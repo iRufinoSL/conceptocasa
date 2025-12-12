@@ -3,6 +3,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Pencil, Trash2, ExternalLink, Package, Users, Clock, Wrench, Boxes, Cog, Layers, Square } from 'lucide-react';
+import { openSafeUrl } from '@/lib/url-utils';
 
 interface ResourceCardProps {
   resource: ExternalResource;
@@ -113,7 +114,7 @@ export function ResourceCard({ resource, onEdit, onDelete, effectiveCost, allRes
                     variant="ghost"
                     size="sm"
                     className="text-muted-foreground hover:text-accent"
-                    onClick={() => window.open(resource.website, '_blank')}
+                    onClick={() => openSafeUrl(resource.website)}
                   >
                     <ExternalLink className="h-4 w-4 mr-1" />
                     Web

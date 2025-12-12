@@ -25,6 +25,7 @@ const Index = () => {
     addResource,
     updateResource,
     deleteResource,
+    getEffectiveCost,
   } = useResources();
 
   const [formOpen, setFormOpen] = useState(false);
@@ -146,6 +147,8 @@ const Index = () => {
                   resource={resource}
                   onEdit={handleEdit}
                   onDelete={handleDeleteClick}
+                  effectiveCost={getEffectiveCost(resource)}
+                  allResources={allResources}
                 />
               ))}
             </div>
@@ -154,6 +157,7 @@ const Index = () => {
               resources={resources}
               onEdit={handleEdit}
               onDelete={handleDeleteClick}
+              getEffectiveCost={getEffectiveCost}
             />
           )
         ) : (
@@ -184,6 +188,7 @@ const Index = () => {
         resource={editingResource}
         onSubmit={handleSubmit}
         onUpdate={handleUpdate}
+        allResources={allResources}
       />
 
       {/* Delete Confirmation */}

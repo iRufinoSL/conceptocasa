@@ -10,6 +10,7 @@ export const mockResources: ExternalResource[] = [
     resourceType: 'Material',
     imageUrl: 'https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=400',
     website: 'https://www.hormigones.com',
+    relatedResources: [],
     createdAt: new Date('2024-01-15'),
     updatedAt: new Date('2024-01-15'),
   },
@@ -20,6 +21,7 @@ export const mockResources: ExternalResource[] = [
     unitCost: 22.00,
     unitMeasure: 'hora',
     resourceType: 'Mano de obra',
+    relatedResources: [],
     createdAt: new Date('2024-01-10'),
     updatedAt: new Date('2024-01-10'),
   },
@@ -32,6 +34,7 @@ export const mockResources: ExternalResource[] = [
     resourceType: 'Alquiler',
     imageUrl: 'https://images.unsplash.com/photo-1581094288338-2314dddb7ece?w=400',
     website: 'https://www.alquimaq.es',
+    relatedResources: [],
     createdAt: new Date('2024-02-01'),
     updatedAt: new Date('2024-02-01'),
   },
@@ -43,6 +46,7 @@ export const mockResources: ExternalResource[] = [
     unitMeasure: 'ud',
     resourceType: 'Producto',
     imageUrl: 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=400',
+    relatedResources: [],
     createdAt: new Date('2024-02-10'),
     updatedAt: new Date('2024-02-10'),
   },
@@ -54,6 +58,7 @@ export const mockResources: ExternalResource[] = [
     unitMeasure: 'ud',
     resourceType: 'Servicio',
     website: 'https://www.geotecnica.es',
+    relatedResources: [],
     createdAt: new Date('2024-02-15'),
     updatedAt: new Date('2024-02-15'),
   },
@@ -65,7 +70,22 @@ export const mockResources: ExternalResource[] = [
     unitMeasure: 'm2',
     resourceType: 'Alquiler',
     imageUrl: 'https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=400',
+    relatedResources: [],
     createdAt: new Date('2024-03-01'),
     updatedAt: new Date('2024-03-01'),
+  },
+  {
+    id: '7',
+    name: 'Tabique de ladrillo (m2)',
+    description: 'Partición interior de ladrillo cerámico perforado, incluyendo material y mano de obra.',
+    unitCost: 0, // Calculated from related resources
+    unitMeasure: 'm2',
+    resourceType: 'Producto',
+    relatedResources: [
+      { resourceId: '4', quantity: 35 }, // 35 ladrillos por m2
+      { resourceId: '2', quantity: 0.5 }, // 0.5 horas de albañil por m2
+    ],
+    createdAt: new Date('2024-03-15'),
+    updatedAt: new Date('2024-03-15'),
   },
 ];

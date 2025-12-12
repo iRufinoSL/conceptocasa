@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '@/hooks/useAuth';
 import { useResources } from '@/hooks/useResources';
 import { ExternalResource } from '@/types/resource';
-import { Header } from '@/components/Header';
 import { StatsCards } from '@/components/StatsCards';
 import { ResourceFilters } from '@/components/ResourceFilters';
 import { ResourceCard } from '@/components/ResourceCard';
@@ -9,12 +10,14 @@ import { ResourceList } from '@/components/ResourceList';
 import { ResourceForm } from '@/components/ResourceForm';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import { Button } from '@/components/ui/button';
-import { Plus, FolderOpen, LayoutGrid, List } from 'lucide-react';
+import { Plus, FolderOpen, LayoutGrid, List, ArrowLeft, Package } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 type ViewMode = 'cards' | 'list';
 
-const Index = () => {
+export default function Recursos() {
+  const navigate = useNavigate();
+  const { user, loading: authLoading, isAdmin } = useAuth();
   const {
     resources,
     allResources,
@@ -34,6 +37,20 @@ const Index = () => {
   const [resourceToDelete, setResourceToDelete] = useState<ExternalResource | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('cards');
   const { toast } = useToast();
+
+  useEffect(() => {
+    if (!authLoading && !user) {
+      navigate('/auth');
+    }
+    if (!authLoading && user && !isAdmin()) {
+      navigate('/dashboard');
+      toast({
+        title: 'Acceso denegado',
+        description: 'No tienes permisos para acceder a esta sección.',
+        variant: 'destructive',
+      });
+    }
+  }, [user, authLoading, isAdmin, navigate, toast]);
 
   const handleAddNew = () => {
     setEditingResource(null);
@@ -81,9 +98,30 @@ const Index = () => {
     });
   };
 
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background">
-      <Header />
+      {/* Header */}
+      <header className="border-b bg-card/50 backdrop-blur-sm sticky top-0 z-10">
+        <div className="container mx-auto px-4 py-4 flex items-center gap-4">
+          <Button variant="ghost" size="icon" onClick={() => navigate('/dashboard')}>
+            <ArrowLeft className="h-5 w-5" />
+          </Button>
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-primary/10">
+              <Package className="h-5 w-5 text-primary" />
+            </div>
+            <h1 className="text-xl font-bold text-foreground">Gestión de Recursos</h1>
+          </div>
+        </div>
+      </header>
 
       <main className="container mx-auto px-4 py-8">
         {/* Page Title */}
@@ -200,6 +238,4 @@ const Index = () => {
       />
     </div>
   );
-};
-
-export default Index;
+}

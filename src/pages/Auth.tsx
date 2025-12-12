@@ -32,7 +32,7 @@ export default function Auth() {
 
   useEffect(() => {
     if (user && !loading) {
-      navigate('/');
+      navigate('/dashboard');
     }
   }, [user, loading, navigate]);
 
@@ -76,7 +76,7 @@ export default function Auth() {
       }
     } else {
       toast.success('Sesión iniciada correctamente');
-      navigate('/');
+      navigate('/dashboard');
     }
     
     setIsSubmitting(false);
@@ -99,7 +99,7 @@ export default function Auth() {
       }
     } else {
       toast.success('Cuenta creada correctamente. Ya puedes iniciar sesión.');
-      navigate('/');
+      navigate('/dashboard');
     }
     
     setIsSubmitting(false);
@@ -122,9 +122,9 @@ export default function Auth() {
               <Building2 className="h-8 w-8 text-primary" />
             </div>
           </div>
-          <CardTitle className="text-2xl font-bold">Gestión de Recursos</CardTitle>
+          <CardTitle className="text-2xl font-bold">Gestión Concepto.Casa</CardTitle>
           <CardDescription>
-            Accede a tu cuenta para gestionar recursos externos y presupuestos
+            Accede a tu cuenta para gestionar tus proyectos de construcción
           </CardDescription>
         </CardHeader>
         <CardContent>

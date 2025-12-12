@@ -15,9 +15,13 @@ import { toast } from 'sonner';
 import { z } from 'zod';
 import { Lock, Eye, EyeOff } from 'lucide-react';
 
-const passwordSchema = z
-  .string()
-  .min(6, 'La contraseña debe tener al menos 6 caracteres');
+const passwordSchema = z.string()
+  .min(8, 'La contraseña debe tener al menos 8 caracteres')
+  .max(128, 'La contraseña no puede exceder 128 caracteres')
+  .regex(/[a-z]/, 'Debe contener al menos una letra minúscula')
+  .regex(/[A-Z]/, 'Debe contener al menos una letra mayúscula')
+  .regex(/[0-9]/, 'Debe contener al menos un número')
+  .regex(/[^a-zA-Z0-9]/, 'Debe contener al menos un carácter especial');
 
 interface ChangePasswordDialogProps {
   open: boolean;
@@ -85,7 +89,7 @@ export function ChangePasswordDialog({ open, onOpenChange }: ChangePasswordDialo
         <DialogHeader>
           <DialogTitle>Cambiar Contraseña</DialogTitle>
           <DialogDescription>
-            Ingresa tu nueva contraseña. Debe tener al menos 6 caracteres.
+            Ingresa tu nueva contraseña. Debe tener al menos 8 caracteres incluyendo mayúsculas, minúsculas, números y caracteres especiales.
           </DialogDescription>
         </DialogHeader>
         

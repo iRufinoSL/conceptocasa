@@ -43,7 +43,7 @@ export default function Landing() {
                 <span className="text-muted-foreground">.</span>
                 <span className="text-foreground">Idea</span>
                 <span className="text-muted-foreground">.</span>
-                <span className="text-accent-foreground">Concepto</span>
+                <span className="text-primary">Concepto</span>
               </h1>
               <div className="hidden md:flex items-center gap-4 text-sm text-muted-foreground">
                 <a href="mailto:organiza@concepto.casa" className="flex items-center gap-1.5 hover:text-foreground transition-colors">
@@ -88,7 +88,7 @@ export default function Landing() {
         {/* Content Overlay */}
         <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-4">
           <div className="max-w-4xl mx-auto space-y-8">
-            <h2 className="text-4xl md:text-6xl lg:text-7xl font-bold text-foreground leading-tight animate-fade-in">
+            <h2 className="text-4xl md:text-6xl lg:text-7xl font-bold text-foreground leading-tight animate-fade-in font-playfair">
               Construimos tu Futuro
               <span className="block text-primary">Ahora</span>
             </h2>

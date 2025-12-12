@@ -4,6 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 import { 
   Mail, 
   Phone, 
@@ -31,8 +33,51 @@ import homeEco from "@/assets/home-eco.jpg";
 const heroImages = [homeModern, homeClassic, homeRustic, homeWood, homeEco];
 
 const Landing = () => {
+  const { toast } = useToast();
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [formData, setFormData] = useState({
+    name: "",
+    email: "",
+    phone: "",
+    subject: "",
+    message: ""
+  });
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+
+    try {
+      const { data, error } = await supabase.functions.invoke('send-contact-email', {
+        body: formData
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: "¡Mensaje enviado!",
+        description: "Hemos recibido tu mensaje. Te contactaremos pronto.",
+      });
+
+      setFormData({ name: "", email: "", phone: "", subject: "", message: "" });
+    } catch (error: any) {
+      console.error("Error sending message:", error);
+      toast({
+        title: "Error al enviar",
+        description: error.message || "Hubo un problema al enviar tu mensaje. Inténtalo de nuevo.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -483,31 +528,76 @@ const Landing = () => {
 
             {/* Contact Form */}
             <Card className="p-6 md:p-8">
-              <form className="space-y-4">
+              <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
                   <label className="text-sm font-medium text-foreground">Nombre *</label>
-                  <Input className="mt-1" placeholder="Tu nombre completo" required />
+                  <Input 
+                    name="name"
+                    value={formData.name}
+                    onChange={handleInputChange}
+                    className="mt-1" 
+                    placeholder="Tu nombre completo" 
+                    required 
+                    maxLength={100}
+                  />
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="text-sm font-medium text-foreground">Email *</label>
-                    <Input type="email" className="mt-1" placeholder="tu@email.com" required />
+                    <Input 
+                      type="email" 
+                      name="email"
+                      value={formData.email}
+                      onChange={handleInputChange}
+                      className="mt-1" 
+                      placeholder="tu@email.com" 
+                      required 
+                      maxLength={255}
+                    />
                   </div>
                   <div>
                     <label className="text-sm font-medium text-foreground">Teléfono *</label>
-                    <Input type="tel" className="mt-1" placeholder="+34 600 000 000" required />
+                    <Input 
+                      type="tel" 
+                      name="phone"
+                      value={formData.phone}
+                      onChange={handleInputChange}
+                      className="mt-1" 
+                      placeholder="+34 600 000 000" 
+                      required 
+                      maxLength={20}
+                    />
                   </div>
                 </div>
                 <div>
                   <label className="text-sm font-medium text-foreground">Asunto</label>
-                  <Input className="mt-1" placeholder="¿En qué podemos ayudarte?" />
+                  <Input 
+                    name="subject"
+                    value={formData.subject}
+                    onChange={handleInputChange}
+                    className="mt-1" 
+                    placeholder="¿En qué podemos ayudarte?" 
+                    maxLength={200}
+                  />
                 </div>
                 <div>
                   <label className="text-sm font-medium text-foreground">Mensaje *</label>
-                  <Textarea className="mt-1 min-h-[120px]" placeholder="Cuéntanos sobre tu proyecto..." required />
+                  <Textarea 
+                    name="message"
+                    value={formData.message}
+                    onChange={handleInputChange}
+                    className="mt-1 min-h-[120px]" 
+                    placeholder="Cuéntanos sobre tu proyecto..." 
+                    required 
+                    maxLength={2000}
+                  />
                 </div>
-                <Button type="submit" className="w-full bg-primary hover:bg-primary/90">
-                  Enviar Mensaje
+                <Button 
+                  type="submit" 
+                  className="w-full bg-primary hover:bg-primary/90"
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting ? "Enviando..." : "Enviar Mensaje"}
                 </Button>
               </form>
             </Card>

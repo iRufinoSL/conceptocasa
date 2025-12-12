@@ -16,6 +16,52 @@ interface ContactEmailRequest {
   message: string;
 }
 
+// In-memory rate limiting store
+const rateLimitStore = new Map<string, { count: number; resetTime: number }>();
+
+// Rate limit configuration: 5 requests per hour per IP
+const RATE_LIMIT_MAX = 5;
+const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000; // 1 hour
+
+function checkRateLimit(ip: string): { allowed: boolean; remaining: number } {
+  const now = Date.now();
+  const record = rateLimitStore.get(ip);
+
+  // Clean up old entries periodically
+  if (rateLimitStore.size > 10000) {
+    for (const [key, value] of rateLimitStore.entries()) {
+      if (value.resetTime < now) {
+        rateLimitStore.delete(key);
+      }
+    }
+  }
+
+  if (!record || record.resetTime < now) {
+    // New window
+    rateLimitStore.set(ip, { count: 1, resetTime: now + RATE_LIMIT_WINDOW_MS });
+    return { allowed: true, remaining: RATE_LIMIT_MAX - 1 };
+  }
+
+  if (record.count >= RATE_LIMIT_MAX) {
+    return { allowed: false, remaining: 0 };
+  }
+
+  record.count++;
+  return { allowed: true, remaining: RATE_LIMIT_MAX - record.count };
+}
+
+// HTML entity encoding to prevent XSS
+function escapeHtml(text: string): string {
+  const map: { [key: string]: string } = {
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#039;'
+  };
+  return text.replace(/[&<>"']/g, (m) => map[m]);
+}
+
 const handler = async (req: Request): Promise<Response> => {
   // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
@@ -23,9 +69,31 @@ const handler = async (req: Request): Promise<Response> => {
   }
 
   try {
+    // Get client IP for rate limiting
+    const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || 
+               req.headers.get("x-real-ip") || 
+               "anonymous";
+
+    // Check rate limit
+    const rateLimit = checkRateLimit(ip);
+    if (!rateLimit.allowed) {
+      console.warn(`Rate limit exceeded for IP: ${ip}`);
+      return new Response(
+        JSON.stringify({ error: "Has enviado demasiados mensajes. Por favor, inténtalo de nuevo más tarde." }),
+        { 
+          status: 429, 
+          headers: { 
+            ...corsHeaders, 
+            "Content-Type": "application/json",
+            "Retry-After": "3600"
+          } 
+        }
+      );
+    }
+
     const { name, email, phone, subject, message }: ContactEmailRequest = await req.json();
 
-    console.log("Received contact form submission:", { name, email, phone, subject });
+    console.log("Received contact form submission from IP:", ip, "- Remaining requests:", rateLimit.remaining);
 
     // Validate required fields
     if (!name || !email || !phone || !message) {
@@ -36,30 +104,47 @@ const handler = async (req: Request): Promise<Response> => {
       );
     }
 
+    // Validate input lengths to prevent abuse
+    if (name.length > 100 || email.length > 255 || phone.length > 50 || 
+        (subject && subject.length > 200) || message.length > 5000) {
+      console.error("Input too long");
+      return new Response(
+        JSON.stringify({ error: "Uno o más campos exceden la longitud máxima permitida" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     // Validate email format
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
-      console.error("Invalid email format:", email);
+      console.error("Invalid email format");
       return new Response(
         JSON.stringify({ error: "Formato de email inválido" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
+    // Escape all user inputs to prevent XSS/HTML injection
+    const safeName = escapeHtml(name);
+    const safeEmail = escapeHtml(email);
+    const safePhone = escapeHtml(phone);
+    const safeSubject = escapeHtml(subject || "Sin asunto");
+    const safeMessage = escapeHtml(message).replace(/\n/g, "<br />");
+
     // Send notification email to the company
     const notificationEmail = await resend.emails.send({
       from: "Concepto.Casa <onboarding@resend.dev>",
       to: ["organiza@concepto.casa"],
-      subject: `Nuevo contacto: ${subject || "Sin asunto"}`,
+      subject: `Nuevo contacto: ${safeSubject}`,
       html: `
         <h2>Nuevo mensaje de contacto</h2>
-        <p><strong>Nombre:</strong> ${name}</p>
-        <p><strong>Email:</strong> ${email}</p>
-        <p><strong>Teléfono:</strong> ${phone}</p>
-        <p><strong>Asunto:</strong> ${subject || "Sin asunto"}</p>
+        <p><strong>Nombre:</strong> ${safeName}</p>
+        <p><strong>Email:</strong> ${safeEmail}</p>
+        <p><strong>Teléfono:</strong> ${safePhone}</p>
+        <p><strong>Asunto:</strong> ${safeSubject}</p>
         <hr />
         <p><strong>Mensaje:</strong></p>
-        <p>${message.replace(/\n/g, "<br />")}</p>
+        <p>${safeMessage}</p>
       `,
     });
 
@@ -71,11 +156,11 @@ const handler = async (req: Request): Promise<Response> => {
       to: [email],
       subject: "Hemos recibido tu mensaje - Concepto.Casa",
       html: `
-        <h1>¡Gracias por contactarnos, ${name}!</h1>
+        <h1>¡Gracias por contactarnos, ${safeName}!</h1>
         <p>Hemos recibido tu mensaje y nos pondremos en contacto contigo lo antes posible.</p>
         <hr />
         <p><strong>Tu mensaje:</strong></p>
-        <p>${message.replace(/\n/g, "<br />")}</p>
+        <p>${safeMessage}</p>
         <hr />
         <p>Saludos cordiales,<br />El equipo de Concepto.Casa</p>
         <p style="color: #666; font-size: 12px;">
@@ -94,7 +179,7 @@ const handler = async (req: Request): Promise<Response> => {
   } catch (error: any) {
     console.error("Error in send-contact-email function:", error);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: "Error al enviar el mensaje. Por favor, inténtalo de nuevo." }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }

@@ -9,9 +9,18 @@ export function useResources() {
 
   const filteredResources = useMemo(() => {
     return resources.filter((resource) => {
+      const searchLower = searchTerm.toLowerCase();
+      
+      // Search across all fields
       const matchesSearch =
-        resource.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        resource.description.toLowerCase().includes(searchTerm.toLowerCase());
+        resource.name.toLowerCase().includes(searchLower) ||
+        resource.description.toLowerCase().includes(searchLower) ||
+        resource.id.toLowerCase().includes(searchLower) ||
+        resource.resourceType.toLowerCase().includes(searchLower) ||
+        resource.unitMeasure.toLowerCase().includes(searchLower) ||
+        resource.unitCost.toString().includes(searchLower) ||
+        (resource.website && resource.website.toLowerCase().includes(searchLower));
+      
       const matchesType = filterType === 'all' || resource.resourceType === filterType;
       return matchesSearch && matchesType;
     });

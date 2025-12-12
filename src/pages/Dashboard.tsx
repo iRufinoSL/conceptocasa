@@ -97,7 +97,7 @@ const apps: AppCard[] = [
     description: 'Gestión de usuarios y permisos',
     icon: UserCog,
     route: '/usuarios',
-    available: false,
+    available: true,
     adminOnly: true,
   },
   {

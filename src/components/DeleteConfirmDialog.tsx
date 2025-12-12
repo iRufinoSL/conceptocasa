@@ -14,6 +14,8 @@ interface DeleteConfirmDialogProps {
   onOpenChange: (open: boolean) => void;
   onConfirm: () => void;
   resourceName?: string;
+  title?: string;
+  description?: string;
 }
 
 export function DeleteConfirmDialog({
@@ -21,16 +23,22 @@ export function DeleteConfirmDialog({
   onOpenChange,
   onConfirm,
   resourceName,
+  title,
+  description,
 }: DeleteConfirmDialogProps) {
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>¿Eliminar recurso?</AlertDialogTitle>
+          <AlertDialogTitle>{title || '¿Eliminar recurso?'}</AlertDialogTitle>
           <AlertDialogDescription>
-            Esta acción no se puede deshacer. Se eliminará permanentemente el recurso
-            {resourceName && <strong className="text-foreground"> "{resourceName}"</strong>} de la
-            base de datos.
+            {description || (
+              <>
+                Esta acción no se puede deshacer. Se eliminará permanentemente el recurso
+                {resourceName && <strong className="text-foreground"> "{resourceName}"</strong>} de la
+                base de datos.
+              </>
+            )}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>

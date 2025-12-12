@@ -1,148 +1,540 @@
-import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
-import { Mail, Phone, LogIn, ChevronLeft, ChevronRight } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { 
+  Mail, 
+  Phone, 
+  Menu, 
+  X, 
+  ChevronDown, 
+  Building2, 
+  Home, 
+  Briefcase, 
+  Hammer, 
+  ClipboardList,
+  Leaf,
+  TrendingDown,
+  Zap,
+  MapPin,
+  Clock,
+  Play
+} from "lucide-react";
+import homeModern from "@/assets/home-modern.jpg";
+import homeClassic from "@/assets/home-classic.jpg";
+import homeRustic from "@/assets/home-rustic.jpg";
+import homeWood from "@/assets/home-wood.jpg";
+import homeEco from "@/assets/home-eco.jpg";
 
-import homeModern from '@/assets/home-modern.jpg';
-import homeClassic from '@/assets/home-classic.jpg';
-import homeRustic from '@/assets/home-rustic.jpg';
-import homeWood from '@/assets/home-wood.jpg';
-import homeEco from '@/assets/home-eco.jpg';
+const heroImages = [homeModern, homeClassic, homeRustic, homeWood, homeEco];
 
-const slides = [
-  { image: homeModern, alt: 'Casa moderna minimalista' },
-  { image: homeClassic, alt: 'Casa clásica mediterránea' },
-  { image: homeRustic, alt: 'Casa rústica de piedra' },
-  { image: homeWood, alt: 'Casa de madera sostenible' },
-  { image: homeEco, alt: 'Casa ecológica' },
-];
-
-export default function Landing() {
-  const [currentSlide, setCurrentSlide] = useState(0);
+const Landing = () => {
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentSlide((prev) => (prev + 1) % slides.length);
-    }, 6000);
-    return () => clearInterval(timer);
+    const interval = setInterval(() => {
+      setCurrentImageIndex((prev) => (prev + 1) % heroImages.length);
+    }, 5000);
+    return () => clearInterval(interval);
   }, []);
 
-  const goToSlide = (index: number) => setCurrentSlide(index);
-  const prevSlide = () => setCurrentSlide((prev) => (prev - 1 + slides.length) % slides.length);
-  const nextSlide = () => setCurrentSlide((prev) => (prev + 1) % slides.length);
+  const scrollToSection = (id: string) => {
+    const element = document.getElementById(id);
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth' });
+    }
+    setMobileMenuOpen(false);
+  };
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-md border-b border-border/50">
-        <div className="container mx-auto px-4 py-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-6">
-              <h1 className="text-xl md:text-2xl font-bold tracking-tight">
-                <span className="text-primary">Terra</span>
-                <span className="text-muted-foreground">.</span>
-                <span className="text-foreground">Idea</span>
-                <span className="text-muted-foreground">.</span>
-                <span className="text-primary">Concepto</span>
-              </h1>
-              <div className="hidden md:flex items-center gap-4 text-sm text-muted-foreground">
-                <a href="mailto:organiza@concepto.casa" className="flex items-center gap-1.5 hover:text-foreground transition-colors">
-                  <Mail className="h-4 w-4" />
+      {/* Navigation */}
+      <nav className="fixed top-0 left-0 right-0 z-50 bg-background/90 backdrop-blur-md border-b border-border/50">
+        <div className="container mx-auto px-4">
+          <div className="flex items-center justify-between h-16">
+            {/* Logo */}
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
+                <Home className="w-5 h-5 text-primary-foreground" />
+              </div>
+              <span className="text-xl font-bold">
+                <span className="text-foreground">Concepto</span>
+                <span className="text-primary">.</span>
+                <span className="text-primary">Casa</span>
+              </span>
+            </div>
+
+            {/* Desktop Navigation */}
+            <div className="hidden lg:flex items-center gap-6">
+              <button onClick={() => scrollToSection('inicio')} className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+                Inicio
+              </button>
+              <button onClick={() => scrollToSection('servicios')} className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+                Servicios
+              </button>
+              <button onClick={() => scrollToSection('sistemas')} className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+                Sistemas Constructivos
+              </button>
+              <button onClick={() => scrollToSection('proyectos')} className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+                Proyectos
+              </button>
+              <button onClick={() => scrollToSection('contacto')} className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+                Contacto
+              </button>
+            </div>
+
+            {/* Right Side */}
+            <div className="hidden lg:flex items-center gap-4">
+              <a href="mailto:organiza@concepto.casa" className="flex items-center gap-2 text-sm text-muted-foreground hover:text-primary transition-colors">
+                <Mail className="w-4 h-4" />
+                <span>Enviar email a organiza@concepto.casa</span>
+              </a>
+              <Link to="/auth">
+                <Button className="bg-primary hover:bg-primary/90">
+                  Acceso
+                </Button>
+              </Link>
+            </div>
+
+            {/* Mobile Menu Button */}
+            <button 
+              className="lg:hidden p-2"
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            >
+              {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+            </button>
+          </div>
+
+          {/* Mobile Menu */}
+          {mobileMenuOpen && (
+            <div className="lg:hidden py-4 border-t border-border">
+              <div className="flex flex-col gap-4">
+                <button onClick={() => scrollToSection('inicio')} className="text-left text-sm text-muted-foreground hover:text-foreground">Inicio</button>
+                <button onClick={() => scrollToSection('servicios')} className="text-left text-sm text-muted-foreground hover:text-foreground">Servicios</button>
+                <button onClick={() => scrollToSection('sistemas')} className="text-left text-sm text-muted-foreground hover:text-foreground">Sistemas Constructivos</button>
+                <button onClick={() => scrollToSection('proyectos')} className="text-left text-sm text-muted-foreground hover:text-foreground">Proyectos</button>
+                <button onClick={() => scrollToSection('contacto')} className="text-left text-sm text-muted-foreground hover:text-foreground">Contacto</button>
+                <a href="mailto:organiza@concepto.casa" className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Mail className="w-4 h-4" />
                   organiza@concepto.casa
                 </a>
-                <a href="tel:+34690123533" className="flex items-center gap-1.5 hover:text-foreground transition-colors">
-                  <Phone className="h-4 w-4" />
-                  +34 690 123 533
-                </a>
+                <Link to="/auth">
+                  <Button className="w-full bg-primary hover:bg-primary/90">Acceso</Button>
+                </Link>
               </div>
             </div>
-            <Button asChild variant="default" size="sm">
-              <Link to="/auth" className="flex items-center gap-2">
-                <LogIn className="h-4 w-4" />
-                Acceder
-              </Link>
-            </Button>
-          </div>
+          )}
         </div>
-      </header>
+      </nav>
 
-      {/* Hero Carousel */}
-      <section className="relative h-screen w-full overflow-hidden">
-        {/* Slides */}
-        {slides.map((slide, index) => (
+      {/* Hero Section */}
+      <section id="inicio" className="relative min-h-screen flex items-center justify-center overflow-hidden pt-16">
+        {/* Background Images */}
+        {heroImages.map((image, index) => (
           <div
             key={index}
-            className={`absolute inset-0 transition-opacity duration-1000 ${
-              index === currentSlide ? 'opacity-100' : 'opacity-0'
-            }`}
+            className="absolute inset-0 transition-opacity duration-1000"
+            style={{
+              opacity: currentImageIndex === index ? 1 : 0,
+            }}
           >
             <img
-              src={slide.image}
-              alt={slide.alt}
+              src={image}
+              alt={`Casa ${index + 1}`}
               className="w-full h-full object-cover"
             />
-            <div className="absolute inset-0 bg-gradient-to-b from-background/70 via-background/40 to-background/80" />
+            <div className="absolute inset-0 bg-background/40" />
           </div>
         ))}
 
-        {/* Content Overlay */}
-        <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-4">
+        {/* Content */}
+        <div className="relative z-10 container mx-auto px-4 text-center">
           <div className="max-w-4xl mx-auto space-y-8">
-            <h2 className="text-4xl md:text-6xl lg:text-7xl font-bold text-foreground leading-tight animate-fade-in font-playfair">
-              Construimos tu Futuro
-              <span className="block text-primary">Ahora</span>
-            </h2>
+            <span className="inline-block px-4 py-2 bg-primary/20 text-primary rounded-full text-sm font-medium">
+              +15 años construyendo futuros
+            </span>
             
-            <p className="text-lg md:text-xl lg:text-2xl text-foreground/90 font-medium max-w-3xl mx-auto leading-relaxed animate-fade-in" style={{ animationDelay: '0.2s' }}>
-              Diseño y construcción industrializada basada en tres pilares
+            <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold text-foreground leading-tight">
+              Construimos tu{" "}
+              <span className="font-playfair italic text-primary">Futuro Ahora</span>
+            </h1>
+            
+            <p className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto">
+              Diseño y construcción industrializada en tres pilares: Eficiencia, Economía y Ecología/Salud.
             </p>
-            
-            <div className="flex flex-wrap justify-center gap-4 md:gap-8 animate-fade-in" style={{ animationDelay: '0.4s' }}>
-              <div className="px-6 py-3 bg-primary/20 backdrop-blur-sm rounded-lg border border-primary/30">
-                <span className="text-lg md:text-xl font-semibold text-primary">Eficiencia</span>
-              </div>
-              <div className="px-6 py-3 bg-success/20 backdrop-blur-sm rounded-lg border border-success/30">
-                <span className="text-lg md:text-xl font-semibold text-success">Economía</span>
-              </div>
-              <div className="px-6 py-3 bg-accent/20 backdrop-blur-sm rounded-lg border border-accent/30">
-                <span className="text-lg md:text-xl font-semibold text-accent-foreground">Ecología/Salud</span>
-              </div>
+
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              <Button 
+                size="lg" 
+                className="bg-primary hover:bg-primary/90 text-primary-foreground px-8"
+                onClick={() => scrollToSection('contacto')}
+              >
+                Solicitar Consulta
+              </Button>
+              <Button 
+                size="lg" 
+                variant="outline" 
+                className="border-foreground/20 hover:bg-foreground/10"
+                onClick={() => scrollToSection('proyectos')}
+              >
+                Ver Proyectos
+              </Button>
+            </div>
+
+            {/* Stats */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-12">
+              <Card className="bg-card/60 backdrop-blur-md border-border/50 p-6 text-center">
+                <div className="text-3xl md:text-4xl font-playfair font-bold text-primary">Decenas</div>
+                <div className="text-sm text-muted-foreground mt-1">Proyectos Completados</div>
+              </Card>
+              <Card className="bg-card/60 backdrop-blur-md border-border/50 p-6 text-center">
+                <div className="text-3xl md:text-4xl font-playfair font-bold text-primary">15+</div>
+                <div className="text-sm text-muted-foreground mt-1">Años de Experiencia</div>
+              </Card>
+              <Card className="bg-card/60 backdrop-blur-md border-border/50 p-6 text-center">
+                <div className="text-3xl md:text-4xl font-playfair font-bold text-primary">Muy cerca de ti</div>
+                <div className="text-sm text-muted-foreground mt-1">Profesionales</div>
+              </Card>
             </div>
           </div>
         </div>
 
-        {/* Navigation Arrows */}
-        <button
-          onClick={prevSlide}
-          className="absolute left-4 top-1/2 -translate-y-1/2 p-2 rounded-full bg-background/50 backdrop-blur-sm border border-border/50 text-foreground hover:bg-background/80 transition-colors"
-          aria-label="Imagen anterior"
-        >
-          <ChevronLeft className="h-6 w-6" />
-        </button>
-        <button
-          onClick={nextSlide}
-          className="absolute right-4 top-1/2 -translate-y-1/2 p-2 rounded-full bg-background/50 backdrop-blur-sm border border-border/50 text-foreground hover:bg-background/80 transition-colors"
-          aria-label="Imagen siguiente"
-        >
-          <ChevronRight className="h-6 w-6" />
-        </button>
-
-        {/* Dots Indicator */}
-        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex gap-2">
-          {slides.map((_, index) => (
-            <button
-              key={index}
-              onClick={() => goToSlide(index)}
-              className={`w-3 h-3 rounded-full transition-all ${
-                index === currentSlide
-                  ? 'bg-primary w-8'
-                  : 'bg-foreground/30 hover:bg-foreground/50'
-              }`}
-              aria-label={`Ir a imagen ${index + 1}`}
-            />
-          ))}
+        {/* Scroll Indicator */}
+        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 animate-bounce">
+          <ChevronDown className="w-8 h-8 text-foreground/50" />
         </div>
       </section>
+
+      {/* Services Section */}
+      <section id="servicios" className="py-20 bg-secondary/30">
+        <div className="container mx-auto px-4">
+          <div className="text-center mb-16">
+            <span className="text-sm text-primary font-medium uppercase tracking-wide">Servicios</span>
+            <h2 className="text-3xl md:text-4xl font-bold text-foreground mt-2">Soluciones Integrales</h2>
+            <p className="text-muted-foreground mt-4 max-w-2xl mx-auto">
+              Ofrecemos una gama completa de servicios para satisfacer todas tus necesidades en construcción y bienes raíces.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <Card className="p-6 hover:shadow-lg transition-shadow group">
+              <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center mb-4 group-hover:bg-primary/20 transition-colors">
+                <Building2 className="w-6 h-6 text-primary" />
+              </div>
+              <h3 className="text-lg font-semibold text-foreground mb-2">Diseño y Construcción Industrializada</h3>
+              <p className="text-sm text-muted-foreground">
+                Proyectos de construcción desde cero con los más altos estándares de calidad y seguridad.
+              </p>
+            </Card>
+
+            <Card className="p-6 hover:shadow-lg transition-shadow group">
+              <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center mb-4 group-hover:bg-primary/20 transition-colors">
+                <Home className="w-6 h-6 text-primary" />
+              </div>
+              <h3 className="text-lg font-semibold text-foreground mb-2">Viviendas Residenciales</h3>
+              <p className="text-sm text-muted-foreground">
+                Construcción de casas y departamentos con diseños personalizados y acabados premium.
+              </p>
+            </Card>
+
+            <Card className="p-6 hover:shadow-lg transition-shadow group">
+              <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center mb-4 group-hover:bg-primary/20 transition-colors">
+                <Briefcase className="w-6 h-6 text-primary" />
+              </div>
+              <h3 className="text-lg font-semibold text-foreground mb-2">Gestión Inmobiliaria</h3>
+              <p className="text-sm text-muted-foreground">
+                Red de inmobiliarias colaboradoras en toda España para la compra, venta y alquiler de propiedades.
+              </p>
+            </Card>
+
+            <Card className="p-6 hover:shadow-lg transition-shadow group">
+              <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center mb-4 group-hover:bg-primary/20 transition-colors">
+                <Hammer className="w-6 h-6 text-primary" />
+              </div>
+              <h3 className="text-lg font-semibold text-foreground mb-2">Remodelación</h3>
+              <p className="text-sm text-muted-foreground">
+                Renovamos y mejoramos espacios existentes con diseños contemporáneos.
+              </p>
+            </Card>
+
+            <Card className="p-6 hover:shadow-lg transition-shadow group">
+              <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center mb-4 group-hover:bg-primary/20 transition-colors">
+                <ClipboardList className="w-6 h-6 text-primary" />
+              </div>
+              <h3 className="text-lg font-semibold text-foreground mb-2">Gestión de Proyectos</h3>
+              <p className="text-sm text-muted-foreground">
+                Administración integral de proyectos desde la planificación hasta la entrega.
+              </p>
+            </Card>
+          </div>
+        </div>
+      </section>
+
+      {/* Construction Systems Section */}
+      <section id="sistemas" className="py-20 bg-background">
+        <div className="container mx-auto px-4">
+          <div className="text-center mb-16">
+            <span className="text-sm text-primary font-medium uppercase tracking-wide">Innovación en Construcción</span>
+            <h2 className="text-3xl md:text-4xl font-bold text-foreground mt-2">SISTEMAS CONSTRUCTIVOS</h2>
+            <p className="text-muted-foreground mt-4 max-w-2xl mx-auto">
+              Descubre los sistemas constructivos más innovadores y eficientes para tu proyecto
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
+            <div className="relative group">
+              <img 
+                src="https://img.youtube.com/vi/jekNJ7-Ij-0/maxresdefault.jpg" 
+                alt="Sistema constructivo" 
+                className="w-full rounded-xl shadow-lg"
+              />
+              <div className="absolute inset-0 bg-foreground/40 rounded-xl flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                <a 
+                  href="https://www.youtube.com/watch?v=jekNJ7-Ij-0" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="w-16 h-16 bg-primary rounded-full flex items-center justify-center hover:scale-110 transition-transform"
+                >
+                  <Play className="w-8 h-8 text-primary-foreground ml-1" />
+                </a>
+              </div>
+              <div className="mt-4">
+                <h3 className="text-xl font-semibold text-foreground">Ejemplo de bloque sólido</h3>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Sistema constructivo con bloques sólidos de alta eficiencia térmica y acústica
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-6">
+              <Card className="p-6 border-l-4 border-l-primary">
+                <div className="flex items-start gap-4">
+                  <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <Zap className="w-5 h-5 text-primary" />
+                  </div>
+                  <div>
+                    <h4 className="text-lg font-semibold text-foreground">Eficiencia Energética</h4>
+                    <p className="text-sm text-muted-foreground mt-1">Sistemas que optimizan el consumo energético</p>
+                  </div>
+                </div>
+              </Card>
+
+              <Card className="p-6 border-l-4 border-l-primary">
+                <div className="flex items-start gap-4">
+                  <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <TrendingDown className="w-5 h-5 text-primary" />
+                  </div>
+                  <div>
+                    <h4 className="text-lg font-semibold text-foreground">Economía</h4>
+                    <p className="text-sm text-muted-foreground mt-1">Construcción industrializada reduce costes</p>
+                  </div>
+                </div>
+              </Card>
+
+              <Card className="p-6 border-l-4 border-l-primary">
+                <div className="flex items-start gap-4">
+                  <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <Leaf className="w-5 h-5 text-primary" />
+                  </div>
+                  <div>
+                    <h4 className="text-lg font-semibold text-foreground">Ecología y Salud</h4>
+                    <p className="text-sm text-muted-foreground mt-1">Materiales sostenibles y saludables</p>
+                  </div>
+                </div>
+              </Card>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Projects Section */}
+      <section id="proyectos" className="py-20 bg-secondary/30">
+        <div className="container mx-auto px-4">
+          <div className="text-center mb-16">
+            <span className="text-sm text-primary font-medium uppercase tracking-wide">Portafolio</span>
+            <h2 className="text-3xl md:text-4xl font-bold text-foreground mt-2">Proyectos Factibles</h2>
+            <p className="text-muted-foreground mt-4 max-w-2xl mx-auto">
+              Todos los proyectos son distintos, te ayudamos personalizando el tuyo, dinos qué estilo te gusta y lo hacemos posible.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {[
+              { 
+                image: homeModern, 
+                tag: "Moderno", 
+                title: "Estilo Moderno", 
+                desc: "Diseño contemporáneo con líneas limpias, amplios ventanales y espacios minimalistas." 
+              },
+              { 
+                image: homeClassic, 
+                tag: "Convencional", 
+                title: "Casa Tradicional", 
+                desc: "Arquitectura clásica con elementos tradicionales y acabados atemporales." 
+              },
+              { 
+                image: homeRustic, 
+                tag: "Rústico", 
+                title: "Estilo rústico montañés", 
+                desc: "Vivienda rústica montañesa con piedra natural y madera autóctona." 
+              },
+              { 
+                image: homeEco, 
+                tag: "Mediterráneo", 
+                title: "Estilo Mediterráneo", 
+                desc: "Materiales locales con terrazas amplias y vistas al mar." 
+              },
+              { 
+                image: homeWood, 
+                tag: "Madera", 
+                title: "Viviendas de madera", 
+                desc: "Vivienda escandinava de madera natural con diseño funcional y sostenible." 
+              },
+            ].map((project, index) => (
+              <Card key={index} className="overflow-hidden group hover:shadow-xl transition-shadow">
+                <div className="relative h-48 overflow-hidden">
+                  <img 
+                    src={project.image} 
+                    alt={project.title} 
+                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" 
+                  />
+                  <span className="absolute top-4 left-4 px-3 py-1 bg-primary text-primary-foreground text-xs font-medium rounded-full">
+                    {project.tag}
+                  </span>
+                </div>
+                <div className="p-6">
+                  <h3 className="text-lg font-semibold text-foreground">{project.title}</h3>
+                  <p className="text-sm text-muted-foreground mt-2">{project.desc}</p>
+                </div>
+              </Card>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Contact Section */}
+      <section id="contacto" className="py-20 bg-background">
+        <div className="container mx-auto px-4">
+          <div className="text-center mb-16">
+            <span className="text-sm text-primary font-medium uppercase tracking-wide">Contacto</span>
+            <h2 className="text-3xl md:text-4xl font-bold text-foreground mt-2">Comencemos tu Proyecto</h2>
+            <p className="text-muted-foreground mt-4 max-w-2xl mx-auto">
+              Estamos listos para escucharte y ayudarte a hacer realidad tu visión. Contáctanos hoy.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
+            {/* Contact Info */}
+            <div className="space-y-6">
+              <a href="tel:+34690123533" className="flex items-start gap-4 p-4 bg-secondary/50 rounded-xl hover:bg-secondary transition-colors">
+                <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <Phone className="w-6 h-6 text-primary" />
+                </div>
+                <div>
+                  <h4 className="font-semibold text-foreground">Teléfono</h4>
+                  <p className="text-primary">+34 690 123 533</p>
+                </div>
+              </a>
+
+              <a href="mailto:organiza@concepto.casa" className="flex items-start gap-4 p-4 bg-secondary/50 rounded-xl hover:bg-secondary transition-colors">
+                <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <Mail className="w-6 h-6 text-primary" />
+                </div>
+                <div>
+                  <h4 className="font-semibold text-foreground">Email</h4>
+                  <p className="text-primary">organiza@concepto.casa</p>
+                </div>
+              </a>
+
+              <div className="flex items-start gap-4 p-4 bg-secondary/50 rounded-xl">
+                <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <MapPin className="w-6 h-6 text-primary" />
+                </div>
+                <div>
+                  <h4 className="font-semibold text-foreground">Estamos cerca de ti en toda España</h4>
+                  <p className="text-muted-foreground">Domicilio Fiscal: Zoco Gran Santander, of. 201 Santander 39011 Cantabria</p>
+                </div>
+              </div>
+
+              <Card className="p-6">
+                <div className="flex items-center gap-3 mb-4">
+                  <Clock className="w-5 h-5 text-primary" />
+                  <h4 className="font-semibold text-foreground">Horario de Atención</h4>
+                </div>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Lunes - Viernes:</span>
+                    <span className="text-foreground">8:00 - 18:00</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Sábados:</span>
+                    <span className="text-foreground">9:00 - 13:00</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Domingos:</span>
+                    <span className="text-foreground">Cerrado</span>
+                  </div>
+                </div>
+              </Card>
+            </div>
+
+            {/* Contact Form */}
+            <Card className="p-6 md:p-8">
+              <form className="space-y-4">
+                <div>
+                  <label className="text-sm font-medium text-foreground">Nombre *</label>
+                  <Input className="mt-1" placeholder="Tu nombre completo" required />
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm font-medium text-foreground">Email *</label>
+                    <Input type="email" className="mt-1" placeholder="tu@email.com" required />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-foreground">Teléfono *</label>
+                    <Input type="tel" className="mt-1" placeholder="+34 600 000 000" required />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-foreground">Asunto</label>
+                  <Input className="mt-1" placeholder="¿En qué podemos ayudarte?" />
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-foreground">Mensaje *</label>
+                  <Textarea className="mt-1 min-h-[120px]" placeholder="Cuéntanos sobre tu proyecto..." required />
+                </div>
+                <Button type="submit" className="w-full bg-primary hover:bg-primary/90">
+                  Enviar Mensaje
+                </Button>
+              </form>
+            </Card>
+          </div>
+        </div>
+      </section>
+
+      {/* Footer */}
+      <footer className="bg-foreground text-background py-12">
+        <div className="container mx-auto px-4">
+          <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
+                <Home className="w-5 h-5 text-primary-foreground" />
+              </div>
+              <span className="text-xl font-bold">
+                Concepto<span className="text-primary">.</span>Casa
+              </span>
+            </div>
+            <p className="text-sm text-background/70">
+              © {new Date().getFullYear()} Terra.Idea.Concepto. Todos los derechos reservados.
+            </p>
+          </div>
+        </div>
+      </footer>
     </div>
   );
-}
+};
+
+export default Landing;

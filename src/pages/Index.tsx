@@ -5,11 +5,14 @@ import { Header } from '@/components/Header';
 import { StatsCards } from '@/components/StatsCards';
 import { ResourceFilters } from '@/components/ResourceFilters';
 import { ResourceCard } from '@/components/ResourceCard';
+import { ResourceList } from '@/components/ResourceList';
 import { ResourceForm } from '@/components/ResourceForm';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import { Button } from '@/components/ui/button';
-import { Plus, FolderOpen } from 'lucide-react';
+import { Plus, FolderOpen, LayoutGrid, List } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+
+type ViewMode = 'cards' | 'list';
 
 const Index = () => {
   const {
@@ -28,6 +31,7 @@ const Index = () => {
   const [editingResource, setEditingResource] = useState<ExternalResource | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [resourceToDelete, setResourceToDelete] = useState<ExternalResource | null>(null);
+  const [viewMode, setViewMode] = useState<ViewMode>('cards');
   const { toast } = useToast();
 
   const handleAddNew = () => {
@@ -100,28 +104,58 @@ const Index = () => {
           <StatsCards resources={allResources} />
         </div>
 
-        {/* Filters */}
-        <div className="mb-6">
-          <ResourceFilters
-            searchTerm={searchTerm}
-            onSearchChange={setSearchTerm}
-            filterType={filterType}
-            onFilterChange={setFilterType}
-          />
+        {/* Filters and View Toggle */}
+        <div className="flex flex-col sm:flex-row gap-4 mb-6">
+          <div className="flex-1">
+            <ResourceFilters
+              searchTerm={searchTerm}
+              onSearchChange={setSearchTerm}
+              filterType={filterType}
+              onFilterChange={setFilterType}
+            />
+          </div>
+          <div className="flex items-center gap-1 p-1 bg-muted rounded-lg">
+            <Button
+              variant={viewMode === 'cards' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => setViewMode('cards')}
+              className="gap-2"
+            >
+              <LayoutGrid className="h-4 w-4" />
+              <span className="hidden sm:inline">Tarjetas</span>
+            </Button>
+            <Button
+              variant={viewMode === 'list' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => setViewMode('list')}
+              className="gap-2"
+            >
+              <List className="h-4 w-4" />
+              <span className="hidden sm:inline">Lista</span>
+            </Button>
+          </div>
         </div>
 
-        {/* Resources Grid */}
+        {/* Resources Display */}
         {resources.length > 0 ? (
-          <div className="grid gap-4 md:grid-cols-2">
-            {resources.map((resource) => (
-              <ResourceCard
-                key={resource.id}
-                resource={resource}
-                onEdit={handleEdit}
-                onDelete={handleDeleteClick}
-              />
-            ))}
-          </div>
+          viewMode === 'cards' ? (
+            <div className="grid gap-4 md:grid-cols-2">
+              {resources.map((resource) => (
+                <ResourceCard
+                  key={resource.id}
+                  resource={resource}
+                  onEdit={handleEdit}
+                  onDelete={handleDeleteClick}
+                />
+              ))}
+            </div>
+          ) : (
+            <ResourceList
+              resources={resources}
+              onEdit={handleEdit}
+              onDelete={handleDeleteClick}
+            />
+          )
         ) : (
           <div className="text-center py-16">
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-muted mb-4">

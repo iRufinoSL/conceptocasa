@@ -1,5 +1,5 @@
-import { useState, useMemo } from 'react';
-import { ExternalResource, ResourceType } from '@/types/resource';
+import { useState, useMemo, useCallback } from 'react';
+import { ExternalResource, ResourceType, calculateCompositeCost, getResourceComposition } from '@/types/resource';
 import { mockResources } from '@/data/mockResources';
 
 export function useResources() {
@@ -7,11 +7,22 @@ export function useResources() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<ResourceType | 'all'>('all');
 
+  // Calculate effective cost for a resource (including composite resources)
+  const getEffectiveCost = useCallback((resource: ExternalResource): number => {
+    return calculateCompositeCost(resource, resources);
+  }, [resources]);
+
+  // Get composition type for a resource
+  const getComposition = useCallback((resource: ExternalResource) => {
+    return getResourceComposition(resource);
+  }, []);
+
   const filteredResources = useMemo(() => {
     return resources.filter((resource) => {
       const searchLower = searchTerm.toLowerCase();
+      const composition = getComposition(resource);
       
-      // Search across all fields
+      // Search across all fields including composition
       const matchesSearch =
         resource.name.toLowerCase().includes(searchLower) ||
         resource.description.toLowerCase().includes(searchLower) ||
@@ -19,12 +30,13 @@ export function useResources() {
         resource.resourceType.toLowerCase().includes(searchLower) ||
         resource.unitMeasure.toLowerCase().includes(searchLower) ||
         resource.unitCost.toString().includes(searchLower) ||
+        composition.toLowerCase().includes(searchLower) ||
         (resource.website && resource.website.toLowerCase().includes(searchLower));
       
       const matchesType = filterType === 'all' || resource.resourceType === filterType;
       return matchesSearch && matchesType;
     });
-  }, [resources, searchTerm, filterType]);
+  }, [resources, searchTerm, filterType, getComposition]);
 
   const addResource = (resource: Omit<ExternalResource, 'id' | 'createdAt' | 'updatedAt'>) => {
     const newResource: ExternalResource = {
@@ -60,5 +72,7 @@ export function useResources() {
     addResource,
     updateResource,
     deleteResource,
+    getEffectiveCost,
+    getComposition,
   };
 }

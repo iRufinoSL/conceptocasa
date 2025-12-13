@@ -127,25 +127,62 @@ export function BudgetSummary({ budgetId, budgetName, open, onOpenChange }: Budg
     const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.getWidth();
     
-    // Header
-    doc.setFontSize(18);
+    // Company info
+    const companyName = 'Concepto.Casa';
+    const companyEmail = 'organiza@concepto.casa';
+    const companyPhone = '+34 690 123 533';
+    const companyAddress = 'Barcelona, España';
+    const companyWeb = 'www.concepto.casa';
+    
+    // Header with company branding
+    // Logo placeholder (colored rectangle with initials)
+    doc.setFillColor(37, 99, 235); // Primary blue
+    doc.roundedRect(14, 10, 25, 25, 3, 3, 'F');
+    doc.setTextColor(255);
+    doc.setFontSize(16);
     doc.setFont('helvetica', 'bold');
-    doc.text('Resumen de Presupuesto', pageWidth / 2, 20, { align: 'center' });
+    doc.text('CC', 26.5, 26, { align: 'center' });
+    doc.setTextColor(0);
     
-    doc.setFontSize(14);
+    // Company name and contact
+    doc.setFontSize(16);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(37, 99, 235);
+    doc.text(companyName, 45, 18);
+    doc.setTextColor(0);
+    
+    doc.setFontSize(9);
     doc.setFont('helvetica', 'normal');
-    doc.text(budgetName, pageWidth / 2, 28, { align: 'center' });
-    
-    doc.setFontSize(10);
     doc.setTextColor(100);
-    doc.text(`Generado el ${format(new Date(), "d 'de' MMMM 'de' yyyy", { locale: es })}`, pageWidth / 2, 35, { align: 'center' });
+    doc.text(`${companyEmail}  |  ${companyPhone}`, 45, 24);
+    doc.text(`${companyAddress}  |  ${companyWeb}`, 45, 30);
+    doc.setTextColor(0);
+    
+    // Separator line
+    doc.setDrawColor(200);
+    doc.line(14, 40, pageWidth - 14, 40);
+    
+    // Document title
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.text('RESUMEN DE PRESUPUESTO', pageWidth / 2, 50, { align: 'center' });
+    
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'normal');
+    doc.text(budgetName, pageWidth / 2, 58, { align: 'center' });
+    
+    doc.setFontSize(9);
+    doc.setTextColor(100);
+    doc.text(`Fecha de generación: ${format(new Date(), "d 'de' MMMM 'de' yyyy", { locale: es })}`, pageWidth / 2, 65, { align: 'center' });
     doc.setTextColor(0);
 
     // Summary section
-    let yPos = 50;
-    doc.setFontSize(12);
+    let yPos = 80;
+    doc.setFontSize(11);
     doc.setFont('helvetica', 'bold');
+    doc.setTextColor(37, 99, 235);
     doc.text('Resumen General', 14, yPos);
+    doc.setTextColor(0);
     
     yPos += 8;
     doc.setFontSize(10);
@@ -172,15 +209,17 @@ export function BudgetSummary({ budgetId, budgetName, open, onOpenChange }: Budg
     doc.setFont('helvetica', 'bold');
     doc.text('TOTAL PVP:', 18, yPos + 3);
     doc.text(formatPdfCurrency(calculations.totalWithMargins), pageWidth - 18, yPos + 3, { align: 'right' });
-    doc.setTextColor(0);
+    doc.setTextColor(0)
     doc.setFont('helvetica', 'normal');
 
     // Breakdown by type
     if (Object.keys(calculations.byType).length > 0) {
       yPos += 20;
-      doc.setFontSize(12);
+      doc.setFontSize(11);
       doc.setFont('helvetica', 'bold');
+      doc.setTextColor(37, 99, 235);
       doc.text('Desglose por Tipo de Recurso', 14, yPos);
+      doc.setTextColor(0);
       
       yPos += 8;
       const typeData = Object.entries(calculations.byType).map(([type, data]) => [
@@ -203,9 +242,11 @@ export function BudgetSummary({ budgetId, budgetName, open, onOpenChange }: Budg
 
     // Resource details table
     if (calculations.resources.length > 0) {
-      doc.setFontSize(12);
+      doc.setFontSize(11);
       doc.setFont('helvetica', 'bold');
+      doc.setTextColor(37, 99, 235);
       doc.text('Detalle de Recursos', 14, yPos);
+      doc.setTextColor(0);
       
       const tableData = calculations.resources.map(r => [
         r.name,
@@ -243,17 +284,27 @@ export function BudgetSummary({ budgetId, budgetName, open, onOpenChange }: Budg
       });
     }
 
-    // Footer
+    // Footer with company info
     const pageCount = doc.getNumberOfPages();
+    const pageHeight = doc.internal.pageSize.getHeight();
     for (let i = 1; i <= pageCount; i++) {
       doc.setPage(i);
-      doc.setFontSize(8);
-      doc.setTextColor(150);
+      
+      // Footer line
+      doc.setDrawColor(200);
+      doc.line(14, pageHeight - 20, pageWidth - 14, pageHeight - 20);
+      
+      // Company info in footer
+      doc.setFontSize(7);
+      doc.setTextColor(120);
+      doc.text(`${companyName} | ${companyEmail} | ${companyPhone}`, 14, pageHeight - 14);
+      
+      // Page number
       doc.text(
         `Página ${i} de ${pageCount}`,
-        pageWidth / 2,
-        doc.internal.pageSize.getHeight() - 10,
-        { align: 'center' }
+        pageWidth - 14,
+        pageHeight - 14,
+        { align: 'right' }
       );
     }
 

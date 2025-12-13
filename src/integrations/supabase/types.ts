@@ -14,6 +14,545 @@ export type Database = {
   }
   public: {
     Tables: {
+      budget_activity_resources: {
+        Row: {
+          activity_id: string | null
+          budget_id: string
+          created_at: string | null
+          description: string | null
+          external_unit_cost: number | null
+          id: string
+          manual_units: number | null
+          name: string
+          resource_type: string | null
+          safety_margin_percent: number | null
+          sales_margin_percent: number | null
+          unit: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          activity_id?: string | null
+          budget_id: string
+          created_at?: string | null
+          description?: string | null
+          external_unit_cost?: number | null
+          id?: string
+          manual_units?: number | null
+          name: string
+          resource_type?: string | null
+          safety_margin_percent?: number | null
+          sales_margin_percent?: number | null
+          unit?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          activity_id?: string | null
+          budget_id?: string
+          created_at?: string | null
+          description?: string | null
+          external_unit_cost?: number | null
+          id?: string
+          manual_units?: number | null
+          name?: string
+          resource_type?: string | null
+          safety_margin_percent?: number | null
+          sales_margin_percent?: number | null
+          unit?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "budget_activity_resources_activity_id_fkey"
+            columns: ["activity_id"]
+            isOneToOne: false
+            referencedRelation: "budget_concepts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budget_activity_resources_budget_id_fkey"
+            columns: ["budget_id"]
+            isOneToOne: false
+            referencedRelation: "presupuestos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      budget_concepts: {
+        Row: {
+          budget_id: string
+          code: string | null
+          created_at: string | null
+          description: string | null
+          id: string
+          measurement_id: string | null
+          name: string
+          phase_id: string | null
+          updated_at: string | null
+          workspace_id: string | null
+        }
+        Insert: {
+          budget_id: string
+          code?: string | null
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          measurement_id?: string | null
+          name: string
+          phase_id?: string | null
+          updated_at?: string | null
+          workspace_id?: string | null
+        }
+        Update: {
+          budget_id?: string
+          code?: string | null
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          measurement_id?: string | null
+          name?: string
+          phase_id?: string | null
+          updated_at?: string | null
+          workspace_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "budget_concepts_budget_id_fkey"
+            columns: ["budget_id"]
+            isOneToOne: false
+            referencedRelation: "presupuestos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budget_concepts_measurement_id_fkey"
+            columns: ["measurement_id"]
+            isOneToOne: false
+            referencedRelation: "budget_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budget_concepts_phase_id_fkey"
+            columns: ["phase_id"]
+            isOneToOne: false
+            referencedRelation: "budget_phases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      budget_items: {
+        Row: {
+          budget_id: string
+          created_at: string | null
+          id: string
+          name: string
+          quantity: number | null
+          unit: string | null
+          updated_at: string | null
+          workspace_id: string | null
+        }
+        Insert: {
+          budget_id: string
+          created_at?: string | null
+          id?: string
+          name: string
+          quantity?: number | null
+          unit?: string | null
+          updated_at?: string | null
+          workspace_id?: string | null
+        }
+        Update: {
+          budget_id?: string
+          created_at?: string | null
+          id?: string
+          name?: string
+          quantity?: number | null
+          unit?: string | null
+          updated_at?: string | null
+          workspace_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "budget_items_budget_id_fkey"
+            columns: ["budget_id"]
+            isOneToOne: false
+            referencedRelation: "presupuestos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      budget_phases: {
+        Row: {
+          budget_id: string
+          code: string | null
+          created_at: string | null
+          id: string
+          name: string
+          order_index: number | null
+          parent_id: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          budget_id: string
+          code?: string | null
+          created_at?: string | null
+          id?: string
+          name: string
+          order_index?: number | null
+          parent_id?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          budget_id?: string
+          code?: string | null
+          created_at?: string | null
+          id?: string
+          name?: string
+          order_index?: number | null
+          parent_id?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "budget_phases_budget_id_fkey"
+            columns: ["budget_id"]
+            isOneToOne: false
+            referencedRelation: "presupuestos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budget_phases_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "budget_phases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      crm_activities: {
+        Row: {
+          created_at: string | null
+          id: string
+          name: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          name: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          name?: string
+        }
+        Relationships: []
+      }
+      crm_contact_activities: {
+        Row: {
+          activity_id: string
+          contact_id: string
+          created_at: string | null
+          id: string
+        }
+        Insert: {
+          activity_id: string
+          contact_id: string
+          created_at?: string | null
+          id?: string
+        }
+        Update: {
+          activity_id?: string
+          contact_id?: string
+          created_at?: string | null
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_contact_activities_activity_id_fkey"
+            columns: ["activity_id"]
+            isOneToOne: false
+            referencedRelation: "crm_activities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "crm_contact_activities_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contacts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      crm_contact_relations: {
+        Row: {
+          contact_id_a: string
+          contact_id_b: string
+          created_at: string | null
+          id: string
+        }
+        Insert: {
+          contact_id_a: string
+          contact_id_b: string
+          created_at?: string | null
+          id?: string
+        }
+        Update: {
+          contact_id_a?: string
+          contact_id_b?: string
+          created_at?: string | null
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_contact_relations_contact_id_a_fkey"
+            columns: ["contact_id_a"]
+            isOneToOne: false
+            referencedRelation: "crm_contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "crm_contact_relations_contact_id_b_fkey"
+            columns: ["contact_id_b"]
+            isOneToOne: false
+            referencedRelation: "crm_contacts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      crm_contacts: {
+        Row: {
+          address: string | null
+          city: string | null
+          contact_type: string
+          country: string | null
+          created_at: string | null
+          created_by: string | null
+          email: string | null
+          id: string
+          logo_path: string | null
+          name: string
+          nif_dni: string | null
+          observations: string | null
+          phone: string | null
+          postal_code: string | null
+          professional_activity_id: string | null
+          province: string | null
+          status: string
+          surname: string | null
+          tags: string[] | null
+          updated_at: string | null
+          website: string | null
+        }
+        Insert: {
+          address?: string | null
+          city?: string | null
+          contact_type?: string
+          country?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          email?: string | null
+          id?: string
+          logo_path?: string | null
+          name: string
+          nif_dni?: string | null
+          observations?: string | null
+          phone?: string | null
+          postal_code?: string | null
+          professional_activity_id?: string | null
+          province?: string | null
+          status?: string
+          surname?: string | null
+          tags?: string[] | null
+          updated_at?: string | null
+          website?: string | null
+        }
+        Update: {
+          address?: string | null
+          city?: string | null
+          contact_type?: string
+          country?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          email?: string | null
+          id?: string
+          logo_path?: string | null
+          name?: string
+          nif_dni?: string | null
+          observations?: string | null
+          phone?: string | null
+          postal_code?: string | null
+          professional_activity_id?: string | null
+          province?: string | null
+          status?: string
+          surname?: string | null
+          tags?: string[] | null
+          updated_at?: string | null
+          website?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_contacts_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "crm_contacts_professional_activity_id_fkey"
+            columns: ["professional_activity_id"]
+            isOneToOne: false
+            referencedRelation: "crm_professional_activities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      crm_management_contacts: {
+        Row: {
+          contact_id: string
+          created_at: string | null
+          id: string
+          management_id: string
+        }
+        Insert: {
+          contact_id: string
+          created_at?: string | null
+          id?: string
+          management_id: string
+        }
+        Update: {
+          contact_id?: string
+          created_at?: string | null
+          id?: string
+          management_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_management_contacts_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "crm_management_contacts_management_id_fkey"
+            columns: ["management_id"]
+            isOneToOne: false
+            referencedRelation: "crm_managements"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      crm_managements: {
+        Row: {
+          created_at: string | null
+          created_by: string | null
+          description: string | null
+          end_time: string | null
+          id: string
+          management_type: string
+          start_time: string | null
+          status: string
+          target_date: string | null
+          title: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          end_time?: string | null
+          id?: string
+          management_type?: string
+          start_time?: string | null
+          status?: string
+          target_date?: string | null
+          title: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          end_time?: string | null
+          id?: string
+          management_type?: string
+          start_time?: string | null
+          status?: string
+          target_date?: string | null
+          title?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_managements_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      crm_opportunities: {
+        Row: {
+          contact_id: string | null
+          created_at: string | null
+          created_by: string | null
+          description: string | null
+          id: string
+          name: string
+          updated_at: string | null
+        }
+        Insert: {
+          contact_id?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          name: string
+          updated_at?: string | null
+        }
+        Update: {
+          contact_id?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          name?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_opportunities_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "crm_opportunities_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      crm_professional_activities: {
+        Row: {
+          created_at: string | null
+          id: string
+          name: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          name: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          name?: string
+        }
+        Relationships: []
+      }
       presupuestos: {
         Row: {
           codigo_correlativo: number
@@ -67,6 +606,222 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: []
+      }
+      project_contacts: {
+        Row: {
+          contact_id: string
+          contact_role: string | null
+          created_at: string | null
+          created_by: string | null
+          id: string
+          project_id: string
+        }
+        Insert: {
+          contact_id: string
+          contact_role?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          project_id: string
+        }
+        Update: {
+          contact_id?: string
+          contact_role?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          project_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_contacts_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_contacts_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_contacts_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_documents: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          document_type: string | null
+          document_url: string | null
+          file_path: string | null
+          file_size: number | null
+          file_type: string | null
+          id: string
+          name: string
+          project_id: string | null
+          tags: string[] | null
+          uploaded_by: string | null
+          visible_to: string[] | null
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          document_type?: string | null
+          document_url?: string | null
+          file_path?: string | null
+          file_size?: number | null
+          file_type?: string | null
+          id?: string
+          name: string
+          project_id?: string | null
+          tags?: string[] | null
+          uploaded_by?: string | null
+          visible_to?: string[] | null
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          document_type?: string | null
+          document_url?: string | null
+          file_path?: string | null
+          file_size?: number | null
+          file_type?: string | null
+          id?: string
+          name?: string
+          project_id?: string | null
+          tags?: string[] | null
+          uploaded_by?: string | null
+          visible_to?: string[] | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_documents_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_documents_uploaded_by_fkey"
+            columns: ["uploaded_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_predesigns: {
+        Row: {
+          category: string | null
+          created_at: string | null
+          description: string | null
+          file_name: string
+          file_path: string
+          file_type: string | null
+          id: string
+          project_id: string
+          uploaded_by: string | null
+        }
+        Insert: {
+          category?: string | null
+          created_at?: string | null
+          description?: string | null
+          file_name: string
+          file_path: string
+          file_type?: string | null
+          id?: string
+          project_id: string
+          uploaded_by?: string | null
+        }
+        Update: {
+          category?: string | null
+          created_at?: string | null
+          description?: string | null
+          file_name?: string
+          file_path?: string
+          file_type?: string | null
+          id?: string
+          project_id?: string
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_predesigns_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_predesigns_uploaded_by_fkey"
+            columns: ["uploaded_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      projects: {
+        Row: {
+          budget: number | null
+          created_at: string | null
+          created_by: string | null
+          description: string | null
+          end_date: string | null
+          id: string
+          location: string | null
+          name: string
+          project_type: string | null
+          start_date: string | null
+          status: string
+          updated_at: string | null
+        }
+        Insert: {
+          budget?: number | null
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          end_date?: string | null
+          id?: string
+          location?: string | null
+          name: string
+          project_type?: string | null
+          start_date?: string | null
+          status?: string
+          updated_at?: string | null
+        }
+        Update: {
+          budget?: number | null
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          end_date?: string | null
+          id?: string
+          location?: string | null
+          name?: string
+          project_type?: string | null
+          start_date?: string | null
+          status?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "projects_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_presupuestos: {
         Row: {

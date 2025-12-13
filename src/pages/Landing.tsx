@@ -29,8 +29,9 @@ import homeClassic from "@/assets/home-classic.jpg";
 import homeRustic from "@/assets/home-rustic.jpg";
 import homeWood from "@/assets/home-wood.jpg";
 import homeEco from "@/assets/home-eco.jpg";
+import homeMediterranean from "@/assets/home-mediterranean.jpg";
 
-const heroImages = [homeModern, homeClassic, homeRustic, homeWood, homeEco];
+const heroImages = [homeModern, homeClassic, homeRustic, homeWood, homeEco, homeMediterranean];
 
 const Landing = () => {
   const { toast } = useToast();
@@ -427,7 +428,7 @@ const Landing = () => {
                 desc: "Vivienda rústica montañesa con piedra natural y madera autóctona." 
               },
               { 
-                image: homeEco, 
+                image: homeMediterranean, 
                 tag: "Mediterráneo", 
                 title: "Estilo Mediterráneo", 
                 desc: "Materiales locales con terrazas amplias y vistas al mar." 
@@ -437,6 +438,12 @@ const Landing = () => {
                 tag: "Madera", 
                 title: "Viviendas de madera", 
                 desc: "Vivienda escandinava de madera natural con diseño funcional y sostenible." 
+              },
+              { 
+                image: homeEco, 
+                tag: "Ecológica", 
+                title: "Casa Ecológica", 
+                desc: "Construcción sostenible con materiales naturales y bajo impacto ambiental." 
               },
             ].map((project, index) => (
               <Card key={index} className="overflow-hidden group hover:shadow-xl transition-shadow">

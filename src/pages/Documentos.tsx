@@ -30,7 +30,17 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog';
-import { ArrowLeft, Download, FileText, Search, Filter, FolderOpen, Upload, Plus, Eye, X } from 'lucide-react';
+import { ArrowLeft, Download, FileText, Search, Filter, FolderOpen, Upload, Plus, Eye, X, Trash2 } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -85,6 +95,11 @@ export default function Documentos() {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewType, setPreviewType] = useState<'image' | 'pdf' | 'unsupported'>('unsupported');
   const [previewName, setPreviewName] = useState('');
+
+  // Delete state
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [documentToDelete, setDocumentToDelete] = useState<ProjectDocument | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -270,6 +285,47 @@ export default function Documentos() {
     setPreviewOpen(false);
     setPreviewUrl(null);
     setPreviewName('');
+  };
+
+  const handleDeleteClick = (doc: ProjectDocument) => {
+    setDocumentToDelete(doc);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!documentToDelete) return;
+
+    setDeleting(true);
+    try {
+      // Delete from storage if file exists
+      if (documentToDelete.file_path) {
+        const { error: storageError } = await supabase.storage
+          .from('project-documents')
+          .remove([documentToDelete.file_path]);
+
+        if (storageError) {
+          console.error('Error deleting file from storage:', storageError);
+        }
+      }
+
+      // Delete from database
+      const { error: dbError } = await supabase
+        .from('project_documents')
+        .delete()
+        .eq('id', documentToDelete.id);
+
+      if (dbError) throw dbError;
+
+      toast.success('Documento eliminado correctamente');
+      setDeleteDialogOpen(false);
+      setDocumentToDelete(null);
+      fetchDocuments();
+    } catch (error) {
+      console.error('Error deleting document:', error);
+      toast.error('Error al eliminar el documento');
+    } finally {
+      setDeleting(false);
+    }
   };
 
   const formatFileSize = (bytes: number | null) => {
@@ -468,6 +524,17 @@ export default function Documentos() {
                             >
                               <Download className="h-4 w-4" />
                             </Button>
+                            {isAdmin() && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleDeleteClick(doc)}
+                                title="Eliminar"
+                                className="text-destructive hover:text-destructive"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            )}
                           </div>
                         </TableCell>
                       </TableRow>
@@ -598,6 +665,29 @@ export default function Documentos() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Eliminar documento?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta acción eliminará permanentemente el documento "{documentToDelete?.name}". 
+              Esta acción no se puede deshacer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteConfirm}
+              disabled={deleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleting ? 'Eliminando...' : 'Eliminar'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { 
   ArrowLeft, 
@@ -64,6 +65,7 @@ export default function Proyectos() {
   const [projectBudgetCounts, setProjectBudgetCounts] = useState<Record<string, number>>({});
   const [filteredProjects, setFilteredProjects] = useState<Project[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
   const [isLoading, setIsLoading] = useState(true);
 
   // Form states
@@ -160,13 +162,18 @@ export default function Proyectos() {
   }, [user]);
 
   useEffect(() => {
-    const filtered = projects.filter(project =>
-      project.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      project.location?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      project.project_type?.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    const filtered = projects.filter(project => {
+      const matchesSearch = 
+        project.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        project.location?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        project.project_type?.toLowerCase().includes(searchTerm.toLowerCase());
+      
+      const matchesStatus = statusFilter === 'all' || project.status === statusFilter;
+      
+      return matchesSearch && matchesStatus;
+    });
     setFilteredProjects(filtered);
-  }, [searchTerm, projects]);
+  }, [searchTerm, statusFilter, projects]);
 
   const handleAddNew = () => {
     setEditingProject(null);
@@ -296,7 +303,7 @@ export default function Proyectos() {
 
       {/* Main Content */}
       <main className="container mx-auto px-4 py-8">
-        {/* Search and Stats */}
+        {/* Search, Filter and Stats */}
         <div className="flex flex-col sm:flex-row gap-4 mb-8">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -307,7 +314,19 @@ export default function Proyectos() {
               className="pl-10"
             />
           </div>
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="w-full sm:w-48">
+              <SelectValue placeholder="Filtrar por estado" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos los estados</SelectItem>
+              <SelectItem value="active">Activo</SelectItem>
+              <SelectItem value="completed">Completado</SelectItem>
+              <SelectItem value="on_hold">En pausa</SelectItem>
+              <SelectItem value="cancelled">Cancelado</SelectItem>
+            </SelectContent>
+          </Select>
+          <div className="flex items-center gap-2 text-sm text-muted-foreground whitespace-nowrap">
             <Building2 className="h-4 w-4" />
             <span>{filteredProjects.length} proyectos</span>
           </div>

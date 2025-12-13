@@ -14,63 +14,100 @@ interface NumericInputProps extends Omit<React.InputHTMLAttributes<HTMLInputElem
 export const parseEuropeanNumber = (value: string): number => {
   if (!value || value.trim() === '') return 0;
   
-  // Remove thousands separators (dots) and convert decimal comma to period
-  // First, determine the format by checking if there's a comma after a dot
-  const cleanValue = value.trim();
+  // Remove thousands separators (dots in European format) and spaces
+  const cleanValue = value.trim().replace(/\s/g, '');
   
   // If the value has both . and , we need to determine which is the decimal separator
-  // European: 1.234,56 -> 1234.56
-  // Standard: 1,234.56 -> 1234.56
-  
   if (cleanValue.includes(',') && cleanValue.includes('.')) {
-    // Check which comes last - that's likely the decimal separator
     const lastComma = cleanValue.lastIndexOf(',');
     const lastDot = cleanValue.lastIndexOf('.');
     
     if (lastComma > lastDot) {
-      // European format: 1.234,56
+      // European format: 1.234,56 -> 1234.56
       return parseFloat(cleanValue.replace(/\./g, '').replace(',', '.')) || 0;
     } else {
-      // Standard format: 1,234.56
+      // Standard format: 1,234.56 -> 1234.56
       return parseFloat(cleanValue.replace(/,/g, '')) || 0;
     }
   } else if (cleanValue.includes(',')) {
-    // Only comma - could be European decimal or thousands
-    // If there's exactly 3 digits after comma, it might be thousands separator
-    const parts = cleanValue.split(',');
-    if (parts.length === 2 && parts[1].length === 3 && !parts[1].includes('.')) {
-      // Likely thousands separator: 1,234 -> 1234
-      return parseFloat(cleanValue.replace(',', '')) || 0;
-    }
-    // Likely European decimal: 1,5 -> 1.5
-    return parseFloat(cleanValue.replace(',', '.')) || 0;
+    // Only comma - treat as European decimal separator
+    return parseFloat(cleanValue.replace(/\./g, '').replace(',', '.')) || 0;
   }
   
-  // Standard format or just a number
-  return parseFloat(cleanValue.replace(/,/g, '')) || 0;
+  // Standard format or just a number - remove any dots used as thousands
+  return parseFloat(cleanValue) || 0;
+};
+
+/**
+ * Format a number with European thousands separators (dots) and decimal comma
+ */
+const formatWithThousands = (value: string, decimals: number): string => {
+  if (!value || value === '-') return value;
+  
+  // Check if we're in the middle of typing decimals
+  const hasDecimalSeparator = value.includes(',') || value.includes('.');
+  const endsWithSeparator = value.endsWith(',') || value.endsWith('.');
+  
+  // Parse to get the numeric value
+  const numericValue = parseEuropeanNumber(value);
+  
+  if (isNaN(numericValue)) return value;
+  
+  // Split into integer and decimal parts
+  const parts = value.replace('.', ',').split(',');
+  const integerPart = parts[0].replace(/\D/g, '');
+  const decimalPart = parts[1] || '';
+  
+  // Format integer part with thousands separators (dots)
+  const formattedInteger = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  
+  // Handle negative numbers
+  const isNegative = value.startsWith('-');
+  const prefix = isNegative ? '-' : '';
+  
+  if (hasDecimalSeparator) {
+    // Keep the decimal part as typed (up to max decimals)
+    const truncatedDecimal = decimalPart.slice(0, decimals);
+    return `${prefix}${formattedInteger},${truncatedDecimal}`;
+  }
+  
+  return `${prefix}${formattedInteger}`;
+};
+
+/**
+ * Format a number for display (with thousands and decimals)
+ */
+const formatForDisplay = (value: number, decimals: number): string => {
+  if (value === 0) return '0,00';
+  
+  const formatted = new Intl.NumberFormat('es-ES', {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  }).format(value);
+  
+  return formatted;
 };
 
 /**
  * NumericInput component that accepts both European (comma) and standard (period) 
- * decimal separators. Displays the value as-is but parses correctly on change.
+ * decimal separators. Displays with automatic thousands separators.
  */
 const NumericInput = React.forwardRef<HTMLInputElement, NumericInputProps>(
   ({ className, value, onChange, decimals = 2, ...props }, ref) => {
     const [displayValue, setDisplayValue] = React.useState<string>('');
+    const [isFocused, setIsFocused] = React.useState(false);
     
     // Initialize display value from prop
     React.useEffect(() => {
-      if (typeof value === 'number') {
-        // Convert number to display string with comma as decimal separator
-        const formatted = value.toFixed(decimals).replace('.', ',');
-        // Only update if different to avoid cursor jumping
-        if (parseEuropeanNumber(displayValue) !== value) {
-          setDisplayValue(formatted);
+      if (!isFocused) {
+        if (typeof value === 'number') {
+          setDisplayValue(formatForDisplay(value, decimals));
+        } else if (typeof value === 'string') {
+          const numValue = parseEuropeanNumber(value);
+          setDisplayValue(formatForDisplay(numValue, decimals));
         }
-      } else if (typeof value === 'string') {
-        setDisplayValue(value);
       }
-    }, [value, decimals]);
+    }, [value, decimals, isFocused]);
     
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
       const inputValue = e.target.value;
@@ -82,24 +119,38 @@ const NumericInput = React.forwardRef<HTMLInputElement, NumericInputProps>(
         return;
       }
       
-      // Allow valid numeric input characters (digits, comma, period, minus)
-      const validPattern = /^-?[\d.,]*$/;
+      // Allow valid numeric input characters (digits, comma, period, minus, dots for thousands)
+      const validPattern = /^-?[\d.,\s]*$/;
       if (!validPattern.test(inputValue)) {
         return;
       }
       
-      setDisplayValue(inputValue);
+      // Format with thousands separators while typing
+      const formatted = formatWithThousands(inputValue, decimals);
+      setDisplayValue(formatted);
+      
       const numericValue = parseEuropeanNumber(inputValue);
       onChange(numericValue);
     };
     
-    const handleBlur = (e: React.FocusEvent<HTMLInputElement>) => {
-      // On blur, format the value properly
-      const numericValue = parseEuropeanNumber(displayValue);
-      const formatted = numericValue.toFixed(decimals).replace('.', ',');
-      setDisplayValue(formatted);
+    const handleFocus = (e: React.FocusEvent<HTMLInputElement>) => {
+      setIsFocused(true);
+      // Select all text on focus for easy editing
+      setTimeout(() => {
+        e.target.select();
+      }, 0);
       
-      // Call original onBlur if provided
+      if (props.onFocus) {
+        props.onFocus(e);
+      }
+    };
+    
+    const handleBlur = (e: React.FocusEvent<HTMLInputElement>) => {
+      setIsFocused(false);
+      // On blur, format the value properly with all decimals
+      const numericValue = parseEuropeanNumber(displayValue);
+      setDisplayValue(formatForDisplay(numericValue, decimals));
+      
       if (props.onBlur) {
         props.onBlur(e);
       }
@@ -110,12 +161,13 @@ const NumericInput = React.forwardRef<HTMLInputElement, NumericInputProps>(
         type="text"
         inputMode="decimal"
         className={cn(
-          "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm",
+          "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm text-right",
           className,
         )}
         ref={ref}
         value={displayValue}
         onChange={handleChange}
+        onFocus={handleFocus}
         onBlur={handleBlur}
         {...props}
       />

@@ -7,7 +7,8 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
-import { ArrowLeft, Calculator, FolderOpen, Building2, Search, Calendar } from 'lucide-react';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { ArrowLeft, Calculator, FolderOpen, Building2, Search, Calendar, LayoutGrid, List } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 
@@ -18,6 +19,7 @@ export default function Presupuestos() {
   const [sortBy, setSortBy] = useState<'name_asc' | 'name_desc' | 'date_asc' | 'date_desc'>('date_desc');
   const [projectFilter, setProjectFilter] = useState<string>('all');
   const [currentPage, setCurrentPage] = useState(1);
+  const [viewMode, setViewMode] = useState<'cards' | 'list'>('cards');
   const itemsPerPage = 9;
 
   // Get unique projects for filter
@@ -186,64 +188,142 @@ export default function Presupuestos() {
             <Calculator className="h-4 w-4" />
             <span>{filteredPresupuestos.length} presupuestos</span>
           </div>
+          <div className="flex items-center border rounded-lg">
+            <Button
+              variant={viewMode === 'cards' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => setViewMode('cards')}
+              className="rounded-r-none"
+            >
+              <LayoutGrid className="h-4 w-4" />
+            </Button>
+            <Button
+              variant={viewMode === 'list' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => setViewMode('list')}
+              className="rounded-l-none"
+            >
+              <List className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
 
         {paginatedPresupuestos.length > 0 ? (
           <>
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {paginatedPresupuestos.map((up) => (
-                <Card 
-                  key={up.presupuesto_id} 
-                  className="cursor-pointer hover:shadow-lg hover:border-primary/50 transition-all"
-                  onClick={() => navigate(`/presupuestos/${up.presupuesto_id}`)}
-                >
-                  <CardHeader>
-                    <div className="flex items-start justify-between">
-                      <div className="p-2 rounded-lg bg-primary/10">
-                        <Calculator className="h-5 w-5 text-primary" />
-                      </div>
-                      <span className="text-xs bg-muted text-muted-foreground px-2 py-1 rounded-full capitalize">
-                        {up.role}
-                      </span>
-                    </div>
-                    <CardTitle className="text-lg">
-                      {up.presupuesto?.nombre || 'Sin nombre'}
-                    </CardTitle>
-                    <CardDescription>
-                      {up.presupuesto?.poblacion} • Versión {up.presupuesto?.version}
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-2">
-                    <div className="flex items-center justify-between text-sm text-muted-foreground">
-                      <span>Código: {up.presupuesto?.codigo_correlativo}</span>
-                      {up.presupuesto?.created_at && (
-                        <span className="flex items-center gap-1">
-                          <Calendar className="h-3 w-3" />
-                          {format(new Date(up.presupuesto.created_at), 'd MMM yyyy', { locale: es })}
+            {viewMode === 'cards' ? (
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {paginatedPresupuestos.map((up) => (
+                  <Card 
+                    key={up.presupuesto_id} 
+                    className="cursor-pointer hover:shadow-lg hover:border-primary/50 transition-all"
+                    onClick={() => navigate(`/presupuestos/${up.presupuesto_id}`)}
+                  >
+                    <CardHeader>
+                      <div className="flex items-start justify-between">
+                        <div className="p-2 rounded-lg bg-primary/10">
+                          <Calculator className="h-5 w-5 text-primary" />
+                        </div>
+                        <span className="text-xs bg-muted text-muted-foreground px-2 py-1 rounded-full capitalize">
+                          {up.role}
                         </span>
-                      )}
-                    </div>
-                    {up.presupuesto?.project && (
-                      <div className="flex items-center justify-between gap-2">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            navigate(`/proyectos?id=${up.presupuesto?.project?.id}`);
-                          }}
-                          className="flex items-center gap-2 text-sm text-primary hover:underline"
-                        >
-                          <Building2 className="h-4 w-4" />
-                          <span>{up.presupuesto.project.name}</span>
-                        </button>
-                        <Badge variant={getStatusVariant(up.presupuesto.project.status)}>
-                          {getStatusLabel(up.presupuesto.project.status)}
-                        </Badge>
                       </div>
-                    )}
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
+                      <CardTitle className="text-lg">
+                        {up.presupuesto?.nombre || 'Sin nombre'}
+                      </CardTitle>
+                      <CardDescription>
+                        {up.presupuesto?.poblacion} • Versión {up.presupuesto?.version}
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-2">
+                      <div className="flex items-center justify-between text-sm text-muted-foreground">
+                        <span>Código: {up.presupuesto?.codigo_correlativo}</span>
+                        {up.presupuesto?.created_at && (
+                          <span className="flex items-center gap-1">
+                            <Calendar className="h-3 w-3" />
+                            {format(new Date(up.presupuesto.created_at), 'd MMM yyyy', { locale: es })}
+                          </span>
+                        )}
+                      </div>
+                      {up.presupuesto?.project && (
+                        <div className="flex items-center justify-between gap-2">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigate(`/proyectos?id=${up.presupuesto?.project?.id}`);
+                            }}
+                            className="flex items-center gap-2 text-sm text-primary hover:underline"
+                          >
+                            <Building2 className="h-4 w-4" />
+                            <span>{up.presupuesto.project.name}</span>
+                          </button>
+                          <Badge variant={getStatusVariant(up.presupuesto.project.status)}>
+                            {getStatusLabel(up.presupuesto.project.status)}
+                          </Badge>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            ) : (
+              <div className="border rounded-lg overflow-hidden">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Nombre</TableHead>
+                      <TableHead>Código</TableHead>
+                      <TableHead>Población</TableHead>
+                      <TableHead>Versión</TableHead>
+                      <TableHead>Proyecto</TableHead>
+                      <TableHead>Rol</TableHead>
+                      <TableHead>Fecha</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {paginatedPresupuestos.map((up) => (
+                      <TableRow 
+                        key={up.presupuesto_id}
+                        className="cursor-pointer hover:bg-muted/50"
+                        onClick={() => navigate(`/presupuestos/${up.presupuesto_id}`)}
+                      >
+                        <TableCell className="font-medium">
+                          {up.presupuesto?.nombre || 'Sin nombre'}
+                        </TableCell>
+                        <TableCell>{up.presupuesto?.codigo_correlativo}</TableCell>
+                        <TableCell>{up.presupuesto?.poblacion}</TableCell>
+                        <TableCell>{up.presupuesto?.version}</TableCell>
+                        <TableCell>
+                          {up.presupuesto?.project ? (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigate(`/proyectos?id=${up.presupuesto?.project?.id}`);
+                              }}
+                              className="flex items-center gap-2 text-sm text-primary hover:underline"
+                            >
+                              <Building2 className="h-4 w-4" />
+                              <span>{up.presupuesto.project.name}</span>
+                            </button>
+                          ) : (
+                            <span className="text-muted-foreground">-</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <span className="text-xs bg-muted text-muted-foreground px-2 py-1 rounded-full capitalize">
+                            {up.role}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {up.presupuesto?.created_at 
+                            ? format(new Date(up.presupuesto.created_at), 'd MMM yyyy', { locale: es })
+                            : '-'}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
 
             {/* Pagination */}
             {totalPages > 1 && (

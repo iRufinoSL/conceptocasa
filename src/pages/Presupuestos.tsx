@@ -5,12 +5,14 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ArrowLeft, Calculator, FolderOpen, Building2, Search } from 'lucide-react';
 
 export default function Presupuestos() {
   const navigate = useNavigate();
   const { user, loading, userPresupuestos, isAdmin } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
+  const [sortBy, setSortBy] = useState<'name_asc' | 'name_desc' | 'date_asc' | 'date_desc'>('date_desc');
 
   useEffect(() => {
     if (!loading && !user) {
@@ -27,17 +29,37 @@ export default function Presupuestos() {
   }
 
   const filteredPresupuestos = useMemo(() => {
-    if (!searchTerm.trim()) return userPresupuestos;
+    let result = [...userPresupuestos];
     
-    const term = searchTerm.toLowerCase();
-    return userPresupuestos.filter(up => 
-      up.presupuesto?.nombre?.toLowerCase().includes(term) ||
-      up.presupuesto?.poblacion?.toLowerCase().includes(term) ||
-      up.presupuesto?.codigo_correlativo?.toString().includes(term) ||
-      up.presupuesto?.version?.toLowerCase().includes(term) ||
-      up.presupuesto?.project?.name?.toLowerCase().includes(term)
-    );
-  }, [userPresupuestos, searchTerm]);
+    // Filter
+    if (searchTerm.trim()) {
+      const term = searchTerm.toLowerCase();
+      result = result.filter(up => 
+        up.presupuesto?.nombre?.toLowerCase().includes(term) ||
+        up.presupuesto?.poblacion?.toLowerCase().includes(term) ||
+        up.presupuesto?.codigo_correlativo?.toString().includes(term) ||
+        up.presupuesto?.version?.toLowerCase().includes(term) ||
+        up.presupuesto?.project?.name?.toLowerCase().includes(term)
+      );
+    }
+    
+    // Sort
+    result.sort((a, b) => {
+      switch (sortBy) {
+        case 'name_asc':
+          return (a.presupuesto?.nombre || '').localeCompare(b.presupuesto?.nombre || '');
+        case 'name_desc':
+          return (b.presupuesto?.nombre || '').localeCompare(a.presupuesto?.nombre || '');
+        case 'date_asc':
+          return new Date(a.presupuesto?.created_at || 0).getTime() - new Date(b.presupuesto?.created_at || 0).getTime();
+        case 'date_desc':
+        default:
+          return new Date(b.presupuesto?.created_at || 0).getTime() - new Date(a.presupuesto?.created_at || 0).getTime();
+      }
+    });
+    
+    return result;
+  }, [userPresupuestos, searchTerm, sortBy]);
 
   const getStatusLabel = (status: string) => {
     const labels: Record<string, string> = {
@@ -86,7 +108,7 @@ export default function Presupuestos() {
           </p>
         </div>
 
-        {/* Search */}
+        {/* Search and Sort */}
         <div className="flex flex-col sm:flex-row gap-4 mb-6">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -97,6 +119,17 @@ export default function Presupuestos() {
               className="pl-10"
             />
           </div>
+          <Select value={sortBy} onValueChange={(v) => setSortBy(v as typeof sortBy)}>
+            <SelectTrigger className="w-full sm:w-48">
+              <SelectValue placeholder="Ordenar por" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="date_desc">Más recientes</SelectItem>
+              <SelectItem value="date_asc">Más antiguos</SelectItem>
+              <SelectItem value="name_asc">Nombre A-Z</SelectItem>
+              <SelectItem value="name_desc">Nombre Z-A</SelectItem>
+            </SelectContent>
+          </Select>
           <div className="flex items-center gap-2 text-sm text-muted-foreground whitespace-nowrap">
             <Calculator className="h-4 w-4" />
             <span>{filteredPresupuestos.length} presupuestos</span>

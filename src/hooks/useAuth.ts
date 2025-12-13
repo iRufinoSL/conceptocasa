@@ -18,6 +18,7 @@ interface UserPresupuesto {
     codigo_correlativo: number;
     version: string;
     poblacion: string;
+    created_at: string;
     project_id: string | null;
     project?: {
       id: string;
@@ -71,6 +72,7 @@ export function useAuth() {
               codigo_correlativo,
               version,
               poblacion,
+              created_at,
               project_id,
               projects (
                 id,

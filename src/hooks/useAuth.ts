@@ -30,7 +30,60 @@ export function useAuth() {
   const [userPresupuestos, setUserPresupuestos] = useState<UserPresupuesto[]>([]);
 
   useEffect(() => {
-    console.log('[useAuth] Initializing auth...');
+    let isMounted = true;
+    
+    const loadUserData = async (userId: string) => {
+      if (!isMounted) return;
+      setRolesLoading(true);
+      
+      try {
+        // Fetch roles
+        const { data: rolesData, error: rolesError } = await supabase
+          .from('user_roles')
+          .select('role')
+          .eq('user_id', userId);
+        
+        if (!isMounted) return;
+        
+        if (rolesError) {
+          console.error('[useAuth] Error fetching roles:', rolesError);
+        } else if (rolesData) {
+          const fetchedRoles = rolesData.map((r: UserRole) => r.role);
+          console.log('[useAuth] Roles loaded:', fetchedRoles);
+          setRoles(fetchedRoles);
+        }
+
+        // Fetch presupuestos
+        const { data: presupuestosData, error: presupuestosError } = await supabase
+          .from('user_presupuestos')
+          .select(`
+            presupuesto_id,
+            role,
+            presupuestos (
+              id,
+              nombre,
+              codigo_correlativo,
+              version,
+              poblacion
+            )
+          `)
+          .eq('user_id', userId);
+        
+        if (!isMounted) return;
+        
+        if (!presupuestosError && presupuestosData) {
+          setUserPresupuestos(presupuestosData.map((up: any) => ({
+            presupuesto_id: up.presupuesto_id,
+            role: up.role,
+            presupuesto: up.presupuestos
+          })));
+        }
+      } finally {
+        if (isMounted) {
+          setRolesLoading(false);
+        }
+      }
+    };
     
     // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
@@ -40,12 +93,7 @@ export function useAuth() {
         setUser(session?.user ?? null);
         
         if (session?.user) {
-          setRolesLoading(true);
-          // Defer Supabase calls with setTimeout
-          setTimeout(() => {
-            fetchUserRoles(session.user.id);
-            fetchUserPresupuestos(session.user.id);
-          }, 0);
+          loadUserData(session.user.id);
         } else {
           setRoles([]);
           setUserPresupuestos([]);
@@ -58,14 +106,13 @@ export function useAuth() {
 
     // THEN check for existing session
     supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!isMounted) return;
       console.log('[useAuth] Got existing session:', session?.user?.email);
       setSession(session);
       setUser(session?.user ?? null);
       
       if (session?.user) {
-        setRolesLoading(true);
-        fetchUserRoles(session.user.id);
-        fetchUserPresupuestos(session.user.id);
+        loadUserData(session.user.id);
       } else {
         setRolesLoading(false);
       }
@@ -73,57 +120,11 @@ export function useAuth() {
       setLoading(false);
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
-
-  const fetchUserRoles = async (userId: string) => {
-    console.log('[useAuth] Fetching roles for user:', userId);
-    try {
-      const { data, error } = await supabase
-        .from('user_roles')
-        .select('role')
-        .eq('user_id', userId);
-      
-      console.log('[useAuth] Roles response:', { data, error });
-      
-      if (error) {
-        console.error('[useAuth] Error fetching roles:', error);
-      }
-      
-      if (!error && data) {
-        const fetchedRoles = data.map((r: UserRole) => r.role);
-        console.log('[useAuth] Setting roles:', fetchedRoles);
-        setRoles(fetchedRoles);
-      }
-    } finally {
-      setRolesLoading(false);
-    }
-  };
-
-  const fetchUserPresupuestos = async (userId: string) => {
-    const { data, error } = await supabase
-      .from('user_presupuestos')
-      .select(`
-        presupuesto_id,
-        role,
-        presupuestos (
-          id,
-          nombre,
-          codigo_correlativo,
-          version,
-          poblacion
-        )
-      `)
-      .eq('user_id', userId);
-    
-    if (!error && data) {
-      setUserPresupuestos(data.map((up: any) => ({
-        presupuesto_id: up.presupuesto_id,
-        role: up.role,
-        presupuesto: up.presupuestos
-      })));
-    }
-  };
 
   const signIn = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({

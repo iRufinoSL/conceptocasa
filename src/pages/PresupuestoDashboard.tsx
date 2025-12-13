@@ -9,7 +9,7 @@ import { ArrowLeft, Calculator, ClipboardList, Building2, FileText, Settings, Ca
 import { AppNavDropdown } from '@/components/AppNavDropdown';
 import { BudgetActivitiesTab } from '@/components/presupuestos/BudgetActivitiesTab';
 import { BudgetPhasesTab } from '@/components/presupuestos/BudgetPhasesTab';
-
+import { BudgetResourcesTab } from '@/components/presupuestos/BudgetResourcesTab';
 interface Presupuesto {
   id: string;
   nombre: string;
@@ -198,7 +198,7 @@ export default function PresupuestoDashboard() {
             </TabsTrigger>
             <TabsTrigger value="recursos" className="flex items-center gap-2">
               <FileText className="h-4 w-4" />
-              <span className="hidden sm:inline">Recursos</span>
+              <span className="hidden sm:inline">CÓMO hacer?</span>
             </TabsTrigger>
             <TabsTrigger value="resumen" className="flex items-center gap-2">
               <Calculator className="h-4 w-4" />
@@ -219,15 +219,7 @@ export default function PresupuestoDashboard() {
           </TabsContent>
 
           <TabsContent value="recursos" className="mt-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Recursos del Presupuesto</CardTitle>
-                <CardDescription>Gestión de recursos asignados a las actividades</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <p className="text-muted-foreground text-center py-8">Próximamente</p>
-              </CardContent>
-            </Card>
+            <BudgetResourcesTab budgetId={presupuesto.id} isAdmin={isAdmin} />
           </TabsContent>
 
           <TabsContent value="resumen" className="mt-6">

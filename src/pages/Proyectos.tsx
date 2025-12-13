@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { 
   ArrowLeft, 
@@ -18,11 +19,13 @@ import {
   Plus,
   MoreVertical,
   Pencil,
-  Trash2
+  Trash2,
+  Users
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { ProjectForm } from '@/components/projects/ProjectForm';
+import { ProjectContactsManager } from '@/components/projects/ProjectContactsManager';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import { useToast } from '@/hooks/use-toast';
 
@@ -39,11 +42,21 @@ interface Project {
   created_at: string | null;
 }
 
+interface ProjectContact {
+  contact_id: string;
+  contact_role: string | null;
+  contact: {
+    name: string;
+    surname: string | null;
+  } | null;
+}
+
 export default function Proyectos() {
   const navigate = useNavigate();
   const { user, loading, rolesLoading, isAdmin } = useAuth();
   const { toast } = useToast();
   const [projects, setProjects] = useState<Project[]>([]);
+  const [projectContacts, setProjectContacts] = useState<Record<string, ProjectContact[]>>({});
   const [filteredProjects, setFilteredProjects] = useState<Project[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [isLoading, setIsLoading] = useState(true);
@@ -51,6 +64,10 @@ export default function Proyectos() {
   // Form states
   const [formOpen, setFormOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
+
+  // Contacts manager state
+  const [contactsManagerOpen, setContactsManagerOpen] = useState(false);
+  const [selectedProjectForContacts, setSelectedProjectForContacts] = useState<Project | null>(null);
 
   // Delete states
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -72,6 +89,36 @@ export default function Proyectos() {
     if (!error && data) {
       setProjects(data);
       setFilteredProjects(data);
+      
+      // Fetch contacts for all projects
+      const projectIds = data.map(p => p.id);
+      if (projectIds.length > 0) {
+        const { data: contactsData } = await supabase
+          .from('project_contacts')
+          .select('project_id, contact_id, contact_role')
+          .in('project_id', projectIds);
+
+        if (contactsData) {
+          // Fetch contact details
+          const contactIds = [...new Set(contactsData.map(pc => pc.contact_id))];
+          const { data: contactDetails } = await supabase
+            .from('crm_contacts')
+            .select('id, name, surname')
+            .in('id', contactIds);
+
+          // Group by project
+          const grouped: Record<string, ProjectContact[]> = {};
+          contactsData.forEach(pc => {
+            if (!grouped[pc.project_id]) grouped[pc.project_id] = [];
+            grouped[pc.project_id].push({
+              contact_id: pc.contact_id,
+              contact_role: pc.contact_role,
+              contact: contactDetails?.find(c => c.id === pc.contact_id) || null
+            });
+          });
+          setProjectContacts(grouped);
+        }
+      }
     }
     setIsLoading(false);
   };
@@ -99,6 +146,11 @@ export default function Proyectos() {
   const handleEdit = (project: Project) => {
     setEditingProject(project);
     setFormOpen(true);
+  };
+
+  const handleManageContacts = (project: Project) => {
+    setSelectedProjectForContacts(project);
+    setContactsManagerOpen(true);
   };
 
   const handleDeleteClick = (project: Project) => {
@@ -156,6 +208,12 @@ export default function Proyectos() {
       currency: 'EUR',
       maximumFractionDigits: 0
     }).format(amount);
+  };
+
+  const getInitials = (name: string, surname?: string | null) => {
+    const first = name.charAt(0).toUpperCase();
+    const second = surname ? surname.charAt(0).toUpperCase() : '';
+    return first + second;
   };
 
   const canEdit = isAdmin();
@@ -233,76 +291,108 @@ export default function Proyectos() {
           </Card>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {filteredProjects.map((project) => (
-              <Card
-                key={project.id}
-                className="group hover:shadow-lg hover:border-primary/50 transition-all duration-200"
-              >
-                <CardHeader className="pb-3">
-                  <div className="flex items-start justify-between">
-                    <CardTitle className="text-lg line-clamp-1 flex-1">{project.name}</CardTitle>
-                    <div className="flex items-center gap-1">
-                      <Badge variant={getStatusVariant(project.status)}>
-                        {getStatusLabel(project.status)}
-                      </Badge>
-                      {canEdit && (
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity">
-                              <MoreVertical className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => handleEdit(project)}>
-                              <Pencil className="h-4 w-4 mr-2" />
-                              Editar
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleDeleteClick(project)} className="text-destructive">
-                              <Trash2 className="h-4 w-4 mr-2" />
-                              Eliminar
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      )}
+            {filteredProjects.map((project) => {
+              const contacts = projectContacts[project.id] || [];
+              return (
+                <Card
+                  key={project.id}
+                  className="group hover:shadow-lg hover:border-primary/50 transition-all duration-200"
+                >
+                  <CardHeader className="pb-3">
+                    <div className="flex items-start justify-between">
+                      <CardTitle className="text-lg line-clamp-1 flex-1">{project.name}</CardTitle>
+                      <div className="flex items-center gap-1">
+                        <Badge variant={getStatusVariant(project.status)}>
+                          {getStatusLabel(project.status)}
+                        </Badge>
+                        {canEdit && (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <MoreVertical className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => handleManageContacts(project)}>
+                                <Users className="h-4 w-4 mr-2" />
+                                Gestionar contactos
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleEdit(project)}>
+                                <Pencil className="h-4 w-4 mr-2" />
+                                Editar
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleDeleteClick(project)} className="text-destructive">
+                                <Trash2 className="h-4 w-4 mr-2" />
+                                Eliminar
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                  {project.description && (
-                    <CardDescription className="line-clamp-2">
-                      {project.description}
-                    </CardDescription>
-                  )}
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  {project.location && (
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <MapPin className="h-4 w-4" />
-                      <span>{project.location}</span>
-                    </div>
-                  )}
-                  {project.project_type && (
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <Building2 className="h-4 w-4" />
-                      <span>{project.project_type}</span>
-                    </div>
-                  )}
-                  {project.budget && (
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <DollarSign className="h-4 w-4" />
-                      <span>{formatCurrency(project.budget)}</span>
-                    </div>
-                  )}
-                  {project.start_date && (
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <Calendar className="h-4 w-4" />
-                      <span>
-                        {format(new Date(project.start_date), 'dd MMM yyyy', { locale: es })}
-                        {project.end_date && ` - ${format(new Date(project.end_date), 'dd MMM yyyy', { locale: es })}`}
-                      </span>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            ))}
+                    {project.description && (
+                      <CardDescription className="line-clamp-2">
+                        {project.description}
+                      </CardDescription>
+                    )}
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {project.location && (
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <MapPin className="h-4 w-4" />
+                        <span>{project.location}</span>
+                      </div>
+                    )}
+                    {project.project_type && (
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Building2 className="h-4 w-4" />
+                        <span>{project.project_type}</span>
+                      </div>
+                    )}
+                    {project.budget && (
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <DollarSign className="h-4 w-4" />
+                        <span>{formatCurrency(project.budget)}</span>
+                      </div>
+                    )}
+                    {project.start_date && (
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Calendar className="h-4 w-4" />
+                        <span>
+                          {format(new Date(project.start_date), 'dd MMM yyyy', { locale: es })}
+                          {project.end_date && ` - ${format(new Date(project.end_date), 'dd MMM yyyy', { locale: es })}`}
+                        </span>
+                      </div>
+                    )}
+                    
+                    {/* Project Contacts */}
+                    {contacts.length > 0 && (
+                      <div className="pt-2 border-t">
+                        <div className="flex items-center gap-2">
+                          <div className="flex -space-x-2">
+                            {contacts.slice(0, 4).map((pc, idx) => (
+                              <Avatar key={idx} className="h-7 w-7 border-2 border-background">
+                                <AvatarFallback className="text-xs bg-primary/10 text-primary">
+                                  {pc.contact ? getInitials(pc.contact.name, pc.contact.surname) : '?'}
+                                </AvatarFallback>
+                              </Avatar>
+                            ))}
+                            {contacts.length > 4 && (
+                              <div className="h-7 w-7 rounded-full bg-muted flex items-center justify-center text-xs border-2 border-background">
+                                +{contacts.length - 4}
+                              </div>
+                            )}
+                          </div>
+                          <span className="text-xs text-muted-foreground">
+                            {contacts.length} contacto{contacts.length !== 1 ? 's' : ''}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
         )}
       </main>
@@ -314,6 +404,21 @@ export default function Proyectos() {
         project={editingProject}
         onSuccess={fetchProjects}
       />
+
+      {/* Contacts Manager */}
+      {selectedProjectForContacts && (
+        <ProjectContactsManager
+          open={contactsManagerOpen}
+          onOpenChange={(open) => {
+            setContactsManagerOpen(open);
+            if (!open) {
+              fetchProjects(); // Refresh to show updated contacts
+            }
+          }}
+          projectId={selectedProjectForContacts.id}
+          projectName={selectedProjectForContacts.name}
+        />
+      )}
 
       {/* Delete Confirmation */}
       <DeleteConfirmDialog

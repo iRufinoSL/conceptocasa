@@ -44,6 +44,7 @@ import {
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { AppNavDropdown } from '@/components/AppNavDropdown';
 
 interface ProjectDocument {
   id: string;
@@ -414,6 +415,7 @@ export default function Documentos() {
               <Button variant="ghost" size="icon" onClick={() => navigate('/dashboard')}>
                 <ArrowLeft className="h-5 w-5" />
               </Button>
+              <AppNavDropdown />
               <div className="flex items-center gap-3">
                 <div className="p-2 rounded-lg bg-primary/10">
                   <FileText className="h-6 w-6 text-primary" />

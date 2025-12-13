@@ -12,6 +12,7 @@ import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import { Button } from '@/components/ui/button';
 import { Plus, FolderOpen, LayoutGrid, List, ArrowLeft, Package } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { AppNavDropdown } from '@/components/AppNavDropdown';
 
 type ViewMode = 'cards' | 'list';
 
@@ -115,6 +116,7 @@ export default function Recursos() {
           <Button variant="ghost" size="icon" onClick={() => navigate('/dashboard')}>
             <ArrowLeft className="h-5 w-5" />
           </Button>
+          <AppNavDropdown />
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-lg bg-primary/10">
               <Package className="h-5 w-5 text-primary" />

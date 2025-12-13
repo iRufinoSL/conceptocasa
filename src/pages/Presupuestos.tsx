@@ -15,6 +15,7 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { formatCurrency } from '@/lib/format-utils';
 import { BudgetSummary } from '@/components/presupuestos/BudgetSummary';
+import { AppNavDropdown } from '@/components/AppNavDropdown';
 
 interface PresupuestoData {
   presupuesto_id: string;
@@ -304,6 +305,7 @@ export default function Presupuestos() {
           <Button variant="ghost" size="icon" onClick={() => navigate('/dashboard')}>
             <ArrowLeft className="h-5 w-5" />
           </Button>
+          <AppNavDropdown />
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-lg bg-primary/10">
               <Calculator className="h-5 w-5 text-primary" />

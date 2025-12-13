@@ -914,14 +914,14 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
             <div className="space-y-2">
               <Label htmlFor="phase">Fase de Gestión</Label>
               <Select 
-                value={form.phase_id} 
-                onValueChange={(value) => setForm({ ...form, phase_id: value })}
+                value={form.phase_id || 'none'} 
+                onValueChange={(value) => setForm({ ...form, phase_id: value === 'none' ? '' : value })}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Seleccionar fase..." />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Sin fase</SelectItem>
+                  <SelectItem value="none">Sin fase</SelectItem>
                   {phases.map(phase => (
                     <SelectItem key={phase.id} value={phase.id}>
                       {phase.code} {phase.name}

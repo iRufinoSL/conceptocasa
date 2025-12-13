@@ -59,6 +59,19 @@ export default function Presupuestos() {
     return Array.from(projects.entries()).map(([id, name]) => ({ id, name }));
   }, [userPresupuestos]);
 
+  // Statistics
+  const stats = useMemo(() => {
+    const total = userPresupuestos.length;
+    const withProject = userPresupuestos.filter(up => up.presupuesto?.project_id).length;
+    const withoutProject = total - withProject;
+    const byRole = {
+      administrador: userPresupuestos.filter(up => up.role === 'administrador').length,
+      colaborador: userPresupuestos.filter(up => up.role === 'colaborador').length,
+      cliente: userPresupuestos.filter(up => up.role === 'cliente').length,
+    };
+    return { total, withProject, withoutProject, byRole };
+  }, [userPresupuestos]);
+
   useEffect(() => {
     if (!loading && !user) {
       navigate('/auth');
@@ -195,11 +208,67 @@ export default function Presupuestos() {
       <main className="container mx-auto px-4 py-8">
         <div className="mb-8">
           <h2 className="text-2xl font-bold text-foreground mb-2">Mis Presupuestos</h2>
-          <p className="text-muted-foreground">
+          <p className="text-muted-foreground mb-6">
             {isAdmin() 
               ? 'Gestiona todos los presupuestos del sistema'
               : 'Presupuestos a los que tienes acceso'}
           </p>
+          
+          {/* Statistics Cards */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <Card className="bg-primary/5 border-primary/20">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-primary/10">
+                    <Calculator className="h-5 w-5 text-primary" />
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold text-foreground">{stats.total}</p>
+                    <p className="text-xs text-muted-foreground">Total</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="bg-green-500/5 border-green-500/20">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-green-500/10">
+                    <Building2 className="h-5 w-5 text-green-600" />
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold text-foreground">{stats.withProject}</p>
+                    <p className="text-xs text-muted-foreground">Con proyecto</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="bg-orange-500/5 border-orange-500/20">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-orange-500/10">
+                    <FolderOpen className="h-5 w-5 text-orange-600" />
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold text-foreground">{stats.withoutProject}</p>
+                    <p className="text-xs text-muted-foreground">Sin proyecto</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="bg-blue-500/5 border-blue-500/20">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-blue-500/10">
+                    <Calendar className="h-5 w-5 text-blue-600" />
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold text-foreground">{uniqueProjects.length}</p>
+                    <p className="text-xs text-muted-foreground">Proyectos</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         </div>
 
         {/* Search and Sort */}

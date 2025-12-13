@@ -19,7 +19,16 @@ export default function Presupuestos() {
   const [sortBy, setSortBy] = useState<'name_asc' | 'name_desc' | 'date_asc' | 'date_desc'>('date_desc');
   const [projectFilter, setProjectFilter] = useState<string>('all');
   const [currentPage, setCurrentPage] = useState(1);
-  const [viewMode, setViewMode] = useState<'cards' | 'list'>('cards');
+  const [viewMode, setViewMode] = useState<'cards' | 'list'>(() => {
+    const saved = localStorage.getItem('presupuestos-view-mode');
+    return (saved === 'cards' || saved === 'list') ? saved : 'cards';
+  });
+
+  // Persist view mode preference
+  const handleViewModeChange = (mode: 'cards' | 'list') => {
+    setViewMode(mode);
+    localStorage.setItem('presupuestos-view-mode', mode);
+  };
   const itemsPerPage = 9;
 
   // Get unique projects for filter
@@ -229,7 +238,7 @@ export default function Presupuestos() {
             <Button
               variant={viewMode === 'cards' ? 'default' : 'ghost'}
               size="sm"
-              onClick={() => setViewMode('cards')}
+              onClick={() => handleViewModeChange('cards')}
               className="rounded-r-none"
             >
               <LayoutGrid className="h-4 w-4" />
@@ -237,7 +246,7 @@ export default function Presupuestos() {
             <Button
               variant={viewMode === 'list' ? 'default' : 'ghost'}
               size="sm"
-              onClick={() => setViewMode('list')}
+              onClick={() => handleViewModeChange('list')}
               className="rounded-l-none"
             >
               <List className="h-4 w-4" />

@@ -162,7 +162,7 @@ export default function Proyectos() {
   }, [user]);
 
   useEffect(() => {
-    const filtered = projects.filter(project => {
+    let filtered = projects.filter(project => {
       const matchesSearch = 
         project.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         project.location?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -172,6 +172,10 @@ export default function Proyectos() {
       
       return matchesSearch && matchesStatus;
     });
+    
+    // Sort alphabetically by name
+    filtered.sort((a, b) => a.name.localeCompare(b.name, 'es'));
+    
     setFilteredProjects(filtered);
   }, [searchTerm, statusFilter, projects]);
 

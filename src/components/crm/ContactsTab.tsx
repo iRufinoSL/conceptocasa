@@ -16,14 +16,27 @@ interface ContactsTabProps {
 
 export function ContactsTab({ contacts, searchTerm, onEdit, onDelete }: ContactsTabProps) {
   const filteredContacts = useMemo(() => {
-    if (!searchTerm) return contacts;
-    const term = searchTerm.toLowerCase();
-    return contacts.filter(contact =>
-      contact.name.toLowerCase().includes(term) ||
-      contact.surname?.toLowerCase().includes(term) ||
-      contact.email?.toLowerCase().includes(term) ||
-      contact.city?.toLowerCase().includes(term)
-    );
+    let result = [...contacts];
+    
+    // Filter by search term
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase();
+      result = result.filter(contact =>
+        contact.name.toLowerCase().includes(term) ||
+        contact.surname?.toLowerCase().includes(term) ||
+        contact.email?.toLowerCase().includes(term) ||
+        contact.city?.toLowerCase().includes(term)
+      );
+    }
+    
+    // Sort alphabetically by name + surname
+    result.sort((a, b) => {
+      const nameA = `${a.name} ${a.surname || ''}`.toLowerCase().trim();
+      const nameB = `${b.name} ${b.surname || ''}`.toLowerCase().trim();
+      return nameA.localeCompare(nameB, 'es');
+    });
+    
+    return result;
   }, [contacts, searchTerm]);
 
   const getStatusVariant = (status: string) => {

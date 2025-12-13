@@ -7,7 +7,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Plus, Pencil, Trash2, Upload, Search, ChevronRight, ChevronDown, ClipboardList } from 'lucide-react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Checkbox } from '@/components/ui/checkbox';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Plus, Pencil, Trash2, Upload, Search, ChevronRight, ChevronDown, ClipboardList, MoreHorizontal, Copy } from 'lucide-react';
 import { toast } from 'sonner';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 
@@ -30,6 +33,7 @@ interface BudgetActivity {
 interface PhaseForm {
   name: string;
   code: string;
+  selectedActivities: string[];
 }
 
 interface BudgetPhasesTabProps {
@@ -40,6 +44,7 @@ interface BudgetPhasesTabProps {
 const emptyForm: PhaseForm = {
   name: '',
   code: '',
+  selectedActivities: [],
 };
 
 export function BudgetPhasesTab({ budgetId, isAdmin }: BudgetPhasesTabProps) {
@@ -53,7 +58,7 @@ export function BudgetPhasesTab({ budgetId, isAdmin }: BudgetPhasesTabProps) {
   const [currentPhase, setCurrentPhase] = useState<BudgetPhase | null>(null);
   const [form, setForm] = useState<PhaseForm>(emptyForm);
   const [isSaving, setIsSaving] = useState(false);
-  const [importData, setImportData] = useState<PhaseForm[]>([]);
+  const [importData, setImportData] = useState<{ name: string; code: string }[]>([]);
   const [isImporting, setIsImporting] = useState(false);
   const [expandedPhases, setExpandedPhases] = useState<Set<string>>(new Set());
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -98,9 +103,12 @@ export function BudgetPhasesTab({ budgetId, isAdmin }: BudgetPhasesTabProps) {
 
   const handleEdit = (phase: BudgetPhase) => {
     setCurrentPhase(phase);
+    // Get activities assigned to this phase
+    const phaseActivities = activities.filter(a => a.phase_id === phase.id).map(a => a.id);
     setForm({
       name: phase.name,
       code: phase.code || '',
+      selectedActivities: phaseActivities,
     });
     setFormDialogOpen(true);
   };
@@ -118,6 +126,8 @@ export function BudgetPhasesTab({ budgetId, isAdmin }: BudgetPhasesTabProps) {
 
     setIsSaving(true);
     try {
+      let phaseId = currentPhase?.id;
+
       if (currentPhase) {
         const { error } = await supabase
           .from('budget_phases')
@@ -128,20 +138,44 @@ export function BudgetPhasesTab({ budgetId, isAdmin }: BudgetPhasesTabProps) {
           .eq('id', currentPhase.id);
 
         if (error) throw error;
-        toast.success('Fase actualizada correctamente');
       } else {
-        const { error } = await supabase
+        const { data, error } = await supabase
           .from('budget_phases')
           .insert({
             budget_id: budgetId,
             name: form.name.trim(),
             code: form.code.trim() || null,
-          });
+          })
+          .select()
+          .single();
 
         if (error) throw error;
-        toast.success('Fase creada correctamente');
+        phaseId = data.id;
       }
 
+      // Update activity associations
+      if (phaseId) {
+        // First, remove phase from activities that were previously assigned but are now unselected
+        const previouslyAssigned = activities.filter(a => a.phase_id === phaseId).map(a => a.id);
+        const toUnassign = previouslyAssigned.filter(id => !form.selectedActivities.includes(id));
+        
+        if (toUnassign.length > 0) {
+          await supabase
+            .from('budget_activities')
+            .update({ phase_id: null })
+            .in('id', toUnassign);
+        }
+
+        // Then, assign the selected activities to this phase
+        if (form.selectedActivities.length > 0) {
+          await supabase
+            .from('budget_activities')
+            .update({ phase_id: phaseId })
+            .in('id', form.selectedActivities);
+        }
+      }
+
+      toast.success(currentPhase ? 'Fase actualizada correctamente' : 'Fase creada correctamente');
       setFormDialogOpen(false);
       fetchData();
     } catch (error) {
@@ -149,6 +183,100 @@ export function BudgetPhasesTab({ budgetId, isAdmin }: BudgetPhasesTabProps) {
       toast.error('Error al guardar la fase');
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  // Duplicate phase with all related activities
+  const handleDuplicate = async (phase: BudgetPhase) => {
+    try {
+      // Create duplicated phase
+      const { data: newPhase, error: phaseError } = await supabase
+        .from('budget_phases')
+        .insert({
+          budget_id: budgetId,
+          name: `${phase.name} (copia)`,
+          code: phase.code ? `${phase.code}-C` : null,
+          order_index: phase.order_index,
+        })
+        .select()
+        .single();
+
+      if (phaseError) throw phaseError;
+
+      // Get activities from original phase
+      const phaseActivities = activities.filter(a => a.phase_id === phase.id);
+
+      // Duplicate activities if any
+      for (const activity of phaseActivities) {
+        // Get full activity data
+        const { data: fullActivity, error: actError } = await supabase
+          .from('budget_activities')
+          .select('*')
+          .eq('id', activity.id)
+          .single();
+
+        if (actError || !fullActivity) continue;
+
+        // Create duplicated activity
+        const { data: newActivity, error: newActError } = await supabase
+          .from('budget_activities')
+          .insert({
+            budget_id: budgetId,
+            name: `${fullActivity.name} (copia)`,
+            code: `${fullActivity.code}-C`,
+            description: fullActivity.description,
+            measurement_unit: fullActivity.measurement_unit,
+            phase_id: newPhase.id
+          })
+          .select()
+          .single();
+
+        if (newActError || !newActivity) continue;
+
+        // Get files from original activity
+        const { data: files } = await supabase
+          .from('budget_activity_files')
+          .select('*')
+          .eq('activity_id', activity.id);
+
+        // Duplicate files if any
+        if (files && files.length > 0) {
+          for (const file of files) {
+            try {
+              const { data: fileData } = await supabase.storage
+                .from('activity-files')
+                .download(file.file_path);
+
+              if (!fileData) continue;
+
+              const fileExt = file.file_name.split('.').pop();
+              const newPath = `${newActivity.id}/${Date.now()}.${fileExt}`;
+              
+              await supabase.storage
+                .from('activity-files')
+                .upload(newPath, fileData);
+
+              await supabase
+                .from('budget_activity_files')
+                .insert({
+                  activity_id: newActivity.id,
+                  file_name: file.file_name,
+                  file_path: newPath,
+                  file_type: file.file_type,
+                  file_size: file.file_size
+                });
+            } catch (fileErr) {
+              console.error('Error duplicating file:', fileErr);
+            }
+          }
+        }
+      }
+
+      toast.success('Fase duplicada con todas sus actividades');
+      fetchData();
+    } catch (err: any) {
+      console.error('Error duplicating:', err);
+      toast.error(err.message || 'Error al duplicar');
     }
   };
 
@@ -190,7 +318,7 @@ export function BudgetPhasesTab({ budgetId, isAdmin }: BudgetPhasesTabProps) {
           return;
         }
 
-        const parsedData: PhaseForm[] = [];
+        const parsedData: { name: string; code: string }[] = [];
         for (let i = 1; i < lines.length; i++) {
           const values = lines[i].match(/(".*?"|[^,]+)/g)?.map(v => v.trim().replace(/^"|"$/g, '')) || [];
           const name = values[nameIdx]?.trim();
@@ -359,13 +487,28 @@ export function BudgetPhasesTab({ budgetId, isAdmin }: BudgetPhasesTabProps) {
                           </div>
                         </div>
                         {isAdmin && (
-                          <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
-                            <Button variant="ghost" size="icon" onClick={() => handleEdit(phase)}>
-                              <Pencil className="h-4 w-4" />
-                            </Button>
-                            <Button variant="ghost" size="icon" onClick={() => handleDeleteClick(phase)}>
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
+                          <div onClick={(e) => e.stopPropagation()}>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon">
+                                  <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="bg-popover">
+                                <DropdownMenuItem onClick={() => handleEdit(phase)}>
+                                  <Pencil className="h-4 w-4 mr-2" />
+                                  Editar
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleDuplicate(phase)}>
+                                  <Copy className="h-4 w-4 mr-2" />
+                                  Duplicar
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleDeleteClick(phase)} className="text-destructive">
+                                  <Trash2 className="h-4 w-4 mr-2" />
+                                  Eliminar
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           </div>
                         )}
                       </div>
@@ -438,6 +581,43 @@ export function BudgetPhasesTab({ budgetId, isAdmin }: BudgetPhasesTabProps) {
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
                 placeholder="Nombre de la fase"
               />
+            </div>
+            <div className="space-y-2">
+              <Label>Actividades asociadas</Label>
+              <ScrollArea className="h-48 border rounded-md p-3">
+                {activities.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-4">No hay actividades disponibles</p>
+                ) : (
+                  <div className="space-y-2">
+                    {activities
+                      .sort((a, b) => a.name.localeCompare(b.name))
+                      .map((activity) => (
+                        <div key={activity.id} className="flex items-center space-x-2">
+                          <Checkbox
+                            id={`activity-${activity.id}`}
+                            checked={form.selectedActivities.includes(activity.id)}
+                            onCheckedChange={(checked) => {
+                              if (checked) {
+                                setForm({ ...form, selectedActivities: [...form.selectedActivities, activity.id] });
+                              } else {
+                                setForm({ ...form, selectedActivities: form.selectedActivities.filter(id => id !== activity.id) });
+                              }
+                            }}
+                          />
+                          <label 
+                            htmlFor={`activity-${activity.id}`} 
+                            className="text-sm cursor-pointer flex-1"
+                          >
+                            {activity.code} - {activity.name}
+                          </label>
+                        </div>
+                      ))}
+                  </div>
+                )}
+              </ScrollArea>
+              <p className="text-xs text-muted-foreground">
+                {form.selectedActivities.length} actividad(es) seleccionada(s)
+              </p>
             </div>
           </div>
           <DialogFooter>

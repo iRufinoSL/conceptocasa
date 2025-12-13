@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Plus, Search, Upload, Pencil, Trash2, MoreHorizontal, FileUp, File, X, Download, ChevronRight, ChevronDown, List, Layers } from 'lucide-react';
+import { Plus, Search, Upload, Pencil, Trash2, MoreHorizontal, FileUp, File, X, Download, ChevronRight, ChevronDown, List, Layers, Copy } from 'lucide-react';
 import { toast } from 'sonner';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 
@@ -235,6 +235,80 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
     } catch (err: any) {
       console.error('Error deleting:', err);
       toast.error(err.message || 'Error al eliminar');
+    }
+  };
+
+  // Duplicate activity with all related files
+  const handleDuplicate = async (activity: BudgetActivity) => {
+    try {
+      // Create duplicated activity
+      const { data: newActivity, error: activityError } = await supabase
+        .from('budget_activities')
+        .insert({
+          budget_id: budgetId,
+          name: `${activity.name} (copia)`,
+          code: `${activity.code}-C`,
+          description: activity.description,
+          measurement_unit: activity.measurement_unit,
+          phase_id: activity.phase_id
+        })
+        .select()
+        .single();
+
+      if (activityError) throw activityError;
+
+      // Get files from original activity
+      const { data: files, error: filesError } = await supabase
+        .from('budget_activity_files')
+        .select('*')
+        .eq('activity_id', activity.id);
+
+      if (filesError) throw filesError;
+
+      // Duplicate files if any
+      if (files && files.length > 0) {
+        for (const file of files) {
+          // Download original file
+          const { data: fileData, error: downloadError } = await supabase.storage
+            .from('activity-files')
+            .download(file.file_path);
+
+          if (downloadError) {
+            console.error('Error downloading file:', downloadError);
+            continue;
+          }
+
+          // Upload with new path
+          const fileExt = file.file_name.split('.').pop();
+          const newPath = `${newActivity.id}/${Date.now()}.${fileExt}`;
+          
+          const { error: uploadError } = await supabase.storage
+            .from('activity-files')
+            .upload(newPath, fileData);
+
+          if (uploadError) {
+            console.error('Error uploading file:', uploadError);
+            continue;
+          }
+
+          // Create file record
+          await supabase
+            .from('budget_activity_files')
+            .insert({
+              activity_id: newActivity.id,
+              file_name: file.file_name,
+              file_path: newPath,
+              file_type: file.file_type,
+              file_size: file.file_size
+            });
+        }
+      }
+
+      toast.success('Actividad duplicada');
+      fetchData();
+    } catch (err: any) {
+      console.error('Error duplicating:', err);
+      toast.error(err.message || 'Error al duplicar');
     }
   };
 
@@ -562,6 +636,10 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
                               <Pencil className="h-4 w-4 mr-2" />
                               Editar
                             </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleDuplicate(activity)}>
+                              <Copy className="h-4 w-4 mr-2" />
+                              Duplicar
+                            </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => handleManageFiles(activity)}>
                               <FileUp className="h-4 w-4 mr-2" />
                               Archivos
@@ -655,6 +733,9 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
                                         <DropdownMenuItem onClick={() => handleEdit(activity)}>
                                           <Pencil className="h-4 w-4 mr-2" />Editar
                                         </DropdownMenuItem>
+                                        <DropdownMenuItem onClick={() => handleDuplicate(activity)}>
+                                          <Copy className="h-4 w-4 mr-2" />Duplicar
+                                        </DropdownMenuItem>
                                         <DropdownMenuItem onClick={() => handleDeleteClick(activity)} className="text-destructive">
                                           <Trash2 className="h-4 w-4 mr-2" />Eliminar
                                         </DropdownMenuItem>
@@ -734,6 +815,9 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
                                     <DropdownMenuContent align="end">
                                       <DropdownMenuItem onClick={() => handleEdit(activity)}>
                                         <Pencil className="h-4 w-4 mr-2" />Editar
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem onClick={() => handleDuplicate(activity)}>
+                                        <Copy className="h-4 w-4 mr-2" />Duplicar
                                       </DropdownMenuItem>
                                       <DropdownMenuItem onClick={() => handleDeleteClick(activity)} className="text-destructive">
                                         <Trash2 className="h-4 w-4 mr-2" />Eliminar

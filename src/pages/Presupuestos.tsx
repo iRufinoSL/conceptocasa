@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ArrowLeft, Calculator, FolderOpen, Building2, Search, Calendar, LayoutGrid, List } from 'lucide-react';
+import { ArrowLeft, Calculator, FolderOpen, Building2, Search, Calendar, LayoutGrid, List, Download } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 
@@ -121,6 +121,34 @@ export default function Presupuestos() {
     return variants[status] || 'outline';
   };
 
+  const exportToCSV = () => {
+    const headers = ['Nombre', 'Código', 'Población', 'Versión', 'Proyecto', 'Estado Proyecto', 'Rol', 'Fecha Creación'];
+    const rows = filteredPresupuestos.map(up => [
+      up.presupuesto?.nombre || '',
+      up.presupuesto?.codigo_correlativo?.toString() || '',
+      up.presupuesto?.poblacion || '',
+      up.presupuesto?.version || '',
+      up.presupuesto?.project?.name || '',
+      up.presupuesto?.project ? getStatusLabel(up.presupuesto.project.status) : '',
+      up.role,
+      up.presupuesto?.created_at 
+        ? format(new Date(up.presupuesto.created_at), 'dd/MM/yyyy', { locale: es })
+        : ''
+    ]);
+
+    const csvContent = [
+      headers.join(';'),
+      ...rows.map(row => row.map(cell => `"${cell}"`).join(';'))
+    ].join('\n');
+
+    const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `presupuestos_${format(new Date(), 'yyyyMMdd_HHmmss')}.csv`;
+    link.click();
+    URL.revokeObjectURL(link.href);
+  };
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -188,6 +216,15 @@ export default function Presupuestos() {
             <Calculator className="h-4 w-4" />
             <span>{filteredPresupuestos.length} presupuestos</span>
           </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={exportToCSV}
+            disabled={filteredPresupuestos.length === 0}
+          >
+            <Download className="h-4 w-4 mr-2" />
+            CSV
+          </Button>
           <div className="flex items-center border rounded-lg">
             <Button
               variant={viewMode === 'cards' ? 'default' : 'ghost'}

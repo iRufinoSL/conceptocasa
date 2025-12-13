@@ -9,9 +9,17 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Plus, Search, Upload, Pencil, Trash2, MoreHorizontal, FileUp, File, X, Download } from 'lucide-react';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Plus, Search, Upload, Pencil, Trash2, MoreHorizontal, FileUp, File, X, Download, ChevronRight, ChevronDown, List, Layers } from 'lucide-react';
 import { toast } from 'sonner';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
+
+interface BudgetPhase {
+  id: string;
+  name: string;
+  code: string | null;
+}
 
 interface BudgetActivity {
   id: string;
@@ -20,6 +28,7 @@ interface BudgetActivity {
   code: string;
   description: string | null;
   measurement_unit: string;
+  phase_id: string | null;
   created_at: string;
   files_count?: number;
 }
@@ -39,6 +48,7 @@ interface ActivityForm {
   code: string;
   description: string;
   measurement_unit: string;
+  phase_id: string;
 }
 
 interface BudgetActivitiesTabProps {
@@ -54,13 +64,17 @@ const emptyForm: ActivityForm = {
   name: '',
   code: '',
   description: '',
-  measurement_unit: 'ud'
+  measurement_unit: 'ud',
+  phase_id: ''
 };
 
 export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabProps) {
   const [activities, setActivities] = useState<BudgetActivity[]>([]);
+  const [phases, setPhases] = useState<BudgetPhase[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [viewMode, setViewMode] = useState<'alphabetical' | 'grouped'>('alphabetical');
+  const [expandedPhases, setExpandedPhases] = useState<Set<string>>(new Set());
   
   // Dialog states
   const [formDialogOpen, setFormDialogOpen] = useState(false);
@@ -82,20 +96,28 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
   const fileInputRef = useRef<HTMLInputElement>(null);
   const activityFileInputRef = useRef<HTMLInputElement>(null);
 
-  // Fetch activities
-  const fetchActivities = async () => {
+  // Fetch activities and phases
+  const fetchData = async () => {
     try {
-      const { data, error } = await supabase
-        .from('budget_activities')
-        .select('*')
-        .eq('budget_id', budgetId)
-        .order('code', { ascending: true });
+      const [activitiesRes, phasesRes] = await Promise.all([
+        supabase
+          .from('budget_activities')
+          .select('*')
+          .eq('budget_id', budgetId)
+          .order('name', { ascending: true }),
+        supabase
+          .from('budget_phases')
+          .select('id, name, code')
+          .eq('budget_id', budgetId)
+          .order('code', { ascending: true })
+      ]);
 
-      if (error) throw error;
+      if (activitiesRes.error) throw activitiesRes.error;
+      if (phasesRes.error) throw phasesRes.error;
 
       // Get file counts for each activity
       const activitiesWithFiles = await Promise.all(
-        (data || []).map(async (activity) => {
+        (activitiesRes.data || []).map(async (activity) => {
           const { count } = await supabase
             .from('budget_activity_files')
             .select('*', { count: 'exact', head: true })
@@ -106,16 +128,17 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
       );
 
       setActivities(activitiesWithFiles);
+      setPhases(phasesRes.data || []);
     } catch (err: any) {
-      console.error('Error fetching activities:', err);
-      toast.error('Error al cargar actividades');
+      console.error('Error fetching data:', err);
+      toast.error('Error al cargar datos');
     } finally {
       setIsLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchActivities();
+    fetchData();
   }, [budgetId]);
 
   // Open form for new activity
@@ -132,7 +155,8 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
       name: activity.name,
       code: activity.code,
       description: activity.description || '',
-      measurement_unit: activity.measurement_unit
+      measurement_unit: activity.measurement_unit,
+      phase_id: activity.phase_id || ''
     });
     setFormDialogOpen(true);
   };
@@ -162,7 +186,8 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
         name: form.name.trim(),
         code: form.code.trim(),
         description: form.description.trim() || null,
-        measurement_unit: form.measurement_unit
+        measurement_unit: form.measurement_unit,
+        phase_id: form.phase_id || null
       };
 
       if (editingActivity) {
@@ -183,7 +208,7 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
       }
 
       setFormDialogOpen(false);
-      fetchActivities();
+      fetchData();
     } catch (err: any) {
       console.error('Error saving:', err);
       toast.error(err.message || 'Error al guardar');
@@ -206,7 +231,7 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
       toast.success('Actividad eliminada');
       setDeleteDialogOpen(false);
       setDeletingActivity(null);
-      fetchActivities();
+      fetchData();
     } catch (err: any) {
       console.error('Error deleting:', err);
       toast.error(err.message || 'Error al eliminar');
@@ -271,13 +296,38 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
       toast.success(`${activitiesToInsert.length} actividades importadas`);
       setImportDialogOpen(false);
       setImportFile(null);
-      fetchActivities();
+      fetchData();
     } catch (err: any) {
       console.error('Error importing:', err);
       toast.error(err.message || 'Error al importar');
     } finally {
       setIsImporting(false);
     }
+  };
+
+  // Toggle phase expansion
+  const togglePhaseExpanded = (phaseId: string) => {
+    setExpandedPhases(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(phaseId)) {
+        newSet.delete(phaseId);
+      } else {
+        newSet.add(phaseId);
+      }
+      return newSet;
+    });
+  };
+
+  // Generate ActividadID
+  const generateActivityId = (activity: BudgetActivity) => {
+    const phase = phases.find(p => p.id === activity.phase_id);
+    const phaseCode = phase?.code || '';
+    return `${phaseCode} ${activity.code}.- ${activity.name}`.trim();
+  };
+
+  // Get phase by id
+  const getPhaseById = (phaseId: string | null) => {
+    return phases.find(p => p.id === phaseId);
   };
 
   // Manage activity files
@@ -329,7 +379,7 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
 
       toast.success('Archivo subido');
       handleManageFiles(selectedActivity);
-      fetchActivities();
+      fetchData();
     } catch (err: any) {
       console.error('Error uploading:', err);
       toast.error(err.message || 'Error al subir archivo');
@@ -360,7 +410,7 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
       if (selectedActivity) {
         handleManageFiles(selectedActivity);
       }
-      fetchActivities();
+      fetchData();
     } catch (err: any) {
       console.error('Error deleting file:', err);
       toast.error(err.message || 'Error al eliminar archivo');
@@ -412,21 +462,44 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h3 className="text-lg font-semibold text-foreground">Actividades del Presupuesto</h3>
+          <h3 className="text-lg font-semibold text-foreground">QUÉ hay que hacer? - Actividades</h3>
           <p className="text-sm text-muted-foreground">{activities.length} actividad(es)</p>
         </div>
-        {isAdmin && (
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={() => setImportDialogOpen(true)}>
-              <Upload className="h-4 w-4 mr-2" />
-              Importar CSV
+        <div className="flex gap-2">
+          {/* View Mode Toggle */}
+          <div className="flex border rounded-lg">
+            <Button 
+              variant={viewMode === 'alphabetical' ? 'default' : 'ghost'} 
+              size="sm"
+              onClick={() => setViewMode('alphabetical')}
+              className="rounded-r-none"
+            >
+              <List className="h-4 w-4 mr-1" />
+              Alfabético
             </Button>
-            <Button onClick={handleNew}>
-              <Plus className="h-4 w-4 mr-2" />
-              Nueva Actividad
+            <Button 
+              variant={viewMode === 'grouped' ? 'default' : 'ghost'} 
+              size="sm"
+              onClick={() => setViewMode('grouped')}
+              className="rounded-l-none"
+            >
+              <Layers className="h-4 w-4 mr-1" />
+              Por Fase
             </Button>
           </div>
-        )}
+          {isAdmin && (
+            <>
+              <Button variant="outline" onClick={() => setImportDialogOpen(true)}>
+                <Upload className="h-4 w-4 mr-2" />
+                Importar CSV
+              </Button>
+              <Button onClick={handleNew}>
+                <Plus className="h-4 w-4 mr-2" />
+                Nueva Actividad
+              </Button>
+            </>
+          )}
+        </div>
       </div>
 
       {/* Search */}
@@ -440,81 +513,255 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
         />
       </div>
 
-      {/* Table */}
-      <div className="border rounded-lg overflow-hidden">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Código</TableHead>
-              <TableHead>Actividad</TableHead>
-              <TableHead>Descripción</TableHead>
-              <TableHead>Unidad</TableHead>
-              <TableHead>Archivos</TableHead>
-              {isAdmin && <TableHead className="w-20">Acciones</TableHead>}
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filteredActivities.map((activity) => (
-              <TableRow key={activity.id}>
-                <TableCell className="font-mono text-sm">{activity.code}</TableCell>
-                <TableCell className="font-medium">{activity.name}</TableCell>
-                <TableCell className="text-muted-foreground max-w-xs truncate">
-                  {activity.description || '-'}
-                </TableCell>
-                <TableCell>{activity.measurement_unit}</TableCell>
-                <TableCell>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleManageFiles(activity)}
-                    className="flex items-center gap-1"
-                  >
-                    <File className="h-4 w-4" />
-                    {activity.files_count || 0}
-                  </Button>
-                </TableCell>
-                {isAdmin && (
-                  <TableCell>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon">
-                          <MoreHorizontal className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => handleEdit(activity)}>
-                          <Pencil className="h-4 w-4 mr-2" />
-                          Editar
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => handleManageFiles(activity)}>
-                          <FileUp className="h-4 w-4 mr-2" />
-                          Archivos
-                        </DropdownMenuItem>
-                        <DropdownMenuItem 
-                          onClick={() => handleDeleteClick(activity)}
-                          className="text-destructive"
-                        >
-                          <Trash2 className="h-4 w-4 mr-2" />
-                          Eliminar
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
-                )}
-              </TableRow>
-            ))}
-            {filteredActivities.length === 0 && (
+      {/* Alphabetical View */}
+      {viewMode === 'alphabetical' && (
+        <div className="border rounded-lg overflow-hidden">
+          <Table>
+            <TableHeader>
               <TableRow>
-                <TableCell colSpan={isAdmin ? 6 : 5} className="text-center py-8 text-muted-foreground">
-                  {searchTerm 
-                    ? 'No se encontraron actividades con ese criterio'
-                    : 'No hay actividades. Crea una nueva o importa desde CSV.'}
-                </TableCell>
+                <TableHead>ActividadID</TableHead>
+                <TableHead>Actividad</TableHead>
+                <TableHead>Fase</TableHead>
+                <TableHead>Unidad</TableHead>
+                <TableHead>Archivos</TableHead>
+                {isAdmin && <TableHead className="w-20">Acciones</TableHead>}
               </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </div>
+            </TableHeader>
+            <TableBody>
+              {filteredActivities.map((activity) => {
+                const phase = getPhaseById(activity.phase_id);
+                return (
+                  <TableRow key={activity.id}>
+                    <TableCell className="font-mono text-sm">{generateActivityId(activity)}</TableCell>
+                    <TableCell className="font-medium">{activity.name}</TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {phase ? `${phase.code} ${phase.name}` : '-'}
+                    </TableCell>
+                    <TableCell>{activity.measurement_unit}</TableCell>
+                    <TableCell>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleManageFiles(activity)}
+                        className="flex items-center gap-1"
+                      >
+                        <File className="h-4 w-4" />
+                        {activity.files_count || 0}
+                      </Button>
+                    </TableCell>
+                    {isAdmin && (
+                      <TableCell>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => handleEdit(activity)}>
+                              <Pencil className="h-4 w-4 mr-2" />
+                              Editar
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleManageFiles(activity)}>
+                              <FileUp className="h-4 w-4 mr-2" />
+                              Archivos
+                            </DropdownMenuItem>
+                            <DropdownMenuItem 
+                              onClick={() => handleDeleteClick(activity)}
+                              className="text-destructive"
+                            >
+                              <Trash2 className="h-4 w-4 mr-2" />
+                              Eliminar
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    )}
+                  </TableRow>
+                );
+              })}
+              {filteredActivities.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={isAdmin ? 6 : 5} className="text-center py-8 text-muted-foreground">
+                    {searchTerm 
+                      ? 'No se encontraron actividades con ese criterio'
+                      : 'No hay actividades. Crea una nueva o importa desde CSV.'}
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </div>
+      )}
+
+      {/* Grouped by Phase View */}
+      {viewMode === 'grouped' && (
+        <div className="space-y-2">
+          {/* Activities without phase */}
+          {(() => {
+            const unassigned = filteredActivities.filter(a => !a.phase_id);
+            if (unassigned.length > 0) {
+              const isExpanded = expandedPhases.has('unassigned');
+              return (
+                <Collapsible open={isExpanded} onOpenChange={() => togglePhaseExpanded('unassigned')}>
+                  <div className="border rounded-lg">
+                    <CollapsibleTrigger asChild>
+                      <div className="flex items-center justify-between p-4 cursor-pointer hover:bg-muted/50 transition-colors">
+                        <div className="flex items-center gap-3">
+                          {isExpanded ? (
+                            <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                          ) : (
+                            <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                          )}
+                          <div>
+                            <p className="font-medium text-muted-foreground">Sin fase asignada</p>
+                            <p className="text-sm text-muted-foreground">
+                              {unassigned.length} actividad{unassigned.length !== 1 ? 'es' : ''}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <div className="border-t bg-muted/20 p-4">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>ActividadID</TableHead>
+                              <TableHead>Actividad</TableHead>
+                              <TableHead>Unidad</TableHead>
+                              <TableHead>Archivos</TableHead>
+                              {isAdmin && <TableHead className="w-20">Acciones</TableHead>}
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {unassigned.sort((a, b) => a.name.localeCompare(b.name)).map(activity => (
+                              <TableRow key={activity.id}>
+                                <TableCell className="font-mono text-sm">{generateActivityId(activity)}</TableCell>
+                                <TableCell className="font-medium">{activity.name}</TableCell>
+                                <TableCell>{activity.measurement_unit}</TableCell>
+                                <TableCell>
+                                  <Button variant="ghost" size="sm" onClick={() => handleManageFiles(activity)}>
+                                    <File className="h-4 w-4 mr-1" />{activity.files_count || 0}
+                                  </Button>
+                                </TableCell>
+                                {isAdmin && (
+                                  <TableCell>
+                                    <DropdownMenu>
+                                      <DropdownMenuTrigger asChild>
+                                        <Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button>
+                                      </DropdownMenuTrigger>
+                                      <DropdownMenuContent align="end">
+                                        <DropdownMenuItem onClick={() => handleEdit(activity)}>
+                                          <Pencil className="h-4 w-4 mr-2" />Editar
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem onClick={() => handleDeleteClick(activity)} className="text-destructive">
+                                          <Trash2 className="h-4 w-4 mr-2" />Eliminar
+                                        </DropdownMenuItem>
+                                      </DropdownMenuContent>
+                                    </DropdownMenu>
+                                  </TableCell>
+                                )}
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    </CollapsibleContent>
+                  </div>
+                </Collapsible>
+              );
+            }
+            return null;
+          })()}
+
+          {/* Activities grouped by phase */}
+          {phases.map(phase => {
+            const phaseActivities = filteredActivities.filter(a => a.phase_id === phase.id);
+            if (phaseActivities.length === 0) return null;
+
+            const isExpanded = expandedPhases.has(phase.id);
+
+            return (
+              <Collapsible key={phase.id} open={isExpanded} onOpenChange={() => togglePhaseExpanded(phase.id)}>
+                <div className="border rounded-lg">
+                  <CollapsibleTrigger asChild>
+                    <div className="flex items-center justify-between p-4 cursor-pointer hover:bg-muted/50 transition-colors">
+                      <div className="flex items-center gap-3">
+                        {isExpanded ? (
+                          <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                        ) : (
+                          <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                        )}
+                        <div>
+                          <p className="font-medium">{phase.code} {phase.name}</p>
+                          <p className="text-sm text-muted-foreground">
+                            {phaseActivities.length} actividad{phaseActivities.length !== 1 ? 'es' : ''}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <div className="border-t bg-muted/20 p-4">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>ActividadID</TableHead>
+                            <TableHead>Actividad</TableHead>
+                            <TableHead>Unidad</TableHead>
+                            <TableHead>Archivos</TableHead>
+                            {isAdmin && <TableHead className="w-20">Acciones</TableHead>}
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {phaseActivities.sort((a, b) => a.name.localeCompare(b.name)).map(activity => (
+                            <TableRow key={activity.id}>
+                              <TableCell className="font-mono text-sm">{generateActivityId(activity)}</TableCell>
+                              <TableCell className="font-medium">{activity.name}</TableCell>
+                              <TableCell>{activity.measurement_unit}</TableCell>
+                              <TableCell>
+                                <Button variant="ghost" size="sm" onClick={() => handleManageFiles(activity)}>
+                                  <File className="h-4 w-4 mr-1" />{activity.files_count || 0}
+                                </Button>
+                              </TableCell>
+                              {isAdmin && (
+                                <TableCell>
+                                  <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                      <Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end">
+                                      <DropdownMenuItem onClick={() => handleEdit(activity)}>
+                                        <Pencil className="h-4 w-4 mr-2" />Editar
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem onClick={() => handleDeleteClick(activity)} className="text-destructive">
+                                        <Trash2 className="h-4 w-4 mr-2" />Eliminar
+                                      </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                  </DropdownMenu>
+                                </TableCell>
+                              )}
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </CollapsibleContent>
+                </div>
+              </Collapsible>
+            );
+          })}
+
+          {filteredActivities.length === 0 && (
+            <div className="text-center py-8 text-muted-foreground border rounded-lg">
+              {searchTerm 
+                ? 'No se encontraron actividades con ese criterio'
+                : 'No hay actividades. Crea una nueva o importa desde CSV.'}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Form Dialog */}
       <Dialog open={formDialogOpen} onOpenChange={setFormDialogOpen}>
@@ -578,6 +825,26 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
                 placeholder="Descripción detallada de la actividad..."
                 rows={3}
               />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="phase">Fase de Gestión</Label>
+              <Select 
+                value={form.phase_id} 
+                onValueChange={(value) => setForm({ ...form, phase_id: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Seleccionar fase..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">Sin fase</SelectItem>
+                  {phases.map(phase => (
+                    <SelectItem key={phase.id} value={phase.id}>
+                      {phase.code} {phase.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
 

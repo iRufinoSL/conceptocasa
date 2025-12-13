@@ -5,9 +5,10 @@ import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowLeft, Calculator, ClipboardList, Building2, FileText, Settings } from 'lucide-react';
+import { ArrowLeft, Calculator, ClipboardList, Building2, FileText, Settings, Calendar } from 'lucide-react';
 import { AppNavDropdown } from '@/components/AppNavDropdown';
 import { BudgetActivitiesTab } from '@/components/presupuestos/BudgetActivitiesTab';
+import { BudgetPhasesTab } from '@/components/presupuestos/BudgetPhasesTab';
 
 interface Presupuesto {
   id: string;
@@ -176,10 +177,14 @@ export default function PresupuestoDashboard() {
 
         {/* Tabs */}
         <Tabs defaultValue="actividades" className="w-full">
-          <TabsList className="grid w-full grid-cols-4 lg:w-auto lg:inline-grid">
+          <TabsList className="grid w-full grid-cols-5 lg:w-auto lg:inline-grid">
             <TabsTrigger value="actividades" className="flex items-center gap-2">
               <ClipboardList className="h-4 w-4" />
-              <span className="hidden sm:inline">Actividades</span>
+              <span className="hidden sm:inline">QUÉ hay que hacer?</span>
+            </TabsTrigger>
+            <TabsTrigger value="fases" className="flex items-center gap-2">
+              <Calendar className="h-4 w-4" />
+              <span className="hidden sm:inline">CUÁNDO se hace?</span>
             </TabsTrigger>
             <TabsTrigger value="recursos" className="flex items-center gap-2">
               <FileText className="h-4 w-4" />
@@ -197,6 +202,10 @@ export default function PresupuestoDashboard() {
 
           <TabsContent value="actividades" className="mt-6">
             <BudgetActivitiesTab budgetId={presupuesto.id} isAdmin={isAdmin} />
+          </TabsContent>
+
+          <TabsContent value="fases" className="mt-6">
+            <BudgetPhasesTab budgetId={presupuesto.id} isAdmin={isAdmin} />
           </TabsContent>
 
           <TabsContent value="recursos" className="mt-6">

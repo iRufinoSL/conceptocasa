@@ -384,7 +384,8 @@ export function BudgetResourcesTab({ budgetId, isAdmin }: BudgetResourcesTabProp
       return null;
     };
     
-    const name = String(getValue(['Recurso', 'name', 'Name', 'Nombre']) || '').replace(/^"|"$/g, '').trim();
+    // Column names match exactly the user's Excel headers
+    const name = String(getValue(['Recurso']) || '').replace(/^"|"$/g, '').trim();
     if (!name) return null;
     
     // Skip duplicates
@@ -392,22 +393,17 @@ export function BudgetResourcesTab({ budgetId, isAdmin }: BudgetResourcesTabProp
     if (existingNames.has(nameLower)) return null;
     existingNames.add(nameLower);
     
-    const externalCost = parseNumber(getValue(['€Coste ud', 'external_unit_cost', 'Coste ud', 'Coste']));
-    const unit = String(getValue(['Ud medida', 'unit', 'Ud', 'Unidad']) || '').replace(/^"|"$/g, '').trim() || null;
-    const resourceType = String(getValue(['Tipo recurso', 'resource_type', 'Tipo']) || '').replace(/^"|"$/g, '').trim() || null;
+    const externalCost = parseNumber(getValue(['€Coste ud']));
+    const unit = String(getValue(['Ud medida']) || '').replace(/^"|"$/g, '').trim() || null;
+    const resourceType = String(getValue(['Tipo recurso']) || '').replace(/^"|"$/g, '').trim() || null;
     
-    // Parse percentages - values like 0.15 mean 15%, keep as decimal
-    let safetyPercent = parseNumber(getValue(['%Margen seguridad', 'safety_margin_percent', 'Margen seguridad']));
-    if (safetyPercent === null) safetyPercent = 0.15;
-    if (safetyPercent > 1) safetyPercent = safetyPercent / 100;
+    // Default percentages (these fields are not in the import)
+    const safetyPercent = 0.15;
+    const salesPercent = 0.25;
     
-    let salesPercent = parseNumber(getValue(['%Margen venta', 'sales_margin_percent', 'Margen venta']));
-    if (salesPercent === null) salesPercent = 0.25;
-    if (salesPercent > 1) salesPercent = salesPercent / 100;
-    
-    const manualUnits = parseNumber(getValue(['Uds manual', 'manual_units', 'Uds Manual']));
-    const relatedUnits = parseNumber(getValue(['Uds relacionadas', 'related_units', 'Uds Relacionadas']));
-    const activityIdField = String(getValue(['ActividadID', 'activity_id', 'Actividad']) || '').replace(/^"|"$/g, '').trim();
+    const manualUnits = parseNumber(getValue(['Uds manual']));
+    const relatedUnits = parseNumber(getValue(['Uds relacionadas']));
+    const activityIdField = String(getValue(['ActividadID']) || '').replace(/^"|"$/g, '').trim();
     
     return {
       budget_id: budgetId,

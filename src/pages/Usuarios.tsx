@@ -14,6 +14,7 @@ import { toast } from 'sonner';
 import { z } from 'zod';
 import { ArrowLeft, Plus, UserCog, Pencil, Trash2, Search, Building2 } from 'lucide-react';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
+import { AppNavDropdown } from '@/components/AppNavDropdown';
 
 const emailSchema = z.string().email('Email inválido');
 const passwordSchema = z.string()
@@ -323,6 +324,7 @@ export default function Usuarios() {
             <Button variant="ghost" size="icon" onClick={() => navigate('/dashboard')}>
               <ArrowLeft className="h-5 w-5" />
             </Button>
+            <AppNavDropdown />
             <div className="p-2 rounded-lg bg-primary/10">
               <UserCog className="h-6 w-6 text-primary" />
             </div>

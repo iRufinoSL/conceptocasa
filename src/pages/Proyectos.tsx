@@ -34,6 +34,7 @@ import { ProjectDocumentsManager } from '@/components/projects/ProjectDocumentsM
 import { ProjectBudgetsManager } from '@/components/projects/ProjectBudgetsManager';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import { useToast } from '@/hooks/use-toast';
+import { AppNavDropdown } from '@/components/AppNavDropdown';
 
 interface Project {
   id: string;
@@ -278,6 +279,7 @@ export default function Proyectos() {
             <Button variant="ghost" size="icon" onClick={() => navigate('/dashboard')}>
               <ArrowLeft className="h-5 w-5" />
             </Button>
+            <AppNavDropdown />
             <div className="p-2 rounded-lg bg-primary/10">
               <FolderOpen className="h-6 w-6 text-primary" />
             </div>

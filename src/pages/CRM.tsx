@@ -14,6 +14,7 @@ import { ManagementForm } from '@/components/crm/ManagementForm';
 import { OpportunityForm } from '@/components/crm/OpportunityForm';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import { useToast } from '@/hooks/use-toast';
+import { AppNavDropdown } from '@/components/AppNavDropdown';
 
 export interface Contact {
   id: string;
@@ -196,6 +197,7 @@ export default function CRM() {
             <Button variant="ghost" size="icon" onClick={() => navigate('/dashboard')}>
               <ArrowLeft className="h-5 w-5" />
             </Button>
+            <AppNavDropdown />
             <div className="p-2 rounded-lg bg-primary/10">
               <Users className="h-6 w-6 text-primary" />
             </div>

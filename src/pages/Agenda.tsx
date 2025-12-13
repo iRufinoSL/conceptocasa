@@ -10,6 +10,7 @@ import { ArrowLeft, CalendarDays, Clock, Plus, ChevronLeft, ChevronRight } from 
 import { format, isSameDay, startOfWeek, endOfWeek, addWeeks, subWeeks, eachDayOfInterval, isToday, addDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { ManagementForm } from '@/components/crm/ManagementForm';
+import { AppNavDropdown } from '@/components/AppNavDropdown';
 
 interface Management {
   id: string;
@@ -143,6 +144,7 @@ export default function Agenda() {
             <Button variant="ghost" size="icon" onClick={() => navigate('/dashboard')}>
               <ArrowLeft className="h-5 w-5" />
             </Button>
+            <AppNavDropdown />
             <div className="p-2 rounded-lg bg-primary/10">
               <CalendarDays className="h-6 w-6 text-primary" />
             </div>

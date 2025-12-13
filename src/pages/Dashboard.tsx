@@ -34,7 +34,7 @@ const apps: AppCard[] = [
     description: 'Gestión de proyectos de construcción',
     icon: FolderKanban,
     route: '/proyectos',
-    available: false,
+    available: true,
     adminOnly: false,
   },
   {

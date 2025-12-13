@@ -7,6 +7,7 @@ import Landing from "./pages/Landing";
 import Dashboard from "./pages/Dashboard";
 import Recursos from "./pages/Recursos";
 import Presupuestos from "./pages/Presupuestos";
+import Proyectos from "./pages/Proyectos";
 import Usuarios from "./pages/Usuarios";
 import Setup from "./pages/Setup";
 import Auth from "./pages/Auth";
@@ -25,6 +26,7 @@ const App = () => (
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/recursos" element={<Recursos />} />
           <Route path="/presupuestos" element={<Presupuestos />} />
+          <Route path="/proyectos" element={<Proyectos />} />
           <Route path="/usuarios" element={<Usuarios />} />
           <Route path="/setup" element={<Setup />} />
           <Route path="/auth" element={<Auth />} />

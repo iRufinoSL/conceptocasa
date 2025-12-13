@@ -30,7 +30,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog';
-import { ArrowLeft, Download, FileText, Search, Filter, FolderOpen, Upload, Plus } from 'lucide-react';
+import { ArrowLeft, Download, FileText, Search, Filter, FolderOpen, Upload, Plus, Eye, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -79,6 +79,12 @@ export default function Documentos() {
   const [uploadDocType, setUploadDocType] = useState<string>('otro');
   const [uploadDescription, setUploadDescription] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Preview state
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewType, setPreviewType] = useState<'image' | 'pdf' | 'unsupported'>('unsupported');
+  const [previewName, setPreviewName] = useState('');
 
   useEffect(() => {
     if (!loading && !user) {
@@ -218,6 +224,52 @@ export default function Documentos() {
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
+  };
+
+  const getPreviewType = (fileType: string | null): 'image' | 'pdf' | 'unsupported' => {
+    if (!fileType) return 'unsupported';
+    if (fileType.startsWith('image/')) return 'image';
+    if (fileType === 'application/pdf') return 'pdf';
+    return 'unsupported';
+  };
+
+  const canPreview = (doc: ProjectDocument): boolean => {
+    return getPreviewType(doc.file_type) !== 'unsupported';
+  };
+
+  const handlePreview = async (doc: ProjectDocument) => {
+    if (!doc.file_path) {
+      toast.error('No hay archivo asociado');
+      return;
+    }
+
+    const type = getPreviewType(doc.file_type);
+    if (type === 'unsupported') {
+      toast.error('Vista previa no disponible para este tipo de archivo');
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase.storage
+        .from('project-documents')
+        .createSignedUrl(doc.file_path, 300); // 5 min URL
+
+      if (error) throw error;
+
+      setPreviewUrl(data.signedUrl);
+      setPreviewType(type);
+      setPreviewName(doc.name);
+      setPreviewOpen(true);
+    } catch (error) {
+      console.error('Error getting preview URL:', error);
+      toast.error('Error al obtener la vista previa');
+    }
+  };
+
+  const closePreview = () => {
+    setPreviewOpen(false);
+    setPreviewUrl(null);
+    setPreviewName('');
   };
 
   const formatFileSize = (bytes: number | null) => {
@@ -396,14 +448,27 @@ export default function Documentos() {
                             : '-'}
                         </TableCell>
                         <TableCell className="text-right">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleDownload(doc)}
-                            disabled={!doc.file_path}
-                          >
-                            <Download className="h-4 w-4" />
-                          </Button>
+                          <div className="flex items-center justify-end gap-1">
+                            {canPreview(doc) && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handlePreview(doc)}
+                                title="Vista previa"
+                              >
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                            )}
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDownload(doc)}
+                              disabled={!doc.file_path}
+                              title="Descargar"
+                            >
+                              <Download className="h-4 w-4" />
+                            </Button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -496,6 +561,41 @@ export default function Documentos() {
               {uploading ? 'Subiendo...' : 'Subir'}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Preview Dialog */}
+      <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] p-0 overflow-hidden">
+          <DialogHeader className="p-4 pb-2 border-b">
+            <div className="flex items-center justify-between">
+              <DialogTitle className="flex items-center gap-2 text-base">
+                <Eye className="h-5 w-5" />
+                {previewName}
+              </DialogTitle>
+              <Button variant="ghost" size="icon" onClick={closePreview}>
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          </DialogHeader>
+          <div className="flex-1 overflow-auto p-4 bg-muted/30">
+            {previewUrl && previewType === 'image' && (
+              <div className="flex items-center justify-center min-h-[400px]">
+                <img
+                  src={previewUrl}
+                  alt={previewName}
+                  className="max-w-full max-h-[70vh] object-contain rounded-lg shadow-lg"
+                />
+              </div>
+            )}
+            {previewUrl && previewType === 'pdf' && (
+              <iframe
+                src={previewUrl}
+                title={previewName}
+                className="w-full h-[70vh] rounded-lg border"
+              />
+            )}
+          </div>
         </DialogContent>
       </Dialog>
     </div>

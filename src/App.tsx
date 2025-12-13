@@ -7,6 +7,7 @@ import Landing from "./pages/Landing";
 import Dashboard from "./pages/Dashboard";
 import Recursos from "./pages/Recursos";
 import Presupuestos from "./pages/Presupuestos";
+import PresupuestoDashboard from "./pages/PresupuestoDashboard";
 import Proyectos from "./pages/Proyectos";
 import CRM from "./pages/CRM";
 import Agenda from "./pages/Agenda";
@@ -30,6 +31,7 @@ const App = () => (
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/recursos" element={<Recursos />} />
           <Route path="/presupuestos" element={<Presupuestos />} />
+          <Route path="/presupuestos/:id" element={<PresupuestoDashboard />} />
           <Route path="/proyectos" element={<Proyectos />} />
           <Route path="/crm" element={<CRM />} />
           <Route path="/agenda" element={<Agenda />} />

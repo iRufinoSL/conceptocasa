@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { ArrowLeft, Calculator, Search, LayoutGrid, List, Plus, Pencil, Trash2 } from 'lucide-react';
+import { ArrowLeft, Calculator, Search, LayoutGrid, List, Plus, Pencil, Trash2, ExternalLink } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { AppNavDropdown } from '@/components/AppNavDropdown';
@@ -322,25 +322,48 @@ export default function Presupuestos() {
         {viewMode === 'cards' && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {filteredPresupuestos.map((p) => (
-              <Card key={p.id} className="hover:shadow-md transition-shadow">
+              <Card 
+                key={p.id} 
+                className="hover:shadow-md transition-shadow cursor-pointer group"
+                onClick={() => navigate(`/presupuestos/${p.id}`)}
+              >
                 <CardHeader className="pb-2">
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
-                      <CardTitle className="text-lg">{p.nombre}</CardTitle>
+                      <CardTitle className="text-lg group-hover:text-primary transition-colors">
+                        {p.nombre}
+                      </CardTitle>
                       <CardDescription className="text-xs mt-1">
                         {generatePresupuestoId(p)}
                       </CardDescription>
                     </div>
-                    {isAdmin && (
-                      <div className="flex gap-1">
-                        <Button variant="ghost" size="icon" onClick={() => handleEdit(p)}>
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        <Button variant="ghost" size="icon" onClick={() => handleDeleteClick(p)}>
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
-                      </div>
-                    )}
+                    <div className="flex gap-1">
+                      {isAdmin && (
+                        <>
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            onClick={(e) => { e.stopPropagation(); handleEdit(p); }}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            onClick={(e) => { e.stopPropagation(); handleDeleteClick(p); }}
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </>
+                      )}
+                      <Button 
+                        variant="ghost" 
+                        size="icon"
+                        onClick={(e) => { e.stopPropagation(); navigate(`/presupuestos/${p.id}`); }}
+                      >
+                        <ExternalLink className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
                 </CardHeader>
                 <CardContent>
@@ -373,33 +396,56 @@ export default function Presupuestos() {
                   <TableHead>Población</TableHead>
                   <TableHead>Provincia</TableHead>
                   <TableHead>Creado</TableHead>
-                  {isAdmin && <TableHead className="w-24">Acciones</TableHead>}
+                  <TableHead className="w-32">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredPresupuestos.map((p) => (
-                  <TableRow key={p.id} className="hover:bg-muted/50">
+                  <TableRow 
+                    key={p.id} 
+                    className="hover:bg-muted/50 cursor-pointer"
+                    onClick={() => navigate(`/presupuestos/${p.id}`)}
+                  >
                     <TableCell className="text-xs text-muted-foreground max-w-xs truncate">
                       {generatePresupuestoId(p)}
                     </TableCell>
-                    <TableCell className="font-medium">{p.nombre}</TableCell>
+                    <TableCell className="font-medium hover:text-primary transition-colors">
+                      {p.nombre}
+                    </TableCell>
                     <TableCell>{p.codigo_correlativo}</TableCell>
                     <TableCell>{p.version}</TableCell>
                     <TableCell>{p.poblacion}</TableCell>
                     <TableCell>{p.provincia || '-'}</TableCell>
                     <TableCell>{format(new Date(p.created_at), 'dd/MM/yyyy', { locale: es })}</TableCell>
-                    {isAdmin && (
-                      <TableCell>
-                        <div className="flex gap-1">
-                          <Button variant="ghost" size="icon" onClick={() => handleEdit(p)}>
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button variant="ghost" size="icon" onClick={() => handleDeleteClick(p)}>
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    )}
+                    <TableCell>
+                      <div className="flex gap-1">
+                        {isAdmin && (
+                          <>
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              onClick={(e) => { e.stopPropagation(); handleEdit(p); }}
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              onClick={(e) => { e.stopPropagation(); handleDeleteClick(p); }}
+                            >
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          </>
+                        )}
+                        <Button 
+                          variant="ghost" 
+                          size="icon"
+                          onClick={(e) => { e.stopPropagation(); navigate(`/presupuestos/${p.id}`); }}
+                        >
+                          <ExternalLink className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>

@@ -112,10 +112,10 @@ const apps: AppCard[] = [
   {
     id: 'configuracion',
     title: 'Configuración',
-    description: 'Ajustes del sistema y backup',
+    description: 'Ajustes del sistema y empresa',
     icon: Settings,
     route: '/configuracion',
-    available: false,
+    available: true,
     adminOnly: true,
   },
 ];

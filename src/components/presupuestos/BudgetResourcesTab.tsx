@@ -5,11 +5,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Search, Upload, Pencil, Trash2, Package, Wrench, Truck, Briefcase } from 'lucide-react';
+import { Plus, Search, Upload, Pencil, Trash2, Package, Wrench, Truck, Briefcase, FileSpreadsheet } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatCurrency, formatNumber, formatPercent } from '@/lib/format-utils';
 import { BudgetResourceForm } from './BudgetResourceForm';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
+import * as XLSX from 'xlsx';
 
 interface BudgetResource {
   id: string;
@@ -220,167 +221,273 @@ export function BudgetResourcesTab({ budgetId, isAdmin }: BudgetResourcesTabProp
     handleFormClose();
   };
 
-  const handleImportCSV = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  // Parse numbers - handles both European (1.234,56) and standard (1234.56) formats
+  const parseNumber = (val: string | number | null | undefined): number | null => {
+    if (val === null || val === undefined) return null;
+    
+    // If already a number, return it directly
+    if (typeof val === 'number') {
+      return isNaN(val) ? null : val;
+    }
+    
+    if (typeof val !== 'string' || val.trim() === '') return null;
+    
+    let cleaned = val.replace(/^"|"$/g, '').trim();
+    
+    // Detect format: if has comma as last separator, it's European
+    const hasEuropeanFormat = /\d,\d{1,2}$/.test(cleaned);
+    
+    if (hasEuropeanFormat) {
+      // European: 1.234,56 -> 1234.56
+      cleaned = cleaned.replace(/\./g, '').replace(',', '.');
+    }
+    // Otherwise keep as is (standard format: 1234.56)
+    
+    cleaned = cleaned.replace(/[^0-9.-]/g, '');
+    const num = parseFloat(cleaned);
+    return isNaN(num) ? null : num;
+  };
+
+  // Find activity by its display ID (exact match or partial match)
+  const findActivityId = (activityIdField: string | null | undefined): string | null => {
+    if (!activityIdField || typeof activityIdField !== 'string') return null;
+    
+    const cleanField = activityIdField.trim();
+    if (!cleanField) return null;
+    
+    // Try exact match first
+    const matchingActivity = activities.find(a => {
+      const phase = a.phase_id ? phases.find(p => p.id === a.phase_id) : null;
+      const fullId = `${phase?.code || ''} ${a.code}.-${a.name}`;
+      return fullId === cleanField || fullId.toLowerCase() === cleanField.toLowerCase();
+    });
+    
+    if (matchingActivity) return matchingActivity.id;
+    
+    // Try partial match on name or code
+    const partialMatch = activities.find(a => {
+      const phase = a.phase_id ? phases.find(p => p.id === a.phase_id) : null;
+      const fullId = `${phase?.code || ''} ${a.code}.-${a.name}`;
+      return fullId.toLowerCase().includes(cleanField.toLowerCase()) ||
+             cleanField.toLowerCase().includes(a.name.toLowerCase());
+    });
+    
+    return partialMatch?.id || null;
+  };
+
+  // Process row data (from CSV or Excel)
+  const processRowData = (
+    row: Record<string, any>,
+    existingNames: Set<string>,
+    columnMapping: Record<string, string>
+  ): {
+    budget_id: string;
+    name: string;
+    external_unit_cost: number | null;
+    unit: string | null;
+    resource_type: string | null;
+    safety_margin_percent: number;
+    sales_margin_percent: number;
+    manual_units: number | null;
+    related_units: number | null;
+    activity_id: string | null;
+  } | null => {
+    const getValue = (key: string) => row[columnMapping[key] || key];
+    
+    const name = String(getValue('name') || '').replace(/^"|"$/g, '').trim();
+    if (!name) return null;
+    
+    // Skip duplicates
+    const nameLower = name.toLowerCase();
+    if (existingNames.has(nameLower)) return null;
+    existingNames.add(nameLower);
+    
+    const externalCost = parseNumber(getValue('external_unit_cost'));
+    const unit = String(getValue('unit') || '').replace(/^"|"$/g, '').trim() || null;
+    const resourceType = String(getValue('resource_type') || '').replace(/^"|"$/g, '').trim() || null;
+    
+    // Parse percentages - values like 0.15 mean 15%, keep as decimal
+    let safetyPercent = parseNumber(getValue('safety_margin_percent'));
+    if (safetyPercent === null) safetyPercent = 0.15;
+    if (safetyPercent > 1) safetyPercent = safetyPercent / 100;
+    
+    let salesPercent = parseNumber(getValue('sales_margin_percent'));
+    if (salesPercent === null) salesPercent = 0.25;
+    if (salesPercent > 1) salesPercent = salesPercent / 100;
+    
+    const manualUnits = parseNumber(getValue('manual_units'));
+    const relatedUnits = parseNumber(getValue('related_units'));
+    const activityIdField = String(getValue('activity_id') || '').replace(/^"|"$/g, '').trim();
+    
+    return {
+      budget_id: budgetId,
+      name,
+      external_unit_cost: externalCost,
+      unit,
+      resource_type: resourceType,
+      safety_margin_percent: safetyPercent,
+      sales_margin_percent: salesPercent,
+      manual_units: manualUnits,
+      related_units: relatedUnits,
+      activity_id: findActivityId(activityIdField),
+    };
+  };
+
+  // Import resources from parsed data
+  const importResources = async (
+    resourcesData: Array<{
+      budget_id: string;
+      name: string;
+      external_unit_cost: number | null;
+      unit: string | null;
+      resource_type: string | null;
+      safety_margin_percent: number;
+      sales_margin_percent: number;
+      manual_units: number | null;
+      related_units: number | null;
+      activity_id: string | null;
+    }>,
+    totalRows: number
+  ) => {
+    if (resourcesData.length === 0) {
+      toast.info('No se encontraron recursos nuevos para importar (posibles duplicados)');
+      return;
+    }
+    
+    const skipped = totalRows - resourcesData.length;
+    const batchSize = 50;
+    let imported = 0;
+    
+    for (let i = 0; i < resourcesData.length; i += batchSize) {
+      const batch = resourcesData.slice(i, i + batchSize);
+      const { error } = await supabase
+        .from('budget_activity_resources')
+        .insert(batch);
+      
+      if (error) throw error;
+      imported += batch.length;
+    }
+    
+    const skippedMsg = skipped > 0 ? ` (${skipped} duplicados omitidos)` : '';
+    toast.success(`${imported} recursos importados correctamente${skippedMsg}`);
+    fetchData();
+  };
+
+  const handleImportFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
+    const isExcel = file.name.endsWith('.xlsx') || file.name.endsWith('.xls');
+    const existingNames = new Set(resources.map(r => r.name.toLowerCase().trim()));
+    
+    // Column mapping for known headers
+    const columnMapping: Record<string, string> = {
+      'name': 'Recurso',
+      'external_unit_cost': '€Coste ud',
+      'unit': 'Ud medida',
+      'resource_type': 'Tipo recurso',
+      'safety_margin_percent': '%Margen seguridad',
+      'sales_margin_percent': '%Margen venta',
+      'manual_units': 'Uds manual',
+      'related_units': 'Uds relacionadas',
+      'activity_id': 'ActividadID',
+    };
+
     try {
-      const text = await file.text();
-      // Remove BOM if present
-      const cleanText = text.replace(/^\uFEFF/, '');
-      const lines = cleanText.split('\n');
-      
-      // Get existing resource names for duplicate detection
-      const existingNames = new Set(resources.map(r => r.name.toLowerCase().trim()));
-      
-      const resourcesData: {
-        budget_id: string;
-        name: string;
-        external_unit_cost: number | null;
-        unit: string | null;
-        resource_type: string | null;
-        safety_margin_percent: number;
-        sales_margin_percent: number;
-        manual_units: number | null;
-        related_units: number | null;
-        activity_id: string | null;
-      }[] = [];
-      
-      for (let i = 1; i < lines.length; i++) {
-        const line = lines[i].trim();
-        if (!line) continue;
+      if (isExcel) {
+        // Handle Excel file
+        const arrayBuffer = await file.arrayBuffer();
+        const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+        const sheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[sheetName];
         
-        // Parse CSV line with proper handling of quoted fields
-        const values: string[] = [];
+        // Convert to JSON with header row
+        const jsonData = XLSX.utils.sheet_to_json<Record<string, any>>(worksheet, { defval: '' });
+        
+        const resourcesData: Array<ReturnType<typeof processRowData>> = [];
+        
+        for (const row of jsonData) {
+          const processed = processRowData(row, existingNames, columnMapping);
+          if (processed) resourcesData.push(processed);
+        }
+        
+        await importResources(
+          resourcesData.filter((r): r is NonNullable<typeof r> => r !== null),
+          jsonData.length
+        );
+      } else {
+        // Handle CSV file
+        const text = await file.text();
+        const cleanText = text.replace(/^\uFEFF/, '');
+        const lines = cleanText.split('\n');
+        
+        if (lines.length < 2) {
+          toast.error('El archivo CSV está vacío o no tiene datos');
+          return;
+        }
+        
+        // Parse header row to get column positions
+        const headerLine = lines[0];
+        const headers: string[] = [];
         let current = '';
         let inQuotes = false;
         
-        for (const char of line) {
+        // Detect delimiter: semicolon or comma
+        const delimiter = headerLine.includes(';') ? ';' : ',';
+        
+        for (const char of headerLine) {
           if (char === '"') {
             inQuotes = !inQuotes;
-          } else if (char === ',' && !inQuotes) {
-            values.push(current.trim());
+          } else if (char === delimiter && !inQuotes) {
+            headers.push(current.replace(/^"|"$/g, '').trim());
             current = '';
           } else {
             current += char;
           }
         }
-        values.push(current.trim());
+        headers.push(current.replace(/^"|"$/g, '').trim());
         
-        const name = values[0]?.replace(/^"|"$/g, '').trim() || '';
-        if (!name) continue;
+        const resourcesData: Array<ReturnType<typeof processRowData>> = [];
         
-        // Skip duplicates (check against existing resources and already parsed resources)
-        const nameLower = name.toLowerCase();
-        if (existingNames.has(nameLower)) continue;
-        existingNames.add(nameLower); // Prevent duplicates within the CSV itself
-        
-        // Parse numbers - handles both European (1.234,56) and standard (1234.56) formats
-        const parseNumber = (val: string): number | null => {
-          if (!val || val.trim() === '') return null;
-          let cleaned = val.replace(/^"|"$/g, '').trim();
+        for (let i = 1; i < lines.length; i++) {
+          const line = lines[i].trim();
+          if (!line) continue;
           
-          // Detect format: if has comma as last separator, it's European
-          const hasEuropeanFormat = /\d,\d{1,2}$/.test(cleaned);
+          // Parse CSV line with proper handling of quoted fields
+          const values: string[] = [];
+          current = '';
+          inQuotes = false;
           
-          if (hasEuropeanFormat) {
-            // European: 1.234,56 -> 1234.56
-            cleaned = cleaned.replace(/\./g, '').replace(',', '.');
+          for (const char of line) {
+            if (char === '"') {
+              inQuotes = !inQuotes;
+            } else if (char === delimiter && !inQuotes) {
+              values.push(current.trim());
+              current = '';
+            } else {
+              current += char;
+            }
           }
-          // Otherwise keep as is (standard format: 1234.56)
+          values.push(current.trim());
           
-          cleaned = cleaned.replace(/[^0-9.-]/g, '');
-          const num = parseFloat(cleaned);
-          return isNaN(num) ? null : num;
-        };
-        
-        // CSV columns: Recurso, €Coste ud, Ud medida, Tipo recurso, %Margen seguridad, €Margen seguridad, €Coste interno ud, %Margen venta, €Margen venta, €Coste venta ud, Uds manual, Uds relacionadas, ActividadID
-        const externalCost = parseNumber(values[1] || '');
-        const unit = values[2]?.replace(/^"|"$/g, '').trim() || null;
-        const resourceType = values[3]?.replace(/^"|"$/g, '').trim() || null;
-        
-        // Parse percentages - values like 0.15 mean 15%, keep as decimal
-        let safetyPercent = parseNumber(values[4] || '');
-        if (safetyPercent === null) safetyPercent = 0.15;
-        // If value > 1, it's likely already a percentage (15 = 15%), convert to decimal
-        if (safetyPercent > 1) safetyPercent = safetyPercent / 100;
-        
-        let salesPercent = parseNumber(values[7] || '');
-        if (salesPercent === null) salesPercent = 0.25;
-        if (salesPercent > 1) salesPercent = salesPercent / 100;
-        
-        const manualUnits = parseNumber(values[10] || '');
-        const relatedUnits = parseNumber(values[11] || '');
-        const activityIdField = values[12]?.replace(/^"|"$/g, '').trim() || '';
-        
-        // Find activity by its display ID (exact match or partial match)
-        let activityId: string | null = null;
-        if (activityIdField) {
-          // Try exact match first
-          const matchingActivity = activities.find(a => {
-            const phase = a.phase_id ? phases.find(p => p.id === a.phase_id) : null;
-            const fullId = `${phase?.code || ''} ${a.code}.-${a.name}`;
-            return fullId === activityIdField || 
-                   fullId.toLowerCase() === activityIdField.toLowerCase();
+          // Create row object from values
+          const row: Record<string, string> = {};
+          headers.forEach((header, idx) => {
+            row[header] = values[idx] || '';
           });
           
-          if (matchingActivity) {
-            activityId = matchingActivity.id;
-          } else {
-            // Try partial match on name or code
-            const partialMatch = activities.find(a => {
-              const phase = a.phase_id ? phases.find(p => p.id === a.phase_id) : null;
-              const fullId = `${phase?.code || ''} ${a.code}.-${a.name}`;
-              return fullId.toLowerCase().includes(activityIdField.toLowerCase()) ||
-                     activityIdField.toLowerCase().includes(a.name.toLowerCase());
-            });
-            activityId = partialMatch?.id || null;
-          }
+          const processed = processRowData(row, existingNames, columnMapping);
+          if (processed) resourcesData.push(processed);
         }
         
-        resourcesData.push({
-          budget_id: budgetId,
-          name,
-          external_unit_cost: externalCost,
-          unit: unit || null,
-          resource_type: resourceType,
-          safety_margin_percent: safetyPercent,
-          sales_margin_percent: salesPercent,
-          manual_units: manualUnits,
-          related_units: relatedUnits,
-          activity_id: activityId,
-        });
+        await importResources(
+          resourcesData.filter((r): r is NonNullable<typeof r> => r !== null),
+          lines.filter((l, i) => i > 0 && l.trim()).length
+        );
       }
-      
-      if (resourcesData.length === 0) {
-        toast.info('No se encontraron recursos nuevos para importar (posibles duplicados)');
-        return;
-      }
-      
-      // Count skipped duplicates
-      const totalLines = lines.filter((l, i) => i > 0 && l.trim()).length;
-      const skipped = totalLines - resourcesData.length;
-      
-      // Insert resources in batches to avoid timeouts
-      const batchSize = 50;
-      let imported = 0;
-      
-      for (let i = 0; i < resourcesData.length; i += batchSize) {
-        const batch = resourcesData.slice(i, i + batchSize);
-        const { error } = await supabase
-          .from('budget_activity_resources')
-          .insert(batch);
-        
-        if (error) throw error;
-        imported += batch.length;
-      }
-      
-      const skippedMsg = skipped > 0 ? ` (${skipped} duplicados omitidos)` : '';
-      toast.success(`${imported} recursos importados correctamente${skippedMsg}`);
-      fetchData();
     } catch (error) {
-      console.error('Error importing CSV:', error);
-      toast.error('Error al importar el archivo CSV');
+      console.error('Error importing file:', error);
+      toast.error(`Error al importar el archivo ${isExcel ? 'Excel' : 'CSV'}`);
     }
     
     // Reset input
@@ -411,20 +518,20 @@ export function BudgetResourcesTab({ budgetId, isAdmin }: BudgetResourcesTabProp
           </div>
           {isAdmin && (
             <div className="flex items-center gap-2">
-              <label htmlFor="csv-upload" className="cursor-pointer">
+              <label htmlFor="file-upload" className="cursor-pointer">
                 <Button variant="outline" size="sm" asChild>
                   <span>
-                    <Upload className="h-4 w-4 mr-2" />
-                    Importar CSV
+                    <FileSpreadsheet className="h-4 w-4 mr-2" />
+                    Importar CSV/Excel
                   </span>
                 </Button>
               </label>
               <input
-                id="csv-upload"
+                id="file-upload"
                 type="file"
-                accept=".csv"
+                accept=".csv,.xlsx,.xls"
                 className="hidden"
-                onChange={handleImportCSV}
+                onChange={handleImportFile}
               />
               <Button size="sm" onClick={() => setFormOpen(true)}>
                 <Plus className="h-4 w-4 mr-2" />
@@ -482,7 +589,7 @@ export function BudgetResourcesTab({ budgetId, isAdmin }: BudgetResourcesTabProp
                 {filteredResources.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={isAdmin ? 16 : 15} className="text-center text-muted-foreground py-8">
-                      {searchTerm ? 'No se encontraron recursos' : 'No hay recursos. Añade uno nuevo o importa desde CSV.'}
+                      {searchTerm ? 'No se encontraron recursos' : 'No hay recursos. Añade uno nuevo o importa desde CSV/Excel.'}
                     </TableCell>
                   </TableRow>
                 ) : (

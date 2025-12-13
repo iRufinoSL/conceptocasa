@@ -331,14 +331,14 @@ export function BudgetResourceForm({
             <div className="space-y-2">
               <Label htmlFor="activity_id">Actividad relacionada</Label>
               <Select
-                value={formData.activity_id}
-                onValueChange={(value) => setFormData({ ...formData, activity_id: value })}
+                value={formData.activity_id || '__none__'}
+                onValueChange={(value) => setFormData({ ...formData, activity_id: value === '__none__' ? '' : value })}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Seleccionar actividad (opcional)" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Sin actividad</SelectItem>
+                  <SelectItem value="__none__">Sin actividad</SelectItem>
                   {activities.map((activity) => (
                     <SelectItem key={activity.id} value={activity.id}>
                       {getActivityDisplay(activity.id)}

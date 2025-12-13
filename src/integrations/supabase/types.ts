@@ -560,6 +560,7 @@ export type Database = {
           id: string
           nombre: string
           poblacion: string
+          project_id: string | null
           updated_at: string | null
           version: string
         }
@@ -569,6 +570,7 @@ export type Database = {
           id?: string
           nombre: string
           poblacion: string
+          project_id?: string | null
           updated_at?: string | null
           version: string
         }
@@ -578,10 +580,19 @@ export type Database = {
           id?: string
           nombre?: string
           poblacion?: string
+          project_id?: string | null
           updated_at?: string | null
           version?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "presupuestos_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       profiles: {
         Row: {

@@ -21,13 +21,15 @@ import {
   Pencil,
   Trash2,
   Users,
-  FileText
+  FileText,
+  Calculator
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { ProjectForm } from '@/components/projects/ProjectForm';
 import { ProjectContactsManager } from '@/components/projects/ProjectContactsManager';
 import { ProjectDocumentsManager } from '@/components/projects/ProjectDocumentsManager';
+import { ProjectBudgetsManager } from '@/components/projects/ProjectBudgetsManager';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import { useToast } from '@/hooks/use-toast';
 
@@ -74,6 +76,10 @@ export default function Proyectos() {
   // Documents manager state
   const [documentsManagerOpen, setDocumentsManagerOpen] = useState(false);
   const [selectedProjectForDocs, setSelectedProjectForDocs] = useState<Project | null>(null);
+
+  // Budgets manager state
+  const [budgetsManagerOpen, setBudgetsManagerOpen] = useState(false);
+  const [selectedProjectForBudgets, setSelectedProjectForBudgets] = useState<Project | null>(null);
 
   // Delete states
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -162,6 +168,11 @@ export default function Proyectos() {
   const handleManageDocuments = (project: Project) => {
     setSelectedProjectForDocs(project);
     setDocumentsManagerOpen(true);
+  };
+
+  const handleManageBudgets = (project: Project) => {
+    setSelectedProjectForBudgets(project);
+    setBudgetsManagerOpen(true);
   };
 
   const handleDeleteClick = (project: Project) => {
@@ -332,6 +343,10 @@ export default function Proyectos() {
                                 <FileText className="h-4 w-4 mr-2" />
                                 Documentos
                               </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleManageBudgets(project)}>
+                                <Calculator className="h-4 w-4 mr-2" />
+                                Presupuestos
+                              </DropdownMenuItem>
                               <DropdownMenuItem onClick={() => handleEdit(project)}>
                                 <Pencil className="h-4 w-4 mr-2" />
                                 Editar
@@ -443,6 +458,16 @@ export default function Proyectos() {
           projectId={selectedProjectForDocs.id}
           projectName={selectedProjectForDocs.name}
           canEdit={canEdit}
+        />
+      )}
+
+      {/* Budgets Manager */}
+      {selectedProjectForBudgets && (
+        <ProjectBudgetsManager
+          open={budgetsManagerOpen}
+          onOpenChange={setBudgetsManagerOpen}
+          projectId={selectedProjectForBudgets.id}
+          projectName={selectedProjectForBudgets.name}
         />
       )}
 

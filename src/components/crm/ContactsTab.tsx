@@ -1,16 +1,20 @@
 import { useMemo } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Mail, Phone, MapPin, Users } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Mail, Phone, MapPin, Users, MoreVertical, Pencil, Trash2 } from 'lucide-react';
 import type { Contact } from '@/pages/CRM';
 
 interface ContactsTabProps {
   contacts: Contact[];
   searchTerm: string;
+  onEdit: (contact: Contact) => void;
+  onDelete: (contact: Contact) => void;
 }
 
-export function ContactsTab({ contacts, searchTerm }: ContactsTabProps) {
+export function ContactsTab({ contacts, searchTerm, onEdit, onDelete }: ContactsTabProps) {
   const filteredContacts = useMemo(() => {
     if (!searchTerm) return contacts;
     const term = searchTerm.toLowerCase();
@@ -59,7 +63,7 @@ export function ContactsTab({ contacts, searchTerm }: ContactsTabProps) {
       {filteredContacts.map((contact) => (
         <Card
           key={contact.id}
-          className="group cursor-pointer hover:shadow-lg hover:border-primary/50 transition-all duration-200"
+          className="group hover:shadow-lg hover:border-primary/50 transition-all duration-200"
         >
           <CardHeader className="pb-3">
             <div className="flex items-start gap-3">
@@ -69,9 +73,28 @@ export function ContactsTab({ contacts, searchTerm }: ContactsTabProps) {
                 </AvatarFallback>
               </Avatar>
               <div className="flex-1 min-w-0">
-                <CardTitle className="text-base line-clamp-1">
-                  {contact.name} {contact.surname}
-                </CardTitle>
+                <div className="flex items-start justify-between">
+                  <CardTitle className="text-base line-clamp-1">
+                    {contact.name} {contact.surname}
+                  </CardTitle>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <MoreVertical className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => onEdit(contact)}>
+                        <Pencil className="h-4 w-4 mr-2" />
+                        Editar
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => onDelete(contact)} className="text-destructive">
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        Eliminar
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
                 <div className="flex gap-2 mt-1">
                   <Badge variant={getTypeVariant(contact.contact_type)} className="text-xs">
                     {contact.contact_type}

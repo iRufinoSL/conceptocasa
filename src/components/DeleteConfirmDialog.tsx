@@ -16,6 +16,7 @@ interface DeleteConfirmDialogProps {
   resourceName?: string;
   title?: string;
   description?: string;
+  isDeleting?: boolean;
 }
 
 export function DeleteConfirmDialog({
@@ -25,6 +26,7 @@ export function DeleteConfirmDialog({
   resourceName,
   title,
   description,
+  isDeleting = false,
 }: DeleteConfirmDialogProps) {
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
@@ -42,12 +44,13 @@ export function DeleteConfirmDialog({
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+          <AlertDialogCancel disabled={isDeleting}>Cancelar</AlertDialogCancel>
           <AlertDialogAction
             onClick={onConfirm}
+            disabled={isDeleting}
             className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
           >
-            Eliminar
+            {isDeleting ? 'Eliminando...' : 'Eliminar'}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

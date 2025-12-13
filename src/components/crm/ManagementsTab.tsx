@@ -1,7 +1,9 @@
 import { useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Calendar, Clock, ClipboardList } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Calendar, Clock, ClipboardList, MoreVertical, Pencil, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import type { Management } from '@/pages/CRM';
@@ -9,9 +11,11 @@ import type { Management } from '@/pages/CRM';
 interface ManagementsTabProps {
   managements: Management[];
   searchTerm: string;
+  onEdit: (management: Management) => void;
+  onDelete: (management: Management) => void;
 }
 
-export function ManagementsTab({ managements, searchTerm }: ManagementsTabProps) {
+export function ManagementsTab({ managements, searchTerm, onEdit, onDelete }: ManagementsTabProps) {
   const filteredManagements = useMemo(() => {
     if (!searchTerm) return managements;
     const term = searchTerm.toLowerCase();
@@ -60,7 +64,7 @@ export function ManagementsTab({ managements, searchTerm }: ManagementsTabProps)
       {filteredManagements.map((management) => (
         <Card
           key={management.id}
-          className="group cursor-pointer hover:shadow-lg hover:border-primary/50 transition-all duration-200"
+          className="group hover:shadow-lg hover:border-primary/50 transition-all duration-200"
         >
           <CardHeader className="pb-3">
             <div className="flex items-start justify-between">
@@ -70,9 +74,28 @@ export function ManagementsTab({ managements, searchTerm }: ManagementsTabProps)
                   {management.management_type}
                 </Badge>
               </div>
-              <Badge variant={getStatusVariant(management.status)}>
-                {management.status}
-              </Badge>
+              <div className="flex items-center gap-1">
+                <Badge variant={getStatusVariant(management.status)}>
+                  {management.status}
+                </Badge>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <MoreVertical className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => onEdit(management)}>
+                      <Pencil className="h-4 w-4 mr-2" />
+                      Editar
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => onDelete(management)} className="text-destructive">
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Eliminar
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
             </div>
             <CardTitle className="text-base line-clamp-2 mt-2">
               {management.title}

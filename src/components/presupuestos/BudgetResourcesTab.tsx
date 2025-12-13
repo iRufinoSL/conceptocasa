@@ -230,6 +230,9 @@ export function BudgetResourcesTab({ budgetId, isAdmin }: BudgetResourcesTabProp
       const cleanText = text.replace(/^\uFEFF/, '');
       const lines = cleanText.split('\n');
       
+      // Get existing resource names for duplicate detection
+      const existingNames = new Set(resources.map(r => r.name.toLowerCase().trim()));
+      
       const resourcesData: {
         budget_id: string;
         name: string;
@@ -264,8 +267,13 @@ export function BudgetResourcesTab({ budgetId, isAdmin }: BudgetResourcesTabProp
         }
         values.push(current.trim());
         
-        const name = values[0]?.replace(/^"|"$/g, '') || '';
+        const name = values[0]?.replace(/^"|"$/g, '').trim() || '';
         if (!name) continue;
+        
+        // Skip duplicates (check against existing resources and already parsed resources)
+        const nameLower = name.toLowerCase();
+        if (existingNames.has(nameLower)) continue;
+        existingNames.add(nameLower); // Prevent duplicates within the CSV itself
         
         // Parse numbers - handles both European (1.234,56) and standard (1234.56) formats
         const parseNumber = (val: string): number | null => {
@@ -345,9 +353,13 @@ export function BudgetResourcesTab({ budgetId, isAdmin }: BudgetResourcesTabProp
       }
       
       if (resourcesData.length === 0) {
-        toast.error('No se encontraron recursos válidos en el archivo');
+        toast.info('No se encontraron recursos nuevos para importar (posibles duplicados)');
         return;
       }
+      
+      // Count skipped duplicates
+      const totalLines = lines.filter((l, i) => i > 0 && l.trim()).length;
+      const skipped = totalLines - resourcesData.length;
       
       // Insert resources in batches to avoid timeouts
       const batchSize = 50;
@@ -363,7 +375,8 @@ export function BudgetResourcesTab({ budgetId, isAdmin }: BudgetResourcesTabProp
         imported += batch.length;
       }
       
-      toast.success(`${imported} recursos importados correctamente`);
+      const skippedMsg = skipped > 0 ? ` (${skipped} duplicados omitidos)` : '';
+      toast.success(`${imported} recursos importados correctamente${skippedMsg}`);
       fetchData();
     } catch (error) {
       console.error('Error importing CSV:', error);

@@ -1,12 +1,17 @@
 import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { formatCurrency, formatNumber, formatPercent } from '@/lib/format-utils';
-import { Calculator, TrendingUp, Percent, Euro, Package } from 'lucide-react';
+import { formatCurrency, formatNumber } from '@/lib/format-utils';
+import { Calculator, TrendingUp, Percent, Euro, Package, FileDown } from 'lucide-react';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import { format } from 'date-fns';
+import { es } from 'date-fns/locale';
 
 interface BudgetResource {
   id: string;
@@ -26,6 +31,14 @@ interface BudgetSummaryProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
+
+// Format for PDF (simpler format without symbols)
+const formatPdfCurrency = (value: number): string => {
+  return new Intl.NumberFormat('es-ES', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value) + ' €';
+};
 
 export function BudgetSummary({ budgetId, budgetName, open, onOpenChange }: BudgetSummaryProps) {
   const [resources, setResources] = useState<BudgetResource[]>([]);
@@ -110,14 +123,161 @@ export function BudgetSummary({ budgetId, budgetName, open, onOpenChange }: Budg
     };
   }, [resources]);
 
+  const exportToPDF = () => {
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.getWidth();
+    
+    // Header
+    doc.setFontSize(18);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Resumen de Presupuesto', pageWidth / 2, 20, { align: 'center' });
+    
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'normal');
+    doc.text(budgetName, pageWidth / 2, 28, { align: 'center' });
+    
+    doc.setFontSize(10);
+    doc.setTextColor(100);
+    doc.text(`Generado el ${format(new Date(), "d 'de' MMMM 'de' yyyy", { locale: es })}`, pageWidth / 2, 35, { align: 'center' });
+    doc.setTextColor(0);
+
+    // Summary section
+    let yPos = 50;
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Resumen General', 14, yPos);
+    
+    yPos += 8;
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    
+    const summaryData = [
+      ['Total de recursos:', calculations.resourceCount.toString()],
+      ['Coste base:', formatPdfCurrency(calculations.totalBaseCost)],
+      ['Margen de seguridad:', formatPdfCurrency(calculations.totalSafetyMargin)],
+      ['Margen comercial:', formatPdfCurrency(calculations.totalSalesMargin)],
+    ];
+    
+    summaryData.forEach(([label, value]) => {
+      doc.text(label, 14, yPos);
+      doc.text(value, 80, yPos);
+      yPos += 6;
+    });
+    
+    // Total PVP highlighted
+    yPos += 4;
+    doc.setFillColor(34, 197, 94); // Green
+    doc.roundedRect(14, yPos - 4, pageWidth - 28, 10, 2, 2, 'F');
+    doc.setTextColor(255);
+    doc.setFont('helvetica', 'bold');
+    doc.text('TOTAL PVP:', 18, yPos + 3);
+    doc.text(formatPdfCurrency(calculations.totalWithMargins), pageWidth - 18, yPos + 3, { align: 'right' });
+    doc.setTextColor(0);
+    doc.setFont('helvetica', 'normal');
+
+    // Breakdown by type
+    if (Object.keys(calculations.byType).length > 0) {
+      yPos += 20;
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Desglose por Tipo de Recurso', 14, yPos);
+      
+      yPos += 8;
+      const typeData = Object.entries(calculations.byType).map(([type, data]) => [
+        type,
+        data.count.toString(),
+        formatPdfCurrency(data.total)
+      ]);
+      
+      autoTable(doc, {
+        startY: yPos,
+        head: [['Tipo', 'Cantidad', 'Total']],
+        body: typeData,
+        theme: 'striped',
+        headStyles: { fillColor: [59, 130, 246] },
+        margin: { left: 14, right: 14 },
+      });
+      
+      yPos = (doc as any).lastAutoTable.finalY + 10;
+    }
+
+    // Resource details table
+    if (calculations.resources.length > 0) {
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Detalle de Recursos', 14, yPos);
+      
+      const tableData = calculations.resources.map(r => [
+        r.name,
+        r.resource_type || '-',
+        `${formatNumber(r.units)} ${r.unit || ''}`.trim(),
+        formatPdfCurrency(r.unitCost),
+        `${formatNumber(r.safetyPercent, 0)}%`,
+        `${formatNumber(r.salesPercent, 0)}%`,
+        formatPdfCurrency(r.withMargins)
+      ]);
+      
+      // Add total row
+      tableData.push([
+        { content: 'TOTAL PVP', colSpan: 6, styles: { halign: 'right', fontStyle: 'bold' } } as any,
+        { content: formatPdfCurrency(calculations.totalWithMargins), styles: { fontStyle: 'bold' } } as any
+      ]);
+      
+      autoTable(doc, {
+        startY: yPos + 5,
+        head: [['Recurso', 'Tipo', 'Uds.', 'Coste/Ud.', 'Seg.', 'Margen', 'Total']],
+        body: tableData,
+        theme: 'striped',
+        headStyles: { fillColor: [59, 130, 246] },
+        margin: { left: 14, right: 14 },
+        styles: { fontSize: 8 },
+        columnStyles: {
+          0: { cellWidth: 40 },
+          1: { cellWidth: 25 },
+          2: { cellWidth: 20, halign: 'right' },
+          3: { cellWidth: 25, halign: 'right' },
+          4: { cellWidth: 15, halign: 'right' },
+          5: { cellWidth: 15, halign: 'right' },
+          6: { cellWidth: 30, halign: 'right' },
+        },
+      });
+    }
+
+    // Footer
+    const pageCount = doc.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i);
+      doc.setFontSize(8);
+      doc.setTextColor(150);
+      doc.text(
+        `Página ${i} de ${pageCount}`,
+        pageWidth / 2,
+        doc.internal.pageSize.getHeight() - 10,
+        { align: 'center' }
+      );
+    }
+
+    // Save
+    const fileName = `presupuesto_${budgetName.replace(/[^a-zA-Z0-9]/g, '_')}_${format(new Date(), 'yyyyMMdd')}.pdf`;
+    doc.save(fileName);
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Calculator className="h-5 w-5 text-primary" />
-            Resumen de Presupuesto: {budgetName}
-          </DialogTitle>
+          <div className="flex items-center justify-between">
+            <DialogTitle className="flex items-center gap-2">
+              <Calculator className="h-5 w-5 text-primary" />
+              Resumen de Presupuesto: {budgetName}
+            </DialogTitle>
+            {!loading && calculations.resourceCount > 0 && (
+              <Button variant="outline" size="sm" onClick={exportToPDF} className="gap-2">
+                <FileDown className="h-4 w-4" />
+                Exportar PDF
+              </Button>
+            )}
+          </div>
         </DialogHeader>
 
         {loading ? (

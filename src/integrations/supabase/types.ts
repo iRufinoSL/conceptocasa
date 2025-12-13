@@ -14,6 +14,88 @@ export type Database = {
   }
   public: {
     Tables: {
+      budget_activities: {
+        Row: {
+          budget_id: string
+          code: string
+          created_at: string
+          description: string | null
+          id: string
+          measurement_unit: string | null
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          budget_id: string
+          code: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          measurement_unit?: string | null
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          budget_id?: string
+          code?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          measurement_unit?: string | null
+          name?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "budget_activities_budget_id_fkey"
+            columns: ["budget_id"]
+            isOneToOne: false
+            referencedRelation: "presupuestos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      budget_activity_files: {
+        Row: {
+          activity_id: string
+          created_at: string
+          file_name: string
+          file_path: string
+          file_size: number | null
+          file_type: string | null
+          id: string
+          uploaded_by: string | null
+        }
+        Insert: {
+          activity_id: string
+          created_at?: string
+          file_name: string
+          file_path: string
+          file_size?: number | null
+          file_type?: string | null
+          id?: string
+          uploaded_by?: string | null
+        }
+        Update: {
+          activity_id?: string
+          created_at?: string
+          file_name?: string
+          file_path?: string
+          file_size?: number | null
+          file_type?: string | null
+          id?: string
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "budget_activity_files_activity_id_fkey"
+            columns: ["activity_id"]
+            isOneToOne: false
+            referencedRelation: "budget_activities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       budget_activity_resources: {
         Row: {
           activity_id: string | null

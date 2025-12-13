@@ -116,6 +116,7 @@ export type Database = {
           id: string
           manual_units: number | null
           name: string
+          related_units: number | null
           resource_type: string | null
           safety_margin_percent: number | null
           sales_margin_percent: number | null
@@ -131,6 +132,7 @@ export type Database = {
           id?: string
           manual_units?: number | null
           name: string
+          related_units?: number | null
           resource_type?: string | null
           safety_margin_percent?: number | null
           sales_margin_percent?: number | null
@@ -146,6 +148,7 @@ export type Database = {
           id?: string
           manual_units?: number | null
           name?: string
+          related_units?: number | null
           resource_type?: string | null
           safety_margin_percent?: number | null
           sales_margin_percent?: number | null

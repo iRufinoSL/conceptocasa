@@ -1,14 +1,16 @@
-import { useEffect } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, Calculator, FolderOpen, Building2 } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { ArrowLeft, Calculator, FolderOpen, Building2, Search } from 'lucide-react';
 
 export default function Presupuestos() {
   const navigate = useNavigate();
   const { user, loading, userPresupuestos, isAdmin } = useAuth();
+  const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
     if (!loading && !user) {
@@ -23,6 +25,19 @@ export default function Presupuestos() {
       </div>
     );
   }
+
+  const filteredPresupuestos = useMemo(() => {
+    if (!searchTerm.trim()) return userPresupuestos;
+    
+    const term = searchTerm.toLowerCase();
+    return userPresupuestos.filter(up => 
+      up.presupuesto?.nombre?.toLowerCase().includes(term) ||
+      up.presupuesto?.poblacion?.toLowerCase().includes(term) ||
+      up.presupuesto?.codigo_correlativo?.toString().includes(term) ||
+      up.presupuesto?.version?.toLowerCase().includes(term) ||
+      up.presupuesto?.project?.name?.toLowerCase().includes(term)
+    );
+  }, [userPresupuestos, searchTerm]);
 
   const getStatusLabel = (status: string) => {
     const labels: Record<string, string> = {
@@ -71,9 +86,26 @@ export default function Presupuestos() {
           </p>
         </div>
 
-        {userPresupuestos.length > 0 ? (
+        {/* Search */}
+        <div className="flex flex-col sm:flex-row gap-4 mb-6">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Buscar por nombre, población, código o proyecto..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+          <div className="flex items-center gap-2 text-sm text-muted-foreground whitespace-nowrap">
+            <Calculator className="h-4 w-4" />
+            <span>{filteredPresupuestos.length} presupuestos</span>
+          </div>
+        </div>
+
+        {filteredPresupuestos.length > 0 ? (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {userPresupuestos.map((up) => (
+            {filteredPresupuestos.map((up) => (
               <Card 
                 key={up.presupuesto_id} 
                 className="cursor-pointer hover:shadow-lg hover:border-primary/50 transition-all"

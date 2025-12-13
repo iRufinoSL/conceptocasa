@@ -25,6 +25,7 @@ export function useAuth() {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [rolesLoading, setRolesLoading] = useState(true);
   const [roles, setRoles] = useState<AppRole[]>([]);
   const [userPresupuestos, setUserPresupuestos] = useState<UserPresupuesto[]>([]);
 
@@ -36,6 +37,7 @@ export function useAuth() {
         setUser(session?.user ?? null);
         
         if (session?.user) {
+          setRolesLoading(true);
           // Defer Supabase calls with setTimeout
           setTimeout(() => {
             fetchUserRoles(session.user.id);
@@ -44,6 +46,7 @@ export function useAuth() {
         } else {
           setRoles([]);
           setUserPresupuestos([]);
+          setRolesLoading(false);
         }
         
         setLoading(false);
@@ -56,8 +59,11 @@ export function useAuth() {
       setUser(session?.user ?? null);
       
       if (session?.user) {
+        setRolesLoading(true);
         fetchUserRoles(session.user.id);
         fetchUserPresupuestos(session.user.id);
+      } else {
+        setRolesLoading(false);
       }
       
       setLoading(false);
@@ -67,13 +73,17 @@ export function useAuth() {
   }, []);
 
   const fetchUserRoles = async (userId: string) => {
-    const { data, error } = await supabase
-      .from('user_roles')
-      .select('role')
-      .eq('user_id', userId);
-    
-    if (!error && data) {
-      setRoles(data.map((r: UserRole) => r.role));
+    try {
+      const { data, error } = await supabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', userId);
+      
+      if (!error && data) {
+        setRoles(data.map((r: UserRole) => r.role));
+      }
+    } finally {
+      setRolesLoading(false);
     }
   };
 
@@ -158,6 +168,7 @@ export function useAuth() {
     user,
     session,
     loading,
+    rolesLoading,
     roles,
     userPresupuestos,
     signIn,

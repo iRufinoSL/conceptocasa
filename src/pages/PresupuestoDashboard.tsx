@@ -34,8 +34,18 @@ export default function PresupuestoDashboard() {
   const [presupuesto, setPresupuesto] = useState<Presupuesto | null>(null);
   const [project, setProject] = useState<Project | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState('actividades');
 
   const isAdmin = roles.includes('administrador');
+
+  // Listen for edit-activity events to switch to activities tab
+  useEffect(() => {
+    const handleEditActivity = () => {
+      setActiveTab('actividades');
+    };
+    window.addEventListener('edit-activity', handleEditActivity);
+    return () => window.removeEventListener('edit-activity', handleEditActivity);
+  }, []);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -176,7 +186,7 @@ export default function PresupuestoDashboard() {
         </div>
 
         {/* Tabs */}
-        <Tabs defaultValue="actividades" className="w-full">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="grid w-full grid-cols-5 lg:w-auto lg:inline-grid">
             <TabsTrigger value="actividades" className="flex items-center gap-2">
               <ClipboardList className="h-4 w-4" />

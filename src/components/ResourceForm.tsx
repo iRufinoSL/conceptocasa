@@ -3,6 +3,7 @@ import { ExternalResource, UNIT_MEASURES, RESOURCE_TYPES, UnitMeasure, ResourceT
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { NumericInput } from '@/components/ui/numeric-input';
+import { InputAddon } from '@/components/ui/input-addon';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -133,16 +134,18 @@ export function ResourceForm({ open, onOpenChange, resource, onSubmit, onUpdate,
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="unitCost">
-                Coste unitario (€) {!isComposite && '*'}
+                Coste unitario {!isComposite && '*'}
               </Label>
-              <NumericInput
-                id="unitCost"
-                value={formData.unitCost}
-                onChange={(value) => setFormData({ ...formData, unitCost: value })}
-                disabled={isComposite}
-                className={isComposite ? 'bg-muted' : ''}
-                placeholder="0,00"
-              />
+              <InputAddon addon="€">
+                <NumericInput
+                  id="unitCost"
+                  value={formData.unitCost}
+                  onChange={(value) => setFormData({ ...formData, unitCost: value })}
+                  disabled={isComposite}
+                  className={isComposite ? 'bg-muted' : ''}
+                  placeholder="0,00"
+                />
+              </InputAddon>
               {isComposite && (
                 <p className="text-xs text-accent">El coste se calcula automáticamente</p>
               )}

@@ -3,6 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { NumericInput } from '@/components/ui/numeric-input';
+import { InputAddon } from '@/components/ui/input-addon';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -181,14 +182,16 @@ export function ProjectForm({ open, onOpenChange, project, onSuccess }: ProjectF
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="budget">Presupuesto (€)</Label>
-            <NumericInput
-              id="budget"
-              value={formData.budget}
-              onChange={(value) => setFormData({ ...formData, budget: value })}
-              placeholder="0,00"
-              decimals={2}
-            />
+            <Label htmlFor="budget">Presupuesto</Label>
+            <InputAddon addon="€">
+              <NumericInput
+                id="budget"
+                value={formData.budget}
+                onChange={(value) => setFormData({ ...formData, budget: value })}
+                placeholder="0,00"
+                decimals={2}
+              />
+            </InputAddon>
           </div>
 
           <div className="grid grid-cols-2 gap-4">

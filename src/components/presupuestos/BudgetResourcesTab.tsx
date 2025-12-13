@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -7,12 +7,15 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Search, Upload, Pencil, Trash2, Package, Wrench, Truck, Briefcase, FileSpreadsheet, Copy, Check } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Plus, Search, Pencil, Trash2, Package, Wrench, Truck, Briefcase, FileSpreadsheet, Check, List, FolderTree } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatCurrency, formatNumber, formatPercent } from '@/lib/format-utils';
 import { BudgetResourceForm } from './BudgetResourceForm';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import { NumericInput } from '@/components/ui/numeric-input';
+import { ResourceInlineEdit } from './ResourceInlineEdit';
+import { ResourcesGroupedView } from './ResourcesGroupedView';
 import * as XLSX from 'xlsx';
 
 interface BudgetResource {
@@ -86,6 +89,7 @@ export function BudgetResourcesTab({ budgetId, isAdmin }: BudgetResourcesTabProp
   const [editingResource, setEditingResource] = useState<BudgetResource | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [resourceToDelete, setResourceToDelete] = useState<BudgetResource | null>(null);
+  const [viewMode, setViewMode] = useState<'list' | 'grouped'>('list');
   
   // Bulk edit state
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -242,6 +246,27 @@ export function BudgetResourcesTab({ budgetId, isAdmin }: BudgetResourcesTabProp
     fetchData();
     handleFormClose();
   };
+
+  // Inline update handler
+  const handleInlineUpdate = useCallback(async (id: string, field: string, value: any) => {
+    try {
+      const { error } = await supabase
+        .from('budget_activity_resources')
+        .update({ [field]: value })
+        .eq('id', id);
+      
+      if (error) throw error;
+      
+      // Update local state
+      setResources(prev => prev.map(r => 
+        r.id === id ? { ...r, [field]: value } : r
+      ));
+    } catch (error) {
+      console.error('Error updating resource:', error);
+      toast.error('Error al actualizar');
+      throw error;
+    }
+  }, []);
 
   // Bulk selection handlers
   const toggleSelectAll = () => {
@@ -640,7 +665,28 @@ export function BudgetResourcesTab({ budgetId, isAdmin }: BudgetResourcesTabProp
                 className="pl-10"
               />
             </div>
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              {/* View Mode Toggle */}
+              <div className="flex items-center border rounded-md">
+                <Button
+                  variant={viewMode === 'list' ? 'secondary' : 'ghost'}
+                  size="sm"
+                  className="rounded-r-none"
+                  onClick={() => setViewMode('list')}
+                >
+                  <List className="h-4 w-4 mr-1" />
+                  Lista
+                </Button>
+                <Button
+                  variant={viewMode === 'grouped' ? 'secondary' : 'ghost'}
+                  size="sm"
+                  className="rounded-l-none"
+                  onClick={() => setViewMode('grouped')}
+                >
+                  <FolderTree className="h-4 w-4 mr-1" />
+                  Por Fase
+                </Button>
+              </div>
               <Badge variant="secondary" className="text-sm">
                 {filteredResources.length} recursos
               </Badge>
@@ -762,132 +808,227 @@ export function BudgetResourcesTab({ budgetId, isAdmin }: BudgetResourcesTabProp
             </div>
           )}
 
-          {/* Resources Table */}
-          <div className="rounded-md border overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  {isAdmin && (
-                    <TableHead className="w-[40px]">
-                      <Checkbox
-                        checked={selectedIds.size === filteredResources.length && filteredResources.length > 0}
-                        onCheckedChange={toggleSelectAll}
-                      />
-                    </TableHead>
-                  )}
-                  <TableHead className="min-w-[200px]">Recurso</TableHead>
-                  <TableHead className="text-right">€Coste ud ext.</TableHead>
-                  <TableHead>Ud</TableHead>
-                  <TableHead>Tipo</TableHead>
-                  <TableHead className="text-right">%Seg.</TableHead>
-                  <TableHead className="text-right">€Seg.</TableHead>
-                  <TableHead className="text-right">€Coste int.</TableHead>
-                  <TableHead className="text-right">%Venta</TableHead>
-                  <TableHead className="text-right">€Venta</TableHead>
-                  <TableHead className="text-right">€Coste venta</TableHead>
-                  <TableHead className="text-right">Uds man.</TableHead>
-                  <TableHead className="text-right">Uds rel.</TableHead>
-                  <TableHead className="text-right">Uds calc.</TableHead>
-                  <TableHead className="text-right">€Subtotal</TableHead>
-                  <TableHead className="min-w-[200px]">Actividad</TableHead>
-                  {isAdmin && <TableHead className="w-[80px]">Acciones</TableHead>}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredResources.length === 0 ? (
+          {/* Resources View */}
+          {viewMode === 'grouped' ? (
+            <ResourcesGroupedView
+              resources={filteredResources}
+              activities={activities}
+              phases={phases}
+              isAdmin={isAdmin}
+              selectedIds={selectedIds}
+              onToggleSelect={toggleSelect}
+              onToggleSelectAll={toggleSelectAll}
+              onEdit={handleEdit}
+              onDelete={handleDelete}
+              onInlineUpdate={handleInlineUpdate}
+              calculateFields={calculateFields}
+              getActivityId={getActivityId}
+            />
+          ) : (
+            <div className="rounded-md border overflow-x-auto">
+              <Table>
+                <TableHeader>
                   <TableRow>
-                    <TableCell colSpan={isAdmin ? 18 : 15} className="text-center text-muted-foreground py-8">
-                      {searchTerm ? 'No se encontraron recursos' : 'No hay recursos. Añade uno nuevo o importa desde CSV/Excel.'}
-                    </TableCell>
+                    {isAdmin && (
+                      <TableHead className="w-[40px]">
+                        <Checkbox
+                          checked={selectedIds.size === filteredResources.length && filteredResources.length > 0}
+                          onCheckedChange={toggleSelectAll}
+                        />
+                      </TableHead>
+                    )}
+                    <TableHead className="min-w-[200px]">Recurso</TableHead>
+                    <TableHead className="text-right">€Coste ud ext.</TableHead>
+                    <TableHead>Ud</TableHead>
+                    <TableHead>Tipo</TableHead>
+                    <TableHead className="text-right">%Seg.</TableHead>
+                    <TableHead className="text-right">€Seg.</TableHead>
+                    <TableHead className="text-right">€Coste int.</TableHead>
+                    <TableHead className="text-right">%Venta</TableHead>
+                    <TableHead className="text-right">€Venta</TableHead>
+                    <TableHead className="text-right">€Coste venta</TableHead>
+                    <TableHead className="text-right">Uds man.</TableHead>
+                    <TableHead className="text-right">Uds rel.</TableHead>
+                    <TableHead className="text-right">Uds calc.</TableHead>
+                    <TableHead className="text-right">€Subtotal</TableHead>
+                    <TableHead className="min-w-[200px]">Actividad</TableHead>
+                    {isAdmin && <TableHead className="w-[80px]">Acciones</TableHead>}
                   </TableRow>
-                ) : (
-                  filteredResources.map((resource) => {
-                    const fields = calculateFields(resource);
-                    const activityDisplay = getActivityId(resource.activity_id);
-                    
-                    return (
-                      <TableRow key={resource.id} className={selectedIds.has(resource.id) ? 'bg-muted/50' : ''}>
-                        {isAdmin && (
-                          <TableCell>
-                            <Checkbox
-                              checked={selectedIds.has(resource.id)}
-                              onCheckedChange={() => toggleSelect(resource.id)}
+                </TableHeader>
+                <TableBody>
+                  {filteredResources.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={isAdmin ? 18 : 15} className="text-center text-muted-foreground py-8">
+                        {searchTerm ? 'No se encontraron recursos' : 'No hay recursos. Añade uno nuevo o importa desde CSV/Excel.'}
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    filteredResources.map((resource) => {
+                      const fields = calculateFields(resource);
+                      const activityDisplay = getActivityId(resource.activity_id);
+                      
+                      const unitOptions = UNITS.map(u => ({ value: u, label: u }));
+                      const typeOptions = RESOURCE_TYPES.map(t => ({ value: t, label: t }));
+                      const activityOptions = activities.map(a => {
+                        const phase = a.phase_id ? phases.find(p => p.id === a.phase_id) : null;
+                        return {
+                          value: a.id,
+                          label: `${phase?.code || ''} ${a.code}.-${a.name}`,
+                        };
+                      });
+                      
+                      return (
+                        <TableRow key={resource.id} className={selectedIds.has(resource.id) ? 'bg-muted/50' : ''}>
+                          {isAdmin && (
+                            <TableCell>
+                              <Checkbox
+                                checked={selectedIds.has(resource.id)}
+                                onCheckedChange={() => toggleSelect(resource.id)}
+                              />
+                            </TableCell>
+                          )}
+                          <TableCell className="font-medium">
+                            <ResourceInlineEdit
+                              value={resource.name}
+                              displayValue={resource.name}
+                              onSave={(v) => handleInlineUpdate(resource.id, 'name', v)}
+                              type="text"
+                              disabled={!isAdmin}
                             />
                           </TableCell>
-                        )}
-                        <TableCell className="font-medium">{resource.name}</TableCell>
-                        <TableCell className="text-right font-mono">
-                          {formatCurrency(resource.external_unit_cost || 0)}
-                        </TableCell>
-                        <TableCell>{resource.unit || '-'}</TableCell>
-                        <TableCell>
-                          {resource.resource_type ? (
-                            <Badge variant={resourceTypeVariants[resource.resource_type] as any || 'secondary'}>
-                              {resourceTypeIcons[resource.resource_type]}
-                              <span className="ml-1">{resource.resource_type}</span>
-                            </Badge>
-                          ) : '-'}
-                        </TableCell>
-                        <TableCell className="text-right font-mono">
-                          {formatPercent(resource.safety_margin_percent || 0.15)}
-                        </TableCell>
-                        <TableCell className="text-right font-mono">
-                          {formatCurrency(fields.safetyMarginUd)}
-                        </TableCell>
-                        <TableCell className="text-right font-mono">
-                          {formatCurrency(fields.internalCostUd)}
-                        </TableCell>
-                        <TableCell className="text-right font-mono">
-                          {formatPercent(resource.sales_margin_percent || 0.25)}
-                        </TableCell>
-                        <TableCell className="text-right font-mono">
-                          {formatCurrency(fields.salesMarginUd)}
-                        </TableCell>
-                        <TableCell className="text-right font-mono font-semibold">
-                          {formatCurrency(fields.salesCostUd)}
-                        </TableCell>
-                        <TableCell className="text-right font-mono">
-                          {resource.manual_units !== null ? formatNumber(resource.manual_units) : '-'}
-                        </TableCell>
-                        <TableCell className="text-right font-mono">
-                          {resource.related_units !== null ? formatNumber(resource.related_units) : '-'}
-                        </TableCell>
-                        <TableCell className="text-right font-mono font-semibold">
-                          {formatNumber(fields.calculatedUnits)}
-                        </TableCell>
-                        <TableCell className="text-right font-mono font-bold text-primary">
-                          {formatCurrency(fields.subtotalSales)}
-                        </TableCell>
-                        <TableCell className="text-xs text-muted-foreground max-w-[200px] truncate" title={activityDisplay}>
-                          {activityDisplay || '-'}
-                        </TableCell>
-                        {isAdmin && (
-                          <TableCell>
-                            <div className="flex items-center gap-1">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => handleEdit(resource)}
-                              >
-                                <Pencil className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => handleDelete(resource)}
-                              >
-                                <Trash2 className="h-4 w-4 text-destructive" />
-                              </Button>
-                            </div>
+                          <TableCell className="text-right font-mono">
+                            <ResourceInlineEdit
+                              value={resource.external_unit_cost}
+                              displayValue={formatCurrency(resource.external_unit_cost || 0)}
+                              onSave={(v) => handleInlineUpdate(resource.id, 'external_unit_cost', v)}
+                              type="number"
+                              decimals={2}
+                              disabled={!isAdmin}
+                            />
                           </TableCell>
-                        )}
-                      </TableRow>
-                    );
-                  })
-                )}
-              </TableBody>
-            </Table>
-          </div>
+                          <TableCell>
+                            <ResourceInlineEdit
+                              value={resource.unit}
+                              displayValue={resource.unit || '-'}
+                              onSave={(v) => handleInlineUpdate(resource.id, 'unit', v)}
+                              type="select"
+                              options={unitOptions}
+                              disabled={!isAdmin}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <ResourceInlineEdit
+                              value={resource.resource_type}
+                              displayValue={
+                                resource.resource_type ? (
+                                  <Badge variant={resourceTypeVariants[resource.resource_type] as any || 'secondary'}>
+                                    {resourceTypeIcons[resource.resource_type]}
+                                    <span className="ml-1">{resource.resource_type}</span>
+                                  </Badge>
+                                ) : '-'
+                              }
+                              onSave={(v) => handleInlineUpdate(resource.id, 'resource_type', v)}
+                              type="select"
+                              options={typeOptions}
+                              disabled={!isAdmin}
+                            />
+                          </TableCell>
+                          <TableCell className="text-right font-mono">
+                            <ResourceInlineEdit
+                              value={(resource.safety_margin_percent || 0.15) * 100}
+                              displayValue={formatPercent(resource.safety_margin_percent || 0.15)}
+                              onSave={(v) => handleInlineUpdate(resource.id, 'safety_margin_percent', v / 100)}
+                              type="percent"
+                              decimals={1}
+                              disabled={!isAdmin}
+                            />
+                          </TableCell>
+                          <TableCell className="text-right font-mono text-muted-foreground">
+                            {formatCurrency(fields.safetyMarginUd)}
+                          </TableCell>
+                          <TableCell className="text-right font-mono text-muted-foreground">
+                            {formatCurrency(fields.internalCostUd)}
+                          </TableCell>
+                          <TableCell className="text-right font-mono">
+                            <ResourceInlineEdit
+                              value={(resource.sales_margin_percent || 0.25) * 100}
+                              displayValue={formatPercent(resource.sales_margin_percent || 0.25)}
+                              onSave={(v) => handleInlineUpdate(resource.id, 'sales_margin_percent', v / 100)}
+                              type="percent"
+                              decimals={1}
+                              disabled={!isAdmin}
+                            />
+                          </TableCell>
+                          <TableCell className="text-right font-mono text-muted-foreground">
+                            {formatCurrency(fields.salesMarginUd)}
+                          </TableCell>
+                          <TableCell className="text-right font-mono font-semibold">
+                            {formatCurrency(fields.salesCostUd)}
+                          </TableCell>
+                          <TableCell className="text-right font-mono">
+                            <ResourceInlineEdit
+                              value={resource.manual_units}
+                              displayValue={resource.manual_units !== null ? formatNumber(resource.manual_units) : '-'}
+                              onSave={(v) => handleInlineUpdate(resource.id, 'manual_units', v)}
+                              type="number"
+                              decimals={2}
+                              disabled={!isAdmin}
+                            />
+                          </TableCell>
+                          <TableCell className="text-right font-mono">
+                            <ResourceInlineEdit
+                              value={resource.related_units}
+                              displayValue={resource.related_units !== null ? formatNumber(resource.related_units) : '-'}
+                              onSave={(v) => handleInlineUpdate(resource.id, 'related_units', v)}
+                              type="number"
+                              decimals={2}
+                              disabled={!isAdmin}
+                            />
+                          </TableCell>
+                          <TableCell className="text-right font-mono font-semibold">
+                            {formatNumber(fields.calculatedUnits)}
+                          </TableCell>
+                          <TableCell className="text-right font-mono font-bold text-primary">
+                            {formatCurrency(fields.subtotalSales)}
+                          </TableCell>
+                          <TableCell className="text-xs max-w-[200px]">
+                            <ResourceInlineEdit
+                              value={resource.activity_id}
+                              displayValue={activityDisplay || '-'}
+                              onSave={(v) => handleInlineUpdate(resource.id, 'activity_id', v)}
+                              type="select"
+                              options={activityOptions}
+                              disabled={!isAdmin}
+                            />
+                          </TableCell>
+                          {isAdmin && (
+                            <TableCell>
+                              <div className="flex items-center gap-1">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleEdit(resource)}
+                                >
+                                  <Pencil className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleDelete(resource)}
+                                >
+                                  <Trash2 className="h-4 w-4 text-destructive" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          )}
+                        </TableRow>
+                      );
+                    })
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          )}
         </CardContent>
       </Card>
 

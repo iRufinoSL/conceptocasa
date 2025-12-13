@@ -10,10 +10,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { ArrowLeft, Calculator, FolderOpen, Building2, Search, Calendar, LayoutGrid, List, Download, RotateCcw } from 'lucide-react';
+import { ArrowLeft, Calculator, FolderOpen, Building2, Search, Calendar, LayoutGrid, List, Download, RotateCcw, BarChart3 } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { formatCurrency } from '@/lib/format-utils';
+import { BudgetSummary } from '@/components/presupuestos/BudgetSummary';
 
 interface PresupuestoData {
   presupuesto_id: string;
@@ -53,6 +54,14 @@ export default function Presupuestos() {
     const saved = localStorage.getItem('presupuestos-view-mode');
     return (saved === 'cards' || saved === 'list') ? saved : 'cards';
   });
+  const [summaryOpen, setSummaryOpen] = useState(false);
+  const [selectedBudgetForSummary, setSelectedBudgetForSummary] = useState<{id: string; name: string} | null>(null);
+
+  const openBudgetSummary = (id: string, name: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSelectedBudgetForSummary({ id, name });
+    setSummaryOpen(true);
+  };
 
   // Persist preferences
   const handleViewModeChange = (mode: 'cards' | 'list') => {
@@ -544,6 +553,17 @@ export default function Presupuestos() {
                           </Badge>
                         </div>
                       )}
+                      <div className="pt-2 border-t">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="w-full gap-2"
+                          onClick={(e) => openBudgetSummary(up.presupuesto_id, up.presupuesto?.nombre || '', e)}
+                        >
+                          <BarChart3 className="h-4 w-4" />
+                          Ver resumen
+                        </Button>
+                      </div>
                     </CardContent>
                   </Card>
                 ))}
@@ -560,6 +580,7 @@ export default function Presupuestos() {
                       <TableHead>Proyecto</TableHead>
                       <TableHead>Rol</TableHead>
                       <TableHead>Fecha</TableHead>
+                      <TableHead className="text-right">Acciones</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -600,6 +621,15 @@ export default function Presupuestos() {
                           {up.presupuesto?.created_at 
                             ? format(new Date(up.presupuesto.created_at), 'd MMM yyyy', { locale: es })
                             : '-'}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => openBudgetSummary(up.presupuesto_id, up.presupuesto?.nombre || '', e)}
+                          >
+                            <BarChart3 className="h-4 w-4" />
+                          </Button>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -653,6 +683,16 @@ export default function Presupuestos() {
           </div>
         )}
       </main>
+
+      {/* Budget Summary Dialog */}
+      {selectedBudgetForSummary && (
+        <BudgetSummary
+          budgetId={selectedBudgetForSummary.id}
+          budgetName={selectedBudgetForSummary.name}
+          open={summaryOpen}
+          onOpenChange={setSummaryOpen}
+        />
+      )}
     </div>
   );
 }

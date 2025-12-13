@@ -1,11 +1,13 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Label } from '@/components/ui/label';
 import {
   Select,
   SelectContent,
@@ -21,7 +23,14 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { ArrowLeft, Download, FileText, Search, Filter, FolderOpen } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import { ArrowLeft, Download, FileText, Search, Filter, FolderOpen, Upload, Plus } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -61,6 +70,15 @@ export default function Documentos() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<string>('all');
   const [filterProject, setFilterProject] = useState<string>('all');
+
+  // Upload state
+  const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [uploadProjectId, setUploadProjectId] = useState<string>('');
+  const [uploadDocType, setUploadDocType] = useState<string>('otro');
+  const [uploadDescription, setUploadDescription] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -139,6 +157,69 @@ export default function Documentos() {
     }
   };
 
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 50 * 1024 * 1024) {
+        toast.error('El archivo no puede superar 50MB');
+        return;
+      }
+      setSelectedFile(file);
+    }
+  };
+
+  const handleUpload = async () => {
+    if (!selectedFile || !uploadProjectId) {
+      toast.error('Selecciona un archivo y un proyecto');
+      return;
+    }
+
+    setUploading(true);
+    try {
+      const fileExt = selectedFile.name.split('.').pop();
+      const fileName = `${uploadProjectId}/${Date.now()}-${selectedFile.name}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('project-documents')
+        .upload(fileName, selectedFile);
+
+      if (uploadError) throw uploadError;
+
+      const { error: dbError } = await supabase.from('project_documents').insert({
+        project_id: uploadProjectId,
+        name: selectedFile.name,
+        description: uploadDescription || null,
+        file_path: fileName,
+        file_type: selectedFile.type,
+        file_size: selectedFile.size,
+        document_type: uploadDocType,
+        uploaded_by: user?.id,
+      });
+
+      if (dbError) throw dbError;
+
+      toast.success('Documento subido correctamente');
+      setUploadDialogOpen(false);
+      resetUploadForm();
+      fetchDocuments();
+    } catch (error) {
+      console.error('Error uploading document:', error);
+      toast.error('Error al subir el documento');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const resetUploadForm = () => {
+    setSelectedFile(null);
+    setUploadProjectId('');
+    setUploadDocType('otro');
+    setUploadDescription('');
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
   const formatFileSize = (bytes: number | null) => {
     if (!bytes) return '-';
     if (bytes < 1024) return `${bytes} B`;
@@ -171,21 +252,29 @@ export default function Documentos() {
       {/* Header */}
       <header className="border-b bg-card/50 backdrop-blur-sm sticky top-0 z-10">
         <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center gap-4">
-            <Button variant="ghost" size="icon" onClick={() => navigate('/dashboard')}>
-              <ArrowLeft className="h-5 w-5" />
-            </Button>
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-primary/10">
-                <FileText className="h-6 w-6 text-primary" />
-              </div>
-              <div>
-                <h1 className="text-xl font-bold text-foreground">Gestión Documental</h1>
-                <p className="text-sm text-muted-foreground">
-                  Todos los documentos de proyectos
-                </p>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <Button variant="ghost" size="icon" onClick={() => navigate('/dashboard')}>
+                <ArrowLeft className="h-5 w-5" />
+              </Button>
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-primary/10">
+                  <FileText className="h-6 w-6 text-primary" />
+                </div>
+                <div>
+                  <h1 className="text-xl font-bold text-foreground">Gestión Documental</h1>
+                  <p className="text-sm text-muted-foreground">
+                    Todos los documentos de proyectos
+                  </p>
+                </div>
               </div>
             </div>
+            {isAdmin() && (
+              <Button onClick={() => setUploadDialogOpen(true)} className="gap-2">
+                <Plus className="h-4 w-4" />
+                <span className="hidden sm:inline">Subir documento</span>
+              </Button>
+            )}
           </div>
         </div>
       </header>
@@ -325,6 +414,90 @@ export default function Documentos() {
           </CardContent>
         </Card>
       </main>
+
+      {/* Upload Dialog */}
+      <Dialog open={uploadDialogOpen} onOpenChange={setUploadDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Upload className="h-5 w-5" />
+              Subir documento
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Proyecto *</Label>
+              <Select value={uploadProjectId} onValueChange={setUploadProjectId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Seleccionar proyecto" />
+                </SelectTrigger>
+                <SelectContent>
+                  {projects.map((project) => (
+                    <SelectItem key={project.id} value={project.id}>
+                      {project.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Tipo de documento</Label>
+              <Select value={uploadDocType} onValueChange={setUploadDocType}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(documentTypeLabels).map(([value, label]) => (
+                    <SelectItem key={value} value={value}>
+                      {label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Archivo *</Label>
+              <Input
+                ref={fileInputRef}
+                type="file"
+                onChange={handleFileSelect}
+                accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.zip"
+              />
+              {selectedFile && (
+                <p className="text-sm text-muted-foreground">
+                  {selectedFile.name} ({formatFileSize(selectedFile.size)})
+                </p>
+              )}
+            </div>
+            <div className="space-y-2">
+              <Label>Descripción</Label>
+              <Textarea
+                value={uploadDescription}
+                onChange={(e) => setUploadDescription(e.target.value)}
+                placeholder="Descripción del documento (opcional)"
+                rows={3}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setUploadDialogOpen(false);
+                resetUploadForm();
+              }}
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleUpload}
+              disabled={uploading || !selectedFile || !uploadProjectId}
+            >
+              {uploading ? 'Subiendo...' : 'Subir'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

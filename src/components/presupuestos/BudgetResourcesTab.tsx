@@ -226,8 +226,9 @@ export function BudgetResourcesTab({ budgetId, isAdmin }: BudgetResourcesTabProp
 
     try {
       const text = await file.text();
-      const lines = text.split('\n');
-      const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+      // Remove BOM if present
+      const cleanText = text.replace(/^\uFEFF/, '');
+      const lines = cleanText.split('\n');
       
       const resourcesData: {
         budget_id: string;
@@ -266,40 +267,74 @@ export function BudgetResourcesTab({ budgetId, isAdmin }: BudgetResourcesTabProp
         const name = values[0]?.replace(/^"|"$/g, '') || '';
         if (!name) continue;
         
-        // Parse European numbers (comma as decimal separator)
-        const parseEuropean = (val: string): number | null => {
-          if (!val) return null;
-          const cleaned = val.replace(/\./g, '').replace(',', '.').replace(/[^0-9.-]/g, '');
+        // Parse numbers - handles both European (1.234,56) and standard (1234.56) formats
+        const parseNumber = (val: string): number | null => {
+          if (!val || val.trim() === '') return null;
+          let cleaned = val.replace(/^"|"$/g, '').trim();
+          
+          // Detect format: if has comma as last separator, it's European
+          const hasEuropeanFormat = /\d,\d{1,2}$/.test(cleaned);
+          
+          if (hasEuropeanFormat) {
+            // European: 1.234,56 -> 1234.56
+            cleaned = cleaned.replace(/\./g, '').replace(',', '.');
+          }
+          // Otherwise keep as is (standard format: 1234.56)
+          
+          cleaned = cleaned.replace(/[^0-9.-]/g, '');
           const num = parseFloat(cleaned);
           return isNaN(num) ? null : num;
         };
         
-        const externalCost = parseEuropean(values[1] || '');
-        const unit = values[2]?.replace(/^"|"$/g, '') || null;
-        const resourceType = values[3]?.replace(/^"|"$/g, '') || null;
-        const safetyPercent = parseEuropean(values[4] || '') || 0.15;
-        const salesPercent = parseEuropean(values[7] || '') || 0.25;
-        const manualUnits = parseEuropean(values[10] || '');
-        const relatedUnits = parseEuropean(values[11] || '');
-        const activityIdField = values[12]?.replace(/^"|"$/g, '') || '';
+        // CSV columns: Recurso, €Coste ud, Ud medida, Tipo recurso, %Margen seguridad, €Margen seguridad, €Coste interno ud, %Margen venta, €Margen venta, €Coste venta ud, Uds manual, Uds relacionadas, ActividadID
+        const externalCost = parseNumber(values[1] || '');
+        const unit = values[2]?.replace(/^"|"$/g, '').trim() || null;
+        const resourceType = values[3]?.replace(/^"|"$/g, '').trim() || null;
         
-        // Find activity by its display ID (code + name format)
+        // Parse percentages - values like 0.15 mean 15%, keep as decimal
+        let safetyPercent = parseNumber(values[4] || '');
+        if (safetyPercent === null) safetyPercent = 0.15;
+        // If value > 1, it's likely already a percentage (15 = 15%), convert to decimal
+        if (safetyPercent > 1) safetyPercent = safetyPercent / 100;
+        
+        let salesPercent = parseNumber(values[7] || '');
+        if (salesPercent === null) salesPercent = 0.25;
+        if (salesPercent > 1) salesPercent = salesPercent / 100;
+        
+        const manualUnits = parseNumber(values[10] || '');
+        const relatedUnits = parseNumber(values[11] || '');
+        const activityIdField = values[12]?.replace(/^"|"$/g, '').trim() || '';
+        
+        // Find activity by its display ID (exact match or partial match)
         let activityId: string | null = null;
         if (activityIdField) {
+          // Try exact match first
           const matchingActivity = activities.find(a => {
             const phase = a.phase_id ? phases.find(p => p.id === a.phase_id) : null;
             const fullId = `${phase?.code || ''} ${a.code}.-${a.name}`;
-            return fullId.toLowerCase().includes(activityIdField.toLowerCase()) ||
-                   activityIdField.toLowerCase().includes(a.name.toLowerCase());
+            return fullId === activityIdField || 
+                   fullId.toLowerCase() === activityIdField.toLowerCase();
           });
-          activityId = matchingActivity?.id || null;
+          
+          if (matchingActivity) {
+            activityId = matchingActivity.id;
+          } else {
+            // Try partial match on name or code
+            const partialMatch = activities.find(a => {
+              const phase = a.phase_id ? phases.find(p => p.id === a.phase_id) : null;
+              const fullId = `${phase?.code || ''} ${a.code}.-${a.name}`;
+              return fullId.toLowerCase().includes(activityIdField.toLowerCase()) ||
+                     activityIdField.toLowerCase().includes(a.name.toLowerCase());
+            });
+            activityId = partialMatch?.id || null;
+          }
         }
         
         resourcesData.push({
           budget_id: budgetId,
           name,
           external_unit_cost: externalCost,
-          unit,
+          unit: unit || null,
           resource_type: resourceType,
           safety_margin_percent: safetyPercent,
           sales_margin_percent: salesPercent,
@@ -314,14 +349,21 @@ export function BudgetResourcesTab({ budgetId, isAdmin }: BudgetResourcesTabProp
         return;
       }
       
-      // Insert resources
-      const { error } = await supabase
-        .from('budget_activity_resources')
-        .insert(resourcesData);
+      // Insert resources in batches to avoid timeouts
+      const batchSize = 50;
+      let imported = 0;
       
-      if (error) throw error;
+      for (let i = 0; i < resourcesData.length; i += batchSize) {
+        const batch = resourcesData.slice(i, i + batchSize);
+        const { error } = await supabase
+          .from('budget_activity_resources')
+          .insert(batch);
+        
+        if (error) throw error;
+        imported += batch.length;
+      }
       
-      toast.success(`${resourcesData.length} recursos importados correctamente`);
+      toast.success(`${imported} recursos importados correctamente`);
       fetchData();
     } catch (error) {
       console.error('Error importing CSV:', error);

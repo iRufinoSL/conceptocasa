@@ -304,7 +304,7 @@ export function BudgetResourcesTab({ budgetId, isAdmin }: BudgetResourcesTabProp
     }
   };
 
-  // Parse numbers - handles both European (1.234,56) and standard (1234.56) formats
+  // Parse numbers - handles European (1.234,56) and standard (1234.56) formats, and currency symbols
   const parseNumber = (val: string | number | null | undefined): number | null => {
     if (val === null || val === undefined) return null;
     
@@ -315,7 +315,10 @@ export function BudgetResourcesTab({ budgetId, isAdmin }: BudgetResourcesTabProp
     
     if (typeof val !== 'string' || val.trim() === '') return null;
     
-    let cleaned = val.replace(/^"|"$/g, '').trim();
+    // Remove quotes, currency symbols, and whitespace
+    let cleaned = val.replace(/^"|"$/g, '').replace(/[€$£¥]/g, '').trim();
+    
+    if (cleaned === '' || cleaned === '0') return cleaned === '0' ? 0 : null;
     
     // Detect format: if has comma as last separator, it's European
     const hasEuropeanFormat = /\d,\d{1,2}$/.test(cleaned);
@@ -324,8 +327,9 @@ export function BudgetResourcesTab({ budgetId, isAdmin }: BudgetResourcesTabProp
       // European: 1.234,56 -> 1234.56
       cleaned = cleaned.replace(/\./g, '').replace(',', '.');
     }
-    // Otherwise keep as is (standard format: 1234.56)
+    // Otherwise keep as is (standard format: 1234.56 or 15.00 €)
     
+    // Remove any remaining non-numeric characters except . and -
     cleaned = cleaned.replace(/[^0-9.-]/g, '');
     const num = parseFloat(cleaned);
     return isNaN(num) ? null : num;
@@ -336,7 +340,8 @@ export function BudgetResourcesTab({ budgetId, isAdmin }: BudgetResourcesTabProp
     if (!activityIdField || typeof activityIdField !== 'string') return null;
     
     const cleanField = activityIdField.trim();
-    if (!cleanField) return null;
+    // If empty or "0", return null (no activity)
+    if (!cleanField || cleanField === '0') return null;
     
     // Try exact match first
     const matchingActivity = activities.find(a => {
@@ -386,7 +391,17 @@ export function BudgetResourcesTab({ budgetId, isAdmin }: BudgetResourcesTabProp
     
     // Column names match exactly the user's Excel headers
     const name = String(getValue(['Recurso']) || '').replace(/^"|"$/g, '').trim();
-    if (!name) return null;
+    
+    // Debug: log first row to see column names
+    if (existingNames.size === 0) {
+      console.log('Import - First row data:', row);
+      console.log('Import - Available columns:', Object.keys(row));
+    }
+    
+    if (!name) {
+      console.log('Import - Skipping row with empty name:', row);
+      return null;
+    }
     
     // Skip duplicates
     const nameLower = name.toLowerCase();

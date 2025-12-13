@@ -117,6 +117,8 @@ export default function Presupuestos() {
     if (projectFilter !== 'all') {
       if (projectFilter === 'none') {
         result = result.filter(up => !up.presupuesto?.project_id);
+      } else if (projectFilter === 'with-project') {
+        result = result.filter(up => !!up.presupuesto?.project_id);
       } else {
         result = result.filter(up => up.presupuesto?.project?.id === projectFilter);
       }
@@ -256,13 +258,10 @@ export default function Presupuestos() {
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Card 
-                    className={`cursor-pointer transition-all hover:shadow-md ${projectFilter !== 'all' && projectFilter !== 'none' ? 'ring-2 ring-green-500' : 'bg-green-500/5 border-green-500/20'}`}
+                    className={`cursor-pointer transition-all hover:shadow-md ${projectFilter === 'with-project' ? 'ring-2 ring-green-500' : 'bg-green-500/5 border-green-500/20'}`}
                     onClick={() => {
-                      // Filter to show only budgets with any project
                       setSearchTerm('');
-                      handleProjectFilterChange('all');
-                      // We need a special filter - let's use the first project or keep all with projects
-                      // For simplicity, we'll show all that have projects by not setting 'none'
+                      handleProjectFilterChange('with-project');
                     }}
                   >
                     <CardContent className="p-4">
@@ -350,7 +349,8 @@ export default function Presupuestos() {
               <SelectValue placeholder="Filtrar por proyecto" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Todos los proyectos</SelectItem>
+              <SelectItem value="all">Todos</SelectItem>
+              <SelectItem value="with-project">Con proyecto</SelectItem>
               <SelectItem value="none">Sin proyecto</SelectItem>
               {uniqueProjects.map(project => (
                 <SelectItem key={project.id} value={project.id}>

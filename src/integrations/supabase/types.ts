@@ -160,7 +160,7 @@ export type Database = {
             foreignKeyName: "budget_activity_resources_activity_id_fkey"
             columns: ["activity_id"]
             isOneToOne: false
-            referencedRelation: "budget_concepts"
+            referencedRelation: "budget_activities"
             referencedColumns: ["id"]
           },
           {

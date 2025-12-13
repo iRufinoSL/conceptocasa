@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { ArrowLeft, Calculator, FolderOpen, Building2, Search, Calendar, LayoutGrid, List, Download, RotateCcw } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -226,60 +227,93 @@ export default function Presupuestos() {
           </p>
           
           {/* Statistics Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <Card className="bg-primary/5 border-primary/20">
-              <CardContent className="p-4">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-primary/10">
-                    <Calculator className="h-5 w-5 text-primary" />
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold text-foreground">{stats.total}</p>
-                    <p className="text-xs text-muted-foreground">Total</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-            <Card className="bg-green-500/5 border-green-500/20">
-              <CardContent className="p-4">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-green-500/10">
-                    <Building2 className="h-5 w-5 text-green-600" />
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold text-foreground">{stats.withProject}</p>
-                    <p className="text-xs text-muted-foreground">Con proyecto</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-            <Card className="bg-orange-500/5 border-orange-500/20">
-              <CardContent className="p-4">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-orange-500/10">
-                    <FolderOpen className="h-5 w-5 text-orange-600" />
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold text-foreground">{stats.withoutProject}</p>
-                    <p className="text-xs text-muted-foreground">Sin proyecto</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-            <Card className="bg-blue-500/5 border-blue-500/20">
-              <CardContent className="p-4">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-blue-500/10">
-                    <Calendar className="h-5 w-5 text-blue-600" />
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold text-foreground">{uniqueProjects.length}</p>
-                    <p className="text-xs text-muted-foreground">Proyectos</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+          <TooltipProvider>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Card className="bg-primary/5 border-primary/20 cursor-help">
+                    <CardContent className="p-4">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 rounded-lg bg-primary/10">
+                          <Calculator className="h-5 w-5 text-primary" />
+                        </div>
+                        <div>
+                          <p className="text-2xl font-bold text-foreground">{stats.total}</p>
+                          <p className="text-xs text-muted-foreground">Total</p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Número total de presupuestos a los que tienes acceso</p>
+                </TooltipContent>
+              </Tooltip>
+
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Card className="bg-green-500/5 border-green-500/20 cursor-help">
+                    <CardContent className="p-4">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 rounded-lg bg-green-500/10">
+                          <Building2 className="h-5 w-5 text-green-600" />
+                        </div>
+                        <div>
+                          <p className="text-2xl font-bold text-foreground">{stats.withProject}</p>
+                          <p className="text-xs text-muted-foreground">Con proyecto</p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Presupuestos vinculados a un proyecto existente</p>
+                </TooltipContent>
+              </Tooltip>
+
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Card className="bg-orange-500/5 border-orange-500/20 cursor-help">
+                    <CardContent className="p-4">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 rounded-lg bg-orange-500/10">
+                          <FolderOpen className="h-5 w-5 text-orange-600" />
+                        </div>
+                        <div>
+                          <p className="text-2xl font-bold text-foreground">{stats.withoutProject}</p>
+                          <p className="text-xs text-muted-foreground">Sin proyecto</p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Presupuestos independientes sin proyecto asignado</p>
+                </TooltipContent>
+              </Tooltip>
+
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Card className="bg-blue-500/5 border-blue-500/20 cursor-help">
+                    <CardContent className="p-4">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 rounded-lg bg-blue-500/10">
+                          <Calendar className="h-5 w-5 text-blue-600" />
+                        </div>
+                        <div>
+                          <p className="text-2xl font-bold text-foreground">{uniqueProjects.length}</p>
+                          <p className="text-xs text-muted-foreground">Proyectos</p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Número de proyectos únicos con presupuestos vinculados</p>
+                </TooltipContent>
+              </Tooltip>
+            </div>
+          </TooltipProvider>
         </div>
 
         {/* Search and Sort */}

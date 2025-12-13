@@ -79,10 +79,16 @@ export default function Presupuestos() {
                     Código: {up.presupuesto?.codigo_correlativo}
                   </p>
                   {up.presupuesto?.project && (
-                    <div className="flex items-center gap-2 text-sm text-primary">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigate(`/proyectos?id=${up.presupuesto?.project?.id}`);
+                      }}
+                      className="flex items-center gap-2 text-sm text-primary hover:underline"
+                    >
                       <Building2 className="h-4 w-4" />
                       <span>{up.presupuesto.project.name}</span>
-                    </div>
+                    </button>
                   )}
                 </CardContent>
               </Card>

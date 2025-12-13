@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { formatCurrency, formatNumber } from '@/lib/format-utils';
 import { Calculator, TrendingUp, Percent, Euro, Package, FileDown } from 'lucide-react';
+import { useCompanySettings } from '@/hooks/useCompanySettings';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { format } from 'date-fns';
@@ -43,6 +44,7 @@ const formatPdfCurrency = (value: number): string => {
 export function BudgetSummary({ budgetId, budgetName, open, onOpenChange }: BudgetSummaryProps) {
   const [resources, setResources] = useState<BudgetResource[]>([]);
   const [loading, setLoading] = useState(true);
+  const { settings: companySettings } = useCompanySettings();
 
   useEffect(() => {
     if (open && budgetId) {
@@ -127,12 +129,13 @@ export function BudgetSummary({ budgetId, budgetName, open, onOpenChange }: Budg
     const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.getWidth();
     
-    // Company info
-    const companyName = 'Concepto.Casa';
-    const companyEmail = 'organiza@concepto.casa';
-    const companyPhone = '+34 690 123 533';
-    const companyAddress = 'Barcelona, España';
-    const companyWeb = 'www.concepto.casa';
+    // Company info from settings
+    const companyName = companySettings.name || 'Mi Empresa';
+    const companyEmail = companySettings.email || '';
+    const companyPhone = companySettings.phone || '';
+    const companyAddress = companySettings.address || '';
+    const companyWeb = companySettings.website || '';
+    const companyInitials = companyName.substring(0, 2).toUpperCase();
     
     // Header with company branding
     // Logo placeholder (colored rectangle with initials)
@@ -141,7 +144,7 @@ export function BudgetSummary({ budgetId, budgetName, open, onOpenChange }: Budg
     doc.setTextColor(255);
     doc.setFontSize(16);
     doc.setFont('helvetica', 'bold');
-    doc.text('CC', 26.5, 26, { align: 'center' });
+    doc.text(companyInitials, 26.5, 26, { align: 'center' });
     doc.setTextColor(0);
     
     // Company name and contact
@@ -154,8 +157,10 @@ export function BudgetSummary({ budgetId, budgetName, open, onOpenChange }: Budg
     doc.setFontSize(9);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(100);
-    doc.text(`${companyEmail}  |  ${companyPhone}`, 45, 24);
-    doc.text(`${companyAddress}  |  ${companyWeb}`, 45, 30);
+    const contactLine = [companyEmail, companyPhone].filter(Boolean).join('  |  ');
+    const addressLine = [companyAddress, companyWeb].filter(Boolean).join('  |  ');
+    if (contactLine) doc.text(contactLine, 45, 24);
+    if (addressLine) doc.text(addressLine, 45, 30);
     doc.setTextColor(0);
     
     // Separator line
@@ -297,7 +302,8 @@ export function BudgetSummary({ budgetId, budgetName, open, onOpenChange }: Budg
       // Company info in footer
       doc.setFontSize(7);
       doc.setTextColor(120);
-      doc.text(`${companyName} | ${companyEmail} | ${companyPhone}`, 14, pageHeight - 14);
+      const footerInfo = [companyName, companyEmail, companyPhone].filter(Boolean).join(' | ');
+      doc.text(footerInfo, 14, pageHeight - 14);
       
       // Page number
       doc.text(

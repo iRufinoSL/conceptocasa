@@ -12,6 +12,7 @@ import CRM from "./pages/CRM";
 import Agenda from "./pages/Agenda";
 import Documentos from "./pages/Documentos";
 import Usuarios from "./pages/Usuarios";
+import Configuracion from "./pages/Configuracion";
 import Setup from "./pages/Setup";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
@@ -34,6 +35,7 @@ const App = () => (
           <Route path="/agenda" element={<Agenda />} />
           <Route path="/documentos" element={<Documentos />} />
           <Route path="/usuarios" element={<Usuarios />} />
+          <Route path="/configuracion" element={<Configuracion />} />
           <Route path="/setup" element={<Setup />} />
           <Route path="/auth" element={<Auth />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

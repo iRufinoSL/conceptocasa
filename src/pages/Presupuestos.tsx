@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
 import { ArrowLeft, Calculator, FolderOpen, Building2, Search } from 'lucide-react';
 
 export default function Presupuestos() {
@@ -14,6 +15,8 @@ export default function Presupuestos() {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState<'name_asc' | 'name_desc' | 'date_asc' | 'date_desc'>('date_desc');
   const [projectFilter, setProjectFilter] = useState<string>('all');
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 9;
 
   // Get unique projects for filter
   const uniqueProjects = useMemo(() => {
@@ -81,6 +84,18 @@ export default function Presupuestos() {
     
     return result;
   }, [userPresupuestos, searchTerm, sortBy, projectFilter]);
+
+  // Pagination
+  const totalPages = Math.ceil(filteredPresupuestos.length / itemsPerPage);
+  const paginatedPresupuestos = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    return filteredPresupuestos.slice(startIndex, startIndex + itemsPerPage);
+  }, [filteredPresupuestos, currentPage, itemsPerPage]);
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, projectFilter, sortBy]);
 
   const getStatusLabel = (status: string) => {
     const labels: Record<string, string> = {
@@ -171,55 +186,90 @@ export default function Presupuestos() {
           </div>
         </div>
 
-        {filteredPresupuestos.length > 0 ? (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {filteredPresupuestos.map((up) => (
-              <Card 
-                key={up.presupuesto_id} 
-                className="cursor-pointer hover:shadow-lg hover:border-primary/50 transition-all"
-                onClick={() => navigate(`/presupuestos/${up.presupuesto_id}`)}
-              >
-                <CardHeader>
-                  <div className="flex items-start justify-between">
-                    <div className="p-2 rounded-lg bg-primary/10">
-                      <Calculator className="h-5 w-5 text-primary" />
+        {paginatedPresupuestos.length > 0 ? (
+          <>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {paginatedPresupuestos.map((up) => (
+                <Card 
+                  key={up.presupuesto_id} 
+                  className="cursor-pointer hover:shadow-lg hover:border-primary/50 transition-all"
+                  onClick={() => navigate(`/presupuestos/${up.presupuesto_id}`)}
+                >
+                  <CardHeader>
+                    <div className="flex items-start justify-between">
+                      <div className="p-2 rounded-lg bg-primary/10">
+                        <Calculator className="h-5 w-5 text-primary" />
+                      </div>
+                      <span className="text-xs bg-muted text-muted-foreground px-2 py-1 rounded-full capitalize">
+                        {up.role}
+                      </span>
                     </div>
-                    <span className="text-xs bg-muted text-muted-foreground px-2 py-1 rounded-full capitalize">
-                      {up.role}
-                    </span>
-                  </div>
-                  <CardTitle className="text-lg">
-                    {up.presupuesto?.nombre || 'Sin nombre'}
-                  </CardTitle>
-                  <CardDescription>
-                    {up.presupuesto?.poblacion} • Versión {up.presupuesto?.version}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-2">
-                  <p className="text-sm text-muted-foreground">
-                    Código: {up.presupuesto?.codigo_correlativo}
-                  </p>
-                  {up.presupuesto?.project && (
-                    <div className="flex items-center justify-between gap-2">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          navigate(`/proyectos?id=${up.presupuesto?.project?.id}`);
-                        }}
-                        className="flex items-center gap-2 text-sm text-primary hover:underline"
-                      >
-                        <Building2 className="h-4 w-4" />
-                        <span>{up.presupuesto.project.name}</span>
-                      </button>
-                      <Badge variant={getStatusVariant(up.presupuesto.project.status)}>
-                        {getStatusLabel(up.presupuesto.project.status)}
-                      </Badge>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+                    <CardTitle className="text-lg">
+                      {up.presupuesto?.nombre || 'Sin nombre'}
+                    </CardTitle>
+                    <CardDescription>
+                      {up.presupuesto?.poblacion} • Versión {up.presupuesto?.version}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    <p className="text-sm text-muted-foreground">
+                      Código: {up.presupuesto?.codigo_correlativo}
+                    </p>
+                    {up.presupuesto?.project && (
+                      <div className="flex items-center justify-between gap-2">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate(`/proyectos?id=${up.presupuesto?.project?.id}`);
+                          }}
+                          className="flex items-center gap-2 text-sm text-primary hover:underline"
+                        >
+                          <Building2 className="h-4 w-4" />
+                          <span>{up.presupuesto.project.name}</span>
+                        </button>
+                        <Badge variant={getStatusVariant(up.presupuesto.project.status)}>
+                          {getStatusLabel(up.presupuesto.project.status)}
+                        </Badge>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="mt-8 flex justify-center">
+                <Pagination>
+                  <PaginationContent>
+                    <PaginationItem>
+                      <PaginationPrevious 
+                        onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                        className={currentPage === 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                      />
+                    </PaginationItem>
+                    {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                      <PaginationItem key={page}>
+                        <PaginationLink
+                          onClick={() => setCurrentPage(page)}
+                          isActive={currentPage === page}
+                          className="cursor-pointer"
+                        >
+                          {page}
+                        </PaginationLink>
+                      </PaginationItem>
+                    ))}
+                    <PaginationItem>
+                      <PaginationNext 
+                        onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                        className={currentPage === totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                      />
+                    </PaginationItem>
+                  </PaginationContent>
+                </Pagination>
+              </div>
+            )}
+          </>
         ) : (
           <div className="text-center py-16">
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-muted mb-4">

@@ -18,6 +18,11 @@ interface UserPresupuesto {
     codigo_correlativo: number;
     version: string;
     poblacion: string;
+    project_id: string | null;
+    project?: {
+      id: string;
+      name: string;
+    } | null;
   };
 }
 
@@ -64,7 +69,12 @@ export function useAuth() {
               nombre,
               codigo_correlativo,
               version,
-              poblacion
+              poblacion,
+              project_id,
+              projects (
+                id,
+                name
+              )
             )
           `)
           .eq('user_id', userId);
@@ -75,7 +85,10 @@ export function useAuth() {
           setUserPresupuestos(presupuestosData.map((up: any) => ({
             presupuesto_id: up.presupuesto_id,
             role: up.role,
-            presupuesto: up.presupuestos
+            presupuesto: up.presupuestos ? {
+              ...up.presupuestos,
+              project: up.presupuestos.projects
+            } : undefined
           })));
         }
       } finally {

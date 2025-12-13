@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { ArrowLeft, Calculator, FolderOpen } from 'lucide-react';
+import { ArrowLeft, Calculator, FolderOpen, Building2 } from 'lucide-react';
 
 export default function Presupuestos() {
   const navigate = useNavigate();
@@ -74,10 +74,16 @@ export default function Presupuestos() {
                     {up.presupuesto?.poblacion} • Versión {up.presupuesto?.version}
                   </CardDescription>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="space-y-2">
                   <p className="text-sm text-muted-foreground">
                     Código: {up.presupuesto?.codigo_correlativo}
                   </p>
+                  {up.presupuesto?.project && (
+                    <div className="flex items-center gap-2 text-sm text-primary">
+                      <Building2 className="h-4 w-4" />
+                      <span>{up.presupuesto.project.name}</span>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             ))}

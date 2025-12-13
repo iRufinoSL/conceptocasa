@@ -23,6 +23,7 @@ export type Database = {
           id: string
           measurement_unit: string | null
           name: string
+          phase_id: string | null
           updated_at: string
         }
         Insert: {
@@ -33,6 +34,7 @@ export type Database = {
           id?: string
           measurement_unit?: string | null
           name: string
+          phase_id?: string | null
           updated_at?: string
         }
         Update: {
@@ -43,6 +45,7 @@ export type Database = {
           id?: string
           measurement_unit?: string | null
           name?: string
+          phase_id?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -51,6 +54,13 @@ export type Database = {
             columns: ["budget_id"]
             isOneToOne: false
             referencedRelation: "presupuestos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budget_activities_phase_id_fkey"
+            columns: ["phase_id"]
+            isOneToOne: false
+            referencedRelation: "budget_phases"
             referencedColumns: ["id"]
           },
         ]

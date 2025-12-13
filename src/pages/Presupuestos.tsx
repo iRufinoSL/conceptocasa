@@ -97,14 +97,14 @@ export default function Presupuestos() {
   useEffect(() => {
     const fetchPresupuestos = async () => {
       if (!user) {
-        console.log('[Presupuestos] No user, skipping fetch');
+        setIsLoading(false);
         return;
       }
       
-      const adminCheck = isAdmin();
-      console.log('[Presupuestos] isAdmin():', adminCheck, 'roles:', roles);
+      // Check if user is admin based on roles array
+      const isUserAdmin = roles.includes('administrador');
       
-      if (adminCheck) {
+      if (isUserAdmin) {
         // Admin: fetch all presupuestos
         const { data, error } = await supabase
           .from('presupuestos')
@@ -151,7 +151,7 @@ export default function Presupuestos() {
     if (!rolesLoading) {
       fetchPresupuestos();
     }
-  }, [user, rolesLoading, isAdmin, userPresupuestos]);
+  }, [user, rolesLoading, roles, userPresupuestos]);
 
   // Get unique projects for filter
   const uniqueProjects = useMemo(() => {
@@ -183,7 +183,7 @@ export default function Presupuestos() {
     }
   }, [user, loading, navigate]);
 
-  console.log('[Presupuestos] Render state - loading:', loading, 'rolesLoading:', rolesLoading, 'isLoading:', isLoading, 'user:', !!user, 'roles:', roles);
+  
 
   if (loading || rolesLoading || isLoading) {
     return (

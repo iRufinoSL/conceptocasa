@@ -42,11 +42,12 @@ const navItems: NavItem[] = [
 export function AppNavDropdown() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { isAdmin } = useAuth();
+  const { roles } = useAuth();
 
   const currentItem = navItems.find(item => item.path === location.pathname);
+  const isUserAdmin = roles.includes('administrador');
 
-  const visibleItems = navItems.filter(item => !item.adminOnly || isAdmin());
+  const visibleItems = navItems.filter(item => !item.adminOnly || isUserAdmin);
 
   return (
     <DropdownMenu>

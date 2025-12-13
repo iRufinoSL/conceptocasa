@@ -54,10 +54,12 @@ export function useAuth() {
         
         if (rolesError) {
           console.error('[useAuth] Error fetching roles:', rolesError);
-        } else if (rolesData) {
+          setRoles([]);
+        } else if (rolesData && rolesData.length > 0) {
           const fetchedRoles = rolesData.map((r: UserRole) => r.role);
-          console.log('[useAuth] Roles loaded:', fetchedRoles);
           setRoles(fetchedRoles);
+        } else {
+          setRoles([]);
         }
 
         // Fetch presupuestos

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { NumericInput } from '@/components/ui/numeric-input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -36,7 +37,7 @@ export function ProjectForm({ open, onOpenChange, project, onSuccess }: ProjectF
     status: 'active',
     location: '',
     project_type: '',
-    budget: '',
+    budget: 0,
     start_date: '',
     end_date: ''
   });
@@ -49,7 +50,7 @@ export function ProjectForm({ open, onOpenChange, project, onSuccess }: ProjectF
         status: project.status || 'active',
         location: project.location || '',
         project_type: project.project_type || '',
-        budget: project.budget?.toString() || '',
+        budget: project.budget || 0,
         start_date: project.start_date || '',
         end_date: project.end_date || ''
       });
@@ -60,7 +61,7 @@ export function ProjectForm({ open, onOpenChange, project, onSuccess }: ProjectF
         status: 'active',
         location: '',
         project_type: '',
-        budget: '',
+        budget: 0,
         start_date: '',
         end_date: ''
       });
@@ -84,7 +85,7 @@ export function ProjectForm({ open, onOpenChange, project, onSuccess }: ProjectF
         status: formData.status,
         location: formData.location.trim() || null,
         project_type: formData.project_type || null,
-        budget: formData.budget ? parseFloat(formData.budget) : null,
+        budget: formData.budget || null,
         start_date: formData.start_date || null,
         end_date: formData.end_date || null
       };
@@ -181,14 +182,12 @@ export function ProjectForm({ open, onOpenChange, project, onSuccess }: ProjectF
 
           <div className="space-y-2">
             <Label htmlFor="budget">Presupuesto (€)</Label>
-            <Input
+            <NumericInput
               id="budget"
-              type="number"
-              min="0"
-              step="0.01"
               value={formData.budget}
-              onChange={(e) => setFormData({ ...formData, budget: e.target.value })}
-              placeholder="0.00"
+              onChange={(value) => setFormData({ ...formData, budget: value })}
+              placeholder="0,00"
+              decimals={2}
             />
           </div>
 

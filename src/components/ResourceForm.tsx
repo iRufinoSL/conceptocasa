@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { ExternalResource, UNIT_MEASURES, RESOURCE_TYPES, UnitMeasure, ResourceType, RelatedResource } from '@/types/resource';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { NumericInput } from '@/components/ui/numeric-input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -134,16 +135,13 @@ export function ResourceForm({ open, onOpenChange, resource, onSubmit, onUpdate,
               <Label htmlFor="unitCost">
                 Coste unitario (€) {!isComposite && '*'}
               </Label>
-              <Input
+              <NumericInput
                 id="unitCost"
-                type="number"
-                step="0.01"
-                min="0"
                 value={formData.unitCost}
-                onChange={(e) => setFormData({ ...formData, unitCost: parseFloat(e.target.value) || 0 })}
-                required={!isComposite}
+                onChange={(value) => setFormData({ ...formData, unitCost: value })}
                 disabled={isComposite}
                 className={isComposite ? 'bg-muted' : ''}
+                placeholder="0,00"
               />
               {isComposite && (
                 <p className="text-xs text-accent">El coste se calcula automáticamente</p>
@@ -237,14 +235,12 @@ export function ResourceForm({ open, onOpenChange, resource, onSubmit, onUpdate,
                           ))}
                         </SelectContent>
                       </Select>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        min="0.01"
+                      <NumericInput
                         value={related.quantity}
-                        onChange={(e) => updateRelatedResource(index, { quantity: parseFloat(e.target.value) || 1 })}
+                        onChange={(value) => updateRelatedResource(index, { quantity: value || 1 })}
                         className="w-24"
                         placeholder="Cant."
+                        decimals={2}
                       />
                       <Button
                         type="button"

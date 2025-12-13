@@ -22,6 +22,7 @@ interface UserPresupuesto {
     project?: {
       id: string;
       name: string;
+      status: string;
     } | null;
   };
 }
@@ -73,7 +74,8 @@ export function useAuth() {
               project_id,
               projects (
                 id,
-                name
+                name,
+                status
               )
             )
           `)

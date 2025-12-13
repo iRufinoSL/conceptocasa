@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { ArrowLeft, Calculator, FolderOpen, Building2 } from 'lucide-react';
 
 export default function Presupuestos() {
@@ -22,6 +23,26 @@ export default function Presupuestos() {
       </div>
     );
   }
+
+  const getStatusLabel = (status: string) => {
+    const labels: Record<string, string> = {
+      active: 'Activo',
+      completed: 'Completado',
+      on_hold: 'En pausa',
+      cancelled: 'Cancelado'
+    };
+    return labels[status] || status;
+  };
+
+  const getStatusVariant = (status: string): "default" | "secondary" | "destructive" | "outline" => {
+    const variants: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
+      active: 'default',
+      completed: 'secondary',
+      on_hold: 'outline',
+      cancelled: 'destructive'
+    };
+    return variants[status] || 'outline';
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -79,16 +100,21 @@ export default function Presupuestos() {
                     Código: {up.presupuesto?.codigo_correlativo}
                   </p>
                   {up.presupuesto?.project && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        navigate(`/proyectos?id=${up.presupuesto?.project?.id}`);
-                      }}
-                      className="flex items-center gap-2 text-sm text-primary hover:underline"
-                    >
-                      <Building2 className="h-4 w-4" />
-                      <span>{up.presupuesto.project.name}</span>
-                    </button>
+                    <div className="flex items-center justify-between gap-2">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate(`/proyectos?id=${up.presupuesto?.project?.id}`);
+                        }}
+                        className="flex items-center gap-2 text-sm text-primary hover:underline"
+                      >
+                        <Building2 className="h-4 w-4" />
+                        <span>{up.presupuesto.project.name}</span>
+                      </button>
+                      <Badge variant={getStatusVariant(up.presupuesto.project.status)}>
+                        {getStatusLabel(up.presupuesto.project.status)}
+                      </Badge>
+                    </div>
                   )}
                 </CardContent>
               </Card>

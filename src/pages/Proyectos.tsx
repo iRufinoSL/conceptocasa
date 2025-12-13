@@ -61,6 +61,7 @@ export default function Proyectos() {
   const { toast } = useToast();
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectContacts, setProjectContacts] = useState<Record<string, ProjectContact[]>>({});
+  const [projectBudgetCounts, setProjectBudgetCounts] = useState<Record<string, number>>({});
   const [filteredProjects, setFilteredProjects] = useState<Project[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [isLoading, setIsLoading] = useState(true);
@@ -105,6 +106,7 @@ export default function Proyectos() {
       // Fetch contacts for all projects
       const projectIds = data.map(p => p.id);
       if (projectIds.length > 0) {
+        // Fetch contacts for all projects
         const { data: contactsData } = await supabase
           .from('project_contacts')
           .select('project_id, contact_id, contact_role')
@@ -129,6 +131,22 @@ export default function Proyectos() {
             });
           });
           setProjectContacts(grouped);
+        }
+
+        // Fetch budget counts for all projects
+        const { data: budgetsData } = await supabase
+          .from('presupuestos')
+          .select('project_id')
+          .in('project_id', projectIds);
+
+        if (budgetsData) {
+          const counts: Record<string, number> = {};
+          budgetsData.forEach(b => {
+            if (b.project_id) {
+              counts[b.project_id] = (counts[b.project_id] || 0) + 1;
+            }
+          });
+          setProjectBudgetCounts(counts);
         }
       }
     }
@@ -315,6 +333,7 @@ export default function Proyectos() {
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {filteredProjects.map((project) => {
               const contacts = projectContacts[project.id] || [];
+              const budgetCount = projectBudgetCounts[project.id] || 0;
               return (
                 <Card
                   key={project.id}
@@ -395,28 +414,43 @@ export default function Proyectos() {
                       </div>
                     )}
                     
-                    {/* Project Contacts */}
-                    {contacts.length > 0 && (
-                      <div className="pt-2 border-t">
-                        <div className="flex items-center gap-2">
-                          <div className="flex -space-x-2">
-                            {contacts.slice(0, 4).map((pc, idx) => (
-                              <Avatar key={idx} className="h-7 w-7 border-2 border-background">
-                                <AvatarFallback className="text-xs bg-primary/10 text-primary">
-                                  {pc.contact ? getInitials(pc.contact.name, pc.contact.surname) : '?'}
-                                </AvatarFallback>
-                              </Avatar>
-                            ))}
-                            {contacts.length > 4 && (
-                              <div className="h-7 w-7 rounded-full bg-muted flex items-center justify-center text-xs border-2 border-background">
-                                +{contacts.length - 4}
-                              </div>
-                            )}
+                    {/* Project Stats: Contacts & Budgets */}
+                    {(contacts.length > 0 || budgetCount > 0) && (
+                      <div className="pt-2 border-t flex items-center justify-between gap-4">
+                        {/* Contacts */}
+                        {contacts.length > 0 && (
+                          <div className="flex items-center gap-2">
+                            <div className="flex -space-x-2">
+                              {contacts.slice(0, 3).map((pc, idx) => (
+                                <Avatar key={idx} className="h-6 w-6 border-2 border-background">
+                                  <AvatarFallback className="text-xs bg-primary/10 text-primary">
+                                    {pc.contact ? getInitials(pc.contact.name, pc.contact.surname) : '?'}
+                                  </AvatarFallback>
+                                </Avatar>
+                              ))}
+                              {contacts.length > 3 && (
+                                <div className="h-6 w-6 rounded-full bg-muted flex items-center justify-center text-xs border-2 border-background">
+                                  +{contacts.length - 3}
+                                </div>
+                              )}
+                            </div>
+                            <span className="text-xs text-muted-foreground">
+                              {contacts.length}
+                            </span>
                           </div>
-                          <span className="text-xs text-muted-foreground">
-                            {contacts.length} contacto{contacts.length !== 1 ? 's' : ''}
-                          </span>
-                        </div>
+                        )}
+
+                        {/* Budgets */}
+                        {budgetCount > 0 && (
+                          <div className="flex items-center gap-1.5">
+                            <div className="p-1.5 rounded bg-primary/10">
+                              <Calculator className="h-3.5 w-3.5 text-primary" />
+                            </div>
+                            <span className="text-xs text-muted-foreground">
+                              {budgetCount} presupuesto{budgetCount !== 1 ? 's' : ''}
+                            </span>
+                          </div>
+                        )}
                       </div>
                     )}
                   </CardContent>

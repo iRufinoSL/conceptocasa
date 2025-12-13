@@ -61,7 +61,7 @@ const apps: AppCard[] = [
     description: 'Calendario y programación',
     icon: Calendar,
     route: '/agenda',
-    available: false,
+    available: true,
     adminOnly: false,
   },
   {

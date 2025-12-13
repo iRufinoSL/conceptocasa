@@ -30,7 +30,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog';
-import { ArrowLeft, Download, FileText, Search, Filter, FolderOpen, Upload, Plus, Eye, X, Trash2 } from 'lucide-react';
+import { ArrowLeft, Download, FileText, Search, Filter, FolderOpen, Upload, Plus, Eye, X, Trash2, Pencil } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -100,6 +100,15 @@ export default function Documentos() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [documentToDelete, setDocumentToDelete] = useState<ProjectDocument | null>(null);
   const [deleting, setDeleting] = useState(false);
+
+  // Edit state
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [documentToEdit, setDocumentToEdit] = useState<ProjectDocument | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [editDocType, setEditDocType] = useState('otro');
+  const [editProjectId, setEditProjectId] = useState<string>('');
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -190,15 +199,16 @@ export default function Documentos() {
   };
 
   const handleUpload = async () => {
-    if (!selectedFile || !uploadProjectId) {
-      toast.error('Selecciona un archivo y un proyecto');
+    if (!selectedFile) {
+      toast.error('Selecciona un archivo');
       return;
     }
 
     setUploading(true);
     try {
       const fileExt = selectedFile.name.split('.').pop();
-      const fileName = `${uploadProjectId}/${Date.now()}-${selectedFile.name}`;
+      const folderPath = uploadProjectId || 'general';
+      const fileName = `${folderPath}/${Date.now()}-${selectedFile.name}`;
 
       const { error: uploadError } = await supabase.storage
         .from('project-documents')
@@ -207,7 +217,7 @@ export default function Documentos() {
       if (uploadError) throw uploadError;
 
       const { error: dbError } = await supabase.from('project_documents').insert({
-        project_id: uploadProjectId,
+        project_id: uploadProjectId || null,
         name: selectedFile.name,
         description: uploadDescription || null,
         file_path: fileName,
@@ -328,6 +338,44 @@ export default function Documentos() {
     }
   };
 
+  const handleEditClick = (doc: ProjectDocument) => {
+    setDocumentToEdit(doc);
+    setEditName(doc.name);
+    setEditDescription(doc.description || '');
+    setEditDocType(doc.document_type || 'otro');
+    setEditProjectId(doc.project_id || '');
+    setEditDialogOpen(true);
+  };
+
+  const handleEditSave = async () => {
+    if (!documentToEdit) return;
+
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from('project_documents')
+        .update({
+          name: editName,
+          description: editDescription || null,
+          document_type: editDocType,
+          project_id: editProjectId || null,
+        })
+        .eq('id', documentToEdit.id);
+
+      if (error) throw error;
+
+      toast.success('Documento actualizado correctamente');
+      setEditDialogOpen(false);
+      setDocumentToEdit(null);
+      fetchDocuments();
+    } catch (error) {
+      console.error('Error updating document:', error);
+      toast.error('Error al actualizar el documento');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const formatFileSize = (bytes: number | null) => {
     if (!bytes) return '-';
     if (bytes < 1024) return `${bytes} B`;
@@ -342,7 +390,8 @@ export default function Documentos() {
       doc.project?.name.toLowerCase().includes(searchTerm.toLowerCase());
 
     const matchesType = filterType === 'all' || doc.document_type === filterType;
-    const matchesProject = filterProject === 'all' || doc.project_id === filterProject;
+    const matchesProject = filterProject === 'all' || 
+      (filterProject === 'none' ? !doc.project_id : doc.project_id === filterProject);
 
     return matchesSearch && matchesType && matchesProject;
   });
@@ -427,6 +476,7 @@ export default function Documentos() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todos los proyectos</SelectItem>
+                  <SelectItem value="none">Sin proyecto</SelectItem>
                   {projects.map((project) => (
                     <SelectItem key={project.id} value={project.id}>
                       {project.name}
@@ -525,15 +575,25 @@ export default function Documentos() {
                               <Download className="h-4 w-4" />
                             </Button>
                             {isAdmin() && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleDeleteClick(doc)}
-                                title="Eliminar"
-                                className="text-destructive hover:text-destructive"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
+                              <>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleEditClick(doc)}
+                                  title="Editar"
+                                >
+                                  <Pencil className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleDeleteClick(doc)}
+                                  title="Eliminar"
+                                  className="text-destructive hover:text-destructive"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </>
                             )}
                           </div>
                         </TableCell>
@@ -558,12 +618,13 @@ export default function Documentos() {
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label>Proyecto *</Label>
+              <Label>Proyecto (opcional)</Label>
               <Select value={uploadProjectId} onValueChange={setUploadProjectId}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Seleccionar proyecto" />
+                  <SelectValue placeholder="Sin proyecto asignado" />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="">Sin proyecto</SelectItem>
                   {projects.map((project) => (
                     <SelectItem key={project.id} value={project.id}>
                       {project.name}
@@ -623,7 +684,7 @@ export default function Documentos() {
             </Button>
             <Button
               onClick={handleUpload}
-              disabled={uploading || !selectedFile || !uploadProjectId}
+              disabled={uploading || !selectedFile}
             >
               {uploading ? 'Subiendo...' : 'Subir'}
             </Button>
@@ -688,6 +749,85 @@ export default function Documentos() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Edit Dialog */}
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Pencil className="h-5 w-5" />
+              Editar documento
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Nombre *</Label>
+              <Input
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                placeholder="Nombre del documento"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Proyecto (opcional)</Label>
+              <Select value={editProjectId} onValueChange={setEditProjectId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Sin proyecto asignado" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">Sin proyecto</SelectItem>
+                  {projects.map((project) => (
+                    <SelectItem key={project.id} value={project.id}>
+                      {project.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Tipo de documento</Label>
+              <Select value={editDocType} onValueChange={setEditDocType}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(documentTypeLabels).map(([value, label]) => (
+                    <SelectItem key={value} value={value}>
+                      {label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Descripción</Label>
+              <Textarea
+                value={editDescription}
+                onChange={(e) => setEditDescription(e.target.value)}
+                placeholder="Descripción del documento (opcional)"
+                rows={3}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setEditDialogOpen(false);
+                setDocumentToEdit(null);
+              }}
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleEditSave}
+              disabled={saving || !editName.trim()}
+            >
+              {saving ? 'Guardando...' : 'Guardar'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

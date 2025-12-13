@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -12,10 +13,32 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { ArrowLeft, Calculator, FolderOpen, Building2, Search, Calendar, LayoutGrid, List, Download, RotateCcw } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { formatCurrency } from '@/lib/format-utils';
+
+interface PresupuestoData {
+  presupuesto_id: string;
+  role: 'administrador' | 'colaborador' | 'cliente';
+  presupuesto?: {
+    id: string;
+    nombre: string;
+    codigo_correlativo: number;
+    version: string;
+    poblacion: string;
+    created_at: string;
+    project_id: string | null;
+    project?: {
+      id: string;
+      name: string;
+      status: string;
+    } | null;
+  };
+}
 
 export default function Presupuestos() {
   const navigate = useNavigate();
-  const { user, loading, userPresupuestos, isAdmin } = useAuth();
+  const { user, loading, rolesLoading, userPresupuestos, isAdmin } = useAuth();
+  const [presupuestosList, setPresupuestosList] = useState<PresupuestoData[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState<'name_asc' | 'name_desc' | 'date_asc' | 'date_desc'>(() => {
     const saved = localStorage.getItem('presupuestos-sort-by');
@@ -60,29 +83,83 @@ export default function Presupuestos() {
 
   const itemsPerPage = 9;
 
+  // Fetch all presupuestos for admins, use userPresupuestos for others
+  useEffect(() => {
+    const fetchPresupuestos = async () => {
+      if (!user) return;
+      
+      if (isAdmin()) {
+        // Admin: fetch all presupuestos
+        const { data, error } = await supabase
+          .from('presupuestos')
+          .select(`
+            id,
+            nombre,
+            codigo_correlativo,
+            version,
+            poblacion,
+            created_at,
+            project_id,
+            projects (
+              id,
+              name,
+              status
+            )
+          `)
+          .order('created_at', { ascending: false });
+
+        if (!error && data) {
+          const mapped = data.map((p: any) => ({
+            presupuesto_id: p.id,
+            role: 'administrador' as const,
+            presupuesto: {
+              id: p.id,
+              nombre: p.nombre,
+              codigo_correlativo: p.codigo_correlativo,
+              version: p.version,
+              poblacion: p.poblacion,
+              created_at: p.created_at,
+              project_id: p.project_id,
+              project: p.projects
+            }
+          }));
+          setPresupuestosList(mapped);
+        }
+      } else {
+        // Non-admin: use userPresupuestos from auth hook
+        setPresupuestosList(userPresupuestos);
+      }
+      setIsLoading(false);
+    };
+
+    if (!rolesLoading) {
+      fetchPresupuestos();
+    }
+  }, [user, rolesLoading, isAdmin, userPresupuestos]);
+
   // Get unique projects for filter
   const uniqueProjects = useMemo(() => {
     const projects = new Map<string, string>();
-    userPresupuestos.forEach(up => {
+    presupuestosList.forEach(up => {
       if (up.presupuesto?.project) {
         projects.set(up.presupuesto.project.id, up.presupuesto.project.name);
       }
     });
     return Array.from(projects.entries()).map(([id, name]) => ({ id, name }));
-  }, [userPresupuestos]);
+  }, [presupuestosList]);
 
   // Statistics
   const stats = useMemo(() => {
-    const total = userPresupuestos.length;
-    const withProject = userPresupuestos.filter(up => up.presupuesto?.project_id).length;
+    const total = presupuestosList.length;
+    const withProject = presupuestosList.filter(up => up.presupuesto?.project_id).length;
     const withoutProject = total - withProject;
     const byRole = {
-      administrador: userPresupuestos.filter(up => up.role === 'administrador').length,
-      colaborador: userPresupuestos.filter(up => up.role === 'colaborador').length,
-      cliente: userPresupuestos.filter(up => up.role === 'cliente').length,
+      administrador: presupuestosList.filter(up => up.role === 'administrador').length,
+      colaborador: presupuestosList.filter(up => up.role === 'colaborador').length,
+      cliente: presupuestosList.filter(up => up.role === 'cliente').length,
     };
     return { total, withProject, withoutProject, byRole };
-  }, [userPresupuestos]);
+  }, [presupuestosList]);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -90,7 +167,7 @@ export default function Presupuestos() {
     }
   }, [user, loading, navigate]);
 
-  if (loading) {
+  if (loading || rolesLoading || isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
@@ -99,7 +176,7 @@ export default function Presupuestos() {
   }
 
   const filteredPresupuestos = useMemo(() => {
-    let result = [...userPresupuestos];
+    let result = [...presupuestosList];
     
     // Filter by search term
     if (searchTerm.trim()) {
@@ -140,7 +217,7 @@ export default function Presupuestos() {
     });
     
     return result;
-  }, [userPresupuestos, searchTerm, sortBy, projectFilter]);
+  }, [presupuestosList, searchTerm, sortBy, projectFilter]);
 
   // Pagination
   const totalPages = Math.ceil(filteredPresupuestos.length / itemsPerPage);

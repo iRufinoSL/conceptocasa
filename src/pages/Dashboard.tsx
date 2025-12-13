@@ -52,7 +52,7 @@ const apps: AppCard[] = [
     description: 'Gestión de contactos y clientes',
     icon: Users,
     route: '/crm',
-    available: false,
+    available: true,
     adminOnly: false,
   },
   {

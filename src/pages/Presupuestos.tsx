@@ -16,19 +16,36 @@ export default function Presupuestos() {
   const navigate = useNavigate();
   const { user, loading, userPresupuestos, isAdmin } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
-  const [sortBy, setSortBy] = useState<'name_asc' | 'name_desc' | 'date_asc' | 'date_desc'>('date_desc');
-  const [projectFilter, setProjectFilter] = useState<string>('all');
+  const [sortBy, setSortBy] = useState<'name_asc' | 'name_desc' | 'date_asc' | 'date_desc'>(() => {
+    const saved = localStorage.getItem('presupuestos-sort-by');
+    return (saved === 'name_asc' || saved === 'name_desc' || saved === 'date_asc' || saved === 'date_desc') 
+      ? saved : 'date_desc';
+  });
+  const [projectFilter, setProjectFilter] = useState<string>(() => {
+    return localStorage.getItem('presupuestos-project-filter') || 'all';
+  });
   const [currentPage, setCurrentPage] = useState(1);
   const [viewMode, setViewMode] = useState<'cards' | 'list'>(() => {
     const saved = localStorage.getItem('presupuestos-view-mode');
     return (saved === 'cards' || saved === 'list') ? saved : 'cards';
   });
 
-  // Persist view mode preference
+  // Persist preferences
   const handleViewModeChange = (mode: 'cards' | 'list') => {
     setViewMode(mode);
     localStorage.setItem('presupuestos-view-mode', mode);
   };
+
+  const handleSortChange = (sort: typeof sortBy) => {
+    setSortBy(sort);
+    localStorage.setItem('presupuestos-sort-by', sort);
+  };
+
+  const handleProjectFilterChange = (filter: string) => {
+    setProjectFilter(filter);
+    localStorage.setItem('presupuestos-project-filter', filter);
+  };
+
   const itemsPerPage = 9;
 
   // Get unique projects for filter
@@ -196,7 +213,7 @@ export default function Presupuestos() {
               className="pl-10"
             />
           </div>
-          <Select value={projectFilter} onValueChange={setProjectFilter}>
+          <Select value={projectFilter} onValueChange={handleProjectFilterChange}>
             <SelectTrigger className="w-full sm:w-48">
               <SelectValue placeholder="Filtrar por proyecto" />
             </SelectTrigger>
@@ -210,7 +227,7 @@ export default function Presupuestos() {
               ))}
             </SelectContent>
           </Select>
-          <Select value={sortBy} onValueChange={(v) => setSortBy(v as typeof sortBy)}>
+          <Select value={sortBy} onValueChange={(v) => handleSortChange(v as typeof sortBy)}>
             <SelectTrigger className="w-full sm:w-48">
               <SelectValue placeholder="Ordenar por" />
             </SelectTrigger>

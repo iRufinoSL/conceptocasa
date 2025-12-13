@@ -70,7 +70,7 @@ const apps: AppCard[] = [
     description: 'Gestión documental',
     icon: FileText,
     route: '/documentos',
-    available: false,
+    available: true,
     adminOnly: false,
   },
   {

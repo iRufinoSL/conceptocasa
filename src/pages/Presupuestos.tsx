@@ -7,7 +7,9 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
-import { ArrowLeft, Calculator, FolderOpen, Building2, Search } from 'lucide-react';
+import { ArrowLeft, Calculator, FolderOpen, Building2, Search, Calendar } from 'lucide-react';
+import { format } from 'date-fns';
+import { es } from 'date-fns/locale';
 
 export default function Presupuestos() {
   const navigate = useNavigate();
@@ -212,9 +214,15 @@ export default function Presupuestos() {
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-2">
-                    <p className="text-sm text-muted-foreground">
-                      Código: {up.presupuesto?.codigo_correlativo}
-                    </p>
+                    <div className="flex items-center justify-between text-sm text-muted-foreground">
+                      <span>Código: {up.presupuesto?.codigo_correlativo}</span>
+                      {up.presupuesto?.created_at && (
+                        <span className="flex items-center gap-1">
+                          <Calendar className="h-3 w-3" />
+                          {format(new Date(up.presupuesto.created_at), 'd MMM yyyy', { locale: es })}
+                        </span>
+                      )}
+                    </div>
                     {up.presupuesto?.project && (
                       <div className="flex items-center justify-between gap-2">
                         <button

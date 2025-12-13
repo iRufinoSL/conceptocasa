@@ -516,28 +516,26 @@ export function BudgetPhasesTab({ budgetId, isAdmin }: BudgetPhasesTabProps) {
                     <CollapsibleContent>
                       {phaseActivities.length > 0 ? (
                         <div className="border-t bg-muted/20 p-4">
-                          <Table>
-                            <TableHeader>
-                              <TableRow>
-                                <TableHead>ActividadID</TableHead>
-                                <TableHead>Actividad</TableHead>
-                                <TableHead>Código</TableHead>
-                              </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                              {phaseActivities
-                                .sort((a, b) => a.name.localeCompare(b.name))
-                                .map((activity) => (
-                                  <TableRow key={activity.id}>
-                                    <TableCell className="font-mono text-sm">
-                                      {generateActivityId(activity, phase.code)}
-                                    </TableCell>
-                                    <TableCell>{activity.name}</TableCell>
-                                    <TableCell>{activity.code}</TableCell>
-                                  </TableRow>
-                                ))}
-                            </TableBody>
-                          </Table>
+                          <div className="space-y-2">
+                            {phaseActivities
+                              .sort((a, b) => a.name.localeCompare(b.name))
+                              .map((activity) => (
+                                <div 
+                                  key={activity.id}
+                                  className="p-3 rounded-md border bg-background hover:bg-muted/50 cursor-pointer transition-colors"
+                                  onClick={() => {
+                                    setCurrentPhase(null);
+                                    // Open activity edit - we need to emit an event or use a callback
+                                    // For now, navigate to the activity via a custom event
+                                    window.dispatchEvent(new CustomEvent('edit-activity', { detail: activity }));
+                                  }}
+                                >
+                                  <p className="font-mono text-sm">
+                                    {generateActivityId(activity, phase.code)}
+                                  </p>
+                                </div>
+                              ))}
+                          </div>
                         </div>
                       ) : (
                         <div className="border-t bg-muted/20 p-4 text-center text-muted-foreground">

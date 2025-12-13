@@ -141,6 +141,44 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
     fetchData();
   }, [budgetId]);
 
+  // Listen for edit-activity events from BudgetPhasesTab
+  useEffect(() => {
+    const handleEditActivity = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      const activityData = customEvent.detail;
+      if (activityData && activityData.id) {
+        // Find the full activity in our state or fetch it
+        const fullActivity = activities.find(a => a.id === activityData.id);
+        if (fullActivity) {
+          handleEdit(fullActivity);
+        } else {
+          // Activity might not be loaded yet, fetch and edit
+          supabase
+            .from('budget_activities')
+            .select('*')
+            .eq('id', activityData.id)
+            .single()
+            .then(({ data }) => {
+              if (data) {
+                setEditingActivity(data);
+                setForm({
+                  name: data.name,
+                  code: data.code,
+                  description: data.description || '',
+                  measurement_unit: data.measurement_unit,
+                  phase_id: data.phase_id || ''
+                });
+                setFormDialogOpen(true);
+              }
+            });
+        }
+      }
+    };
+
+    window.addEventListener('edit-activity', handleEditActivity);
+    return () => window.removeEventListener('edit-activity', handleEditActivity);
+  }, [activities]);
+
   // Open form for new activity
   const handleNew = () => {
     setEditingActivity(null);
@@ -706,7 +744,6 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
                           <TableHeader>
                             <TableRow>
                               <TableHead>ActividadID</TableHead>
-                              <TableHead>Actividad</TableHead>
                               <TableHead>Unidad</TableHead>
                               <TableHead>Archivos</TableHead>
                               {isAdmin && <TableHead className="w-20">Acciones</TableHead>}
@@ -716,7 +753,6 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
                             {unassigned.sort((a, b) => a.name.localeCompare(b.name)).map(activity => (
                               <TableRow key={activity.id}>
                                 <TableCell className="font-mono text-sm">{generateActivityId(activity)}</TableCell>
-                                <TableCell className="font-medium">{activity.name}</TableCell>
                                 <TableCell>{activity.measurement_unit}</TableCell>
                                 <TableCell>
                                   <Button variant="ghost" size="sm" onClick={() => handleManageFiles(activity)}>
@@ -789,7 +825,6 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
                         <TableHeader>
                           <TableRow>
                             <TableHead>ActividadID</TableHead>
-                            <TableHead>Actividad</TableHead>
                             <TableHead>Unidad</TableHead>
                             <TableHead>Archivos</TableHead>
                             {isAdmin && <TableHead className="w-20">Acciones</TableHead>}
@@ -799,7 +834,6 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
                           {phaseActivities.sort((a, b) => a.name.localeCompare(b.name)).map(activity => (
                             <TableRow key={activity.id}>
                               <TableCell className="font-mono text-sm">{generateActivityId(activity)}</TableCell>
-                              <TableCell className="font-medium">{activity.name}</TableCell>
                               <TableCell>{activity.measurement_unit}</TableCell>
                               <TableCell>
                                 <Button variant="ghost" size="sm" onClick={() => handleManageFiles(activity)}>

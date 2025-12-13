@@ -5,10 +5,15 @@ import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowLeft, Search, Users, ClipboardList, Target } from 'lucide-react';
+import { ArrowLeft, Search, Users, ClipboardList, Target, Plus } from 'lucide-react';
 import { ContactsTab } from '@/components/crm/ContactsTab';
 import { ManagementsTab } from '@/components/crm/ManagementsTab';
 import { OpportunitiesTab } from '@/components/crm/OpportunitiesTab';
+import { ContactForm } from '@/components/crm/ContactForm';
+import { ManagementForm } from '@/components/crm/ManagementForm';
+import { OpportunityForm } from '@/components/crm/OpportunityForm';
+import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
+import { useToast } from '@/hooks/use-toast';
 
 export interface Contact {
   id: string;
@@ -45,7 +50,8 @@ export interface Opportunity {
 
 export default function CRM() {
   const navigate = useNavigate();
-  const { user, loading, rolesLoading } = useAuth();
+  const { user, loading, rolesLoading, isAdmin } = useAuth();
+  const { toast } = useToast();
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [managements, setManagements] = useState<Management[]>([]);
   const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
@@ -53,30 +59,125 @@ export default function CRM() {
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('contacts');
 
+  // Form states
+  const [contactFormOpen, setContactFormOpen] = useState(false);
+  const [managementFormOpen, setManagementFormOpen] = useState(false);
+  const [opportunityFormOpen, setOpportunityFormOpen] = useState(false);
+  const [editingContact, setEditingContact] = useState<Contact | null>(null);
+  const [editingManagement, setEditingManagement] = useState<Management | null>(null);
+  const [editingOpportunity, setEditingOpportunity] = useState<Opportunity | null>(null);
+
+  // Delete states
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<{ type: string; item: any } | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
   useEffect(() => {
     if (!loading && !user) {
       navigate('/auth');
     }
   }, [user, loading, navigate]);
 
+  const fetchData = async () => {
+    const [contactsRes, managementsRes, opportunitiesRes] = await Promise.all([
+      supabase.from('crm_contacts').select('*').order('name'),
+      supabase.from('crm_managements').select('*').order('target_date', { ascending: false }),
+      supabase.from('crm_opportunities').select('*').order('created_at', { ascending: false })
+    ]);
+
+    if (contactsRes.data) setContacts(contactsRes.data);
+    if (managementsRes.data) setManagements(managementsRes.data);
+    if (opportunitiesRes.data) setOpportunities(opportunitiesRes.data);
+    setIsLoading(false);
+  };
+
   useEffect(() => {
-    const fetchData = async () => {
-      const [contactsRes, managementsRes, opportunitiesRes] = await Promise.all([
-        supabase.from('crm_contacts').select('*').order('name'),
-        supabase.from('crm_managements').select('*').order('target_date', { ascending: false }),
-        supabase.from('crm_opportunities').select('*').order('created_at', { ascending: false })
-      ]);
-
-      if (contactsRes.data) setContacts(contactsRes.data);
-      if (managementsRes.data) setManagements(managementsRes.data);
-      if (opportunitiesRes.data) setOpportunities(opportunitiesRes.data);
-      setIsLoading(false);
-    };
-
     if (user) {
       fetchData();
     }
   }, [user]);
+
+  const handleAddNew = () => {
+    if (activeTab === 'contacts') {
+      setEditingContact(null);
+      setContactFormOpen(true);
+    } else if (activeTab === 'managements') {
+      setEditingManagement(null);
+      setManagementFormOpen(true);
+    } else {
+      setEditingOpportunity(null);
+      setOpportunityFormOpen(true);
+    }
+  };
+
+  const handleEditContact = (contact: Contact) => {
+    setEditingContact(contact);
+    setContactFormOpen(true);
+  };
+
+  const handleEditManagement = (management: Management) => {
+    setEditingManagement(management);
+    setManagementFormOpen(true);
+  };
+
+  const handleEditOpportunity = (opportunity: Opportunity) => {
+    setEditingOpportunity(opportunity);
+    setOpportunityFormOpen(true);
+  };
+
+  const handleDeleteContact = (contact: Contact) => {
+    setDeleteTarget({ type: 'contact', item: contact });
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDeleteManagement = (management: Management) => {
+    setDeleteTarget({ type: 'management', item: management });
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDeleteOpportunity = (opportunity: Opportunity) => {
+    setDeleteTarget({ type: 'opportunity', item: opportunity });
+    setDeleteDialogOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
+    setIsDeleting(true);
+
+    try {
+      let error;
+      if (deleteTarget.type === 'contact') {
+        ({ error } = await supabase.from('crm_contacts').delete().eq('id', deleteTarget.item.id));
+      } else if (deleteTarget.type === 'management') {
+        ({ error } = await supabase.from('crm_managements').delete().eq('id', deleteTarget.item.id));
+      } else {
+        ({ error } = await supabase.from('crm_opportunities').delete().eq('id', deleteTarget.item.id));
+      }
+
+      if (error) throw error;
+
+      toast({ title: 'Elemento eliminado correctamente' });
+      fetchData();
+    } catch (error: any) {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    } finally {
+      setIsDeleting(false);
+      setDeleteDialogOpen(false);
+      setDeleteTarget(null);
+    }
+  };
+
+  const getDeleteMessage = () => {
+    if (!deleteTarget) return '';
+    switch (deleteTarget.type) {
+      case 'contact': return `¿Eliminar el contacto "${deleteTarget.item.name}"?`;
+      case 'management': return `¿Eliminar la gestión "${deleteTarget.item.title}"?`;
+      case 'opportunity': return `¿Eliminar la oportunidad "${deleteTarget.item.name}"?`;
+      default: return '¿Eliminar este elemento?';
+    }
+  };
+
+  const canEdit = isAdmin();
 
   if (loading || rolesLoading || isLoading) {
     return (
@@ -105,6 +206,15 @@ export default function CRM() {
               </p>
             </div>
           </div>
+          {canEdit && (
+            <Button onClick={handleAddNew} className="gap-2">
+              <Plus className="h-4 w-4" />
+              <span className="hidden sm:inline">
+                {activeTab === 'contacts' ? 'Nuevo Contacto' : 
+                 activeTab === 'managements' ? 'Nueva Gestión' : 'Nueva Oportunidad'}
+              </span>
+            </Button>
+          )}
         </div>
       </header>
 
@@ -142,22 +252,65 @@ export default function CRM() {
           </TabsList>
 
           <TabsContent value="contacts">
-            <ContactsTab contacts={contacts} searchTerm={searchTerm} />
+            <ContactsTab 
+              contacts={contacts} 
+              searchTerm={searchTerm}
+              onEdit={handleEditContact}
+              onDelete={handleDeleteContact}
+            />
           </TabsContent>
 
           <TabsContent value="managements">
-            <ManagementsTab managements={managements} searchTerm={searchTerm} />
+            <ManagementsTab 
+              managements={managements} 
+              searchTerm={searchTerm}
+              onEdit={handleEditManagement}
+              onDelete={handleDeleteManagement}
+            />
           </TabsContent>
 
           <TabsContent value="opportunities">
             <OpportunitiesTab 
               opportunities={opportunities} 
               contacts={contacts}
-              searchTerm={searchTerm} 
+              searchTerm={searchTerm}
+              onEdit={handleEditOpportunity}
+              onDelete={handleDeleteOpportunity}
             />
           </TabsContent>
         </Tabs>
       </main>
+
+      {/* Forms */}
+      <ContactForm
+        open={contactFormOpen}
+        onOpenChange={setContactFormOpen}
+        contact={editingContact}
+        onSuccess={fetchData}
+      />
+      <ManagementForm
+        open={managementFormOpen}
+        onOpenChange={setManagementFormOpen}
+        management={editingManagement}
+        onSuccess={fetchData}
+      />
+      <OpportunityForm
+        open={opportunityFormOpen}
+        onOpenChange={setOpportunityFormOpen}
+        opportunity={editingOpportunity}
+        contacts={contacts}
+        onSuccess={fetchData}
+      />
+
+      {/* Delete Confirmation */}
+      <DeleteConfirmDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        onConfirm={handleConfirmDelete}
+        title="Confirmar eliminación"
+        description={getDeleteMessage()}
+        isDeleting={isDeleting}
+      />
     </div>
   );
 }

@@ -2,7 +2,9 @@ import { useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Target, User, Calendar } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Target, User, Calendar, MoreVertical, Pencil, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import type { Opportunity, Contact } from '@/pages/CRM';
@@ -11,9 +13,11 @@ interface OpportunitiesTabProps {
   opportunities: Opportunity[];
   contacts: Contact[];
   searchTerm: string;
+  onEdit: (opportunity: Opportunity) => void;
+  onDelete: (opportunity: Opportunity) => void;
 }
 
-export function OpportunitiesTab({ opportunities, contacts, searchTerm }: OpportunitiesTabProps) {
+export function OpportunitiesTab({ opportunities, contacts, searchTerm, onEdit, onDelete }: OpportunitiesTabProps) {
   const filteredOpportunities = useMemo(() => {
     if (!searchTerm) return opportunities;
     const term = searchTerm.toLowerCase();
@@ -52,14 +56,33 @@ export function OpportunitiesTab({ opportunities, contacts, searchTerm }: Opport
         return (
           <Card
             key={opportunity.id}
-            className="group cursor-pointer hover:shadow-lg hover:border-primary/50 transition-all duration-200"
+            className="group hover:shadow-lg hover:border-primary/50 transition-all duration-200"
           >
             <CardHeader className="pb-3">
               <div className="flex items-start justify-between">
                 <div className="p-2 rounded-lg bg-primary/10">
                   <Target className="h-5 w-5 text-primary" />
                 </div>
-                <Badge variant="secondary">Oportunidad</Badge>
+                <div className="flex items-center gap-1">
+                  <Badge variant="secondary">Oportunidad</Badge>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <MoreVertical className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => onEdit(opportunity)}>
+                        <Pencil className="h-4 w-4 mr-2" />
+                        Editar
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => onDelete(opportunity)} className="text-destructive">
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        Eliminar
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
               </div>
               <CardTitle className="text-base line-clamp-2 mt-2">
                 {opportunity.name}

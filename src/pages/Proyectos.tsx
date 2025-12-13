@@ -20,12 +20,14 @@ import {
   MoreVertical,
   Pencil,
   Trash2,
-  Users
+  Users,
+  FileText
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { ProjectForm } from '@/components/projects/ProjectForm';
 import { ProjectContactsManager } from '@/components/projects/ProjectContactsManager';
+import { ProjectDocumentsManager } from '@/components/projects/ProjectDocumentsManager';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import { useToast } from '@/hooks/use-toast';
 
@@ -68,6 +70,10 @@ export default function Proyectos() {
   // Contacts manager state
   const [contactsManagerOpen, setContactsManagerOpen] = useState(false);
   const [selectedProjectForContacts, setSelectedProjectForContacts] = useState<Project | null>(null);
+
+  // Documents manager state
+  const [documentsManagerOpen, setDocumentsManagerOpen] = useState(false);
+  const [selectedProjectForDocs, setSelectedProjectForDocs] = useState<Project | null>(null);
 
   // Delete states
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -151,6 +157,11 @@ export default function Proyectos() {
   const handleManageContacts = (project: Project) => {
     setSelectedProjectForContacts(project);
     setContactsManagerOpen(true);
+  };
+
+  const handleManageDocuments = (project: Project) => {
+    setSelectedProjectForDocs(project);
+    setDocumentsManagerOpen(true);
   };
 
   const handleDeleteClick = (project: Project) => {
@@ -317,6 +328,10 @@ export default function Proyectos() {
                                 <Users className="h-4 w-4 mr-2" />
                                 Gestionar contactos
                               </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleManageDocuments(project)}>
+                                <FileText className="h-4 w-4 mr-2" />
+                                Documentos
+                              </DropdownMenuItem>
                               <DropdownMenuItem onClick={() => handleEdit(project)}>
                                 <Pencil className="h-4 w-4 mr-2" />
                                 Editar
@@ -417,6 +432,17 @@ export default function Proyectos() {
           }}
           projectId={selectedProjectForContacts.id}
           projectName={selectedProjectForContacts.name}
+        />
+      )}
+
+      {/* Documents Manager */}
+      {selectedProjectForDocs && (
+        <ProjectDocumentsManager
+          open={documentsManagerOpen}
+          onOpenChange={setDocumentsManagerOpen}
+          projectId={selectedProjectForDocs.id}
+          projectName={selectedProjectForDocs.name}
+          canEdit={canEdit}
         />
       )}
 

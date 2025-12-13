@@ -73,14 +73,23 @@ export function useAuth() {
   }, []);
 
   const fetchUserRoles = async (userId: string) => {
+    console.log('[useAuth] Fetching roles for user:', userId);
     try {
       const { data, error } = await supabase
         .from('user_roles')
         .select('role')
         .eq('user_id', userId);
       
+      console.log('[useAuth] Roles response:', { data, error });
+      
+      if (error) {
+        console.error('[useAuth] Error fetching roles:', error);
+      }
+      
       if (!error && data) {
-        setRoles(data.map((r: UserRole) => r.role));
+        const fetchedRoles = data.map((r: UserRole) => r.role);
+        console.log('[useAuth] Setting roles:', fetchedRoles);
+        setRoles(fetchedRoles);
       }
     } finally {
       setRolesLoading(false);

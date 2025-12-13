@@ -3,10 +3,31 @@ import { Resend } from "https://esm.sh/resend@2.0.0";
 
 const resend = new Resend(Deno.env.get("RESEND_API_KEY"));
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+// Allowed origins for CORS - restrict to specific domains
+const ALLOWED_ORIGINS = [
+  "https://concepto.casa",
+  "https://www.concepto.casa",
+  "https://build-buddy-resources.lovable.app"
+];
+
+// Check if origin is allowed, also allow lovable preview domains
+function isOriginAllowed(origin: string | null): boolean {
+  if (!origin) return false;
+  if (ALLOWED_ORIGINS.includes(origin)) return true;
+  // Allow Lovable preview domains
+  if (origin.match(/^https:\/\/[a-z0-9-]+\.lovableproject\.com$/)) return true;
+  if (origin.match(/^https:\/\/[a-z0-9-]+\.lovable\.app$/)) return true;
+  return false;
+}
+
+function getCorsHeaders(origin: string | null): Record<string, string> {
+  const allowedOrigin = isOriginAllowed(origin) ? origin! : ALLOWED_ORIGINS[0];
+  return {
+    "Access-Control-Allow-Origin": allowedOrigin,
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+  };
+}
 
 interface ContactEmailRequest {
   name: string;
@@ -63,9 +84,21 @@ function escapeHtml(text: string): string {
 }
 
 const handler = async (req: Request): Promise<Response> => {
+  const origin = req.headers.get("origin");
+  const corsHeaders = getCorsHeaders(origin);
+
   // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
+  }
+
+  // Validate origin - reject requests from unauthorized origins
+  if (!isOriginAllowed(origin)) {
+    console.warn(`Rejected request from unauthorized origin: ${origin}`);
+    return new Response(
+      JSON.stringify({ error: "Origen no autorizado" }),
+      { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
   }
 
   try {
@@ -93,7 +126,7 @@ const handler = async (req: Request): Promise<Response> => {
 
     const { name, email, phone, subject, message }: ContactEmailRequest = await req.json();
 
-    console.log("Received contact form submission from IP:", ip, "- Remaining requests:", rateLimit.remaining);
+    console.log("Received contact form submission from IP:", ip, "- Origin:", origin, "- Remaining requests:", rateLimit.remaining);
 
     // Validate required fields
     if (!name || !email || !phone || !message) {

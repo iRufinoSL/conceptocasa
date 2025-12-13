@@ -37,7 +37,7 @@ interface PresupuestoData {
 
 export default function Presupuestos() {
   const navigate = useNavigate();
-  const { user, loading, rolesLoading, userPresupuestos, isAdmin } = useAuth();
+  const { user, loading, rolesLoading, userPresupuestos, isAdmin, roles } = useAuth();
   const [presupuestosList, setPresupuestosList] = useState<PresupuestoData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -95,9 +95,15 @@ export default function Presupuestos() {
   // Fetch all presupuestos for admins, use userPresupuestos for others
   useEffect(() => {
     const fetchPresupuestos = async () => {
-      if (!user) return;
+      if (!user) {
+        console.log('[Presupuestos] No user, skipping fetch');
+        return;
+      }
       
-      if (isAdmin()) {
+      const adminCheck = isAdmin();
+      console.log('[Presupuestos] isAdmin():', adminCheck, 'roles:', roles);
+      
+      if (adminCheck) {
         // Admin: fetch all presupuestos
         const { data, error } = await supabase
           .from('presupuestos')
@@ -175,6 +181,8 @@ export default function Presupuestos() {
       navigate('/auth');
     }
   }, [user, loading, navigate]);
+
+  console.log('[Presupuestos] Render state - loading:', loading, 'rolesLoading:', rolesLoading, 'isLoading:', isLoading, 'user:', !!user, 'roles:', roles);
 
   if (loading || rolesLoading || isLoading) {
     return (

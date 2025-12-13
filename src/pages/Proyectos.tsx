@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { 
   ArrowLeft, 
   Search, 
@@ -13,10 +14,17 @@ import {
   Calendar, 
   DollarSign,
   Building2,
-  FolderOpen
+  FolderOpen,
+  Plus,
+  MoreVertical,
+  Pencil,
+  Trash2
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { ProjectForm } from '@/components/projects/ProjectForm';
+import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
+import { useToast } from '@/hooks/use-toast';
 
 interface Project {
   id: string;
@@ -33,11 +41,21 @@ interface Project {
 
 export default function Proyectos() {
   const navigate = useNavigate();
-  const { user, loading, rolesLoading } = useAuth();
+  const { user, loading, rolesLoading, isAdmin } = useAuth();
+  const { toast } = useToast();
   const [projects, setProjects] = useState<Project[]>([]);
   const [filteredProjects, setFilteredProjects] = useState<Project[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [isLoading, setIsLoading] = useState(true);
+
+  // Form states
+  const [formOpen, setFormOpen] = useState(false);
+  const [editingProject, setEditingProject] = useState<Project | null>(null);
+
+  // Delete states
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [projectToDelete, setProjectToDelete] = useState<Project | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -45,20 +63,20 @@ export default function Proyectos() {
     }
   }, [user, loading, navigate]);
 
+  const fetchProjects = async () => {
+    const { data, error } = await supabase
+      .from('projects')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (!error && data) {
+      setProjects(data);
+      setFilteredProjects(data);
+    }
+    setIsLoading(false);
+  };
+
   useEffect(() => {
-    const fetchProjects = async () => {
-      const { data, error } = await supabase
-        .from('projects')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (!error && data) {
-        setProjects(data);
-        setFilteredProjects(data);
-      }
-      setIsLoading(false);
-    };
-
     if (user) {
       fetchProjects();
     }
@@ -72,6 +90,44 @@ export default function Proyectos() {
     );
     setFilteredProjects(filtered);
   }, [searchTerm, projects]);
+
+  const handleAddNew = () => {
+    setEditingProject(null);
+    setFormOpen(true);
+  };
+
+  const handleEdit = (project: Project) => {
+    setEditingProject(project);
+    setFormOpen(true);
+  };
+
+  const handleDeleteClick = (project: Project) => {
+    setProjectToDelete(project);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!projectToDelete) return;
+    setIsDeleting(true);
+
+    try {
+      const { error } = await supabase
+        .from('projects')
+        .delete()
+        .eq('id', projectToDelete.id);
+
+      if (error) throw error;
+
+      toast({ title: 'Proyecto eliminado correctamente' });
+      fetchProjects();
+    } catch (error: any) {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    } finally {
+      setIsDeleting(false);
+      setDeleteDialogOpen(false);
+      setProjectToDelete(null);
+    }
+  };
 
   const getStatusVariant = (status: string) => {
     switch (status) {
@@ -102,6 +158,8 @@ export default function Proyectos() {
     }).format(amount);
   };
 
+  const canEdit = isAdmin();
+
   if (loading || rolesLoading || isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -129,6 +187,12 @@ export default function Proyectos() {
               </p>
             </div>
           </div>
+          {canEdit && (
+            <Button onClick={handleAddNew} className="gap-2">
+              <Plus className="h-4 w-4" />
+              <span className="hidden sm:inline">Nuevo Proyecto</span>
+            </Button>
+          )}
         </div>
       </header>
 
@@ -156,9 +220,15 @@ export default function Proyectos() {
           <Card className="py-16">
             <CardContent className="text-center">
               <FolderOpen className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
-              <p className="text-muted-foreground">
+              <p className="text-muted-foreground mb-4">
                 {searchTerm ? 'No se encontraron proyectos' : 'No hay proyectos registrados'}
               </p>
+              {canEdit && !searchTerm && (
+                <Button onClick={handleAddNew}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Crear primer proyecto
+                </Button>
+              )}
             </CardContent>
           </Card>
         ) : (
@@ -166,14 +236,35 @@ export default function Proyectos() {
             {filteredProjects.map((project) => (
               <Card
                 key={project.id}
-                className="group cursor-pointer hover:shadow-lg hover:border-primary/50 transition-all duration-200"
+                className="group hover:shadow-lg hover:border-primary/50 transition-all duration-200"
               >
                 <CardHeader className="pb-3">
                   <div className="flex items-start justify-between">
-                    <CardTitle className="text-lg line-clamp-1">{project.name}</CardTitle>
-                    <Badge variant={getStatusVariant(project.status)}>
-                      {getStatusLabel(project.status)}
-                    </Badge>
+                    <CardTitle className="text-lg line-clamp-1 flex-1">{project.name}</CardTitle>
+                    <div className="flex items-center gap-1">
+                      <Badge variant={getStatusVariant(project.status)}>
+                        {getStatusLabel(project.status)}
+                      </Badge>
+                      {canEdit && (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <MoreVertical className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => handleEdit(project)}>
+                              <Pencil className="h-4 w-4 mr-2" />
+                              Editar
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleDeleteClick(project)} className="text-destructive">
+                              <Trash2 className="h-4 w-4 mr-2" />
+                              Eliminar
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      )}
+                    </div>
                   </div>
                   {project.description && (
                     <CardDescription className="line-clamp-2">
@@ -215,6 +306,24 @@ export default function Proyectos() {
           </div>
         )}
       </main>
+
+      {/* Form */}
+      <ProjectForm
+        open={formOpen}
+        onOpenChange={setFormOpen}
+        project={editingProject}
+        onSuccess={fetchProjects}
+      />
+
+      {/* Delete Confirmation */}
+      <DeleteConfirmDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        onConfirm={handleConfirmDelete}
+        title="Eliminar proyecto"
+        description={`¿Estás seguro de que quieres eliminar el proyecto "${projectToDelete?.name}"? Esta acción no se puede deshacer.`}
+        isDeleting={isDeleting}
+      />
     </div>
   );
 }

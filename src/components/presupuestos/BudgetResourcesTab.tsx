@@ -278,8 +278,7 @@ export function BudgetResourcesTab({ budgetId, isAdmin }: BudgetResourcesTabProp
   // Process row data (from CSV or Excel)
   const processRowData = (
     row: Record<string, any>,
-    existingNames: Set<string>,
-    columnMapping: Record<string, string>
+    existingNames: Set<string>
   ): {
     budget_id: string;
     name: string;
@@ -292,9 +291,17 @@ export function BudgetResourcesTab({ budgetId, isAdmin }: BudgetResourcesTabProp
     related_units: number | null;
     activity_id: string | null;
   } | null => {
-    const getValue = (key: string) => row[columnMapping[key] || key];
+    // Try to get value by multiple possible column names
+    const getValue = (keys: string[]) => {
+      for (const key of keys) {
+        if (row[key] !== undefined && row[key] !== '') {
+          return row[key];
+        }
+      }
+      return null;
+    };
     
-    const name = String(getValue('name') || '').replace(/^"|"$/g, '').trim();
+    const name = String(getValue(['Recurso', 'name', 'Name', 'Nombre']) || '').replace(/^"|"$/g, '').trim();
     if (!name) return null;
     
     // Skip duplicates
@@ -302,22 +309,22 @@ export function BudgetResourcesTab({ budgetId, isAdmin }: BudgetResourcesTabProp
     if (existingNames.has(nameLower)) return null;
     existingNames.add(nameLower);
     
-    const externalCost = parseNumber(getValue('external_unit_cost'));
-    const unit = String(getValue('unit') || '').replace(/^"|"$/g, '').trim() || null;
-    const resourceType = String(getValue('resource_type') || '').replace(/^"|"$/g, '').trim() || null;
+    const externalCost = parseNumber(getValue(['€Coste ud', 'external_unit_cost', 'Coste ud', 'Coste']));
+    const unit = String(getValue(['Ud medida', 'unit', 'Ud', 'Unidad']) || '').replace(/^"|"$/g, '').trim() || null;
+    const resourceType = String(getValue(['Tipo recurso', 'resource_type', 'Tipo']) || '').replace(/^"|"$/g, '').trim() || null;
     
     // Parse percentages - values like 0.15 mean 15%, keep as decimal
-    let safetyPercent = parseNumber(getValue('safety_margin_percent'));
+    let safetyPercent = parseNumber(getValue(['%Margen seguridad', 'safety_margin_percent', 'Margen seguridad']));
     if (safetyPercent === null) safetyPercent = 0.15;
     if (safetyPercent > 1) safetyPercent = safetyPercent / 100;
     
-    let salesPercent = parseNumber(getValue('sales_margin_percent'));
+    let salesPercent = parseNumber(getValue(['%Margen venta', 'sales_margin_percent', 'Margen venta']));
     if (salesPercent === null) salesPercent = 0.25;
     if (salesPercent > 1) salesPercent = salesPercent / 100;
     
-    const manualUnits = parseNumber(getValue('manual_units'));
-    const relatedUnits = parseNumber(getValue('related_units'));
-    const activityIdField = String(getValue('activity_id') || '').replace(/^"|"$/g, '').trim();
+    const manualUnits = parseNumber(getValue(['Uds manual', 'manual_units', 'Uds Manual']));
+    const relatedUnits = parseNumber(getValue(['Uds relacionadas', 'related_units', 'Uds Relacionadas']));
+    const activityIdField = String(getValue(['ActividadID', 'activity_id', 'Actividad']) || '').replace(/^"|"$/g, '').trim();
     
     return {
       budget_id: budgetId,
@@ -379,19 +386,6 @@ export function BudgetResourcesTab({ budgetId, isAdmin }: BudgetResourcesTabProp
 
     const isExcel = file.name.endsWith('.xlsx') || file.name.endsWith('.xls');
     const existingNames = new Set(resources.map(r => r.name.toLowerCase().trim()));
-    
-    // Column mapping for known headers
-    const columnMapping: Record<string, string> = {
-      'name': 'Recurso',
-      'external_unit_cost': '€Coste ud',
-      'unit': 'Ud medida',
-      'resource_type': 'Tipo recurso',
-      'safety_margin_percent': '%Margen seguridad',
-      'sales_margin_percent': '%Margen venta',
-      'manual_units': 'Uds manual',
-      'related_units': 'Uds relacionadas',
-      'activity_id': 'ActividadID',
-    };
 
     try {
       if (isExcel) {
@@ -407,7 +401,7 @@ export function BudgetResourcesTab({ budgetId, isAdmin }: BudgetResourcesTabProp
         const resourcesData: Array<ReturnType<typeof processRowData>> = [];
         
         for (const row of jsonData) {
-          const processed = processRowData(row, existingNames, columnMapping);
+          const processed = processRowData(row, existingNames);
           if (processed) resourcesData.push(processed);
         }
         
@@ -476,7 +470,7 @@ export function BudgetResourcesTab({ budgetId, isAdmin }: BudgetResourcesTabProp
             row[header] = values[idx] || '';
           });
           
-          const processed = processRowData(row, existingNames, columnMapping);
+          const processed = processRowData(row, existingNames);
           if (processed) resourcesData.push(processed);
         }
         

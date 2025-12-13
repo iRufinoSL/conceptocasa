@@ -1,301 +1,90 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { ArrowLeft, Calculator, FolderOpen, Building2, Search, Calendar, LayoutGrid, List, Download, RotateCcw, BarChart3 } from 'lucide-react';
+import { ArrowLeft, Calculator, Search, LayoutGrid, List } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { formatCurrency } from '@/lib/format-utils';
-import { BudgetSummary } from '@/components/presupuestos/BudgetSummary';
 import { AppNavDropdown } from '@/components/AppNavDropdown';
 
-interface PresupuestoData {
-  presupuesto_id: string;
-  role: 'administrador' | 'colaborador' | 'cliente';
-  presupuesto?: {
-    id: string;
-    nombre: string;
-    codigo_correlativo: number;
-    version: string;
-    poblacion: string;
-    created_at: string;
-    project_id: string | null;
-    project?: {
-      id: string;
-      name: string;
-      status: string;
-    } | null;
-  };
+interface Presupuesto {
+  id: string;
+  nombre: string;
+  codigo_correlativo: number;
+  version: string;
+  poblacion: string;
+  created_at: string;
+  project_id: string | null;
 }
 
 export default function Presupuestos() {
   const navigate = useNavigate();
-  const { user, loading, rolesLoading, userPresupuestos, isAdmin, roles } = useAuth();
-  const [presupuestosList, setPresupuestosList] = useState<PresupuestoData[]>([]);
+  const { user, loading } = useAuth();
+  const [presupuestos, setPresupuestos] = useState<Presupuesto[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [sortBy, setSortBy] = useState<'name_asc' | 'name_desc' | 'date_asc' | 'date_desc'>(() => {
-    const saved = localStorage.getItem('presupuestos-sort-by');
-    return (saved === 'name_asc' || saved === 'name_desc' || saved === 'date_asc' || saved === 'date_desc') 
-      ? saved : 'date_desc';
-  });
-  const [projectFilter, setProjectFilter] = useState<string>(() => {
-    return localStorage.getItem('presupuestos-project-filter') || 'all';
-  });
-  const [currentPage, setCurrentPage] = useState(1);
-  const [viewMode, setViewMode] = useState<'cards' | 'list'>(() => {
-    const saved = localStorage.getItem('presupuestos-view-mode');
-    return (saved === 'cards' || saved === 'list') ? saved : 'cards';
-  });
-  const [summaryOpen, setSummaryOpen] = useState(false);
-  const [selectedBudgetForSummary, setSelectedBudgetForSummary] = useState<{id: string; name: string} | null>(null);
+  const [viewMode, setViewMode] = useState<'cards' | 'list'>('cards');
 
-  const openBudgetSummary = (id: string, name: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setSelectedBudgetForSummary({ id, name });
-    setSummaryOpen(true);
-  };
-
-  // Persist preferences
-  const handleViewModeChange = (mode: 'cards' | 'list') => {
-    setViewMode(mode);
-    localStorage.setItem('presupuestos-view-mode', mode);
-  };
-
-  const handleSortChange = (sort: typeof sortBy) => {
-    setSortBy(sort);
-    localStorage.setItem('presupuestos-sort-by', sort);
-  };
-
-  const handleProjectFilterChange = (filter: string) => {
-    setProjectFilter(filter);
-    localStorage.setItem('presupuestos-project-filter', filter);
-  };
-
-  const resetFilters = () => {
-    setSearchTerm('');
-    setSortBy('date_desc');
-    setProjectFilter('all');
-    setCurrentPage(1);
-    localStorage.removeItem('presupuestos-sort-by');
-    localStorage.removeItem('presupuestos-project-filter');
-  };
-
-  const hasActiveFilters = searchTerm !== '' || sortBy !== 'date_desc' || projectFilter !== 'all';
-
-  const itemsPerPage = 9;
-
-  // Fetch all presupuestos for admins, use userPresupuestos for others
+  // Fetch presupuestos
   useEffect(() => {
     const fetchPresupuestos = async () => {
       if (!user) {
         setIsLoading(false);
         return;
       }
-      
-      // Check if user is admin based on roles array
-      const isUserAdmin = roles.includes('administrador');
-      
-      if (isUserAdmin) {
-        // Admin: fetch all presupuestos
+
+      try {
         const { data, error } = await supabase
           .from('presupuestos')
-          .select(`
-            id,
-            nombre,
-            codigo_correlativo,
-            version,
-            poblacion,
-            created_at,
-            project_id,
-            projects (
-              id,
-              name,
-              status
-            )
-          `)
-          .order('created_at', { ascending: false });
+          .select('id, nombre, codigo_correlativo, version, poblacion, created_at, project_id')
+          .order('nombre', { ascending: true });
 
-        if (!error && data) {
-          const mapped = data.map((p: any) => ({
-            presupuesto_id: p.id,
-            role: 'administrador' as const,
-            presupuesto: {
-              id: p.id,
-              nombre: p.nombre,
-              codigo_correlativo: p.codigo_correlativo,
-              version: p.version,
-              poblacion: p.poblacion,
-              created_at: p.created_at,
-              project_id: p.project_id,
-              project: p.projects
-            }
-          }));
-          setPresupuestosList(mapped);
+        if (error) {
+          console.error('Error fetching presupuestos:', error);
+        } else {
+          setPresupuestos(data || []);
         }
-      } else {
-        // Non-admin: use userPresupuestos from auth hook
-        setPresupuestosList(userPresupuestos);
+      } catch (err) {
+        console.error('Error:', err);
+      } finally {
+        setIsLoading(false);
       }
-      setIsLoading(false);
     };
 
-    if (!rolesLoading) {
+    if (!loading) {
       fetchPresupuestos();
     }
-  }, [user, rolesLoading, roles, userPresupuestos]);
+  }, [user, loading]);
 
-  // Get unique projects for filter
-  const uniqueProjects = useMemo(() => {
-    const projects = new Map<string, string>();
-    presupuestosList.forEach(up => {
-      if (up.presupuesto?.project) {
-        projects.set(up.presupuesto.project.id, up.presupuesto.project.name);
-      }
-    });
-    return Array.from(projects.entries()).map(([id, name]) => ({ id, name }));
-  }, [presupuestosList]);
-
-  // Statistics
-  const stats = useMemo(() => {
-    const total = presupuestosList.length;
-    const withProject = presupuestosList.filter(up => up.presupuesto?.project_id).length;
-    const withoutProject = total - withProject;
-    const byRole = {
-      administrador: presupuestosList.filter(up => up.role === 'administrador').length,
-      colaborador: presupuestosList.filter(up => up.role === 'colaborador').length,
-      cliente: presupuestosList.filter(up => up.role === 'cliente').length,
-    };
-    return { total, withProject, withoutProject, byRole };
-  }, [presupuestosList]);
-
+  // Redirect if not authenticated
   useEffect(() => {
     if (!loading && !user) {
       navigate('/auth');
     }
   }, [user, loading, navigate]);
 
-  
+  // Filter presupuestos
+  const filteredPresupuestos = presupuestos.filter(p => {
+    const term = searchTerm.toLowerCase();
+    return (
+      p.nombre?.toLowerCase().includes(term) ||
+      p.poblacion?.toLowerCase().includes(term) ||
+      p.codigo_correlativo?.toString().includes(term) ||
+      p.version?.toLowerCase().includes(term)
+    );
+  });
 
-  if (loading || rolesLoading || isLoading) {
+  if (loading || isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
       </div>
     );
   }
-
-  const filteredPresupuestos = useMemo(() => {
-    let result = [...presupuestosList];
-    
-    // Filter by search term
-    if (searchTerm.trim()) {
-      const term = searchTerm.toLowerCase();
-      result = result.filter(up => 
-        up.presupuesto?.nombre?.toLowerCase().includes(term) ||
-        up.presupuesto?.poblacion?.toLowerCase().includes(term) ||
-        up.presupuesto?.codigo_correlativo?.toString().includes(term) ||
-        up.presupuesto?.version?.toLowerCase().includes(term) ||
-        up.presupuesto?.project?.name?.toLowerCase().includes(term)
-      );
-    }
-    
-    // Filter by project
-    if (projectFilter !== 'all') {
-      if (projectFilter === 'none') {
-        result = result.filter(up => !up.presupuesto?.project_id);
-      } else if (projectFilter === 'with-project') {
-        result = result.filter(up => !!up.presupuesto?.project_id);
-      } else {
-        result = result.filter(up => up.presupuesto?.project?.id === projectFilter);
-      }
-    }
-    
-    // Sort
-    result.sort((a, b) => {
-      switch (sortBy) {
-        case 'name_asc':
-          return (a.presupuesto?.nombre || '').localeCompare(b.presupuesto?.nombre || '');
-        case 'name_desc':
-          return (b.presupuesto?.nombre || '').localeCompare(a.presupuesto?.nombre || '');
-        case 'date_asc':
-          return new Date(a.presupuesto?.created_at || 0).getTime() - new Date(b.presupuesto?.created_at || 0).getTime();
-        case 'date_desc':
-        default:
-          return new Date(b.presupuesto?.created_at || 0).getTime() - new Date(a.presupuesto?.created_at || 0).getTime();
-      }
-    });
-    
-    return result;
-  }, [presupuestosList, searchTerm, sortBy, projectFilter]);
-
-  // Pagination
-  const totalPages = Math.ceil(filteredPresupuestos.length / itemsPerPage);
-  const paginatedPresupuestos = useMemo(() => {
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    return filteredPresupuestos.slice(startIndex, startIndex + itemsPerPage);
-  }, [filteredPresupuestos, currentPage, itemsPerPage]);
-
-  // Reset to page 1 when filters change
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchTerm, projectFilter, sortBy]);
-
-  const getStatusLabel = (status: string) => {
-    const labels: Record<string, string> = {
-      active: 'Activo',
-      completed: 'Completado',
-      on_hold: 'En pausa',
-      cancelled: 'Cancelado'
-    };
-    return labels[status] || status;
-  };
-
-  const getStatusVariant = (status: string): "default" | "secondary" | "destructive" | "outline" => {
-    const variants: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
-      active: 'default',
-      completed: 'secondary',
-      on_hold: 'outline',
-      cancelled: 'destructive'
-    };
-    return variants[status] || 'outline';
-  };
-
-  const exportToCSV = () => {
-    const headers = ['Nombre', 'Código', 'Población', 'Versión', 'Proyecto', 'Estado Proyecto', 'Rol', 'Fecha Creación'];
-    const rows = filteredPresupuestos.map(up => [
-      up.presupuesto?.nombre || '',
-      up.presupuesto?.codigo_correlativo?.toString() || '',
-      up.presupuesto?.poblacion || '',
-      up.presupuesto?.version || '',
-      up.presupuesto?.project?.name || '',
-      up.presupuesto?.project ? getStatusLabel(up.presupuesto.project.status) : '',
-      up.role,
-      up.presupuesto?.created_at 
-        ? format(new Date(up.presupuesto.created_at), 'dd/MM/yyyy', { locale: es })
-        : ''
-    ]);
-
-    const csvContent = [
-      headers.join(';'),
-      ...rows.map(row => row.map(cell => `"${cell}"`).join(';'))
-    ].join('\n');
-
-    const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = `presupuestos_${format(new Date(), 'yyyyMMdd_HHmmss')}.csv`;
-    link.click();
-    URL.revokeObjectURL(link.href);
-  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -316,393 +105,109 @@ export default function Presupuestos() {
       </header>
 
       <main className="container mx-auto px-4 py-8">
-        <div className="mb-8">
-          <h2 className="text-2xl font-bold text-foreground mb-2">Mis Presupuestos</h2>
-          <p className="text-muted-foreground mb-6">
-            {roles.includes('administrador') 
-              ? 'Gestiona todos los presupuestos del sistema'
-              : 'Presupuestos a los que tienes acceso'}
+        <div className="mb-6">
+          <h2 className="text-2xl font-bold text-foreground mb-2">Gestión de Presupuestos</h2>
+          <p className="text-muted-foreground">
+            Lista de presupuestos ordenados alfabéticamente
           </p>
-          
-          {/* Statistics Cards */}
-          <TooltipProvider>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Card 
-                    className={`cursor-pointer transition-all hover:shadow-md ${projectFilter === 'all' && !searchTerm ? 'ring-2 ring-primary' : 'bg-primary/5 border-primary/20'}`}
-                    onClick={resetFilters}
-                  >
-                    <CardContent className="p-4">
-                      <div className="flex items-center gap-3">
-                        <div className="p-2 rounded-lg bg-primary/10">
-                          <Calculator className="h-5 w-5 text-primary" />
-                        </div>
-                        <div>
-                          <p className="text-2xl font-bold text-foreground">{stats.total}</p>
-                          <p className="text-xs text-muted-foreground">Total</p>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Clic para mostrar todos los presupuestos</p>
-                </TooltipContent>
-              </Tooltip>
-
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Card 
-                    className={`cursor-pointer transition-all hover:shadow-md ${projectFilter === 'with-project' ? 'ring-2 ring-green-500' : 'bg-green-500/5 border-green-500/20'}`}
-                    onClick={() => {
-                      setSearchTerm('');
-                      handleProjectFilterChange('with-project');
-                    }}
-                  >
-                    <CardContent className="p-4">
-                      <div className="flex items-center gap-3">
-                        <div className="p-2 rounded-lg bg-green-500/10">
-                          <Building2 className="h-5 w-5 text-green-600" />
-                        </div>
-                        <div>
-                          <p className="text-2xl font-bold text-foreground">{stats.withProject}</p>
-                          <p className="text-xs text-muted-foreground">Con proyecto</p>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Presupuestos vinculados a un proyecto</p>
-                </TooltipContent>
-              </Tooltip>
-
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Card 
-                    className={`cursor-pointer transition-all hover:shadow-md ${projectFilter === 'none' ? 'ring-2 ring-orange-500' : 'bg-orange-500/5 border-orange-500/20'}`}
-                    onClick={() => {
-                      setSearchTerm('');
-                      handleProjectFilterChange('none');
-                    }}
-                  >
-                    <CardContent className="p-4">
-                      <div className="flex items-center gap-3">
-                        <div className="p-2 rounded-lg bg-orange-500/10">
-                          <FolderOpen className="h-5 w-5 text-orange-600" />
-                        </div>
-                        <div>
-                          <p className="text-2xl font-bold text-foreground">{stats.withoutProject}</p>
-                          <p className="text-xs text-muted-foreground">Sin proyecto</p>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Clic para filtrar presupuestos sin proyecto</p>
-                </TooltipContent>
-              </Tooltip>
-
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Card className="bg-blue-500/5 border-blue-500/20">
-                    <CardContent className="p-4">
-                      <div className="flex items-center gap-3">
-                        <div className="p-2 rounded-lg bg-blue-500/10">
-                          <Calendar className="h-5 w-5 text-blue-600" />
-                        </div>
-                        <div>
-                          <p className="text-2xl font-bold text-foreground">{uniqueProjects.length}</p>
-                          <p className="text-xs text-muted-foreground">Proyectos</p>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Número de proyectos únicos con presupuestos vinculados</p>
-                </TooltipContent>
-              </Tooltip>
-            </div>
-          </TooltipProvider>
         </div>
 
-        {/* Search and Sort */}
+        {/* Search and View Toggle */}
         <div className="flex flex-col sm:flex-row gap-4 mb-6">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Buscar por nombre, población, código o proyecto..."
+              placeholder="Buscar por nombre, población, código..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-10"
             />
           </div>
-          <Select value={projectFilter} onValueChange={handleProjectFilterChange}>
-            <SelectTrigger className="w-full sm:w-48">
-              <SelectValue placeholder="Filtrar por proyecto" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos</SelectItem>
-              <SelectItem value="with-project">Con proyecto</SelectItem>
-              <SelectItem value="none">Sin proyecto</SelectItem>
-              {uniqueProjects.map(project => (
-                <SelectItem key={project.id} value={project.id}>
-                  {project.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={sortBy} onValueChange={(v) => handleSortChange(v as typeof sortBy)}>
-            <SelectTrigger className="w-full sm:w-48">
-              <SelectValue placeholder="Ordenar por" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="date_desc">Más recientes</SelectItem>
-              <SelectItem value="date_asc">Más antiguos</SelectItem>
-              <SelectItem value="name_asc">Nombre A-Z</SelectItem>
-              <SelectItem value="name_desc">Nombre Z-A</SelectItem>
-            </SelectContent>
-          </Select>
-          <div className="flex items-center gap-2 text-sm text-muted-foreground whitespace-nowrap">
-            <Calculator className="h-4 w-4" />
-            <span>{filteredPresupuestos.length} presupuestos</span>
-          </div>
-          {hasActiveFilters && (
+          <div className="flex gap-2">
             <Button
-              variant="ghost"
-              size="sm"
-              onClick={resetFilters}
-              className="text-muted-foreground"
-            >
-              <RotateCcw className="h-4 w-4 mr-2" />
-              Restablecer
-            </Button>
-          )}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={exportToCSV}
-            disabled={filteredPresupuestos.length === 0}
-          >
-            <Download className="h-4 w-4 mr-2" />
-            CSV
-          </Button>
-          <div className="flex items-center border rounded-lg">
-            <Button
-              variant={viewMode === 'cards' ? 'default' : 'ghost'}
-              size="sm"
-              onClick={() => handleViewModeChange('cards')}
-              className="rounded-r-none"
+              variant={viewMode === 'cards' ? 'default' : 'outline'}
+              size="icon"
+              onClick={() => setViewMode('cards')}
             >
               <LayoutGrid className="h-4 w-4" />
             </Button>
             <Button
-              variant={viewMode === 'list' ? 'default' : 'ghost'}
-              size="sm"
-              onClick={() => handleViewModeChange('list')}
-              className="rounded-l-none"
+              variant={viewMode === 'list' ? 'default' : 'outline'}
+              size="icon"
+              onClick={() => setViewMode('list')}
             >
               <List className="h-4 w-4" />
             </Button>
           </div>
         </div>
 
-        {paginatedPresupuestos.length > 0 ? (
-          <>
-            {viewMode === 'cards' ? (
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {paginatedPresupuestos.map((up) => (
-                  <Card 
-                    key={up.presupuesto_id} 
-                    className="cursor-pointer hover:shadow-lg hover:border-primary/50 transition-all"
-                    onClick={() => navigate(`/presupuestos/${up.presupuesto_id}`)}
-                  >
-                    <CardHeader>
-                      <div className="flex items-start justify-between">
-                        <div className="p-2 rounded-lg bg-primary/10">
-                          <Calculator className="h-5 w-5 text-primary" />
-                        </div>
-                        <span className="text-xs bg-muted text-muted-foreground px-2 py-1 rounded-full capitalize">
-                          {up.role}
-                        </span>
-                      </div>
-                      <CardTitle className="text-lg">
-                        {up.presupuesto?.nombre || 'Sin nombre'}
-                      </CardTitle>
-                      <CardDescription>
-                        {up.presupuesto?.poblacion} • Versión {up.presupuesto?.version}
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-2">
-                      <div className="flex items-center justify-between text-sm text-muted-foreground">
-                        <span>Código: {up.presupuesto?.codigo_correlativo}</span>
-                        {up.presupuesto?.created_at && (
-                          <span className="flex items-center gap-1">
-                            <Calendar className="h-3 w-3" />
-                            {format(new Date(up.presupuesto.created_at), 'd MMM yyyy', { locale: es })}
-                          </span>
-                        )}
-                      </div>
-                      {up.presupuesto?.project && (
-                        <div className="flex items-center justify-between gap-2">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              navigate(`/proyectos?id=${up.presupuesto?.project?.id}`);
-                            }}
-                            className="flex items-center gap-2 text-sm text-primary hover:underline"
-                          >
-                            <Building2 className="h-4 w-4" />
-                            <span>{up.presupuesto.project.name}</span>
-                          </button>
-                          <Badge variant={getStatusVariant(up.presupuesto.project.status)}>
-                            {getStatusLabel(up.presupuesto.project.status)}
-                          </Badge>
-                        </div>
-                      )}
-                      <div className="pt-2 border-t">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="w-full gap-2"
-                          onClick={(e) => openBudgetSummary(up.presupuesto_id, up.presupuesto?.nombre || '', e)}
-                        >
-                          <BarChart3 className="h-4 w-4" />
-                          Ver resumen
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            ) : (
-              <div className="border rounded-lg overflow-hidden">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Nombre</TableHead>
-                      <TableHead>Código</TableHead>
-                      <TableHead>Población</TableHead>
-                      <TableHead>Versión</TableHead>
-                      <TableHead>Proyecto</TableHead>
-                      <TableHead>Rol</TableHead>
-                      <TableHead>Fecha</TableHead>
-                      <TableHead className="text-right">Acciones</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {paginatedPresupuestos.map((up) => (
-                      <TableRow 
-                        key={up.presupuesto_id}
-                        className="cursor-pointer hover:bg-muted/50"
-                        onClick={() => navigate(`/presupuestos/${up.presupuesto_id}`)}
-                      >
-                        <TableCell className="font-medium">
-                          {up.presupuesto?.nombre || 'Sin nombre'}
-                        </TableCell>
-                        <TableCell>{up.presupuesto?.codigo_correlativo}</TableCell>
-                        <TableCell>{up.presupuesto?.poblacion}</TableCell>
-                        <TableCell>{up.presupuesto?.version}</TableCell>
-                        <TableCell>
-                          {up.presupuesto?.project ? (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                navigate(`/proyectos?id=${up.presupuesto?.project?.id}`);
-                              }}
-                              className="flex items-center gap-2 text-sm text-primary hover:underline"
-                            >
-                              <Building2 className="h-4 w-4" />
-                              <span>{up.presupuesto.project.name}</span>
-                            </button>
-                          ) : (
-                            <span className="text-muted-foreground">-</span>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <span className="text-xs bg-muted text-muted-foreground px-2 py-1 rounded-full capitalize">
-                            {up.role}
-                          </span>
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {up.presupuesto?.created_at 
-                            ? format(new Date(up.presupuesto.created_at), 'd MMM yyyy', { locale: es })
-                            : '-'}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={(e) => openBudgetSummary(up.presupuesto_id, up.presupuesto?.nombre || '', e)}
-                          >
-                            <BarChart3 className="h-4 w-4" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            )}
+        {/* Results count */}
+        <p className="text-sm text-muted-foreground mb-4">
+          {filteredPresupuestos.length} presupuesto(s) encontrado(s)
+        </p>
 
-            {/* Pagination */}
-            {totalPages > 1 && (
-              <div className="mt-8 flex justify-center">
-                <Pagination>
-                  <PaginationContent>
-                    <PaginationItem>
-                      <PaginationPrevious 
-                        onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                        className={currentPage === 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
-                      />
-                    </PaginationItem>
-                    {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
-                      <PaginationItem key={page}>
-                        <PaginationLink
-                          onClick={() => setCurrentPage(page)}
-                          isActive={currentPage === page}
-                          className="cursor-pointer"
-                        >
-                          {page}
-                        </PaginationLink>
-                      </PaginationItem>
-                    ))}
-                    <PaginationItem>
-                      <PaginationNext 
-                        onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                        className={currentPage === totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
-                      />
-                    </PaginationItem>
-                  </PaginationContent>
-                </Pagination>
-              </div>
-            )}
-          </>
-        ) : (
-          <div className="text-center py-16">
-            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-muted mb-4">
-              <FolderOpen className="h-8 w-8 text-muted-foreground" />
-            </div>
-            <h3 className="text-lg font-semibold text-foreground mb-2">No tienes presupuestos asignados</h3>
+        {/* Cards View */}
+        {viewMode === 'cards' && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {filteredPresupuestos.map((p) => (
+              <Card key={p.id} className="hover:shadow-md transition-shadow cursor-pointer">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-lg">{p.nombre}</CardTitle>
+                  <CardDescription>Código: {p.codigo_correlativo}</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-1 text-sm text-muted-foreground">
+                    <p><strong>Población:</strong> {p.poblacion}</p>
+                    <p><strong>Versión:</strong> {p.version}</p>
+                    <p><strong>Creado:</strong> {format(new Date(p.created_at), 'dd/MM/yyyy', { locale: es })}</p>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
+
+        {/* List View */}
+        {viewMode === 'list' && (
+          <div className="border rounded-lg overflow-hidden">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Nombre</TableHead>
+                  <TableHead>Código</TableHead>
+                  <TableHead>Población</TableHead>
+                  <TableHead>Versión</TableHead>
+                  <TableHead>Creado</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredPresupuestos.map((p) => (
+                  <TableRow key={p.id} className="cursor-pointer hover:bg-muted/50">
+                    <TableCell className="font-medium">{p.nombre}</TableCell>
+                    <TableCell>{p.codigo_correlativo}</TableCell>
+                    <TableCell>{p.poblacion}</TableCell>
+                    <TableCell>{p.version}</TableCell>
+                    <TableCell>{format(new Date(p.created_at), 'dd/MM/yyyy', { locale: es })}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+
+        {/* Empty state */}
+        {filteredPresupuestos.length === 0 && (
+          <div className="text-center py-12">
+            <Calculator className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-foreground mb-2">
+              No se encontraron presupuestos
+            </h3>
             <p className="text-muted-foreground">
-              Contacta con un administrador para obtener acceso a un presupuesto.
+              {searchTerm ? 'Prueba con otros términos de búsqueda' : 'No hay presupuestos disponibles'}
             </p>
           </div>
         )}
       </main>
-
-      {/* Budget Summary Dialog */}
-      {selectedBudgetForSummary && (
-        <BudgetSummary
-          budgetId={selectedBudgetForSummary.id}
-          budgetName={selectedBudgetForSummary.name}
-          open={summaryOpen}
-          onOpenChange={setSummaryOpen}
-        />
-      )}
     </div>
   );
 }

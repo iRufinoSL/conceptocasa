@@ -17,7 +17,7 @@ type ViewMode = 'cards' | 'list';
 
 export default function Recursos() {
   const navigate = useNavigate();
-  const { user, loading: authLoading, isAdmin } = useAuth();
+  const { user, loading: authLoading, rolesLoading, isAdmin } = useAuth();
   const {
     resources,
     allResources,
@@ -42,7 +42,8 @@ export default function Recursos() {
     if (!authLoading && !user) {
       navigate('/auth');
     }
-    if (!authLoading && user && !isAdmin()) {
+    // Wait for roles to load before checking admin status
+    if (!authLoading && !rolesLoading && user && !isAdmin()) {
       navigate('/dashboard');
       toast({
         title: 'Acceso denegado',
@@ -50,7 +51,7 @@ export default function Recursos() {
         variant: 'destructive',
       });
     }
-  }, [user, authLoading, isAdmin, navigate, toast]);
+  }, [user, authLoading, rolesLoading, isAdmin, navigate, toast]);
 
   const handleAddNew = () => {
     setEditingResource(null);
@@ -98,7 +99,7 @@ export default function Recursos() {
     });
   };
 
-  if (authLoading) {
+  if (authLoading || rolesLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>

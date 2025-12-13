@@ -36,7 +36,7 @@ type AppRole = 'administrador' | 'colaborador' | 'cliente';
 
 export default function Usuarios() {
   const navigate = useNavigate();
-  const { user, isAdmin, loading } = useAuth();
+  const { user, isAdmin, loading, rolesLoading } = useAuth();
   
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -65,17 +65,17 @@ export default function Usuarios() {
   useEffect(() => {
     if (!loading && !user) {
       navigate('/auth');
-    } else if (!loading && user && !isAdmin()) {
+    } else if (!loading && !rolesLoading && user && !isAdmin()) {
       toast.error('No tienes permisos para acceder a esta página');
       navigate('/dashboard');
     }
-  }, [user, loading, isAdmin, navigate]);
+  }, [user, loading, rolesLoading, isAdmin, navigate]);
 
   useEffect(() => {
-    if (user && isAdmin()) {
+    if (user && !rolesLoading && isAdmin()) {
       fetchUsers();
     }
-  }, [user, isAdmin]);
+  }, [user, rolesLoading, isAdmin]);
 
   const fetchUsers = async () => {
     setIsLoading(true);
@@ -306,7 +306,7 @@ export default function Usuarios() {
     (u.full_name && u.full_name.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
-  if (loading || isLoading) {
+  if (loading || rolesLoading || isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>

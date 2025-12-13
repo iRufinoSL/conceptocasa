@@ -889,6 +889,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      can_access_storage_file: { Args: { file_path: string }; Returns: boolean }
       has_presupuesto_access: {
         Args: { _presupuesto_id: string; _user_id: string }
         Returns: boolean

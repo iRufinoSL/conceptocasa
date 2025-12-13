@@ -1,6 +1,7 @@
 import { ExternalResource } from '@/types/resource';
 import { Card, CardContent } from '@/components/ui/card';
 import { Package, TrendingUp, Layers, Euro } from 'lucide-react';
+import { formatCurrency } from '@/lib/format-utils';
 
 interface StatsCardsProps {
   resources: ExternalResource[];
@@ -32,14 +33,14 @@ export function StatsCards({ resources }: StatsCardsProps) {
     },
     {
       label: 'Coste Medio',
-      value: avgCost.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' }),
+      value: formatCurrency(avgCost),
       icon: TrendingUp,
       color: 'text-emerald-600',
       bg: 'bg-emerald-100',
     },
     {
       label: 'Coste Máximo',
-      value: maxCost.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' }),
+      value: formatCurrency(maxCost),
       icon: Euro,
       color: 'text-amber-600',
       bg: 'bg-amber-100',

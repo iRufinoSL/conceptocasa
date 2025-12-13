@@ -13,6 +13,18 @@ export default function Presupuestos() {
   const { user, loading, userPresupuestos, isAdmin } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState<'name_asc' | 'name_desc' | 'date_asc' | 'date_desc'>('date_desc');
+  const [projectFilter, setProjectFilter] = useState<string>('all');
+
+  // Get unique projects for filter
+  const uniqueProjects = useMemo(() => {
+    const projects = new Map<string, string>();
+    userPresupuestos.forEach(up => {
+      if (up.presupuesto?.project) {
+        projects.set(up.presupuesto.project.id, up.presupuesto.project.name);
+      }
+    });
+    return Array.from(projects.entries()).map(([id, name]) => ({ id, name }));
+  }, [userPresupuestos]);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -31,7 +43,7 @@ export default function Presupuestos() {
   const filteredPresupuestos = useMemo(() => {
     let result = [...userPresupuestos];
     
-    // Filter
+    // Filter by search term
     if (searchTerm.trim()) {
       const term = searchTerm.toLowerCase();
       result = result.filter(up => 
@@ -41,6 +53,15 @@ export default function Presupuestos() {
         up.presupuesto?.version?.toLowerCase().includes(term) ||
         up.presupuesto?.project?.name?.toLowerCase().includes(term)
       );
+    }
+    
+    // Filter by project
+    if (projectFilter !== 'all') {
+      if (projectFilter === 'none') {
+        result = result.filter(up => !up.presupuesto?.project_id);
+      } else {
+        result = result.filter(up => up.presupuesto?.project?.id === projectFilter);
+      }
     }
     
     // Sort
@@ -59,7 +80,7 @@ export default function Presupuestos() {
     });
     
     return result;
-  }, [userPresupuestos, searchTerm, sortBy]);
+  }, [userPresupuestos, searchTerm, sortBy, projectFilter]);
 
   const getStatusLabel = (status: string) => {
     const labels: Record<string, string> = {
@@ -119,6 +140,20 @@ export default function Presupuestos() {
               className="pl-10"
             />
           </div>
+          <Select value={projectFilter} onValueChange={setProjectFilter}>
+            <SelectTrigger className="w-full sm:w-48">
+              <SelectValue placeholder="Filtrar por proyecto" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos los proyectos</SelectItem>
+              <SelectItem value="none">Sin proyecto</SelectItem>
+              {uniqueProjects.map(project => (
+                <SelectItem key={project.id} value={project.id}>
+                  {project.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Select value={sortBy} onValueChange={(v) => setSortBy(v as typeof sortBy)}>
             <SelectTrigger className="w-full sm:w-48">
               <SelectValue placeholder="Ordenar por" />

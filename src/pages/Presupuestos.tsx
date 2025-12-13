@@ -319,7 +319,7 @@ export default function Presupuestos() {
         <div className="mb-8">
           <h2 className="text-2xl font-bold text-foreground mb-2">Mis Presupuestos</h2>
           <p className="text-muted-foreground mb-6">
-            {isAdmin() 
+            {roles.includes('administrador') 
               ? 'Gestiona todos los presupuestos del sistema'
               : 'Presupuestos a los que tienes acceso'}
           </p>

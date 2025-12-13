@@ -592,31 +592,40 @@ export type Database = {
       presupuestos: {
         Row: {
           codigo_correlativo: number
+          coordenadas_lat: number | null
+          coordenadas_lng: number | null
           created_at: string | null
           id: string
           nombre: string
           poblacion: string
           project_id: string | null
+          provincia: string | null
           updated_at: string | null
           version: string
         }
         Insert: {
           codigo_correlativo: number
+          coordenadas_lat?: number | null
+          coordenadas_lng?: number | null
           created_at?: string | null
           id?: string
           nombre: string
           poblacion: string
           project_id?: string | null
+          provincia?: string | null
           updated_at?: string | null
           version: string
         }
         Update: {
           codigo_correlativo?: number
+          coordenadas_lat?: number | null
+          coordenadas_lng?: number | null
           created_at?: string | null
           id?: string
           nombre?: string
           poblacion?: string
           project_id?: string | null
+          provincia?: string | null
           updated_at?: string | null
           version?: string
         }

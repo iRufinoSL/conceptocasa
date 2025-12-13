@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Pencil, Trash2, ExternalLink, Package, Users, Clock, Wrench, Boxes, Cog, Layers, Square } from 'lucide-react';
 import { openSafeUrl } from '@/lib/url-utils';
+import { formatCurrency } from '@/lib/format-utils';
 
 interface ResourceCardProps {
   resource: ExternalResource;
@@ -94,10 +95,7 @@ export function ResourceCard({ resource, onEdit, onDelete, effectiveCost, allRes
               {/* Price */}
               <div className="text-right flex-shrink-0">
                 <div className="text-2xl font-bold text-foreground">
-                  {effectiveCost.toLocaleString('es-ES', {
-                    style: 'currency',
-                    currency: 'EUR',
-                  })}
+                  {formatCurrency(effectiveCost)}
                 </div>
                 <div className="text-sm text-muted-foreground">/{resource.unitMeasure}</div>
                 {isComposite && (

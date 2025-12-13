@@ -7,6 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Plus, Trash2 } from 'lucide-react';
+import { formatCurrency } from '@/lib/format-utils';
 
 interface ResourceFormProps {
   open: boolean;
@@ -231,7 +232,7 @@ export function ResourceForm({ open, onOpenChange, resource, onSubmit, onUpdate,
                         <SelectContent>
                           {availableForSelect.map((r) => (
                             <SelectItem key={r.id} value={r.id}>
-                              {r.name} ({r.unitCost.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}/{r.unitMeasure})
+                              {r.name} ({formatCurrency(r.unitCost)}/{r.unitMeasure})
                             </SelectItem>
                           ))}
                         </SelectContent>

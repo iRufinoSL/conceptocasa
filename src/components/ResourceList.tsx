@@ -3,6 +3,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Pencil, Trash2, ExternalLink, Package, Users, Clock, Wrench, Boxes, Cog, Layers, Square } from 'lucide-react';
+import { formatCurrency } from '@/lib/format-utils';
 
 interface ResourceListProps {
   resources: ExternalResource[];
@@ -113,10 +114,7 @@ export function ResourceList({ resources, onEdit, onDelete, getEffectiveCost }: 
                 </TableCell>
                 <TableCell className="text-right font-semibold whitespace-nowrap">
                   <div>
-                    {effectiveCost.toLocaleString('es-ES', {
-                      style: 'currency',
-                      currency: 'EUR',
-                    })}
+                    {formatCurrency(effectiveCost)}
                   </div>
                   {isComposite && (
                     <span className="text-xs text-accent font-normal">Calculado</span>

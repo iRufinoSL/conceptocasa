@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { formatCurrencyNoDecimals } from '@/lib/format-utils';
 import { ProjectForm } from '@/components/projects/ProjectForm';
 import { ProjectContactsManager } from '@/components/projects/ProjectContactsManager';
 import { ProjectDocumentsManager } from '@/components/projects/ProjectDocumentsManager';
@@ -252,15 +253,6 @@ export default function Proyectos() {
     }
   };
 
-  const formatCurrency = (amount: number | null) => {
-    if (!amount) return 'Sin presupuesto';
-    return new Intl.NumberFormat('es-ES', {
-      style: 'currency',
-      currency: 'EUR',
-      maximumFractionDigits: 0
-    }).format(amount);
-  };
-
   const getInitials = (name: string, surname?: string | null) => {
     const first = name.charAt(0).toUpperCase();
     const second = surname ? surname.charAt(0).toUpperCase() : '';
@@ -424,7 +416,7 @@ export default function Proyectos() {
                     {project.budget && (
                       <div className="flex items-center gap-2 text-sm text-muted-foreground">
                         <DollarSign className="h-4 w-4" />
-                        <span>{formatCurrency(project.budget)}</span>
+                        <span>{formatCurrencyNoDecimals(project.budget)}</span>
                       </div>
                     )}
                     {project.start_date && (

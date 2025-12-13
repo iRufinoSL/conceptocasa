@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ArrowLeft, Calculator, FolderOpen, Building2, Search, Calendar, LayoutGrid, List, Download } from 'lucide-react';
+import { ArrowLeft, Calculator, FolderOpen, Building2, Search, Calendar, LayoutGrid, List, Download, RotateCcw } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 
@@ -45,6 +45,17 @@ export default function Presupuestos() {
     setProjectFilter(filter);
     localStorage.setItem('presupuestos-project-filter', filter);
   };
+
+  const resetFilters = () => {
+    setSearchTerm('');
+    setSortBy('date_desc');
+    setProjectFilter('all');
+    setCurrentPage(1);
+    localStorage.removeItem('presupuestos-sort-by');
+    localStorage.removeItem('presupuestos-project-filter');
+  };
+
+  const hasActiveFilters = searchTerm !== '' || sortBy !== 'date_desc' || projectFilter !== 'all';
 
   const itemsPerPage = 9;
 
@@ -311,6 +322,17 @@ export default function Presupuestos() {
             <Calculator className="h-4 w-4" />
             <span>{filteredPresupuestos.length} presupuestos</span>
           </div>
+          {hasActiveFilters && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={resetFilters}
+              className="text-muted-foreground"
+            >
+              <RotateCcw className="h-4 w-4 mr-2" />
+              Restablecer
+            </Button>
+          )}
           <Button
             variant="outline"
             size="sm"

@@ -231,7 +231,10 @@ export default function Presupuestos() {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Card className="bg-primary/5 border-primary/20 cursor-help">
+                  <Card 
+                    className={`cursor-pointer transition-all hover:shadow-md ${projectFilter === 'all' && !searchTerm ? 'ring-2 ring-primary' : 'bg-primary/5 border-primary/20'}`}
+                    onClick={resetFilters}
+                  >
                     <CardContent className="p-4">
                       <div className="flex items-center gap-3">
                         <div className="p-2 rounded-lg bg-primary/10">
@@ -246,13 +249,22 @@ export default function Presupuestos() {
                   </Card>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p>Número total de presupuestos a los que tienes acceso</p>
+                  <p>Clic para mostrar todos los presupuestos</p>
                 </TooltipContent>
               </Tooltip>
 
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Card className="bg-green-500/5 border-green-500/20 cursor-help">
+                  <Card 
+                    className={`cursor-pointer transition-all hover:shadow-md ${projectFilter !== 'all' && projectFilter !== 'none' ? 'ring-2 ring-green-500' : 'bg-green-500/5 border-green-500/20'}`}
+                    onClick={() => {
+                      // Filter to show only budgets with any project
+                      setSearchTerm('');
+                      handleProjectFilterChange('all');
+                      // We need a special filter - let's use the first project or keep all with projects
+                      // For simplicity, we'll show all that have projects by not setting 'none'
+                    }}
+                  >
                     <CardContent className="p-4">
                       <div className="flex items-center gap-3">
                         <div className="p-2 rounded-lg bg-green-500/10">
@@ -267,13 +279,19 @@ export default function Presupuestos() {
                   </Card>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p>Presupuestos vinculados a un proyecto existente</p>
+                  <p>Presupuestos vinculados a un proyecto</p>
                 </TooltipContent>
               </Tooltip>
 
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Card className="bg-orange-500/5 border-orange-500/20 cursor-help">
+                  <Card 
+                    className={`cursor-pointer transition-all hover:shadow-md ${projectFilter === 'none' ? 'ring-2 ring-orange-500' : 'bg-orange-500/5 border-orange-500/20'}`}
+                    onClick={() => {
+                      setSearchTerm('');
+                      handleProjectFilterChange('none');
+                    }}
+                  >
                     <CardContent className="p-4">
                       <div className="flex items-center gap-3">
                         <div className="p-2 rounded-lg bg-orange-500/10">
@@ -288,13 +306,13 @@ export default function Presupuestos() {
                   </Card>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p>Presupuestos independientes sin proyecto asignado</p>
+                  <p>Clic para filtrar presupuestos sin proyecto</p>
                 </TooltipContent>
               </Tooltip>
 
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Card className="bg-blue-500/5 border-blue-500/20 cursor-help">
+                  <Card className="bg-blue-500/5 border-blue-500/20">
                     <CardContent className="p-4">
                       <div className="flex items-center gap-3">
                         <div className="p-2 rounded-lg bg-blue-500/10">

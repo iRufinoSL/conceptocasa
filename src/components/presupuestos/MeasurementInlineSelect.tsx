@@ -87,7 +87,12 @@ export const MeasurementInlineSelect = forwardRef<MeasurementInlineSelectHandle,
     };
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
-      if (!open) {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setOpen(false);
+        setSearchQuery('');
+        triggerRef.current?.blur();
+      } else if (!open) {
         if (e.key === 'Tab') {
           if (e.shiftKey && onTabPrev) {
             e.preventDefault();
@@ -97,6 +102,17 @@ export const MeasurementInlineSelect = forwardRef<MeasurementInlineSelectHandle,
             onTabNext();
           }
         }
+      }
+    };
+
+    // Handle escape inside the popover
+    const handlePopoverKeyDown = (e: React.KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        setOpen(false);
+        setSearchQuery('');
+        triggerRef.current?.focus();
       }
     };
 
@@ -118,7 +134,7 @@ export const MeasurementInlineSelect = forwardRef<MeasurementInlineSelectHandle,
             {displayValue}
           </button>
         </PopoverTrigger>
-        <PopoverContent className="w-[350px] p-0" align="start">
+        <PopoverContent className="w-[350px] p-0" align="start" onKeyDown={handlePopoverKeyDown}>
           <Command shouldFilter={false}>
             <CommandInput
               placeholder="Buscar medición..."

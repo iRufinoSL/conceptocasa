@@ -90,6 +90,9 @@ export function BudgetResourceForm({
         activity_id: resource.activity_id || '',
       });
     } else {
+      // Check for preselected activity from navigation
+      const preselectedActivityId = window.sessionStorage.getItem('preselectedActivityId');
+      
       setFormData({
         name: '',
         external_unit_cost: 0,
@@ -99,8 +102,13 @@ export function BudgetResourceForm({
         sales_margin_percent: 0.25,
         manual_units: null,
         related_units: null,
-        activity_id: '',
+        activity_id: preselectedActivityId || '',
       });
+      
+      // Clear the preselected activity after using it
+      if (preselectedActivityId) {
+        window.sessionStorage.removeItem('preselectedActivityId');
+      }
     }
   }, [resource, open]);
 

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -6,6 +6,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { NumericInput } from '@/components/ui/numeric-input';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Check, ChevronsUpDown } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { formatCurrency, formatPercent } from '@/lib/format-utils';
 
@@ -119,6 +123,31 @@ export function BudgetResourceForm({
     const phaseCode = phase?.code || '';
     return `${phaseCode} ${activity.code}.-${activity.name}`;
   };
+
+  // Activity options sorted alphabetically by ActividadID with search content
+  const activityOptions = useMemo(() => {
+    return activities
+      .map(a => {
+        const phase = a.phase_id ? phases.find(p => p.id === a.phase_id) : null;
+        const actividadId = `${phase?.code || ''} ${a.code}.-${a.name}`;
+        const searchContent = `${phase?.code || ''} ${phase?.name || ''} ${a.code} ${a.name}`.toLowerCase();
+        return {
+          value: a.id,
+          label: actividadId,
+          searchContent,
+        };
+      })
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [activities, phases]);
+
+  const [activitySearchQuery, setActivitySearchQuery] = useState('');
+  const [activityPopoverOpen, setActivityPopoverOpen] = useState(false);
+
+  const filteredActivities = useMemo(() => {
+    const query = activitySearchQuery.toLowerCase().trim();
+    if (!query) return activityOptions;
+    return activityOptions.filter(opt => opt.searchContent.includes(query));
+  }, [activityOptions, activitySearchQuery]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -330,22 +359,72 @@ export function BudgetResourceForm({
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="activity_id">Actividad relacionada</Label>
-              <Select
-                value={formData.activity_id || '__none__'}
-                onValueChange={(value) => setFormData({ ...formData, activity_id: value === '__none__' ? '' : value })}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Seleccionar actividad (opcional)" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none__">Sin actividad</SelectItem>
-                  {activities.map((activity) => (
-                    <SelectItem key={activity.id} value={activity.id}>
-                      {getActivityDisplay(activity.id)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Popover open={activityPopoverOpen} onOpenChange={setActivityPopoverOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={activityPopoverOpen}
+                    className="w-full justify-between font-normal"
+                  >
+                    <span className="truncate">
+                      {formData.activity_id ? getActivityDisplay(formData.activity_id) : 'Sin actividad'}
+                    </span>
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[400px] p-0" align="start">
+                  <Command shouldFilter={false}>
+                    <CommandInput 
+                      placeholder="Buscar actividad..." 
+                      value={activitySearchQuery}
+                      onValueChange={setActivitySearchQuery}
+                    />
+                    <CommandList className="max-h-[200px]">
+                      <CommandEmpty>No se encontraron actividades.</CommandEmpty>
+                      <CommandGroup>
+                        <CommandItem
+                          value="__none__"
+                          onSelect={() => {
+                            setFormData({ ...formData, activity_id: '' });
+                            setActivityPopoverOpen(false);
+                            setActivitySearchQuery('');
+                          }}
+                          className="cursor-pointer"
+                        >
+                          <Check
+                            className={cn(
+                              "mr-2 h-4 w-4",
+                              !formData.activity_id ? "opacity-100" : "opacity-0"
+                            )}
+                          />
+                          Sin actividad
+                        </CommandItem>
+                        {filteredActivities.map((opt) => (
+                          <CommandItem
+                            key={opt.value}
+                            value={opt.value}
+                            onSelect={() => {
+                              setFormData({ ...formData, activity_id: opt.value });
+                              setActivityPopoverOpen(false);
+                              setActivitySearchQuery('');
+                            }}
+                            className="cursor-pointer"
+                          >
+                            <Check
+                              className={cn(
+                                "mr-2 h-4 w-4",
+                                formData.activity_id === opt.value ? "opacity-100" : "opacity-0"
+                              )}
+                            />
+                            <span className="text-sm">{opt.label}</span>
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             </div>
             <div className="space-y-2">
               <Label>€Subtotal venta</Label>

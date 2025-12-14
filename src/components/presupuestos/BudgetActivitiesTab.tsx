@@ -15,7 +15,7 @@ import { Badge } from '@/components/ui/badge';
 import { Plus, Search, Upload, Pencil, Trash2, MoreHorizontal, FileUp, File, X, Download, ChevronRight, ChevronDown, List, Layers, Copy, Package, Wrench, Truck, Briefcase, Eye } from 'lucide-react';
 import { toast } from 'sonner';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
-import { formatCurrency } from '@/lib/format-utils';
+import { formatCurrency, formatNumber } from '@/lib/format-utils';
 
 interface BudgetPhase {
   id: string;
@@ -31,9 +31,22 @@ interface BudgetActivity {
   description: string | null;
   measurement_unit: string;
   phase_id: string | null;
+  measurement_id: string | null;
   created_at: string;
   files_count?: number;
   resources_subtotal?: number;
+}
+
+interface Measurement {
+  id: string;
+  name: string;
+  manual_units: number | null;
+  measurement_unit: string | null;
+}
+
+interface MeasurementRelation {
+  measurement_id: string;
+  related_measurement_id: string;
 }
 
 interface ActivityFile {
@@ -86,6 +99,8 @@ const emptyForm: ActivityForm = {
 export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabProps) {
   const [activities, setActivities] = useState<BudgetActivity[]>([]);
   const [phases, setPhases] = useState<BudgetPhase[]>([]);
+  const [measurements, setMeasurements] = useState<Measurement[]>([]);
+  const [measurementRelations, setMeasurementRelations] = useState<MeasurementRelation[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [viewMode, setViewMode] = useState<'alphabetical' | 'grouped'>('alphabetical');
@@ -140,7 +155,7 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
   // Fetch activities and phases
   const fetchData = async () => {
     try {
-      const [activitiesRes, phasesRes, resourcesRes] = await Promise.all([
+      const [activitiesRes, phasesRes, resourcesRes, measurementsRes, measurementRelationsRes] = await Promise.all([
         supabase
           .from('budget_activities')
           .select('*')
@@ -154,12 +169,21 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
         supabase
           .from('budget_activity_resources')
           .select('*')
-          .eq('budget_id', budgetId)
+          .eq('budget_id', budgetId),
+        supabase
+          .from('budget_measurements')
+          .select('id, name, manual_units, measurement_unit')
+          .eq('budget_id', budgetId),
+        supabase
+          .from('budget_measurement_relations')
+          .select('measurement_id, related_measurement_id')
       ]);
 
       if (activitiesRes.error) throw activitiesRes.error;
       if (phasesRes.error) throw phasesRes.error;
       if (resourcesRes.error) throw resourcesRes.error;
+      if (measurementsRes.error) throw measurementsRes.error;
+      if (measurementRelationsRes.error) throw measurementRelationsRes.error;
 
       const allResources = resourcesRes.data || [];
 
@@ -185,6 +209,15 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
 
       setActivities(activitiesWithData);
       setPhases(phasesRes.data || []);
+      
+      // Set measurements and filter relations to this budget
+      const measurementsList = measurementsRes.data || [];
+      setMeasurements(measurementsList);
+      const measurementIds = measurementsList.map(m => m.id);
+      const filteredRelations = (measurementRelationsRes.data || []).filter(
+        r => measurementIds.includes(r.measurement_id)
+      );
+      setMeasurementRelations(filteredRelations);
     } catch (err: any) {
       console.error('Error fetching data:', err);
       toast.error('Error al cargar datos');
@@ -637,6 +670,40 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
     return phases.find(p => p.id === phaseId);
   };
 
+  // Get measurement data for an activity
+  const getMeasurementData = (activity: BudgetActivity): { measurement: Measurement | null; relatedUnits: number; medicionId: string } => {
+    if (!activity.measurement_id) {
+      return { measurement: null, relatedUnits: 0, medicionId: '-' };
+    }
+    
+    const measurement = measurements.find(m => m.id === activity.measurement_id);
+    if (!measurement) {
+      return { measurement: null, relatedUnits: 0, medicionId: '-' };
+    }
+    
+    // Calculate related units (sum of manual_units from related measurements)
+    const relatedMeasurementIds = measurementRelations
+      .filter(r => r.measurement_id === measurement.id)
+      .map(r => r.related_measurement_id);
+    
+    const relatedUnitsSum = relatedMeasurementIds.reduce((sum, relId) => {
+      const relMeasurement = measurements.find(m => m.id === relId);
+      return sum + (relMeasurement?.manual_units || 0);
+    }, 0);
+    
+    // Uds cálculo: if relatedUnits > 0 use that, else use manual_units
+    const udsCalculo = relatedUnitsSum > 0 ? relatedUnitsSum : (measurement.manual_units || 0);
+    
+    // Generate MediciónID: Uds cálculo/Ud medida: Measurement name
+    const medicionId = `${formatNumber(udsCalculo)}/${measurement.measurement_unit || 'ud'}: ${measurement.name}`;
+    
+    return { 
+      measurement, 
+      relatedUnits: udsCalculo, 
+      medicionId 
+    };
+  };
+
   // Manage activity files
   const handleManageFiles = async (activity: BudgetActivity) => {
     setSelectedActivity(activity);
@@ -830,6 +897,8 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
                 <TableHead>Actividad</TableHead>
                 <TableHead>Fase</TableHead>
                 <TableHead>Unidad</TableHead>
+                <TableHead className="text-right">Uds Relac.</TableHead>
+                <TableHead>MediciónID</TableHead>
                 <TableHead className="text-right">€SubTotal Recursos</TableHead>
                 <TableHead>Archivos</TableHead>
                 {isAdmin && <TableHead className="w-20">Acciones</TableHead>}
@@ -838,6 +907,7 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
             <TableBody>
               {filteredActivities.map((activity) => {
                 const phase = getPhaseById(activity.phase_id);
+                const { relatedUnits, medicionId } = getMeasurementData(activity);
                 return (
                   <TableRow key={activity.id}>
                     <TableCell className="font-mono text-sm">{generateActivityId(activity)}</TableCell>
@@ -846,6 +916,12 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
                       {phase ? `${phase.code} ${phase.name}` : '-'}
                     </TableCell>
                     <TableCell>{activity.measurement_unit}</TableCell>
+                    <TableCell className="text-right">
+                      {activity.measurement_id ? formatNumber(relatedUnits) : '-'}
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground max-w-[200px] truncate" title={medicionId}>
+                      {medicionId}
+                    </TableCell>
                     <TableCell className="text-right font-mono font-semibold text-primary">
                       {formatCurrency(activity.resources_subtotal || 0)}
                     </TableCell>
@@ -897,7 +973,7 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
               })}
               {filteredActivities.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={isAdmin ? 7 : 6} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={isAdmin ? 9 : 8} className="text-center py-8 text-muted-foreground">
                     {searchTerm 
                       ? 'No se encontraron actividades con ese criterio'
                       : 'No hay actividades. Crea una nueva o importa desde CSV.'}

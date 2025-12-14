@@ -45,28 +45,37 @@ export const parseEuropeanNumber = (value: string): number => {
 const formatWithThousands = (value: string, decimals: number): string => {
   if (!value || value === '-') return value;
   
-  // Check if we're in the middle of typing decimals
-  const hasDecimalSeparator = value.includes(',') || value.includes('.');
-  const endsWithSeparator = value.endsWith(',') || value.endsWith('.');
-  
-  // Parse to get the numeric value
-  const numericValue = parseEuropeanNumber(value);
-  
-  if (isNaN(numericValue)) return value;
-  
-  // Split into integer and decimal parts
-  const parts = value.replace('.', ',').split(',');
-  const integerPart = parts[0].replace(/\D/g, '');
-  const decimalPart = parts[1] || '';
-  
-  // Format integer part with thousands separators (dots)
-  const formattedInteger = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-  
   // Handle negative numbers
   const isNegative = value.startsWith('-');
   const prefix = isNegative ? '-' : '';
+  let cleanValue = isNegative ? value.slice(1) : value;
   
-  if (hasDecimalSeparator) {
+  // First, remove all existing thousands separators (dots that are not decimal separators)
+  // In European format, comma is the decimal separator
+  // Determine if there's a decimal separator (comma or trailing period being typed)
+  const hasComma = cleanValue.includes(',');
+  const endsWithPeriod = cleanValue.endsWith('.');
+  
+  // Remove all dots (they are thousands separators in European format)
+  cleanValue = cleanValue.replace(/\./g, '');
+  
+  // If it ends with a period (user typing decimal), convert to comma
+  if (endsWithPeriod && !hasComma) {
+    cleanValue = cleanValue.slice(0, -1) + ',';
+  }
+  
+  // Split by comma to get integer and decimal parts
+  const parts = cleanValue.split(',');
+  const integerPart = parts[0].replace(/\D/g, ''); // Keep only digits
+  const decimalPart = parts.length > 1 ? parts[1].replace(/\D/g, '') : null;
+  
+  if (!integerPart && !decimalPart) return prefix;
+  
+  // Format integer part with thousands separators (dots)
+  const formattedInteger = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, '.') || '0';
+  
+  // If there's a decimal separator in the input
+  if (decimalPart !== null) {
     // Keep the decimal part as typed (up to max decimals)
     const truncatedDecimal = decimalPart.slice(0, decimals);
     return `${prefix}${formattedInteger},${truncatedDecimal}`;

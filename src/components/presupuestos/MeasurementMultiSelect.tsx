@@ -4,7 +4,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Checkbox } from '@/components/ui/checkbox';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Link2, Check } from 'lucide-react';
+import { Link2, CheckCircle2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatNumber } from '@/lib/format-utils';
 
@@ -34,6 +34,7 @@ export function MeasurementMultiSelect({
   const [searchQuery, setSearchQuery] = useState('');
   const [localSelectedIds, setLocalSelectedIds] = useState<string[]>(selectedIds);
   const [isSaving, setIsSaving] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
 
   // Get available measurements (exclude self)
   const availableMeasurements = useMemo(() => {
@@ -76,6 +77,8 @@ export function MeasurementMultiSelect({
     try {
       await onSave(localSelectedIds);
       setIsOpen(false);
+      setShowSuccess(true);
+      setTimeout(() => setShowSuccess(false), 1200);
       requestAnimationFrame(() => {
         window.scrollTo({ top: scrollPosition, behavior: 'instant' });
       });
@@ -86,7 +89,7 @@ export function MeasurementMultiSelect({
 
   if (disabled) {
     return (
-      <div className="flex flex-wrap gap-1">
+      <div className="flex flex-wrap gap-1 items-center">
         {selectedMeasurements.length === 0 ? (
           <span className="text-muted-foreground">-</span>
         ) : (
@@ -105,7 +108,7 @@ export function MeasurementMultiSelect({
     <Popover open={isOpen} onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>
         <div 
-          className="cursor-pointer hover:bg-muted/50 px-1 py-0.5 rounded transition-colors min-h-[24px]"
+          className="cursor-pointer hover:bg-muted/50 px-1 py-0.5 rounded transition-colors min-h-[24px] inline-flex items-center gap-1"
           title="Clic para editar"
         >
           {selectedMeasurements.length === 0 ? (
@@ -119,6 +122,9 @@ export function MeasurementMultiSelect({
                 </Badge>
               ))}
             </div>
+          )}
+          {showSuccess && (
+            <CheckCircle2 className="h-3.5 w-3.5 text-green-500 animate-fade-in flex-shrink-0" />
           )}
         </div>
       </PopoverTrigger>

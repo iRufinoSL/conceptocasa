@@ -1014,6 +1014,7 @@ export function BudgetResourcesTab({ budgetId, isAdmin }: BudgetResourcesTabProp
                               onSave={(v) => handleInlineUpdate(resource.id, 'manual_units', v)}
                               type="number"
                               decimals={2}
+                              allowNull={true}
                               disabled={!isAdmin}
                             />
                           </TableCell>

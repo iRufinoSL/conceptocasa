@@ -2,9 +2,10 @@ import * as React from "react";
 import { cn } from "@/lib/utils";
 
 interface NumericInputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'onChange' | 'value'> {
-  value: number | string;
-  onChange: (value: number) => void;
+  value: number | string | null;
+  onChange: (value: number | null) => void;
   decimals?: number;
+  allowNull?: boolean;
 }
 
 /**
@@ -93,29 +94,35 @@ const formatForDisplay = (value: number, decimals: number): string => {
  * decimal separators. Displays with automatic thousands separators.
  */
 const NumericInput = React.forwardRef<HTMLInputElement, NumericInputProps>(
-  ({ className, value, onChange, decimals = 2, ...props }, ref) => {
+  ({ className, value, onChange, decimals = 2, allowNull = false, ...props }, ref) => {
     const [displayValue, setDisplayValue] = React.useState<string>('');
     const [isFocused, setIsFocused] = React.useState(false);
     
     // Initialize display value from prop
     React.useEffect(() => {
       if (!isFocused) {
-        if (typeof value === 'number') {
+        if (value === null || value === undefined) {
+          setDisplayValue(allowNull ? '' : formatForDisplay(0, decimals));
+        } else if (typeof value === 'number') {
           setDisplayValue(formatForDisplay(value, decimals));
         } else if (typeof value === 'string') {
-          const numValue = parseEuropeanNumber(value);
-          setDisplayValue(formatForDisplay(numValue, decimals));
+          if (value === '' && allowNull) {
+            setDisplayValue('');
+          } else {
+            const numValue = parseEuropeanNumber(value);
+            setDisplayValue(formatForDisplay(numValue, decimals));
+          }
         }
       }
-    }, [value, decimals, isFocused]);
+    }, [value, decimals, isFocused, allowNull]);
     
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
       const inputValue = e.target.value;
       
       // Allow empty input
-      if (inputValue === '') {
+      if (inputValue === '' || inputValue.trim() === '') {
         setDisplayValue('');
-        onChange(0);
+        onChange(allowNull ? null : 0);
         return;
       }
       
@@ -148,8 +155,17 @@ const NumericInput = React.forwardRef<HTMLInputElement, NumericInputProps>(
     const handleBlur = (e: React.FocusEvent<HTMLInputElement>) => {
       setIsFocused(false);
       // On blur, format the value properly with all decimals
-      const numericValue = parseEuropeanNumber(displayValue);
-      setDisplayValue(formatForDisplay(numericValue, decimals));
+      if (displayValue === '' || displayValue.trim() === '') {
+        if (allowNull) {
+          setDisplayValue('');
+          onChange(null);
+        } else {
+          setDisplayValue(formatForDisplay(0, decimals));
+        }
+      } else {
+        const numericValue = parseEuropeanNumber(displayValue);
+        setDisplayValue(formatForDisplay(numericValue, decimals));
+      }
       
       if (props.onBlur) {
         props.onBlur(e);

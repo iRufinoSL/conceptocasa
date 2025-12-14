@@ -19,6 +19,7 @@ interface InlineEditProps {
   tabIndex?: number;
   onTabNext?: () => void;
   onTabPrev?: () => void;
+  allowNull?: boolean;
 }
 
 export function ResourceInlineEdit({
@@ -33,6 +34,7 @@ export function ResourceInlineEdit({
   tabIndex,
   onTabNext,
   onTabPrev,
+  allowNull = false,
 }: InlineEditProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState<string | number>(value ?? '');
@@ -72,17 +74,19 @@ export function ResourceInlineEdit({
     let finalValue: any = editValue;
     
     if (type === 'number' || type === 'percent') {
-      // Use the numeric value directly if it's already a number
-      if (typeof editValue === 'number') {
+      // Check if editValue is null (from allowNull NumericInput)
+      if (editValue === null || editValue === '' || editValue === undefined) {
+        finalValue = allowNull ? null : 0;
+      } else if (typeof editValue === 'number') {
         finalValue = editValue;
       } else {
         // Parse from display string - editValue from NumericInput is already numeric
         finalValue = editValue;
       }
       
-      // Ensure it's a valid number
-      if (typeof finalValue !== 'number' || isNaN(finalValue)) {
-        finalValue = 0;
+      // Ensure it's a valid number or null
+      if (finalValue !== null && (typeof finalValue !== 'number' || isNaN(finalValue))) {
+        finalValue = allowNull ? null : 0;
       }
     }
     
@@ -309,7 +313,7 @@ export function ResourceInlineEdit({
 
   if (type === 'number' || type === 'percent') {
     // Get the numeric value from props for initial display
-    const numericValue = typeof value === 'number' ? value : 0;
+    const numericValue = allowNull && value === null ? null : (typeof value === 'number' ? value : 0);
     
     return (
       <EditWrapper>
@@ -319,6 +323,7 @@ export function ResourceInlineEdit({
             value={numericValue}
             onChange={(v) => setEditValue(v)}
             decimals={decimals}
+            allowNull={allowNull}
             className="h-7 w-24 text-xs ring-2 ring-primary ring-offset-1 bg-primary/5 transition-all duration-200"
             onBlur={handleSave}
             onKeyDown={handleKeyDown}

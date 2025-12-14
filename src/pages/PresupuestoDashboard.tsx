@@ -212,7 +212,7 @@ export default function PresupuestoDashboard() {
             </TabsTrigger>
             <TabsTrigger value="mediciones" className="flex items-center gap-2">
               <Ruler className="h-4 w-4" />
-              <span className="hidden sm:inline">CUÁNTO medir?</span>
+              <span className="hidden sm:inline">Mediciones Presupuesto</span>
             </TabsTrigger>
             <TabsTrigger value="resumen" className="flex items-center gap-2">
               <Calculator className="h-4 w-4" />

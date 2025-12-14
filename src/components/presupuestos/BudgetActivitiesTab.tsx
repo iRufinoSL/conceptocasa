@@ -1281,6 +1281,12 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
             if (phaseActivities.length === 0) return null;
 
             const isExpanded = expandedPhases.has(phase.id);
+            
+            // Calculate phase resources subtotal
+            const phaseResourcesSubtotal = phaseActivities.reduce(
+              (total, activity) => total + (activity.resources_subtotal || 0), 
+              0
+            );
 
             return (
               <Collapsible key={phase.id} open={isExpanded} onOpenChange={() => togglePhaseExpanded(phase.id)}>
@@ -1299,6 +1305,10 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
                             {phaseActivities.length} actividad{phaseActivities.length !== 1 ? 'es' : ''}
                           </p>
                         </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs text-muted-foreground">€SubTotal Recursos</p>
+                        <p className="font-mono font-semibold text-primary">{formatCurrency(phaseResourcesSubtotal)}</p>
                       </div>
                     </div>
                   </CollapsibleTrigger>

@@ -11,9 +11,11 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Plus, Search, Upload, Pencil, Trash2, MoreHorizontal, FileUp, File, X, Download, ChevronRight, ChevronDown, List, Layers, Copy } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Plus, Search, Upload, Pencil, Trash2, MoreHorizontal, FileUp, File, X, Download, ChevronRight, ChevronDown, List, Layers, Copy, Package, Wrench, Truck, Briefcase } from 'lucide-react';
 import { toast } from 'sonner';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
+import { formatCurrency } from '@/lib/format-utils';
 
 interface BudgetPhase {
   id: string;
@@ -31,6 +33,7 @@ interface BudgetActivity {
   phase_id: string | null;
   created_at: string;
   files_count?: number;
+  resources_subtotal?: number;
 }
 
 interface ActivityFile {
@@ -41,6 +44,18 @@ interface ActivityFile {
   file_type: string | null;
   file_size: number;
   created_at: string;
+}
+
+interface ActivityResource {
+  id: string;
+  name: string;
+  external_unit_cost: number | null;
+  unit: string | null;
+  resource_type: string | null;
+  safety_margin_percent: number | null;
+  sales_margin_percent: number | null;
+  manual_units: number | null;
+  related_units: number | null;
 }
 
 interface ActivityForm {
@@ -86,6 +101,7 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
   const [deletingActivity, setDeletingActivity] = useState<BudgetActivity | null>(null);
   const [selectedActivity, setSelectedActivity] = useState<BudgetActivity | null>(null);
   const [activityFiles, setActivityFiles] = useState<ActivityFile[]>([]);
+  const [activityResources, setActivityResources] = useState<ActivityResource[]>([]);
   
   const [form, setForm] = useState<ActivityForm>(emptyForm);
   const [isSaving, setIsSaving] = useState(false);
@@ -96,10 +112,30 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
   const fileInputRef = useRef<HTMLInputElement>(null);
   const activityFileInputRef = useRef<HTMLInputElement>(null);
 
+  // Calculate resource subtotal for an activity
+  const calculateResourceSubtotal = (resources: any[]) => {
+    return resources.reduce((total, resource) => {
+      const externalCost = resource.external_unit_cost || 0;
+      const safetyPercent = resource.safety_margin_percent || 0.15;
+      const salesPercent = resource.sales_margin_percent || 0.25;
+      
+      const safetyMarginUd = externalCost * safetyPercent;
+      const internalCostUd = externalCost + safetyMarginUd;
+      const salesMarginUd = internalCostUd * salesPercent;
+      const salesCostUd = internalCostUd + salesMarginUd;
+      
+      const calculatedUnits = resource.manual_units !== null 
+        ? resource.manual_units 
+        : (resource.related_units || 0);
+      
+      return total + (calculatedUnits * salesCostUd);
+    }, 0);
+  };
+
   // Fetch activities and phases
   const fetchData = async () => {
     try {
-      const [activitiesRes, phasesRes] = await Promise.all([
+      const [activitiesRes, phasesRes, resourcesRes] = await Promise.all([
         supabase
           .from('budget_activities')
           .select('*')
@@ -109,25 +145,40 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
           .from('budget_phases')
           .select('id, name, code')
           .eq('budget_id', budgetId)
-          .order('code', { ascending: true })
+          .order('code', { ascending: true }),
+        supabase
+          .from('budget_activity_resources')
+          .select('*')
+          .eq('budget_id', budgetId)
       ]);
 
       if (activitiesRes.error) throw activitiesRes.error;
       if (phasesRes.error) throw phasesRes.error;
+      if (resourcesRes.error) throw resourcesRes.error;
 
-      // Get file counts for each activity
-      const activitiesWithFiles = await Promise.all(
+      const allResources = resourcesRes.data || [];
+
+      // Get file counts and resource subtotals for each activity
+      const activitiesWithData = await Promise.all(
         (activitiesRes.data || []).map(async (activity) => {
           const { count } = await supabase
             .from('budget_activity_files')
             .select('*', { count: 'exact', head: true })
             .eq('activity_id', activity.id);
           
-          return { ...activity, files_count: count || 0 };
+          // Calculate resources subtotal
+          const activityResources = allResources.filter(r => r.activity_id === activity.id);
+          const resourcesSubtotal = calculateResourceSubtotal(activityResources);
+          
+          return { 
+            ...activity, 
+            files_count: count || 0,
+            resources_subtotal: resourcesSubtotal
+          };
         })
       );
 
-      setActivities(activitiesWithFiles);
+      setActivities(activitiesWithData);
       setPhases(phasesRes.data || []);
     } catch (err: any) {
       console.error('Error fetching data:', err);
@@ -183,11 +234,27 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
   const handleNew = () => {
     setEditingActivity(null);
     setForm(emptyForm);
+    setActivityResources([]);
     setFormDialogOpen(true);
   };
 
+  // Fetch resources for an activity
+  const fetchActivityResources = async (activityId: string) => {
+    const { data, error } = await supabase
+      .from('budget_activity_resources')
+      .select('id, name, external_unit_cost, unit, resource_type, safety_margin_percent, sales_margin_percent, manual_units, related_units')
+      .eq('activity_id', activityId)
+      .order('name', { ascending: true });
+
+    if (error) {
+      console.error('Error fetching resources:', error);
+      return [];
+    }
+    return data || [];
+  };
+
   // Open form for editing
-  const handleEdit = (activity: BudgetActivity) => {
+  const handleEdit = async (activity: BudgetActivity) => {
     setEditingActivity(activity);
     setForm({
       name: activity.name,
@@ -196,6 +263,11 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
       measurement_unit: activity.measurement_unit,
       phase_id: activity.phase_id || ''
     });
+    
+    // Fetch resources for this activity
+    const resources = await fetchActivityResources(activity.id);
+    setActivityResources(resources);
+    
     setFormDialogOpen(true);
   };
 
@@ -635,6 +707,7 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
                 <TableHead>Actividad</TableHead>
                 <TableHead>Fase</TableHead>
                 <TableHead>Unidad</TableHead>
+                <TableHead className="text-right">€SubTotal Recursos</TableHead>
                 <TableHead>Archivos</TableHead>
                 {isAdmin && <TableHead className="w-20">Acciones</TableHead>}
               </TableRow>
@@ -650,6 +723,9 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
                       {phase ? `${phase.code} ${phase.name}` : '-'}
                     </TableCell>
                     <TableCell>{activity.measurement_unit}</TableCell>
+                    <TableCell className="text-right font-mono font-semibold text-primary">
+                      {formatCurrency(activity.resources_subtotal || 0)}
+                    </TableCell>
                     <TableCell>
                       <Button
                         variant="ghost"
@@ -698,7 +774,7 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
               })}
               {filteredActivities.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={isAdmin ? 6 : 5} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={isAdmin ? 7 : 6} className="text-center py-8 text-muted-foreground">
                     {searchTerm 
                       ? 'No se encontraron actividades con ese criterio'
                       : 'No hay actividades. Crea una nueva o importa desde CSV.'}
@@ -745,6 +821,7 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
                             <TableRow>
                               <TableHead>ActividadID</TableHead>
                               <TableHead>Unidad</TableHead>
+                              <TableHead className="text-right">€SubTotal Recursos</TableHead>
                               <TableHead>Archivos</TableHead>
                               {isAdmin && <TableHead className="w-20">Acciones</TableHead>}
                             </TableRow>
@@ -754,6 +831,9 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
                               <TableRow key={activity.id}>
                                 <TableCell className="font-mono text-sm">{generateActivityId(activity)}</TableCell>
                                 <TableCell>{activity.measurement_unit}</TableCell>
+                                <TableCell className="text-right font-mono font-semibold text-primary">
+                                  {formatCurrency(activity.resources_subtotal || 0)}
+                                </TableCell>
                                 <TableCell>
                                   <Button variant="ghost" size="sm" onClick={() => handleManageFiles(activity)}>
                                     <File className="h-4 w-4 mr-1" />{activity.files_count || 0}
@@ -826,6 +906,7 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
                           <TableRow>
                             <TableHead>ActividadID</TableHead>
                             <TableHead>Unidad</TableHead>
+                            <TableHead className="text-right">€SubTotal Recursos</TableHead>
                             <TableHead>Archivos</TableHead>
                             {isAdmin && <TableHead className="w-20">Acciones</TableHead>}
                           </TableRow>
@@ -835,6 +916,9 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
                             <TableRow key={activity.id}>
                               <TableCell className="font-mono text-sm">{generateActivityId(activity)}</TableCell>
                               <TableCell>{activity.measurement_unit}</TableCell>
+                              <TableCell className="text-right font-mono font-semibold text-primary">
+                                {formatCurrency(activity.resources_subtotal || 0)}
+                              </TableCell>
                               <TableCell>
                                 <Button variant="ghost" size="sm" onClick={() => handleManageFiles(activity)}>
                                   <File className="h-4 w-4 mr-1" />{activity.files_count || 0}
@@ -964,6 +1048,52 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
                 </SelectContent>
               </Select>
             </div>
+
+            {/* Resources list for existing activities */}
+            {editingActivity && activityResources.length > 0 && (
+              <div className="space-y-2 pt-4 border-t">
+                <div className="flex items-center justify-between">
+                  <Label>Recursos asociados ({activityResources.length})</Label>
+                  <Badge variant="default" className="text-sm">
+                    €SubTotal: {formatCurrency(calculateResourceSubtotal(activityResources))}
+                  </Badge>
+                </div>
+                <div className="border rounded-lg max-h-48 overflow-y-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="text-xs">
+                        <TableHead className="py-2">Recurso</TableHead>
+                        <TableHead className="py-2">Tipo</TableHead>
+                        <TableHead className="py-2 text-right">€Coste ud</TableHead>
+                        <TableHead className="py-2">Ud</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {activityResources.map((resource) => (
+                        <TableRow key={resource.id} className="text-sm">
+                          <TableCell className="py-1.5">{resource.name}</TableCell>
+                          <TableCell className="py-1.5">
+                            {resource.resource_type && (
+                              <Badge variant="outline" className="text-xs flex items-center gap-1 w-fit">
+                                {resource.resource_type === 'Producto' && <Package className="h-3 w-3" />}
+                                {resource.resource_type === 'Mano de obra' && <Wrench className="h-3 w-3" />}
+                                {resource.resource_type === 'Alquiler' && <Truck className="h-3 w-3" />}
+                                {resource.resource_type === 'Servicio' && <Briefcase className="h-3 w-3" />}
+                                {resource.resource_type}
+                              </Badge>
+                            )}
+                          </TableCell>
+                          <TableCell className="py-1.5 text-right font-mono">
+                            {formatCurrency(resource.external_unit_cost || 0)}
+                          </TableCell>
+                          <TableCell className="py-1.5">{resource.unit || '-'}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+            )}
           </div>
 
           <DialogFooter>

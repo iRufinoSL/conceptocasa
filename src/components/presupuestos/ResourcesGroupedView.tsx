@@ -290,7 +290,7 @@ export function ResourcesGroupedView({
             disabled={!isAdmin}
           />
         </TableCell>
-        {/* 5. Actividad relacionada */}
+        {/* 5. Actividad relacionada - moved after Tipo Recurso */}
         <TableCell>
           <ResourceInlineEdit
             value={resource.activity_id || '__none__'}
@@ -415,7 +415,7 @@ export function ResourcesGroupedView({
               <TableHead className="text-right">€Coste ud ext.</TableHead>
               <TableHead>Ud</TableHead>
               <TableHead>Tipo</TableHead>
-              <TableHead className="min-w-[180px]">Actividad</TableHead>
+              <TableHead className="min-w-[180px]">ActividadID</TableHead>
               <TableHead className="text-right">Uds rel.</TableHead>
               <TableHead className="text-right">Uds man.</TableHead>
               <TableHead className="text-right">€SubT</TableHead>

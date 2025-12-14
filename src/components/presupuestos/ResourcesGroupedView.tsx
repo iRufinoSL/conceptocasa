@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef, useCallback } from 'react';
 import { ChevronDown, ChevronRight, Folder, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -9,6 +9,13 @@ import { formatCurrency, formatNumber, formatPercent } from '@/lib/format-utils'
 import { Pencil, Trash2, Package, Wrench, Truck, Briefcase } from 'lucide-react';
 import { ResourceInlineEdit } from './ResourceInlineEdit';
 import { cn } from '@/lib/utils';
+
+// Define editable fields for tab navigation (in display order)
+const EDITABLE_FIELDS = [
+  'name', 'external_unit_cost', 'unit', 'resource_type', 'activity_id',
+  'related_units', 'manual_units', 'safety_margin_percent', 'sales_margin_percent'
+] as const;
+type EditableField = typeof EDITABLE_FIELDS[number];
 
 interface BudgetResource {
   id: string;
@@ -95,6 +102,20 @@ export function ResourcesGroupedView({
   const [expandedPhases, setExpandedPhases] = useState<Set<string>>(new Set());
   const [expandedActivities, setExpandedActivities] = useState<Set<string>>(new Set());
 
+  // Tab navigation refs
+  const cellRefs = useRef<Map<string, HTMLElement | null>>(new Map());
+  const getCellKey = (resourceId: string, field: EditableField) => `${resourceId}-${field}`;
+
+  // Focus a specific cell
+  const focusCell = useCallback((resourceId: string, field: EditableField) => {
+    const key = getCellKey(resourceId, field);
+    const element = cellRefs.current.get(key);
+    if (element) {
+      element.focus();
+      element.click();
+    }
+  }, []);
+
   // Group resources by Phase -> Activity
   const groupedData = useMemo(() => {
     const phaseMap = new Map<string, {
@@ -165,6 +186,57 @@ export function ResourcesGroupedView({
       });
   }, [resources, activities, phases]);
 
+  // Get flat list of resources in display order for navigation
+  const flatResourceList = useMemo(() => {
+    const result: BudgetResource[] = [];
+    groupedData.forEach(([, phaseGroup]) => {
+      // Activities sorted
+      const sortedActivities = Array.from(phaseGroup.activities.entries())
+        .sort(([, a], [, b]) => (a.activity?.code || '').localeCompare(b.activity?.code || ''));
+      
+      sortedActivities.forEach(([, activityGroup]) => {
+        result.push(...activityGroup.resources);
+      });
+      
+      // Unassigned resources
+      result.push(...phaseGroup.unassignedResources);
+    });
+    return result;
+  }, [groupedData]);
+
+  // Navigate to next/prev editable field
+  const navigateToField = useCallback((currentResourceId: string, currentField: EditableField, direction: 'next' | 'prev') => {
+    const currentFieldIndex = EDITABLE_FIELDS.indexOf(currentField);
+    const currentRowIndex = flatResourceList.findIndex(r => r.id === currentResourceId);
+    
+    if (currentRowIndex === -1) return;
+
+    let nextRowIndex = currentRowIndex;
+    let nextFieldIndex = currentFieldIndex;
+
+    if (direction === 'next') {
+      nextFieldIndex++;
+      if (nextFieldIndex >= EDITABLE_FIELDS.length) {
+        nextFieldIndex = 0;
+        nextRowIndex++;
+      }
+    } else {
+      nextFieldIndex--;
+      if (nextFieldIndex < 0) {
+        nextFieldIndex = EDITABLE_FIELDS.length - 1;
+        nextRowIndex--;
+      }
+    }
+
+    // Check bounds
+    if (nextRowIndex < 0 || nextRowIndex >= flatResourceList.length) return;
+
+    const nextResource = flatResourceList[nextRowIndex];
+    const nextField = EDITABLE_FIELDS[nextFieldIndex];
+    
+    focusCell(nextResource.id, nextField);
+  }, [flatResourceList, focusCell]);
+
   const togglePhase = (phaseId: string) => {
     setExpandedPhases((prev) => {
       const next = new Set(prev);
@@ -227,6 +299,17 @@ export function ResourcesGroupedView({
         .sort((a, b) => a.label.localeCompare(b.label)),
     ];
 
+    // Helper to create tab navigation handlers for a field
+    const createTabHandlers = (field: EditableField) => ({
+      onTabNext: () => navigateToField(resource.id, field, 'next'),
+      onTabPrev: () => navigateToField(resource.id, field, 'prev'),
+    });
+
+    // Helper to register cell ref
+    const registerRef = (field: EditableField) => (el: HTMLElement | null) => {
+      cellRefs.current.set(getCellKey(resource.id, field), el);
+    };
+
     return (
       <TableRow 
         key={resource.id} 
@@ -242,86 +325,107 @@ export function ResourcesGroupedView({
         )}
         {/* 1. Recurso */}
         <TableCell className="font-medium" style={{ paddingLeft: isAdmin ? undefined : `${indent * 16 + 8}px` }}>
-          <ResourceInlineEdit
-            value={resource.name}
-            displayValue={resource.name}
-            onSave={(v) => onInlineUpdate(resource.id, 'name', v)}
-            type="text"
-            disabled={!isAdmin}
-          />
+          <span ref={registerRef('name')} tabIndex={-1}>
+            <ResourceInlineEdit
+              value={resource.name}
+              displayValue={resource.name}
+              onSave={(v) => onInlineUpdate(resource.id, 'name', v)}
+              type="text"
+              disabled={!isAdmin}
+              {...createTabHandlers('name')}
+            />
+          </span>
         </TableCell>
         {/* 2. €Coste ud externa */}
         <TableCell className="text-right font-mono">
-          <ResourceInlineEdit
-            value={resource.external_unit_cost}
-            displayValue={formatCurrency(resource.external_unit_cost || 0)}
-            onSave={(v) => onInlineUpdate(resource.id, 'external_unit_cost', v)}
-            type="number"
-            decimals={2}
-            disabled={!isAdmin}
-          />
+          <span ref={registerRef('external_unit_cost')} tabIndex={-1}>
+            <ResourceInlineEdit
+              value={resource.external_unit_cost}
+              displayValue={formatCurrency(resource.external_unit_cost || 0)}
+              onSave={(v) => onInlineUpdate(resource.id, 'external_unit_cost', v)}
+              type="number"
+              decimals={2}
+              disabled={!isAdmin}
+              {...createTabHandlers('external_unit_cost')}
+            />
+          </span>
         </TableCell>
         {/* 3. Ud medida */}
         <TableCell>
-          <ResourceInlineEdit
-            value={resource.unit}
-            displayValue={resource.unit || '-'}
-            onSave={(v) => onInlineUpdate(resource.id, 'unit', v)}
-            type="select"
-            options={unitOptions}
-            disabled={!isAdmin}
-          />
+          <span ref={registerRef('unit')} tabIndex={-1}>
+            <ResourceInlineEdit
+              value={resource.unit}
+              displayValue={resource.unit || '-'}
+              onSave={(v) => onInlineUpdate(resource.id, 'unit', v)}
+              type="select"
+              options={unitOptions}
+              disabled={!isAdmin}
+              {...createTabHandlers('unit')}
+            />
+          </span>
         </TableCell>
         {/* 4. Tipo recurso */}
         <TableCell>
-          <ResourceInlineEdit
-            value={resource.resource_type}
-            displayValue={
-              resource.resource_type ? (
-                <Badge variant={resourceTypeVariants[resource.resource_type] as any || 'secondary'}>
-                  {resourceTypeIcons[resource.resource_type]}
-                  <span className="ml-1">{resource.resource_type}</span>
-                </Badge>
-              ) : '-'
-            }
-            onSave={(v) => onInlineUpdate(resource.id, 'resource_type', v)}
-            type="select"
-            options={typeOptions}
-            disabled={!isAdmin}
-          />
+          <span ref={registerRef('resource_type')} tabIndex={-1}>
+            <ResourceInlineEdit
+              value={resource.resource_type}
+              displayValue={
+                resource.resource_type ? (
+                  <Badge variant={resourceTypeVariants[resource.resource_type] as any || 'secondary'}>
+                    {resourceTypeIcons[resource.resource_type]}
+                    <span className="ml-1">{resource.resource_type}</span>
+                  </Badge>
+                ) : '-'
+              }
+              onSave={(v) => onInlineUpdate(resource.id, 'resource_type', v)}
+              type="select"
+              options={typeOptions}
+              disabled={!isAdmin}
+              {...createTabHandlers('resource_type')}
+            />
+          </span>
         </TableCell>
         {/* 5. Actividad relacionada - moved after Tipo Recurso */}
         <TableCell>
-          <ResourceInlineEdit
-            value={resource.activity_id || '__none__'}
-            displayValue={getActivityId(resource.activity_id) || 'Sin actividad'}
-            onSave={(v) => onInlineUpdate(resource.id, 'activity_id', v === '__none__' ? null : v)}
-            type="searchable-select"
-            options={activityOptions}
-            disabled={!isAdmin}
-          />
+          <span ref={registerRef('activity_id')} tabIndex={-1}>
+            <ResourceInlineEdit
+              value={resource.activity_id || '__none__'}
+              displayValue={getActivityId(resource.activity_id) || 'Sin actividad'}
+              onSave={(v) => onInlineUpdate(resource.id, 'activity_id', v === '__none__' ? null : v)}
+              type="searchable-select"
+              options={activityOptions}
+              disabled={!isAdmin}
+              {...createTabHandlers('activity_id')}
+            />
+          </span>
         </TableCell>
         {/* 6. Uds relacionadas */}
         <TableCell className="text-right font-mono">
-          <ResourceInlineEdit
-            value={resource.related_units}
-            displayValue={resource.related_units !== null ? formatNumber(resource.related_units) : '-'}
-            onSave={(v) => onInlineUpdate(resource.id, 'related_units', v)}
-            type="number"
-            decimals={2}
-            disabled={!isAdmin}
-          />
+          <span ref={registerRef('related_units')} tabIndex={-1}>
+            <ResourceInlineEdit
+              value={resource.related_units}
+              displayValue={resource.related_units !== null ? formatNumber(resource.related_units) : '-'}
+              onSave={(v) => onInlineUpdate(resource.id, 'related_units', v)}
+              type="number"
+              decimals={2}
+              disabled={!isAdmin}
+              {...createTabHandlers('related_units')}
+            />
+          </span>
         </TableCell>
         {/* 7. Uds manual */}
         <TableCell className="text-right font-mono">
-          <ResourceInlineEdit
-            value={resource.manual_units}
-            displayValue={resource.manual_units !== null ? formatNumber(resource.manual_units) : '-'}
-            onSave={(v) => onInlineUpdate(resource.id, 'manual_units', v)}
-            type="number"
-            decimals={2}
-            disabled={!isAdmin}
-          />
+          <span ref={registerRef('manual_units')} tabIndex={-1}>
+            <ResourceInlineEdit
+              value={resource.manual_units}
+              displayValue={resource.manual_units !== null ? formatNumber(resource.manual_units) : '-'}
+              onSave={(v) => onInlineUpdate(resource.id, 'manual_units', v)}
+              type="number"
+              decimals={2}
+              disabled={!isAdmin}
+              {...createTabHandlers('manual_units')}
+            />
+          </span>
         </TableCell>
         {/* 8. €SubTotal */}
         <TableCell className="text-right font-mono font-bold text-primary">
@@ -329,14 +433,17 @@ export function ResourcesGroupedView({
         </TableCell>
         {/* Remaining columns */}
         <TableCell className="text-right font-mono">
-          <ResourceInlineEdit
-            value={(resource.safety_margin_percent || 0.15) * 100}
-            displayValue={formatPercent(resource.safety_margin_percent || 0.15)}
-            onSave={(v) => onInlineUpdate(resource.id, 'safety_margin_percent', v / 100)}
-            type="percent"
-            decimals={1}
-            disabled={!isAdmin}
-          />
+          <span ref={registerRef('safety_margin_percent')} tabIndex={-1}>
+            <ResourceInlineEdit
+              value={(resource.safety_margin_percent || 0.15) * 100}
+              displayValue={formatPercent(resource.safety_margin_percent || 0.15)}
+              onSave={(v) => onInlineUpdate(resource.id, 'safety_margin_percent', v / 100)}
+              type="percent"
+              decimals={1}
+              disabled={!isAdmin}
+              {...createTabHandlers('safety_margin_percent')}
+            />
+          </span>
         </TableCell>
         <TableCell className="text-right font-mono text-muted-foreground">
           {formatCurrency(fields.safetyMarginUd)}
@@ -345,14 +452,17 @@ export function ResourcesGroupedView({
           {formatCurrency(fields.internalCostUd)}
         </TableCell>
         <TableCell className="text-right font-mono">
-          <ResourceInlineEdit
-            value={(resource.sales_margin_percent || 0.25) * 100}
-            displayValue={formatPercent(resource.sales_margin_percent || 0.25)}
-            onSave={(v) => onInlineUpdate(resource.id, 'sales_margin_percent', v / 100)}
-            type="percent"
-            decimals={1}
-            disabled={!isAdmin}
-          />
+          <span ref={registerRef('sales_margin_percent')} tabIndex={-1}>
+            <ResourceInlineEdit
+              value={(resource.sales_margin_percent || 0.25) * 100}
+              displayValue={formatPercent(resource.sales_margin_percent || 0.25)}
+              onSave={(v) => onInlineUpdate(resource.id, 'sales_margin_percent', v / 100)}
+              type="percent"
+              decimals={1}
+              disabled={!isAdmin}
+              {...createTabHandlers('sales_margin_percent')}
+            />
+          </span>
         </TableCell>
         <TableCell className="text-right font-mono text-muted-foreground">
           {formatCurrency(fields.salesMarginUd)}

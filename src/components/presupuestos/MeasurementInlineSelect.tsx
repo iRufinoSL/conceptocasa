@@ -75,8 +75,11 @@ export function MeasurementInlineSelect({
       <PopoverTrigger asChild>
         <button
           className={cn(
-            "w-full text-left px-2 py-1 rounded-md hover:bg-muted/50 transition-colors cursor-pointer truncate text-muted-foreground",
-            open && "bg-muted"
+            "w-full text-left px-2 py-1 -mx-1 rounded-md transition-all duration-200 cursor-pointer truncate",
+            "hover:bg-primary/10 hover:border-primary/30 border border-transparent",
+            "focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-1 focus:bg-primary/10",
+            open && "ring-2 ring-primary ring-offset-1 bg-primary/5",
+            !currentMeasurement && "text-muted-foreground"
           )}
           title={displayValue}
         >

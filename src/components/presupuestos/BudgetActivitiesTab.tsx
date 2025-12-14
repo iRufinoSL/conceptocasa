@@ -209,8 +209,28 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin }: BudgetAct
     cellRefs.current.set(getCellKey(activityId), el);
   }, []);
 
-  // Calculate resource subtotal for an activity
-  const calculateResourceSubtotal = (resources: any[]) => {
+  // Calculate resource subtotal for an activity (with live measurement data)
+  const calculateResourceSubtotal = (resources: any[], activityMeasurementId?: string | null) => {
+    // Calculate live related units from measurement if available
+    let liveRelatedUnits = 0;
+    if (activityMeasurementId) {
+      const measurement = measurements.find(m => m.id === activityMeasurementId);
+      if (measurement) {
+        const relatedMeasurementIds = measurementRelations
+          .filter(r => r.measurement_id === measurement.id)
+          .map(r => r.related_measurement_id);
+        
+        if (relatedMeasurementIds.length > 0) {
+          liveRelatedUnits = relatedMeasurementIds.reduce((sum, relId) => {
+            const relMeasurement = measurements.find(m => m.id === relId);
+            return sum + (relMeasurement?.manual_units || 0);
+          }, 0);
+        } else {
+          liveRelatedUnits = measurement.manual_units || 0;
+        }
+      }
+    }
+    
     return resources.reduce((total, resource) => {
       const externalCost = resource.external_unit_cost || 0;
       const safetyPercent = resource.safety_margin_percent ?? 0.15;
@@ -221,9 +241,11 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin }: BudgetAct
       const salesMarginUd = internalCostUd * salesPercent;
       const salesCostUd = internalCostUd + salesMarginUd;
       
+      // Use live related units if available, otherwise fallback to stored value
+      const relatedUnits = activityMeasurementId ? liveRelatedUnits : (resource.related_units || 0);
       const calculatedUnits = resource.manual_units !== null 
         ? resource.manual_units 
-        : (resource.related_units || 0);
+        : relatedUnits;
       
       return total + (calculatedUnits * salesCostUd);
     }, 0);
@@ -272,9 +294,9 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin }: BudgetAct
             .select('*', { count: 'exact', head: true })
             .eq('activity_id', activity.id);
           
-          // Calculate resources subtotal
+          // Calculate resources subtotal (use activity's measurement_id for live calculation)
           const activityResources = allResources.filter(r => r.activity_id === activity.id);
-          const resourcesSubtotal = calculateResourceSubtotal(activityResources);
+          const resourcesSubtotal = calculateResourceSubtotal(activityResources, activity.measurement_id);
           
           return { 
             ...activity, 
@@ -1812,7 +1834,7 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin }: BudgetAct
                   <div className="flex items-center gap-3">
                     <Label className="text-base font-semibold">Recursos asociados ({activityResources.length})</Label>
                     <Badge variant="default" className="text-sm">
-                      €SubTotal: {formatCurrency(calculateResourceSubtotal(activityResources))}
+                      €SubTotal: {formatCurrency(calculateResourceSubtotal(activityResources, editingActivity?.measurement_id))}
                     </Badge>
                   </div>
                   {isAdmin && (
@@ -1837,6 +1859,7 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin }: BudgetAct
                           <TableHead className="py-2 text-right">%Seg</TableHead>
                           <TableHead className="py-2 text-right">%Venta</TableHead>
                           <TableHead className="py-2 text-right">Ud manual</TableHead>
+                          <TableHead className="py-2 text-right">Uds relac</TableHead>
                           <TableHead className="py-2 text-right">Uds calc</TableHead>
                           <TableHead className="py-2 text-right">€SubTotal</TableHead>
                           <TableHead className="py-2 w-28">Acciones</TableHead>
@@ -1851,9 +1874,33 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin }: BudgetAct
                           const internalCostUd = externalCost + safetyMarginUd;
                           const salesMarginUd = internalCostUd * salesPercent;
                           const salesCostUd = internalCostUd + salesMarginUd;
+                          
+                          // Calculate related units in real-time from activity's measurement
+                          let liveRelatedUnits = resource.related_units || 0;
+                          if (editingActivity?.measurement_id) {
+                            const measurement = measurements.find(m => m.id === editingActivity.measurement_id);
+                            if (measurement) {
+                              // Get related measurements
+                              const relatedMeasurementIds = measurementRelations
+                                .filter(r => r.measurement_id === measurement.id)
+                                .map(r => r.related_measurement_id);
+                              
+                              if (relatedMeasurementIds.length > 0) {
+                                // Sum of related measurements' manual_units
+                                liveRelatedUnits = relatedMeasurementIds.reduce((sum, relId) => {
+                                  const relMeasurement = measurements.find(m => m.id === relId);
+                                  return sum + (relMeasurement?.manual_units || 0);
+                                }, 0);
+                              } else {
+                                // No relations, use measurement's own manual_units
+                                liveRelatedUnits = measurement.manual_units || 0;
+                              }
+                            }
+                          }
+                          
                           const calculatedUnits = resource.manual_units !== null 
                             ? resource.manual_units 
-                            : (resource.related_units || 0);
+                            : liveRelatedUnits;
                           const subtotal = calculatedUnits * salesCostUd;
                           
                           const handleInlineUpdate = async (field: string, value: any) => {
@@ -1978,6 +2025,9 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin }: BudgetAct
                                 ) : (
                                   <span className="font-mono">{resource.manual_units !== null ? formatNumber(resource.manual_units) : '-'}</span>
                                 )}
+                              </TableCell>
+                              <TableCell className="py-1.5 text-right font-mono text-muted-foreground">
+                                {formatNumber(liveRelatedUnits)}
                               </TableCell>
                               <TableCell className="py-1.5 text-right font-mono font-semibold">
                                 {formatNumber(calculatedUnits)}

@@ -37,7 +37,7 @@ export function ResourceInlineEdit({
   allowNull = false,
 }: InlineEditProps) {
   const [isEditing, setIsEditing] = useState(false);
-  const [editValue, setEditValue] = useState<string | number>(value ?? '');
+  const [editValue, setEditValue] = useState<string | number | null>(value ?? '');
   const [isSaving, setIsSaving] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [showSuccess, setShowSuccess] = useState(false);
@@ -74,17 +74,20 @@ export function ResourceInlineEdit({
     let finalValue: any = editValue;
     
     if (type === 'number' || type === 'percent') {
-      // Check if editValue is null (from allowNull NumericInput)
-      if (editValue === null || editValue === '' || editValue === undefined) {
+      // editValue can be: number, null (from allowNull NumericInput), or '' (empty string)
+      if (editValue === null) {
+        finalValue = allowNull ? null : 0;
+      } else if (editValue === '' || editValue === undefined) {
         finalValue = allowNull ? null : 0;
       } else if (typeof editValue === 'number') {
         finalValue = editValue;
-      } else {
-        // Parse from display string - editValue from NumericInput is already numeric
-        finalValue = editValue;
+      } else if (typeof editValue === 'string') {
+        // Parse string to number
+        const parsed = parseFloat(editValue.replace(',', '.').replace(/\./g, ''));
+        finalValue = isNaN(parsed) ? (allowNull ? null : 0) : parsed;
       }
       
-      // Ensure it's a valid number or null
+      // Final validation: ensure it's a valid number or null
       if (finalValue !== null && (typeof finalValue !== 'number' || isNaN(finalValue))) {
         finalValue = allowNull ? null : 0;
       }
@@ -100,6 +103,7 @@ export function ResourceInlineEdit({
     if (shouldSave) {
       setIsSaving(true);
       try {
+        console.log(`ResourceInlineEdit saving: ${finalValue} (type: ${typeof finalValue}, allowNull: ${allowNull})`);
         await onSave(finalValue);
         triggerSuccess();
         // Restore scroll position after save completes
@@ -313,7 +317,8 @@ export function ResourceInlineEdit({
 
   if (type === 'number' || type === 'percent') {
     // Get the numeric value from props for initial display
-    const numericValue = allowNull && value === null ? null : (typeof value === 'number' ? value : 0);
+    // When allowNull is true and value is null, pass null; otherwise parse as number
+    const numericValue = (allowNull && value === null) ? null : (typeof value === 'number' ? value : (typeof value === 'string' && value !== '' ? parseFloat(value) : 0));
     
     return (
       <EditWrapper>
@@ -321,7 +326,7 @@ export function ResourceInlineEdit({
           <NumericInput
             ref={inputRef}
             value={numericValue}
-            onChange={(v) => setEditValue(v)}
+            onChange={(v) => setEditValue(v as number | null)}
             decimals={decimals}
             allowNull={allowNull}
             className="h-7 w-24 text-xs ring-2 ring-primary ring-offset-1 bg-primary/5 transition-all duration-200"

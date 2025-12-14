@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { Plus, Search, Edit, Trash2, Ruler, Link2, Upload, FileUp, X } from 'lucide-react';
+import { Plus, Search, Edit, Trash2, Ruler, Link2, Upload, FileUp, X, Download } from 'lucide-react';
 import { formatNumber } from '@/lib/format-utils';
 import { NumericInput } from '@/components/ui/numeric-input';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
@@ -611,6 +611,85 @@ export function BudgetMeasurementsTab({ budgetId, isAdmin }: BudgetMeasurementsT
     }
   };
 
+  // Handle export to Excel
+  const handleExport = () => {
+    if (measurements.length === 0) {
+      toast.error('No hay mediciones para exportar');
+      return;
+    }
+
+    try {
+      // Build export data with relations
+      const exportData = measurements.map(measurement => {
+        // Get related measurement names
+        const relatedMeasurementIds = relations
+          .filter(r => r.measurement_id === measurement.id)
+          .map(r => r.related_measurement_id);
+        
+        const relatedNames = relatedMeasurementIds
+          .map(relId => {
+            const relMeasurement = measurements.find(m => m.id === relId);
+            return relMeasurement?.name || '';
+          })
+          .filter(name => name.length > 0)
+          .join('; ');
+
+        // Get related activities
+        const relatedActivitiesNames = activities
+          .filter(a => a.measurement_id === measurement.id)
+          .map(a => {
+            const phase = phases.find(p => p.id === a.phase_id);
+            return `${phase?.code || ''} ${a.code}.-${a.name}`.trim();
+          })
+          .join('; ');
+
+        // Calculate values
+        const relatedUnits = getRelatedUnits(measurement.id);
+        const calculatedUnits = getCalculatedUnits(measurement);
+
+        return {
+          'Nombre': measurement.name,
+          'Uds Manual': measurement.manual_units !== null ? measurement.manual_units : '',
+          'Ud Medida': measurement.measurement_unit || 'ud',
+          'Mediciones Relacionadas': relatedNames,
+          'Uds Relacionadas': relatedUnits > 0 ? relatedUnits : '',
+          'Uds Cálculo': calculatedUnits,
+          'Actividades Relacionadas': relatedActivitiesNames,
+          'MediciónID': generateMedicionId(measurement)
+        };
+      });
+
+      // Create workbook and worksheet
+      const worksheet = XLSX.utils.json_to_sheet(exportData);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Mediciones');
+
+      // Auto-size columns
+      const colWidths = [
+        { wch: 30 }, // Nombre
+        { wch: 12 }, // Uds Manual
+        { wch: 10 }, // Ud Medida
+        { wch: 40 }, // Mediciones Relacionadas
+        { wch: 15 }, // Uds Relacionadas
+        { wch: 12 }, // Uds Cálculo
+        { wch: 50 }, // Actividades Relacionadas
+        { wch: 60 }, // MediciónID
+      ];
+      worksheet['!cols'] = colWidths;
+
+      // Generate filename with date
+      const date = new Date().toISOString().split('T')[0];
+      const fileName = `mediciones_${date}.xlsx`;
+
+      // Download
+      XLSX.writeFile(workbook, fileName);
+      toast.success(`Exportadas ${measurements.length} mediciones`);
+    } catch (error) {
+      console.error('Error exporting:', error);
+      toast.error('Error al exportar las mediciones');
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -635,9 +714,15 @@ export function BudgetMeasurementsTab({ budgetId, isAdmin }: BudgetMeasurementsT
             </div>
             {isAdmin && (
               <div className="flex gap-2">
+                {measurements.length > 0 && (
+                  <Button variant="outline" onClick={handleExport}>
+                    <Download className="h-4 w-4 mr-2" />
+                    Exportar
+                  </Button>
+                )}
                 <Button variant="outline" onClick={() => setImportDialogOpen(true)}>
                   <Upload className="h-4 w-4 mr-2" />
-                  Importar CSV
+                  Importar
                 </Button>
                 <Button onClick={openCreateForm}>
                   <Plus className="h-4 w-4 mr-2" />

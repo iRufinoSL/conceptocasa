@@ -195,8 +195,8 @@ export function BudgetResourcesTab({ budgetId, isAdmin }: BudgetResourcesTabProp
   // Calculate derived fields for a resource
   const calculateFields = (resource: BudgetResource) => {
     const externalCost = resource.external_unit_cost || 0;
-    const safetyPercent = resource.safety_margin_percent || 0.15;
-    const salesPercent = resource.sales_margin_percent || 0.25;
+    const safetyPercent = resource.safety_margin_percent ?? 0.15;
+    const salesPercent = resource.sales_margin_percent ?? 0.25;
     
     const safetyMarginUd = externalCost * safetyPercent;
     const internalCostUd = externalCost + safetyMarginUd;
@@ -977,8 +977,8 @@ export function BudgetResourcesTab({ budgetId, isAdmin }: BudgetResourcesTabProp
                           </TableCell>
                           <TableCell className="text-right font-mono">
                             <ResourceInlineEdit
-                              value={(resource.safety_margin_percent || 0.15) * 100}
-                              displayValue={formatPercent(resource.safety_margin_percent || 0.15)}
+                              value={(resource.safety_margin_percent ?? 0.15) * 100}
+                              displayValue={formatPercent(resource.safety_margin_percent ?? 0.15)}
                               onSave={(v) => handleInlineUpdate(resource.id, 'safety_margin_percent', v / 100)}
                               type="percent"
                               decimals={1}
@@ -993,8 +993,8 @@ export function BudgetResourcesTab({ budgetId, isAdmin }: BudgetResourcesTabProp
                           </TableCell>
                           <TableCell className="text-right font-mono">
                             <ResourceInlineEdit
-                              value={(resource.sales_margin_percent || 0.25) * 100}
-                              displayValue={formatPercent(resource.sales_margin_percent || 0.25)}
+                              value={(resource.sales_margin_percent ?? 0.25) * 100}
+                              displayValue={formatPercent(resource.sales_margin_percent ?? 0.25)}
                               onSave={(v) => handleInlineUpdate(resource.id, 'sales_margin_percent', v / 100)}
                               type="percent"
                               decimals={1}

@@ -72,15 +72,24 @@ export function ResourceInlineEdit({
     let finalValue: any = editValue;
     
     if (type === 'number' || type === 'percent') {
-      const num = typeof editValue === 'number' ? editValue : parseFloat(String(editValue).replace(',', '.'));
-      finalValue = isNaN(num) ? null : num;
+      // Ensure we're working with the correct numeric value
+      if (typeof editValue === 'number') {
+        finalValue = editValue;
+      } else {
+        const strValue = String(editValue).replace(/\./g, '').replace(',', '.');
+        finalValue = parseFloat(strValue);
+        if (isNaN(finalValue)) finalValue = 0;
+      }
     }
     
     if ((type === 'select' || type === 'searchable-select') && editValue === '__none__') {
       finalValue = null;
     }
 
-    if (finalValue !== value) {
+    // Always save for numbers/percents since comparison is tricky with formatting
+    const shouldSave = (type === 'number' || type === 'percent') ? true : finalValue !== value;
+
+    if (shouldSave) {
       setIsSaving(true);
       try {
         await onSave(finalValue);

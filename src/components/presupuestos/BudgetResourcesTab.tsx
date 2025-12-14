@@ -141,7 +141,7 @@ export function BudgetResourcesTab({ budgetId, isAdmin }: BudgetResourcesTabProp
 
   // Listen for navigation events from Activities tab
   useEffect(() => {
-    const handleNavigateToResources = (e: Event) => {
+    const handleNavigateToResources = async (e: Event) => {
       const customEvent = e as CustomEvent;
       const detail = customEvent.detail;
       
@@ -152,11 +152,27 @@ export function BudgetResourcesTab({ budgetId, isAdmin }: BudgetResourcesTabProp
         // Store the pre-selected activity ID for the form
         window.sessionStorage.setItem('preselectedActivityId', detail.activityId);
       } else if (detail?.action === 'edit' && detail?.resourceId) {
-        // Find and edit the resource
-        const resource = resources.find(r => r.id === detail.resourceId);
+        // Find and edit the resource - check local state first, then fetch if not found
+        let resource = resources.find(r => r.id === detail.resourceId);
+        
+        if (!resource) {
+          // Resource not in state yet - fetch it directly from DB
+          const { data, error } = await supabase
+            .from('budget_activity_resources')
+            .select('*')
+            .eq('id', detail.resourceId)
+            .single();
+          
+          if (!error && data) {
+            resource = data as BudgetResource;
+          }
+        }
+        
         if (resource) {
           setEditingResource(resource);
           setFormOpen(true);
+        } else {
+          toast.error('Recurso no encontrado');
         }
       }
     };

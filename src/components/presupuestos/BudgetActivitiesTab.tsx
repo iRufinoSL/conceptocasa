@@ -17,8 +17,9 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { toast } from 'sonner';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
-import { formatCurrency, formatNumber } from '@/lib/format-utils';
+import { formatCurrency, formatNumber, formatPercent } from '@/lib/format-utils';
 import { MeasurementInlineSelect, MeasurementInlineSelectHandle } from './MeasurementInlineSelect';
+import { ResourceInlineEdit } from './ResourceInlineEdit';
 
 interface BudgetPhase {
   id: string;
@@ -1340,7 +1341,7 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
 
       {/* Form Dialog */}
       <Dialog open={formDialogOpen} onOpenChange={setFormDialogOpen}>
-        <DialogContent className="max-w-4xl">
+        <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <div className="flex items-center justify-between">
               <DialogTitle>
@@ -1513,16 +1514,18 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
                   )}
                 </div>
                 {activityResources.length > 0 ? (
-                  <div className="border rounded-lg max-h-64 overflow-y-auto">
+                  <div className="border rounded-lg max-h-80 overflow-y-auto">
                     <Table>
                       <TableHeader>
                         <TableRow className="text-xs">
                           <TableHead className="py-2">Recurso</TableHead>
-                          <TableHead className="py-2 text-right">€Coste ud</TableHead>
+                          <TableHead className="py-2 text-right">€Coste ud ext</TableHead>
                           <TableHead className="py-2">Ud</TableHead>
+                          <TableHead className="py-2 text-right">%Seg</TableHead>
+                          <TableHead className="py-2 text-right">%Venta</TableHead>
                           <TableHead className="py-2 text-right">Ud manual</TableHead>
                           <TableHead className="py-2 text-right">€SubTotal</TableHead>
-                          <TableHead className="py-2 w-32">Acciones</TableHead>
+                          <TableHead className="py-2 w-28">Acciones</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -1539,15 +1542,90 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
                             : (resource.related_units || 0);
                           const subtotal = calculatedUnits * salesCostUd;
                           
+                          const handleInlineUpdate = async (field: string, value: any) => {
+                            try {
+                              const { error } = await supabase
+                                .from('budget_activity_resources')
+                                .update({ [field]: value })
+                                .eq('id', resource.id);
+                              if (error) throw error;
+                              // Update local state
+                              setActivityResources(prev => 
+                                prev.map(r => r.id === resource.id ? { ...r, [field]: value } : r)
+                              );
+                            } catch (err: any) {
+                              console.error('Error updating resource:', err);
+                              toast.error('Error al actualizar');
+                            }
+                          };
+                          
                           return (
                             <TableRow key={resource.id} className="text-sm">
-                              <TableCell className="py-1.5">{resource.name}</TableCell>
-                              <TableCell className="py-1.5 text-right font-mono">
-                                {formatCurrency(externalCost)}
+                              <TableCell className="py-1.5 font-medium">{resource.name}</TableCell>
+                              <TableCell className="py-1.5 text-right">
+                                {isAdmin ? (
+                                  <ResourceInlineEdit
+                                    value={externalCost}
+                                    type="number"
+                                    decimals={2}
+                                    displayValue={<span className="font-mono">{formatCurrency(externalCost)}</span>}
+                                    onSave={async (v) => handleInlineUpdate('external_unit_cost', v)}
+                                  />
+                                ) : (
+                                  <span className="font-mono">{formatCurrency(externalCost)}</span>
+                                )}
                               </TableCell>
-                              <TableCell className="py-1.5">{resource.unit || '-'}</TableCell>
-                              <TableCell className="py-1.5 text-right font-mono">
-                                {resource.manual_units !== null ? resource.manual_units : '-'}
+                              <TableCell className="py-1.5">
+                                {isAdmin ? (
+                                  <ResourceInlineEdit
+                                    value={resource.unit || ''}
+                                    type="select"
+                                    options={['m2', 'm3', 'ml', 'ud', 'h', 'día', 'mes', 'kg', 'l', 'km'].map(u => ({ value: u, label: u }))}
+                                    displayValue={resource.unit || '-'}
+                                    onSave={async (v) => handleInlineUpdate('unit', v)}
+                                  />
+                                ) : (
+                                  resource.unit || '-'
+                                )}
+                              </TableCell>
+                              <TableCell className="py-1.5 text-right">
+                                {isAdmin ? (
+                                  <ResourceInlineEdit
+                                    value={safetyPercent * 100}
+                                    type="number"
+                                    decimals={0}
+                                    displayValue={<span className="font-mono">{formatPercent(safetyPercent)}</span>}
+                                    onSave={async (v) => handleInlineUpdate('safety_margin_percent', (v as number) / 100)}
+                                  />
+                                ) : (
+                                  <span className="font-mono">{formatPercent(safetyPercent)}</span>
+                                )}
+                              </TableCell>
+                              <TableCell className="py-1.5 text-right">
+                                {isAdmin ? (
+                                  <ResourceInlineEdit
+                                    value={salesPercent * 100}
+                                    type="number"
+                                    decimals={0}
+                                    displayValue={<span className="font-mono">{formatPercent(salesPercent)}</span>}
+                                    onSave={async (v) => handleInlineUpdate('sales_margin_percent', (v as number) / 100)}
+                                  />
+                                ) : (
+                                  <span className="font-mono">{formatPercent(salesPercent)}</span>
+                                )}
+                              </TableCell>
+                              <TableCell className="py-1.5 text-right">
+                                {isAdmin ? (
+                                  <ResourceInlineEdit
+                                    value={resource.manual_units}
+                                    type="number"
+                                    decimals={2}
+                                    displayValue={<span className="font-mono">{resource.manual_units !== null ? formatNumber(resource.manual_units) : '-'}</span>}
+                                    onSave={async (v) => handleInlineUpdate('manual_units', v)}
+                                  />
+                                ) : (
+                                  <span className="font-mono">{resource.manual_units !== null ? formatNumber(resource.manual_units) : '-'}</span>
+                                )}
                               </TableCell>
                               <TableCell className="py-1.5 text-right font-mono font-semibold text-primary">
                                 {formatCurrency(subtotal)}

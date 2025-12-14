@@ -372,15 +372,25 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
     setFormDialogOpen(true);
   };
 
-  // Handle new resource for current activity
+  // Handle new resource for current activity - open form directly
   const handleNewResource = () => {
     if (!editingActivity) return;
-    // Navigate to resources tab with context to create new resource for this activity
-    window.dispatchEvent(new CustomEvent('navigate-to-resources', { 
-      detail: { activityId: editingActivity.id, action: 'new' } 
-    }));
-    setFormDialogOpen(false);
-    toast.info('Redirigido a Recursos para crear nuevo recurso');
+    // Set up empty resource with activity pre-selected
+    setEditingResourceForForm({
+      id: null,
+      budget_id: editingActivity.budget_id,
+      name: '',
+      external_unit_cost: null,
+      unit: 'ud',
+      resource_type: null,
+      safety_margin_percent: 0.15,
+      sales_margin_percent: 0.25,
+      manual_units: null,
+      related_units: null,
+      activity_id: editingActivity.id,
+      description: null,
+    });
+    setResourceFormOpen(true);
   };
 
   // Handle edit resource - open form dialog

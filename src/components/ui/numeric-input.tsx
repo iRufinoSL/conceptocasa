@@ -45,7 +45,7 @@ export const parseEuropeanNumber = (value: string): number => {
     
     // Single dot: check if it looks like a thousands separator
     // In European format, 12.000 means 12000, but 12.50 means 12.50
-    // If the part after the dot has exactly 3 digits AND no leading zeros in decimal context, 
+    // If the part after the dot has exactly 3 digits AND the integer part is >= 1, 
     // it's likely a thousands separator
     const lastPart = parts[parts.length - 1];
     if (lastPart.length === 3 && parseInt(parts[0]) >= 1) {
@@ -57,7 +57,7 @@ export const parseEuropeanNumber = (value: string): number => {
     return parseFloat(cleanValue) || 0;
   }
   
-  // No separators - just a plain number
+  // No separators - just a plain number (12000, 5, etc.)
   return parseFloat(cleanValue) || 0;
 };
 

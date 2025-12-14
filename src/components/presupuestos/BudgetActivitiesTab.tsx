@@ -12,7 +12,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Search, Upload, Pencil, Trash2, MoreHorizontal, FileUp, File, X, Download, ChevronRight, ChevronDown, ChevronLeft, List, Layers, Copy, Package, Wrench, Truck, Briefcase, Eye, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { Plus, Search, Upload, Pencil, Trash2, MoreHorizontal, FileUp, File, X, Download, ChevronRight, ChevronDown, ChevronLeft, List, Layers, Copy, Package, Wrench, Truck, Briefcase, Eye, ArrowUpDown, ArrowUp, ArrowDown, FileDown } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { toast } from 'sonner';
@@ -21,6 +21,11 @@ import { formatCurrency, formatNumber, formatPercent } from '@/lib/format-utils'
 import { MeasurementInlineSelect, MeasurementInlineSelectHandle } from './MeasurementInlineSelect';
 import { ResourceInlineEdit } from './ResourceInlineEdit';
 import { BudgetResourceForm } from './BudgetResourceForm';
+import { useCompanySettings } from '@/hooks/useCompanySettings';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import { format } from 'date-fns';
+import { es } from 'date-fns/locale';
 
 interface BudgetPhase {
   id: string;
@@ -87,8 +92,17 @@ interface ActivityForm {
 
 interface BudgetActivitiesTabProps {
   budgetId: string;
+  budgetName: string;
   isAdmin: boolean;
 }
+
+// Format for PDF (simpler format without symbols)
+const formatPdfCurrency = (value: number): string => {
+  return new Intl.NumberFormat('es-ES', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value) + ' €';
+};
 
 const MEASUREMENT_UNITS = [
   'm2', 'm3', 'ml', 'mes', 'ud', 'kg', 'l', 'h', 'día', 'semana', 'pa'
@@ -103,7 +117,8 @@ const emptyForm: ActivityForm = {
   measurement_id: ''
 };
 
-export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabProps) {
+export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin }: BudgetActivitiesTabProps) {
+  const { settings: companySettings } = useCompanySettings();
   const [activities, setActivities] = useState<BudgetActivity[]>([]);
   const [phases, setPhases] = useState<BudgetPhase[]>([]);
   const [measurements, setMeasurements] = useState<Measurement[]>([]);
@@ -968,6 +983,199 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
     );
   });
 
+  // Calculate total for PDF export
+  const totalResourcesSubtotal = useMemo(() => {
+    return activities.reduce((total, activity) => total + (activity.resources_subtotal || 0), 0);
+  }, [activities]);
+
+  // Export activities summary to PDF
+  const exportActivitiesPDF = () => {
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.getWidth();
+    
+    // Company info from settings
+    const companyName = companySettings.name || 'Mi Empresa';
+    const companyEmail = companySettings.email || '';
+    const companyPhone = companySettings.phone || '';
+    const companyAddress = companySettings.address || '';
+    const companyWeb = companySettings.website || '';
+    const companyInitials = companyName.substring(0, 2).toUpperCase();
+    
+    // Header with company branding
+    doc.setFillColor(37, 99, 235);
+    doc.roundedRect(14, 10, 25, 25, 3, 3, 'F');
+    doc.setTextColor(255);
+    doc.setFontSize(16);
+    doc.setFont('helvetica', 'bold');
+    doc.text(companyInitials, 26.5, 26, { align: 'center' });
+    doc.setTextColor(0);
+    
+    // Company name and contact
+    doc.setFontSize(16);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(37, 99, 235);
+    doc.text(companyName, 45, 18);
+    doc.setTextColor(0);
+    
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(100);
+    const contactLine = [companyEmail, companyPhone].filter(Boolean).join('  |  ');
+    const addressLine = [companyAddress, companyWeb].filter(Boolean).join('  |  ');
+    if (contactLine) doc.text(contactLine, 45, 24);
+    if (addressLine) doc.text(addressLine, 45, 30);
+    doc.setTextColor(0);
+    
+    // Separator line
+    doc.setDrawColor(200);
+    doc.line(14, 40, pageWidth - 14, 40);
+    
+    // Document title
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.text('RESUMEN DE ACTIVIDADES POR FASE', pageWidth / 2, 50, { align: 'center' });
+    
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'normal');
+    doc.text(budgetName, pageWidth / 2, 58, { align: 'center' });
+    
+    doc.setFontSize(9);
+    doc.setTextColor(100);
+    doc.text(`Fecha de generación: ${format(new Date(), "d 'de' MMMM 'de' yyyy", { locale: es })}`, pageWidth / 2, 65, { align: 'center' });
+    doc.setTextColor(0);
+
+    // Summary section
+    let yPos = 80;
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(37, 99, 235);
+    doc.text('Resumen General', 14, yPos);
+    doc.setTextColor(0);
+    
+    yPos += 8;
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    
+    const summaryData = [
+      ['Total de actividades:', activities.length.toString()],
+      ['Total de fases:', phases.length.toString()],
+    ];
+    
+    summaryData.forEach(([label, value]) => {
+      doc.text(label, 14, yPos);
+      doc.text(value, 80, yPos);
+      yPos += 6;
+    });
+    
+    // Total highlighted
+    yPos += 4;
+    doc.setFillColor(34, 197, 94);
+    doc.roundedRect(14, yPos - 4, pageWidth - 28, 10, 2, 2, 'F');
+    doc.setTextColor(255);
+    doc.setFont('helvetica', 'bold');
+    doc.text('TOTAL €SubTotal Recursos:', 18, yPos + 3);
+    doc.text(formatPdfCurrency(totalResourcesSubtotal), pageWidth - 18, yPos + 3, { align: 'right' });
+    doc.setTextColor(0);
+    doc.setFont('helvetica', 'normal');
+
+    // Activities grouped by phase table
+    yPos += 20;
+    
+    // Build table data grouped by phase
+    const tableData: any[] = [];
+    
+    // First add unassigned activities
+    const unassigned = activities.filter(a => !a.phase_id);
+    if (unassigned.length > 0) {
+      const unassignedSubtotal = unassigned.reduce((sum, a) => sum + (a.resources_subtotal || 0), 0);
+      tableData.push([
+        { content: 'Sin fase asignada', colSpan: 3, styles: { fillColor: [240, 240, 240], fontStyle: 'bold' } },
+        { content: formatPdfCurrency(unassignedSubtotal), styles: { fillColor: [240, 240, 240], fontStyle: 'bold', halign: 'right' } }
+      ]);
+      unassigned.forEach(activity => {
+        tableData.push([
+          `  ${generateActivityId(activity)}`,
+          activity.measurement_unit,
+          activity.files_count?.toString() || '0',
+          formatPdfCurrency(activity.resources_subtotal || 0)
+        ]);
+      });
+    }
+    
+    // Then add phases with their activities
+    phases.forEach(phase => {
+      const phaseActivities = activities.filter(a => a.phase_id === phase.id);
+      if (phaseActivities.length === 0) return;
+      
+      const phaseSubtotal = phaseActivities.reduce((sum, a) => sum + (a.resources_subtotal || 0), 0);
+      
+      // Phase header row
+      tableData.push([
+        { content: `${phase.code || ''} ${phase.name}`, colSpan: 3, styles: { fillColor: [59, 130, 246], textColor: [255, 255, 255], fontStyle: 'bold' } },
+        { content: formatPdfCurrency(phaseSubtotal), styles: { fillColor: [59, 130, 246], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'right' } }
+      ]);
+      
+      // Activity rows
+      phaseActivities.sort((a, b) => a.name.localeCompare(b.name)).forEach(activity => {
+        tableData.push([
+          `  ${generateActivityId(activity)}`,
+          activity.measurement_unit,
+          activity.files_count?.toString() || '0',
+          formatPdfCurrency(activity.resources_subtotal || 0)
+        ]);
+      });
+    });
+    
+    // Total row
+    tableData.push([
+      { content: 'TOTAL PRESUPUESTO', colSpan: 3, styles: { fillColor: [34, 197, 94], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'right' } },
+      { content: formatPdfCurrency(totalResourcesSubtotal), styles: { fillColor: [34, 197, 94], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'right' } }
+    ]);
+
+    autoTable(doc, {
+      startY: yPos,
+      head: [['ActividadID', 'Unidad', 'Archivos', '€SubTotal Recursos']],
+      body: tableData,
+      theme: 'striped',
+      headStyles: { fillColor: [59, 130, 246] },
+      margin: { left: 14, right: 14 },
+      styles: { fontSize: 8 },
+      columnStyles: {
+        0: { cellWidth: 90 },
+        1: { cellWidth: 20 },
+        2: { cellWidth: 20, halign: 'center' },
+        3: { cellWidth: 40, halign: 'right' },
+      },
+    });
+
+    // Footer with company info
+    const pageCount = doc.getNumberOfPages();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i);
+      
+      doc.setDrawColor(200);
+      doc.line(14, pageHeight - 20, pageWidth - 14, pageHeight - 20);
+      
+      doc.setFontSize(7);
+      doc.setTextColor(120);
+      const footerInfo = [companyName, companyEmail, companyPhone].filter(Boolean).join(' | ');
+      doc.text(footerInfo, 14, pageHeight - 14);
+      
+      doc.text(
+        `Página ${i} de ${pageCount}`,
+        pageWidth - 14,
+        pageHeight - 14,
+        { align: 'right' }
+      );
+    }
+
+    // Save
+    const fileName = `actividades_${budgetName.replace(/[^a-zA-Z0-9]/g, '_')}_${format(new Date(), 'yyyyMMdd')}.pdf`;
+    doc.save(fileName);
+    toast.success('PDF exportado correctamente');
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -1006,6 +1214,10 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
               Por Fase
             </Button>
           </div>
+          <Button variant="outline" size="sm" onClick={exportActivitiesPDF}>
+            <FileDown className="h-4 w-4 mr-1" />
+            Exportar PDF
+          </Button>
           {isAdmin && (
             <>
               <Button variant="outline" onClick={() => setImportDialogOpen(true)}>

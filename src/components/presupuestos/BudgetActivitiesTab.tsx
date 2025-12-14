@@ -318,6 +318,54 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
     }
   };
 
+  // Handle duplicate resource
+  const handleDuplicateResource = async (resource: ActivityResource) => {
+    if (!editingActivity) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from('budget_activity_resources')
+        .insert({
+          budget_id: editingActivity.budget_id,
+          activity_id: editingActivity.id,
+          name: `${resource.name} (copia)`,
+          external_unit_cost: resource.external_unit_cost,
+          unit: resource.unit,
+          resource_type: resource.resource_type,
+          safety_margin_percent: resource.safety_margin_percent,
+          sales_margin_percent: resource.sales_margin_percent,
+          manual_units: resource.manual_units,
+          related_units: resource.related_units,
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      
+      // Add to local state
+      if (data) {
+        const newResource: ActivityResource = {
+          id: data.id,
+          name: data.name,
+          external_unit_cost: data.external_unit_cost,
+          unit: data.unit,
+          resource_type: data.resource_type,
+          safety_margin_percent: data.safety_margin_percent,
+          sales_margin_percent: data.sales_margin_percent,
+          manual_units: data.manual_units,
+          related_units: data.related_units,
+        };
+        setActivityResources(prev => [...prev, newResource].sort((a, b) => a.name.localeCompare(b.name)));
+      }
+      
+      toast.success('Recurso duplicado');
+      fetchData();
+    } catch (err: any) {
+      console.error('Error duplicating resource:', err);
+      toast.error(err.message || 'Error al duplicar recurso');
+    }
+  };
+
   // Open delete confirmation
   const handleDeleteClick = (activity: BudgetActivity) => {
     setDeletingActivity(activity);
@@ -1125,7 +1173,7 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
                           <TableHead className="py-2">Ud</TableHead>
                           <TableHead className="py-2 text-right">Ud manual</TableHead>
                           <TableHead className="py-2 text-right">€SubTotal</TableHead>
-                          <TableHead className="py-2 w-24">Acciones</TableHead>
+                          <TableHead className="py-2 w-32">Acciones</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -1171,6 +1219,15 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
                                   </Button>
                                   {isAdmin && (
                                     <>
+                                      <Button 
+                                        variant="ghost" 
+                                        size="icon" 
+                                        className="h-7 w-7"
+                                        onClick={() => handleDuplicateResource(resource)}
+                                        title="Duplicar"
+                                      >
+                                        <Copy className="h-3.5 w-3.5" />
+                                      </Button>
                                       <Button 
                                         variant="ghost" 
                                         size="icon" 

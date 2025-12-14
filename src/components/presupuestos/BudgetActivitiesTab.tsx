@@ -12,7 +12,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Search, Upload, Pencil, Trash2, MoreHorizontal, FileUp, File, X, Download, ChevronRight, ChevronDown, List, Layers, Copy, Package, Wrench, Truck, Briefcase } from 'lucide-react';
+import { Plus, Search, Upload, Pencil, Trash2, MoreHorizontal, FileUp, File, X, Download, ChevronRight, ChevronDown, List, Layers, Copy, Package, Wrench, Truck, Briefcase, Eye } from 'lucide-react';
 import { toast } from 'sonner';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import { formatCurrency } from '@/lib/format-utils';
@@ -102,6 +102,8 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
   const [selectedActivity, setSelectedActivity] = useState<BudgetActivity | null>(null);
   const [activityFiles, setActivityFiles] = useState<ActivityFile[]>([]);
   const [activityResources, setActivityResources] = useState<ActivityResource[]>([]);
+  const [resourceDetailDialogOpen, setResourceDetailDialogOpen] = useState(false);
+  const [viewingResource, setViewingResource] = useState<ActivityResource | null>(null);
   
   const [form, setForm] = useState<ActivityForm>(emptyForm);
   const [isSaving, setIsSaving] = useState(false);
@@ -1123,7 +1125,7 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
                           <TableHead className="py-2">Ud</TableHead>
                           <TableHead className="py-2 text-right">Ud manual</TableHead>
                           <TableHead className="py-2 text-right">€SubTotal</TableHead>
-                          {isAdmin && <TableHead className="py-2 w-20">Acciones</TableHead>}
+                          <TableHead className="py-2 w-24">Acciones</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -1153,28 +1155,44 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
                               <TableCell className="py-1.5 text-right font-mono font-semibold text-primary">
                                 {formatCurrency(subtotal)}
                               </TableCell>
-                              {isAdmin && (
-                                <TableCell className="py-1.5">
-                                  <div className="flex gap-1">
-                                    <Button 
-                                      variant="ghost" 
-                                      size="icon" 
-                                      className="h-7 w-7"
-                                      onClick={() => handleEditResource(resource.id)}
-                                    >
-                                      <Pencil className="h-3.5 w-3.5" />
-                                    </Button>
-                                    <Button 
-                                      variant="ghost" 
-                                      size="icon" 
-                                      className="h-7 w-7 text-destructive"
-                                      onClick={() => handleDeleteResource(resource.id)}
-                                    >
-                                      <Trash2 className="h-3.5 w-3.5" />
-                                    </Button>
-                                  </div>
-                                </TableCell>
-                              )}
+                              <TableCell className="py-1.5">
+                                <div className="flex gap-1">
+                                  <Button 
+                                    variant="ghost" 
+                                    size="icon" 
+                                    className="h-7 w-7"
+                                    onClick={() => {
+                                      setViewingResource(resource);
+                                      setResourceDetailDialogOpen(true);
+                                    }}
+                                    title="Ver detalle"
+                                  >
+                                    <Eye className="h-3.5 w-3.5" />
+                                  </Button>
+                                  {isAdmin && (
+                                    <>
+                                      <Button 
+                                        variant="ghost" 
+                                        size="icon" 
+                                        className="h-7 w-7"
+                                        onClick={() => handleEditResource(resource.id)}
+                                        title="Editar"
+                                      >
+                                        <Pencil className="h-3.5 w-3.5" />
+                                      </Button>
+                                      <Button 
+                                        variant="ghost" 
+                                        size="icon" 
+                                        className="h-7 w-7 text-destructive"
+                                        onClick={() => handleDeleteResource(resource.id)}
+                                        title="Eliminar"
+                                      >
+                                        <Trash2 className="h-3.5 w-3.5" />
+                                      </Button>
+                                    </>
+                                  )}
+                                </div>
+                              </TableCell>
                             </TableRow>
                           );
                         })}
@@ -1197,6 +1215,132 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
             <Button onClick={handleSave} disabled={isSaving}>
               {isSaving ? 'Guardando...' : 'Guardar'}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Resource Detail Dialog */}
+      <Dialog open={resourceDetailDialogOpen} onOpenChange={setResourceDetailDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Detalle del Recurso</DialogTitle>
+            <DialogDescription>
+              Información completa del recurso
+            </DialogDescription>
+          </DialogHeader>
+          
+          {viewingResource && (() => {
+            const externalCost = viewingResource.external_unit_cost || 0;
+            const safetyPercent = viewingResource.safety_margin_percent || 0.15;
+            const salesPercent = viewingResource.sales_margin_percent || 0.25;
+            const safetyMarginUd = externalCost * safetyPercent;
+            const internalCostUd = externalCost + safetyMarginUd;
+            const salesMarginUd = internalCostUd * salesPercent;
+            const salesCostUd = internalCostUd + salesMarginUd;
+            const calculatedUnits = viewingResource.manual_units !== null 
+              ? viewingResource.manual_units 
+              : (viewingResource.related_units || 0);
+            const subtotal = calculatedUnits * salesCostUd;
+            
+            return (
+              <div className="space-y-4 py-4">
+                {/* Resource name and type */}
+                <div className="flex items-center justify-between">
+                  <h3 className="font-semibold text-lg">{viewingResource.name}</h3>
+                  {viewingResource.resource_type && (
+                    <Badge variant="outline" className="flex items-center gap-1">
+                      {viewingResource.resource_type === 'Producto' && <Package className="h-3 w-3" />}
+                      {viewingResource.resource_type === 'Mano de obra' && <Wrench className="h-3 w-3" />}
+                      {viewingResource.resource_type === 'Alquiler' && <Truck className="h-3 w-3" />}
+                      {viewingResource.resource_type === 'Servicio' && <Briefcase className="h-3 w-3" />}
+                      {viewingResource.resource_type}
+                    </Badge>
+                  )}
+                </div>
+                
+                {/* Cost breakdown */}
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div className="bg-muted/50 p-3 rounded-lg">
+                    <p className="text-muted-foreground text-xs">€Coste ud externa</p>
+                    <p className="font-mono font-semibold">{formatCurrency(externalCost)}</p>
+                  </div>
+                  <div className="bg-muted/50 p-3 rounded-lg">
+                    <p className="text-muted-foreground text-xs">Unidad medida</p>
+                    <p className="font-semibold">{viewingResource.unit || '-'}</p>
+                  </div>
+                </div>
+                
+                {/* Margins */}
+                <div className="border rounded-lg p-3 space-y-2">
+                  <p className="text-xs font-medium text-muted-foreground">Márgenes</p>
+                  <div className="grid grid-cols-3 gap-2 text-sm">
+                    <div>
+                      <p className="text-muted-foreground text-xs">%Seguridad</p>
+                      <p className="font-mono">{(safetyPercent * 100).toFixed(0)}%</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground text-xs">€Margen seg.</p>
+                      <p className="font-mono">{formatCurrency(safetyMarginUd)}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground text-xs">€Coste interno</p>
+                      <p className="font-mono">{formatCurrency(internalCostUd)}</p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 text-sm pt-2 border-t">
+                    <div>
+                      <p className="text-muted-foreground text-xs">%Venta</p>
+                      <p className="font-mono">{(salesPercent * 100).toFixed(0)}%</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground text-xs">€Margen venta</p>
+                      <p className="font-mono">{formatCurrency(salesMarginUd)}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground text-xs">€Coste venta ud</p>
+                      <p className="font-mono font-semibold text-primary">{formatCurrency(salesCostUd)}</p>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Units */}
+                <div className="grid grid-cols-3 gap-3 text-sm">
+                  <div className="bg-muted/50 p-3 rounded-lg">
+                    <p className="text-muted-foreground text-xs">Uds manual</p>
+                    <p className="font-mono">{viewingResource.manual_units !== null ? viewingResource.manual_units : '-'}</p>
+                  </div>
+                  <div className="bg-muted/50 p-3 rounded-lg">
+                    <p className="text-muted-foreground text-xs">Uds relacionadas</p>
+                    <p className="font-mono">{viewingResource.related_units !== null ? viewingResource.related_units : '-'}</p>
+                  </div>
+                  <div className="bg-muted/50 p-3 rounded-lg">
+                    <p className="text-muted-foreground text-xs">Uds calculadas</p>
+                    <p className="font-mono font-semibold">{calculatedUnits}</p>
+                  </div>
+                </div>
+                
+                {/* Total */}
+                <div className="bg-primary/10 p-4 rounded-lg text-center">
+                  <p className="text-sm text-muted-foreground">€SubTotal venta</p>
+                  <p className="text-2xl font-bold text-primary font-mono">{formatCurrency(subtotal)}</p>
+                </div>
+              </div>
+            );
+          })()}
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setResourceDetailDialogOpen(false)}>
+              Cerrar
+            </Button>
+            {isAdmin && viewingResource && (
+              <Button onClick={() => {
+                setResourceDetailDialogOpen(false);
+                handleEditResource(viewingResource.id);
+              }}>
+                <Pencil className="h-4 w-4 mr-2" />
+                Editar
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

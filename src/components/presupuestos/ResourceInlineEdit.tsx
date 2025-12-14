@@ -1,14 +1,17 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { NumericInput } from '@/components/ui/numeric-input';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface InlineEditProps {
   value: string | number | null;
   onSave: (value: any) => Promise<void>;
-  type: 'text' | 'number' | 'select' | 'percent';
-  options?: { value: string; label: string }[];
+  type: 'text' | 'number' | 'select' | 'percent' | 'searchable-select';
+  options?: { value: string; label: string; searchContent?: string }[];
   decimals?: number;
   className?: string;
   displayValue?: React.ReactNode;
@@ -28,6 +31,7 @@ export function ResourceInlineEdit({
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState<string | number>(value ?? '');
   const [isSaving, setIsSaving] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -41,6 +45,12 @@ export function ResourceInlineEdit({
     setEditValue(value ?? '');
   }, [value]);
 
+  useEffect(() => {
+    if (isEditing) {
+      setSearchQuery('');
+    }
+  }, [isEditing]);
+
   const handleSave = async () => {
     if (isSaving) return;
     
@@ -51,7 +61,7 @@ export function ResourceInlineEdit({
       finalValue = isNaN(num) ? null : num;
     }
     
-    if (type === 'select' && editValue === '__none__') {
+    if ((type === 'select' || type === 'searchable-select') && editValue === '__none__') {
       finalValue = null;
     }
 
@@ -75,6 +85,28 @@ export function ResourceInlineEdit({
     }
   };
 
+  // Filter and sort options for searchable select
+  const filteredOptions = useMemo(() => {
+    if (!options) return [];
+    
+    const query = searchQuery.toLowerCase().trim();
+    let filtered = options;
+    
+    if (query) {
+      filtered = options.filter(opt => {
+        const searchContent = opt.searchContent || opt.label;
+        return searchContent.toLowerCase().includes(query);
+      });
+    }
+    
+    // Sort alphabetically by label (which is ActividadID)
+    return filtered.sort((a, b) => {
+      if (a.value === '__none__') return -1;
+      if (b.value === '__none__') return 1;
+      return a.label.localeCompare(b.label);
+    });
+  }, [options, searchQuery]);
+
   if (disabled) {
     return (
       <span className={cn('cursor-default', className)}>
@@ -95,6 +127,60 @@ export function ResourceInlineEdit({
       >
         {displayValue ?? String(value ?? '-')}
       </span>
+    );
+  }
+
+  if (type === 'searchable-select' && options) {
+    const handleSelect = (selectedValue: string) => {
+      setEditValue(selectedValue);
+      const finalValue = selectedValue === '__none__' ? null : selectedValue;
+      if (finalValue !== value) {
+        setIsSaving(true);
+        onSave(finalValue).finally(() => {
+          setIsSaving(false);
+          setIsEditing(false);
+        });
+      } else {
+        setIsEditing(false);
+      }
+    };
+
+    return (
+      <Popover open={true} onOpenChange={(open) => !open && setIsEditing(false)}>
+        <PopoverTrigger asChild>
+          <span className="sr-only">Seleccionar actividad</span>
+        </PopoverTrigger>
+        <PopoverContent className="w-[320px] p-0" align="start">
+          <Command shouldFilter={false}>
+            <CommandInput 
+              placeholder="Buscar actividad..." 
+              value={searchQuery}
+              onValueChange={setSearchQuery}
+            />
+            <CommandList className="max-h-[200px]">
+              <CommandEmpty>No se encontraron actividades.</CommandEmpty>
+              <CommandGroup>
+                {filteredOptions.map((opt) => (
+                  <CommandItem
+                    key={opt.value}
+                    value={opt.value}
+                    onSelect={() => handleSelect(opt.value)}
+                    className="cursor-pointer"
+                  >
+                    <Check
+                      className={cn(
+                        "mr-2 h-4 w-4",
+                        String(editValue) === opt.value ? "opacity-100" : "opacity-0"
+                      )}
+                    />
+                    <span className="text-sm">{opt.label}</span>
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
     );
   }
 

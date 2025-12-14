@@ -208,15 +208,23 @@ export function ResourcesGroupedView({
     
     const unitOptions = UNITS.map(u => ({ value: u, label: u }));
     const typeOptions = RESOURCE_TYPES.map(t => ({ value: t, label: t }));
+    
+    // Activity options sorted alphabetically by ActividadID with searchContent for full-text search
     const activityOptions = [
-      { value: '__none__', label: 'Sin actividad' },
-      ...activities.map(a => {
-        const phase = a.phase_id ? phases.find(p => p.id === a.phase_id) : null;
-        return {
-          value: a.id,
-          label: `${phase?.code || ''} ${a.code}.-${a.name}`,
-        };
-      }),
+      { value: '__none__', label: 'Sin actividad', searchContent: 'sin actividad' },
+      ...activities
+        .map(a => {
+          const phase = a.phase_id ? phases.find(p => p.id === a.phase_id) : null;
+          const actividadId = `${phase?.code || ''} ${a.code}.-${a.name}`;
+          // Include all searchable content: code, name, description, phase info
+          const searchContent = `${phase?.code || ''} ${phase?.name || ''} ${a.code} ${a.name}`.toLowerCase();
+          return {
+            value: a.id,
+            label: actividadId,
+            searchContent,
+          };
+        })
+        .sort((a, b) => a.label.localeCompare(b.label)),
     ];
 
     return (
@@ -288,7 +296,7 @@ export function ResourcesGroupedView({
             value={resource.activity_id || '__none__'}
             displayValue={getActivityId(resource.activity_id) || 'Sin actividad'}
             onSave={(v) => onInlineUpdate(resource.id, 'activity_id', v === '__none__' ? null : v)}
-            type="select"
+            type="searchable-select"
             options={activityOptions}
             disabled={!isAdmin}
           />

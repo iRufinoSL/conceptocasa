@@ -16,6 +16,7 @@ import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ResourceInlineEdit } from '@/components/presupuestos/ResourceInlineEdit';
 import { MeasurementMultiSelect } from '@/components/presupuestos/MeasurementMultiSelect';
+import { syncAllAffectedResources, syncResourcesRelatedUnits } from '@/lib/budget-utils';
 import * as XLSX from 'xlsx';
 
 // Define editable fields per row for tab navigation
@@ -324,6 +325,9 @@ export function BudgetMeasurementsTab({ budgetId, isAdmin }: BudgetMeasurementsT
           if (actError) throw actError;
         }
 
+        // Sync related_units for resources of linked activities
+        await syncAllAffectedResources(editingMeasurement.id);
+
         toast.success('Medición actualizada');
       } else {
         // Create measurement
@@ -363,6 +367,9 @@ export function BudgetMeasurementsTab({ budgetId, isAdmin }: BudgetMeasurementsT
           
           if (actError) throw actError;
         }
+
+        // Sync related_units for resources of newly linked activities
+        await syncResourcesRelatedUnits(newMeasurement.id);
 
         toast.success('Medición creada');
       }
@@ -495,6 +502,12 @@ export function BudgetMeasurementsTab({ budgetId, isAdmin }: BudgetMeasurementsT
         .eq('id', measurementId);
 
       if (error) throw error;
+      
+      // If manual_units changed, sync related_units for affected resources
+      if (field === 'manual_units') {
+        await syncAllAffectedResources(measurementId);
+      }
+      
       fetchData();
     } catch (error) {
       console.error('Error updating measurement:', error);
@@ -523,6 +536,9 @@ export function BudgetMeasurementsTab({ budgetId, isAdmin }: BudgetMeasurementsT
 
         if (error) throw error;
       }
+
+      // Sync related_units for resources of the newly linked activities
+      await syncResourcesRelatedUnits(measurementId);
 
       toast.success('Actividades actualizadas');
       fetchData();
@@ -557,6 +573,9 @@ export function BudgetMeasurementsTab({ budgetId, isAdmin }: BudgetMeasurementsT
 
         if (error) throw error;
       }
+
+      // Sync related_units for resources of activities linked to this measurement
+      await syncResourcesRelatedUnits(measurementId);
 
       toast.success('Mediciones relacionadas actualizadas');
       fetchData();

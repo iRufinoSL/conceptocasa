@@ -1519,6 +1519,7 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
                       <TableHeader>
                         <TableRow className="text-xs">
                           <TableHead className="py-2">Recurso</TableHead>
+                          <TableHead className="py-2">Tipo</TableHead>
                           <TableHead className="py-2 text-right">€Coste ud ext</TableHead>
                           <TableHead className="py-2">Ud</TableHead>
                           <TableHead className="py-2 text-right">%Seg</TableHead>
@@ -1558,10 +1559,46 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
                               toast.error('Error al actualizar');
                             }
                           };
+
+                          const resourceTypeIcon = resource.resource_type === 'Producto' ? <Package className="h-3 w-3" /> 
+                            : resource.resource_type === 'Mano de obra' ? <Wrench className="h-3 w-3" />
+                            : resource.resource_type === 'Alquiler' ? <Truck className="h-3 w-3" />
+                            : resource.resource_type === 'Servicio' ? <Briefcase className="h-3 w-3" />
+                            : null;
                           
                           return (
                             <TableRow key={resource.id} className="text-sm">
                               <TableCell className="py-1.5 font-medium">{resource.name}</TableCell>
+                              <TableCell className="py-1.5">
+                                {isAdmin ? (
+                                  <ResourceInlineEdit
+                                    value={resource.resource_type || ''}
+                                    type="select"
+                                    options={[
+                                      { value: 'Producto', label: 'Producto' },
+                                      { value: 'Mano de obra', label: 'Mano de obra' },
+                                      { value: 'Alquiler', label: 'Alquiler' },
+                                      { value: 'Servicio', label: 'Servicio' },
+                                    ]}
+                                    displayValue={
+                                      resource.resource_type ? (
+                                        <Badge variant="outline" className="text-xs flex items-center gap-1 w-fit">
+                                          {resourceTypeIcon}
+                                          {resource.resource_type}
+                                        </Badge>
+                                      ) : '-'
+                                    }
+                                    onSave={async (v) => handleInlineUpdate('resource_type', v)}
+                                  />
+                                ) : (
+                                  resource.resource_type ? (
+                                    <Badge variant="outline" className="text-xs flex items-center gap-1">
+                                      {resourceTypeIcon}
+                                      {resource.resource_type}
+                                    </Badge>
+                                  ) : '-'
+                                )}
+                              </TableCell>
                               <TableCell className="py-1.5 text-right">
                                 {isAdmin ? (
                                   <ResourceInlineEdit

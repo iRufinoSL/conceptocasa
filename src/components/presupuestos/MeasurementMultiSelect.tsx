@@ -71,10 +71,14 @@ export function MeasurementMultiSelect({
   };
 
   const handleSave = async () => {
+    const scrollPosition = window.scrollY;
     setIsSaving(true);
     try {
       await onSave(localSelectedIds);
       setIsOpen(false);
+      requestAnimationFrame(() => {
+        window.scrollTo({ top: scrollPosition, behavior: 'instant' });
+      });
     } finally {
       setIsSaving(false);
     }

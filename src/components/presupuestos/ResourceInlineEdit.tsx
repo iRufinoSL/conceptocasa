@@ -54,6 +54,9 @@ export function ResourceInlineEdit({
   const handleSave = async () => {
     if (isSaving) return;
     
+    // Store scroll position before saving
+    const scrollPosition = window.scrollY;
+    
     let finalValue: any = editValue;
     
     if (type === 'number' || type === 'percent') {
@@ -69,6 +72,10 @@ export function ResourceInlineEdit({
       setIsSaving(true);
       try {
         await onSave(finalValue);
+        // Restore scroll position after save completes
+        requestAnimationFrame(() => {
+          window.scrollTo({ top: scrollPosition, behavior: 'instant' });
+        });
       } finally {
         setIsSaving(false);
       }
@@ -78,6 +85,7 @@ export function ResourceInlineEdit({
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
+      e.preventDefault();
       handleSave();
     } else if (e.key === 'Escape') {
       setEditValue(value ?? '');
@@ -132,6 +140,7 @@ export function ResourceInlineEdit({
 
   if (type === 'searchable-select' && options) {
     const handleSelect = (selectedValue: string) => {
+      const scrollPosition = window.scrollY;
       setEditValue(selectedValue);
       const finalValue = selectedValue === '__none__' ? null : selectedValue;
       if (finalValue !== value) {
@@ -139,6 +148,9 @@ export function ResourceInlineEdit({
         onSave(finalValue).finally(() => {
           setIsSaving(false);
           setIsEditing(false);
+          requestAnimationFrame(() => {
+            window.scrollTo({ top: scrollPosition, behavior: 'instant' });
+          });
         });
       } else {
         setIsEditing(false);
@@ -189,6 +201,7 @@ export function ResourceInlineEdit({
       <Select
         value={String(editValue || '__none__')}
         onValueChange={(v) => {
+          const scrollPosition = window.scrollY;
           setEditValue(v);
           // Auto-save on select
           const finalValue = v === '__none__' ? null : v;
@@ -197,6 +210,9 @@ export function ResourceInlineEdit({
             onSave(finalValue).finally(() => {
               setIsSaving(false);
               setIsEditing(false);
+              requestAnimationFrame(() => {
+                window.scrollTo({ top: scrollPosition, behavior: 'instant' });
+              });
             });
           } else {
             setIsEditing(false);

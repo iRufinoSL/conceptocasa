@@ -5,12 +5,13 @@ import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowLeft, Calculator, ClipboardList, Building2, FileText, Settings, Calendar, Ruler } from 'lucide-react';
+import { ArrowLeft, Calculator, ClipboardList, Building2, FileText, Settings, Calendar, Ruler, BarChart3 } from 'lucide-react';
 import { AppNavDropdown } from '@/components/AppNavDropdown';
 import { BudgetActivitiesTab } from '@/components/presupuestos/BudgetActivitiesTab';
 import { BudgetPhasesTab } from '@/components/presupuestos/BudgetPhasesTab';
 import { BudgetResourcesTab } from '@/components/presupuestos/BudgetResourcesTab';
 import { BudgetMeasurementsTab } from '@/components/presupuestos/BudgetMeasurementsTab';
+import { BudgetVisualSummary } from '@/components/presupuestos/BudgetVisualSummary';
 interface Presupuesto {
   id: string;
   nombre: string;
@@ -241,15 +242,7 @@ export default function PresupuestoDashboard() {
           </TabsContent>
 
           <TabsContent value="resumen" className="mt-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Resumen del Presupuesto</CardTitle>
-                <CardDescription>Resumen económico y exportación a PDF</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <p className="text-muted-foreground text-center py-8">Próximamente</p>
-              </CardContent>
-            </Card>
+            <BudgetVisualSummary budgetId={presupuesto.id} budgetName={presupuesto.nombre} />
           </TabsContent>
 
           <TabsContent value="config" className="mt-6">

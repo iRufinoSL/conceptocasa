@@ -16,6 +16,9 @@ interface InlineEditProps {
   className?: string;
   displayValue?: React.ReactNode;
   disabled?: boolean;
+  tabIndex?: number;
+  onTabNext?: () => void;
+  onTabPrev?: () => void;
 }
 
 export function ResourceInlineEdit({
@@ -27,6 +30,9 @@ export function ResourceInlineEdit({
   className,
   displayValue,
   disabled = false,
+  tabIndex,
+  onTabNext,
+  onTabPrev,
 }: InlineEditProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState<string | number>(value ?? '');
@@ -90,10 +96,21 @@ export function ResourceInlineEdit({
     setIsEditing(false);
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
+  const handleKeyDown = async (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
       e.preventDefault();
-      handleSave();
+      await handleSave();
+    } else if (e.key === 'Tab') {
+      e.preventDefault();
+      await handleSave();
+      // Navigate to next/prev field after saving
+      requestAnimationFrame(() => {
+        if (e.shiftKey && onTabPrev) {
+          onTabPrev();
+        } else if (!e.shiftKey && onTabNext) {
+          onTabNext();
+        }
+      });
     } else if (e.key === 'Escape') {
       setEditValue(value ?? '');
       setIsEditing(false);
@@ -135,10 +152,19 @@ export function ResourceInlineEdit({
       <span
         className={cn(
           'cursor-pointer hover:bg-muted/50 px-1 py-0.5 rounded transition-colors inline-flex items-center gap-1',
+          'focus:outline-none focus:ring-2 focus:ring-primary/50 focus:bg-muted/50',
           className
         )}
         onClick={() => setIsEditing(true)}
-        title="Clic para editar"
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            setIsEditing(true);
+          }
+        }}
+        tabIndex={tabIndex ?? 0}
+        role="button"
+        title="Clic para editar (Tab para navegar)"
       >
         {displayValue ?? String(value ?? '-')}
         {showSuccess && (

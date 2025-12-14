@@ -18,6 +18,10 @@ import { ResourceInlineEdit } from '@/components/presupuestos/ResourceInlineEdit
 import { MeasurementMultiSelect } from '@/components/presupuestos/MeasurementMultiSelect';
 import * as XLSX from 'xlsx';
 
+// Define editable fields per row for tab navigation
+const EDITABLE_FIELDS = ['name', 'manual_units', 'measurement_unit'] as const;
+type EditableField = typeof EDITABLE_FIELDS[number];
+
 interface Measurement {
   id: string;
   budget_id: string;
@@ -83,6 +87,22 @@ export function BudgetMeasurementsTab({ budgetId, isAdmin }: BudgetMeasurementsT
   const [importFile, setImportFile] = useState<File | null>(null);
   const [isImporting, setIsImporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Tab navigation refs - stores refs for each editable cell
+  const cellRefs = useRef<Map<string, HTMLElement | null>>(new Map());
+
+  // Get cell key for ref storage
+  const getCellKey = (measurementId: string, field: EditableField) => `${measurementId}-${field}`;
+
+  // Focus a specific cell
+  const focusCell = useCallback((measurementId: string, field: EditableField) => {
+    const key = getCellKey(measurementId, field);
+    const element = cellRefs.current.get(key);
+    if (element) {
+      element.focus();
+      element.click();
+    }
+  }, []);
 
   const fetchData = async () => {
     setLoading(true);
@@ -184,6 +204,39 @@ export function BudgetMeasurementsTab({ budgetId, isAdmin }: BudgetMeasurementsT
       generateMedicionId(m).toLowerCase().includes(term)
     );
   }, [measurements, searchTerm, relations, activities, phases]);
+
+  // Navigate to next/prev editable field (must be after filteredMeasurements)
+  const navigateToField = useCallback((currentMeasurementId: string, currentField: EditableField, direction: 'next' | 'prev') => {
+    const currentFieldIndex = EDITABLE_FIELDS.indexOf(currentField);
+    const currentRowIndex = filteredMeasurements.findIndex(m => m.id === currentMeasurementId);
+    
+    if (currentRowIndex === -1) return;
+
+    let nextRowIndex = currentRowIndex;
+    let nextFieldIndex = currentFieldIndex;
+
+    if (direction === 'next') {
+      nextFieldIndex++;
+      if (nextFieldIndex >= EDITABLE_FIELDS.length) {
+        nextFieldIndex = 0;
+        nextRowIndex++;
+      }
+    } else {
+      nextFieldIndex--;
+      if (nextFieldIndex < 0) {
+        nextFieldIndex = EDITABLE_FIELDS.length - 1;
+        nextRowIndex--;
+      }
+    }
+
+    // Check bounds
+    if (nextRowIndex < 0 || nextRowIndex >= filteredMeasurements.length) return;
+
+    const nextMeasurement = filteredMeasurements[nextRowIndex];
+    const nextField = EDITABLE_FIELDS[nextFieldIndex];
+    
+    focusCell(nextMeasurement.id, nextField);
+  }, [filteredMeasurements, focusCell]);
 
   const openCreateForm = () => {
     setEditingMeasurement(null);
@@ -932,41 +985,68 @@ export function BudgetMeasurementsTab({ budgetId, isAdmin }: BudgetMeasurementsT
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredMeasurements.map((measurement) => {
+                  {filteredMeasurements.map((measurement, rowIndex) => {
                     const relatedUnits = getRelatedUnits(measurement.id);
                     const calculatedUnits = getCalculatedUnits(measurement);
                     const relatedMeasurements = getRelatedMeasurements(measurement.id);
                     const medicionId = generateMedicionId(measurement);
                     const relatedActs = getRelatedActivities(measurement.id);
 
+                    // Create tab navigation handlers for each field
+                    const createTabHandlers = (field: EditableField) => ({
+                      onTabNext: () => navigateToField(measurement.id, field, 'next'),
+                      onTabPrev: () => navigateToField(measurement.id, field, 'prev'),
+                    });
+
                     return (
                       <TableRow key={measurement.id}>
                         <TableCell className="font-medium">
-                          <ResourceInlineEdit
-                            value={measurement.name}
-                            onSave={(v) => handleInlineUpdate(measurement.id, 'name', v)}
-                            type="text"
-                            disabled={!isAdmin}
-                          />
+                          <span 
+                            ref={(el) => cellRefs.current.set(getCellKey(measurement.id, 'name'), el)}
+                            tabIndex={-1}
+                          >
+                            <ResourceInlineEdit
+                              value={measurement.name}
+                              onSave={(v) => handleInlineUpdate(measurement.id, 'name', v)}
+                              type="text"
+                              disabled={!isAdmin}
+                              tabIndex={rowIndex * EDITABLE_FIELDS.length}
+                              {...createTabHandlers('name')}
+                            />
+                          </span>
                         </TableCell>
                         <TableCell className="text-right">
-                          <ResourceInlineEdit
-                            value={measurement.manual_units}
-                            onSave={(v) => handleInlineUpdate(measurement.id, 'manual_units', v)}
-                            type="number"
-                            decimals={2}
-                            disabled={!isAdmin}
-                            displayValue={measurement.manual_units !== null ? formatNumber(measurement.manual_units) : '-'}
-                          />
+                          <span 
+                            ref={(el) => cellRefs.current.set(getCellKey(measurement.id, 'manual_units'), el)}
+                            tabIndex={-1}
+                          >
+                            <ResourceInlineEdit
+                              value={measurement.manual_units}
+                              onSave={(v) => handleInlineUpdate(measurement.id, 'manual_units', v)}
+                              type="number"
+                              decimals={2}
+                              disabled={!isAdmin}
+                              displayValue={measurement.manual_units !== null ? formatNumber(measurement.manual_units) : '-'}
+                              tabIndex={rowIndex * EDITABLE_FIELDS.length + 1}
+                              {...createTabHandlers('manual_units')}
+                            />
+                          </span>
                         </TableCell>
                         <TableCell>
-                          <ResourceInlineEdit
-                            value={measurement.measurement_unit || 'ud'}
-                            onSave={(v) => handleInlineUpdate(measurement.id, 'measurement_unit', v)}
-                            type="select"
-                            options={MEASUREMENT_UNITS.map(u => ({ value: u, label: u }))}
-                            disabled={!isAdmin}
-                          />
+                          <span 
+                            ref={(el) => cellRefs.current.set(getCellKey(measurement.id, 'measurement_unit'), el)}
+                            tabIndex={-1}
+                          >
+                            <ResourceInlineEdit
+                              value={measurement.measurement_unit || 'ud'}
+                              onSave={(v) => handleInlineUpdate(measurement.id, 'measurement_unit', v)}
+                              type="select"
+                              options={MEASUREMENT_UNITS.map(u => ({ value: u, label: u }))}
+                              disabled={!isAdmin}
+                              tabIndex={rowIndex * EDITABLE_FIELDS.length + 2}
+                              {...createTabHandlers('measurement_unit')}
+                            />
+                          </span>
                         </TableCell>
                         <TableCell className="max-w-[200px]">
                           <MeasurementMultiSelect

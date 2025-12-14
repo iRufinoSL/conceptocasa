@@ -1,13 +1,15 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
+import { useVersionCheck } from '@/hooks/useVersionCheck';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { toast } from 'sonner';
 import { z } from 'zod';
-import { Building2, Mail, Lock, Eye, EyeOff } from 'lucide-react';
+import { Building2, Mail, Lock, Eye, EyeOff, RefreshCw } from 'lucide-react';
 
 const emailSchema = z.string().email('Email inválido');
 const passwordSchema = z.string()
@@ -17,6 +19,7 @@ const passwordSchema = z.string()
 export default function Auth() {
   const navigate = useNavigate();
   const { user, loading, signIn } = useAuth();
+  const { hasUpdate, updateApp } = useVersionCheck();
   
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -99,6 +102,25 @@ export default function Auth() {
           </CardDescription>
         </CardHeader>
         <CardContent>
+          {hasUpdate && (
+            <Alert className="mb-4 border-amber-500 bg-amber-50 dark:bg-amber-950/30">
+              <RefreshCw className="h-4 w-4 text-amber-600" />
+              <AlertDescription className="flex items-center justify-between">
+                <span className="text-amber-800 dark:text-amber-200">
+                  Hay una nueva versión disponible
+                </span>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={updateApp}
+                  className="ml-2 border-amber-500 text-amber-700 hover:bg-amber-100 dark:hover:bg-amber-900"
+                >
+                  <RefreshCw className="h-3 w-3 mr-1" />
+                  Actualizar
+                </Button>
+              </AlertDescription>
+            </Alert>
+          )}
           <form onSubmit={handleSignIn} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="login-email">Email</Label>

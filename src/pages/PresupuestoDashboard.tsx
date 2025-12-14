@@ -47,6 +47,15 @@ export default function PresupuestoDashboard() {
     return () => window.removeEventListener('edit-activity', handleEditActivity);
   }, []);
 
+  // Listen for navigate-to-resources events to switch to resources tab
+  useEffect(() => {
+    const handleNavigateToResources = () => {
+      setActiveTab('recursos');
+    };
+    window.addEventListener('navigate-to-resources', handleNavigateToResources);
+    return () => window.removeEventListener('navigate-to-resources', handleNavigateToResources);
+  }, []);
+
   useEffect(() => {
     const fetchData = async () => {
       if (!user || !id) {

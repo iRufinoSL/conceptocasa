@@ -139,6 +139,32 @@ export function BudgetResourcesTab({ budgetId, isAdmin }: BudgetResourcesTabProp
     fetchData();
   }, [budgetId]);
 
+  // Listen for navigation events from Activities tab
+  useEffect(() => {
+    const handleNavigateToResources = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      const detail = customEvent.detail;
+      
+      if (detail?.action === 'new' && detail?.activityId) {
+        // Open form with pre-selected activity
+        setEditingResource(null);
+        setFormOpen(true);
+        // Store the pre-selected activity ID for the form
+        window.sessionStorage.setItem('preselectedActivityId', detail.activityId);
+      } else if (detail?.action === 'edit' && detail?.resourceId) {
+        // Find and edit the resource
+        const resource = resources.find(r => r.id === detail.resourceId);
+        if (resource) {
+          setEditingResource(resource);
+          setFormOpen(true);
+        }
+      }
+    };
+    
+    window.addEventListener('navigate-to-resources', handleNavigateToResources);
+    return () => window.removeEventListener('navigate-to-resources', handleNavigateToResources);
+  }, [resources]);
+
   // Get ActivityID for display
   const getActivityId = (activityId: string | null) => {
     if (!activityId) return '';

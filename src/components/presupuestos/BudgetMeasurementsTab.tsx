@@ -1,0 +1,639 @@
+import { useState, useEffect, useMemo } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Badge } from '@/components/ui/badge';
+import { toast } from 'sonner';
+import { Plus, Search, Edit, Trash2, Ruler, Link2 } from 'lucide-react';
+import { formatNumber } from '@/lib/format-utils';
+import { NumericInput } from '@/components/ui/numeric-input';
+import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
+import { Checkbox } from '@/components/ui/checkbox';
+
+interface Measurement {
+  id: string;
+  budget_id: string;
+  name: string;
+  manual_units: number | null;
+  measurement_unit: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+interface MeasurementRelation {
+  id: string;
+  measurement_id: string;
+  related_measurement_id: string;
+}
+
+interface Activity {
+  id: string;
+  name: string;
+  code: string;
+  phase_id: string | null;
+  measurement_id: string | null;
+}
+
+interface Phase {
+  id: string;
+  name: string;
+  code: string | null;
+}
+
+interface BudgetMeasurementsTabProps {
+  budgetId: string;
+  isAdmin: boolean;
+}
+
+const MEASUREMENT_UNITS = ['m2', 'm3', 'ml', 'ud', 'mes', 'día', 'hora', 'kg', 't', 'l', 'pa'];
+
+export function BudgetMeasurementsTab({ budgetId, isAdmin }: BudgetMeasurementsTabProps) {
+  const [measurements, setMeasurements] = useState<Measurement[]>([]);
+  const [relations, setRelations] = useState<MeasurementRelation[]>([]);
+  const [activities, setActivities] = useState<Activity[]>([]);
+  const [phases, setPhases] = useState<Phase[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
+  
+  // Form states
+  const [formOpen, setFormOpen] = useState(false);
+  const [editingMeasurement, setEditingMeasurement] = useState<Measurement | null>(null);
+  const [formData, setFormData] = useState({
+    name: '',
+    manual_units: null as number | null,
+    measurement_unit: 'ud',
+    related_measurement_ids: [] as string[],
+    activity_ids: [] as string[]
+  });
+  
+  // Delete dialog
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [measurementToDelete, setMeasurementToDelete] = useState<Measurement | null>(null);
+
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      const [measurementsRes, relationsRes, activitiesRes, phasesRes] = await Promise.all([
+        supabase.from('budget_measurements').select('*').eq('budget_id', budgetId).order('name'),
+        supabase.from('budget_measurement_relations').select('*'),
+        supabase.from('budget_activities').select('id, name, code, phase_id, measurement_id').eq('budget_id', budgetId),
+        supabase.from('budget_phases').select('id, name, code').eq('budget_id', budgetId)
+      ]);
+
+      if (measurementsRes.error) throw measurementsRes.error;
+      if (relationsRes.error) throw relationsRes.error;
+      if (activitiesRes.error) throw activitiesRes.error;
+      if (phasesRes.error) throw phasesRes.error;
+
+      setMeasurements(measurementsRes.data || []);
+      
+      // Filter relations to only those belonging to this budget's measurements
+      const measurementIds = (measurementsRes.data || []).map(m => m.id);
+      const filteredRelations = (relationsRes.data || []).filter(
+        r => measurementIds.includes(r.measurement_id)
+      );
+      setRelations(filteredRelations);
+      setActivities(activitiesRes.data || []);
+      setPhases(phasesRes.data || []);
+    } catch (error) {
+      console.error('Error fetching data:', error);
+      toast.error('Error al cargar las mediciones');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, [budgetId]);
+
+  // Calculate related units for a measurement
+  const getRelatedUnits = (measurementId: string): number => {
+    const relatedIds = relations
+      .filter(r => r.measurement_id === measurementId)
+      .map(r => r.related_measurement_id);
+    
+    return relatedIds.reduce((sum, relId) => {
+      const relMeasurement = measurements.find(m => m.id === relId);
+      return sum + (relMeasurement?.manual_units || 0);
+    }, 0);
+  };
+
+  // Calculate Uds cálculo
+  const getCalculatedUnits = (measurement: Measurement): number => {
+    const relatedUnits = getRelatedUnits(measurement.id);
+    if (relatedUnits > 0) {
+      return relatedUnits;
+    }
+    return measurement.manual_units || 0;
+  };
+
+  // Get related activities for a measurement
+  const getRelatedActivities = (measurementId: string): Activity[] => {
+    return activities.filter(a => a.measurement_id === measurementId);
+  };
+
+  // Generate MediciónID
+  const generateMedicionId = (measurement: Measurement): string => {
+    const udsCalculo = getCalculatedUnits(measurement);
+    const unit = measurement.measurement_unit || 'ud';
+    const relatedActivities = getRelatedActivities(measurement.id);
+    
+    if (relatedActivities.length === 0) {
+      return `${formatNumber(udsCalculo)}/${unit}: Sin actividad`;
+    }
+    
+    const activityNames = relatedActivities.map(a => {
+      const phase = phases.find(p => p.id === a.phase_id);
+      const phaseCode = phase?.code || '';
+      return `${phaseCode} ${a.code}.-${a.name}`;
+    }).join(', ');
+    
+    return `${formatNumber(udsCalculo)}/${unit}: ${activityNames}`;
+  };
+
+  // Get related measurements for a measurement
+  const getRelatedMeasurements = (measurementId: string): Measurement[] => {
+    const relatedIds = relations
+      .filter(r => r.measurement_id === measurementId)
+      .map(r => r.related_measurement_id);
+    return measurements.filter(m => relatedIds.includes(m.id));
+  };
+
+  // Filter measurements
+  const filteredMeasurements = useMemo(() => {
+    if (!searchTerm) return measurements;
+    const term = searchTerm.toLowerCase();
+    return measurements.filter(m => 
+      m.name.toLowerCase().includes(term) ||
+      (m.measurement_unit || '').toLowerCase().includes(term) ||
+      generateMedicionId(m).toLowerCase().includes(term)
+    );
+  }, [measurements, searchTerm, relations, activities, phases]);
+
+  const openCreateForm = () => {
+    setEditingMeasurement(null);
+    setFormData({
+      name: '',
+      manual_units: null,
+      measurement_unit: 'ud',
+      related_measurement_ids: [],
+      activity_ids: []
+    });
+    setFormOpen(true);
+  };
+
+  const openEditForm = (measurement: Measurement) => {
+    const relatedIds = relations
+      .filter(r => r.measurement_id === measurement.id)
+      .map(r => r.related_measurement_id);
+    
+    const activityIds = activities
+      .filter(a => a.measurement_id === measurement.id)
+      .map(a => a.id);
+
+    setEditingMeasurement(measurement);
+    setFormData({
+      name: measurement.name,
+      manual_units: measurement.manual_units,
+      measurement_unit: measurement.measurement_unit || 'ud',
+      related_measurement_ids: relatedIds,
+      activity_ids: activityIds
+    });
+    setFormOpen(true);
+  };
+
+  const handleSubmit = async () => {
+    if (!formData.name.trim()) {
+      toast.error('El nombre es obligatorio');
+      return;
+    }
+
+    try {
+      if (editingMeasurement) {
+        // Update measurement
+        const { error: updateError } = await supabase
+          .from('budget_measurements')
+          .update({
+            name: formData.name.trim(),
+            manual_units: formData.manual_units,
+            measurement_unit: formData.measurement_unit
+          })
+          .eq('id', editingMeasurement.id);
+
+        if (updateError) throw updateError;
+
+        // Update relations - delete old and insert new
+        await supabase
+          .from('budget_measurement_relations')
+          .delete()
+          .eq('measurement_id', editingMeasurement.id);
+
+        if (formData.related_measurement_ids.length > 0) {
+          const relationsToInsert = formData.related_measurement_ids.map(relId => ({
+            measurement_id: editingMeasurement.id,
+            related_measurement_id: relId
+          }));
+          
+          const { error: relError } = await supabase
+            .from('budget_measurement_relations')
+            .insert(relationsToInsert);
+          
+          if (relError) throw relError;
+        }
+
+        // Update activity links - first unlink all, then link selected
+        await supabase
+          .from('budget_activities')
+          .update({ measurement_id: null })
+          .eq('measurement_id', editingMeasurement.id);
+
+        if (formData.activity_ids.length > 0) {
+          const { error: actError } = await supabase
+            .from('budget_activities')
+            .update({ measurement_id: editingMeasurement.id })
+            .in('id', formData.activity_ids);
+          
+          if (actError) throw actError;
+        }
+
+        toast.success('Medición actualizada');
+      } else {
+        // Create measurement
+        const { data: newMeasurement, error: createError } = await supabase
+          .from('budget_measurements')
+          .insert({
+            budget_id: budgetId,
+            name: formData.name.trim(),
+            manual_units: formData.manual_units,
+            measurement_unit: formData.measurement_unit
+          })
+          .select()
+          .single();
+
+        if (createError) throw createError;
+
+        // Create relations
+        if (formData.related_measurement_ids.length > 0) {
+          const relationsToInsert = formData.related_measurement_ids.map(relId => ({
+            measurement_id: newMeasurement.id,
+            related_measurement_id: relId
+          }));
+          
+          const { error: relError } = await supabase
+            .from('budget_measurement_relations')
+            .insert(relationsToInsert);
+          
+          if (relError) throw relError;
+        }
+
+        // Link activities
+        if (formData.activity_ids.length > 0) {
+          const { error: actError } = await supabase
+            .from('budget_activities')
+            .update({ measurement_id: newMeasurement.id })
+            .in('id', formData.activity_ids);
+          
+          if (actError) throw actError;
+        }
+
+        toast.success('Medición creada');
+      }
+
+      setFormOpen(false);
+      fetchData();
+    } catch (error) {
+      console.error('Error saving measurement:', error);
+      toast.error('Error al guardar la medición');
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!measurementToDelete) return;
+
+    try {
+      const { error } = await supabase
+        .from('budget_measurements')
+        .delete()
+        .eq('id', measurementToDelete.id);
+
+      if (error) throw error;
+
+      toast.success('Medición eliminada');
+      setDeleteDialogOpen(false);
+      setMeasurementToDelete(null);
+      fetchData();
+    } catch (error) {
+      console.error('Error deleting measurement:', error);
+      toast.error('Error al eliminar la medición');
+    }
+  };
+
+  // Get available activities (not linked to any measurement, or linked to current one)
+  const availableActivities = useMemo(() => {
+    return activities.filter(a => 
+      !a.measurement_id || a.measurement_id === editingMeasurement?.id
+    );
+  }, [activities, editingMeasurement]);
+
+  // Toggle related measurement
+  const toggleRelatedMeasurement = (measurementId: string) => {
+    setFormData(prev => ({
+      ...prev,
+      related_measurement_ids: prev.related_measurement_ids.includes(measurementId)
+        ? prev.related_measurement_ids.filter(id => id !== measurementId)
+        : [...prev.related_measurement_ids, measurementId]
+    }));
+  };
+
+  // Toggle activity
+  const toggleActivity = (activityId: string) => {
+    setFormData(prev => ({
+      ...prev,
+      activity_ids: prev.activity_ids.includes(activityId)
+        ? prev.activity_ids.filter(id => id !== activityId)
+        : [...prev.activity_ids, activityId]
+    }));
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <Ruler className="h-5 w-5" />
+                Mediciones
+              </CardTitle>
+              <CardDescription>
+                Gestiona las mediciones del presupuesto
+              </CardDescription>
+            </div>
+            {isAdmin && (
+              <Button onClick={openCreateForm}>
+                <Plus className="h-4 w-4 mr-2" />
+                Nueva Medición
+              </Button>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent>
+          {/* Search */}
+          <div className="mb-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Buscar mediciones..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+          </div>
+
+          {/* Table */}
+          {filteredMeasurements.length === 0 ? (
+            <div className="text-center py-12 text-muted-foreground">
+              {searchTerm ? 'No se encontraron mediciones' : 'No hay mediciones. Crea la primera.'}
+            </div>
+          ) : (
+            <div className="rounded-md border overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Nombre</TableHead>
+                    <TableHead className="text-right">Uds Manual</TableHead>
+                    <TableHead>Ud Medida</TableHead>
+                    <TableHead className="text-right">Uds Relacionadas</TableHead>
+                    <TableHead className="text-right">Uds Cálculo</TableHead>
+                    <TableHead>MediciónID</TableHead>
+                    {isAdmin && <TableHead className="w-[100px]">Acciones</TableHead>}
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredMeasurements.map((measurement) => {
+                    const relatedUnits = getRelatedUnits(measurement.id);
+                    const calculatedUnits = getCalculatedUnits(measurement);
+                    const relatedMeasurements = getRelatedMeasurements(measurement.id);
+                    const medicionId = generateMedicionId(measurement);
+
+                    return (
+                      <TableRow key={measurement.id}>
+                        <TableCell className="font-medium">
+                          <div>
+                            {measurement.name}
+                            {relatedMeasurements.length > 0 && (
+                              <div className="flex flex-wrap gap-1 mt-1">
+                                {relatedMeasurements.map(rm => (
+                                  <Badge key={rm.id} variant="secondary" className="text-xs">
+                                    <Link2 className="h-3 w-3 mr-1" />
+                                    {rm.name}
+                                  </Badge>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {measurement.manual_units !== null ? formatNumber(measurement.manual_units) : '-'}
+                        </TableCell>
+                        <TableCell>{measurement.measurement_unit || 'ud'}</TableCell>
+                        <TableCell className="text-right">
+                          {relatedUnits > 0 ? formatNumber(relatedUnits) : '-'}
+                        </TableCell>
+                        <TableCell className="text-right font-medium">
+                          {formatNumber(calculatedUnits)}
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground max-w-[300px] truncate">
+                          {medicionId}
+                        </TableCell>
+                        {isAdmin && (
+                          <TableCell>
+                            <div className="flex items-center gap-1">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => openEditForm(measurement)}
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => {
+                                  setMeasurementToDelete(measurement);
+                                  setDeleteDialogOpen(true);
+                                }}
+                              >
+                                <Trash2 className="h-4 w-4 text-destructive" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        )}
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Form Dialog */}
+      <Dialog open={formOpen} onOpenChange={setFormOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              {editingMeasurement ? 'Editar Medición' : 'Nueva Medición'}
+            </DialogTitle>
+            <DialogDescription>
+              {editingMeasurement ? 'Modifica los datos de la medición' : 'Crea una nueva medición para el presupuesto'}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="name">Nombre *</Label>
+                <Input
+                  id="name"
+                  value={formData.name}
+                  onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                  placeholder="Nombre de la medición"
+                  maxLength={200}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="measurement_unit">Ud Medida</Label>
+                <Select
+                  value={formData.measurement_unit}
+                  onValueChange={(value) => setFormData(prev => ({ ...prev, measurement_unit: value }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {MEASUREMENT_UNITS.map(unit => (
+                      <SelectItem key={unit} value={unit}>{unit}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="manual_units">Uds Manual</Label>
+                <NumericInput
+                  id="manual_units"
+                  value={formData.manual_units}
+                  onChange={(value) => setFormData(prev => ({ ...prev, manual_units: value }))}
+                  decimals={2}
+                  placeholder="0,00"
+                />
+              </div>
+            </div>
+
+            {/* Related Measurements Section */}
+            <div className="space-y-2">
+              <Label>Mediciones Relacionadas</Label>
+              <div className="border rounded-md p-3 max-h-40 overflow-y-auto">
+                {measurements.filter(m => m.id !== editingMeasurement?.id).length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No hay otras mediciones disponibles</p>
+                ) : (
+                  <div className="space-y-2">
+                    {measurements
+                      .filter(m => m.id !== editingMeasurement?.id)
+                      .map(m => (
+                        <div key={m.id} className="flex items-center gap-2">
+                          <Checkbox
+                            id={`rel-${m.id}`}
+                            checked={formData.related_measurement_ids.includes(m.id)}
+                            onCheckedChange={() => toggleRelatedMeasurement(m.id)}
+                          />
+                          <label htmlFor={`rel-${m.id}`} className="text-sm cursor-pointer flex-1">
+                            {m.name} ({formatNumber(m.manual_units || 0)} {m.measurement_unit || 'ud'})
+                          </label>
+                        </div>
+                      ))}
+                  </div>
+                )}
+              </div>
+              {formData.related_measurement_ids.length > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  Uds Relacionadas (suma): {formatNumber(
+                    formData.related_measurement_ids.reduce((sum, id) => {
+                      const m = measurements.find(m => m.id === id);
+                      return sum + (m?.manual_units || 0);
+                    }, 0)
+                  )}
+                </p>
+              )}
+            </div>
+
+            {/* Related Activities Section */}
+            <div className="space-y-2">
+              <Label>Actividades Relacionadas</Label>
+              <div className="border rounded-md p-3 max-h-40 overflow-y-auto">
+                {availableActivities.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No hay actividades disponibles</p>
+                ) : (
+                  <div className="space-y-2">
+                    {availableActivities.map(a => {
+                      const phase = phases.find(p => p.id === a.phase_id);
+                      const activityId = `${phase?.code || ''} ${a.code}.-${a.name}`;
+                      return (
+                        <div key={a.id} className="flex items-center gap-2">
+                          <Checkbox
+                            id={`act-${a.id}`}
+                            checked={formData.activity_ids.includes(a.id)}
+                            onCheckedChange={() => toggleActivity(a.id)}
+                          />
+                          <label htmlFor={`act-${a.id}`} className="text-sm cursor-pointer flex-1">
+                            {activityId}
+                          </label>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setFormOpen(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={handleSubmit}>
+              {editingMeasurement ? 'Guardar Cambios' : 'Crear Medición'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Dialog */}
+      <DeleteConfirmDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        onConfirm={handleDelete}
+        title="Eliminar Medición"
+        description={`¿Estás seguro de que quieres eliminar la medición "${measurementToDelete?.name}"? Las actividades relacionadas serán desvinculadas.`}
+      />
+    </div>
+  );
+}

@@ -21,6 +21,7 @@ export type Database = {
           created_at: string
           description: string | null
           id: string
+          measurement_id: string | null
           measurement_unit: string | null
           name: string
           phase_id: string | null
@@ -32,6 +33,7 @@ export type Database = {
           created_at?: string
           description?: string | null
           id?: string
+          measurement_id?: string | null
           measurement_unit?: string | null
           name: string
           phase_id?: string | null
@@ -43,6 +45,7 @@ export type Database = {
           created_at?: string
           description?: string | null
           id?: string
+          measurement_id?: string | null
           measurement_unit?: string | null
           name?: string
           phase_id?: string | null
@@ -54,6 +57,13 @@ export type Database = {
             columns: ["budget_id"]
             isOneToOne: false
             referencedRelation: "presupuestos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budget_activities_measurement_id_fkey"
+            columns: ["measurement_id"]
+            isOneToOne: false
+            referencedRelation: "budget_measurements"
             referencedColumns: ["id"]
           },
           {
@@ -267,6 +277,80 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "budget_items_budget_id_fkey"
+            columns: ["budget_id"]
+            isOneToOne: false
+            referencedRelation: "presupuestos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      budget_measurement_relations: {
+        Row: {
+          created_at: string
+          id: string
+          measurement_id: string
+          related_measurement_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          measurement_id: string
+          related_measurement_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          measurement_id?: string
+          related_measurement_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "budget_measurement_relations_measurement_id_fkey"
+            columns: ["measurement_id"]
+            isOneToOne: false
+            referencedRelation: "budget_measurements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budget_measurement_relations_related_measurement_id_fkey"
+            columns: ["related_measurement_id"]
+            isOneToOne: false
+            referencedRelation: "budget_measurements"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      budget_measurements: {
+        Row: {
+          budget_id: string
+          created_at: string
+          id: string
+          manual_units: number | null
+          measurement_unit: string | null
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          budget_id: string
+          created_at?: string
+          id?: string
+          manual_units?: number | null
+          measurement_unit?: string | null
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          budget_id?: string
+          created_at?: string
+          id?: string
+          manual_units?: number | null
+          measurement_unit?: string | null
+          name?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "budget_measurements_budget_id_fkey"
             columns: ["budget_id"]
             isOneToOne: false
             referencedRelation: "presupuestos"

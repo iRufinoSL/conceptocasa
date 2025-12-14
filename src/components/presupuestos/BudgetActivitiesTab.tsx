@@ -104,6 +104,9 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
   const [activityResources, setActivityResources] = useState<ActivityResource[]>([]);
   const [resourceDetailDialogOpen, setResourceDetailDialogOpen] = useState(false);
   const [viewingResource, setViewingResource] = useState<ActivityResource | null>(null);
+  const [duplicateResourceDialogOpen, setDuplicateResourceDialogOpen] = useState(false);
+  const [duplicatingResource, setDuplicatingResource] = useState<ActivityResource | null>(null);
+  const [duplicateResourceName, setDuplicateResourceName] = useState('');
   
   const [form, setForm] = useState<ActivityForm>(emptyForm);
   const [isSaving, setIsSaving] = useState(false);
@@ -318,9 +321,22 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
     }
   };
 
+  // Open duplicate resource dialog
+  const openDuplicateResourceDialog = (resource: ActivityResource) => {
+    setDuplicatingResource(resource);
+    setDuplicateResourceName(`${resource.name} (copia)`);
+    setDuplicateResourceDialogOpen(true);
+  };
+
   // Handle duplicate resource
-  const handleDuplicateResource = async (resource: ActivityResource) => {
-    if (!editingActivity) return;
+  const handleDuplicateResource = async () => {
+    if (!editingActivity || !duplicatingResource) return;
+    
+    const trimmedName = duplicateResourceName.trim();
+    if (!trimmedName) {
+      toast.error('El nombre del recurso es obligatorio');
+      return;
+    }
     
     try {
       const { data, error } = await supabase
@@ -328,14 +344,14 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
         .insert({
           budget_id: editingActivity.budget_id,
           activity_id: editingActivity.id,
-          name: `${resource.name} (copia)`,
-          external_unit_cost: resource.external_unit_cost,
-          unit: resource.unit,
-          resource_type: resource.resource_type,
-          safety_margin_percent: resource.safety_margin_percent,
-          sales_margin_percent: resource.sales_margin_percent,
-          manual_units: resource.manual_units,
-          related_units: resource.related_units,
+          name: trimmedName,
+          external_unit_cost: duplicatingResource.external_unit_cost,
+          unit: duplicatingResource.unit,
+          resource_type: duplicatingResource.resource_type,
+          safety_margin_percent: duplicatingResource.safety_margin_percent,
+          sales_margin_percent: duplicatingResource.sales_margin_percent,
+          manual_units: duplicatingResource.manual_units,
+          related_units: duplicatingResource.related_units,
         })
         .select()
         .single();
@@ -358,6 +374,8 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
         setActivityResources(prev => [...prev, newResource].sort((a, b) => a.name.localeCompare(b.name)));
       }
       
+      setDuplicateResourceDialogOpen(false);
+      setDuplicatingResource(null);
       toast.success('Recurso duplicado');
       fetchData();
     } catch (err: any) {
@@ -1223,7 +1241,7 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
                                         variant="ghost" 
                                         size="icon" 
                                         className="h-7 w-7"
-                                        onClick={() => handleDuplicateResource(resource)}
+                                        onClick={() => openDuplicateResourceDialog(resource)}
                                         title="Duplicar"
                                       >
                                         <Copy className="h-3.5 w-3.5" />
@@ -1398,6 +1416,50 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
                 Editar
               </Button>
             )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Duplicate Resource Dialog */}
+      <Dialog open={duplicateResourceDialogOpen} onOpenChange={setDuplicateResourceDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Duplicar Recurso</DialogTitle>
+            <DialogDescription>
+              Introduce el nombre para el nuevo recurso duplicado
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="duplicate-name">Nombre del recurso *</Label>
+              <Input
+                id="duplicate-name"
+                value={duplicateResourceName}
+                onChange={(e) => setDuplicateResourceName(e.target.value)}
+                placeholder="Nombre del recurso"
+                maxLength={200}
+                autoFocus
+              />
+            </div>
+            
+            {duplicatingResource && (
+              <div className="text-sm text-muted-foreground bg-muted/50 p-3 rounded-lg">
+                <p>Recurso original: <span className="font-medium">{duplicatingResource.name}</span></p>
+                <p>Tipo: {duplicatingResource.resource_type || '-'}</p>
+                <p>€Coste ud: {formatCurrency(duplicatingResource.external_unit_cost || 0)}</p>
+              </div>
+            )}
+          </div>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDuplicateResourceDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={handleDuplicateResource} disabled={!duplicateResourceName.trim()}>
+              <Copy className="h-4 w-4 mr-2" />
+              Duplicar
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

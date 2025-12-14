@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { Plus, Search, Edit, Trash2, Ruler, Link2, Upload, FileUp, X, Download } from 'lucide-react';
+import { Plus, Search, Edit, Trash2, Ruler, Link2, Upload, FileUp, X, Download, Copy } from 'lucide-react';
 import { formatNumber } from '@/lib/format-utils';
 import { NumericInput } from '@/components/ui/numeric-input';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
@@ -338,6 +338,55 @@ export function BudgetMeasurementsTab({ budgetId, isAdmin }: BudgetMeasurementsT
     } catch (error) {
       console.error('Error deleting measurement:', error);
       toast.error('Error al eliminar la medición');
+    }
+  };
+
+  // Duplicate measurement with relations and activities
+  const handleDuplicate = async (measurement: Measurement) => {
+    try {
+      // Create duplicated measurement
+      const { data: newMeasurement, error: measurementError } = await supabase
+        .from('budget_measurements')
+        .insert({
+          budget_id: budgetId,
+          name: `${measurement.name} (copia)`,
+          manual_units: measurement.manual_units,
+          measurement_unit: measurement.measurement_unit
+        })
+        .select()
+        .single();
+
+      if (measurementError) throw measurementError;
+
+      // Copy relations (related measurements)
+      const measurementRelations = relations.filter(r => r.measurement_id === measurement.id);
+      if (measurementRelations.length > 0) {
+        const relationsToInsert = measurementRelations.map(r => ({
+          measurement_id: newMeasurement.id,
+          related_measurement_id: r.related_measurement_id
+        }));
+
+        const { error: relationsError } = await supabase
+          .from('budget_measurement_relations')
+          .insert(relationsToInsert);
+
+        if (relationsError) throw relationsError;
+      }
+
+      // Copy activity links - link the same activities to the new measurement
+      // Note: This creates a copy of the links, not the activities themselves
+      const linkedActivities = activities.filter(a => a.measurement_id === measurement.id);
+      if (linkedActivities.length > 0) {
+        // Update activities to also be linked to new measurement
+        // Since an activity can only have one measurement, we'll create a note about this
+        toast.info(`${linkedActivities.length} actividades vinculadas no se duplicaron (cada actividad solo puede tener una medición)`);
+      }
+
+      toast.success('Medición duplicada correctamente');
+      fetchData();
+    } catch (error) {
+      console.error('Error duplicating measurement:', error);
+      toast.error('Error al duplicar la medición');
     }
   };
 
@@ -809,8 +858,17 @@ export function BudgetMeasurementsTab({ budgetId, isAdmin }: BudgetMeasurementsT
                                 variant="ghost"
                                 size="icon"
                                 onClick={() => openEditForm(measurement)}
+                                title="Editar"
                               >
                                 <Edit className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleDuplicate(measurement)}
+                                title="Duplicar"
+                              >
+                                <Copy className="h-4 w-4" />
                               </Button>
                               <Button
                                 variant="ghost"
@@ -819,6 +877,7 @@ export function BudgetMeasurementsTab({ budgetId, isAdmin }: BudgetMeasurementsT
                                   setMeasurementToDelete(measurement);
                                   setDeleteDialogOpen(true);
                                 }}
+                                title="Eliminar"
                               >
                                 <Trash2 className="h-4 w-4 text-destructive" />
                               </Button>

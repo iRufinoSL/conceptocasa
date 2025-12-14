@@ -12,6 +12,7 @@ import { BudgetPhasesTab } from '@/components/presupuestos/BudgetPhasesTab';
 import { BudgetResourcesTab } from '@/components/presupuestos/BudgetResourcesTab';
 import { BudgetMeasurementsTab } from '@/components/presupuestos/BudgetMeasurementsTab';
 import { BudgetVisualSummary } from '@/components/presupuestos/BudgetVisualSummary';
+import { BudgetVersionComparison } from '@/components/presupuestos/BudgetVersionComparison';
 interface Presupuesto {
   id: string;
   nombre: string;
@@ -246,15 +247,23 @@ export default function PresupuestoDashboard() {
           </TabsContent>
 
           <TabsContent value="config" className="mt-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Configuración del Presupuesto</CardTitle>
-                <CardDescription>Ajustes y parámetros del presupuesto</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <p className="text-muted-foreground text-center py-8">Próximamente</p>
-              </CardContent>
-            </Card>
+            <div className="space-y-6">
+              <BudgetVersionComparison 
+                currentBudgetId={presupuesto.id}
+                currentBudgetName={presupuesto.nombre}
+                currentVersion={presupuesto.version}
+              />
+              
+              <Card>
+                <CardHeader>
+                  <CardTitle>Configuración del Presupuesto</CardTitle>
+                  <CardDescription>Ajustes y parámetros del presupuesto</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-muted-foreground text-center py-8">Próximamente</p>
+                </CardContent>
+              </Card>
+            </div>
           </TabsContent>
         </Tabs>
       </main>

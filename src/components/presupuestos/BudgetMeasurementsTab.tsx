@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,6 +14,7 @@ import { formatNumber } from '@/lib/format-utils';
 import { NumericInput } from '@/components/ui/numeric-input';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import { Checkbox } from '@/components/ui/checkbox';
+import { ResourceInlineEdit } from '@/components/presupuestos/ResourceInlineEdit';
 import * as XLSX from 'xlsx';
 
 interface Measurement {
@@ -427,6 +428,85 @@ export function BudgetMeasurementsTab({ budgetId, isAdmin }: BudgetMeasurementsT
     return isNaN(parsed) ? null : parsed;
   };
 
+  // Inline edit handlers
+  const handleInlineUpdate = useCallback(async (
+    measurementId: string,
+    field: string,
+    value: any
+  ) => {
+    try {
+      const { error } = await supabase
+        .from('budget_measurements')
+        .update({ [field]: value })
+        .eq('id', measurementId);
+
+      if (error) throw error;
+      fetchData();
+    } catch (error) {
+      console.error('Error updating measurement:', error);
+      toast.error('Error al actualizar');
+    }
+  }, [budgetId]);
+
+  // Handle inline activity update
+  const handleActivityUpdate = useCallback(async (
+    measurementId: string,
+    selectedActivityIds: string[]
+  ) => {
+    try {
+      // First, unlink all activities currently linked to this measurement
+      await supabase
+        .from('budget_activities')
+        .update({ measurement_id: null })
+        .eq('measurement_id', measurementId);
+
+      // Then link selected activities
+      if (selectedActivityIds.length > 0) {
+        const { error } = await supabase
+          .from('budget_activities')
+          .update({ measurement_id: measurementId })
+          .in('id', selectedActivityIds);
+
+        if (error) throw error;
+      }
+
+      toast.success('Actividades actualizadas');
+      fetchData();
+    } catch (error) {
+      console.error('Error updating activities:', error);
+      toast.error('Error al actualizar actividades');
+    }
+  }, []);
+
+  // Get activity options for inline edit
+  const getActivityOptions = useCallback((measurementId: string) => {
+    // Include activities that have no measurement or belong to this measurement
+    const availableActs = activities.filter(a => 
+      !a.measurement_id || a.measurement_id === measurementId
+    );
+    
+    return availableActs.map(a => {
+      const phase = phases.find(p => p.id === a.phase_id);
+      const activityId = `${phase?.code || ''} ${a.code}.-${a.name}`;
+      return {
+        value: a.id,
+        label: activityId,
+        searchContent: `${phase?.code || ''} ${phase?.name || ''} ${a.code} ${a.name}`
+      };
+    }).sort((a, b) => a.label.localeCompare(b.label));
+  }, [activities, phases]);
+
+  // Get formatted activities display for a measurement
+  const getActivitiesDisplay = useCallback((measurementId: string): string => {
+    const relatedActs = activities.filter(a => a.measurement_id === measurementId);
+    if (relatedActs.length === 0) return '-';
+    
+    return relatedActs.map(a => {
+      const phase = phases.find(p => p.id === a.phase_id);
+      return `${phase?.code || ''} ${a.code}.-${a.name}`;
+    }).join(', ');
+  }, [activities, phases]);
+
   // Handle CSV/Excel import
   const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -810,6 +890,7 @@ export function BudgetMeasurementsTab({ budgetId, isAdmin }: BudgetMeasurementsT
                     <TableHead>Ud Medida</TableHead>
                     <TableHead className="text-right">Uds Relacionadas</TableHead>
                     <TableHead className="text-right">Uds Cálculo</TableHead>
+                    <TableHead>Actividades Relacionadas</TableHead>
                     <TableHead>MediciónID</TableHead>
                     {isAdmin && <TableHead className="w-[100px]">Acciones</TableHead>}
                   </TableRow>
@@ -820,12 +901,18 @@ export function BudgetMeasurementsTab({ budgetId, isAdmin }: BudgetMeasurementsT
                     const calculatedUnits = getCalculatedUnits(measurement);
                     const relatedMeasurements = getRelatedMeasurements(measurement.id);
                     const medicionId = generateMedicionId(measurement);
+                    const relatedActs = getRelatedActivities(measurement.id);
 
                     return (
                       <TableRow key={measurement.id}>
                         <TableCell className="font-medium">
                           <div>
-                            {measurement.name}
+                            <ResourceInlineEdit
+                              value={measurement.name}
+                              onSave={(v) => handleInlineUpdate(measurement.id, 'name', v)}
+                              type="text"
+                              disabled={!isAdmin}
+                            />
                             {relatedMeasurements.length > 0 && (
                               <div className="flex flex-wrap gap-1 mt-1">
                                 {relatedMeasurements.map(rm => (
@@ -839,14 +926,49 @@ export function BudgetMeasurementsTab({ budgetId, isAdmin }: BudgetMeasurementsT
                           </div>
                         </TableCell>
                         <TableCell className="text-right">
-                          {measurement.manual_units !== null ? formatNumber(measurement.manual_units) : '-'}
+                          <ResourceInlineEdit
+                            value={measurement.manual_units}
+                            onSave={(v) => handleInlineUpdate(measurement.id, 'manual_units', v)}
+                            type="number"
+                            decimals={2}
+                            disabled={!isAdmin}
+                            displayValue={measurement.manual_units !== null ? formatNumber(measurement.manual_units) : '-'}
+                          />
                         </TableCell>
-                        <TableCell>{measurement.measurement_unit || 'ud'}</TableCell>
+                        <TableCell>
+                          <ResourceInlineEdit
+                            value={measurement.measurement_unit || 'ud'}
+                            onSave={(v) => handleInlineUpdate(measurement.id, 'measurement_unit', v)}
+                            type="select"
+                            options={MEASUREMENT_UNITS.map(u => ({ value: u, label: u }))}
+                            disabled={!isAdmin}
+                          />
+                        </TableCell>
                         <TableCell className="text-right">
                           {relatedUnits > 0 ? formatNumber(relatedUnits) : '-'}
                         </TableCell>
                         <TableCell className="text-right font-medium">
                           {formatNumber(calculatedUnits)}
+                        </TableCell>
+                        <TableCell className="max-w-[200px]">
+                          <ResourceInlineEdit
+                            value={relatedActs.map(a => a.id).join(',')}
+                            onSave={async (v) => {
+                              const ids = v ? String(v).split(',').filter(Boolean) : [];
+                              await handleActivityUpdate(measurement.id, ids);
+                            }}
+                            type="searchable-select"
+                            options={[
+                              { value: '__none__', label: 'Sin actividad', searchContent: 'sin actividad ninguna' },
+                              ...getActivityOptions(measurement.id)
+                            ]}
+                            disabled={!isAdmin}
+                            displayValue={
+                              <span className="text-sm text-muted-foreground truncate block max-w-[180px]" title={getActivitiesDisplay(measurement.id)}>
+                                {getActivitiesDisplay(measurement.id)}
+                              </span>
+                            }
+                          />
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground max-w-[300px] truncate">
                           {medicionId}

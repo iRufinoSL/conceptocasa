@@ -63,6 +63,7 @@ export const parseEuropeanNumber = (value: string): number => {
 
 /**
  * Format a number with European thousands separators (dots) and decimal comma
+ * while the user is typing
  */
 const formatWithThousands = (value: string, decimals: number): string => {
   if (!value || value === '-') return value;
@@ -72,26 +73,19 @@ const formatWithThousands = (value: string, decimals: number): string => {
   const prefix = isNegative ? '-' : '';
   let cleanValue = isNegative ? value.slice(1) : value;
   
-  // Find if user is typing a decimal (comma or period at the end or anywhere)
+  // Check if user is typing a decimal (comma or period that acts as decimal)
   const hasComma = cleanValue.includes(',');
   const endsWithPeriod = cleanValue.endsWith('.');
   
-  // Count periods and commas to determine format
-  const periodCount = (cleanValue.match(/\./g) || []).length;
-  const commaCount = (cleanValue.match(/,/g) || []).length;
-  
-  // If multiple periods, they are thousands separators - remove them
-  // If single period at end and no comma, user is typing decimal
-  // If comma exists, periods are thousands separators
-  
+  // Remove any existing thousands separators (dots) when there's a comma (European decimal)
   if (hasComma) {
-    // European format: periods are thousands, comma is decimal
+    // European format in progress: periods before comma are thousands separators
     cleanValue = cleanValue.replace(/\./g, '');
-  } else if (periodCount === 1 && endsWithPeriod) {
-    // User just typed a period as decimal separator - convert to comma
-    cleanValue = cleanValue.replace('.', ',');
-  } else if (periodCount > 0) {
-    // Multiple periods or period in middle - they're thousands separators
+  } else if (endsWithPeriod) {
+    // User just typed a period - convert to comma for European format
+    cleanValue = cleanValue.slice(0, -1) + ',';
+  } else {
+    // No comma yet - remove all dots (they would be thousands separators from previous formatting)
     cleanValue = cleanValue.replace(/\./g, '');
   }
   
@@ -105,14 +99,14 @@ const formatWithThousands = (value: string, decimals: number): string => {
   // Format integer part with thousands separators (dots)
   const formattedInteger = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, '.') || '0';
   
-  // If there's a decimal separator in the input
+  // If there's a decimal part
   if (decimalPart !== null) {
     // Keep the decimal part as typed (up to max decimals)
     const truncatedDecimal = decimalPart.slice(0, decimals);
     return `${prefix}${formattedInteger},${truncatedDecimal}`;
   }
   
-  // If original had a comma but decimal part is empty (user just typed comma)
+  // If cleanValue ends with comma (user just typed comma/period)
   if (cleanValue.endsWith(',')) {
     return `${prefix}${formattedInteger},`;
   }

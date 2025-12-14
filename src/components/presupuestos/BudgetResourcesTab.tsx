@@ -11,6 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Plus, Search, Pencil, Trash2, Package, Wrench, Truck, Briefcase, FileSpreadsheet, Check, List, FolderTree, FileDown } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatCurrency, formatNumber, formatPercent } from '@/lib/format-utils';
+import { getActivityMeasurementUnits } from '@/lib/budget-utils';
 import { BudgetResourceForm } from './BudgetResourceForm';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import { NumericInput } from '@/components/ui/numeric-input';
@@ -590,17 +591,37 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
   // Inline update handler
   const handleInlineUpdate = useCallback(async (id: string, field: string, value: any) => {
     try {
-      const { error } = await supabase
-        .from('budget_activity_resources')
-        .update({ [field]: value })
-        .eq('id', id);
-      
-      if (error) throw error;
-      
-      // Update local state
-      setResources(prev => prev.map(r => 
-        r.id === id ? { ...r, [field]: value } : r
-      ));
+      // If changing activity_id, also update related_units from the activity's measurement
+      if (field === 'activity_id') {
+        const relatedUnits = value ? await getActivityMeasurementUnits(value) : null;
+        
+        const { error } = await supabase
+          .from('budget_activity_resources')
+          .update({ 
+            [field]: value,
+            related_units: relatedUnits
+          })
+          .eq('id', id);
+        
+        if (error) throw error;
+        
+        // Update local state
+        setResources(prev => prev.map(r => 
+          r.id === id ? { ...r, [field]: value, related_units: relatedUnits } : r
+        ));
+      } else {
+        const { error } = await supabase
+          .from('budget_activity_resources')
+          .update({ [field]: value })
+          .eq('id', id);
+        
+        if (error) throw error;
+        
+        // Update local state
+        setResources(prev => prev.map(r => 
+          r.id === id ? { ...r, [field]: value } : r
+        ));
+      }
     } catch (error) {
       console.error('Error updating resource:', error);
       toast.error('Error al actualizar');

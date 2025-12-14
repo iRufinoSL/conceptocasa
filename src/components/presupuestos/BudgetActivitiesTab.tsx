@@ -338,6 +338,16 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
       return;
     }
     
+    // Check for duplicate name in current activity resources
+    const isDuplicate = activityResources.some(
+      r => r.name.toLowerCase() === trimmedName.toLowerCase() && r.id !== duplicatingResource.id
+    );
+    
+    if (isDuplicate) {
+      toast.error('Ya existe un recurso con ese nombre en esta actividad');
+      return;
+    }
+    
     try {
       const { data, error } = await supabase
         .from('budget_activity_resources')

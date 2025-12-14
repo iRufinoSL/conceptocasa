@@ -44,14 +44,17 @@ export const formatCurrencyNoDecimals = (value: number | null | undefined): stri
 };
 
 /**
- * Format a percentage in European format (e.g., 25,50%)
+ * Format a percentage in European format (e.g., 15,00%)
+ * Takes a decimal value (0.15) and displays it as percentage (15,00%)
  */
 export const formatPercent = (value: number | null | undefined, decimals: number = 2): string => {
   if (value === null || value === undefined) return '-';
   
+  // Intl.NumberFormat percent style multiplies by 100 automatically
+  // So we pass the value directly (0.15 -> 15%)
   return new Intl.NumberFormat('es-ES', {
     style: 'percent',
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,
-  }).format(value / 100);
+  }).format(value);
 };

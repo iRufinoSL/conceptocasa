@@ -380,14 +380,13 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
     toast.info('Redirigido a Recursos para crear nuevo recurso');
   };
 
-  // Handle edit resource
+  // Handle edit resource - open form dialog
   const handleEditResource = (resourceId: string) => {
-    // Navigate to resources tab with context to edit this resource
-    window.dispatchEvent(new CustomEvent('navigate-to-resources', { 
-      detail: { resourceId, action: 'edit' } 
-    }));
-    setFormDialogOpen(false);
-    toast.info('Redirigido a Recursos para editar');
+    const resource = activityResources.find(r => r.id === resourceId);
+    if (resource) {
+      setViewingResource(resource);
+      setResourceDetailDialogOpen(true);
+    }
   };
 
   // Handle delete resource
@@ -1545,6 +1544,7 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
                           
                           const handleInlineUpdate = async (field: string, value: any) => {
                             try {
+                              console.log(`Updating ${field} to:`, value, typeof value);
                               const { error } = await supabase
                                 .from('budget_activity_resources')
                                 .update({ [field]: value })
@@ -1629,8 +1629,8 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
                                 {isAdmin ? (
                                   <ResourceInlineEdit
                                     value={safetyPercent * 100}
-                                    type="number"
-                                    decimals={0}
+                                    type="percent"
+                                    decimals={1}
                                     displayValue={<span className="font-mono">{formatPercent(safetyPercent)}</span>}
                                     onSave={async (v) => handleInlineUpdate('safety_margin_percent', Math.max(0, v as number) / 100)}
                                   />
@@ -1642,8 +1642,8 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
                                 {isAdmin ? (
                                   <ResourceInlineEdit
                                     value={salesPercent * 100}
-                                    type="number"
-                                    decimals={0}
+                                    type="percent"
+                                    decimals={1}
                                     displayValue={<span className="font-mono">{formatPercent(salesPercent)}</span>}
                                     onSave={async (v) => handleInlineUpdate('sales_margin_percent', Math.max(0, v as number) / 100)}
                                   />

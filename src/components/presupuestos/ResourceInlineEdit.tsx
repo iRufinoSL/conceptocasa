@@ -72,13 +72,17 @@ export function ResourceInlineEdit({
     let finalValue: any = editValue;
     
     if (type === 'number' || type === 'percent') {
-      // Ensure we're working with the correct numeric value
+      // Use the numeric value directly if it's already a number
       if (typeof editValue === 'number') {
         finalValue = editValue;
       } else {
-        const strValue = String(editValue).replace(/\./g, '').replace(',', '.');
-        finalValue = parseFloat(strValue);
-        if (isNaN(finalValue)) finalValue = 0;
+        // Parse from display string - editValue from NumericInput is already numeric
+        finalValue = editValue;
+      }
+      
+      // Ensure it's a valid number
+      if (typeof finalValue !== 'number' || isNaN(finalValue)) {
+        finalValue = 0;
       }
     }
     
@@ -304,15 +308,18 @@ export function ResourceInlineEdit({
   }
 
   if (type === 'number' || type === 'percent') {
+    // Get the numeric value from props for initial display
+    const numericValue = typeof value === 'number' ? value : 0;
+    
     return (
       <EditWrapper>
         <div className="animate-scale-in">
           <NumericInput
             ref={inputRef}
-            value={typeof editValue === 'number' ? editValue : parseFloat(String(editValue).replace(',', '.')) || 0}
+            value={numericValue}
             onChange={(v) => setEditValue(v)}
             decimals={decimals}
-            className="h-7 w-20 text-xs ring-2 ring-primary ring-offset-1 bg-primary/5 transition-all duration-200"
+            className="h-7 w-24 text-xs ring-2 ring-primary ring-offset-1 bg-primary/5 transition-all duration-200"
             onBlur={handleSave}
             onKeyDown={handleKeyDown}
           />

@@ -15,6 +15,7 @@ import { NumericInput } from '@/components/ui/numeric-input';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ResourceInlineEdit } from '@/components/presupuestos/ResourceInlineEdit';
+import { MeasurementMultiSelect } from '@/components/presupuestos/MeasurementMultiSelect';
 import * as XLSX from 'xlsx';
 
 interface Measurement {
@@ -478,6 +479,40 @@ export function BudgetMeasurementsTab({ budgetId, isAdmin }: BudgetMeasurementsT
     }
   }, []);
 
+  // Handle inline related measurements update
+  const handleRelatedMeasurementsUpdate = useCallback(async (
+    measurementId: string,
+    selectedRelatedIds: string[]
+  ) => {
+    try {
+      // Delete existing relations for this measurement
+      await supabase
+        .from('budget_measurement_relations')
+        .delete()
+        .eq('measurement_id', measurementId);
+
+      // Insert new relations
+      if (selectedRelatedIds.length > 0) {
+        const relationsToInsert = selectedRelatedIds.map(relId => ({
+          measurement_id: measurementId,
+          related_measurement_id: relId
+        }));
+
+        const { error } = await supabase
+          .from('budget_measurement_relations')
+          .insert(relationsToInsert);
+
+        if (error) throw error;
+      }
+
+      toast.success('Mediciones relacionadas actualizadas');
+      fetchData();
+    } catch (error) {
+      console.error('Error updating related measurements:', error);
+      toast.error('Error al actualizar mediciones relacionadas');
+    }
+  }, []);
+
   // Get activity options for inline edit
   const getActivityOptions = useCallback((measurementId: string) => {
     // Include activities that have no measurement or belong to this measurement
@@ -888,6 +923,7 @@ export function BudgetMeasurementsTab({ budgetId, isAdmin }: BudgetMeasurementsT
                     <TableHead>Nombre</TableHead>
                     <TableHead className="text-right">Uds Manual</TableHead>
                     <TableHead>Ud Medida</TableHead>
+                    <TableHead>Mediciones Relacionadas</TableHead>
                     <TableHead className="text-right">Uds Relacionadas</TableHead>
                     <TableHead className="text-right">Uds Cálculo</TableHead>
                     <TableHead>Actividades Relacionadas</TableHead>
@@ -906,24 +942,12 @@ export function BudgetMeasurementsTab({ budgetId, isAdmin }: BudgetMeasurementsT
                     return (
                       <TableRow key={measurement.id}>
                         <TableCell className="font-medium">
-                          <div>
-                            <ResourceInlineEdit
-                              value={measurement.name}
-                              onSave={(v) => handleInlineUpdate(measurement.id, 'name', v)}
-                              type="text"
-                              disabled={!isAdmin}
-                            />
-                            {relatedMeasurements.length > 0 && (
-                              <div className="flex flex-wrap gap-1 mt-1">
-                                {relatedMeasurements.map(rm => (
-                                  <Badge key={rm.id} variant="secondary" className="text-xs">
-                                    <Link2 className="h-3 w-3 mr-1" />
-                                    {rm.name}
-                                  </Badge>
-                                ))}
-                              </div>
-                            )}
-                          </div>
+                          <ResourceInlineEdit
+                            value={measurement.name}
+                            onSave={(v) => handleInlineUpdate(measurement.id, 'name', v)}
+                            type="text"
+                            disabled={!isAdmin}
+                          />
                         </TableCell>
                         <TableCell className="text-right">
                           <ResourceInlineEdit
@@ -941,6 +965,15 @@ export function BudgetMeasurementsTab({ budgetId, isAdmin }: BudgetMeasurementsT
                             onSave={(v) => handleInlineUpdate(measurement.id, 'measurement_unit', v)}
                             type="select"
                             options={MEASUREMENT_UNITS.map(u => ({ value: u, label: u }))}
+                            disabled={!isAdmin}
+                          />
+                        </TableCell>
+                        <TableCell className="max-w-[200px]">
+                          <MeasurementMultiSelect
+                            measurementId={measurement.id}
+                            selectedIds={relatedMeasurements.map(rm => rm.id)}
+                            allMeasurements={measurements}
+                            onSave={(ids) => handleRelatedMeasurementsUpdate(measurement.id, ids)}
                             disabled={!isAdmin}
                           />
                         </TableCell>

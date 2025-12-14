@@ -20,6 +20,7 @@ import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import { formatCurrency, formatNumber, formatPercent } from '@/lib/format-utils';
 import { MeasurementInlineSelect, MeasurementInlineSelectHandle } from './MeasurementInlineSelect';
 import { ResourceInlineEdit } from './ResourceInlineEdit';
+import { BudgetResourceForm } from './BudgetResourceForm';
 
 interface BudgetPhase {
   id: string;
@@ -128,6 +129,8 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
   const [duplicateResourceDialogOpen, setDuplicateResourceDialogOpen] = useState(false);
   const [duplicatingResource, setDuplicatingResource] = useState<ActivityResource | null>(null);
   const [duplicateResourceName, setDuplicateResourceName] = useState('');
+  const [resourceFormOpen, setResourceFormOpen] = useState(false);
+  const [editingResourceForForm, setEditingResourceForForm] = useState<any>(null);
   
   const [form, setForm] = useState<ActivityForm>(emptyForm);
   const [isSaving, setIsSaving] = useState(false);
@@ -1849,17 +1852,32 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
             );
           })()}
           
-          <DialogFooter>
+          <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setResourceDetailDialogOpen(false)}>
               Cerrar
             </Button>
-            {isAdmin && viewingResource && (
+            {isAdmin && viewingResource && editingActivity && (
               <Button onClick={() => {
+                // Prepare resource data for the form
+                setEditingResourceForForm({
+                  id: viewingResource.id,
+                  budget_id: editingActivity.budget_id,
+                  name: viewingResource.name,
+                  external_unit_cost: viewingResource.external_unit_cost,
+                  unit: viewingResource.unit,
+                  resource_type: viewingResource.resource_type,
+                  safety_margin_percent: viewingResource.safety_margin_percent,
+                  sales_margin_percent: viewingResource.sales_margin_percent,
+                  manual_units: viewingResource.manual_units,
+                  related_units: viewingResource.related_units,
+                  activity_id: editingActivity.id,
+                  description: null,
+                });
                 setResourceDetailDialogOpen(false);
-                handleEditResource(viewingResource.id);
+                setResourceFormOpen(true);
               }}>
                 <Pencil className="h-4 w-4 mr-2" />
-                Editar
+                Editar completo
               </Button>
             )}
           </DialogFooter>
@@ -2083,6 +2101,38 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
         title="Eliminar Actividad"
         description={`¿Estás seguro de que quieres eliminar la actividad "${deletingActivity?.name}"? Esta acción no se puede deshacer.`}
       />
+
+      {/* Budget Resource Form for Full Edit */}
+      {editingActivity && (
+        <BudgetResourceForm
+          open={resourceFormOpen}
+          onOpenChange={setResourceFormOpen}
+          budgetId={editingActivity.budget_id}
+          resource={editingResourceForForm}
+          activities={activities.map(a => ({
+            id: a.id,
+            code: a.code,
+            name: a.name,
+            phase_id: a.phase_id
+          }))}
+          phases={phases.map(p => ({
+            id: p.id,
+            code: p.code,
+            name: p.name
+          }))}
+          onSave={async () => {
+            setResourceFormOpen(false);
+            setEditingResourceForForm(null);
+            // Refresh resources for the current activity
+            if (editingActivity) {
+              const resources = await fetchActivityResources(editingActivity.id);
+              setActivityResources(resources);
+            }
+            // Also refresh main data
+            fetchData();
+          }}
+        />
+      )}
     </div>
   );
 }

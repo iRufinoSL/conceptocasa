@@ -12,7 +12,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Search, Upload, Pencil, Trash2, MoreHorizontal, FileUp, File, X, Download, ChevronRight, ChevronDown, ChevronLeft, List, Layers, Copy, Package, Wrench, Truck, Briefcase, Eye } from 'lucide-react';
+import { Plus, Search, Upload, Pencil, Trash2, MoreHorizontal, FileUp, File, X, Download, ChevronRight, ChevronDown, ChevronLeft, List, Layers, Copy, Package, Wrench, Truck, Briefcase, Eye, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { toast } from 'sonner';
@@ -111,6 +111,7 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [viewMode, setViewMode] = useState<'alphabetical' | 'grouped'>('alphabetical');
+  const [activitySortOrder, setActivitySortOrder] = useState<'asc' | 'desc'>('asc');
   const [expandedPhases, setExpandedPhases] = useState<Set<string>>(new Set());
   
   // Dialog states
@@ -393,12 +394,26 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
     setResourceFormOpen(true);
   };
 
-  // Handle edit resource - open form dialog
+  // Handle edit resource - open form dialog directly
   const handleEditResource = (resourceId: string) => {
     const resource = activityResources.find(r => r.id === resourceId);
-    if (resource) {
-      setViewingResource(resource);
-      setResourceDetailDialogOpen(true);
+    if (resource && editingActivity) {
+      // Go directly to full edit form
+      setEditingResourceForForm({
+        id: resource.id,
+        budget_id: editingActivity.budget_id,
+        name: resource.name,
+        external_unit_cost: resource.external_unit_cost,
+        unit: resource.unit,
+        resource_type: resource.resource_type,
+        safety_margin_percent: resource.safety_margin_percent,
+        sales_margin_percent: resource.sales_margin_percent,
+        manual_units: resource.manual_units,
+        related_units: resource.related_units,
+        activity_id: editingActivity.id,
+        description: null,
+      });
+      setResourceFormOpen(true);
     }
   };
 
@@ -736,6 +751,22 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
     const phase = phases.find(p => p.id === activity.phase_id);
     const phaseCode = phase?.code || '';
     return `${phaseCode} ${activity.code}.- ${activity.name}`.trim();
+  };
+
+  // Sort activities by ActividadID
+  const sortActivitiesByActivityId = (activitiesToSort: BudgetActivity[]) => {
+    return [...activitiesToSort].sort((a, b) => {
+      const actIdA = generateActivityId(a);
+      const actIdB = generateActivityId(b);
+      return activitySortOrder === 'asc' 
+        ? actIdA.localeCompare(actIdB) 
+        : actIdB.localeCompare(actIdA);
+    });
+  };
+
+  // Toggle sort order
+  const toggleActivitySortOrder = () => {
+    setActivitySortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
   };
 
   // Get phase by id
@@ -1149,7 +1180,21 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
                         <Table>
                           <TableHeader>
                             <TableRow>
-                              <TableHead>ActividadID</TableHead>
+                              <TableHead>
+                                <Button 
+                                  variant="ghost" 
+                                  size="sm" 
+                                  className="h-auto p-0 font-medium hover:bg-transparent"
+                                  onClick={toggleActivitySortOrder}
+                                >
+                                  ActividadID
+                                  {activitySortOrder === 'asc' ? (
+                                    <ArrowUp className="ml-1 h-3 w-3 inline" />
+                                  ) : (
+                                    <ArrowDown className="ml-1 h-3 w-3 inline" />
+                                  )}
+                                </Button>
+                              </TableHead>
                               <TableHead>Unidad</TableHead>
                               <TableHead className="text-right">Uds Relac.</TableHead>
                               <TableHead>MediciónID</TableHead>
@@ -1159,7 +1204,7 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
                             </TableRow>
                           </TableHeader>
                           <TableBody>
-                            {unassigned.sort((a, b) => a.name.localeCompare(b.name)).map(activity => {
+                            {sortActivitiesByActivityId(unassigned).map(activity => {
                               const { relatedUnits, medicionId } = getMeasurementData(activity);
                               return (
                                 <TableRow key={activity.id}>
@@ -1262,7 +1307,21 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
                       <Table>
                         <TableHeader>
                           <TableRow>
-                            <TableHead>ActividadID</TableHead>
+                            <TableHead>
+                              <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                className="h-auto p-0 font-medium hover:bg-transparent"
+                                onClick={toggleActivitySortOrder}
+                              >
+                                ActividadID
+                                {activitySortOrder === 'asc' ? (
+                                  <ArrowUp className="ml-1 h-3 w-3 inline" />
+                                ) : (
+                                  <ArrowDown className="ml-1 h-3 w-3 inline" />
+                                )}
+                              </Button>
+                            </TableHead>
                             <TableHead>Unidad</TableHead>
                             <TableHead className="text-right">Uds Relac.</TableHead>
                             <TableHead>MediciónID</TableHead>
@@ -1272,7 +1331,7 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {phaseActivities.sort((a, b) => a.name.localeCompare(b.name)).map(activity => {
+                          {sortActivitiesByActivityId(phaseActivities).map(activity => {
                             const { relatedUnits, medicionId } = getMeasurementData(activity);
                             return (
                               <TableRow key={activity.id}>
@@ -1670,6 +1729,7 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
                                     value={resource.manual_units}
                                     type="number"
                                     decimals={2}
+                                    allowNull={true}
                                     displayValue={<span className="font-mono">{resource.manual_units !== null ? formatNumber(resource.manual_units) : '-'}</span>}
                                     onSave={async (v) => handleInlineUpdate('manual_units', v)}
                                   />

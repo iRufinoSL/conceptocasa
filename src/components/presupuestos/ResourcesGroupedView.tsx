@@ -422,6 +422,7 @@ export function ResourcesGroupedView({
               onSave={(v) => onInlineUpdate(resource.id, 'manual_units', v)}
               type="number"
               decimals={2}
+              allowNull={true}
               disabled={!isAdmin}
               {...createTabHandlers('manual_units')}
             />

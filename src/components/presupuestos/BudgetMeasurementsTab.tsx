@@ -414,6 +414,9 @@ export function BudgetMeasurementsTab({ budgetId, isAdmin }: BudgetMeasurementsT
         'unidades': 'manual_units',
         'ud medida': 'measurement_unit',
         'unidad': 'measurement_unit',
+        'mediciones relacionadas': 'related_measurements',
+        'relacionadas': 'related_measurements',
+        'relaciones': 'related_measurements',
       };
 
       // Map header indices
@@ -430,17 +433,23 @@ export function BudgetMeasurementsTab({ budgetId, isAdmin }: BudgetMeasurementsT
         return;
       }
 
-      // Get existing measurement names for duplicate check
-      const existingNames = new Set(measurements.map(m => m.name.toLowerCase().trim()));
+      // Build a map of existing measurements by name (case-insensitive)
+      const existingMeasurementsMap = new Map<string, string>();
+      measurements.forEach(m => {
+        existingMeasurementsMap.set(m.name.toLowerCase().trim(), m.id);
+      });
 
-      // Parse rows
-      const measurementsToInsert: Array<{
-        budget_id: string;
+      // Parse rows - first pass to collect all measurements and their relations
+      interface ImportedMeasurement {
         name: string;
         manual_units: number | null;
         measurement_unit: string;
-      }> = [];
+        related_names: string[];
+        isNew: boolean;
+      }
 
+      const importedMeasurements: ImportedMeasurement[] = [];
+      const newMeasurementNames = new Set<string>();
       let duplicateCount = 0;
 
       for (let i = 1; i < jsonData.length; i++) {
@@ -450,9 +459,37 @@ export function BudgetMeasurementsTab({ budgetId, isAdmin }: BudgetMeasurementsT
         const name = String(row[headerIndices['name']] || '').trim();
         if (!name) continue;
 
-        // Check for duplicate
-        if (existingNames.has(name.toLowerCase())) {
+        const isExisting = existingMeasurementsMap.has(name.toLowerCase());
+        
+        // Parse related measurements (comma or semicolon separated)
+        let relatedNames: string[] = [];
+        if (headerIndices['related_measurements'] !== undefined) {
+          const relatedStr = String(row[headerIndices['related_measurements']] || '').trim();
+          if (relatedStr) {
+            relatedNames = relatedStr
+              .split(/[,;]/)
+              .map(s => s.trim())
+              .filter(s => s.length > 0);
+          }
+        }
+
+        if (isExisting) {
+          // For existing measurements, we'll only update relations if specified
+          if (relatedNames.length > 0) {
+            importedMeasurements.push({
+              name,
+              manual_units: null,
+              measurement_unit: 'ud',
+              related_names: relatedNames,
+              isNew: false
+            });
+          }
           duplicateCount++;
+          continue;
+        }
+
+        // Check if already added in this import batch
+        if (newMeasurementNames.has(name.toLowerCase())) {
           continue;
         }
 
@@ -469,32 +506,99 @@ export function BudgetMeasurementsTab({ budgetId, isAdmin }: BudgetMeasurementsT
           measurementUnit = 'ud';
         }
 
-        measurementsToInsert.push({
-          budget_id: budgetId,
+        importedMeasurements.push({
           name,
           manual_units: manualUnits,
-          measurement_unit: measurementUnit
+          measurement_unit: measurementUnit,
+          related_names: relatedNames,
+          isNew: true
         });
 
-        // Add to existing names set for next rows
-        existingNames.add(name.toLowerCase());
+        newMeasurementNames.add(name.toLowerCase());
       }
 
-      if (measurementsToInsert.length === 0) {
+      const newMeasurements = importedMeasurements.filter(m => m.isNew);
+      
+      if (newMeasurements.length === 0 && importedMeasurements.filter(m => m.related_names.length > 0).length === 0) {
         toast.error(duplicateCount > 0 
-          ? `Todas las ${duplicateCount} mediciones ya existen` 
+          ? `Todas las ${duplicateCount} mediciones ya existen y no hay relaciones nuevas` 
           : 'No se encontraron mediciones válidas para importar');
         return;
       }
 
-      // Insert measurements
-      const { error } = await supabase
-        .from('budget_measurements')
-        .insert(measurementsToInsert);
+      // Insert new measurements
+      let insertedMeasurements: Array<{ id: string; name: string }> = [];
+      if (newMeasurements.length > 0) {
+        const measurementsToInsert = newMeasurements.map(m => ({
+          budget_id: budgetId,
+          name: m.name,
+          manual_units: m.manual_units,
+          measurement_unit: m.measurement_unit
+        }));
 
-      if (error) throw error;
+        const { data: insertedData, error: insertError } = await supabase
+          .from('budget_measurements')
+          .insert(measurementsToInsert)
+          .select('id, name');
 
-      toast.success(`${measurementsToInsert.length} mediciones importadas${duplicateCount > 0 ? ` (${duplicateCount} duplicadas omitidas)` : ''}`);
+        if (insertError) throw insertError;
+        insertedMeasurements = insertedData || [];
+
+        // Add inserted measurements to our map
+        insertedMeasurements.forEach(m => {
+          existingMeasurementsMap.set(m.name.toLowerCase().trim(), m.id);
+        });
+      }
+
+      // Now create relations
+      const relationsToInsert: Array<{ measurement_id: string; related_measurement_id: string }> = [];
+      const existingRelationsSet = new Set(
+        relations.map(r => `${r.measurement_id}:${r.related_measurement_id}`)
+      );
+
+      for (const imported of importedMeasurements) {
+        if (imported.related_names.length === 0) continue;
+
+        const measurementId = existingMeasurementsMap.get(imported.name.toLowerCase().trim());
+        if (!measurementId) continue;
+
+        for (const relatedName of imported.related_names) {
+          const relatedId = existingMeasurementsMap.get(relatedName.toLowerCase().trim());
+          if (!relatedId) continue;
+          if (relatedId === measurementId) continue; // No self-relation
+
+          const relationKey = `${measurementId}:${relatedId}`;
+          if (existingRelationsSet.has(relationKey)) continue;
+
+          relationsToInsert.push({
+            measurement_id: measurementId,
+            related_measurement_id: relatedId
+          });
+          existingRelationsSet.add(relationKey);
+        }
+      }
+
+      if (relationsToInsert.length > 0) {
+        const { error: relError } = await supabase
+          .from('budget_measurement_relations')
+          .insert(relationsToInsert);
+
+        if (relError) throw relError;
+      }
+
+      // Build success message
+      const messages: string[] = [];
+      if (newMeasurements.length > 0) {
+        messages.push(`${newMeasurements.length} mediciones creadas`);
+      }
+      if (relationsToInsert.length > 0) {
+        messages.push(`${relationsToInsert.length} relaciones creadas`);
+      }
+      if (duplicateCount > 0) {
+        messages.push(`${duplicateCount} existentes omitidas`);
+      }
+
+      toast.success(messages.join(', '));
       setImportDialogOpen(false);
       setImportFile(null);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -834,7 +938,11 @@ export function BudgetMeasurementsTab({ budgetId, isAdmin }: BudgetMeasurementsT
                 <li><strong>Nombre</strong> o <strong>Medición</strong> (obligatorio)</li>
                 <li><strong>Uds manual</strong> o <strong>Uds</strong> o <strong>Unidades</strong> (opcional)</li>
                 <li><strong>Ud medida</strong> o <strong>Unidad</strong> (opcional, por defecto: ud)</li>
+                <li><strong>Mediciones relacionadas</strong> o <strong>Relacionadas</strong> (opcional, nombres separados por coma o punto y coma)</li>
               </ul>
+              <p className="text-xs text-muted-foreground mt-2">
+                Las relaciones se crean automáticamente si las mediciones referenciadas existen o se crean en la misma importación.
+              </p>
             </div>
           </div>
 

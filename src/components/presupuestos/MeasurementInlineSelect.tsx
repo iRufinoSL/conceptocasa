@@ -25,6 +25,8 @@ interface MeasurementInlineSelectProps {
   onSave: (measurementId: string | null) => void;
   onTabNext?: () => void;
   onTabPrev?: () => void;
+  onArrowUp?: () => void;
+  onArrowDown?: () => void;
 }
 
 export interface MeasurementInlineSelectHandle {
@@ -40,7 +42,9 @@ export const MeasurementInlineSelect = forwardRef<MeasurementInlineSelectHandle,
     measurementRelations,
     onSave,
     onTabNext,
-    onTabPrev
+    onTabPrev,
+    onArrowUp,
+    onArrowDown
   }, ref) {
     const [open, setOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
@@ -101,6 +105,12 @@ export const MeasurementInlineSelect = forwardRef<MeasurementInlineSelectHandle,
             e.preventDefault();
             onTabNext();
           }
+        } else if (e.key === 'ArrowUp' && onArrowUp) {
+          e.preventDefault();
+          onArrowUp();
+        } else if (e.key === 'ArrowDown' && onArrowDown) {
+          e.preventDefault();
+          onArrowDown();
         }
       }
     };

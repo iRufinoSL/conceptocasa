@@ -1440,37 +1440,58 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
             </DialogDescription>
           </DialogHeader>
           
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="duplicate-name">Nombre del recurso *</Label>
-              <Input
-                id="duplicate-name"
-                value={duplicateResourceName}
-                onChange={(e) => setDuplicateResourceName(e.target.value)}
-                placeholder="Nombre del recurso"
-                maxLength={200}
-                autoFocus
-              />
-            </div>
+          {(() => {
+            const trimmedName = duplicateResourceName.trim();
+            const isDuplicateName = trimmedName && activityResources.some(
+              r => r.name.toLowerCase() === trimmedName.toLowerCase() && r.id !== duplicatingResource?.id
+            );
             
-            {duplicatingResource && (
-              <div className="text-sm text-muted-foreground bg-muted/50 p-3 rounded-lg">
-                <p>Recurso original: <span className="font-medium">{duplicatingResource.name}</span></p>
-                <p>Tipo: {duplicatingResource.resource_type || '-'}</p>
-                <p>€Coste ud: {formatCurrency(duplicatingResource.external_unit_cost || 0)}</p>
-              </div>
-            )}
-          </div>
-          
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDuplicateResourceDialogOpen(false)}>
-              Cancelar
-            </Button>
-            <Button onClick={handleDuplicateResource} disabled={!duplicateResourceName.trim()}>
-              <Copy className="h-4 w-4 mr-2" />
-              Duplicar
-            </Button>
-          </DialogFooter>
+            return (
+              <>
+                <div className="space-y-4 py-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="duplicate-name">Nombre del recurso *</Label>
+                    <Input
+                      id="duplicate-name"
+                      value={duplicateResourceName}
+                      onChange={(e) => setDuplicateResourceName(e.target.value)}
+                      placeholder="Nombre del recurso"
+                      maxLength={200}
+                      autoFocus
+                      className={isDuplicateName ? 'border-destructive focus-visible:ring-destructive' : ''}
+                    />
+                    {isDuplicateName && (
+                      <p className="text-sm text-destructive flex items-center gap-1">
+                        <X className="h-3.5 w-3.5" />
+                        Ya existe un recurso con este nombre en la actividad
+                      </p>
+                    )}
+                  </div>
+                  
+                  {duplicatingResource && (
+                    <div className="text-sm text-muted-foreground bg-muted/50 p-3 rounded-lg">
+                      <p>Recurso original: <span className="font-medium">{duplicatingResource.name}</span></p>
+                      <p>Tipo: {duplicatingResource.resource_type || '-'}</p>
+                      <p>€Coste ud: {formatCurrency(duplicatingResource.external_unit_cost || 0)}</p>
+                    </div>
+                  )}
+                </div>
+                
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setDuplicateResourceDialogOpen(false)}>
+                    Cancelar
+                  </Button>
+                  <Button 
+                    onClick={handleDuplicateResource} 
+                    disabled={!trimmedName || isDuplicateName}
+                  >
+                    <Copy className="h-4 w-4 mr-2" />
+                    Duplicar
+                  </Button>
+                </DialogFooter>
+              </>
+            );
+          })()}
         </DialogContent>
       </Dialog>
 

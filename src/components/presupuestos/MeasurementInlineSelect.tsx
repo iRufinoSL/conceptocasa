@@ -1,7 +1,7 @@
 import { useState, useMemo, useRef, forwardRef, useImperativeHandle } from 'react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
-import { Check } from 'lucide-react';
+import { Check, CheckCircle2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatNumber } from '@/lib/format-utils';
 
@@ -48,12 +48,18 @@ export const MeasurementInlineSelect = forwardRef<MeasurementInlineSelectHandle,
   }, ref) {
     const [open, setOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
+    const [showSuccess, setShowSuccess] = useState(false);
     const triggerRef = useRef<HTMLButtonElement>(null);
 
     useImperativeHandle(ref, () => ({
       focus: () => triggerRef.current?.focus(),
       click: () => triggerRef.current?.click()
     }));
+
+    const triggerSuccess = () => {
+      setShowSuccess(true);
+      setTimeout(() => setShowSuccess(false), 1200);
+    };
 
     // Generate MediciónID for a measurement
     const getMedicionId = (measurement: Measurement): string => {
@@ -85,9 +91,13 @@ export const MeasurementInlineSelect = forwardRef<MeasurementInlineSelectHandle,
     }, [measurements, measurementRelations, searchQuery]);
 
     const handleSelect = (measurementId: string | null) => {
+      const hasChanged = measurementId !== value;
       onSave(measurementId);
       setOpen(false);
       setSearchQuery('');
+      if (hasChanged) {
+        triggerSuccess();
+      }
     };
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -132,7 +142,7 @@ export const MeasurementInlineSelect = forwardRef<MeasurementInlineSelectHandle,
           <button
             ref={triggerRef}
             className={cn(
-              "w-full text-left px-2 py-1 -mx-1 rounded-md transition-all duration-200 cursor-pointer truncate",
+              "w-full text-left px-2 py-1 -mx-1 rounded-md transition-all duration-200 cursor-pointer truncate flex items-center gap-1.5",
               "hover:bg-primary/10 hover:border-primary/30 border border-transparent",
               "focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-1 focus:bg-primary/10",
               open && "ring-2 ring-primary ring-offset-1 bg-primary/5",
@@ -141,7 +151,10 @@ export const MeasurementInlineSelect = forwardRef<MeasurementInlineSelectHandle,
             title={displayValue}
             onKeyDown={handleKeyDown}
           >
-            {displayValue}
+            <span className="truncate">{displayValue}</span>
+            {showSuccess && (
+              <CheckCircle2 className="h-3.5 w-3.5 text-green-500 animate-scale-in flex-shrink-0" />
+            )}
           </button>
         </PopoverTrigger>
         <PopoverContent className="w-[350px] p-0" align="start" onKeyDown={handlePopoverKeyDown}>

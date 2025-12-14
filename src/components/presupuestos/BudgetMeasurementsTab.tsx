@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,11 +9,12 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { Plus, Search, Edit, Trash2, Ruler, Link2 } from 'lucide-react';
+import { Plus, Search, Edit, Trash2, Ruler, Link2, Upload, FileUp, X } from 'lucide-react';
 import { formatNumber } from '@/lib/format-utils';
 import { NumericInput } from '@/components/ui/numeric-input';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import { Checkbox } from '@/components/ui/checkbox';
+import * as XLSX from 'xlsx';
 
 interface Measurement {
   id: string;
@@ -74,6 +75,12 @@ export function BudgetMeasurementsTab({ budgetId, isAdmin }: BudgetMeasurementsT
   // Delete dialog
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [measurementToDelete, setMeasurementToDelete] = useState<Measurement | null>(null);
+  
+  // Import dialog
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [isImporting, setIsImporting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fetchData = async () => {
     setLoading(true);
@@ -361,6 +368,145 @@ export function BudgetMeasurementsTab({ budgetId, isAdmin }: BudgetMeasurementsT
     }));
   };
 
+  // Parse European number format
+  const parseEuropeanNumber = (value: string | number | null | undefined): number | null => {
+    if (value === null || value === undefined || value === '') return null;
+    if (typeof value === 'number') return value;
+    // Remove thousands separator (.) and replace decimal comma with period
+    const normalized = value.toString().replace(/\./g, '').replace(',', '.');
+    const parsed = parseFloat(normalized);
+    return isNaN(parsed) ? null : parsed;
+  };
+
+  // Handle CSV/Excel import
+  const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImportFile(file);
+  };
+
+  const handleImport = async () => {
+    if (!importFile) return;
+
+    setIsImporting(true);
+    try {
+      const data = await importFile.arrayBuffer();
+      const workbook = XLSX.read(data, { type: 'array' });
+      const sheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[sheetName];
+      const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
+
+      if (jsonData.length < 2) {
+        toast.error('El archivo no contiene datos suficientes');
+        return;
+      }
+
+      // Get headers from first row
+      const headers = jsonData[0].map((h: any) => String(h || '').trim().toLowerCase());
+      
+      // Expected columns mapping
+      const columnMap: Record<string, string> = {
+        'nombre': 'name',
+        'medición': 'name',
+        'medicion': 'name',
+        'uds manual': 'manual_units',
+        'uds': 'manual_units',
+        'unidades': 'manual_units',
+        'ud medida': 'measurement_unit',
+        'unidad': 'measurement_unit',
+      };
+
+      // Map header indices
+      const headerIndices: Record<string, number> = {};
+      headers.forEach((h, idx) => {
+        const mappedKey = columnMap[h];
+        if (mappedKey) {
+          headerIndices[mappedKey] = idx;
+        }
+      });
+
+      if (headerIndices['name'] === undefined) {
+        toast.error('No se encontró la columna "Nombre" o "Medición" en el archivo');
+        return;
+      }
+
+      // Get existing measurement names for duplicate check
+      const existingNames = new Set(measurements.map(m => m.name.toLowerCase().trim()));
+
+      // Parse rows
+      const measurementsToInsert: Array<{
+        budget_id: string;
+        name: string;
+        manual_units: number | null;
+        measurement_unit: string;
+      }> = [];
+
+      let duplicateCount = 0;
+
+      for (let i = 1; i < jsonData.length; i++) {
+        const row = jsonData[i];
+        if (!row || row.length === 0) continue;
+
+        const name = String(row[headerIndices['name']] || '').trim();
+        if (!name) continue;
+
+        // Check for duplicate
+        if (existingNames.has(name.toLowerCase())) {
+          duplicateCount++;
+          continue;
+        }
+
+        const manualUnits = headerIndices['manual_units'] !== undefined 
+          ? parseEuropeanNumber(row[headerIndices['manual_units']]) 
+          : null;
+        
+        let measurementUnit = headerIndices['measurement_unit'] !== undefined 
+          ? String(row[headerIndices['measurement_unit']] || '').trim().toLowerCase() 
+          : 'ud';
+        
+        // Validate measurement unit
+        if (!MEASUREMENT_UNITS.includes(measurementUnit)) {
+          measurementUnit = 'ud';
+        }
+
+        measurementsToInsert.push({
+          budget_id: budgetId,
+          name,
+          manual_units: manualUnits,
+          measurement_unit: measurementUnit
+        });
+
+        // Add to existing names set for next rows
+        existingNames.add(name.toLowerCase());
+      }
+
+      if (measurementsToInsert.length === 0) {
+        toast.error(duplicateCount > 0 
+          ? `Todas las ${duplicateCount} mediciones ya existen` 
+          : 'No se encontraron mediciones válidas para importar');
+        return;
+      }
+
+      // Insert measurements
+      const { error } = await supabase
+        .from('budget_measurements')
+        .insert(measurementsToInsert);
+
+      if (error) throw error;
+
+      toast.success(`${measurementsToInsert.length} mediciones importadas${duplicateCount > 0 ? ` (${duplicateCount} duplicadas omitidas)` : ''}`);
+      setImportDialogOpen(false);
+      setImportFile(null);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      fetchData();
+    } catch (error) {
+      console.error('Error importing:', error);
+      toast.error('Error al importar el archivo');
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -384,10 +530,16 @@ export function BudgetMeasurementsTab({ budgetId, isAdmin }: BudgetMeasurementsT
               </CardDescription>
             </div>
             {isAdmin && (
-              <Button onClick={openCreateForm}>
-                <Plus className="h-4 w-4 mr-2" />
-                Nueva Medición
-              </Button>
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={() => setImportDialogOpen(true)}>
+                  <Upload className="h-4 w-4 mr-2" />
+                  Importar CSV
+                </Button>
+                <Button onClick={openCreateForm}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Nueva Medición
+                </Button>
+              </div>
             )}
           </div>
         </CardHeader>
@@ -634,6 +786,85 @@ export function BudgetMeasurementsTab({ budgetId, isAdmin }: BudgetMeasurementsT
         title="Eliminar Medición"
         description={`¿Estás seguro de que quieres eliminar la medición "${measurementToDelete?.name}"? Las actividades relacionadas serán desvinculadas.`}
       />
+
+      {/* Import Dialog */}
+      <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Importar Mediciones desde CSV/Excel</DialogTitle>
+            <DialogDescription>
+              Sube un archivo CSV o Excel con las mediciones a importar. Las mediciones duplicadas serán omitidas.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Archivo CSV/Excel</Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".csv,.xlsx,.xls"
+                  onChange={handleImportFile}
+                  className="flex-1"
+                />
+                {importFile && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => {
+                      setImportFile(null);
+                      if (fileInputRef.current) fileInputRef.current.value = '';
+                    }}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+              {importFile && (
+                <p className="text-sm text-muted-foreground">
+                  Archivo seleccionado: {importFile.name}
+                </p>
+              )}
+            </div>
+
+            <div className="bg-muted/50 p-4 rounded-lg space-y-2">
+              <p className="text-sm font-medium">Columnas esperadas:</p>
+              <ul className="text-sm text-muted-foreground list-disc list-inside space-y-1">
+                <li><strong>Nombre</strong> o <strong>Medición</strong> (obligatorio)</li>
+                <li><strong>Uds manual</strong> o <strong>Uds</strong> o <strong>Unidades</strong> (opcional)</li>
+                <li><strong>Ud medida</strong> o <strong>Unidad</strong> (opcional, por defecto: ud)</li>
+              </ul>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => {
+              setImportDialogOpen(false);
+              setImportFile(null);
+              if (fileInputRef.current) fileInputRef.current.value = '';
+            }}>
+              Cancelar
+            </Button>
+            <Button 
+              onClick={handleImport} 
+              disabled={!importFile || isImporting}
+            >
+              {isImporting ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                  Importando...
+                </>
+              ) : (
+                <>
+                  <FileUp className="h-4 w-4 mr-2" />
+                  Importar
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

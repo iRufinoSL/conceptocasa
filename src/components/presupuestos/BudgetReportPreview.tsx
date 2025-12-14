@@ -1,0 +1,811 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Separator } from '@/components/ui/separator';
+import { FileDown, Printer, X } from 'lucide-react';
+import { formatCurrency, formatNumber } from '@/lib/format-utils';
+import { useCompanySettings } from '@/hooks/useCompanySettings';
+import { format } from 'date-fns';
+import { es } from 'date-fns/locale';
+import { toast } from 'sonner';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+
+interface BudgetReportPreviewProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  presupuesto: {
+    id: string;
+    nombre: string;
+    codigo_correlativo: number;
+    version: string;
+    poblacion: string;
+    provincia: string | null;
+  };
+}
+
+interface Activity {
+  id: string;
+  name: string;
+  code: string;
+  description: string | null;
+  measurement_unit: string;
+  phase_id: string | null;
+  measurement_id: string | null;
+}
+
+interface Phase {
+  id: string;
+  name: string;
+  code: string | null;
+}
+
+interface Resource {
+  id: string;
+  name: string;
+  resource_type: string | null;
+  unit: string | null;
+  external_unit_cost: number | null;
+  safety_margin_percent: number | null;
+  sales_margin_percent: number | null;
+  manual_units: number | null;
+  related_units: number | null;
+  activity_id: string | null;
+}
+
+// Format for PDF
+const formatPdfCurrency = (value: number): string => {
+  return new Intl.NumberFormat('es-ES', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value) + ' €';
+};
+
+export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetReportPreviewProps) {
+  const { settings: companySettings } = useCompanySettings();
+  const [loading, setLoading] = useState(true);
+  const [isExporting, setIsExporting] = useState(false);
+  const [activities, setActivities] = useState<Activity[]>([]);
+  const [phases, setPhases] = useState<Phase[]>([]);
+  const [resources, setResources] = useState<Resource[]>([]);
+  const [filesCountMap, setFilesCountMap] = useState<Map<string, number>>(new Map());
+  const printRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (open) {
+      fetchData();
+    }
+  }, [open, presupuesto.id]);
+
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      const [activitiesRes, phasesRes, resourcesRes, filesCountRes] = await Promise.all([
+        supabase
+          .from('budget_activities')
+          .select('id, name, code, description, measurement_unit, phase_id, measurement_id')
+          .eq('budget_id', presupuesto.id)
+          .order('name'),
+        supabase
+          .from('budget_phases')
+          .select('id, name, code')
+          .eq('budget_id', presupuesto.id)
+          .order('code'),
+        supabase
+          .from('budget_activity_resources')
+          .select('*')
+          .eq('budget_id', presupuesto.id)
+          .order('name'),
+        supabase
+          .from('budget_activity_files')
+          .select('activity_id'),
+      ]);
+
+      if (activitiesRes.error) throw activitiesRes.error;
+      if (phasesRes.error) throw phasesRes.error;
+      if (resourcesRes.error) throw resourcesRes.error;
+
+      setActivities(activitiesRes.data || []);
+      setPhases(phasesRes.data || []);
+      setResources(resourcesRes.data || []);
+
+      const filesMap = new Map<string, number>();
+      (filesCountRes.data || []).forEach(f => {
+        filesMap.set(f.activity_id, (filesMap.get(f.activity_id) || 0) + 1);
+      });
+      setFilesCountMap(filesMap);
+    } catch (error) {
+      console.error('Error fetching data:', error);
+      toast.error('Error al cargar los datos del informe');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Resource calculation helper
+  const calculateFields = (resource: Resource) => {
+    const externalCost = resource.external_unit_cost ?? 0;
+    const safetyMargin = resource.safety_margin_percent ?? 0.15;
+    const salesMargin = resource.sales_margin_percent ?? 0.25;
+    const safetyMarginUd = externalCost * safetyMargin;
+    const internalCostUd = externalCost + safetyMarginUd;
+    const salesMarginUd = internalCostUd * salesMargin;
+    const salesCostUd = internalCostUd + salesMarginUd;
+    const manualUnits = resource.manual_units;
+    const relatedUnits = resource.related_units ?? 0;
+    const calculatedUnits = manualUnits !== null && manualUnits !== undefined ? manualUnits : relatedUnits;
+    const subtotalSales = salesCostUd * calculatedUnits;
+    return { salesCostUd, calculatedUnits, subtotalSales };
+  };
+
+  // Calculate activity resources subtotals
+  const activityResourcesMap = new Map<string, number>();
+  resources.forEach(r => {
+    if (r.activity_id) {
+      const fields = calculateFields(r);
+      activityResourcesMap.set(r.activity_id, (activityResourcesMap.get(r.activity_id) || 0) + fields.subtotalSales);
+    }
+  });
+
+  // Get phase info for activity
+  const getPhaseInfo = (phaseId: string | null) => {
+    if (!phaseId) return { code: '', name: '' };
+    const phase = phases.find(p => p.id === phaseId);
+    return { code: phase?.code || '', name: phase?.name || '' };
+  };
+
+  // Generate ActivityID
+  const generateActivityId = (activity: Activity) => {
+    const phaseInfo = getPhaseInfo(activity.phase_id);
+    if (phaseInfo.code) {
+      return `${phaseInfo.code} ${activity.code}.-${activity.name}`;
+    }
+    return `${activity.code}.-${activity.name}`;
+  };
+
+  // Calculate totals
+  const totalResourcesSubtotal = resources.reduce((sum, r) => sum + calculateFields(r).subtotalSales, 0);
+
+  // Group resources by type
+  const byType = resources.reduce((acc, r) => {
+    const type = r.resource_type || 'Sin tipo';
+    const fields = calculateFields(r);
+    if (!acc[type]) acc[type] = { count: 0, total: 0 };
+    acc[type].count++;
+    acc[type].total += fields.subtotalSales;
+    return acc;
+  }, {} as Record<string, { count: number; total: number }>);
+
+  const presupuestoId = `${presupuesto.nombre} (${presupuesto.codigo_correlativo}/${presupuesto.version}): ${presupuesto.poblacion}`;
+
+  const handlePrint = () => {
+    window.print();
+  };
+
+  const exportToPDF = async () => {
+    setIsExporting(true);
+    try {
+      const doc = new jsPDF();
+      const pageWidth = doc.internal.pageSize.getWidth();
+
+      // Company info
+      const companyName = companySettings.name || 'Mi Empresa';
+      const companyEmail = companySettings.email || '';
+      const companyPhone = companySettings.phone || '';
+      const companyAddress = companySettings.address || '';
+      const companyWeb = companySettings.website || '';
+      const companyInitials = companyName.substring(0, 2).toUpperCase();
+
+      // Header with company branding
+      doc.setFillColor(37, 99, 235);
+      doc.roundedRect(14, 10, 25, 25, 3, 3, 'F');
+      doc.setTextColor(255);
+      doc.setFontSize(16);
+      doc.setFont('helvetica', 'bold');
+      doc.text(companyInitials, 26.5, 26, { align: 'center' });
+      doc.setTextColor(0);
+
+      doc.setFontSize(16);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(37, 99, 235);
+      doc.text(companyName, 45, 18);
+      doc.setTextColor(0);
+
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(100);
+      const contactLine = [companyEmail, companyPhone].filter(Boolean).join('  |  ');
+      const addressLine = [companyAddress, companyWeb].filter(Boolean).join('  |  ');
+      if (contactLine) doc.text(contactLine, 45, 24);
+      if (addressLine) doc.text(addressLine, 45, 30);
+      doc.setTextColor(0);
+
+      doc.setDrawColor(200);
+      doc.line(14, 40, pageWidth - 14, 40);
+
+      doc.setFontSize(14);
+      doc.setFont('helvetica', 'bold');
+      doc.text('INFORME COMPLETO DE PRESUPUESTO', pageWidth / 2, 50, { align: 'center' });
+
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'normal');
+      doc.text(presupuesto.nombre, pageWidth / 2, 58, { align: 'center' });
+
+      doc.setFontSize(9);
+      doc.setTextColor(100);
+      doc.text(presupuestoId, pageWidth / 2, 65, { align: 'center' });
+      doc.text(`Fecha de generación: ${format(new Date(), "d 'de' MMMM 'de' yyyy", { locale: es })}`, pageWidth / 2, 72, { align: 'center' });
+      doc.setTextColor(0);
+
+      // Section 1: General Summary
+      let yPos = 85;
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(37, 99, 235);
+      doc.text('1. RESUMEN GENERAL', 14, yPos);
+      doc.setTextColor(0);
+
+      yPos += 10;
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+
+      const summaryData = [
+        ['Total de actividades:', activities.length.toString()],
+        ['Total de fases:', phases.length.toString()],
+        ['Total de recursos:', resources.length.toString()],
+      ];
+
+      summaryData.forEach(([label, value]) => {
+        doc.text(label, 14, yPos);
+        doc.text(value, 80, yPos);
+        yPos += 6;
+      });
+
+      yPos += 4;
+      doc.setFillColor(34, 197, 94);
+      doc.roundedRect(14, yPos - 4, pageWidth - 28, 10, 2, 2, 'F');
+      doc.setTextColor(255);
+      doc.setFont('helvetica', 'bold');
+      doc.text('TOTAL PRESUPUESTO:', 18, yPos + 3);
+      doc.text(formatPdfCurrency(totalResourcesSubtotal), pageWidth - 18, yPos + 3, { align: 'right' });
+      doc.setTextColor(0);
+      doc.setFont('helvetica', 'normal');
+
+      yPos += 20;
+      doc.setFontSize(11);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(37, 99, 235);
+      doc.text('Desglose por Tipo de Recurso', 14, yPos);
+      doc.setTextColor(0);
+
+      yPos += 8;
+      const typeData = Object.entries(byType).map(([type, data]) => [
+        type,
+        data.count.toString(),
+        formatPdfCurrency(data.total)
+      ]);
+
+      autoTable(doc, {
+        startY: yPos,
+        head: [['Tipo', 'Cantidad', 'Total']],
+        body: typeData,
+        theme: 'striped',
+        headStyles: { fillColor: [59, 130, 246] },
+        margin: { left: 14, right: 14 },
+      });
+
+      // Section 2: Activities Summary
+      doc.addPage();
+      yPos = 20;
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(37, 99, 235);
+      doc.text('2. RESUMEN DE ACTIVIDADES POR FASE', 14, yPos);
+      doc.setTextColor(0);
+
+      yPos += 10;
+
+      const activitiesTableData: any[] = [];
+
+      const unassigned = activities.filter(a => !a.phase_id);
+      if (unassigned.length > 0) {
+        const unassignedSubtotal = unassigned.reduce((sum, a) => sum + (activityResourcesMap.get(a.id) || 0), 0);
+        activitiesTableData.push([
+          { content: 'Sin fase asignada', colSpan: 3, styles: { fillColor: [240, 240, 240], fontStyle: 'bold' } },
+          { content: formatPdfCurrency(unassignedSubtotal), styles: { fillColor: [240, 240, 240], fontStyle: 'bold', halign: 'right' } }
+        ]);
+        unassigned.forEach(activity => {
+          activitiesTableData.push([
+            `  ${generateActivityId(activity)}`,
+            activity.measurement_unit,
+            (filesCountMap.get(activity.id) || 0).toString(),
+            formatPdfCurrency(activityResourcesMap.get(activity.id) || 0)
+          ]);
+        });
+      }
+
+      phases.forEach(phase => {
+        const phaseActivities = activities.filter(a => a.phase_id === phase.id);
+        if (phaseActivities.length === 0) return;
+
+        const phaseSubtotal = phaseActivities.reduce((sum, a) => sum + (activityResourcesMap.get(a.id) || 0), 0);
+
+        activitiesTableData.push([
+          { content: `${phase.code || ''} ${phase.name}`, colSpan: 3, styles: { fillColor: [59, 130, 246], textColor: [255, 255, 255], fontStyle: 'bold' } },
+          { content: formatPdfCurrency(phaseSubtotal), styles: { fillColor: [59, 130, 246], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'right' } }
+        ]);
+
+        phaseActivities.sort((a, b) => a.name.localeCompare(b.name)).forEach(activity => {
+          activitiesTableData.push([
+            `  ${generateActivityId(activity)}`,
+            activity.measurement_unit,
+            (filesCountMap.get(activity.id) || 0).toString(),
+            formatPdfCurrency(activityResourcesMap.get(activity.id) || 0)
+          ]);
+        });
+      });
+
+      activitiesTableData.push([
+        { content: 'TOTAL ACTIVIDADES', colSpan: 3, styles: { fillColor: [34, 197, 94], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'right' } },
+        { content: formatPdfCurrency(totalResourcesSubtotal), styles: { fillColor: [34, 197, 94], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'right' } }
+      ]);
+
+      autoTable(doc, {
+        startY: yPos,
+        head: [['ActividadID', 'Unidad', 'Archivos', '€SubTotal']],
+        body: activitiesTableData,
+        theme: 'striped',
+        headStyles: { fillColor: [59, 130, 246] },
+        margin: { left: 14, right: 14 },
+        styles: { fontSize: 8 },
+        columnStyles: {
+          0: { cellWidth: 90 },
+          1: { cellWidth: 20 },
+          2: { cellWidth: 20, halign: 'center' },
+          3: { cellWidth: 40, halign: 'right' },
+        },
+      });
+
+      // Section 3: Resources Detail
+      doc.addPage();
+      yPos = 20;
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(37, 99, 235);
+      doc.text('3. DESGLOSE DE RECURSOS POR FASE Y ACTIVIDAD', 14, yPos);
+      doc.setTextColor(0);
+
+      yPos += 10;
+
+      const resourcesTableData: any[] = [];
+
+      const unassignedResources = resources.filter(r => !r.activity_id);
+      if (unassignedResources.length > 0) {
+        const unassignedTotal = unassignedResources.reduce((sum, r) => sum + calculateFields(r).subtotalSales, 0);
+        resourcesTableData.push([
+          { content: 'Sin actividad asignada', colSpan: 5, styles: { fillColor: [240, 240, 240], fontStyle: 'bold' } },
+          { content: formatPdfCurrency(unassignedTotal), styles: { fillColor: [240, 240, 240], fontStyle: 'bold', halign: 'right' } }
+        ]);
+        unassignedResources.forEach(resource => {
+          const fields = calculateFields(resource);
+          resourcesTableData.push([
+            `  ${resource.name}`,
+            resource.resource_type || '-',
+            resource.unit || '-',
+            formatPdfCurrency(fields.salesCostUd),
+            formatNumber(fields.calculatedUnits),
+            formatPdfCurrency(fields.subtotalSales)
+          ]);
+        });
+      }
+
+      phases.forEach(phase => {
+        const phaseActivities = activities.filter(a => a.phase_id === phase.id);
+        const phaseResources = resources.filter(r => {
+          const activity = activities.find(a => a.id === r.activity_id);
+          return activity?.phase_id === phase.id;
+        });
+
+        if (phaseResources.length === 0) return;
+
+        const phaseTotal = phaseResources.reduce((sum, r) => sum + calculateFields(r).subtotalSales, 0);
+
+        resourcesTableData.push([
+          { content: `${phase.code || ''} ${phase.name}`, colSpan: 5, styles: { fillColor: [59, 130, 246], textColor: [255, 255, 255], fontStyle: 'bold' } },
+          { content: formatPdfCurrency(phaseTotal), styles: { fillColor: [59, 130, 246], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'right' } }
+        ]);
+
+        phaseActivities.forEach(activity => {
+          const activityResources = resources.filter(r => r.activity_id === activity.id);
+          if (activityResources.length === 0) return;
+
+          const activityTotal = activityResources.reduce((sum, r) => sum + calculateFields(r).subtotalSales, 0);
+
+          resourcesTableData.push([
+            { content: `  ${activity.code}.-${activity.name}`, colSpan: 5, styles: { fillColor: [219, 234, 254], fontStyle: 'italic' } },
+            { content: formatPdfCurrency(activityTotal), styles: { fillColor: [219, 234, 254], fontStyle: 'italic', halign: 'right' } }
+          ]);
+
+          activityResources.sort((a, b) => a.name.localeCompare(b.name)).forEach(resource => {
+            const fields = calculateFields(resource);
+            resourcesTableData.push([
+              `    ${resource.name}`,
+              resource.resource_type || '-',
+              resource.unit || '-',
+              formatPdfCurrency(fields.salesCostUd),
+              formatNumber(fields.calculatedUnits),
+              formatPdfCurrency(fields.subtotalSales)
+            ]);
+          });
+        });
+      });
+
+      const activitiesWithoutPhase = activities.filter(a => !a.phase_id);
+      activitiesWithoutPhase.forEach(activity => {
+        const activityResources = resources.filter(r => r.activity_id === activity.id);
+        if (activityResources.length === 0) return;
+
+        const activityTotal = activityResources.reduce((sum, r) => sum + calculateFields(r).subtotalSales, 0);
+
+        resourcesTableData.push([
+          { content: `${activity.code}.-${activity.name} (sin fase)`, colSpan: 5, styles: { fillColor: [254, 243, 199], fontStyle: 'italic' } },
+          { content: formatPdfCurrency(activityTotal), styles: { fillColor: [254, 243, 199], fontStyle: 'italic', halign: 'right' } }
+        ]);
+
+        activityResources.sort((a, b) => a.name.localeCompare(b.name)).forEach(resource => {
+          const fields = calculateFields(resource);
+          resourcesTableData.push([
+            `  ${resource.name}`,
+            resource.resource_type || '-',
+            resource.unit || '-',
+            formatPdfCurrency(fields.salesCostUd),
+            formatNumber(fields.calculatedUnits),
+            formatPdfCurrency(fields.subtotalSales)
+          ]);
+        });
+      });
+
+      resourcesTableData.push([
+        { content: 'TOTAL PRESUPUESTO', colSpan: 5, styles: { fillColor: [34, 197, 94], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'right' } },
+        { content: formatPdfCurrency(totalResourcesSubtotal), styles: { fillColor: [34, 197, 94], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'right' } }
+      ]);
+
+      autoTable(doc, {
+        startY: yPos,
+        head: [['Recurso', 'Tipo', 'Ud', '€Coste Venta', 'Uds', '€SubTotal']],
+        body: resourcesTableData,
+        theme: 'striped',
+        headStyles: { fillColor: [59, 130, 246] },
+        margin: { left: 14, right: 14 },
+        styles: { fontSize: 7 },
+        columnStyles: {
+          0: { cellWidth: 65 },
+          1: { cellWidth: 25 },
+          2: { cellWidth: 15 },
+          3: { cellWidth: 25, halign: 'right' },
+          4: { cellWidth: 20, halign: 'right' },
+          5: { cellWidth: 28, halign: 'right' },
+        },
+      });
+
+      // Footer
+      const pageCount = doc.getNumberOfPages();
+      const pageHeight = doc.internal.pageSize.getHeight();
+      for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        doc.setDrawColor(200);
+        doc.line(14, pageHeight - 20, pageWidth - 14, pageHeight - 20);
+        doc.setFontSize(7);
+        doc.setTextColor(120);
+        const footerInfo = [companyName, companyEmail, companyPhone].filter(Boolean).join(' | ');
+        doc.text(footerInfo, 14, pageHeight - 14);
+        doc.text(`Página ${i} de ${pageCount}`, pageWidth - 14, pageHeight - 14, { align: 'right' });
+      }
+
+      const fileName = `presupuesto_completo_${presupuesto.nombre.replace(/[^a-zA-Z0-9]/g, '_')}_${format(new Date(), 'yyyyMMdd')}.pdf`;
+      doc.save(fileName);
+      toast.success('PDF exportado correctamente');
+    } catch (error) {
+      console.error('Error exporting PDF:', error);
+      toast.error('Error al exportar el PDF');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-5xl max-h-[90vh] flex flex-col p-0">
+        <DialogHeader className="px-6 pt-6 pb-4 border-b print:hidden">
+          <div className="flex items-center justify-between">
+            <DialogTitle className="text-lg font-semibold">
+              Vista previa del informe
+            </DialogTitle>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={handlePrint}>
+                <Printer className="h-4 w-4 mr-2" />
+                Imprimir
+              </Button>
+              <Button size="sm" onClick={exportToPDF} disabled={isExporting || loading}>
+                <FileDown className="h-4 w-4 mr-2" />
+                {isExporting ? 'Exportando...' : 'Exportar PDF'}
+              </Button>
+            </div>
+          </div>
+        </DialogHeader>
+
+        <ScrollArea className="flex-1 px-6">
+          {loading ? (
+            <div className="space-y-4 py-6">
+              <Skeleton className="h-32 w-full" />
+              <Skeleton className="h-48 w-full" />
+              <Skeleton className="h-64 w-full" />
+            </div>
+          ) : (
+            <div ref={printRef} className="py-6 space-y-8 print:py-0 print:space-y-4">
+              {/* Header */}
+              <div className="text-center border-b pb-6 print:pb-4">
+                <div className="flex items-center justify-center gap-4 mb-4">
+                  <div className="w-12 h-12 rounded-lg bg-primary flex items-center justify-center text-primary-foreground font-bold text-lg">
+                    {(companySettings.name || 'MI').substring(0, 2).toUpperCase()}
+                  </div>
+                  <div className="text-left">
+                    <h2 className="text-xl font-bold text-primary">{companySettings.name || 'Mi Empresa'}</h2>
+                    <p className="text-xs text-muted-foreground">
+                      {[companySettings.email, companySettings.phone].filter(Boolean).join(' | ')}
+                    </p>
+                  </div>
+                </div>
+                <h1 className="text-2xl font-bold text-foreground mb-1">INFORME COMPLETO DE PRESUPUESTO</h1>
+                <p className="text-lg text-foreground">{presupuesto.nombre}</p>
+                <p className="text-sm text-muted-foreground">{presupuestoId}</p>
+                <p className="text-xs text-muted-foreground mt-2">
+                  Fecha de generación: {format(new Date(), "d 'de' MMMM 'de' yyyy", { locale: es })}
+                </p>
+              </div>
+
+              {/* Section 1: General Summary */}
+              <div>
+                <h3 className="text-lg font-bold text-primary mb-4">1. RESUMEN GENERAL</h3>
+                
+                <div className="grid grid-cols-3 gap-4 mb-4">
+                  <Card>
+                    <CardContent className="pt-4">
+                      <p className="text-2xl font-bold">{activities.length}</p>
+                      <p className="text-sm text-muted-foreground">Actividades</p>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="pt-4">
+                      <p className="text-2xl font-bold">{phases.length}</p>
+                      <p className="text-sm text-muted-foreground">Fases</p>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="pt-4">
+                      <p className="text-2xl font-bold">{resources.length}</p>
+                      <p className="text-sm text-muted-foreground">Recursos</p>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                <Card className="bg-green-500/10 border-green-500/30">
+                  <CardContent className="py-4 flex items-center justify-between">
+                    <span className="font-semibold text-lg">TOTAL PRESUPUESTO</span>
+                    <span className="text-2xl font-bold text-green-600">{formatCurrency(totalResourcesSubtotal)}</span>
+                  </CardContent>
+                </Card>
+
+                <div className="mt-4">
+                  <h4 className="font-semibold mb-2">Desglose por Tipo de Recurso</h4>
+                  <div className="flex flex-wrap gap-2">
+                    {Object.entries(byType).map(([type, data]) => (
+                      <Badge key={type} variant="outline" className="text-sm py-1 px-3">
+                        {type}: {data.count} ({formatCurrency(data.total)})
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <Separator className="print:hidden" />
+
+              {/* Section 2: Activities Summary */}
+              <div className="print:break-before-page">
+                <h3 className="text-lg font-bold text-primary mb-4">2. RESUMEN DE ACTIVIDADES POR FASE</h3>
+                
+                <div className="border rounded-lg overflow-hidden">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-primary/10">
+                        <TableHead className="font-bold">ActividadID</TableHead>
+                        <TableHead className="font-bold w-20">Unidad</TableHead>
+                        <TableHead className="font-bold w-20 text-center">Archivos</TableHead>
+                        <TableHead className="font-bold w-32 text-right">€SubTotal</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {/* Unassigned activities */}
+                      {activities.filter(a => !a.phase_id).length > 0 && (
+                        <>
+                          <TableRow className="bg-muted/50">
+                            <TableCell colSpan={3} className="font-semibold">Sin fase asignada</TableCell>
+                            <TableCell className="font-semibold text-right">
+                              {formatCurrency(activities.filter(a => !a.phase_id).reduce((sum, a) => sum + (activityResourcesMap.get(a.id) || 0), 0))}
+                            </TableCell>
+                          </TableRow>
+                          {activities.filter(a => !a.phase_id).map(activity => (
+                            <TableRow key={activity.id}>
+                              <TableCell className="pl-6">{generateActivityId(activity)}</TableCell>
+                              <TableCell>{activity.measurement_unit}</TableCell>
+                              <TableCell className="text-center">{filesCountMap.get(activity.id) || 0}</TableCell>
+                              <TableCell className="text-right font-mono">{formatCurrency(activityResourcesMap.get(activity.id) || 0)}</TableCell>
+                            </TableRow>
+                          ))}
+                        </>
+                      )}
+
+                      {/* Phases with activities */}
+                      {phases.map(phase => {
+                        const phaseActivities = activities.filter(a => a.phase_id === phase.id);
+                        if (phaseActivities.length === 0) return null;
+                        
+                        const phaseSubtotal = phaseActivities.reduce((sum, a) => sum + (activityResourcesMap.get(a.id) || 0), 0);
+                        
+                        return (
+                          <React.Fragment key={phase.id}>
+                            <TableRow className="bg-primary text-primary-foreground">
+                              <TableCell colSpan={3} className="font-bold">{phase.code} {phase.name}</TableCell>
+                              <TableCell className="font-bold text-right">{formatCurrency(phaseSubtotal)}</TableCell>
+                            </TableRow>
+                            {phaseActivities.sort((a, b) => a.name.localeCompare(b.name)).map(activity => (
+                              <TableRow key={activity.id}>
+                                <TableCell className="pl-6">{generateActivityId(activity)}</TableCell>
+                                <TableCell>{activity.measurement_unit}</TableCell>
+                                <TableCell className="text-center">{filesCountMap.get(activity.id) || 0}</TableCell>
+                                <TableCell className="text-right font-mono">{formatCurrency(activityResourcesMap.get(activity.id) || 0)}</TableCell>
+                              </TableRow>
+                            ))}
+                          </React.Fragment>
+                        );
+                      })}
+
+                      {/* Total row */}
+                      <TableRow className="bg-green-500 text-white">
+                        <TableCell colSpan={3} className="font-bold text-right">TOTAL ACTIVIDADES</TableCell>
+                        <TableCell className="font-bold text-right">{formatCurrency(totalResourcesSubtotal)}</TableCell>
+                      </TableRow>
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+
+              <Separator className="print:hidden" />
+
+              {/* Section 3: Resources Detail */}
+              <div className="print:break-before-page">
+                <h3 className="text-lg font-bold text-primary mb-4">3. DESGLOSE DE RECURSOS POR FASE Y ACTIVIDAD</h3>
+                
+                <div className="border rounded-lg overflow-hidden">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-primary/10">
+                        <TableHead className="font-bold">Recurso</TableHead>
+                        <TableHead className="font-bold w-24">Tipo</TableHead>
+                        <TableHead className="font-bold w-16">Ud</TableHead>
+                        <TableHead className="font-bold w-24 text-right">€Coste Venta</TableHead>
+                        <TableHead className="font-bold w-16 text-right">Uds</TableHead>
+                        <TableHead className="font-bold w-28 text-right">€SubTotal</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {/* Resources without activity */}
+                      {resources.filter(r => !r.activity_id).length > 0 && (
+                        <>
+                          <TableRow className="bg-muted/50">
+                            <TableCell colSpan={5} className="font-semibold">Sin actividad asignada</TableCell>
+                            <TableCell className="font-semibold text-right">
+                              {formatCurrency(resources.filter(r => !r.activity_id).reduce((sum, r) => sum + calculateFields(r).subtotalSales, 0))}
+                            </TableCell>
+                          </TableRow>
+                          {resources.filter(r => !r.activity_id).map(resource => {
+                            const fields = calculateFields(resource);
+                            return (
+                              <TableRow key={resource.id}>
+                                <TableCell className="pl-6">{resource.name}</TableCell>
+                                <TableCell>{resource.resource_type || '-'}</TableCell>
+                                <TableCell>{resource.unit || '-'}</TableCell>
+                                <TableCell className="text-right font-mono">{formatCurrency(fields.salesCostUd)}</TableCell>
+                                <TableCell className="text-right font-mono">{formatNumber(fields.calculatedUnits)}</TableCell>
+                                <TableCell className="text-right font-mono">{formatCurrency(fields.subtotalSales)}</TableCell>
+                              </TableRow>
+                            );
+                          })}
+                        </>
+                      )}
+
+                      {/* Phases with resources */}
+                      {phases.map(phase => {
+                        const phaseActivities = activities.filter(a => a.phase_id === phase.id);
+                        const phaseResources = resources.filter(r => {
+                          const activity = activities.find(a => a.id === r.activity_id);
+                          return activity?.phase_id === phase.id;
+                        });
+                        
+                        if (phaseResources.length === 0) return null;
+                        
+                        const phaseTotal = phaseResources.reduce((sum, r) => sum + calculateFields(r).subtotalSales, 0);
+                        
+                        return (
+                          <React.Fragment key={phase.id}>
+                            <TableRow className="bg-primary text-primary-foreground">
+                              <TableCell colSpan={5} className="font-bold">{phase.code} {phase.name}</TableCell>
+                              <TableCell className="font-bold text-right">{formatCurrency(phaseTotal)}</TableCell>
+                            </TableRow>
+                            {phaseActivities.map(activity => {
+                              const activityResources = resources.filter(r => r.activity_id === activity.id);
+                              if (activityResources.length === 0) return null;
+                              
+                              const activityTotal = activityResources.reduce((sum, r) => sum + calculateFields(r).subtotalSales, 0);
+                              
+                              return (
+                                <React.Fragment key={activity.id}>
+                                  <TableRow className="bg-primary/10">
+                                    <TableCell colSpan={5} className="font-medium italic pl-4">{activity.code}.-{activity.name}</TableCell>
+                                    <TableCell className="font-medium italic text-right">{formatCurrency(activityTotal)}</TableCell>
+                                  </TableRow>
+                                  {activityResources.sort((a, b) => a.name.localeCompare(b.name)).map(resource => {
+                                    const fields = calculateFields(resource);
+                                    return (
+                                      <TableRow key={resource.id}>
+                                        <TableCell className="pl-8">{resource.name}</TableCell>
+                                        <TableCell>{resource.resource_type || '-'}</TableCell>
+                                        <TableCell>{resource.unit || '-'}</TableCell>
+                                        <TableCell className="text-right font-mono">{formatCurrency(fields.salesCostUd)}</TableCell>
+                                        <TableCell className="text-right font-mono">{formatNumber(fields.calculatedUnits)}</TableCell>
+                                        <TableCell className="text-right font-mono">{formatCurrency(fields.subtotalSales)}</TableCell>
+                                      </TableRow>
+                                    );
+                                  })}
+                                </React.Fragment>
+                              );
+                            })}
+                          </React.Fragment>
+                        );
+                      })}
+
+                      {/* Total row */}
+                      <TableRow className="bg-green-500 text-white">
+                        <TableCell colSpan={5} className="font-bold text-right">TOTAL PRESUPUESTO</TableCell>
+                        <TableCell className="font-bold text-right">{formatCurrency(totalResourcesSubtotal)}</TableCell>
+                      </TableRow>
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="text-center text-xs text-muted-foreground pt-4 border-t print:mt-8">
+                <p>{[companySettings.name, companySettings.email, companySettings.phone].filter(Boolean).join(' | ')}</p>
+                <p>{[companySettings.address, companySettings.website].filter(Boolean).join(' | ')}</p>
+              </div>
+            </div>
+          )}
+        </ScrollArea>
+
+        <DialogFooter className="px-6 py-4 border-t print:hidden">
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Cerrar
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+

@@ -979,7 +979,7 @@ export function BudgetResourcesTab({ budgetId, isAdmin }: BudgetResourcesTabProp
                             <ResourceInlineEdit
                               value={(resource.safety_margin_percent ?? 0.15) * 100}
                               displayValue={formatPercent(resource.safety_margin_percent ?? 0.15)}
-                              onSave={(v) => handleInlineUpdate(resource.id, 'safety_margin_percent', v / 100)}
+                              onSave={(v) => handleInlineUpdate(resource.id, 'safety_margin_percent', Math.max(0, v) / 100)}
                               type="percent"
                               decimals={1}
                               disabled={!isAdmin}
@@ -995,7 +995,7 @@ export function BudgetResourcesTab({ budgetId, isAdmin }: BudgetResourcesTabProp
                             <ResourceInlineEdit
                               value={(resource.sales_margin_percent ?? 0.25) * 100}
                               displayValue={formatPercent(resource.sales_margin_percent ?? 0.25)}
-                              onSave={(v) => handleInlineUpdate(resource.id, 'sales_margin_percent', v / 100)}
+                              onSave={(v) => handleInlineUpdate(resource.id, 'sales_margin_percent', Math.max(0, v) / 100)}
                               type="percent"
                               decimals={1}
                               disabled={!isAdmin}

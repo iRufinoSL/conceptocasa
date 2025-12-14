@@ -1632,7 +1632,7 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
                                     type="number"
                                     decimals={0}
                                     displayValue={<span className="font-mono">{formatPercent(safetyPercent)}</span>}
-                                    onSave={async (v) => handleInlineUpdate('safety_margin_percent', (v as number) / 100)}
+                                    onSave={async (v) => handleInlineUpdate('safety_margin_percent', Math.max(0, v as number) / 100)}
                                   />
                                 ) : (
                                   <span className="font-mono">{formatPercent(safetyPercent)}</span>
@@ -1645,7 +1645,7 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
                                     type="number"
                                     decimals={0}
                                     displayValue={<span className="font-mono">{formatPercent(salesPercent)}</span>}
-                                    onSave={async (v) => handleInlineUpdate('sales_margin_percent', (v as number) / 100)}
+                                    onSave={async (v) => handleInlineUpdate('sales_margin_percent', Math.max(0, v as number) / 100)}
                                   />
                                 ) : (
                                   <span className="font-mono">{formatPercent(salesPercent)}</span>

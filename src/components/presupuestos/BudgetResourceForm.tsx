@@ -281,7 +281,7 @@ export function BudgetResourceForm({
               <NumericInput
                 id="safety_margin_percent"
                 value={formData.safety_margin_percent * 100}
-                onChange={(value) => setFormData({ ...formData, safety_margin_percent: value / 100 })}
+                onChange={(value) => setFormData({ ...formData, safety_margin_percent: Math.max(0, value) / 100 })}
                 decimals={2}
               />
             </div>
@@ -310,7 +310,7 @@ export function BudgetResourceForm({
               <NumericInput
                 id="sales_margin_percent"
                 value={formData.sales_margin_percent * 100}
-                onChange={(value) => setFormData({ ...formData, sales_margin_percent: value / 100 })}
+                onChange={(value) => setFormData({ ...formData, sales_margin_percent: Math.max(0, value) / 100 })}
                 decimals={2}
               />
             </div>

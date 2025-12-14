@@ -147,31 +147,42 @@ export function ResourceInlineEdit({
     );
   }
 
+  // Wrapper for all edit states with consistent positioning
+  const EditWrapper = ({ children }: { children: React.ReactNode }) => (
+    <div className="inline-block relative min-w-[60px]">
+      {children}
+    </div>
+  );
+
   if (!isEditing) {
     return (
-      <span
-        className={cn(
-          'cursor-pointer hover:bg-primary/10 px-1.5 py-0.5 -mx-1 rounded-md transition-all duration-200 inline-flex items-center gap-1',
-          'focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-1 focus:bg-primary/10',
-          'border border-transparent hover:border-primary/30',
-          className
-        )}
-        onClick={() => setIsEditing(true)}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            setIsEditing(true);
-          }
-        }}
-        tabIndex={tabIndex ?? 0}
-        role="button"
-        title="Clic para editar (Tab para navegar)"
-      >
-        {displayValue ?? String(value ?? '-')}
-        {showSuccess && (
-          <CheckCircle2 className="h-3.5 w-3.5 text-green-500 animate-scale-in" />
-        )}
-      </span>
+      <EditWrapper>
+        <span
+          className={cn(
+            'cursor-pointer hover:bg-primary/10 px-1.5 py-0.5 -mx-1 rounded-md inline-flex items-center gap-1',
+            'focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-1 focus:bg-primary/10',
+            'border border-transparent hover:border-primary/30',
+            'transition-all duration-200 ease-out',
+            'animate-fade-in',
+            className
+          )}
+          onClick={() => setIsEditing(true)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              setIsEditing(true);
+            }
+          }}
+          tabIndex={tabIndex ?? 0}
+          role="button"
+          title="Clic para editar (Tab para navegar)"
+        >
+          {displayValue ?? String(value ?? '-')}
+          {showSuccess && (
+            <CheckCircle2 className="h-3.5 w-3.5 text-green-500 animate-scale-in" />
+          )}
+        </span>
+      </EditWrapper>
     );
   }
 
@@ -196,107 +207,123 @@ export function ResourceInlineEdit({
     };
 
     return (
-      <Popover open={true} onOpenChange={(open) => !open && setIsEditing(false)}>
-        <PopoverTrigger asChild>
-          <span className="sr-only">Seleccionar actividad</span>
-        </PopoverTrigger>
-        <PopoverContent className="w-[320px] p-0" align="start">
-          <Command shouldFilter={false}>
-            <CommandInput 
-              placeholder="Buscar actividad..." 
-              value={searchQuery}
-              onValueChange={setSearchQuery}
-            />
-            <CommandList className="max-h-[200px]">
-              <CommandEmpty>No se encontraron actividades.</CommandEmpty>
-              <CommandGroup>
-                {filteredOptions.map((opt) => (
-                  <CommandItem
-                    key={opt.value}
-                    value={opt.value}
-                    onSelect={() => handleSelect(opt.value)}
-                    className="cursor-pointer"
-                  >
-                    <Check
-                      className={cn(
-                        "mr-2 h-4 w-4",
-                        String(editValue) === opt.value ? "opacity-100" : "opacity-0"
-                      )}
-                    />
-                    <span className="text-sm">{opt.label}</span>
-                  </CommandItem>
-                ))}
-              </CommandGroup>
-            </CommandList>
-          </Command>
-        </PopoverContent>
-      </Popover>
+      <EditWrapper>
+        <div className="animate-scale-in">
+          <Popover open={true} onOpenChange={(open) => !open && setIsEditing(false)}>
+            <PopoverTrigger asChild>
+              <span className="sr-only">Seleccionar actividad</span>
+            </PopoverTrigger>
+            <PopoverContent className="w-[320px] p-0 animate-scale-in" align="start">
+              <Command shouldFilter={false}>
+                <CommandInput 
+                  placeholder="Buscar actividad..." 
+                  value={searchQuery}
+                  onValueChange={setSearchQuery}
+                />
+                <CommandList className="max-h-[200px]">
+                  <CommandEmpty>No se encontraron actividades.</CommandEmpty>
+                  <CommandGroup>
+                    {filteredOptions.map((opt) => (
+                      <CommandItem
+                        key={opt.value}
+                        value={opt.value}
+                        onSelect={() => handleSelect(opt.value)}
+                        className="cursor-pointer"
+                      >
+                        <Check
+                          className={cn(
+                            "mr-2 h-4 w-4 transition-opacity duration-150",
+                            String(editValue) === opt.value ? "opacity-100" : "opacity-0"
+                          )}
+                        />
+                        <span className="text-sm">{opt.label}</span>
+                      </CommandItem>
+                    ))}
+                  </CommandGroup>
+                </CommandList>
+              </Command>
+            </PopoverContent>
+          </Popover>
+        </div>
+      </EditWrapper>
     );
   }
 
   if (type === 'select' && options) {
     return (
-      <Select
-        value={String(editValue || '__none__')}
-        onValueChange={(v) => {
-          const scrollPosition = window.scrollY;
-          setEditValue(v);
-          // Auto-save on select
-          const finalValue = v === '__none__' ? null : v;
-          if (finalValue !== value) {
-            setIsSaving(true);
-            onSave(finalValue).finally(() => {
-              setIsSaving(false);
-              setIsEditing(false);
-              triggerSuccess();
-              requestAnimationFrame(() => {
-                window.scrollTo({ top: scrollPosition, behavior: 'instant' });
-              });
-            });
-          } else {
-            setIsEditing(false);
-          }
-        }}
-        open={true}
-        onOpenChange={(open) => !open && setIsEditing(false)}
-      >
-        <SelectTrigger className="h-7 w-full text-xs ring-2 ring-primary ring-offset-1 bg-primary/5">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="__none__">-</SelectItem>
-          {options.map((opt) => (
-            <SelectItem key={opt.value} value={opt.value}>
-              {opt.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      <EditWrapper>
+        <div className="animate-scale-in">
+          <Select
+            value={String(editValue || '__none__')}
+            onValueChange={(v) => {
+              const scrollPosition = window.scrollY;
+              setEditValue(v);
+              // Auto-save on select
+              const finalValue = v === '__none__' ? null : v;
+              if (finalValue !== value) {
+                setIsSaving(true);
+                onSave(finalValue).finally(() => {
+                  setIsSaving(false);
+                  setIsEditing(false);
+                  triggerSuccess();
+                  requestAnimationFrame(() => {
+                    window.scrollTo({ top: scrollPosition, behavior: 'instant' });
+                  });
+                });
+              } else {
+                setIsEditing(false);
+              }
+            }}
+            open={true}
+            onOpenChange={(open) => !open && setIsEditing(false)}
+          >
+            <SelectTrigger className="h-7 w-full text-xs ring-2 ring-primary ring-offset-1 bg-primary/5 transition-all duration-200">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent className="animate-scale-in">
+              <SelectItem value="__none__">-</SelectItem>
+              {options.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>
+                  {opt.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </EditWrapper>
     );
   }
 
   if (type === 'number' || type === 'percent') {
     return (
-      <NumericInput
-        ref={inputRef}
-        value={typeof editValue === 'number' ? editValue : parseFloat(String(editValue).replace(',', '.')) || 0}
-        onChange={(v) => setEditValue(v)}
-        decimals={decimals}
-        className="h-7 w-20 text-xs ring-2 ring-primary ring-offset-1 bg-primary/5"
-        onBlur={handleSave}
-        onKeyDown={handleKeyDown}
-      />
+      <EditWrapper>
+        <div className="animate-scale-in">
+          <NumericInput
+            ref={inputRef}
+            value={typeof editValue === 'number' ? editValue : parseFloat(String(editValue).replace(',', '.')) || 0}
+            onChange={(v) => setEditValue(v)}
+            decimals={decimals}
+            className="h-7 w-20 text-xs ring-2 ring-primary ring-offset-1 bg-primary/5 transition-all duration-200"
+            onBlur={handleSave}
+            onKeyDown={handleKeyDown}
+          />
+        </div>
+      </EditWrapper>
     );
   }
 
   return (
-    <Input
-      ref={inputRef}
-      value={String(editValue)}
-      onChange={(e) => setEditValue(e.target.value)}
-      className="h-7 text-xs ring-2 ring-primary ring-offset-1 bg-primary/5"
-      onBlur={handleSave}
-      onKeyDown={handleKeyDown}
-    />
+    <EditWrapper>
+      <div className="animate-scale-in">
+        <Input
+          ref={inputRef}
+          value={String(editValue)}
+          onChange={(e) => setEditValue(e.target.value)}
+          className="h-7 text-xs ring-2 ring-primary ring-offset-1 bg-primary/5 transition-all duration-200"
+          onBlur={handleSave}
+          onKeyDown={handleKeyDown}
+        />
+      </div>
+    </EditWrapper>
   );
 }

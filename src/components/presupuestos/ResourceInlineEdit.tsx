@@ -4,7 +4,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { NumericInput } from '@/components/ui/numeric-input';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Check } from 'lucide-react';
+import { Check, CheckCircle2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface InlineEditProps {
@@ -32,6 +32,7 @@ export function ResourceInlineEdit({
   const [editValue, setEditValue] = useState<string | number>(value ?? '');
   const [isSaving, setIsSaving] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [showSuccess, setShowSuccess] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -50,6 +51,11 @@ export function ResourceInlineEdit({
       setSearchQuery('');
     }
   }, [isEditing]);
+
+  const triggerSuccess = () => {
+    setShowSuccess(true);
+    setTimeout(() => setShowSuccess(false), 1200);
+  };
 
   const handleSave = async () => {
     if (isSaving) return;
@@ -72,6 +78,7 @@ export function ResourceInlineEdit({
       setIsSaving(true);
       try {
         await onSave(finalValue);
+        triggerSuccess();
         // Restore scroll position after save completes
         requestAnimationFrame(() => {
           window.scrollTo({ top: scrollPosition, behavior: 'instant' });
@@ -127,13 +134,16 @@ export function ResourceInlineEdit({
     return (
       <span
         className={cn(
-          'cursor-pointer hover:bg-muted/50 px-1 py-0.5 rounded transition-colors',
+          'cursor-pointer hover:bg-muted/50 px-1 py-0.5 rounded transition-colors inline-flex items-center gap-1',
           className
         )}
         onClick={() => setIsEditing(true)}
         title="Clic para editar"
       >
         {displayValue ?? String(value ?? '-')}
+        {showSuccess && (
+          <CheckCircle2 className="h-3.5 w-3.5 text-green-500 animate-fade-in" />
+        )}
       </span>
     );
   }
@@ -148,6 +158,7 @@ export function ResourceInlineEdit({
         onSave(finalValue).finally(() => {
           setIsSaving(false);
           setIsEditing(false);
+          triggerSuccess();
           requestAnimationFrame(() => {
             window.scrollTo({ top: scrollPosition, behavior: 'instant' });
           });
@@ -210,6 +221,7 @@ export function ResourceInlineEdit({
             onSave(finalValue).finally(() => {
               setIsSaving(false);
               setIsEditing(false);
+              triggerSuccess();
               requestAnimationFrame(() => {
                 window.scrollTo({ top: scrollPosition, behavior: 'instant' });
               });

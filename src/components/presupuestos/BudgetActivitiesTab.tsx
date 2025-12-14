@@ -170,6 +170,20 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
     focusCell(nextActivity.id);
   }, [sortedActivities, focusCell]);
 
+  // Navigate to row above/below (arrow keys)
+  const navigateToRow = useCallback((currentActivityId: string, direction: 'up' | 'down') => {
+    const currentIndex = sortedActivities.findIndex(a => a.id === currentActivityId);
+    if (currentIndex === -1) return;
+
+    const nextIndex = direction === 'down' ? currentIndex + 1 : currentIndex - 1;
+
+    // Check bounds
+    if (nextIndex < 0 || nextIndex >= sortedActivities.length) return;
+
+    const nextActivity = sortedActivities[nextIndex];
+    focusCell(nextActivity.id);
+  }, [sortedActivities, focusCell]);
+
   // Register cell ref
   const registerCellRef = useCallback((activityId: string, el: MeasurementInlineSelectHandle | null) => {
     cellRefs.current.set(getCellKey(activityId), el);
@@ -1017,6 +1031,8 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
                           onSave={(measurementId) => handleUpdateActivityMeasurement(activity.id, measurementId)}
                           onTabNext={() => navigateToMeasurementField(activity.id, 'next')}
                           onTabPrev={() => navigateToMeasurementField(activity.id, 'prev')}
+                          onArrowUp={() => navigateToRow(activity.id, 'up')}
+                          onArrowDown={() => navigateToRow(activity.id, 'down')}
                         />
                       ) : (
                         <span className="text-muted-foreground truncate" title={medicionId}>
@@ -1150,6 +1166,8 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
                                         onSave={(measurementId) => handleUpdateActivityMeasurement(activity.id, measurementId)}
                                         onTabNext={() => navigateToMeasurementField(activity.id, 'next')}
                                         onTabPrev={() => navigateToMeasurementField(activity.id, 'prev')}
+                                        onArrowUp={() => navigateToRow(activity.id, 'up')}
+                                        onArrowDown={() => navigateToRow(activity.id, 'down')}
                                       />
                                     ) : (
                                       <span className="text-muted-foreground truncate" title={medicionId}>
@@ -1261,6 +1279,8 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
                                       onSave={(measurementId) => handleUpdateActivityMeasurement(activity.id, measurementId)}
                                       onTabNext={() => navigateToMeasurementField(activity.id, 'next')}
                                       onTabPrev={() => navigateToMeasurementField(activity.id, 'prev')}
+                                      onArrowUp={() => navigateToRow(activity.id, 'up')}
+                                      onArrowDown={() => navigateToRow(activity.id, 'down')}
                                     />
                                   ) : (
                                     <span className="text-muted-foreground truncate" title={medicionId}>

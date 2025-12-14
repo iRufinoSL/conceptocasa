@@ -151,8 +151,9 @@ export function ResourceInlineEdit({
     return (
       <span
         className={cn(
-          'cursor-pointer hover:bg-muted/50 px-1 py-0.5 rounded transition-colors inline-flex items-center gap-1',
-          'focus:outline-none focus:ring-2 focus:ring-primary/50 focus:bg-muted/50',
+          'cursor-pointer hover:bg-primary/10 px-1.5 py-0.5 -mx-1 rounded-md transition-all duration-200 inline-flex items-center gap-1',
+          'focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-1 focus:bg-primary/10',
+          'border border-transparent hover:border-primary/30',
           className
         )}
         onClick={() => setIsEditing(true)}
@@ -168,7 +169,7 @@ export function ResourceInlineEdit({
       >
         {displayValue ?? String(value ?? '-')}
         {showSuccess && (
-          <CheckCircle2 className="h-3.5 w-3.5 text-green-500 animate-fade-in" />
+          <CheckCircle2 className="h-3.5 w-3.5 text-green-500 animate-scale-in" />
         )}
       </span>
     );
@@ -259,7 +260,7 @@ export function ResourceInlineEdit({
         open={true}
         onOpenChange={(open) => !open && setIsEditing(false)}
       >
-        <SelectTrigger className="h-7 w-full text-xs">
+        <SelectTrigger className="h-7 w-full text-xs ring-2 ring-primary ring-offset-1 bg-primary/5">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -281,7 +282,7 @@ export function ResourceInlineEdit({
         value={typeof editValue === 'number' ? editValue : parseFloat(String(editValue).replace(',', '.')) || 0}
         onChange={(v) => setEditValue(v)}
         decimals={decimals}
-        className="h-7 w-20 text-xs"
+        className="h-7 w-20 text-xs ring-2 ring-primary ring-offset-1 bg-primary/5"
         onBlur={handleSave}
         onKeyDown={handleKeyDown}
       />
@@ -293,7 +294,7 @@ export function ResourceInlineEdit({
       ref={inputRef}
       value={String(editValue)}
       onChange={(e) => setEditValue(e.target.value)}
-      className="h-7 text-xs"
+      className="h-7 text-xs ring-2 ring-primary ring-offset-1 bg-primary/5"
       onBlur={handleSave}
       onKeyDown={handleKeyDown}
     />

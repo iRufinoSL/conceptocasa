@@ -208,13 +208,16 @@ export function ResourcesGroupedView({
     
     const unitOptions = UNITS.map(u => ({ value: u, label: u }));
     const typeOptions = RESOURCE_TYPES.map(t => ({ value: t, label: t }));
-    const activityOptions = activities.map(a => {
-      const phase = a.phase_id ? phases.find(p => p.id === a.phase_id) : null;
-      return {
-        value: a.id,
-        label: `${phase?.code || ''} ${a.code}.-${a.name}`,
-      };
-    });
+    const activityOptions = [
+      { value: '__none__', label: 'Sin actividad' },
+      ...activities.map(a => {
+        const phase = a.phase_id ? phases.find(p => p.id === a.phase_id) : null;
+        return {
+          value: a.id,
+          label: `${phase?.code || ''} ${a.code}.-${a.name}`,
+        };
+      }),
+    ];
 
     return (
       <TableRow 
@@ -229,6 +232,7 @@ export function ResourcesGroupedView({
             />
           </TableCell>
         )}
+        {/* 1. Recurso */}
         <TableCell className="font-medium" style={{ paddingLeft: isAdmin ? undefined : `${indent * 16 + 8}px` }}>
           <ResourceInlineEdit
             value={resource.name}
@@ -238,6 +242,7 @@ export function ResourcesGroupedView({
             disabled={!isAdmin}
           />
         </TableCell>
+        {/* 2. €Coste ud externa */}
         <TableCell className="text-right font-mono">
           <ResourceInlineEdit
             value={resource.external_unit_cost}
@@ -248,6 +253,7 @@ export function ResourcesGroupedView({
             disabled={!isAdmin}
           />
         </TableCell>
+        {/* 3. Ud medida */}
         <TableCell>
           <ResourceInlineEdit
             value={resource.unit}
@@ -258,6 +264,7 @@ export function ResourcesGroupedView({
             disabled={!isAdmin}
           />
         </TableCell>
+        {/* 4. Tipo recurso */}
         <TableCell>
           <ResourceInlineEdit
             value={resource.resource_type}
@@ -275,6 +282,44 @@ export function ResourcesGroupedView({
             disabled={!isAdmin}
           />
         </TableCell>
+        {/* 5. Actividad relacionada */}
+        <TableCell>
+          <ResourceInlineEdit
+            value={resource.activity_id || '__none__'}
+            displayValue={getActivityId(resource.activity_id) || 'Sin actividad'}
+            onSave={(v) => onInlineUpdate(resource.id, 'activity_id', v === '__none__' ? null : v)}
+            type="select"
+            options={activityOptions}
+            disabled={!isAdmin}
+          />
+        </TableCell>
+        {/* 6. Uds relacionadas */}
+        <TableCell className="text-right font-mono">
+          <ResourceInlineEdit
+            value={resource.related_units}
+            displayValue={resource.related_units !== null ? formatNumber(resource.related_units) : '-'}
+            onSave={(v) => onInlineUpdate(resource.id, 'related_units', v)}
+            type="number"
+            decimals={2}
+            disabled={!isAdmin}
+          />
+        </TableCell>
+        {/* 7. Uds manual */}
+        <TableCell className="text-right font-mono">
+          <ResourceInlineEdit
+            value={resource.manual_units}
+            displayValue={resource.manual_units !== null ? formatNumber(resource.manual_units) : '-'}
+            onSave={(v) => onInlineUpdate(resource.id, 'manual_units', v)}
+            type="number"
+            decimals={2}
+            disabled={!isAdmin}
+          />
+        </TableCell>
+        {/* 8. €SubTotal */}
+        <TableCell className="text-right font-mono font-bold text-primary">
+          {formatCurrency(fields.subtotalSales)}
+        </TableCell>
+        {/* Remaining columns */}
         <TableCell className="text-right font-mono">
           <ResourceInlineEdit
             value={(resource.safety_margin_percent || 0.15) * 100}
@@ -307,31 +352,8 @@ export function ResourcesGroupedView({
         <TableCell className="text-right font-mono font-semibold">
           {formatCurrency(fields.salesCostUd)}
         </TableCell>
-        <TableCell className="text-right font-mono">
-          <ResourceInlineEdit
-            value={resource.manual_units}
-            displayValue={resource.manual_units !== null ? formatNumber(resource.manual_units) : '-'}
-            onSave={(v) => onInlineUpdate(resource.id, 'manual_units', v)}
-            type="number"
-            decimals={2}
-            disabled={!isAdmin}
-          />
-        </TableCell>
-        <TableCell className="text-right font-mono">
-          <ResourceInlineEdit
-            value={resource.related_units}
-            displayValue={resource.related_units !== null ? formatNumber(resource.related_units) : '-'}
-            onSave={(v) => onInlineUpdate(resource.id, 'related_units', v)}
-            type="number"
-            decimals={2}
-            disabled={!isAdmin}
-          />
-        </TableCell>
         <TableCell className="text-right font-mono font-semibold">
           {formatNumber(fields.calculatedUnits)}
-        </TableCell>
-        <TableCell className="text-right font-mono font-bold text-primary">
-          {formatCurrency(fields.subtotalSales)}
         </TableCell>
         {isAdmin && (
           <TableCell>
@@ -385,16 +407,17 @@ export function ResourcesGroupedView({
               <TableHead className="text-right">€Coste ud ext.</TableHead>
               <TableHead>Ud</TableHead>
               <TableHead>Tipo</TableHead>
+              <TableHead className="min-w-[180px]">Actividad</TableHead>
+              <TableHead className="text-right">Uds rel.</TableHead>
+              <TableHead className="text-right">Uds man.</TableHead>
+              <TableHead className="text-right">€SubT</TableHead>
               <TableHead className="text-right">%Seg.</TableHead>
               <TableHead className="text-right">€Seg.</TableHead>
               <TableHead className="text-right">€Coste int.</TableHead>
               <TableHead className="text-right">%Venta</TableHead>
               <TableHead className="text-right">€Venta</TableHead>
               <TableHead className="text-right">€Coste venta</TableHead>
-              <TableHead className="text-right">Uds man.</TableHead>
-              <TableHead className="text-right">Uds rel.</TableHead>
               <TableHead className="text-right">Uds calc.</TableHead>
-              <TableHead className="text-right">€Subtotal</TableHead>
               {isAdmin && <TableHead className="w-[80px]">Acciones</TableHead>}
             </TableRow>
           </TableHeader>

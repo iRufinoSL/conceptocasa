@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -18,7 +18,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { toast } from 'sonner';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import { formatCurrency, formatNumber } from '@/lib/format-utils';
-import { MeasurementInlineSelect } from './MeasurementInlineSelect';
+import { MeasurementInlineSelect, MeasurementInlineSelectHandle } from './MeasurementInlineSelect';
 
 interface BudgetPhase {
   id: string;
@@ -136,6 +136,44 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
   const [isImporting, setIsImporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const activityFileInputRef = useRef<HTMLInputElement>(null);
+
+  // Tab navigation refs for inline editing
+  const cellRefs = useRef<Map<string, MeasurementInlineSelectHandle | null>>(new Map());
+  const getCellKey = (activityId: string) => activityId;
+
+  // Get sorted activities for navigation
+  const sortedActivities = useMemo(() => {
+    return [...activities].sort((a, b) => a.name.localeCompare(b.name));
+  }, [activities]);
+
+  // Focus a specific cell
+  const focusCell = useCallback((activityId: string) => {
+    const key = getCellKey(activityId);
+    const element = cellRefs.current.get(key);
+    if (element) {
+      element.focus();
+      element.click();
+    }
+  }, []);
+
+  // Navigate to next/prev activity's measurement field
+  const navigateToMeasurementField = useCallback((currentActivityId: string, direction: 'next' | 'prev') => {
+    const currentIndex = sortedActivities.findIndex(a => a.id === currentActivityId);
+    if (currentIndex === -1) return;
+
+    const nextIndex = direction === 'next' ? currentIndex + 1 : currentIndex - 1;
+
+    // Check bounds
+    if (nextIndex < 0 || nextIndex >= sortedActivities.length) return;
+
+    const nextActivity = sortedActivities[nextIndex];
+    focusCell(nextActivity.id);
+  }, [sortedActivities, focusCell]);
+
+  // Register cell ref
+  const registerCellRef = useCallback((activityId: string, el: MeasurementInlineSelectHandle | null) => {
+    cellRefs.current.set(getCellKey(activityId), el);
+  }, []);
 
   // Calculate resource subtotal for an activity
   const calculateResourceSubtotal = (resources: any[]) => {
@@ -971,11 +1009,14 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
                     <TableCell className="text-sm max-w-[200px]">
                       {isAdmin ? (
                         <MeasurementInlineSelect
+                          ref={(el) => registerCellRef(activity.id, el)}
                           activityId={activity.id}
                           value={activity.measurement_id}
                           measurements={measurements}
                           measurementRelations={measurementRelations}
                           onSave={(measurementId) => handleUpdateActivityMeasurement(activity.id, measurementId)}
+                          onTabNext={() => navigateToMeasurementField(activity.id, 'next')}
+                          onTabPrev={() => navigateToMeasurementField(activity.id, 'prev')}
                         />
                       ) : (
                         <span className="text-muted-foreground truncate" title={medicionId}>
@@ -1098,8 +1139,23 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
                                   <TableCell className="text-right">
                                     {activity.measurement_id ? formatNumber(relatedUnits) : '-'}
                                   </TableCell>
-                                  <TableCell className="text-sm text-muted-foreground max-w-[150px] truncate" title={medicionId}>
-                                    {medicionId}
+                                  <TableCell className="text-sm max-w-[150px]">
+                                    {isAdmin ? (
+                                      <MeasurementInlineSelect
+                                        ref={(el) => registerCellRef(activity.id, el)}
+                                        activityId={activity.id}
+                                        value={activity.measurement_id}
+                                        measurements={measurements}
+                                        measurementRelations={measurementRelations}
+                                        onSave={(measurementId) => handleUpdateActivityMeasurement(activity.id, measurementId)}
+                                        onTabNext={() => navigateToMeasurementField(activity.id, 'next')}
+                                        onTabPrev={() => navigateToMeasurementField(activity.id, 'prev')}
+                                      />
+                                    ) : (
+                                      <span className="text-muted-foreground truncate" title={medicionId}>
+                                        {medicionId}
+                                      </span>
+                                    )}
                                   </TableCell>
                                   <TableCell className="text-right font-mono font-semibold text-primary">
                                     {formatCurrency(activity.resources_subtotal || 0)}
@@ -1197,11 +1253,14 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
                                 <TableCell className="text-sm max-w-[150px]">
                                   {isAdmin ? (
                                     <MeasurementInlineSelect
+                                      ref={(el) => registerCellRef(activity.id, el)}
                                       activityId={activity.id}
                                       value={activity.measurement_id}
                                       measurements={measurements}
                                       measurementRelations={measurementRelations}
                                       onSave={(measurementId) => handleUpdateActivityMeasurement(activity.id, measurementId)}
+                                      onTabNext={() => navigateToMeasurementField(activity.id, 'next')}
+                                      onTabPrev={() => navigateToMeasurementField(activity.id, 'prev')}
                                     />
                                   ) : (
                                     <span className="text-muted-foreground truncate" title={medicionId}>

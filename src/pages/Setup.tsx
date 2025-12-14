@@ -125,21 +125,10 @@ export default function Setup() {
       if (error) throw error;
 
       if (data.user) {
-        // Add administrator role
-        const { error: roleError } = await supabase
-          .from('user_roles')
-          .insert({
-            user_id: data.user.id,
-            role: 'administrador'
-          });
-
-        if (roleError) {
-          console.error('Error assigning admin role:', roleError);
-          toast.error('Usuario creado pero hubo un error al asignar el rol de administrador');
-        } else {
-          toast.success('Administrador inicial creado correctamente. Ya puedes iniciar sesión.');
-          navigate('/auth');
-        }
+        // The handle_new_user trigger automatically assigns admin role to the first user
+        // No manual role insertion needed - it's handled securely server-side
+        toast.success('Administrador inicial creado correctamente. Ya puedes iniciar sesión.');
+        navigate('/auth');
       }
     } catch (error: any) {
       console.error('Error creating admin:', error);

@@ -235,7 +235,7 @@ export default function PresupuestoDashboard() {
           </TabsContent>
 
           <TabsContent value="recursos" className="mt-6">
-            <BudgetResourcesTab budgetId={presupuesto.id} isAdmin={isAdmin} />
+            <BudgetResourcesTab budgetId={presupuesto.id} budgetName={presupuesto.nombre} isAdmin={isAdmin} />
           </TabsContent>
 
           <TabsContent value="mediciones" className="mt-6">

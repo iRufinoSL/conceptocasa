@@ -1837,6 +1837,7 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin }: BudgetAct
                           <TableHead className="py-2 text-right">%Seg</TableHead>
                           <TableHead className="py-2 text-right">%Venta</TableHead>
                           <TableHead className="py-2 text-right">Ud manual</TableHead>
+                          <TableHead className="py-2 text-right">Uds calc</TableHead>
                           <TableHead className="py-2 text-right">€SubTotal</TableHead>
                           <TableHead className="py-2 w-28">Acciones</TableHead>
                         </TableRow>
@@ -1977,6 +1978,9 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin }: BudgetAct
                                 ) : (
                                   <span className="font-mono">{resource.manual_units !== null ? formatNumber(resource.manual_units) : '-'}</span>
                                 )}
+                              </TableCell>
+                              <TableCell className="py-1.5 text-right font-mono font-semibold">
+                                {formatNumber(calculatedUnits)}
                               </TableCell>
                               <TableCell className="py-1.5 text-right font-mono font-semibold text-primary">
                                 {formatCurrency(subtotal)}

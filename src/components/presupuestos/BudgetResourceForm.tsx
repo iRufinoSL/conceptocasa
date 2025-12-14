@@ -91,38 +91,55 @@ export function BudgetResourceForm({
   }, []);
 
   useEffect(() => {
-    if (resource) {
-      setFormData({
-        name: resource.name,
-        external_unit_cost: resource.external_unit_cost || 0,
-        unit: resource.unit || 'ud',
-        resource_type: resource.resource_type || 'Producto',
-        safety_margin_percent: resource.safety_margin_percent ?? 0.15,
-        sales_margin_percent: resource.sales_margin_percent ?? 0.25,
-        manual_units: resource.manual_units,
-        related_units: resource.related_units,
-        activity_id: resource.activity_id || '',
-      });
-    } else {
-      // Check for preselected activity from navigation
-      const preselectedActivityId = window.sessionStorage.getItem('preselectedActivityId');
-      
-      setFormData({
-        name: '',
-        external_unit_cost: 0,
-        unit: 'ud',
-        resource_type: 'Producto',
-        safety_margin_percent: 0.15,
-        sales_margin_percent: 0.25,
-        manual_units: null,
-        related_units: null,
-        activity_id: preselectedActivityId || '',
-      });
-      
-      // Clear the preselected activity after using it
-      if (preselectedActivityId) {
-        window.sessionStorage.removeItem('preselectedActivityId');
+    const initFormData = async () => {
+      if (resource) {
+        // First load the existing data
+        setFormData({
+          name: resource.name,
+          external_unit_cost: resource.external_unit_cost || 0,
+          unit: resource.unit || 'ud',
+          resource_type: resource.resource_type || 'Producto',
+          safety_margin_percent: resource.safety_margin_percent ?? 0.15,
+          sales_margin_percent: resource.sales_margin_percent ?? 0.25,
+          manual_units: resource.manual_units,
+          related_units: resource.related_units,
+          activity_id: resource.activity_id || '',
+        });
+        
+        // If resource has an activity, recalculate related_units to ensure it's up-to-date
+        if (resource.activity_id) {
+          const freshRelatedUnits = await getActivityMeasurementUnits(resource.activity_id);
+          if (freshRelatedUnits !== null && freshRelatedUnits !== resource.related_units) {
+            setFormData(prev => ({ ...prev, related_units: freshRelatedUnits }));
+          }
+        }
+      } else {
+        // Check for preselected activity from navigation
+        const preselectedActivityId = window.sessionStorage.getItem('preselectedActivityId');
+        
+        setFormData({
+          name: '',
+          external_unit_cost: 0,
+          unit: 'ud',
+          resource_type: 'Producto',
+          safety_margin_percent: 0.15,
+          sales_margin_percent: 0.25,
+          manual_units: null,
+          related_units: null,
+          activity_id: preselectedActivityId || '',
+        });
+        
+        // If preselected activity, fetch related_units
+        if (preselectedActivityId) {
+          const relatedUnits = await getActivityMeasurementUnits(preselectedActivityId);
+          setFormData(prev => ({ ...prev, related_units: relatedUnits }));
+          window.sessionStorage.removeItem('preselectedActivityId');
+        }
       }
+    };
+    
+    if (open) {
+      initFormData();
     }
   }, [resource, open]);
 

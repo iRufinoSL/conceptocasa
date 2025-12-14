@@ -271,6 +271,51 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
     setFormDialogOpen(true);
   };
 
+  // Handle new resource for current activity
+  const handleNewResource = () => {
+    if (!editingActivity) return;
+    // Navigate to resources tab with context to create new resource for this activity
+    window.dispatchEvent(new CustomEvent('navigate-to-resources', { 
+      detail: { activityId: editingActivity.id, action: 'new' } 
+    }));
+    setFormDialogOpen(false);
+    toast.info('Redirigido a Recursos para crear nuevo recurso');
+  };
+
+  // Handle edit resource
+  const handleEditResource = (resourceId: string) => {
+    // Navigate to resources tab with context to edit this resource
+    window.dispatchEvent(new CustomEvent('navigate-to-resources', { 
+      detail: { resourceId, action: 'edit' } 
+    }));
+    setFormDialogOpen(false);
+    toast.info('Redirigido a Recursos para editar');
+  };
+
+  // Handle delete resource
+  const handleDeleteResource = async (resourceId: string) => {
+    if (!confirm('¿Estás seguro de que quieres eliminar este recurso?')) return;
+    
+    try {
+      const { error } = await supabase
+        .from('budget_activity_resources')
+        .delete()
+        .eq('id', resourceId);
+
+      if (error) throw error;
+      
+      // Update local state
+      setActivityResources(prev => prev.filter(r => r.id !== resourceId));
+      toast.success('Recurso eliminado');
+      
+      // Refresh main data
+      fetchData();
+    } catch (err: any) {
+      console.error('Error deleting resource:', err);
+      toast.error(err.message || 'Error al eliminar recurso');
+    }
+  };
+
   // Open delete confirmation
   const handleDeleteClick = (activity: BudgetActivity) => {
     setDeletingActivity(activity);
@@ -967,7 +1012,7 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
 
       {/* Form Dialog */}
       <Dialog open={formDialogOpen} onOpenChange={setFormDialogOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-4xl">
           <DialogHeader>
             <DialogTitle>
               {editingActivity ? 'Editar Actividad' : 'Nueva Actividad'}
@@ -980,7 +1025,7 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
           </DialogHeader>
 
           <div className="space-y-4 py-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-4 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="code">Código *</Label>
                 <Input
@@ -1006,6 +1051,25 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
                   </SelectContent>
                 </Select>
               </div>
+              <div className="col-span-2 space-y-2">
+                <Label htmlFor="phase">Fase de Gestión</Label>
+                <Select 
+                  value={form.phase_id || 'none'} 
+                  onValueChange={(value) => setForm({ ...form, phase_id: value === 'none' ? '' : value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccionar fase..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Sin fase</SelectItem>
+                    {phases.map(phase => (
+                      <SelectItem key={phase.id} value={phase.id}>
+                        {phase.code} {phase.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
             <div className="space-y-2">
@@ -1025,73 +1089,103 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
                 value={form.description}
                 onChange={(e) => setForm({ ...form, description: e.target.value })}
                 placeholder="Descripción detallada de la actividad..."
-                rows={3}
+                rows={2}
               />
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="phase">Fase de Gestión</Label>
-              <Select 
-                value={form.phase_id || 'none'} 
-                onValueChange={(value) => setForm({ ...form, phase_id: value === 'none' ? '' : value })}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Seleccionar fase..." />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Sin fase</SelectItem>
-                  {phases.map(phase => (
-                    <SelectItem key={phase.id} value={phase.id}>
-                      {phase.code} {phase.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
             {/* Resources list for existing activities */}
-            {editingActivity && activityResources.length > 0 && (
-              <div className="space-y-2 pt-4 border-t">
+            {editingActivity && (
+              <div className="space-y-3 pt-4 border-t">
                 <div className="flex items-center justify-between">
-                  <Label>Recursos asociados ({activityResources.length})</Label>
-                  <Badge variant="default" className="text-sm">
-                    €SubTotal: {formatCurrency(calculateResourceSubtotal(activityResources))}
-                  </Badge>
+                  <div className="flex items-center gap-3">
+                    <Label className="text-base font-semibold">Recursos asociados ({activityResources.length})</Label>
+                    <Badge variant="default" className="text-sm">
+                      €SubTotal: {formatCurrency(calculateResourceSubtotal(activityResources))}
+                    </Badge>
+                  </div>
+                  {isAdmin && (
+                    <Button 
+                      size="sm" 
+                      onClick={() => handleNewResource()}
+                    >
+                      <Plus className="h-4 w-4 mr-1" />
+                      Nuevo Recurso
+                    </Button>
+                  )}
                 </div>
-                <div className="border rounded-lg max-h-48 overflow-y-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow className="text-xs">
-                        <TableHead className="py-2">Recurso</TableHead>
-                        <TableHead className="py-2">Tipo</TableHead>
-                        <TableHead className="py-2 text-right">€Coste ud</TableHead>
-                        <TableHead className="py-2">Ud</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {activityResources.map((resource) => (
-                        <TableRow key={resource.id} className="text-sm">
-                          <TableCell className="py-1.5">{resource.name}</TableCell>
-                          <TableCell className="py-1.5">
-                            {resource.resource_type && (
-                              <Badge variant="outline" className="text-xs flex items-center gap-1 w-fit">
-                                {resource.resource_type === 'Producto' && <Package className="h-3 w-3" />}
-                                {resource.resource_type === 'Mano de obra' && <Wrench className="h-3 w-3" />}
-                                {resource.resource_type === 'Alquiler' && <Truck className="h-3 w-3" />}
-                                {resource.resource_type === 'Servicio' && <Briefcase className="h-3 w-3" />}
-                                {resource.resource_type}
-                              </Badge>
-                            )}
-                          </TableCell>
-                          <TableCell className="py-1.5 text-right font-mono">
-                            {formatCurrency(resource.external_unit_cost || 0)}
-                          </TableCell>
-                          <TableCell className="py-1.5">{resource.unit || '-'}</TableCell>
+                {activityResources.length > 0 ? (
+                  <div className="border rounded-lg max-h-64 overflow-y-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="text-xs">
+                          <TableHead className="py-2">Recurso</TableHead>
+                          <TableHead className="py-2 text-right">€Coste ud</TableHead>
+                          <TableHead className="py-2">Ud</TableHead>
+                          <TableHead className="py-2 text-right">Ud manual</TableHead>
+                          <TableHead className="py-2 text-right">€SubTotal</TableHead>
+                          {isAdmin && <TableHead className="py-2 w-20">Acciones</TableHead>}
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
+                      </TableHeader>
+                      <TableBody>
+                        {activityResources.map((resource) => {
+                          const externalCost = resource.external_unit_cost || 0;
+                          const safetyPercent = resource.safety_margin_percent || 0.15;
+                          const salesPercent = resource.sales_margin_percent || 0.25;
+                          const safetyMarginUd = externalCost * safetyPercent;
+                          const internalCostUd = externalCost + safetyMarginUd;
+                          const salesMarginUd = internalCostUd * salesPercent;
+                          const salesCostUd = internalCostUd + salesMarginUd;
+                          const calculatedUnits = resource.manual_units !== null 
+                            ? resource.manual_units 
+                            : (resource.related_units || 0);
+                          const subtotal = calculatedUnits * salesCostUd;
+                          
+                          return (
+                            <TableRow key={resource.id} className="text-sm">
+                              <TableCell className="py-1.5">{resource.name}</TableCell>
+                              <TableCell className="py-1.5 text-right font-mono">
+                                {formatCurrency(externalCost)}
+                              </TableCell>
+                              <TableCell className="py-1.5">{resource.unit || '-'}</TableCell>
+                              <TableCell className="py-1.5 text-right font-mono">
+                                {resource.manual_units !== null ? resource.manual_units : '-'}
+                              </TableCell>
+                              <TableCell className="py-1.5 text-right font-mono font-semibold text-primary">
+                                {formatCurrency(subtotal)}
+                              </TableCell>
+                              {isAdmin && (
+                                <TableCell className="py-1.5">
+                                  <div className="flex gap-1">
+                                    <Button 
+                                      variant="ghost" 
+                                      size="icon" 
+                                      className="h-7 w-7"
+                                      onClick={() => handleEditResource(resource.id)}
+                                    >
+                                      <Pencil className="h-3.5 w-3.5" />
+                                    </Button>
+                                    <Button 
+                                      variant="ghost" 
+                                      size="icon" 
+                                      className="h-7 w-7 text-destructive"
+                                      onClick={() => handleDeleteResource(resource.id)}
+                                    >
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                    </Button>
+                                  </div>
+                                </TableCell>
+                              )}
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </div>
+                ) : (
+                  <div className="text-center py-6 text-muted-foreground border rounded-lg">
+                    No hay recursos asociados a esta actividad
+                  </div>
+                )}
               </div>
             )}
           </div>

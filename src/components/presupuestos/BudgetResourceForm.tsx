@@ -83,8 +83,8 @@ export function BudgetResourceForm({
         external_unit_cost: resource.external_unit_cost || 0,
         unit: resource.unit || 'ud',
         resource_type: resource.resource_type || 'Producto',
-        safety_margin_percent: resource.safety_margin_percent || 0.15,
-        sales_margin_percent: resource.sales_margin_percent || 0.25,
+        safety_margin_percent: resource.safety_margin_percent ?? 0.15,
+        sales_margin_percent: resource.sales_margin_percent ?? 0.25,
         manual_units: resource.manual_units,
         related_units: resource.related_units,
         activity_id: resource.activity_id || '',
@@ -280,8 +280,8 @@ export function BudgetResourceForm({
               <Label htmlFor="safety_margin_percent">%Margen seguridad</Label>
               <NumericInput
                 id="safety_margin_percent"
-                value={formData.safety_margin_percent}
-                onChange={(value) => setFormData({ ...formData, safety_margin_percent: value })}
+                value={formData.safety_margin_percent * 100}
+                onChange={(value) => setFormData({ ...formData, safety_margin_percent: value / 100 })}
                 decimals={2}
               />
             </div>
@@ -309,8 +309,8 @@ export function BudgetResourceForm({
               <Label htmlFor="sales_margin_percent">%Margen venta</Label>
               <NumericInput
                 id="sales_margin_percent"
-                value={formData.sales_margin_percent}
-                onChange={(value) => setFormData({ ...formData, sales_margin_percent: value })}
+                value={formData.sales_margin_percent * 100}
+                onChange={(value) => setFormData({ ...formData, sales_margin_percent: value / 100 })}
                 decimals={2}
               />
             </div>

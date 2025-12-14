@@ -194,8 +194,8 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
   const calculateResourceSubtotal = (resources: any[]) => {
     return resources.reduce((total, resource) => {
       const externalCost = resource.external_unit_cost || 0;
-      const safetyPercent = resource.safety_margin_percent || 0.15;
-      const salesPercent = resource.sales_margin_percent || 0.25;
+      const safetyPercent = resource.safety_margin_percent ?? 0.15;
+      const salesPercent = resource.sales_margin_percent ?? 0.25;
       
       const safetyMarginUd = externalCost * safetyPercent;
       const internalCostUd = externalCost + safetyMarginUd;
@@ -1532,8 +1532,8 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
                       <TableBody>
                         {activityResources.map((resource) => {
                           const externalCost = resource.external_unit_cost || 0;
-                          const safetyPercent = resource.safety_margin_percent || 0.15;
-                          const salesPercent = resource.sales_margin_percent || 0.25;
+                          const safetyPercent = resource.safety_margin_percent ?? 0.15;
+                          const salesPercent = resource.sales_margin_percent ?? 0.25;
                           const safetyMarginUd = externalCost * safetyPercent;
                           const internalCostUd = externalCost + safetyMarginUd;
                           const salesMarginUd = internalCostUd * salesPercent;
@@ -1752,8 +1752,8 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
           
           {viewingResource && (() => {
             const externalCost = viewingResource.external_unit_cost || 0;
-            const safetyPercent = viewingResource.safety_margin_percent || 0.15;
-            const salesPercent = viewingResource.sales_margin_percent || 0.25;
+            const safetyPercent = viewingResource.safety_margin_percent ?? 0.15;
+            const salesPercent = viewingResource.sales_margin_percent ?? 0.25;
             const safetyMarginUd = externalCost * safetyPercent;
             const internalCostUd = externalCost + safetyMarginUd;
             const salesMarginUd = internalCostUd * salesPercent;

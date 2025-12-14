@@ -435,8 +435,8 @@ export function ResourcesGroupedView({
         <TableCell className="text-right font-mono">
           <span ref={registerRef('safety_margin_percent')} tabIndex={-1}>
             <ResourceInlineEdit
-              value={(resource.safety_margin_percent || 0.15) * 100}
-              displayValue={formatPercent(resource.safety_margin_percent || 0.15)}
+              value={(resource.safety_margin_percent ?? 0.15) * 100}
+              displayValue={formatPercent(resource.safety_margin_percent ?? 0.15)}
               onSave={(v) => onInlineUpdate(resource.id, 'safety_margin_percent', v / 100)}
               type="percent"
               decimals={1}
@@ -454,8 +454,8 @@ export function ResourcesGroupedView({
         <TableCell className="text-right font-mono">
           <span ref={registerRef('sales_margin_percent')} tabIndex={-1}>
             <ResourceInlineEdit
-              value={(resource.sales_margin_percent || 0.25) * 100}
-              displayValue={formatPercent(resource.sales_margin_percent || 0.25)}
+              value={(resource.sales_margin_percent ?? 0.25) * 100}
+              displayValue={formatPercent(resource.sales_margin_percent ?? 0.25)}
               onSave={(v) => onInlineUpdate(resource.id, 'sales_margin_percent', v / 100)}
               type="percent"
               decimals={1}

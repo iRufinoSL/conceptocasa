@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -12,6 +12,7 @@ import { Check, ChevronsUpDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { formatCurrency, formatPercent } from '@/lib/format-utils';
+import { getActivityMeasurementUnits } from '@/lib/budget-utils';
 
 interface BudgetResource {
   id: string;
@@ -33,6 +34,7 @@ interface Activity {
   code: string;
   name: string;
   phase_id: string | null;
+  measurement_id?: string | null;
 }
 
 interface Phase {
@@ -75,6 +77,18 @@ export function BudgetResourceForm({
     related_units: null as number | null,
     activity_id: '',
   });
+  
+  // Fetch related_units when activity changes
+  const handleActivityChange = useCallback(async (activityId: string) => {
+    setFormData(prev => ({ ...prev, activity_id: activityId }));
+    
+    if (activityId) {
+      const relatedUnits = await getActivityMeasurementUnits(activityId);
+      setFormData(prev => ({ ...prev, related_units: relatedUnits }));
+    } else {
+      setFormData(prev => ({ ...prev, related_units: null }));
+    }
+  }, []);
 
   useEffect(() => {
     if (resource) {
@@ -394,7 +408,7 @@ export function BudgetResourceForm({
                         <CommandItem
                           value="__none__"
                           onSelect={() => {
-                            setFormData({ ...formData, activity_id: '' });
+                            handleActivityChange('');
                             setActivityPopoverOpen(false);
                             setActivitySearchQuery('');
                           }}
@@ -413,7 +427,7 @@ export function BudgetResourceForm({
                             key={opt.value}
                             value={opt.value}
                             onSelect={() => {
-                              setFormData({ ...formData, activity_id: opt.value });
+                              handleActivityChange(opt.value);
                               setActivityPopoverOpen(false);
                               setActivitySearchQuery('');
                             }}

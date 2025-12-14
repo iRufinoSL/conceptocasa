@@ -155,6 +155,110 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
     fetchData();
   }, [budgetId]);
 
+  // Real-time sync: Listen for measurement changes and update related_units
+  useEffect(() => {
+    // Subscribe to measurement changes
+    const measurementsChannel = supabase
+      .channel('measurements-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'budget_measurements'
+        },
+        async (payload) => {
+          console.log('Measurement changed:', payload);
+          
+          // Find activities linked to this measurement
+          const newRecord = payload.new as Record<string, any> | null;
+          const oldRecord = payload.old as Record<string, any> | null;
+          const measurementId = newRecord?.id || oldRecord?.id;
+          if (!measurementId) return;
+          
+          const { data: affectedActivities } = await supabase
+            .from('budget_activities')
+            .select('id')
+            .eq('measurement_id', measurementId)
+            .eq('budget_id', budgetId);
+          
+          if (!affectedActivities || affectedActivities.length === 0) return;
+          
+          const activityIds = affectedActivities.map(a => a.id);
+          
+          // Update related_units for all resources linked to these activities
+          for (const activityId of activityIds) {
+            const relatedUnits = await getActivityMeasurementUnits(activityId);
+            
+            // Update in database
+            await supabase
+              .from('budget_activity_resources')
+              .update({ related_units: relatedUnits })
+              .eq('activity_id', activityId)
+              .eq('budget_id', budgetId);
+          }
+          
+          // Refresh local state
+          fetchData();
+          toast.info('Uds relacionadas actualizadas automáticamente');
+        }
+      )
+      .subscribe();
+
+    // Subscribe to measurement relations changes
+    const relationsChannel = supabase
+      .channel('measurement-relations-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'budget_measurement_relations'
+        },
+        async (payload) => {
+          console.log('Measurement relation changed:', payload);
+          
+          // Get the measurement_id from the relation
+          const newRecord = payload.new as Record<string, any> | null;
+          const oldRecord = payload.old as Record<string, any> | null;
+          const measurementId = newRecord?.measurement_id || oldRecord?.measurement_id;
+          if (!measurementId) return;
+          
+          // Find activities linked to this measurement
+          const { data: affectedActivities } = await supabase
+            .from('budget_activities')
+            .select('id')
+            .eq('measurement_id', measurementId)
+            .eq('budget_id', budgetId);
+          
+          if (!affectedActivities || affectedActivities.length === 0) return;
+          
+          const activityIds = affectedActivities.map(a => a.id);
+          
+          // Update related_units for all resources linked to these activities
+          for (const activityId of activityIds) {
+            const relatedUnits = await getActivityMeasurementUnits(activityId);
+            
+            await supabase
+              .from('budget_activity_resources')
+              .update({ related_units: relatedUnits })
+              .eq('activity_id', activityId)
+              .eq('budget_id', budgetId);
+          }
+          
+          // Refresh local state
+          fetchData();
+          toast.info('Uds relacionadas actualizadas automáticamente');
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(measurementsChannel);
+      supabase.removeChannel(relationsChannel);
+    };
+  }, [budgetId]);
+
   // Listen for navigation events from Activities tab
   useEffect(() => {
     const handleNavigateToResources = async (e: Event) => {

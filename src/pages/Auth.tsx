@@ -19,7 +19,7 @@ const passwordSchema = z.string()
 export default function Auth() {
   const navigate = useNavigate();
   const { user, loading, signIn } = useAuth();
-  const { hasUpdate, updateApp } = useVersionCheck();
+  const { hasUpdate, updateApp } = useVersionCheck(true); // Auto-update enabled
   
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');

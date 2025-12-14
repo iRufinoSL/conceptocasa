@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 
-const BUILD_TIMESTAMP = Date.now().toString();
 const VERSION_KEY = 'app_version_timestamp';
+const AUTO_UPDATE_KEY = 'app_auto_updated';
 
-export function useVersionCheck() {
+export function useVersionCheck(autoUpdate: boolean = false) {
   const [hasUpdate, setHasUpdate] = useState(false);
   const [checking, setChecking] = useState(true);
 
@@ -25,11 +25,26 @@ export function useVersionCheck() {
           const storedHash = localStorage.getItem(VERSION_KEY);
           
           if (currentHash && storedHash && currentHash !== storedHash) {
+            // Check if we just auto-updated to prevent infinite loop
+            const justUpdated = sessionStorage.getItem(AUTO_UPDATE_KEY);
+            
+            if (autoUpdate && !justUpdated) {
+              // Mark that we're auto-updating
+              sessionStorage.setItem(AUTO_UPDATE_KEY, 'true');
+              localStorage.setItem(VERSION_KEY, currentHash);
+              // Force reload
+              window.location.reload();
+              return;
+            }
+            
             setHasUpdate(true);
           } else if (currentHash && !storedHash) {
             // First visit, store the current hash
             localStorage.setItem(VERSION_KEY, currentHash);
           }
+          
+          // Clear the auto-update flag after successful load
+          sessionStorage.removeItem(AUTO_UPDATE_KEY);
         }
       } catch (error) {
         console.log('Version check skipped:', error);
@@ -39,7 +54,7 @@ export function useVersionCheck() {
     };
 
     checkVersion();
-  }, []);
+  }, [autoUpdate]);
 
   const updateApp = () => {
     // Clear the stored version so next load saves the new one

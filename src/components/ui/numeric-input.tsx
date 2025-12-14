@@ -50,18 +50,27 @@ const formatWithThousands = (value: string, decimals: number): string => {
   const prefix = isNegative ? '-' : '';
   let cleanValue = isNegative ? value.slice(1) : value;
   
-  // First, remove all existing thousands separators (dots that are not decimal separators)
-  // In European format, comma is the decimal separator
-  // Determine if there's a decimal separator (comma or trailing period being typed)
+  // Find if user is typing a decimal (comma or period at the end or anywhere)
   const hasComma = cleanValue.includes(',');
   const endsWithPeriod = cleanValue.endsWith('.');
   
-  // Remove all dots (they are thousands separators in European format)
-  cleanValue = cleanValue.replace(/\./g, '');
+  // Count periods and commas to determine format
+  const periodCount = (cleanValue.match(/\./g) || []).length;
+  const commaCount = (cleanValue.match(/,/g) || []).length;
   
-  // If it ends with a period (user typing decimal), convert to comma
-  if (endsWithPeriod && !hasComma) {
-    cleanValue = cleanValue.slice(0, -1) + ',';
+  // If multiple periods, they are thousands separators - remove them
+  // If single period at end and no comma, user is typing decimal
+  // If comma exists, periods are thousands separators
+  
+  if (hasComma) {
+    // European format: periods are thousands, comma is decimal
+    cleanValue = cleanValue.replace(/\./g, '');
+  } else if (periodCount === 1 && endsWithPeriod) {
+    // User just typed a period as decimal separator - convert to comma
+    cleanValue = cleanValue.replace('.', ',');
+  } else if (periodCount > 0) {
+    // Multiple periods or period in middle - they're thousands separators
+    cleanValue = cleanValue.replace(/\./g, '');
   }
   
   // Split by comma to get integer and decimal parts
@@ -79,6 +88,11 @@ const formatWithThousands = (value: string, decimals: number): string => {
     // Keep the decimal part as typed (up to max decimals)
     const truncatedDecimal = decimalPart.slice(0, decimals);
     return `${prefix}${formattedInteger},${truncatedDecimal}`;
+  }
+  
+  // If original had a comma but decimal part is empty (user just typed comma)
+  if (cleanValue.endsWith(',')) {
+    return `${prefix}${formattedInteger},`;
   }
   
   return `${prefix}${formattedInteger}`;

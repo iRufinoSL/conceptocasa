@@ -1020,46 +1020,57 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
                             <TableRow>
                               <TableHead>ActividadID</TableHead>
                               <TableHead>Unidad</TableHead>
+                              <TableHead className="text-right">Uds Relac.</TableHead>
+                              <TableHead>MediciónID</TableHead>
                               <TableHead className="text-right">€SubTotal Recursos</TableHead>
                               <TableHead>Archivos</TableHead>
                               {isAdmin && <TableHead className="w-20">Acciones</TableHead>}
                             </TableRow>
                           </TableHeader>
                           <TableBody>
-                            {unassigned.sort((a, b) => a.name.localeCompare(b.name)).map(activity => (
-                              <TableRow key={activity.id}>
-                                <TableCell className="font-mono text-sm">{generateActivityId(activity)}</TableCell>
-                                <TableCell>{activity.measurement_unit}</TableCell>
-                                <TableCell className="text-right font-mono font-semibold text-primary">
-                                  {formatCurrency(activity.resources_subtotal || 0)}
-                                </TableCell>
-                                <TableCell>
-                                  <Button variant="ghost" size="sm" onClick={() => handleManageFiles(activity)}>
-                                    <File className="h-4 w-4 mr-1" />{activity.files_count || 0}
-                                  </Button>
-                                </TableCell>
-                                {isAdmin && (
-                                  <TableCell>
-                                    <DropdownMenu>
-                                      <DropdownMenuTrigger asChild>
-                                        <Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button>
-                                      </DropdownMenuTrigger>
-                                      <DropdownMenuContent align="end">
-                                        <DropdownMenuItem onClick={() => handleEdit(activity)}>
-                                          <Pencil className="h-4 w-4 mr-2" />Editar
-                                        </DropdownMenuItem>
-                                        <DropdownMenuItem onClick={() => handleDuplicate(activity)}>
-                                          <Copy className="h-4 w-4 mr-2" />Duplicar
-                                        </DropdownMenuItem>
-                                        <DropdownMenuItem onClick={() => handleDeleteClick(activity)} className="text-destructive">
-                                          <Trash2 className="h-4 w-4 mr-2" />Eliminar
-                                        </DropdownMenuItem>
-                                      </DropdownMenuContent>
-                                    </DropdownMenu>
+                            {unassigned.sort((a, b) => a.name.localeCompare(b.name)).map(activity => {
+                              const { relatedUnits, medicionId } = getMeasurementData(activity);
+                              return (
+                                <TableRow key={activity.id}>
+                                  <TableCell className="font-mono text-sm">{generateActivityId(activity)}</TableCell>
+                                  <TableCell>{activity.measurement_unit}</TableCell>
+                                  <TableCell className="text-right">
+                                    {activity.measurement_id ? formatNumber(relatedUnits) : '-'}
                                   </TableCell>
-                                )}
-                              </TableRow>
-                            ))}
+                                  <TableCell className="text-sm text-muted-foreground max-w-[150px] truncate" title={medicionId}>
+                                    {medicionId}
+                                  </TableCell>
+                                  <TableCell className="text-right font-mono font-semibold text-primary">
+                                    {formatCurrency(activity.resources_subtotal || 0)}
+                                  </TableCell>
+                                  <TableCell>
+                                    <Button variant="ghost" size="sm" onClick={() => handleManageFiles(activity)}>
+                                      <File className="h-4 w-4 mr-1" />{activity.files_count || 0}
+                                    </Button>
+                                  </TableCell>
+                                  {isAdmin && (
+                                    <TableCell>
+                                      <DropdownMenu>
+                                        <DropdownMenuTrigger asChild>
+                                          <Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent align="end">
+                                          <DropdownMenuItem onClick={() => handleEdit(activity)}>
+                                            <Pencil className="h-4 w-4 mr-2" />Editar
+                                          </DropdownMenuItem>
+                                          <DropdownMenuItem onClick={() => handleDuplicate(activity)}>
+                                            <Copy className="h-4 w-4 mr-2" />Duplicar
+                                          </DropdownMenuItem>
+                                          <DropdownMenuItem onClick={() => handleDeleteClick(activity)} className="text-destructive">
+                                            <Trash2 className="h-4 w-4 mr-2" />Eliminar
+                                          </DropdownMenuItem>
+                                        </DropdownMenuContent>
+                                      </DropdownMenu>
+                                    </TableCell>
+                                  )}
+                                </TableRow>
+                              );
+                            })}
                           </TableBody>
                         </Table>
                       </div>
@@ -1105,46 +1116,57 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
                           <TableRow>
                             <TableHead>ActividadID</TableHead>
                             <TableHead>Unidad</TableHead>
+                            <TableHead className="text-right">Uds Relac.</TableHead>
+                            <TableHead>MediciónID</TableHead>
                             <TableHead className="text-right">€SubTotal Recursos</TableHead>
                             <TableHead>Archivos</TableHead>
                             {isAdmin && <TableHead className="w-20">Acciones</TableHead>}
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {phaseActivities.sort((a, b) => a.name.localeCompare(b.name)).map(activity => (
-                            <TableRow key={activity.id}>
-                              <TableCell className="font-mono text-sm">{generateActivityId(activity)}</TableCell>
-                              <TableCell>{activity.measurement_unit}</TableCell>
-                              <TableCell className="text-right font-mono font-semibold text-primary">
-                                {formatCurrency(activity.resources_subtotal || 0)}
-                              </TableCell>
-                              <TableCell>
-                                <Button variant="ghost" size="sm" onClick={() => handleManageFiles(activity)}>
-                                  <File className="h-4 w-4 mr-1" />{activity.files_count || 0}
-                                </Button>
-                              </TableCell>
-                              {isAdmin && (
-                                <TableCell>
-                                  <DropdownMenu>
-                                    <DropdownMenuTrigger asChild>
-                                      <Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button>
-                                    </DropdownMenuTrigger>
-                                    <DropdownMenuContent align="end">
-                                      <DropdownMenuItem onClick={() => handleEdit(activity)}>
-                                        <Pencil className="h-4 w-4 mr-2" />Editar
-                                      </DropdownMenuItem>
-                                      <DropdownMenuItem onClick={() => handleDuplicate(activity)}>
-                                        <Copy className="h-4 w-4 mr-2" />Duplicar
-                                      </DropdownMenuItem>
-                                      <DropdownMenuItem onClick={() => handleDeleteClick(activity)} className="text-destructive">
-                                        <Trash2 className="h-4 w-4 mr-2" />Eliminar
-                                      </DropdownMenuItem>
-                                    </DropdownMenuContent>
-                                  </DropdownMenu>
+                          {phaseActivities.sort((a, b) => a.name.localeCompare(b.name)).map(activity => {
+                            const { relatedUnits, medicionId } = getMeasurementData(activity);
+                            return (
+                              <TableRow key={activity.id}>
+                                <TableCell className="font-mono text-sm">{generateActivityId(activity)}</TableCell>
+                                <TableCell>{activity.measurement_unit}</TableCell>
+                                <TableCell className="text-right">
+                                  {activity.measurement_id ? formatNumber(relatedUnits) : '-'}
                                 </TableCell>
-                              )}
-                            </TableRow>
-                          ))}
+                                <TableCell className="text-sm text-muted-foreground max-w-[150px] truncate" title={medicionId}>
+                                  {medicionId}
+                                </TableCell>
+                                <TableCell className="text-right font-mono font-semibold text-primary">
+                                  {formatCurrency(activity.resources_subtotal || 0)}
+                                </TableCell>
+                                <TableCell>
+                                  <Button variant="ghost" size="sm" onClick={() => handleManageFiles(activity)}>
+                                    <File className="h-4 w-4 mr-1" />{activity.files_count || 0}
+                                  </Button>
+                                </TableCell>
+                                {isAdmin && (
+                                  <TableCell>
+                                    <DropdownMenu>
+                                      <DropdownMenuTrigger asChild>
+                                        <Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button>
+                                      </DropdownMenuTrigger>
+                                      <DropdownMenuContent align="end">
+                                        <DropdownMenuItem onClick={() => handleEdit(activity)}>
+                                          <Pencil className="h-4 w-4 mr-2" />Editar
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem onClick={() => handleDuplicate(activity)}>
+                                          <Copy className="h-4 w-4 mr-2" />Duplicar
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem onClick={() => handleDeleteClick(activity)} className="text-destructive">
+                                          <Trash2 className="h-4 w-4 mr-2" />Eliminar
+                                        </DropdownMenuItem>
+                                      </DropdownMenuContent>
+                                    </DropdownMenu>
+                                  </TableCell>
+                                )}
+                              </TableRow>
+                            );
+                          })}
                         </TableBody>
                       </Table>
                     </div>

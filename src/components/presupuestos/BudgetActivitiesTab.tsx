@@ -12,10 +12,13 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Search, Upload, Pencil, Trash2, MoreHorizontal, FileUp, File, X, Download, ChevronRight, ChevronDown, List, Layers, Copy, Package, Wrench, Truck, Briefcase, Eye } from 'lucide-react';
+import { Plus, Search, Upload, Pencil, Trash2, MoreHorizontal, FileUp, File, X, Download, ChevronRight, ChevronDown, ChevronLeft, List, Layers, Copy, Package, Wrench, Truck, Briefcase, Eye } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { toast } from 'sonner';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import { formatCurrency, formatNumber } from '@/lib/format-utils';
+import { MeasurementInlineSelect } from './MeasurementInlineSelect';
 
 interface BudgetPhase {
   id: string;
@@ -77,6 +80,7 @@ interface ActivityForm {
   description: string;
   measurement_unit: string;
   phase_id: string;
+  measurement_id: string;
 }
 
 interface BudgetActivitiesTabProps {
@@ -93,7 +97,8 @@ const emptyForm: ActivityForm = {
   code: '',
   description: '',
   measurement_unit: 'ud',
-  phase_id: ''
+  phase_id: '',
+  measurement_id: ''
 };
 
 export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabProps) {
@@ -255,7 +260,8 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
                   code: data.code,
                   description: data.description || '',
                   measurement_unit: data.measurement_unit,
-                  phase_id: data.phase_id || ''
+                  phase_id: data.phase_id || '',
+                  measurement_id: data.measurement_id || ''
                 });
                 setFormDialogOpen(true);
               }
@@ -299,7 +305,8 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
       code: activity.code,
       description: activity.description || '',
       measurement_unit: activity.measurement_unit,
-      phase_id: activity.phase_id || ''
+      phase_id: activity.phase_id || '',
+      measurement_id: activity.measurement_id || ''
     });
     
     // Fetch resources for this activity
@@ -453,7 +460,8 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
         code: form.code.trim(),
         description: form.description.trim() || null,
         measurement_unit: form.measurement_unit,
-        phase_id: form.phase_id || null
+        phase_id: form.phase_id || null,
+        measurement_id: form.measurement_id || null
       };
 
       if (editingActivity) {
@@ -704,6 +712,47 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
     };
   };
 
+  // Update activity measurement_id inline
+  const handleUpdateActivityMeasurement = async (activityId: string, measurementId: string | null) => {
+    try {
+      const { error } = await supabase
+        .from('budget_activities')
+        .update({ measurement_id: measurementId })
+        .eq('id', activityId);
+
+      if (error) throw error;
+      
+      // Update local state
+      setActivities(prev => prev.map(a => 
+        a.id === activityId ? { ...a, measurement_id: measurementId } : a
+      ));
+      toast.success('Medición actualizada');
+    } catch (err: any) {
+      console.error('Error updating measurement:', err);
+      toast.error(err.message || 'Error al actualizar medición');
+    }
+  };
+
+  // Navigate to previous/next activity in form
+  const navigateToActivity = async (direction: 'prev' | 'next') => {
+    if (!editingActivity) return;
+    
+    const sortedActivities = [...activities].sort((a, b) => a.name.localeCompare(b.name));
+    const currentIndex = sortedActivities.findIndex(a => a.id === editingActivity.id);
+    
+    let newIndex: number;
+    if (direction === 'prev') {
+      newIndex = currentIndex > 0 ? currentIndex - 1 : sortedActivities.length - 1;
+    } else {
+      newIndex = currentIndex < sortedActivities.length - 1 ? currentIndex + 1 : 0;
+    }
+    
+    const newActivity = sortedActivities[newIndex];
+    if (newActivity) {
+      await handleEdit(newActivity);
+    }
+  };
+
   // Manage activity files
   const handleManageFiles = async (activity: BudgetActivity) => {
     setSelectedActivity(activity);
@@ -919,8 +968,20 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
                     <TableCell className="text-right">
                       {activity.measurement_id ? formatNumber(relatedUnits) : '-'}
                     </TableCell>
-                    <TableCell className="text-sm text-muted-foreground max-w-[200px] truncate" title={medicionId}>
-                      {medicionId}
+                    <TableCell className="text-sm max-w-[200px]">
+                      {isAdmin ? (
+                        <MeasurementInlineSelect
+                          activityId={activity.id}
+                          value={activity.measurement_id}
+                          measurements={measurements}
+                          measurementRelations={measurementRelations}
+                          onSave={(measurementId) => handleUpdateActivityMeasurement(activity.id, measurementId)}
+                        />
+                      ) : (
+                        <span className="text-muted-foreground truncate" title={medicionId}>
+                          {medicionId}
+                        </span>
+                      )}
                     </TableCell>
                     <TableCell className="text-right font-mono font-semibold text-primary">
                       {formatCurrency(activity.resources_subtotal || 0)}
@@ -1133,8 +1194,20 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
                                 <TableCell className="text-right">
                                   {activity.measurement_id ? formatNumber(relatedUnits) : '-'}
                                 </TableCell>
-                                <TableCell className="text-sm text-muted-foreground max-w-[150px] truncate" title={medicionId}>
-                                  {medicionId}
+                                <TableCell className="text-sm max-w-[150px]">
+                                  {isAdmin ? (
+                                    <MeasurementInlineSelect
+                                      activityId={activity.id}
+                                      value={activity.measurement_id}
+                                      measurements={measurements}
+                                      measurementRelations={measurementRelations}
+                                      onSave={(measurementId) => handleUpdateActivityMeasurement(activity.id, measurementId)}
+                                    />
+                                  ) : (
+                                    <span className="text-muted-foreground truncate" title={medicionId}>
+                                      {medicionId}
+                                    </span>
+                                  )}
                                 </TableCell>
                                 <TableCell className="text-right font-mono font-semibold text-primary">
                                   {formatCurrency(activity.resources_subtotal || 0)}
@@ -1190,9 +1263,31 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
       <Dialog open={formDialogOpen} onOpenChange={setFormDialogOpen}>
         <DialogContent className="max-w-4xl">
           <DialogHeader>
-            <DialogTitle>
-              {editingActivity ? 'Editar Actividad' : 'Nueva Actividad'}
-            </DialogTitle>
+            <div className="flex items-center justify-between">
+              <DialogTitle>
+                {editingActivity ? 'Editar Actividad' : 'Nueva Actividad'}
+              </DialogTitle>
+              {editingActivity && (
+                <div className="flex items-center gap-1 mr-6">
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => navigateToActivity('prev')}
+                    title="Actividad anterior"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => navigateToActivity('next')}
+                    title="Actividad siguiente"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              )}
+            </div>
             <DialogDescription>
               {editingActivity 
                 ? 'Modifica los datos de la actividad'
@@ -1258,15 +1353,64 @@ export function BudgetActivitiesTab({ budgetId, isAdmin }: BudgetActivitiesTabPr
               />
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="description">Descripción</Label>
-              <Textarea
-                id="description"
-                value={form.description}
-                onChange={(e) => setForm({ ...form, description: e.target.value })}
-                placeholder="Descripción detallada de la actividad..."
-                rows={2}
-              />
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="description">Descripción</Label>
+                <Textarea
+                  id="description"
+                  value={form.description}
+                  onChange={(e) => setForm({ ...form, description: e.target.value })}
+                  placeholder="Descripción detallada de la actividad..."
+                  rows={2}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="measurement">Medición Relacionada</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      className="w-full justify-between font-normal"
+                    >
+                      {form.measurement_id 
+                        ? (() => {
+                            const m = measurements.find(m => m.id === form.measurement_id);
+                            return m ? m.name : 'Seleccionar medición...'
+                          })()
+                        : 'Sin medición'}
+                      <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[350px] p-0" align="start">
+                    <Command>
+                      <CommandInput placeholder="Buscar medición..." />
+                      <CommandList className="max-h-[200px]">
+                        <CommandEmpty>No se encontraron mediciones</CommandEmpty>
+                        <CommandGroup>
+                          <CommandItem
+                            value="none"
+                            onSelect={() => setForm({ ...form, measurement_id: '' })}
+                          >
+                            <span className="text-muted-foreground italic">Sin medición</span>
+                          </CommandItem>
+                          {measurements
+                            .sort((a, b) => a.name.localeCompare(b.name))
+                            .map(m => (
+                              <CommandItem
+                                key={m.id}
+                                value={m.name}
+                                onSelect={() => setForm({ ...form, measurement_id: m.id })}
+                              >
+                                {m.name} ({formatNumber(m.manual_units || 0)} {m.measurement_unit || 'ud'})
+                              </CommandItem>
+                            ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+              </div>
             </div>
 
             {/* Resources list for existing activities */}

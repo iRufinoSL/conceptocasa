@@ -151,15 +151,20 @@ export function ResourcesActivityGroupedView({
     });
 
     // Convert to sorted array by ActivityID
-    return Array.from(activityMap.entries())
-      .sort(([keyA, a], [keyB, b]) => {
-        if (keyA === '__no_activity__') return 1;
-        if (keyB === '__no_activity__') return -1;
-        const labelA = getActivityLabel(a.activity);
-        const labelB = getActivityLabel(b.activity);
-        return labelA.localeCompare(labelB);
-      });
-  }, [resources, activities]);
+    return Array.from(activityMap.entries()).sort(([keyA, a], [keyB, b]) => {
+      if (keyA === '__no_activity__') return 1;
+      if (keyB === '__no_activity__') return -1;
+      const labelA = getActivityLabel(a.activity);
+      const labelB = getActivityLabel(b.activity);
+      return labelA.localeCompare(labelB);
+    });
+  }, [resources, activities, phases]);
+
+  function getActivityLabel(activity: Activity | null) {
+    if (!activity) return 'Sin Actividad';
+    const phase = activity.phase_id ? phases.find(p => p.id === activity.phase_id) : null;
+    return `${phase?.code || ''} ${activity.code}.-${activity.name}`;
+  }
 
   // Get flat list of resources in display order for navigation
   const flatResourceList = useMemo(() => {
@@ -171,43 +176,40 @@ export function ResourcesActivityGroupedView({
   }, [groupedData]);
 
   // Navigate to next/prev editable field
-  const navigateToField = useCallback((currentResourceId: string, currentField: EditableField, direction: 'next' | 'prev') => {
-    const currentFieldIndex = EDITABLE_FIELDS.indexOf(currentField);
-    const currentRowIndex = flatResourceList.findIndex(r => r.id === currentResourceId);
-    
-    if (currentRowIndex === -1) return;
+  const navigateToField = useCallback(
+    (currentResourceId: string, currentField: EditableField, direction: 'next' | 'prev') => {
+      const currentFieldIndex = EDITABLE_FIELDS.indexOf(currentField);
+      const currentRowIndex = flatResourceList.findIndex(r => r.id === currentResourceId);
 
-    let nextRowIndex = currentRowIndex;
-    let nextFieldIndex = currentFieldIndex;
+      if (currentRowIndex === -1) return;
 
-    if (direction === 'next') {
-      nextFieldIndex++;
-      if (nextFieldIndex >= EDITABLE_FIELDS.length) {
-        nextFieldIndex = 0;
-        nextRowIndex++;
+      let nextRowIndex = currentRowIndex;
+      let nextFieldIndex = currentFieldIndex;
+
+      if (direction === 'next') {
+        nextFieldIndex++;
+        if (nextFieldIndex >= EDITABLE_FIELDS.length) {
+          nextFieldIndex = 0;
+          nextRowIndex++;
+        }
+      } else {
+        nextFieldIndex--;
+        if (nextFieldIndex < 0) {
+          nextFieldIndex = EDITABLE_FIELDS.length - 1;
+          nextRowIndex--;
+        }
       }
-    } else {
-      nextFieldIndex--;
-      if (nextFieldIndex < 0) {
-        nextFieldIndex = EDITABLE_FIELDS.length - 1;
-        nextRowIndex--;
-      }
-    }
 
-    // Check bounds
-    if (nextRowIndex < 0 || nextRowIndex >= flatResourceList.length) return;
+      // Check bounds
+      if (nextRowIndex < 0 || nextRowIndex >= flatResourceList.length) return;
 
-    const nextResource = flatResourceList[nextRowIndex];
-    const nextField = EDITABLE_FIELDS[nextFieldIndex];
-    
-    focusCell(nextResource.id, nextField);
-  }, [flatResourceList, focusCell]);
+      const nextResource = flatResourceList[nextRowIndex];
+      const nextField = EDITABLE_FIELDS[nextFieldIndex];
 
-  const getActivityLabel = (activity: Activity | null) => {
-    if (!activity) return 'Sin Actividad';
-    const phase = activity.phase_id ? phases.find(p => p.id === activity.phase_id) : null;
-    return `${phase?.code || ''} ${activity.code}.-${activity.name}`;
-  };
+      focusCell(nextResource.id, nextField);
+    },
+    [flatResourceList, focusCell]
+  );
 
   const toggleActivity = (activityId: string) => {
     setExpandedActivities((prev) => {

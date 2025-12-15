@@ -549,6 +549,42 @@ export type Database = {
           },
         ]
       }
+      crm_contact_professional_activities: {
+        Row: {
+          contact_id: string
+          created_at: string | null
+          id: string
+          professional_activity_id: string
+        }
+        Insert: {
+          contact_id: string
+          created_at?: string | null
+          id?: string
+          professional_activity_id: string
+        }
+        Update: {
+          contact_id?: string
+          created_at?: string | null
+          id?: string
+          professional_activity_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_contact_professional_activiti_professional_activity_id_fkey"
+            columns: ["professional_activity_id"]
+            isOneToOne: false
+            referencedRelation: "crm_professional_activities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "crm_contact_professional_activities_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contacts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       crm_contact_relations: {
         Row: {
           contact_id_a: string

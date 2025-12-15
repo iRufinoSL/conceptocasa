@@ -32,6 +32,7 @@ export function ContactsTab({ contacts, searchTerm, onEdit, onDelete }: Contacts
     return (localStorage.getItem('crm-contacts-view') as ViewMode) || 'cards';
   });
   const [activities, setActivities] = useState<ProfessionalActivity[]>([]);
+  const [contactActivitiesMap, setContactActivitiesMap] = useState<Record<string, string[]>>({});
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
 
   useEffect(() => {
@@ -48,6 +49,29 @@ export function ContactsTab({ contacts, searchTerm, onEdit, onDelete }: Contacts
     };
     fetchActivities();
   }, []);
+
+  // Fetch contact-activity relationships
+  useEffect(() => {
+    const fetchContactActivities = async () => {
+      if (contacts.length === 0) return;
+      
+      const contactIds = contacts.map(c => c.id);
+      const { data } = await supabase
+        .from('crm_contact_professional_activities')
+        .select('contact_id, professional_activity_id')
+        .in('contact_id', contactIds);
+      
+      if (data) {
+        const map: Record<string, string[]> = {};
+        data.forEach(item => {
+          if (!map[item.contact_id]) map[item.contact_id] = [];
+          map[item.contact_id].push(item.professional_activity_id);
+        });
+        setContactActivitiesMap(map);
+      }
+    };
+    fetchContactActivities();
+  }, [contacts]);
 
   const filteredContacts = useMemo(() => {
     let result = [...contacts];
@@ -72,18 +96,26 @@ export function ContactsTab({ contacts, searchTerm, onEdit, onDelete }: Contacts
     return result;
   }, [contacts, searchTerm]);
 
+  // Group contacts by activity (a contact can appear in multiple groups)
   const groupedContacts = useMemo(() => {
     const groups: Record<string, Contact[]> = {};
     const noActivity: Contact[] = [];
 
     filteredContacts.forEach(contact => {
-      if (contact.professional_activity_id) {
-        const activity = activities.find(a => a.id === contact.professional_activity_id);
-        const activityName = activity?.name || 'Sin actividad';
-        if (!groups[activityName]) groups[activityName] = [];
-        groups[activityName].push(contact);
-      } else {
+      const activityIds = contactActivitiesMap[contact.id] || [];
+      
+      if (activityIds.length === 0) {
         noActivity.push(contact);
+      } else {
+        activityIds.forEach(activityId => {
+          const activity = activities.find(a => a.id === activityId);
+          const activityName = activity?.name || 'Sin actividad';
+          if (!groups[activityName]) groups[activityName] = [];
+          // Avoid duplicates in same group
+          if (!groups[activityName].some(c => c.id === contact.id)) {
+            groups[activityName].push(contact);
+          }
+        });
       }
     });
 
@@ -96,7 +128,7 @@ export function ContactsTab({ contacts, searchTerm, onEdit, onDelete }: Contacts
     }
 
     return sortedGroups;
-  }, [filteredContacts, activities]);
+  }, [filteredContacts, activities, contactActivitiesMap]);
 
   const toggleGroup = (group: string) => {
     setExpandedGroups(prev => {
@@ -129,9 +161,11 @@ export function ContactsTab({ contacts, searchTerm, onEdit, onDelete }: Contacts
     return first + second;
   };
 
-  const getActivityName = (activityId: string | null) => {
-    if (!activityId) return null;
-    return activities.find(a => a.id === activityId)?.name || null;
+  const getActivityNames = (contactId: string) => {
+    const activityIds = contactActivitiesMap[contactId] || [];
+    return activityIds
+      .map(id => activities.find(a => a.id === id)?.name)
+      .filter(Boolean) as string[];
   };
 
   if (filteredContacts.length === 0) {
@@ -203,7 +237,7 @@ export function ContactsTab({ contacts, searchTerm, onEdit, onDelete }: Contacts
               getInitials={getInitials}
               getTypeVariant={getTypeVariant}
               getStatusVariant={getStatusVariant}
-              getActivityName={getActivityName}
+              getActivityNames={() => getActivityNames(contact.id)}
             />
           ))}
         </div>
@@ -242,10 +276,14 @@ export function ContactsTab({ contacts, searchTerm, onEdit, onDelete }: Contacts
                   <TableCell className="text-muted-foreground">{contact.phone || '-'}</TableCell>
                   <TableCell className="text-muted-foreground">{contact.city || '-'}</TableCell>
                   <TableCell>
-                    {getActivityName(contact.professional_activity_id) ? (
-                      <Badge variant="outline" className="text-xs">
-                        {getActivityName(contact.professional_activity_id)}
-                      </Badge>
+                    {getActivityNames(contact.id).length > 0 ? (
+                      <div className="flex flex-wrap gap-1">
+                        {getActivityNames(contact.id).map((name, idx) => (
+                          <Badge key={idx} variant="outline" className="text-xs">
+                            {name}
+                          </Badge>
+                        ))}
+                      </div>
                     ) : '-'}
                   </TableCell>
                   <TableCell>
@@ -394,7 +432,7 @@ function ContactCard({
   getInitials,
   getTypeVariant,
   getStatusVariant,
-  getActivityName
+  getActivityNames
 }: {
   contact: Contact;
   onEdit: (contact: Contact) => void;
@@ -403,9 +441,9 @@ function ContactCard({
   getInitials: (name: string, surname?: string | null) => string;
   getTypeVariant: (type: string) => "default" | "outline";
   getStatusVariant: (status: string) => "default" | "secondary" | "outline";
-  getActivityName: (activityId: string | null) => string | null;
+  getActivityNames: () => string[];
 }) {
-  const activityName = getActivityName(contact.professional_activity_id);
+  const activityNames = getActivityNames();
 
   return (
     <Card 
@@ -454,11 +492,11 @@ function ContactCard({
               <Badge variant={getStatusVariant(contact.status)} className="text-xs">
                 {contact.status}
               </Badge>
-              {activityName && (
-                <Badge variant="outline" className="text-xs bg-primary/5">
-                  {activityName}
+              {activityNames.map((name, index) => (
+                <Badge key={index} variant="outline" className="text-xs bg-primary/5">
+                  {name}
                 </Badge>
-              )}
+              ))}
             </div>
           </div>
         </div>

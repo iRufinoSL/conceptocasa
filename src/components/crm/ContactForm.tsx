@@ -6,9 +6,11 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { X, Plus } from 'lucide-react';
+import { X, Plus, Briefcase } from 'lucide-react';
 import type { Contact } from '@/pages/CRM';
 
 interface ProfessionalActivity {
@@ -27,6 +29,7 @@ export function ContactForm({ open, onOpenChange, contact, onSuccess }: ContactF
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
   const [activities, setActivities] = useState<ProfessionalActivity[]>([]);
+  const [selectedActivityIds, setSelectedActivityIds] = useState<string[]>([]);
   const [newTag, setNewTag] = useState('');
   const [newActivityName, setNewActivityName] = useState('');
   const [showNewActivity, setShowNewActivity] = useState(false);
@@ -46,7 +49,6 @@ export function ContactForm({ open, onOpenChange, contact, onSuccess }: ContactF
     nif_dni: '',
     website: '',
     observations: '',
-    professional_activity_id: '',
     tags: [] as string[]
   });
 
@@ -62,56 +64,47 @@ export function ContactForm({ open, onOpenChange, contact, onSuccess }: ContactF
   }, [open]);
 
   useEffect(() => {
-    if (contact) {
-      setFormData({
-        name: contact.name || '',
-        surname: contact.surname || '',
-        email: contact.email || '',
-        phone: contact.phone || '',
-        contact_type: contact.contact_type || 'Persona',
-        status: contact.status || 'Prospecto',
-        address: '',
-        city: contact.city || '',
-        province: '',
-        postal_code: '',
-        country: 'España',
-        nif_dni: '',
-        website: '',
-        observations: '',
-        professional_activity_id: contact.professional_activity_id || '',
-        tags: contact.tags || []
-      });
-      
-      // Fetch full contact data
-      const fetchFullContact = async () => {
-        const { data } = await supabase
+    if (contact && open) {
+      // Fetch full contact data and activities
+      const fetchContactData = async () => {
+        const { data: fullContact } = await supabase
           .from('crm_contacts')
           .select('*')
           .eq('id', contact.id)
           .single();
-        if (data) {
+        
+        if (fullContact) {
           setFormData({
-            name: data.name || '',
-            surname: data.surname || '',
-            email: data.email || '',
-            phone: data.phone || '',
-            contact_type: data.contact_type || 'Persona',
-            status: data.status || 'Prospecto',
-            address: data.address || '',
-            city: data.city || '',
-            province: data.province || '',
-            postal_code: data.postal_code || '',
-            country: data.country || 'España',
-            nif_dni: data.nif_dni || '',
-            website: data.website || '',
-            observations: data.observations || '',
-            professional_activity_id: data.professional_activity_id || '',
-            tags: data.tags || []
+            name: fullContact.name || '',
+            surname: fullContact.surname || '',
+            email: fullContact.email || '',
+            phone: fullContact.phone || '',
+            contact_type: fullContact.contact_type || 'Persona',
+            status: fullContact.status || 'Prospecto',
+            address: fullContact.address || '',
+            city: fullContact.city || '',
+            province: fullContact.province || '',
+            postal_code: fullContact.postal_code || '',
+            country: fullContact.country || 'España',
+            nif_dni: fullContact.nif_dni || '',
+            website: fullContact.website || '',
+            observations: fullContact.observations || '',
+            tags: fullContact.tags || []
           });
         }
+
+        // Fetch contact's professional activities
+        const { data: contactActivities } = await supabase
+          .from('crm_contact_professional_activities')
+          .select('professional_activity_id')
+          .eq('contact_id', contact.id);
+        
+        if (contactActivities) {
+          setSelectedActivityIds(contactActivities.map(ca => ca.professional_activity_id));
+        }
       };
-      fetchFullContact();
-    } else {
+      fetchContactData();
+    } else if (!contact && open) {
       setFormData({
         name: '',
         surname: '',
@@ -127,11 +120,19 @@ export function ContactForm({ open, onOpenChange, contact, onSuccess }: ContactF
         nif_dni: '',
         website: '',
         observations: '',
-        professional_activity_id: '',
         tags: []
       });
+      setSelectedActivityIds([]);
     }
   }, [contact, open]);
+
+  const toggleActivity = (activityId: string) => {
+    setSelectedActivityIds(prev => 
+      prev.includes(activityId)
+        ? prev.filter(id => id !== activityId)
+        : [...prev, activityId]
+    );
+  };
 
   const handleAddTag = () => {
     const tag = newTag.trim();
@@ -159,7 +160,7 @@ export function ContactForm({ open, onOpenChange, contact, onSuccess }: ContactF
       if (error) throw error;
 
       setActivities([...activities, data].sort((a, b) => a.name.localeCompare(b.name)));
-      setFormData({ ...formData, professional_activity_id: data.id });
+      setSelectedActivityIds([...selectedActivityIds, data.id]);
       setNewActivityName('');
       setShowNewActivity(false);
       toast({ title: 'Actividad profesional creada' });
@@ -194,9 +195,10 @@ export function ContactForm({ open, onOpenChange, contact, onSuccess }: ContactF
         nif_dni: formData.nif_dni.trim() || null,
         website: formData.website.trim() || null,
         observations: formData.observations.trim() || null,
-        professional_activity_id: formData.professional_activity_id || null,
         tags: formData.tags.length > 0 ? formData.tags : null
       };
+
+      let contactId = contact?.id;
 
       if (contact) {
         const { error } = await supabase
@@ -205,16 +207,41 @@ export function ContactForm({ open, onOpenChange, contact, onSuccess }: ContactF
           .eq('id', contact.id);
 
         if (error) throw error;
-        toast({ title: 'Contacto actualizado correctamente' });
       } else {
-        const { error } = await supabase
+        const { data: newContact, error } = await supabase
           .from('crm_contacts')
-          .insert(dataToSave);
+          .insert(dataToSave)
+          .select()
+          .single();
 
         if (error) throw error;
-        toast({ title: 'Contacto creado correctamente' });
+        contactId = newContact.id;
       }
 
+      // Update professional activities (many-to-many)
+      if (contactId) {
+        // Delete existing activity links
+        await supabase
+          .from('crm_contact_professional_activities')
+          .delete()
+          .eq('contact_id', contactId);
+
+        // Insert new activity links
+        if (selectedActivityIds.length > 0) {
+          const activityLinks = selectedActivityIds.map(activityId => ({
+            contact_id: contactId,
+            professional_activity_id: activityId
+          }));
+
+          const { error: linkError } = await supabase
+            .from('crm_contact_professional_activities')
+            .insert(activityLinks);
+
+          if (linkError) throw linkError;
+        }
+      }
+
+      toast({ title: contact ? 'Contacto actualizado correctamente' : 'Contacto creado correctamente' });
       onSuccess();
       onOpenChange(false);
     } catch (error: any) {
@@ -282,29 +309,59 @@ export function ContactForm({ open, onOpenChange, contact, onSuccess }: ContactF
             </div>
           </div>
 
-          {/* Professional Activity */}
+          {/* Professional Activities (Multiple) */}
           <div className="space-y-2">
-            <Label>Actividad Profesional</Label>
+            <Label className="flex items-center gap-2">
+              <Briefcase className="h-4 w-4" />
+              Actividades Profesionales
+            </Label>
             {!showNewActivity ? (
-              <div className="flex gap-2">
-                <Select 
-                  value={formData.professional_activity_id || '__none__'} 
-                  onValueChange={(v) => setFormData({ ...formData, professional_activity_id: v === '__none__' ? '' : v })}
-                >
-                  <SelectTrigger className="flex-1">
-                    <SelectValue placeholder="Seleccionar actividad..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none__">Sin actividad</SelectItem>
-                    {activities.map(activity => (
-                      <SelectItem key={activity.id} value={activity.id}>
-                        {activity.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Button type="button" variant="outline" size="icon" onClick={() => setShowNewActivity(true)}>
-                  <Plus className="h-4 w-4" />
+              <div className="space-y-2">
+                <ScrollArea className="h-32 rounded-md border p-2">
+                  {activities.length === 0 ? (
+                    <p className="text-sm text-muted-foreground p-2">No hay actividades definidas</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {activities.map(activity => (
+                        <div key={activity.id} className="flex items-center space-x-2">
+                          <Checkbox
+                            id={`activity-${activity.id}`}
+                            checked={selectedActivityIds.includes(activity.id)}
+                            onCheckedChange={() => toggleActivity(activity.id)}
+                          />
+                          <label
+                            htmlFor={`activity-${activity.id}`}
+                            className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                          >
+                            {activity.name}
+                          </label>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </ScrollArea>
+                {selectedActivityIds.length > 0 && (
+                  <div className="flex flex-wrap gap-1">
+                    {selectedActivityIds.map(id => {
+                      const activity = activities.find(a => a.id === id);
+                      return activity ? (
+                        <Badge key={id} variant="secondary" className="gap-1">
+                          {activity.name}
+                          <button
+                            type="button"
+                            onClick={() => toggleActivity(id)}
+                            className="ml-1 hover:text-destructive"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </Badge>
+                      ) : null;
+                    })}
+                  </div>
+                )}
+                <Button type="button" variant="outline" size="sm" onClick={() => setShowNewActivity(true)} className="w-full">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Nueva Actividad
                 </Button>
               </div>
             ) : (

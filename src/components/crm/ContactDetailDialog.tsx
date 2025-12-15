@@ -39,7 +39,7 @@ interface ContactDetailDialogProps {
 
 export function ContactDetailDialog({ contact, open, onOpenChange }: ContactDetailDialogProps) {
   const [managements, setManagements] = useState<Management[]>([]);
-  const [activityName, setActivityName] = useState<string | null>(null);
+  const [activityNames, setActivityNames] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -69,19 +69,25 @@ export function ContactDetailDialog({ contact, open, onOpenChange }: ContactDeta
         setManagements([]);
       }
       
-      // Fetch professional activity name
-      if (contact.professional_activity_id) {
-        const { data: activity } = await supabase
+      // Fetch professional activities (many-to-many)
+      const { data: contactActivities } = await supabase
+        .from('crm_contact_professional_activities')
+        .select('professional_activity_id')
+        .eq('contact_id', contact.id);
+      
+      if (contactActivities && contactActivities.length > 0) {
+        const activityIds = contactActivities.map(ca => ca.professional_activity_id);
+        const { data: activities } = await supabase
           .from('crm_professional_activities')
           .select('name')
-          .eq('id', contact.professional_activity_id)
-          .single();
+          .in('id', activityIds)
+          .order('name');
         
-        if (activity) {
-          setActivityName(activity.name);
+        if (activities) {
+          setActivityNames(activities.map(a => a.name));
         }
       } else {
-        setActivityName(null);
+        setActivityNames([]);
       }
       
       setLoading(false);
@@ -154,11 +160,11 @@ export function ContactDetailDialog({ contact, open, onOpenChange }: ContactDeta
                 <Badge variant={getStatusVariant(contact.status)}>
                   {contact.status}
                 </Badge>
-                {activityName && (
-                  <Badge variant="outline" className="bg-primary/5">
-                    {activityName}
+                {activityNames.map((name, index) => (
+                  <Badge key={index} variant="outline" className="bg-primary/5">
+                    {name}
                   </Badge>
-                )}
+                ))}
               </div>
             </div>
           </div>

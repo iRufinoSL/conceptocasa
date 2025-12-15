@@ -406,6 +406,59 @@ export type Database = {
           },
         ]
       }
+      budget_predesigns: {
+        Row: {
+          budget_id: string
+          content: string
+          content_type: string
+          created_at: string
+          description: string | null
+          file_name: string | null
+          file_path: string | null
+          file_size: number | null
+          file_type: string | null
+          id: string
+          updated_at: string
+          uploaded_by: string | null
+        }
+        Insert: {
+          budget_id: string
+          content: string
+          content_type?: string
+          created_at?: string
+          description?: string | null
+          file_name?: string | null
+          file_path?: string | null
+          file_size?: number | null
+          file_type?: string | null
+          id?: string
+          updated_at?: string
+          uploaded_by?: string | null
+        }
+        Update: {
+          budget_id?: string
+          content?: string
+          content_type?: string
+          created_at?: string
+          description?: string | null
+          file_name?: string | null
+          file_path?: string | null
+          file_size?: number | null
+          file_type?: string | null
+          id?: string
+          updated_at?: string
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "budget_predesigns_budget_id_fkey"
+            columns: ["budget_id"]
+            isOneToOne: false
+            referencedRelation: "presupuestos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       company_settings: {
         Row: {
           address: string | null

@@ -5,7 +5,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowLeft, Calculator, ClipboardList, Building2, FileText, Settings, Calendar, Ruler, FileDown } from 'lucide-react';
+import { ArrowLeft, Calculator, ClipboardList, Building2, FileText, Settings, Calendar, Ruler, FileDown, Image } from 'lucide-react';
 import { AppNavDropdown } from '@/components/AppNavDropdown';
 import { BudgetActivitiesTab } from '@/components/presupuestos/BudgetActivitiesTab';
 import { BudgetPhasesTab } from '@/components/presupuestos/BudgetPhasesTab';
@@ -14,6 +14,7 @@ import { BudgetMeasurementsTab } from '@/components/presupuestos/BudgetMeasureme
 import { BudgetVisualSummary } from '@/components/presupuestos/BudgetVisualSummary';
 import { BudgetVersionComparison } from '@/components/presupuestos/BudgetVersionComparison';
 import { BudgetReportPreview } from '@/components/presupuestos/BudgetReportPreview';
+import { BudgetPredesignTab } from '@/components/presupuestos/BudgetPredesignTab';
 
 interface Presupuesto {
   id: string;
@@ -39,7 +40,7 @@ export default function PresupuestoDashboard() {
   const [presupuesto, setPresupuesto] = useState<Presupuesto | null>(null);
   const [project, setProject] = useState<Project | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('actividades');
+  const [activeTab, setActiveTab] = useState('anteproyecto');
   const [reportPreviewOpen, setReportPreviewOpen] = useState(false);
 
   const isAdmin = roles.includes('administrador');
@@ -211,7 +212,11 @@ export default function PresupuestoDashboard() {
 
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-6 lg:w-auto lg:inline-grid">
+          <TabsList className="grid w-full grid-cols-7 lg:w-auto lg:inline-grid">
+            <TabsTrigger value="anteproyecto" className="flex items-center gap-2">
+              <Image className="h-4 w-4" />
+              <span className="hidden sm:inline">Ante-proyecto</span>
+            </TabsTrigger>
             <TabsTrigger value="actividades" className="flex items-center gap-2">
               <ClipboardList className="h-4 w-4" />
               <span className="hidden sm:inline">QUÉ hay que hacer?</span>
@@ -237,6 +242,10 @@ export default function PresupuestoDashboard() {
               <span className="hidden sm:inline">Configuración</span>
             </TabsTrigger>
           </TabsList>
+
+          <TabsContent value="anteproyecto" className="mt-6">
+            <BudgetPredesignTab budgetId={presupuesto.id} isAdmin={isAdmin} />
+          </TabsContent>
 
           <TabsContent value="actividades" className="mt-6">
             <BudgetActivitiesTab budgetId={presupuesto.id} budgetName={presupuesto.nombre} isAdmin={isAdmin} />

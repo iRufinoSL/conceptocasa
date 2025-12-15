@@ -295,9 +295,35 @@ export function BudgetPredesignTab({ budgetId, isAdmin }: BudgetPredesignTabProp
     }
   };
 
+  const [fileUrls, setFileUrls] = useState<Record<string, string>>({});
+
+  // Generate signed URLs for private bucket access
+  useEffect(() => {
+    const generateSignedUrls = async () => {
+      const urlMap: Record<string, string> = {};
+      
+      for (const item of predesigns) {
+        if (item.file_path) {
+          const { data, error } = await supabase.storage
+            .from('budget-predesigns')
+            .createSignedUrl(item.file_path, 3600); // 1 hour expiry
+          
+          if (data && !error) {
+            urlMap[item.file_path] = data.signedUrl;
+          }
+        }
+      }
+      
+      setFileUrls(urlMap);
+    };
+
+    if (predesigns.length > 0) {
+      generateSignedUrls();
+    }
+  }, [predesigns]);
+
   const getFileUrl = (filePath: string) => {
-    const { data } = supabase.storage.from('budget-predesigns').getPublicUrl(filePath);
-    return data.publicUrl;
+    return fileUrls[filePath] || '';
   };
 
   const isImageFile = (fileType: string | null) => {

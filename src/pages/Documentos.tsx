@@ -621,12 +621,15 @@ export default function Documentos() {
           <div className="space-y-4 py-4">
             <div className="space-y-2">
               <Label>Proyecto (opcional)</Label>
-              <Select value={uploadProjectId} onValueChange={setUploadProjectId}>
+              <Select 
+                value={uploadProjectId || '__none__'} 
+                onValueChange={(val) => setUploadProjectId(val === '__none__' ? '' : val)}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Sin proyecto asignado" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Sin proyecto</SelectItem>
+                  <SelectItem value="__none__">Sin proyecto</SelectItem>
                   {projects.map((project) => (
                     <SelectItem key={project.id} value={project.id}>
                       {project.name}
@@ -772,12 +775,15 @@ export default function Documentos() {
             </div>
             <div className="space-y-2">
               <Label>Proyecto (opcional)</Label>
-              <Select value={editProjectId} onValueChange={setEditProjectId}>
+              <Select 
+                value={editProjectId || '__none__'} 
+                onValueChange={(val) => setEditProjectId(val === '__none__' ? '' : val)}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Sin proyecto asignado" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Sin proyecto</SelectItem>
+                  <SelectItem value="__none__">Sin proyecto</SelectItem>
                   {projects.map((project) => (
                     <SelectItem key={project.id} value={project.id}>
                       {project.name}

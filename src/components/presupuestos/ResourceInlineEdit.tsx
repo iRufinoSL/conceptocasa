@@ -50,9 +50,13 @@ export function ResourceInlineEdit({
     }
   }, [isEditing]);
 
+  // Only update editValue from props when NOT editing
+  // This prevents the value from resetting during save operations
   useEffect(() => {
-    setEditValue(value ?? '');
-  }, [value]);
+    if (!isEditing && !isSaving) {
+      setEditValue(value ?? '');
+    }
+  }, [value, isEditing, isSaving]);
 
   useEffect(() => {
     if (isEditing) {

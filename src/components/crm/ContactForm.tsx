@@ -4,10 +4,17 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import { X, Plus } from 'lucide-react';
 import type { Contact } from '@/pages/CRM';
+
+interface ProfessionalActivity {
+  id: string;
+  name: string;
+}
 
 interface ContactFormProps {
   open: boolean;
@@ -19,6 +26,11 @@ interface ContactFormProps {
 export function ContactForm({ open, onOpenChange, contact, onSuccess }: ContactFormProps) {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
+  const [activities, setActivities] = useState<ProfessionalActivity[]>([]);
+  const [newTag, setNewTag] = useState('');
+  const [newActivityName, setNewActivityName] = useState('');
+  const [showNewActivity, setShowNewActivity] = useState(false);
+  
   const [formData, setFormData] = useState({
     name: '',
     surname: '',
@@ -33,8 +45,21 @@ export function ContactForm({ open, onOpenChange, contact, onSuccess }: ContactF
     country: 'España',
     nif_dni: '',
     website: '',
-    observations: ''
+    observations: '',
+    professional_activity_id: '',
+    tags: [] as string[]
   });
+
+  useEffect(() => {
+    const fetchActivities = async () => {
+      const { data } = await supabase
+        .from('crm_professional_activities')
+        .select('*')
+        .order('name');
+      if (data) setActivities(data);
+    };
+    if (open) fetchActivities();
+  }, [open]);
 
   useEffect(() => {
     if (contact) {
@@ -52,8 +77,40 @@ export function ContactForm({ open, onOpenChange, contact, onSuccess }: ContactF
         country: 'España',
         nif_dni: '',
         website: '',
-        observations: ''
+        observations: '',
+        professional_activity_id: contact.professional_activity_id || '',
+        tags: contact.tags || []
       });
+      
+      // Fetch full contact data
+      const fetchFullContact = async () => {
+        const { data } = await supabase
+          .from('crm_contacts')
+          .select('*')
+          .eq('id', contact.id)
+          .single();
+        if (data) {
+          setFormData({
+            name: data.name || '',
+            surname: data.surname || '',
+            email: data.email || '',
+            phone: data.phone || '',
+            contact_type: data.contact_type || 'Persona',
+            status: data.status || 'Prospecto',
+            address: data.address || '',
+            city: data.city || '',
+            province: data.province || '',
+            postal_code: data.postal_code || '',
+            country: data.country || 'España',
+            nif_dni: data.nif_dni || '',
+            website: data.website || '',
+            observations: data.observations || '',
+            professional_activity_id: data.professional_activity_id || '',
+            tags: data.tags || []
+          });
+        }
+      };
+      fetchFullContact();
     } else {
       setFormData({
         name: '',
@@ -69,10 +126,47 @@ export function ContactForm({ open, onOpenChange, contact, onSuccess }: ContactF
         country: 'España',
         nif_dni: '',
         website: '',
-        observations: ''
+        observations: '',
+        professional_activity_id: '',
+        tags: []
       });
     }
   }, [contact, open]);
+
+  const handleAddTag = () => {
+    const tag = newTag.trim();
+    if (tag && !formData.tags.includes(tag)) {
+      setFormData({ ...formData, tags: [...formData.tags, tag] });
+      setNewTag('');
+    }
+  };
+
+  const handleRemoveTag = (tagToRemove: string) => {
+    setFormData({ ...formData, tags: formData.tags.filter(t => t !== tagToRemove) });
+  };
+
+  const handleAddNewActivity = async () => {
+    const name = newActivityName.trim();
+    if (!name) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('crm_professional_activities')
+        .insert({ name })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      setActivities([...activities, data].sort((a, b) => a.name.localeCompare(b.name)));
+      setFormData({ ...formData, professional_activity_id: data.id });
+      setNewActivityName('');
+      setShowNewActivity(false);
+      toast({ title: 'Actividad profesional creada' });
+    } catch (error: any) {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -85,25 +179,29 @@ export function ContactForm({ open, onOpenChange, contact, onSuccess }: ContactF
     setIsLoading(true);
 
     try {
+      const dataToSave = {
+        name: formData.name.trim(),
+        surname: formData.surname.trim() || null,
+        email: formData.email.trim() || null,
+        phone: formData.phone.trim() || null,
+        contact_type: formData.contact_type,
+        status: formData.status,
+        address: formData.address.trim() || null,
+        city: formData.city.trim() || null,
+        province: formData.province.trim() || null,
+        postal_code: formData.postal_code.trim() || null,
+        country: formData.country.trim() || null,
+        nif_dni: formData.nif_dni.trim() || null,
+        website: formData.website.trim() || null,
+        observations: formData.observations.trim() || null,
+        professional_activity_id: formData.professional_activity_id || null,
+        tags: formData.tags.length > 0 ? formData.tags : null
+      };
+
       if (contact) {
         const { error } = await supabase
           .from('crm_contacts')
-          .update({
-            name: formData.name.trim(),
-            surname: formData.surname.trim() || null,
-            email: formData.email.trim() || null,
-            phone: formData.phone.trim() || null,
-            contact_type: formData.contact_type,
-            status: formData.status,
-            address: formData.address.trim() || null,
-            city: formData.city.trim() || null,
-            province: formData.province.trim() || null,
-            postal_code: formData.postal_code.trim() || null,
-            country: formData.country.trim() || null,
-            nif_dni: formData.nif_dni.trim() || null,
-            website: formData.website.trim() || null,
-            observations: formData.observations.trim() || null
-          })
+          .update(dataToSave)
           .eq('id', contact.id);
 
         if (error) throw error;
@@ -111,22 +209,7 @@ export function ContactForm({ open, onOpenChange, contact, onSuccess }: ContactF
       } else {
         const { error } = await supabase
           .from('crm_contacts')
-          .insert({
-            name: formData.name.trim(),
-            surname: formData.surname.trim() || null,
-            email: formData.email.trim() || null,
-            phone: formData.phone.trim() || null,
-            contact_type: formData.contact_type,
-            status: formData.status,
-            address: formData.address.trim() || null,
-            city: formData.city.trim() || null,
-            province: formData.province.trim() || null,
-            postal_code: formData.postal_code.trim() || null,
-            country: formData.country.trim() || null,
-            nif_dni: formData.nif_dni.trim() || null,
-            website: formData.website.trim() || null,
-            observations: formData.observations.trim() || null
-          });
+          .insert(dataToSave);
 
         if (error) throw error;
         toast({ title: 'Contacto creado correctamente' });
@@ -197,6 +280,87 @@ export function ContactForm({ open, onOpenChange, contact, onSuccess }: ContactF
                 </SelectContent>
               </Select>
             </div>
+          </div>
+
+          {/* Professional Activity */}
+          <div className="space-y-2">
+            <Label>Actividad Profesional</Label>
+            {!showNewActivity ? (
+              <div className="flex gap-2">
+                <Select 
+                  value={formData.professional_activity_id || '__none__'} 
+                  onValueChange={(v) => setFormData({ ...formData, professional_activity_id: v === '__none__' ? '' : v })}
+                >
+                  <SelectTrigger className="flex-1">
+                    <SelectValue placeholder="Seleccionar actividad..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">Sin actividad</SelectItem>
+                    {activities.map(activity => (
+                      <SelectItem key={activity.id} value={activity.id}>
+                        {activity.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button type="button" variant="outline" size="icon" onClick={() => setShowNewActivity(true)}>
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </div>
+            ) : (
+              <div className="flex gap-2">
+                <Input
+                  value={newActivityName}
+                  onChange={(e) => setNewActivityName(e.target.value)}
+                  placeholder="Nueva actividad (ej: Arquitecto, Almacén...)"
+                  maxLength={100}
+                />
+                <Button type="button" variant="default" onClick={handleAddNewActivity}>
+                  Añadir
+                </Button>
+                <Button type="button" variant="outline" onClick={() => { setShowNewActivity(false); setNewActivityName(''); }}>
+                  Cancelar
+                </Button>
+              </div>
+            )}
+          </div>
+
+          {/* Tags */}
+          <div className="space-y-2">
+            <Label>Etiquetas</Label>
+            <div className="flex gap-2">
+              <Input
+                value={newTag}
+                onChange={(e) => setNewTag(e.target.value)}
+                placeholder="Nueva etiqueta..."
+                maxLength={50}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleAddTag();
+                  }
+                }}
+              />
+              <Button type="button" variant="outline" onClick={handleAddTag}>
+                <Plus className="h-4 w-4" />
+              </Button>
+            </div>
+            {formData.tags.length > 0 && (
+              <div className="flex flex-wrap gap-1 mt-2">
+                {formData.tags.map((tag, index) => (
+                  <Badge key={index} variant="secondary" className="gap-1">
+                    {tag}
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveTag(tag)}
+                      className="ml-1 hover:text-destructive"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </Badge>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-4">

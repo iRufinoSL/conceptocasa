@@ -1,0 +1,313 @@
+import { useState, useEffect } from 'react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Separator } from '@/components/ui/separator';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { 
+  Mail, Phone, MapPin, Globe, Building2, User, 
+  Calendar, FileText, Tag, Briefcase, ClipboardList
+} from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { format } from 'date-fns';
+import { es } from 'date-fns/locale';
+import type { Contact } from '@/pages/CRM';
+
+interface Management {
+  id: string;
+  title: string;
+  description: string | null;
+  management_type: string;
+  status: string;
+  target_date: string | null;
+  start_time: string | null;
+  end_time: string | null;
+  created_at: string;
+}
+
+interface ProfessionalActivity {
+  id: string;
+  name: string;
+}
+
+interface ContactDetailDialogProps {
+  contact: Contact | null;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}
+
+export function ContactDetailDialog({ contact, open, onOpenChange }: ContactDetailDialogProps) {
+  const [managements, setManagements] = useState<Management[]>([]);
+  const [activityName, setActivityName] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      if (!contact || !open) return;
+      
+      setLoading(true);
+      
+      // Fetch related managements
+      const { data: managementLinks } = await supabase
+        .from('crm_management_contacts')
+        .select('management_id')
+        .eq('contact_id', contact.id);
+      
+      if (managementLinks && managementLinks.length > 0) {
+        const managementIds = managementLinks.map(link => link.management_id);
+        const { data: managementsData } = await supabase
+          .from('crm_managements')
+          .select('*')
+          .in('id', managementIds)
+          .order('created_at', { ascending: false });
+        
+        if (managementsData) {
+          setManagements(managementsData);
+        }
+      } else {
+        setManagements([]);
+      }
+      
+      // Fetch professional activity name
+      if (contact.professional_activity_id) {
+        const { data: activity } = await supabase
+          .from('crm_professional_activities')
+          .select('name')
+          .eq('id', contact.professional_activity_id)
+          .single();
+        
+        if (activity) {
+          setActivityName(activity.name);
+        }
+      } else {
+        setActivityName(null);
+      }
+      
+      setLoading(false);
+    };
+    
+    fetchData();
+  }, [contact, open]);
+
+  if (!contact) return null;
+
+  const getInitials = (name: string, surname?: string | null) => {
+    const first = name.charAt(0).toUpperCase();
+    const second = surname ? surname.charAt(0).toUpperCase() : name.charAt(1)?.toUpperCase() || '';
+    return first + second;
+  };
+
+  const getStatusVariant = (status: string) => {
+    switch (status) {
+      case 'Cliente': return 'default';
+      case 'Prospecto': return 'secondary';
+      case 'Inactivo': return 'outline';
+      case 'Completada': return 'default';
+      case 'Pendiente': return 'secondary';
+      case 'Cancelada': return 'destructive';
+      default: return 'secondary';
+    }
+  };
+
+  const getManagementTypeIcon = (type: string) => {
+    switch (type) {
+      case 'Reunión': return '📅';
+      case 'Llamada': return '📞';
+      case 'Email': return '📧';
+      case 'Tarea': return '✓';
+      default: return '📋';
+    }
+  };
+
+  const InfoRow = ({ icon: Icon, label, value }: { icon: any; label: string; value: string | null | undefined }) => {
+    if (!value) return null;
+    return (
+      <div className="flex items-start gap-3 py-2">
+        <Icon className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+        <div className="min-w-0">
+          <p className="text-xs text-muted-foreground">{label}</p>
+          <p className="text-sm break-words">{value}</p>
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl max-h-[90vh] p-0 overflow-hidden">
+        <DialogHeader className="px-6 pt-6 pb-4 border-b bg-muted/30">
+          <div className="flex items-center gap-4">
+            <Avatar className="h-16 w-16">
+              <AvatarFallback className="bg-primary text-primary-foreground text-xl font-semibold">
+                {getInitials(contact.name, contact.surname)}
+              </AvatarFallback>
+            </Avatar>
+            <div className="flex-1 min-w-0">
+              <DialogTitle className="text-xl font-semibold">
+                {contact.name} {contact.surname}
+              </DialogTitle>
+              <div className="flex flex-wrap gap-2 mt-2">
+                <Badge variant={contact.contact_type === 'Empresa' ? 'default' : 'outline'}>
+                  {contact.contact_type}
+                </Badge>
+                <Badge variant={getStatusVariant(contact.status)}>
+                  {contact.status}
+                </Badge>
+                {activityName && (
+                  <Badge variant="outline" className="bg-primary/5">
+                    {activityName}
+                  </Badge>
+                )}
+              </div>
+            </div>
+          </div>
+        </DialogHeader>
+
+        <ScrollArea className="max-h-[calc(90vh-180px)]">
+          <div className="p-6 space-y-6">
+            {/* Contact Information */}
+            <div className="grid gap-6 md:grid-cols-2">
+              {/* Basic Info */}
+              <Card>
+                <CardHeader className="py-3">
+                  <CardTitle className="text-sm font-medium flex items-center gap-2">
+                    <User className="h-4 w-4" />
+                    Información de Contacto
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="py-0 pb-4">
+                  <InfoRow icon={Mail} label="Email" value={contact.email} />
+                  <InfoRow icon={Phone} label="Teléfono" value={contact.phone} />
+                  <InfoRow icon={Globe} label="Sitio Web" value={contact.website} />
+                  <InfoRow icon={FileText} label="NIF/DNI" value={contact.nif_dni} />
+                </CardContent>
+              </Card>
+
+              {/* Address Info */}
+              <Card>
+                <CardHeader className="py-3">
+                  <CardTitle className="text-sm font-medium flex items-center gap-2">
+                    <MapPin className="h-4 w-4" />
+                    Dirección
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="py-0 pb-4">
+                  <InfoRow icon={Building2} label="Dirección" value={contact.address} />
+                  <InfoRow icon={MapPin} label="Ciudad" value={contact.city} />
+                  <InfoRow icon={MapPin} label="Provincia" value={contact.province} />
+                  <InfoRow icon={MapPin} label="Código Postal" value={contact.postal_code} />
+                  <InfoRow icon={Globe} label="País" value={contact.country} />
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Tags */}
+            {contact.tags && contact.tags.length > 0 && (
+              <Card>
+                <CardHeader className="py-3">
+                  <CardTitle className="text-sm font-medium flex items-center gap-2">
+                    <Tag className="h-4 w-4" />
+                    Etiquetas
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="py-0 pb-4">
+                  <div className="flex flex-wrap gap-2">
+                    {contact.tags.map((tag, index) => (
+                      <Badge key={index} variant="secondary">
+                        {tag}
+                      </Badge>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Observations */}
+            {contact.observations && (
+              <Card>
+                <CardHeader className="py-3">
+                  <CardTitle className="text-sm font-medium flex items-center gap-2">
+                    <FileText className="h-4 w-4" />
+                    Observaciones
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="py-0 pb-4">
+                  <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+                    {contact.observations}
+                  </p>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Management History */}
+            <Card>
+              <CardHeader className="py-3">
+                <CardTitle className="text-sm font-medium flex items-center gap-2">
+                  <ClipboardList className="h-4 w-4" />
+                  Historial de Gestiones ({managements.length})
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="py-0 pb-4">
+                {loading ? (
+                  <p className="text-sm text-muted-foreground py-4 text-center">
+                    Cargando gestiones...
+                  </p>
+                ) : managements.length === 0 ? (
+                  <p className="text-sm text-muted-foreground py-4 text-center">
+                    No hay gestiones registradas para este contacto
+                  </p>
+                ) : (
+                  <div className="space-y-3">
+                    {managements.map((management) => (
+                      <div
+                        key={management.id}
+                        className="flex items-start gap-3 p-3 rounded-lg border bg-muted/30 hover:bg-muted/50 transition-colors"
+                      >
+                        <span className="text-lg mt-0.5">
+                          {getManagementTypeIcon(management.management_type)}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between gap-2">
+                            <h4 className="text-sm font-medium truncate">
+                              {management.title}
+                            </h4>
+                            <Badge variant={getStatusVariant(management.status)} className="text-xs shrink-0">
+                              {management.status}
+                            </Badge>
+                          </div>
+                          {management.description && (
+                            <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                              {management.description}
+                            </p>
+                          )}
+                          <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
+                            <span className="flex items-center gap-1">
+                              <Briefcase className="h-3 w-3" />
+                              {management.management_type}
+                            </span>
+                            {management.target_date && (
+                              <span className="flex items-center gap-1">
+                                <Calendar className="h-3 w-3" />
+                                {format(new Date(management.target_date), 'dd MMM yyyy', { locale: es })}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Creation Info */}
+            <div className="text-xs text-muted-foreground text-center pt-2 border-t">
+              Creado el {contact.created_at ? format(new Date(contact.created_at), 'dd MMMM yyyy', { locale: es }) : '-'}
+            </div>
+          </div>
+        </ScrollArea>
+      </DialogContent>
+    </Dialog>
+  );
+}

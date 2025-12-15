@@ -8,6 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Mail, Phone, MapPin, Users, MoreVertical, Pencil, Trash2, LayoutGrid, List, FolderOpen, ChevronRight } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { ContactDetailDialog } from './ContactDetailDialog';
 import type { Contact } from '@/pages/CRM';
 
 type ViewMode = 'cards' | 'list' | 'grouped';
@@ -25,6 +26,8 @@ interface ContactsTabProps {
 }
 
 export function ContactsTab({ contacts, searchTerm, onEdit, onDelete }: ContactsTabProps) {
+  const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
     return (localStorage.getItem('crm-contacts-view') as ViewMode) || 'cards';
   });
@@ -177,6 +180,13 @@ export function ContactsTab({ contacts, searchTerm, onEdit, onDelete }: Contacts
         </Button>
       </div>
 
+      {/* Contact Detail Dialog */}
+      <ContactDetailDialog
+        contact={selectedContact}
+        open={detailOpen}
+        onOpenChange={setDetailOpen}
+      />
+
       {/* Cards View */}
       {viewMode === 'cards' && (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -186,6 +196,10 @@ export function ContactsTab({ contacts, searchTerm, onEdit, onDelete }: Contacts
               contact={contact}
               onEdit={onEdit}
               onDelete={onDelete}
+              onViewDetail={(c) => {
+                setSelectedContact(c);
+                setDetailOpen(true);
+              }}
               getInitials={getInitials}
               getTypeVariant={getTypeVariant}
               getStatusVariant={getStatusVariant}
@@ -376,6 +390,7 @@ function ContactCard({
   contact,
   onEdit,
   onDelete,
+  onViewDetail,
   getInitials,
   getTypeVariant,
   getStatusVariant,
@@ -384,6 +399,7 @@ function ContactCard({
   contact: Contact;
   onEdit: (contact: Contact) => void;
   onDelete: (contact: Contact) => void;
+  onViewDetail: (contact: Contact) => void;
   getInitials: (name: string, surname?: string | null) => string;
   getTypeVariant: (type: string) => "default" | "outline";
   getStatusVariant: (status: string) => "default" | "secondary" | "outline";
@@ -392,7 +408,10 @@ function ContactCard({
   const activityName = getActivityName(contact.professional_activity_id);
 
   return (
-    <Card className="group hover:shadow-lg hover:border-primary/50 transition-all duration-200">
+    <Card 
+      className="group hover:shadow-lg hover:border-primary/50 transition-all duration-200 cursor-pointer"
+      onClick={() => onViewDetail(contact)}
+    >
       <CardHeader className="pb-3">
         <div className="flex items-start gap-3">
           <Avatar className="h-12 w-12">
@@ -407,16 +426,21 @@ function ContactCard({
               </CardTitle>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
+                    onClick={(e) => e.stopPropagation()}
+                  >
                     <MoreVertical className="h-4 w-4" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={() => onEdit(contact)}>
+                  <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onEdit(contact); }}>
                     <Pencil className="h-4 w-4 mr-2" />
                     Editar
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => onDelete(contact)} className="text-destructive">
+                  <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onDelete(contact); }} className="text-destructive">
                     <Trash2 className="h-4 w-4 mr-2" />
                     Eliminar
                   </DropdownMenuItem>

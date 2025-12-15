@@ -8,7 +8,8 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Pencil, Trash2, Upload, X, Maximize2, FileImage, FileText } from 'lucide-react';
+import { Plus, Pencil, Trash2, Upload, X, Maximize2, FileImage, FileText, LayoutGrid, Layers, ChevronDown, ChevronRight } from 'lucide-react';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 
 interface BudgetPredesign {
@@ -37,6 +38,8 @@ const DEFAULT_CONTENT_TYPES = [
   'Otro'
 ];
 
+type ViewMode = 'alphabetical' | 'grouped';
+
 export function BudgetPredesignTab({ budgetId, isAdmin }: BudgetPredesignTabProps) {
   const { toast } = useToast();
   const [predesigns, setPredesigns] = useState<BudgetPredesign[]>([]);
@@ -47,6 +50,10 @@ export function BudgetPredesignTab({ budgetId, isAdmin }: BudgetPredesignTabProp
   const [itemToDelete, setItemToDelete] = useState<BudgetPredesign | null>(null);
   const [fullscreenImage, setFullscreenImage] = useState<string | null>(null);
   const [customContentTypes, setCustomContentTypes] = useState<string[]>([]);
+  const [viewMode, setViewMode] = useState<ViewMode>(() => {
+    return (localStorage.getItem('predesign-view-mode') as ViewMode) || 'alphabetical';
+  });
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
 
   // Form state
   const [formData, setFormData] = useState({
@@ -57,6 +64,51 @@ export function BudgetPredesignTab({ budgetId, isAdmin }: BudgetPredesignTabProp
   });
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+
+  // Toggle view mode and save preference
+  const handleViewModeChange = (mode: ViewMode) => {
+    setViewMode(mode);
+    localStorage.setItem('predesign-view-mode', mode);
+  };
+
+  // Toggle group expansion
+  const toggleGroup = (groupName: string) => {
+    setExpandedGroups(prev => ({
+      ...prev,
+      [groupName]: !prev[groupName]
+    }));
+  };
+
+  // Get sorted predesigns for alphabetical view
+  const getSortedPredesigns = () => {
+    return [...predesigns].sort((a, b) => a.content.localeCompare(b.content, 'es'));
+  };
+
+  // Get grouped predesigns by content type
+  const getGroupedPredesigns = () => {
+    const groups: Record<string, BudgetPredesign[]> = {};
+    
+    predesigns.forEach(item => {
+      const type = item.content_type || 'Sin tipo';
+      if (!groups[type]) {
+        groups[type] = [];
+      }
+      groups[type].push(item);
+    });
+
+    // Sort items within each group alphabetically
+    Object.keys(groups).forEach(key => {
+      groups[key].sort((a, b) => a.content.localeCompare(b.content, 'es'));
+    });
+
+    // Sort groups alphabetically by type name
+    const sortedGroups: Record<string, BudgetPredesign[]> = {};
+    Object.keys(groups).sort((a, b) => a.localeCompare(b, 'es')).forEach(key => {
+      sortedGroups[key] = groups[key];
+    });
+
+    return sortedGroups;
+  };
 
   const fetchPredesigns = async () => {
     try {
@@ -266,21 +318,117 @@ export function BudgetPredesignTab({ budgetId, isAdmin }: BudgetPredesignTabProp
     );
   }
 
+  // Render a single predesign card
+  const renderPredesignCard = (item: BudgetPredesign) => (
+    <Card key={item.id} className="overflow-hidden group">
+      {item.file_path && (
+        <div className="relative aspect-video bg-muted">
+          {isImageFile(item.file_type) ? (
+            <>
+              <img
+                src={getFileUrl(item.file_path)}
+                alt={item.content}
+                className="w-full h-full object-cover"
+              />
+              <Button
+                variant="secondary"
+                size="icon"
+                className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                onClick={() => setFullscreenImage(getFileUrl(item.file_path!))}
+              >
+                <Maximize2 className="h-4 w-4" />
+              </Button>
+            </>
+          ) : isPdfFile(item.file_type) ? (
+            <div 
+              className="w-full h-full flex items-center justify-center cursor-pointer hover:bg-muted/80 transition-colors"
+              onClick={() => window.open(getFileUrl(item.file_path!), '_blank')}
+            >
+              <div className="text-center">
+                <FileText className="h-12 w-12 mx-auto text-muted-foreground mb-2" />
+                <p className="text-sm text-muted-foreground">{item.file_name}</p>
+                <p className="text-xs text-muted-foreground mt-1">Clic para abrir PDF</p>
+              </div>
+            </div>
+          ) : (
+            <div className="w-full h-full flex items-center justify-center">
+              <FileText className="h-12 w-12 text-muted-foreground" />
+            </div>
+          )}
+        </div>
+      )}
+      <CardHeader className="pb-2">
+        <div className="flex items-start justify-between">
+          <div className="flex-1 min-w-0">
+            {viewMode === 'alphabetical' && (
+              <span className="inline-block px-2 py-0.5 text-xs rounded-full bg-primary/10 text-primary mb-2">
+                {item.content_type}
+              </span>
+            )}
+            <CardTitle className="text-base truncate">{item.content}</CardTitle>
+            {item.description && (
+              <CardDescription className="line-clamp-2 mt-1">
+                {item.description}
+              </CardDescription>
+            )}
+          </div>
+        </div>
+      </CardHeader>
+      {isAdmin && (
+        <CardContent className="pt-0">
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={() => handleEdit(item)}>
+              <Pencil className="h-3 w-3 mr-1" />
+              Editar
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => handleDeleteClick(item)}>
+              <Trash2 className="h-3 w-3 mr-1" />
+              Eliminar
+            </Button>
+          </div>
+        </CardContent>
+      )}
+    </Card>
+  );
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
           <h3 className="text-lg font-semibold">Ante-proyecto</h3>
           <p className="text-sm text-muted-foreground">
             Referencias catastrales, planos, alzados, perspectivas y otros documentos visuales
           </p>
         </div>
-        {isAdmin && (
-          <Button onClick={handleNew}>
-            <Plus className="h-4 w-4 mr-2" />
-            Nuevo Elemento
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          {/* View mode toggle */}
+          <div className="flex items-center border rounded-lg p-1 bg-muted/30">
+            <Button
+              variant={viewMode === 'alphabetical' ? 'secondary' : 'ghost'}
+              size="sm"
+              onClick={() => handleViewModeChange('alphabetical')}
+              className="gap-1"
+            >
+              <LayoutGrid className="h-4 w-4" />
+              Alfabético
+            </Button>
+            <Button
+              variant={viewMode === 'grouped' ? 'secondary' : 'ghost'}
+              size="sm"
+              onClick={() => handleViewModeChange('grouped')}
+              className="gap-1"
+            >
+              <Layers className="h-4 w-4" />
+              Por Tipo
+            </Button>
+          </div>
+          {isAdmin && (
+            <Button onClick={handleNew}>
+              <Plus className="h-4 w-4 mr-2" />
+              Nuevo Elemento
+            </Button>
+          )}
+        </div>
       </div>
 
       {predesigns.length === 0 ? (
@@ -296,79 +444,49 @@ export function BudgetPredesignTab({ budgetId, isAdmin }: BudgetPredesignTabProp
             )}
           </CardContent>
         </Card>
-      ) : (
+      ) : viewMode === 'alphabetical' ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {predesigns.map((item) => (
-            <Card key={item.id} className="overflow-hidden group">
-              {item.file_path && (
-                <div className="relative aspect-video bg-muted">
-                  {isImageFile(item.file_type) ? (
-                    <>
-                      <img
-                        src={getFileUrl(item.file_path)}
-                        alt={item.content}
-                        className="w-full h-full object-cover"
-                      />
-                      <Button
-                        variant="secondary"
-                        size="icon"
-                        className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
-                        onClick={() => setFullscreenImage(getFileUrl(item.file_path!))}
-                      >
-                        <Maximize2 className="h-4 w-4" />
-                      </Button>
-                    </>
-                  ) : isPdfFile(item.file_type) ? (
-                    <div 
-                      className="w-full h-full flex items-center justify-center cursor-pointer hover:bg-muted/80 transition-colors"
-                      onClick={() => window.open(getFileUrl(item.file_path!), '_blank')}
-                    >
-                      <div className="text-center">
-                        <FileText className="h-12 w-12 mx-auto text-muted-foreground mb-2" />
-                        <p className="text-sm text-muted-foreground">{item.file_name}</p>
-                        <p className="text-xs text-muted-foreground mt-1">Clic para abrir PDF</p>
+          {getSortedPredesigns().map(renderPredesignCard)}
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {Object.entries(getGroupedPredesigns()).map(([contentType, items]) => (
+            <Collapsible
+              key={contentType}
+              open={expandedGroups[contentType] !== false}
+              onOpenChange={() => toggleGroup(contentType)}
+            >
+              <Card>
+                <CollapsibleTrigger asChild>
+                  <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        {expandedGroups[contentType] !== false ? (
+                          <ChevronDown className="h-5 w-5 text-muted-foreground" />
+                        ) : (
+                          <ChevronRight className="h-5 w-5 text-muted-foreground" />
+                        )}
+                        <CardTitle className="text-base">{contentType}</CardTitle>
+                        <span className="text-sm text-muted-foreground">
+                          ({items.length} {items.length === 1 ? 'elemento' : 'elementos'})
+                        </span>
                       </div>
                     </div>
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center">
-                      <FileText className="h-12 w-12 text-muted-foreground" />
+                  </CardHeader>
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  <CardContent className="pt-0">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {items.map(renderPredesignCard)}
                     </div>
-                  )}
-                </div>
-              )}
-              <CardHeader className="pb-2">
-                <div className="flex items-start justify-between">
-                  <div className="flex-1 min-w-0">
-                    <span className="inline-block px-2 py-0.5 text-xs rounded-full bg-primary/10 text-primary mb-2">
-                      {item.content_type}
-                    </span>
-                    <CardTitle className="text-base truncate">{item.content}</CardTitle>
-                    {item.description && (
-                      <CardDescription className="line-clamp-2 mt-1">
-                        {item.description}
-                      </CardDescription>
-                    )}
-                  </div>
-                </div>
-              </CardHeader>
-              {isAdmin && (
-                <CardContent className="pt-0">
-                  <div className="flex gap-2">
-                    <Button variant="outline" size="sm" onClick={() => handleEdit(item)}>
-                      <Pencil className="h-3 w-3 mr-1" />
-                      Editar
-                    </Button>
-                    <Button variant="outline" size="sm" onClick={() => handleDeleteClick(item)}>
-                      <Trash2 className="h-3 w-3 mr-1" />
-                      Eliminar
-                    </Button>
-                  </div>
-                </CardContent>
-              )}
-            </Card>
+                  </CardContent>
+                </CollapsibleContent>
+              </Card>
+            </Collapsible>
           ))}
         </div>
-      )}
+      )
+      }
 
       {/* Form Dialog */}
       <Dialog open={formOpen} onOpenChange={setFormOpen}>

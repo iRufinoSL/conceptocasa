@@ -5,7 +5,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowLeft, Calculator, ClipboardList, Building2, FileText, Settings, Calendar, Ruler, FileDown, Image } from 'lucide-react';
+import { ArrowLeft, Calculator, ClipboardList, Building2, FileText, Settings, Calendar, Ruler, FileDown, Image, RefreshCw } from 'lucide-react';
 import { AppNavDropdown } from '@/components/AppNavDropdown';
 import { BudgetActivitiesTab } from '@/components/presupuestos/BudgetActivitiesTab';
 import { BudgetPhasesTab } from '@/components/presupuestos/BudgetPhasesTab';
@@ -15,6 +15,8 @@ import { BudgetVisualSummary } from '@/components/presupuestos/BudgetVisualSumma
 import { BudgetVersionComparison } from '@/components/presupuestos/BudgetVersionComparison';
 import { BudgetReportPreview } from '@/components/presupuestos/BudgetReportPreview';
 import { BudgetPredesignTab } from '@/components/presupuestos/BudgetPredesignTab';
+import { recalculateAllBudgetResources } from '@/lib/budget-utils';
+import { toast } from 'sonner';
 
 interface Presupuesto {
   id: string;
@@ -42,8 +44,30 @@ export default function PresupuestoDashboard() {
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('anteproyecto');
   const [reportPreviewOpen, setReportPreviewOpen] = useState(false);
+  const [isRecalculating, setIsRecalculating] = useState(false);
 
   const isAdmin = roles.includes('administrador');
+
+  const handleRecalculateAll = async () => {
+    if (!id) return;
+    
+    setIsRecalculating(true);
+    try {
+      const result = await recalculateAllBudgetResources(id);
+      if (result.errors === 0) {
+        toast.success(`Recálculo completado: ${result.updated} actividades actualizadas`);
+      } else {
+        toast.warning(`Recálculo con errores: ${result.updated} actualizadas, ${result.errors} errores`);
+      }
+      // Dispatch event to refresh data in all tabs
+      window.dispatchEvent(new CustomEvent('budget-recalculated'));
+    } catch (err) {
+      console.error('Error recalculating:', err);
+      toast.error('Error al recalcular');
+    } finally {
+      setIsRecalculating(false);
+    }
+  };
 
   // Listen for edit-activity events to switch to activities tab
   useEffect(() => {
@@ -280,8 +304,26 @@ export default function PresupuestoDashboard() {
                   <CardTitle>Configuración del Presupuesto</CardTitle>
                   <CardDescription>Ajustes y parámetros del presupuesto</CardDescription>
                 </CardHeader>
-                <CardContent>
-                  <p className="text-muted-foreground text-center py-8">Próximamente</p>
+                <CardContent className="space-y-6">
+                  {isAdmin && (
+                    <div className="flex items-center justify-between p-4 border rounded-lg bg-muted/30">
+                      <div>
+                        <h4 className="font-medium">Recalcular Unidades Relacionadas</h4>
+                        <p className="text-sm text-muted-foreground">
+                          Actualiza las Uds relacionadas de todos los recursos basándose en las mediciones y el flag "Usa Medición" de cada actividad.
+                        </p>
+                      </div>
+                      <Button 
+                        onClick={handleRecalculateAll} 
+                        disabled={isRecalculating}
+                        className="flex items-center gap-2"
+                      >
+                        <RefreshCw className={`h-4 w-4 ${isRecalculating ? 'animate-spin' : ''}`} />
+                        {isRecalculating ? 'Recalculando...' : 'Recalcular Todo'}
+                      </Button>
+                    </div>
+                  )}
+                  <p className="text-muted-foreground text-center py-4">Más opciones próximamente</p>
                 </CardContent>
               </Card>
             </div>

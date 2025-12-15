@@ -207,7 +207,6 @@ export default function Documentos() {
 
     setUploading(true);
     try {
-      const fileExt = selectedFile.name.split('.').pop();
       const folderPath = uploadProjectId || 'general';
       const fileName = `${folderPath}/${Date.now()}-${selectedFile.name}`;
 
@@ -215,7 +214,15 @@ export default function Documentos() {
         .from('project-documents')
         .upload(fileName, selectedFile);
 
-      if (uploadError) throw uploadError;
+      if (uploadError) {
+        console.error('Storage upload error:', uploadError);
+        if (uploadError.message?.includes('row-level security') || uploadError.message?.includes('policy')) {
+          toast.error('No tienes permisos para subir documentos');
+        } else {
+          toast.error(`Error de almacenamiento: ${uploadError.message}`);
+        }
+        return;
+      }
 
       const { error: dbError } = await supabase.from('project_documents').insert({
         project_id: uploadProjectId || null,
@@ -228,15 +235,21 @@ export default function Documentos() {
         uploaded_by: user?.id,
       });
 
-      if (dbError) throw dbError;
+      if (dbError) {
+        console.error('Database insert error:', dbError);
+        // Clean up uploaded file
+        await supabase.storage.from('project-documents').remove([fileName]);
+        toast.error(`Error de base de datos: ${dbError.message}`);
+        return;
+      }
 
       toast.success('Documento subido correctamente');
       setUploadDialogOpen(false);
       resetUploadForm();
       fetchDocuments();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error uploading document:', error);
-      toast.error('Error al subir el documento');
+      toast.error(error?.message || 'Error al subir el documento');
     } finally {
       setUploading(false);
     }

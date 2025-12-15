@@ -198,6 +198,11 @@ export function BudgetResourceForm({
 
     setLoading(true);
     try {
+      // Ensure activity_id is a valid UUID or null (not empty string or "null")
+      const activityId = formData.activity_id && formData.activity_id !== '' && formData.activity_id !== 'null' 
+        ? formData.activity_id 
+        : null;
+      
       const data = {
         budget_id: budgetId,
         name: formData.name.trim(),
@@ -208,7 +213,7 @@ export function BudgetResourceForm({
         sales_margin_percent: formData.sales_margin_percent,
         manual_units: formData.manual_units,
         related_units: formData.related_units,
-        activity_id: formData.activity_id || null,
+        activity_id: activityId,
       };
 
       if (resource) {

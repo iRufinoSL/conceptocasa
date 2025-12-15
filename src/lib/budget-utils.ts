@@ -7,16 +7,22 @@ import { supabase } from '@/integrations/supabase/client';
  */
 export async function getActivityMeasurementUnits(activityId: string): Promise<number | null> {
   try {
-    // Get activity with its measurement_id
+    // Get activity with its measurement_id and uses_measurement flag
     const { data: activity, error: actError } = await supabase
       .from('budget_activities')
-      .select('measurement_id')
+      .select('measurement_id, uses_measurement')
       .eq('id', activityId)
       .single();
     
     if (actError || !activity?.measurement_id) {
       console.log('No measurement linked to activity:', activityId);
       return null;
+    }
+    
+    // If uses_measurement is false, return 0
+    if (activity.uses_measurement === false) {
+      console.log('Activity has uses_measurement=false, returning 0');
+      return 0;
     }
     
     // Get the measurement

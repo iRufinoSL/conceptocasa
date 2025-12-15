@@ -1366,9 +1366,33 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin }: BudgetAct
                   <TableRow key={activity.id}>
                     <TableCell className="font-mono text-sm">{generateActivityId(activity)}</TableCell>
                     <TableCell className="text-center">
-                      <Badge variant={activity.uses_measurement ? 'default' : 'secondary'} className="text-xs">
-                        {activity.uses_measurement ? 'Sí' : 'No'}
-                      </Badge>
+                      {isAdmin ? (
+                        <button
+                          onClick={async () => {
+                            const newValue = !activity.uses_measurement;
+                            try {
+                              const { error } = await supabase
+                                .from('budget_activities')
+                                .update({ uses_measurement: newValue })
+                                .eq('id', activity.id);
+                              if (error) throw error;
+                              fetchData();
+                              toast.success(`Usa Medición: ${newValue ? 'Sí' : 'No'}`);
+                            } catch (err: any) {
+                              toast.error('Error al actualizar');
+                            }
+                          }}
+                          className="cursor-pointer hover:opacity-80 transition-opacity"
+                        >
+                          <Badge variant={activity.uses_measurement ? 'default' : 'secondary'} className="text-xs">
+                            {activity.uses_measurement ? 'Sí' : 'No'}
+                          </Badge>
+                        </button>
+                      ) : (
+                        <Badge variant={activity.uses_measurement ? 'default' : 'secondary'} className="text-xs">
+                          {activity.uses_measurement ? 'Sí' : 'No'}
+                        </Badge>
+                      )}
                     </TableCell>
                     <TableCell className="font-medium">{activity.name}</TableCell>
                     <TableCell className="text-muted-foreground">
@@ -1816,6 +1840,18 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin }: BudgetAct
                   </SelectContent>
                 </Select>
               </div>
+            </div>
+
+            <div className="flex items-center justify-between py-2 px-3 border rounded-lg bg-muted/30">
+              <div className="space-y-0.5">
+                <Label htmlFor="uses_measurement" className="text-sm font-medium">Usa Medición</Label>
+                <p className="text-xs text-muted-foreground">Si NO, las Uds relacionadas serán 0,00</p>
+              </div>
+              <Switch
+                id="uses_measurement"
+                checked={form.uses_measurement}
+                onCheckedChange={(checked) => setForm({ ...form, uses_measurement: checked })}
+              />
             </div>
 
             <div className="space-y-2">

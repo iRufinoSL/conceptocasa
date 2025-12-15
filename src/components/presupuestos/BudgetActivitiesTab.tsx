@@ -210,19 +210,29 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin }: BudgetAct
   }, []);
 
   // Calculate resource subtotal for an activity (with live measurement data)
-  const calculateResourceSubtotal = (resources: any[], activityMeasurementId?: string | null) => {
+  // Uses passed-in measurements data to avoid stale state issues
+  const calculateResourceSubtotal = (
+    resources: any[], 
+    activityMeasurementId?: string | null,
+    measurementsList?: Measurement[],
+    relationsList?: MeasurementRelation[]
+  ) => {
+    // Use passed-in data or fall back to state
+    const measurementsData = measurementsList || measurements;
+    const relationsData = relationsList || measurementRelations;
+    
     // Calculate live related units from measurement if available
     let liveRelatedUnits = 0;
     if (activityMeasurementId) {
-      const measurement = measurements.find(m => m.id === activityMeasurementId);
+      const measurement = measurementsData.find(m => m.id === activityMeasurementId);
       if (measurement) {
-        const relatedMeasurementIds = measurementRelations
+        const relatedMeasurementIds = relationsData
           .filter(r => r.measurement_id === measurement.id)
           .map(r => r.related_measurement_id);
         
         if (relatedMeasurementIds.length > 0) {
           liveRelatedUnits = relatedMeasurementIds.reduce((sum, relId) => {
-            const relMeasurement = measurements.find(m => m.id === relId);
+            const relMeasurement = measurementsData.find(m => m.id === relId);
             return sum + (relMeasurement?.manual_units || 0);
           }, 0);
         } else {
@@ -285,8 +295,16 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin }: BudgetAct
       if (measurementRelationsRes.error) throw measurementRelationsRes.error;
 
       const allResources = resourcesRes.data || [];
+      
+      // Prepare measurements data FIRST so we can use it in subtotal calculations
+      const measurementsList = measurementsRes.data || [];
+      const measurementIds = measurementsList.map(m => m.id);
+      const filteredRelations = (measurementRelationsRes.data || []).filter(
+        r => measurementIds.includes(r.measurement_id)
+      );
 
       // Get file counts and resource subtotals for each activity
+      // Pass fresh measurement data to avoid stale state issues
       const activitiesWithData = await Promise.all(
         (activitiesRes.data || []).map(async (activity) => {
           const { count } = await supabase
@@ -294,9 +312,14 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin }: BudgetAct
             .select('*', { count: 'exact', head: true })
             .eq('activity_id', activity.id);
           
-          // Calculate resources subtotal (use activity's measurement_id for live calculation)
+          // Calculate resources subtotal using fresh measurement data
           const activityResources = allResources.filter(r => r.activity_id === activity.id);
-          const resourcesSubtotal = calculateResourceSubtotal(activityResources, activity.measurement_id);
+          const resourcesSubtotal = calculateResourceSubtotal(
+            activityResources, 
+            activity.measurement_id,
+            measurementsList,
+            filteredRelations
+          );
           
           return { 
             ...activity, 
@@ -308,14 +331,7 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin }: BudgetAct
 
       setActivities(activitiesWithData);
       setPhases(phasesRes.data || []);
-      
-      // Set measurements and filter relations to this budget
-      const measurementsList = measurementsRes.data || [];
       setMeasurements(measurementsList);
-      const measurementIds = measurementsList.map(m => m.id);
-      const filteredRelations = (measurementRelationsRes.data || []).filter(
-        r => measurementIds.includes(r.measurement_id)
-      );
       setMeasurementRelations(filteredRelations);
     } catch (err: any) {
       console.error('Error fetching data:', err);
@@ -577,8 +593,8 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin }: BudgetAct
         code: form.code.trim(),
         description: form.description.trim() || null,
         measurement_unit: form.measurement_unit,
-        phase_id: form.phase_id || null,
-        measurement_id: form.measurement_id || null
+        phase_id: form.phase_id && form.phase_id !== '' && form.phase_id !== 'null' ? form.phase_id : null,
+        measurement_id: form.measurement_id && form.measurement_id !== '' && form.measurement_id !== 'null' ? form.measurement_id : null
       };
 
       if (editingActivity) {

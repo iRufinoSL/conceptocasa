@@ -72,6 +72,32 @@ const documentTypeLabels: Record<string, string> = {
   otro: 'Otro',
 };
 
+const toSafeStorageKey = (input: string) => {
+  const normalized = input
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+
+  const safe = normalized
+    .replace(/[^a-zA-Z0-9._-]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-+|-+$/g, '');
+
+  return safe || 'archivo';
+};
+
+const buildDocumentStoragePath = (folder: string, originalName: string) => {
+  const lastDot = originalName.lastIndexOf('.');
+  const ext = lastDot > -1 ? originalName.slice(lastDot + 1) : '';
+  const base = lastDot > -1 ? originalName.slice(0, lastDot) : originalName;
+
+  const safeFolder = (toSafeStorageKey(folder) || 'general').slice(0, 64);
+  const safeBase = toSafeStorageKey(base).slice(0, 120);
+  const safeExt = toSafeStorageKey(ext).slice(0, 10);
+
+  const safeFile = `${Date.now()}-${safeBase}${safeExt ? `.${safeExt}` : ''}`;
+  return `${safeFolder}/${safeFile}`;
+};
+
 export default function Documentos() {
   const navigate = useNavigate();
   const { user, loading, isAdmin } = useAuth();
@@ -207,8 +233,7 @@ export default function Documentos() {
 
     setUploading(true);
     try {
-      const folderPath = uploadProjectId || 'general';
-      const fileName = `${folderPath}/${Date.now()}-${selectedFile.name}`;
+      const fileName = buildDocumentStoragePath(uploadProjectId || 'general', selectedFile.name);
 
       const { error: uploadError } = await supabase.storage
         .from('project-documents')

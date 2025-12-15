@@ -229,9 +229,10 @@ export function BudgetResourceForm({
       }
 
       onSave();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error saving resource:', error);
-      toast.error('Error al guardar el recurso');
+      const errorMessage = error?.message || error?.details || 'Error desconocido';
+      toast.error(`Error al guardar el recurso: ${errorMessage}`);
     } finally {
       setLoading(false);
     }

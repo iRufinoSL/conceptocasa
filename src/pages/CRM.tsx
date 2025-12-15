@@ -27,6 +27,14 @@ export interface Contact {
   city: string | null;
   tags: string[] | null;
   professional_activity_id: string | null;
+  address: string | null;
+  postal_code: string | null;
+  province: string | null;
+  country: string | null;
+  website: string | null;
+  nif_dni: string | null;
+  observations: string | null;
+  created_at: string | null;
 }
 
 export interface Management {

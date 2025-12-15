@@ -302,6 +302,15 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
     return () => window.removeEventListener('navigate-to-resources', handleNavigateToResources);
   }, [resources]);
 
+  // Listen for budget recalculation events
+  useEffect(() => {
+    const handleRecalculated = () => {
+      fetchData();
+    };
+    window.addEventListener('budget-recalculated', handleRecalculated);
+    return () => window.removeEventListener('budget-recalculated', handleRecalculated);
+  }, []);
+
   // Get ActivityID for display
   const getActivityId = (activityId: string | null) => {
     if (!activityId) return '';

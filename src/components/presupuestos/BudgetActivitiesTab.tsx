@@ -395,6 +395,15 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin }: BudgetAct
     return () => window.removeEventListener('edit-activity', handleEditActivity);
   }, [activities]);
 
+  // Listen for budget recalculation events
+  useEffect(() => {
+    const handleRecalculated = () => {
+      fetchData();
+    };
+    window.addEventListener('budget-recalculated', handleRecalculated);
+    return () => window.removeEventListener('budget-recalculated', handleRecalculated);
+  }, []);
+
   // Open form for new activity
   const handleNew = () => {
     setEditingActivity(null);

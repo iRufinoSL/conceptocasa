@@ -171,3 +171,126 @@ export async function syncAllAffectedResources(changedMeasurementId: string): Pr
     console.error('Error syncing all affected resources:', error);
   }
 }
+
+/**
+ * Recalculate all related_units for all resources in a budget.
+ * This should be used to sync all resources when:
+ * - An activity's uses_measurement flag changes
+ * - Bulk data needs to be recalculated
+ * 
+ * Returns the number of resources updated.
+ */
+export async function recalculateAllBudgetResources(budgetId: string): Promise<{ updated: number; errors: number }> {
+  let updated = 0;
+  let errors = 0;
+  
+  try {
+    // Get all activities for this budget
+    const { data: activities, error: actError } = await supabase
+      .from('budget_activities')
+      .select('id, measurement_id, uses_measurement')
+      .eq('budget_id', budgetId);
+    
+    if (actError || !activities) {
+      console.error('Error fetching activities:', actError);
+      return { updated: 0, errors: 1 };
+    }
+    
+    // Get all measurements for this budget
+    const { data: measurements, error: measError } = await supabase
+      .from('budget_measurements')
+      .select('id, manual_units')
+      .eq('budget_id', budgetId);
+    
+    if (measError) {
+      console.error('Error fetching measurements:', measError);
+    }
+    
+    const measurementMap = new Map(measurements?.map(m => [m.id, m.manual_units || 0]) || []);
+    
+    // Get all measurement relations for this budget
+    const { data: relations, error: relError } = await supabase
+      .from('budget_measurement_relations')
+      .select('measurement_id, related_measurement_id');
+    
+    if (relError) {
+      console.error('Error fetching relations:', relError);
+    }
+    
+    // Build a map of measurement_id -> sum of related measurements' units
+    const relatedUnitsMap = new Map<string, number>();
+    
+    if (relations) {
+      // Group relations by measurement_id
+      const relationsByMeasurement = new Map<string, string[]>();
+      for (const rel of relations) {
+        const existing = relationsByMeasurement.get(rel.measurement_id) || [];
+        existing.push(rel.related_measurement_id);
+        relationsByMeasurement.set(rel.measurement_id, existing);
+      }
+      
+      // Calculate sum of related units for each measurement
+      for (const [measId, relatedIds] of relationsByMeasurement) {
+        const sum = relatedIds.reduce((total, relId) => total + (measurementMap.get(relId) || 0), 0);
+        relatedUnitsMap.set(measId, sum);
+      }
+    }
+    
+    // Calculate related_units for each activity
+    const activityUnitsMap = new Map<string, number>();
+    
+    for (const activity of activities) {
+      if (!activity.uses_measurement) {
+        // If uses_measurement is false, related_units should be 0
+        activityUnitsMap.set(activity.id, 0);
+      } else if (activity.measurement_id) {
+        // Check if measurement has relations
+        const relatedSum = relatedUnitsMap.get(activity.measurement_id);
+        if (relatedSum !== undefined) {
+          activityUnitsMap.set(activity.id, relatedSum);
+        } else {
+          // Use measurement's own manual_units
+          activityUnitsMap.set(activity.id, measurementMap.get(activity.measurement_id) || 0);
+        }
+      } else {
+        // No measurement linked, related_units should be null/0
+        activityUnitsMap.set(activity.id, 0);
+      }
+    }
+    
+    // Update resources for each activity
+    for (const [activityId, relatedUnits] of activityUnitsMap) {
+      const { error: updateError, count } = await supabase
+        .from('budget_activity_resources')
+        .update({ related_units: relatedUnits })
+        .eq('activity_id', activityId)
+        .select('id');
+      
+      if (updateError) {
+        console.error(`Error updating resources for activity ${activityId}:`, updateError);
+        errors++;
+      } else {
+        // Count isn't directly available, but we track success
+        updated++;
+      }
+    }
+    
+    // Also update resources without activity (set related_units to null)
+    const { error: noActError } = await supabase
+      .from('budget_activity_resources')
+      .update({ related_units: null })
+      .eq('budget_id', budgetId)
+      .is('activity_id', null);
+    
+    if (noActError) {
+      console.error('Error updating resources without activity:', noActError);
+      errors++;
+    }
+    
+    console.log(`Recalculated resources for ${updated} activities in budget ${budgetId}`);
+    return { updated, errors };
+  } catch (error) {
+    console.error('Error recalculating budget resources:', error);
+    return { updated, errors: errors + 1 };
+  }
+}

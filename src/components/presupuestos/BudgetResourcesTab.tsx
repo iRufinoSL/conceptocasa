@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Plus, Search, Pencil, Trash2, Package, Wrench, Truck, Briefcase, FileSpreadsheet, Check, List, FolderTree, FileDown } from 'lucide-react';
+import { Plus, Search, Pencil, Trash2, Package, Wrench, Truck, Briefcase, FileSpreadsheet, Check, List, FolderTree, FileDown, FileText } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatCurrency, formatNumber, formatPercent } from '@/lib/format-utils';
 import { getActivityMeasurementUnits } from '@/lib/budget-utils';
@@ -17,6 +17,7 @@ import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import { NumericInput } from '@/components/ui/numeric-input';
 import { ResourceInlineEdit } from './ResourceInlineEdit';
 import { ResourcesGroupedView } from './ResourcesGroupedView';
+import { ResourcesActivityGroupedView } from './ResourcesActivityGroupedView';
 import { useCompanySettings } from '@/hooks/useCompanySettings';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -105,7 +106,7 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
   const [editingResource, setEditingResource] = useState<BudgetResource | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [resourceToDelete, setResourceToDelete] = useState<BudgetResource | null>(null);
-  const [viewMode, setViewMode] = useState<'list' | 'grouped'>('list');
+  const [viewMode, setViewMode] = useState<'list' | 'grouped' | 'activity'>('list');
   
   // Bulk edit state
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -1144,18 +1145,30 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
                   size="sm"
                   className="rounded-r-none"
                   onClick={() => setViewMode('list')}
+                  title="Lista alfabética"
                 >
                   <List className="h-4 w-4 mr-1" />
                   Lista
+                </Button>
+                <Button
+                  variant={viewMode === 'activity' ? 'secondary' : 'ghost'}
+                  size="sm"
+                  className="rounded-none border-x"
+                  onClick={() => setViewMode('activity')}
+                  title="Agrupado por Actividad"
+                >
+                  <FileText className="h-4 w-4 mr-1" />
+                  Actividad
                 </Button>
                 <Button
                   variant={viewMode === 'grouped' ? 'secondary' : 'ghost'}
                   size="sm"
                   className="rounded-l-none"
                   onClick={() => setViewMode('grouped')}
+                  title="Agrupado por Fase y Actividad"
                 >
                   <FolderTree className="h-4 w-4 mr-1" />
-                  Por Fase
+                  Fase
                 </Button>
               </div>
               <Badge variant="secondary" className="text-sm">
@@ -1282,6 +1295,21 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
           {/* Resources View */}
           {viewMode === 'grouped' ? (
             <ResourcesGroupedView
+              resources={filteredResources}
+              activities={activities}
+              phases={phases}
+              isAdmin={isAdmin}
+              selectedIds={selectedIds}
+              onToggleSelect={toggleSelect}
+              onToggleSelectAll={toggleSelectAll}
+              onEdit={handleEdit}
+              onDelete={handleDelete}
+              onInlineUpdate={handleInlineUpdate}
+              calculateFields={calculateFields}
+              getActivityId={getActivityId}
+            />
+          ) : viewMode === 'activity' ? (
+            <ResourcesActivityGroupedView
               resources={filteredResources}
               activities={activities}
               phases={phases}

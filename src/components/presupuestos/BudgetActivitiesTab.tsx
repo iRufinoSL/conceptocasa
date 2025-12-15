@@ -81,6 +81,8 @@ interface ActivityResource {
   related_units: number | null;
 }
 
+type ExistingBudgetResource = ActivityResource & { activity_id: string | null };
+
 interface ActivityForm {
   name: string;
   code: string;
@@ -147,7 +149,11 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin }: BudgetAct
   const [duplicateResourceName, setDuplicateResourceName] = useState('');
   const [resourceFormOpen, setResourceFormOpen] = useState(false);
   const [editingResourceForForm, setEditingResourceForForm] = useState<any>(null);
-  
+
+  const [existingResourcePickerOpen, setExistingResourcePickerOpen] = useState(false);
+  const [existingResources, setExistingResources] = useState<ExistingBudgetResource[]>([]);
+  const [existingResourcesLoading, setExistingResourcesLoading] = useState(false);
+  const [existingResourcesQuery, setExistingResourcesQuery] = useState('');
   const [form, setForm] = useState<ActivityForm>(emptyForm);
   const [isSaving, setIsSaving] = useState(false);
   
@@ -426,24 +432,40 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin }: BudgetAct
     setFormDialogOpen(true);
   };
 
+  // Open picker to select an existing resource (will duplicate it into this activity)
+  const openExistingResourcePicker = async () => {
+    if (!editingActivity) return;
+
+    setExistingResourcesQuery('');
+    setExistingResourcePickerOpen(true);
+    setExistingResourcesLoading(true);
+
+    try {
+      const { data, error } = await supabase
+        .from('budget_activity_resources')
+        .select('id, name, external_unit_cost, unit, resource_type, safety_margin_percent, sales_margin_percent, manual_units, related_units, activity_id')
+        .eq('budget_id', budgetId)
+        .order('name', { ascending: true });
+
+      if (error) throw error;
+      setExistingResources((data || []) as ExistingBudgetResource[]);
+    } catch (err: any) {
+      console.error('Error fetching existing resources:', err);
+      toast.error(err.message || 'Error al cargar recursos existentes');
+    } finally {
+      setExistingResourcesLoading(false);
+    }
+  };
+
   // Handle new resource for current activity - open form directly
   const handleNewResource = () => {
     if (!editingActivity) return;
-    // Set up empty resource with activity pre-selected
-    setEditingResourceForForm({
-      id: null,
-      budget_id: editingActivity.budget_id,
-      name: '',
-      external_unit_cost: null,
-      unit: 'ud',
-      resource_type: null,
-      safety_margin_percent: 0.15,
-      sales_margin_percent: 0.25,
-      manual_units: null,
-      related_units: null,
-      activity_id: editingActivity.id,
-      description: null,
-    });
+
+    // Preselect current activity in the resource form
+    window.sessionStorage.setItem('preselectedActivityId', editingActivity.id);
+
+    // Null resource = create mode (avoids updating with id = null)
+    setEditingResourceForForm(null);
     setResourceFormOpen(true);
   };
 
@@ -1854,13 +1876,23 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin }: BudgetAct
                     </Badge>
                   </div>
                   {isAdmin && (
-                    <Button 
-                      size="sm" 
-                      onClick={() => handleNewResource()}
-                    >
-                      <Plus className="h-4 w-4 mr-1" />
-                      Nuevo Recurso
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={openExistingResourcePicker}
+                      >
+                        <Copy className="h-4 w-4 mr-1" />
+                        Añadir existente
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={handleNewResource}
+                      >
+                        <Plus className="h-4 w-4 mr-1" />
+                        Nuevo Recurso
+                      </Button>
+                    </div>
                   )}
                 </div>
                 {activityResources.length > 0 ? (
@@ -2261,6 +2293,79 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin }: BudgetAct
                 Editar completo
               </Button>
             )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Existing Resource Picker Dialog */}
+      <Dialog open={existingResourcePickerOpen} onOpenChange={setExistingResourcePickerOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Añadir recurso existente</DialogTitle>
+            <DialogDescription>
+              Selecciona un recurso del presupuesto para duplicarlo en esta actividad.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="py-2">
+            <Command shouldFilter={false}>
+              <CommandInput
+                placeholder="Buscar recurso..."
+                value={existingResourcesQuery}
+                onValueChange={setExistingResourcesQuery}
+              />
+              <CommandList className="max-h-[360px]">
+                <CommandEmpty>
+                  {existingResourcesLoading ? 'Cargando...' : 'No se encontraron recursos.'}
+                </CommandEmpty>
+                <CommandGroup>
+                  {existingResources
+                    .filter((r) => {
+                      const q = existingResourcesQuery.toLowerCase().trim();
+                      if (!q) return true;
+                      return (
+                        r.name.toLowerCase().includes(q) ||
+                        (r.resource_type || '').toLowerCase().includes(q) ||
+                        String(r.external_unit_cost ?? '').includes(q)
+                      );
+                    })
+                    .map((r) => {
+                      const originActivity = r.activity_id ? activities.find((a) => a.id === r.activity_id) : null;
+                      const originLabel = originActivity ? generateActivityId(originActivity) : 'Sin actividad';
+
+                      return (
+                        <CommandItem
+                          key={r.id}
+                          value={r.id}
+                          onSelect={() => {
+                            setExistingResourcePickerOpen(false);
+                            openDuplicateResourceDialog(r);
+                          }}
+                          className="cursor-pointer"
+                        >
+                          <div className="flex w-full items-center justify-between gap-4">
+                            <div className="min-w-0">
+                              <p className="font-medium truncate">{r.name}</p>
+                              <p className="text-xs text-muted-foreground truncate">
+                                {originLabel} · {r.resource_type || 'Sin tipo'} · {r.unit || 'ud'}
+                              </p>
+                            </div>
+                            <div className="text-right shrink-0 font-mono text-sm">
+                              {formatCurrency(r.external_unit_cost || 0)}
+                            </div>
+                          </div>
+                        </CommandItem>
+                      );
+                    })}
+                </CommandGroup>
+              </CommandList>
+            </Command>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setExistingResourcePickerOpen(false)}>
+              Cancelar
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

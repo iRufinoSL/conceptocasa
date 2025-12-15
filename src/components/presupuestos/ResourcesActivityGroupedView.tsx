@@ -1,10 +1,9 @@
-import { useState, useMemo, useRef, useCallback } from 'react';
+import React, { useState, useMemo, useRef, useCallback } from 'react';
 import { ChevronDown, ChevronRight, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { formatCurrency, formatNumber, formatPercent } from '@/lib/format-utils';
 import { Pencil, Trash2, Package, Wrench, Truck, Briefcase } from 'lucide-react';
 import { ResourceInlineEdit } from './ResourceInlineEdit';
@@ -490,42 +489,34 @@ export function ResourcesActivityGroupedView({
               const activityLabel = getActivityLabel(activityGroup.activity);
 
               return (
-                <Collapsible key={activityKey} open={isActivityExpanded} asChild>
-                  <>
-                    <CollapsibleTrigger asChild>
-                      <TableRow 
-                        className="bg-muted/20 hover:bg-muted/40 cursor-pointer"
-                        onClick={() => toggleActivity(activityKey)}
-                      >
-                        <TableCell colSpan={isAdmin ? 15 : 14}>
-                          <div className="flex items-center gap-2">
-                            {isActivityExpanded ? (
-                              <ChevronDown className="h-4 w-4" />
-                            ) : (
-                              <ChevronRight className="h-4 w-4" />
-                            )}
-                            <FileText className="h-4 w-4 text-primary" />
-                            <span className="font-semibold">{activityLabel}</span>
-                            <Badge variant="outline" className="ml-2">
-                              {activityResourceCount} recursos
-                            </Badge>
-                            <Badge variant="default" className="ml-1">
-                              {formatCurrency(activityTotal)}
-                            </Badge>
-                          </div>
-                        </TableCell>
-                        {isAdmin && <TableCell />}
-                      </TableRow>
-                    </CollapsibleTrigger>
-                    <CollapsibleContent asChild>
-                      <>
-                        {activityGroup.resources.map((resource) => 
-                          renderResourceRow(resource, 2)
+                <React.Fragment key={activityKey}>
+                  <TableRow 
+                    className="bg-muted/20 hover:bg-muted/40 cursor-pointer"
+                    onClick={() => toggleActivity(activityKey)}
+                  >
+                    <TableCell colSpan={isAdmin ? 15 : 14}>
+                      <div className="flex items-center gap-2">
+                        {isActivityExpanded ? (
+                          <ChevronDown className="h-4 w-4" />
+                        ) : (
+                          <ChevronRight className="h-4 w-4" />
                         )}
-                      </>
-                    </CollapsibleContent>
-                  </>
-                </Collapsible>
+                        <FileText className="h-4 w-4 text-primary" />
+                        <span className="font-semibold">{activityLabel}</span>
+                        <Badge variant="outline" className="ml-2">
+                          {activityResourceCount} recursos
+                        </Badge>
+                        <Badge variant="default" className="ml-1">
+                          {formatCurrency(activityTotal)}
+                        </Badge>
+                      </div>
+                    </TableCell>
+                    {isAdmin && <TableCell />}
+                  </TableRow>
+                  {isActivityExpanded && activityGroup.resources.map((resource) => 
+                    renderResourceRow(resource, 2)
+                  )}
+                </React.Fragment>
               );
             })}
           </TableBody>

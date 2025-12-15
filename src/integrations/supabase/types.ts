@@ -26,6 +26,7 @@ export type Database = {
           name: string
           phase_id: string | null
           updated_at: string
+          uses_measurement: boolean
         }
         Insert: {
           budget_id: string
@@ -38,6 +39,7 @@ export type Database = {
           name: string
           phase_id?: string | null
           updated_at?: string
+          uses_measurement?: boolean
         }
         Update: {
           budget_id?: string
@@ -50,6 +52,7 @@ export type Database = {
           name?: string
           phase_id?: string | null
           updated_at?: string
+          uses_measurement?: boolean
         }
         Relationships: [
           {

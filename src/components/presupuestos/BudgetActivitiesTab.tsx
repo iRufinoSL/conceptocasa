@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -42,6 +43,7 @@ interface BudgetActivity {
   measurement_unit: string;
   phase_id: string | null;
   measurement_id: string | null;
+  uses_measurement: boolean;
   created_at: string;
   files_count?: number;
   resources_subtotal?: number;
@@ -90,6 +92,7 @@ interface ActivityForm {
   measurement_unit: string;
   phase_id: string;
   measurement_id: string;
+  uses_measurement: boolean;
 }
 
 interface BudgetActivitiesTabProps {
@@ -116,7 +119,8 @@ const emptyForm: ActivityForm = {
   description: '',
   measurement_unit: 'ud',
   phase_id: '',
-  measurement_id: ''
+  measurement_id: '',
+  uses_measurement: true
 };
 
 export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin }: BudgetActivitiesTabProps) {
@@ -377,7 +381,8 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin }: BudgetAct
                   description: data.description || '',
                   measurement_unit: data.measurement_unit,
                   phase_id: data.phase_id || '',
-                  measurement_id: data.measurement_id || ''
+                  measurement_id: data.measurement_id || '',
+                  uses_measurement: data.uses_measurement ?? true
                 });
                 setFormDialogOpen(true);
               }
@@ -422,7 +427,8 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin }: BudgetAct
       description: activity.description || '',
       measurement_unit: activity.measurement_unit,
       phase_id: activity.phase_id || '',
-      measurement_id: activity.measurement_id || ''
+      measurement_id: activity.measurement_id || '',
+      uses_measurement: activity.uses_measurement ?? true
     });
     
     // Fetch resources for this activity
@@ -616,7 +622,8 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin }: BudgetAct
         description: form.description.trim() || null,
         measurement_unit: form.measurement_unit,
         phase_id: form.phase_id && form.phase_id !== '' && form.phase_id !== 'null' ? form.phase_id : null,
-        measurement_id: form.measurement_id && form.measurement_id !== '' && form.measurement_id !== 'null' ? form.measurement_id : null
+        measurement_id: form.measurement_id && form.measurement_id !== '' && form.measurement_id !== 'null' ? form.measurement_id : null,
+        uses_measurement: form.uses_measurement
       };
 
       if (editingActivity) {
@@ -851,6 +858,16 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin }: BudgetAct
 
   // Get measurement data for an activity
   const getMeasurementData = (activity: BudgetActivity): { measurement: Measurement | null; relatedUnits: number; medicionId: string } => {
+    // If uses_measurement is false, return 0 for related units
+    if (!activity.uses_measurement) {
+      const measurement = activity.measurement_id ? measurements.find(m => m.id === activity.measurement_id) : null;
+      return { 
+        measurement, 
+        relatedUnits: 0, 
+        medicionId: measurement ? `0,00/${measurement.measurement_unit || 'ud'}: ${measurement.name}` : '-' 
+      };
+    }
+    
     if (!activity.measurement_id) {
       return { measurement: null, relatedUnits: 0, medicionId: '-' };
     }
@@ -1330,6 +1347,7 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin }: BudgetAct
             <TableHeader>
               <TableRow>
                 <TableHead>ActividadID</TableHead>
+                <TableHead className="text-center w-16">Usa Med.</TableHead>
                 <TableHead>Actividad</TableHead>
                 <TableHead>Fase</TableHead>
                 <TableHead>Unidad</TableHead>
@@ -1347,6 +1365,11 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin }: BudgetAct
                 return (
                   <TableRow key={activity.id}>
                     <TableCell className="font-mono text-sm">{generateActivityId(activity)}</TableCell>
+                    <TableCell className="text-center">
+                      <Badge variant={activity.uses_measurement ? 'default' : 'secondary'} className="text-xs">
+                        {activity.uses_measurement ? 'Sí' : 'No'}
+                      </Badge>
+                    </TableCell>
                     <TableCell className="font-medium">{activity.name}</TableCell>
                     <TableCell className="text-muted-foreground">
                       {phase ? `${phase.code} ${phase.name}` : '-'}

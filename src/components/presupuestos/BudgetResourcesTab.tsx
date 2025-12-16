@@ -810,6 +810,33 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
     }
   };
 
+  // Bulk delete handler
+  const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = useState(false);
+  
+  const handleBulkDelete = async () => {
+    if (selectedIds.size === 0) return;
+
+    setIsBulkUpdating(true);
+    try {
+      const { error } = await supabase
+        .from('budget_activity_resources')
+        .delete()
+        .in('id', Array.from(selectedIds));
+
+      if (error) throw error;
+
+      toast.success(`${selectedIds.size} recursos eliminados`);
+      setSelectedIds(new Set());
+      setBulkDeleteDialogOpen(false);
+      fetchData();
+    } catch (error) {
+      console.error('Error bulk deleting:', error);
+      toast.error('Error al eliminar recursos');
+    } finally {
+      setIsBulkUpdating(false);
+    }
+  };
+
   // Parse numbers - handles European (1.234,56) and standard (1234.56) formats, and currency symbols
   const parseNumber = (val: string | number | null | undefined): number | null => {
     if (val === null || val === undefined) return null;
@@ -1293,6 +1320,19 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
                 <Check className="h-4 w-4 mr-1" />
                 Aplicar
               </Button>
+              
+              <div className="h-6 w-px bg-border mx-1" />
+              
+              <Button 
+                size="sm" 
+                variant="destructive"
+                onClick={() => setBulkDeleteDialogOpen(true)}
+                disabled={isBulkUpdating}
+              >
+                <Trash2 className="h-4 w-4 mr-1" />
+                Eliminar ({selectedIds.size})
+              </Button>
+              
               <Button 
                 size="sm" 
                 variant="ghost"
@@ -1571,6 +1611,15 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
         onConfirm={confirmDelete}
         title="Eliminar recurso"
         description={`¿Estás seguro de que deseas eliminar el recurso "${resourceToDelete?.name}"? Esta acción no se puede deshacer.`}
+      />
+
+      {/* Bulk Delete Confirmation Dialog */}
+      <DeleteConfirmDialog
+        open={bulkDeleteDialogOpen}
+        onOpenChange={setBulkDeleteDialogOpen}
+        onConfirm={handleBulkDelete}
+        title="Eliminar recursos seleccionados"
+        description={`¿Estás seguro de que deseas eliminar ${selectedIds.size} recursos seleccionados? Esta acción no se puede deshacer.`}
       />
     </>
   );

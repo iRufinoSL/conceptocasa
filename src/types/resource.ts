@@ -19,6 +19,7 @@ export interface ExternalResource {
   imageUrl?: string;
   website?: string;
   relatedResources: RelatedResource[];
+  registrationDate: Date;
   createdAt: Date;
   updatedAt: Date;
 }

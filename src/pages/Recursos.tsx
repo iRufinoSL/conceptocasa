@@ -30,6 +30,7 @@ export default function Recursos() {
     addResource,
     updateResource,
     deleteResource,
+    duplicateResource,
     getEffectiveCost,
   } = useResources();
 
@@ -93,6 +94,16 @@ export default function Recursos() {
     });
   };
 
+  const handleDuplicate = (id: string) => {
+    const duplicated = duplicateResource(id);
+    if (duplicated) {
+      toast({
+        title: 'Recurso duplicado',
+        description: `"${duplicated.name}" ha sido creado correctamente.`,
+      });
+    }
+  };
+
   const handleUpdate = (id: string, data: Partial<ExternalResource>) => {
     updateResource(id, data);
     toast({
@@ -131,7 +142,7 @@ export default function Recursos() {
         {/* Page Title */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
           <div>
-            <h2 className="text-2xl font-bold text-foreground">Recursos Externos</h2>
+            <h2 className="text-2xl font-bold text-foreground">Recursos externos</h2>
             <p className="text-muted-foreground mt-1">
               Gestiona los recursos externos para tus proyectos de construcción
             </p>
@@ -202,6 +213,7 @@ export default function Recursos() {
               resources={resources}
               onEdit={handleEdit}
               onDelete={handleDeleteClick}
+              onDuplicate={handleDuplicate}
               getEffectiveCost={getEffectiveCost}
             />
           )

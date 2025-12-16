@@ -2,13 +2,16 @@ import { ExternalResource, ResourceType, getResourceComposition } from '@/types/
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Pencil, Trash2, ExternalLink, Package, Users, Clock, Wrench, Boxes, Cog, Layers, Square } from 'lucide-react';
+import { Pencil, Trash2, ExternalLink, Package, Users, Clock, Wrench, Boxes, Cog, Layers, Square, Copy } from 'lucide-react';
 import { formatCurrency } from '@/lib/format-utils';
+import { format } from 'date-fns';
+import { es } from 'date-fns/locale';
 
 interface ResourceListProps {
   resources: ExternalResource[];
   onEdit: (resource: ExternalResource) => void;
   onDelete: (id: string) => void;
+  onDuplicate: (id: string) => void;
   getEffectiveCost: (resource: ExternalResource) => number;
 }
 
@@ -30,11 +33,15 @@ const resourceTypeIcons: Record<ResourceType, React.ReactNode> = {
   'Equipo': <Cog className="h-3.5 w-3.5" />,
 };
 
-export function ResourceList({ resources, onEdit, onDelete, getEffectiveCost }: ResourceListProps) {
+export function ResourceList({ resources, onEdit, onDelete, onDuplicate, getEffectiveCost }: ResourceListProps) {
   // Sort alphabetically by name
   const sortedResources = [...resources].sort((a, b) => 
     a.name.localeCompare(b.name, 'es', { sensitivity: 'base' })
   );
+
+  const formatDate = (date: Date) => {
+    return format(new Date(date), 'dd/MM/yyyy', { locale: es });
+  };
 
   return (
     <div className="rounded-lg border border-border bg-card overflow-hidden">
@@ -48,7 +55,8 @@ export function ResourceList({ resources, onEdit, onDelete, getEffectiveCost }: 
             <TableHead>Composición</TableHead>
             <TableHead className="text-right">Coste</TableHead>
             <TableHead className="hidden sm:table-cell">Ud.</TableHead>
-            <TableHead className="w-[120px] text-right">Acciones</TableHead>
+            <TableHead className="hidden lg:table-cell">Fecha Reg.</TableHead>
+            <TableHead className="w-[140px] text-right">Acciones</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -123,13 +131,26 @@ export function ResourceList({ resources, onEdit, onDelete, getEffectiveCost }: 
                 <TableCell className="hidden sm:table-cell text-muted-foreground">
                   {resource.unitMeasure}
                 </TableCell>
+                <TableCell className="hidden lg:table-cell text-muted-foreground text-sm">
+                  {formatDate(resource.registrationDate)}
+                </TableCell>
                 <TableCell>
                   <div className="flex items-center justify-end gap-1">
                     <Button
                       variant="ghost"
                       size="icon"
                       className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                      onClick={() => onDuplicate(resource.id)}
+                      title="Duplicar recurso"
+                    >
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-muted-foreground hover:text-foreground"
                       onClick={() => onEdit(resource)}
+                      title="Editar recurso"
                     >
                       <Pencil className="h-4 w-4" />
                     </Button>
@@ -138,6 +159,7 @@ export function ResourceList({ resources, onEdit, onDelete, getEffectiveCost }: 
                       size="icon"
                       className="h-8 w-8 text-muted-foreground hover:text-destructive"
                       onClick={() => onDelete(resource.id)}
+                      title="Eliminar recurso"
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
@@ -150,7 +172,7 @@ export function ResourceList({ resources, onEdit, onDelete, getEffectiveCost }: 
       </Table>
       {sortedResources.length === 0 && (
         <div className="text-center py-12 text-muted-foreground">
-          No se encontraron recursos
+          No se encontraron recursos externos
         </div>
       )}
     </div>

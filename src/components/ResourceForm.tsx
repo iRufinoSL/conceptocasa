@@ -29,6 +29,7 @@ const initialFormState = {
   imageUrl: '',
   website: '',
   relatedResources: [] as RelatedResource[],
+  registrationDate: new Date().toISOString().split('T')[0],
 };
 
 export function ResourceForm({ open, onOpenChange, resource, onSubmit, onUpdate, allResources }: ResourceFormProps) {
@@ -39,6 +40,9 @@ export function ResourceForm({ open, onOpenChange, resource, onSubmit, onUpdate,
 
   useEffect(() => {
     if (resource) {
+      const regDate = resource.registrationDate 
+        ? new Date(resource.registrationDate).toISOString().split('T')[0]
+        : new Date().toISOString().split('T')[0];
       setFormData({
         name: resource.name,
         description: resource.description,
@@ -48,18 +52,26 @@ export function ResourceForm({ open, onOpenChange, resource, onSubmit, onUpdate,
         imageUrl: resource.imageUrl || '',
         website: resource.website || '',
         relatedResources: resource.relatedResources || [],
+        registrationDate: regDate,
       });
     } else {
-      setFormData(initialFormState);
+      setFormData({
+        ...initialFormState,
+        registrationDate: new Date().toISOString().split('T')[0],
+      });
     }
   }, [resource, open]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    const dataToSubmit = {
+      ...formData,
+      registrationDate: new Date(formData.registrationDate),
+    };
     if (resource && onUpdate) {
-      onUpdate(resource.id, formData);
+      onUpdate(resource.id, dataToSubmit);
     } else {
-      onSubmit(formData);
+      onSubmit(dataToSubmit);
     }
     onOpenChange(false);
   };
@@ -261,15 +273,27 @@ export function ResourceForm({ open, onOpenChange, resource, onSubmit, onUpdate,
             )}
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="imageUrl">URL de imagen</Label>
-            <Input
-              id="imageUrl"
-              type="url"
-              value={formData.imageUrl}
-              onChange={(e) => setFormData({ ...formData, imageUrl: e.target.value })}
-              placeholder="https://ejemplo.com/imagen.jpg"
-            />
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="registrationDate">Fecha de registro *</Label>
+              <Input
+                id="registrationDate"
+                type="date"
+                value={formData.registrationDate}
+                onChange={(e) => setFormData({ ...formData, registrationDate: e.target.value })}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="imageUrl">URL de imagen</Label>
+              <Input
+                id="imageUrl"
+                type="url"
+                value={formData.imageUrl}
+                onChange={(e) => setFormData({ ...formData, imageUrl: e.target.value })}
+                placeholder="https://ejemplo.com/imagen.jpg"
+              />
+            </div>
           </div>
 
           <div className="space-y-2">

@@ -42,10 +42,27 @@ export function useResources() {
     const newResource: ExternalResource = {
       ...resource,
       id: Date.now().toString(),
+      registrationDate: resource.registrationDate || new Date(),
       createdAt: new Date(),
       updatedAt: new Date(),
     };
     setResources((prev) => [...prev, newResource]);
+  };
+
+  const duplicateResource = (resourceId: string) => {
+    const original = resources.find(r => r.id === resourceId);
+    if (!original) return;
+    
+    const duplicated: ExternalResource = {
+      ...original,
+      id: Date.now().toString(),
+      name: `${original.name} (copia)`,
+      registrationDate: new Date(),
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    setResources((prev) => [...prev, duplicated]);
+    return duplicated;
   };
 
   const updateResource = (id: string, updates: Partial<ExternalResource>) => {
@@ -72,6 +89,7 @@ export function useResources() {
     addResource,
     updateResource,
     deleteResource,
+    duplicateResource,
     getEffectiveCost,
     getComposition,
   };

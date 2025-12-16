@@ -81,6 +81,7 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
   const [resources, setResources] = useState<Resource[]>([]);
   const [filesCountMap, setFilesCountMap] = useState<Map<string, number>>(new Map());
   const [reportSection, setReportSection] = useState<'activities' | 'resources'>('activities');
+  const [customNotes, setCustomNotes] = useState<string>('');
   const printRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -478,6 +479,36 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
         yPos += 6;
       });
 
+      // Custom notes section
+      if (customNotes.trim()) {
+        yPos += 8;
+        doc.setFillColor(248, 250, 252);
+        
+        // Calculate text height
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'normal');
+        const splitNotes = doc.splitTextToSize(customNotes, pageWidth - 40);
+        const notesHeight = splitNotes.length * 5 + 16;
+        
+        doc.roundedRect(14, yPos - 4, pageWidth - 28, notesHeight, 2, 2, 'F');
+        
+        // Left accent bar
+        doc.setFillColor(100, 116, 139);
+        doc.roundedRect(14, yPos - 4, 3, notesHeight, 1, 1, 'F');
+        
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(71, 85, 105);
+        doc.text('OBSERVACIONES:', 22, yPos + 4);
+        
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(30, 41, 59);
+        doc.setFontSize(10);
+        doc.text(splitNotes, 22, yPos + 12);
+        
+        yPos += notesHeight + 4;
+      }
+
       yPos += 4;
       doc.setFillColor(34, 197, 94);
       doc.roundedRect(14, yPos - 4, pageWidth - 28, 10, 2, 2, 'F');
@@ -830,6 +861,27 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
                     </CardContent>
                   </Card>
                 </div>
+
+                {/* Custom notes textarea */}
+                <div className="mt-4 print:hidden">
+                  <Label className="text-sm font-medium mb-2 block">Observaciones (texto personalizado):</Label>
+                  <textarea
+                    value={customNotes}
+                    onChange={(e) => setCustomNotes(e.target.value)}
+                    placeholder="Escriba aquí las observaciones o notas que desea incluir en el informe antes del total..."
+                    className="w-full min-h-[80px] p-3 border rounded-md bg-background text-foreground resize-y text-sm"
+                  />
+                </div>
+
+                {/* Custom notes preview for print */}
+                {customNotes.trim() && (
+                  <Card className="bg-muted/50 border-muted hidden print:block">
+                    <CardContent className="py-3">
+                      <p className="text-xs font-semibold text-muted-foreground mb-1">OBSERVACIONES:</p>
+                      <p className="text-sm whitespace-pre-wrap">{customNotes}</p>
+                    </CardContent>
+                  </Card>
+                )}
 
                 <Card className="bg-green-500/10 border-green-500/30">
                   <CardContent className="py-4 flex items-center justify-between">

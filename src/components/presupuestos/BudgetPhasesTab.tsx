@@ -29,6 +29,7 @@ interface BudgetActivity {
   name: string;
   code: string;
   phase_id: string | null;
+  subtotal?: number;
 }
 
 interface BudgetResource {
@@ -139,6 +140,17 @@ export function BudgetPhasesTab({ budgetId, isAdmin }: BudgetPhasesTabProps) {
     window.addEventListener('budget-recalculated', handleRecalculated);
     return () => window.removeEventListener('budget-recalculated', handleRecalculated);
   }, []);
+
+  // Calculate subtotals per activity
+  const activitySubtotals = useMemo(() => {
+    const subtotals = new Map<string, number>();
+    activities.forEach(activity => {
+      const activityResources = resources.filter(r => r.activity_id === activity.id);
+      const subtotal = activityResources.reduce((sum, r) => sum + calculateResourceSubtotal(r), 0);
+      subtotals.set(activity.id, subtotal);
+    });
+    return subtotals;
+  }, [activities, resources]);
 
   // Calculate subtotals per phase
   const phaseSubtotals = useMemo(() => {
@@ -603,7 +615,7 @@ export function BudgetPhasesTab({ budgetId, isAdmin }: BudgetPhasesTabProps) {
                               .map((activity) => (
                                 <div 
                                   key={activity.id}
-                                  className="p-3 rounded-md border bg-background hover:bg-muted/50 cursor-pointer transition-colors"
+                                  className="p-3 rounded-md border bg-background hover:bg-muted/50 cursor-pointer transition-colors flex items-center justify-between"
                                   onClick={() => {
                                     setCurrentPhase(null);
                                     // Open activity edit - we need to emit an event or use a callback
@@ -613,6 +625,9 @@ export function BudgetPhasesTab({ budgetId, isAdmin }: BudgetPhasesTabProps) {
                                 >
                                   <p className="font-mono text-sm">
                                     {generateActivityId(activity, phase.code)}
+                                  </p>
+                                  <p className="text-sm font-semibold text-green-600">
+                                    {formatCurrency(activitySubtotals.get(activity.id) || 0)}
                                   </p>
                                 </div>
                               ))}

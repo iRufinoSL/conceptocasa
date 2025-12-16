@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useCallback } from 'react';
+import { useMemo, useRef, useCallback } from 'react';
 import { ChevronDown, ChevronRight, Folder, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -66,6 +66,10 @@ interface ResourcesGroupedViewProps {
     subtotalSales: number;
   };
   getActivityId: (activityId: string | null) => string;
+  expandedPhases: Set<string>;
+  expandedActivities: Set<string>;
+  onExpandedPhasesChange: (phases: Set<string>) => void;
+  onExpandedActivitiesChange: (activities: Set<string>) => void;
 }
 
 const resourceTypeIcons: Record<string, React.ReactNode> = {
@@ -98,10 +102,11 @@ export function ResourcesGroupedView({
   onInlineUpdate,
   calculateFields,
   getActivityId,
+  expandedPhases,
+  expandedActivities,
+  onExpandedPhasesChange,
+  onExpandedActivitiesChange,
 }: ResourcesGroupedViewProps) {
-  const [expandedPhases, setExpandedPhases] = useState<Set<string>>(new Set());
-  const [expandedActivities, setExpandedActivities] = useState<Set<string>>(new Set());
-
   // Tab navigation refs
   const cellRefs = useRef<Map<string, HTMLElement | null>>(new Map());
   const getCellKey = (resourceId: string, field: EditableField) => `${resourceId}-${field}`;
@@ -238,27 +243,23 @@ export function ResourcesGroupedView({
   }, [flatResourceList, focusCell]);
 
   const togglePhase = (phaseId: string) => {
-    setExpandedPhases((prev) => {
-      const next = new Set(prev);
-      if (next.has(phaseId)) {
-        next.delete(phaseId);
-      } else {
-        next.add(phaseId);
-      }
-      return next;
-    });
+    const next = new Set(expandedPhases);
+    if (next.has(phaseId)) {
+      next.delete(phaseId);
+    } else {
+      next.add(phaseId);
+    }
+    onExpandedPhasesChange(next);
   };
 
   const toggleActivity = (activityId: string) => {
-    setExpandedActivities((prev) => {
-      const next = new Set(prev);
-      if (next.has(activityId)) {
-        next.delete(activityId);
-      } else {
-        next.add(activityId);
-      }
-      return next;
-    });
+    const next = new Set(expandedActivities);
+    if (next.has(activityId)) {
+      next.delete(activityId);
+    } else {
+      next.add(activityId);
+    }
+    onExpandedActivitiesChange(next);
   };
 
   const expandAll = () => {
@@ -266,13 +267,13 @@ export function ResourcesGroupedView({
     const allActivityIds = groupedData.flatMap(([, group]) => 
       Array.from(group.activities.keys())
     );
-    setExpandedPhases(new Set(allPhaseIds));
-    setExpandedActivities(new Set(allActivityIds));
+    onExpandedPhasesChange(new Set(allPhaseIds));
+    onExpandedActivitiesChange(new Set(allActivityIds));
   };
 
   const collapseAll = () => {
-    setExpandedPhases(new Set());
-    setExpandedActivities(new Set());
+    onExpandedPhasesChange(new Set());
+    onExpandedActivitiesChange(new Set());
   };
 
   const renderResourceRow = (resource: BudgetResource, indent: number = 0) => {

@@ -191,10 +191,14 @@ export function ResourceInlineEdit({
             'animate-fade-in',
             className
           )}
-          onClick={() => setIsEditing(true)}
+          onClick={(e) => {
+            e.stopPropagation();
+            setIsEditing(true);
+          }}
           onKeyDown={(e) => {
             if (e.key === 'Enter' || e.key === ' ') {
               e.preventDefault();
+              e.stopPropagation();
               setIsEditing(true);
             }
           }}

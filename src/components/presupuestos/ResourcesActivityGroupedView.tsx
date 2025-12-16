@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef, useCallback } from 'react';
+import React, { useMemo, useRef, useCallback } from 'react';
 import { ChevronDown, ChevronRight, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -65,6 +65,8 @@ interface ResourcesActivityGroupedViewProps {
     subtotalSales: number;
   };
   getActivityId: (activityId: string | null) => string;
+  expandedActivities: Set<string>;
+  onExpandedActivitiesChange: (activities: Set<string>) => void;
 }
 
 const resourceTypeIcons: Record<string, React.ReactNode> = {
@@ -97,9 +99,9 @@ export function ResourcesActivityGroupedView({
   onInlineUpdate,
   calculateFields,
   getActivityId,
+  expandedActivities,
+  onExpandedActivitiesChange,
 }: ResourcesActivityGroupedViewProps) {
-  const [expandedActivities, setExpandedActivities] = useState<Set<string>>(new Set());
-
   // Tab navigation refs
   const cellRefs = useRef<Map<string, HTMLElement | null>>(new Map());
   const getCellKey = (resourceId: string, field: EditableField) => `${resourceId}-${field}`;
@@ -212,24 +214,22 @@ export function ResourcesActivityGroupedView({
   );
 
   const toggleActivity = (activityId: string) => {
-    setExpandedActivities((prev) => {
-      const next = new Set(prev);
-      if (next.has(activityId)) {
-        next.delete(activityId);
-      } else {
-        next.add(activityId);
-      }
-      return next;
-    });
+    const next = new Set(expandedActivities);
+    if (next.has(activityId)) {
+      next.delete(activityId);
+    } else {
+      next.add(activityId);
+    }
+    onExpandedActivitiesChange(next);
   };
 
   const expandAll = () => {
     const allActivityIds = groupedData.map(([id]) => id);
-    setExpandedActivities(new Set(allActivityIds));
+    onExpandedActivitiesChange(new Set(allActivityIds));
   };
 
   const collapseAll = () => {
-    setExpandedActivities(new Set());
+    onExpandedActivitiesChange(new Set());
   };
 
   const renderResourceRow = (resource: BudgetResource, indent: number = 0) => {

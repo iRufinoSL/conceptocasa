@@ -108,6 +108,10 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
   const [resourceToDelete, setResourceToDelete] = useState<BudgetResource | null>(null);
   const [viewMode, setViewMode] = useState<'list' | 'grouped' | 'activity'>('list');
   
+  // Expanded state for grouped views (lifted up to preserve state after edit)
+  const [expandedPhases, setExpandedPhases] = useState<Set<string>>(new Set());
+  const [expandedActivities, setExpandedActivities] = useState<Set<string>>(new Set());
+  
   // Bulk edit state
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkEditField, setBulkEditField] = useState<string>('');
@@ -1316,6 +1320,10 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
               onInlineUpdate={handleInlineUpdate}
               calculateFields={calculateFields}
               getActivityId={getActivityId}
+              expandedPhases={expandedPhases}
+              expandedActivities={expandedActivities}
+              onExpandedPhasesChange={setExpandedPhases}
+              onExpandedActivitiesChange={setExpandedActivities}
             />
           ) : viewMode === 'activity' ? (
             <ResourcesActivityGroupedView
@@ -1331,6 +1339,8 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
               onInlineUpdate={handleInlineUpdate}
               calculateFields={calculateFields}
               getActivityId={getActivityId}
+              expandedActivities={expandedActivities}
+              onExpandedActivitiesChange={setExpandedActivities}
             />
           ) : (
             <div className="rounded-md border overflow-x-auto">

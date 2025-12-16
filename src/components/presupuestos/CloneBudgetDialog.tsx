@@ -1,0 +1,266 @@
+import { useState, useEffect } from 'react';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { supabase } from '@/integrations/supabase/client';
+import { cloneBudget } from '@/lib/clone-budget';
+import { toast } from 'sonner';
+import { Copy, Loader2 } from 'lucide-react';
+
+interface Presupuesto {
+  id: string;
+  nombre: string;
+  codigo_correlativo: number;
+  version: string;
+  poblacion: string;
+  provincia: string | null;
+}
+
+interface CloneBudgetDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  currentBudgetId: string;
+  onCloneSuccess: (newBudgetId: string) => void;
+}
+
+export function CloneBudgetDialog({ 
+  open, 
+  onOpenChange, 
+  currentBudgetId,
+  onCloneSuccess 
+}: CloneBudgetDialogProps) {
+  const [budgets, setBudgets] = useState<Presupuesto[]>([]);
+  const [selectedBudgetId, setSelectedBudgetId] = useState<string>('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [isCloning, setIsCloning] = useState(false);
+  
+  // Form for new budget data
+  const [form, setForm] = useState({
+    nombre: '',
+    version: 'v1.0',
+    poblacion: '',
+    provincia: ''
+  });
+
+  // Fetch available budgets to clone from
+  useEffect(() => {
+    if (open) {
+      fetchBudgets();
+    }
+  }, [open]);
+
+  // Auto-fill form when budget is selected
+  useEffect(() => {
+    if (selectedBudgetId) {
+      const selected = budgets.find(b => b.id === selectedBudgetId);
+      if (selected) {
+        setForm({
+          nombre: `${selected.nombre} (copia)`,
+          version: 'v1.0',
+          poblacion: selected.poblacion,
+          provincia: selected.provincia || ''
+        });
+      }
+    }
+  }, [selectedBudgetId, budgets]);
+
+  const fetchBudgets = async () => {
+    setIsLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('presupuestos')
+        .select('id, nombre, codigo_correlativo, version, poblacion, provincia')
+        .neq('id', currentBudgetId)
+        .order('nombre');
+
+      if (error) throw error;
+      setBudgets(data || []);
+    } catch (err) {
+      console.error('Error fetching budgets:', err);
+      toast.error('Error al cargar presupuestos');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleClone = async () => {
+    if (!selectedBudgetId) {
+      toast.error('Selecciona un presupuesto para clonar');
+      return;
+    }
+    if (!form.nombre.trim()) {
+      toast.error('El nombre es obligatorio');
+      return;
+    }
+    if (!form.poblacion.trim()) {
+      toast.error('La población es obligatoria');
+      return;
+    }
+
+    setIsCloning(true);
+    try {
+      const result = await cloneBudget(selectedBudgetId, {
+        nombre: form.nombre.trim(),
+        version: form.version.trim() || 'v1.0',
+        poblacion: form.poblacion.trim(),
+        provincia: form.provincia.trim() || undefined
+      });
+
+      if (result.success && result.newBudgetId) {
+        toast.success(
+          `Presupuesto clonado: ${result.stats?.phases} fases, ${result.stats?.activities} actividades, ${result.stats?.resources} recursos, ${result.stats?.measurements} mediciones`
+        );
+        onOpenChange(false);
+        onCloneSuccess(result.newBudgetId);
+      } else {
+        toast.error(result.error || 'Error al clonar presupuesto');
+      }
+    } catch (err: any) {
+      console.error('Error cloning:', err);
+      toast.error(err.message || 'Error al clonar');
+    } finally {
+      setIsCloning(false);
+    }
+  };
+
+  const generatePresupuestoId = (p: Presupuesto) => {
+    return `${p.nombre} (${p.codigo_correlativo}/${p.version}): ${p.poblacion}`;
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Copy className="h-5 w-5" />
+            Clonar Presupuesto
+          </DialogTitle>
+          <DialogDescription>
+            Selecciona un presupuesto existente para clonar su estructura completa (fases, actividades, recursos, mediciones). 
+            Los valores de mediciones y archivos del ante-proyecto NO se copian.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4 py-4">
+          {/* Source budget selection */}
+          <div className="space-y-2">
+            <Label>Presupuesto a clonar</Label>
+            {isLoading ? (
+              <div className="flex items-center justify-center py-4">
+                <Loader2 className="h-5 w-5 animate-spin" />
+              </div>
+            ) : budgets.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-2">
+                No hay otros presupuestos disponibles para clonar
+              </p>
+            ) : (
+              <Select value={selectedBudgetId} onValueChange={setSelectedBudgetId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecciona un presupuesto..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {budgets.map((budget) => (
+                    <SelectItem key={budget.id} value={budget.id}>
+                      {generatePresupuestoId(budget)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </div>
+
+          {selectedBudgetId && (
+            <>
+              <div className="border-t pt-4">
+                <p className="text-sm font-medium mb-3">Datos del nuevo presupuesto:</p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="nombre">Nombre *</Label>
+                <Input
+                  id="nombre"
+                  value={form.nombre}
+                  onChange={(e) => setForm({ ...form, nombre: e.target.value })}
+                  placeholder="Nombre del nuevo presupuesto"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="version">Versión</Label>
+                  <Input
+                    id="version"
+                    value={form.version}
+                    onChange={(e) => setForm({ ...form, version: e.target.value })}
+                    placeholder="v1.0"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="poblacion">Población *</Label>
+                  <Input
+                    id="poblacion"
+                    value={form.poblacion}
+                    onChange={(e) => setForm({ ...form, poblacion: e.target.value })}
+                    placeholder="Población"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="provincia">Provincia</Label>
+                <Input
+                  id="provincia"
+                  value={form.provincia}
+                  onChange={(e) => setForm({ ...form, provincia: e.target.value })}
+                  placeholder="Provincia (opcional)"
+                />
+              </div>
+
+              <div className="bg-muted/50 rounded-lg p-3 text-sm">
+                <p className="font-medium mb-1">Se clonará:</p>
+                <ul className="text-muted-foreground space-y-0.5 text-xs">
+                  <li>✓ Fases y su jerarquía</li>
+                  <li>✓ Actividades y sus configuraciones</li>
+                  <li>✓ Recursos con costes y márgenes</li>
+                  <li>✓ Mediciones (estructura sin valores)</li>
+                  <li>✓ Relaciones entre mediciones</li>
+                  <li>✓ Ante-proyecto (textos sin imágenes)</li>
+                </ul>
+                <p className="font-medium mt-2 mb-1">NO se clonará:</p>
+                <ul className="text-muted-foreground space-y-0.5 text-xs">
+                  <li>✗ Valores de mediciones (Uds manual)</li>
+                  <li>✗ Archivos/imágenes del ante-proyecto</li>
+                  <li>✗ Archivos adjuntos de actividades</li>
+                </ul>
+              </div>
+            </>
+          )}
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isCloning}>
+            Cancelar
+          </Button>
+          <Button 
+            onClick={handleClone} 
+            disabled={!selectedBudgetId || isCloning || !form.nombre.trim() || !form.poblacion.trim()}
+          >
+            {isCloning ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Clonando...
+              </>
+            ) : (
+              <>
+                <Copy className="h-4 w-4 mr-2" />
+                Clonar Presupuesto
+              </>
+            )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}

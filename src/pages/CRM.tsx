@@ -15,6 +15,7 @@ import { OpportunityForm } from '@/components/crm/OpportunityForm';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import { useToast } from '@/hooks/use-toast';
 import { AppNavDropdown } from '@/components/AppNavDropdown';
+import { BackupButton } from '@/components/BackupButton';
 
 export interface Contact {
   id: string;
@@ -216,15 +217,18 @@ export default function CRM() {
               </p>
             </div>
           </div>
-          {canEdit && (
-            <Button onClick={handleAddNew} className="gap-2">
-              <Plus className="h-4 w-4" />
-              <span className="hidden sm:inline">
-                {activeTab === 'contacts' ? 'Nuevo Contacto' : 
-                 activeTab === 'managements' ? 'Nueva Gestión' : 'Nueva Oportunidad'}
-              </span>
-            </Button>
-          )}
+          <div className="flex items-center gap-2">
+            {canEdit && <BackupButton module="crm" variant="outline" />}
+            {canEdit && (
+              <Button onClick={handleAddNew} className="gap-2">
+                <Plus className="h-4 w-4" />
+                <span className="hidden sm:inline">
+                  {activeTab === 'contacts' ? 'Nuevo Contacto' : 
+                   activeTab === 'managements' ? 'Nueva Gestión' : 'Nueva Oportunidad'}
+                </span>
+              </Button>
+            )}
+          </div>
         </div>
       </header>
 

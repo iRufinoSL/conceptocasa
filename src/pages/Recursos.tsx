@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Plus, FolderOpen, LayoutGrid, List, ArrowLeft, Package } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { AppNavDropdown } from '@/components/AppNavDropdown';
+import { BackupButton } from '@/components/BackupButton';
 
 type ViewMode = 'cards' | 'list';
 
@@ -135,10 +136,13 @@ export default function Recursos() {
               Gestiona los recursos externos para tus proyectos de construcción
             </p>
           </div>
-          <Button variant="accent" onClick={handleAddNew} className="gap-2">
-            <Plus className="h-4 w-4" />
-            Nuevo Recurso
-          </Button>
+          <div className="flex items-center gap-2">
+            <BackupButton module="resources" variant="outline" />
+            <Button variant="accent" onClick={handleAddNew} className="gap-2">
+              <Plus className="h-4 w-4" />
+              Nuevo Recurso
+            </Button>
+          </div>
         </div>
 
         {/* Stats */}

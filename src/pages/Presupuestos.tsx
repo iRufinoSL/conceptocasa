@@ -14,6 +14,7 @@ import { es } from 'date-fns/locale';
 import { AppNavDropdown } from '@/components/AppNavDropdown';
 import { toast } from 'sonner';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
+import { BackupButton } from '@/components/BackupButton';
 
 interface Presupuesto {
   id: string;
@@ -276,12 +277,15 @@ export default function Presupuestos() {
               Lista de presupuestos ordenados alfabéticamente
             </p>
           </div>
-          {isAdmin && (
-            <Button onClick={handleNew}>
-              <Plus className="h-4 w-4 mr-2" />
-              Nuevo Presupuesto
-            </Button>
-          )}
+          <div className="flex items-center gap-2">
+            {isAdmin && <BackupButton module="budgets" variant="outline" />}
+            {isAdmin && (
+              <Button onClick={handleNew}>
+                <Plus className="h-4 w-4 mr-2" />
+                Nuevo Presupuesto
+              </Button>
+            )}
+          </div>
         </div>
 
         {/* Search and View Toggle */}

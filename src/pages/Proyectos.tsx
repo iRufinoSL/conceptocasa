@@ -35,6 +35,7 @@ import { ProjectBudgetsManager } from '@/components/projects/ProjectBudgetsManag
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import { useToast } from '@/hooks/use-toast';
 import { AppNavDropdown } from '@/components/AppNavDropdown';
+import { BackupButton } from '@/components/BackupButton';
 
 interface Project {
   id: string;
@@ -290,12 +291,15 @@ export default function Proyectos() {
               </p>
             </div>
           </div>
-          {canEdit && (
-            <Button onClick={handleAddNew} className="gap-2">
-              <Plus className="h-4 w-4" />
-              <span className="hidden sm:inline">Nuevo Proyecto</span>
-            </Button>
-          )}
+          <div className="flex items-center gap-2">
+            {canEdit && <BackupButton module="projects" variant="outline" />}
+            {canEdit && (
+              <Button onClick={handleAddNew} className="gap-2">
+                <Plus className="h-4 w-4" />
+                <span className="hidden sm:inline">Nuevo Proyecto</span>
+              </Button>
+            )}
+          </div>
         </div>
       </header>
 

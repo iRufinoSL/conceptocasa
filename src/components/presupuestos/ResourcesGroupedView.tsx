@@ -1,10 +1,9 @@
-import { useMemo, useRef, useCallback } from 'react';
+import React, { useMemo, useRef, useCallback } from 'react';
 import { ChevronDown, ChevronRight, Folder, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { formatCurrency, formatNumber, formatPercent } from '@/lib/format-utils';
 import { Pencil, Trash2, Package, Wrench, Truck, Briefcase } from 'lucide-react';
 import { ResourceInlineEdit } from './ResourceInlineEdit';
@@ -560,116 +559,112 @@ export function ResourcesGroupedView({
               );
 
               return (
-                <Collapsible key={phaseKey} open={isPhaseExpanded} asChild>
-                  <>
-                    <CollapsibleTrigger asChild>
-                      <TableRow 
-                        className="bg-muted/30 hover:bg-muted/50 cursor-pointer"
-                        onClick={() => togglePhase(phaseKey)}
-                      >
-                        <TableCell colSpan={isAdmin ? 15 : 14}>
-                          <div className="flex items-center gap-2">
-                            {isPhaseExpanded ? (
-                              <ChevronDown className="h-4 w-4" />
-                            ) : (
-                              <ChevronRight className="h-4 w-4" />
-                            )}
-                            <Folder className="h-4 w-4 text-primary" />
-                            <span className="font-semibold">
-                              {phaseGroup.phase 
-                                ? `${phaseGroup.phase.code || ''} - ${phaseGroup.phase.name}`
-                                : 'Sin Fase'}
-                            </span>
-                            <Badge variant="secondary" className="ml-2">
-                              {phaseResourceCount} recursos
-                            </Badge>
-                            <Badge variant="default" className="ml-1">
-                              {formatCurrency(phaseTotal)}
-                            </Badge>
-                          </div>
-                        </TableCell>
-                        {isAdmin && <TableCell />}
-                      </TableRow>
-                    </CollapsibleTrigger>
-                    <CollapsibleContent asChild>
-                      <>
-                        {activitiesArray.map(([activityKey, activityGroup]) => {
-                          const isActivityExpanded = expandedActivities.has(activityKey);
-                          const activityTotal = activityGroup.resources.reduce(
-                            (sum, r) => sum + calculateFields(r).subtotalSales, 0
-                          );
-                          const phase = activityGroup.activity?.phase_id 
-                            ? phases.find(p => p.id === activityGroup.activity?.phase_id) 
-                            : null;
-                          const activityLabel = activityGroup.activity
-                            ? `${phase?.code || ''} ${activityGroup.activity.code}.-${activityGroup.activity.name}`
-                            : 'Sin Actividad';
+                <React.Fragment key={phaseKey}>
+                  {/* Phase Row */}
+                  <TableRow 
+                    className="bg-muted/30 hover:bg-muted/50 cursor-pointer"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      togglePhase(phaseKey);
+                    }}
+                  >
+                    <TableCell colSpan={isAdmin ? 16 : 15}>
+                      <div className="flex items-center gap-2">
+                        {isPhaseExpanded ? (
+                          <ChevronDown className="h-4 w-4" />
+                        ) : (
+                          <ChevronRight className="h-4 w-4" />
+                        )}
+                        <Folder className="h-4 w-4 text-primary" />
+                        <span className="font-semibold">
+                          {phaseGroup.phase 
+                            ? `${phaseGroup.phase.code || ''} - ${phaseGroup.phase.name}`
+                            : 'Sin Fase'}
+                        </span>
+                        <Badge variant="secondary" className="ml-2">
+                          {phaseResourceCount} recursos
+                        </Badge>
+                        <Badge variant="default" className="ml-1">
+                          {formatCurrency(phaseTotal)}
+                        </Badge>
+                      </div>
+                    </TableCell>
+                  </TableRow>
 
-                          return (
-                            <Collapsible key={activityKey} open={isActivityExpanded} asChild>
-                              <>
-                                <CollapsibleTrigger asChild>
-                                  <TableRow 
-                                    className="bg-muted/10 hover:bg-muted/20 cursor-pointer"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      toggleActivity(activityKey);
-                                    }}
-                                  >
-                                    <TableCell colSpan={isAdmin ? 15 : 14} style={{ paddingLeft: '32px' }}>
-                                      <div className="flex items-center gap-2">
-                                        {isActivityExpanded ? (
-                                          <ChevronDown className="h-4 w-4" />
-                                        ) : (
-                                          <ChevronRight className="h-4 w-4" />
-                                        )}
-                                        <FileText className="h-4 w-4 text-muted-foreground" />
-                                        <span className="text-sm">{activityLabel}</span>
-                                        <Badge variant="outline" className="ml-2">
-                                          {activityGroup.resources.length} recursos
-                                        </Badge>
-                                        <Badge variant="secondary" className="ml-1">
-                                          {formatCurrency(activityTotal)}
-                                        </Badge>
-                                      </div>
-                                    </TableCell>
-                                    {isAdmin && <TableCell />}
-                                  </TableRow>
-                                </CollapsibleTrigger>
-                                <CollapsibleContent asChild>
-                                  <>
-                                    {activityGroup.resources.map((resource) => 
-                                      renderResourceRow(resource, 3)
-                                    )}
-                                  </>
-                                </CollapsibleContent>
-                              </>
-                            </Collapsible>
-                          );
-                        })}
-                        {/* Unassigned resources (no activity) */}
-                        {phaseGroup.unassignedResources.length > 0 && (
-                          <>
-                            <TableRow className="bg-muted/10">
+                  {/* Phase Content (Activities) */}
+                  {isPhaseExpanded && (
+                    <>
+                      {activitiesArray.map(([activityKey, activityGroup]) => {
+                        const isActivityExpanded = expandedActivities.has(activityKey);
+                        const activityTotal = activityGroup.resources.reduce(
+                          (sum, r) => sum + calculateFields(r).subtotalSales, 0
+                        );
+                        const phase = activityGroup.activity?.phase_id 
+                          ? phases.find(p => p.id === activityGroup.activity?.phase_id) 
+                          : null;
+                        const activityLabel = activityGroup.activity
+                          ? `${phase?.code || ''} ${activityGroup.activity.code}.-${activityGroup.activity.name}`
+                          : 'Sin Actividad';
+
+                        return (
+                          <React.Fragment key={activityKey}>
+                            {/* Activity Row */}
+                            <TableRow 
+                              className="bg-muted/10 hover:bg-muted/20 cursor-pointer"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toggleActivity(activityKey);
+                              }}
+                            >
                               <TableCell colSpan={isAdmin ? 16 : 15} style={{ paddingLeft: '32px' }}>
-                                <div className="flex items-center gap-2 text-muted-foreground">
-                                  <FileText className="h-4 w-4" />
-                                  <span className="text-sm italic">Sin Actividad</span>
+                                <div className="flex items-center gap-2">
+                                  {isActivityExpanded ? (
+                                    <ChevronDown className="h-4 w-4" />
+                                  ) : (
+                                    <ChevronRight className="h-4 w-4" />
+                                  )}
+                                  <FileText className="h-4 w-4 text-muted-foreground" />
+                                  <span className="text-sm">{activityLabel}</span>
                                   <Badge variant="outline" className="ml-2">
-                                    {phaseGroup.unassignedResources.length} recursos
+                                    {activityGroup.resources.length} recursos
+                                  </Badge>
+                                  <Badge variant="secondary" className="ml-1">
+                                    {formatCurrency(activityTotal)}
                                   </Badge>
                                 </div>
                               </TableCell>
                             </TableRow>
-                            {phaseGroup.unassignedResources.map((resource) => 
+
+                            {/* Activity Resources */}
+                            {isActivityExpanded && activityGroup.resources.map((resource) => 
                               renderResourceRow(resource, 3)
                             )}
-                          </>
-                        )}
-                      </>
-                    </CollapsibleContent>
-                  </>
-                </Collapsible>
+                          </React.Fragment>
+                        );
+                      })}
+
+                      {/* Unassigned resources (no activity) */}
+                      {phaseGroup.unassignedResources.length > 0 && (
+                        <>
+                          <TableRow className="bg-muted/10">
+                            <TableCell colSpan={isAdmin ? 16 : 15} style={{ paddingLeft: '32px' }}>
+                              <div className="flex items-center gap-2 text-muted-foreground">
+                                <FileText className="h-4 w-4" />
+                                <span className="text-sm italic">Sin Actividad</span>
+                                <Badge variant="outline" className="ml-2">
+                                  {phaseGroup.unassignedResources.length} recursos
+                                </Badge>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                          {phaseGroup.unassignedResources.map((resource) => 
+                            renderResourceRow(resource, 3)
+                          )}
+                        </>
+                      )}
+                    </>
+                  )}
+                </React.Fragment>
               );
             })}
           </TableBody>

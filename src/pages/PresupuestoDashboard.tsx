@@ -5,7 +5,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowLeft, Calculator, ClipboardList, Building2, FileText, Settings, Calendar, Ruler, FileDown, Image, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Calculator, ClipboardList, Building2, FileText, Settings, Calendar, Ruler, FileDown, Image, RefreshCw, Copy } from 'lucide-react';
 import { AppNavDropdown } from '@/components/AppNavDropdown';
 import { BudgetActivitiesTab } from '@/components/presupuestos/BudgetActivitiesTab';
 import { BudgetPhasesTab } from '@/components/presupuestos/BudgetPhasesTab';
@@ -15,6 +15,7 @@ import { BudgetVisualSummary } from '@/components/presupuestos/BudgetVisualSumma
 import { BudgetVersionComparison } from '@/components/presupuestos/BudgetVersionComparison';
 import { BudgetReportPreview } from '@/components/presupuestos/BudgetReportPreview';
 import { BudgetPredesignTab } from '@/components/presupuestos/BudgetPredesignTab';
+import { CloneBudgetDialog } from '@/components/presupuestos/CloneBudgetDialog';
 import { recalculateAllBudgetResources } from '@/lib/budget-utils';
 import { toast } from 'sonner';
 
@@ -44,6 +45,7 @@ export default function PresupuestoDashboard() {
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('anteproyecto');
   const [reportPreviewOpen, setReportPreviewOpen] = useState(false);
+  const [cloneDialogOpen, setCloneDialogOpen] = useState(false);
   const [isRecalculating, setIsRecalculating] = useState(false);
 
   const isAdmin = roles.includes('administrador');
@@ -306,22 +308,41 @@ export default function PresupuestoDashboard() {
                 </CardHeader>
                 <CardContent className="space-y-6">
                   {isAdmin && (
-                    <div className="flex items-center justify-between p-4 border rounded-lg bg-muted/30">
-                      <div>
-                        <h4 className="font-medium">Recalcular Unidades Relacionadas</h4>
-                        <p className="text-sm text-muted-foreground">
-                          Actualiza las Uds relacionadas de todos los recursos basándose en las mediciones y el flag "Usa Medición" de cada actividad.
-                        </p>
+                    <>
+                      <div className="flex items-center justify-between p-4 border rounded-lg bg-muted/30">
+                        <div>
+                          <h4 className="font-medium">Clonar un Presupuesto</h4>
+                          <p className="text-sm text-muted-foreground">
+                            Crea un nuevo presupuesto clonando la estructura de otro existente (fases, actividades, recursos).
+                          </p>
+                        </div>
+                        <Button 
+                          onClick={() => setCloneDialogOpen(true)}
+                          variant="outline"
+                          className="flex items-center gap-2"
+                        >
+                          <Copy className="h-4 w-4" />
+                          Clonar Presupuesto
+                        </Button>
                       </div>
-                      <Button 
-                        onClick={handleRecalculateAll} 
-                        disabled={isRecalculating}
-                        className="flex items-center gap-2"
-                      >
-                        <RefreshCw className={`h-4 w-4 ${isRecalculating ? 'animate-spin' : ''}`} />
-                        {isRecalculating ? 'Recalculando...' : 'Recalcular Todo'}
-                      </Button>
-                    </div>
+
+                      <div className="flex items-center justify-between p-4 border rounded-lg bg-muted/30">
+                        <div>
+                          <h4 className="font-medium">Recalcular Unidades Relacionadas</h4>
+                          <p className="text-sm text-muted-foreground">
+                            Actualiza las Uds relacionadas de todos los recursos basándose en las mediciones y el flag "Usa Medición" de cada actividad.
+                          </p>
+                        </div>
+                        <Button 
+                          onClick={handleRecalculateAll} 
+                          disabled={isRecalculating}
+                          className="flex items-center gap-2"
+                        >
+                          <RefreshCw className={`h-4 w-4 ${isRecalculating ? 'animate-spin' : ''}`} />
+                          {isRecalculating ? 'Recalculando...' : 'Recalcular Todo'}
+                        </Button>
+                      </div>
+                    </>
                   )}
                   <p className="text-muted-foreground text-center py-4">Más opciones próximamente</p>
                 </CardContent>
@@ -336,6 +357,16 @@ export default function PresupuestoDashboard() {
         open={reportPreviewOpen}
         onOpenChange={setReportPreviewOpen}
         presupuesto={presupuesto}
+      />
+
+      {/* Clone Budget Dialog */}
+      <CloneBudgetDialog
+        open={cloneDialogOpen}
+        onOpenChange={setCloneDialogOpen}
+        currentBudgetId={presupuesto.id}
+        onCloneSuccess={(newBudgetId) => {
+          navigate(`/presupuestos/${newBudgetId}`);
+        }}
       />
     </div>
   );

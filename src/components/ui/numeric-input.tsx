@@ -11,12 +11,15 @@ interface NumericInputProps extends Omit<React.InputHTMLAttributes<HTMLInputElem
 /**
  * Parse a string value that may use European format (comma as decimal separator)
  * or standard format (period as decimal separator) into a number.
+ * Returns NaN if the value cannot be parsed.
  */
 export const parseEuropeanNumber = (value: string): number => {
   if (!value || value.trim() === '') return 0;
   
   // Remove spaces
   const cleanValue = value.trim().replace(/\s/g, '');
+  
+  let result: number;
   
   // If the value has both . and , we need to determine which is the decimal separator
   if (cleanValue.includes(',') && cleanValue.includes('.')) {
@@ -25,40 +28,43 @@ export const parseEuropeanNumber = (value: string): number => {
     
     if (lastComma > lastDot) {
       // European format: 1.234,56 -> 1234.56
-      return parseFloat(cleanValue.replace(/\./g, '').replace(',', '.')) || 0;
+      result = parseFloat(cleanValue.replace(/\./g, '').replace(',', '.'));
     } else {
       // Standard format: 1,234.56 -> 1234.56
-      return parseFloat(cleanValue.replace(/,/g, '')) || 0;
+      result = parseFloat(cleanValue.replace(/,/g, ''));
     }
   } else if (cleanValue.includes(',')) {
     // Only comma - treat as European decimal separator
     // First remove any dots (thousands separators), then convert comma to dot
-    return parseFloat(cleanValue.replace(/\./g, '').replace(',', '.')) || 0;
+    result = parseFloat(cleanValue.replace(/\./g, '').replace(',', '.'));
   } else if (cleanValue.includes('.')) {
     // Only dots - need to determine if they are thousands separators or decimal
     const parts = cleanValue.split('.');
     
     // If multiple dots, they're thousands separators: 12.000 or 12.000.000
     if (parts.length > 2) {
-      return parseFloat(cleanValue.replace(/\./g, '')) || 0;
+      result = parseFloat(cleanValue.replace(/\./g, ''));
+    } else {
+      // Single dot: check if it looks like a thousands separator
+      // In European format, 12.000 means 12000, but 12.50 means 12.50
+      // If the part after the dot has exactly 3 digits AND the integer part is >= 1, 
+      // it's likely a thousands separator
+      const lastPart = parts[parts.length - 1];
+      if (lastPart.length === 3 && parseInt(parts[0]) >= 1) {
+        // Likely European thousands separator: 12.000 -> 12000, 1.234 -> 1234
+        result = parseFloat(cleanValue.replace(/\./g, ''));
+      } else {
+        // Otherwise treat as decimal separator: 12.5 -> 12.5, 0.50 -> 0.5
+        result = parseFloat(cleanValue);
+      }
     }
-    
-    // Single dot: check if it looks like a thousands separator
-    // In European format, 12.000 means 12000, but 12.50 means 12.50
-    // If the part after the dot has exactly 3 digits AND the integer part is >= 1, 
-    // it's likely a thousands separator
-    const lastPart = parts[parts.length - 1];
-    if (lastPart.length === 3 && parseInt(parts[0]) >= 1) {
-      // Likely European thousands separator: 12.000 -> 12000, 1.234 -> 1234
-      return parseFloat(cleanValue.replace(/\./g, '')) || 0;
-    }
-    
-    // Otherwise treat as decimal separator: 12.5 -> 12.5, 0.50 -> 0.5
-    return parseFloat(cleanValue) || 0;
+  } else {
+    // No separators - just a plain number (12000, 5, etc.)
+    result = parseFloat(cleanValue);
   }
   
-  // No separators - just a plain number (12000, 5, etc.)
-  return parseFloat(cleanValue) || 0;
+  // Return 0 only for NaN, preserve actual 0 values
+  return isNaN(result) ? 0 : result;
 };
 
 /**

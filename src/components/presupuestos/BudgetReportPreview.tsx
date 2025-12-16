@@ -240,25 +240,126 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
         doc.line(14, 40, pageWidth - 14, 40);
       };
 
-      // PAGE 1: Cover + Index
-      drawHeader();
-
-      doc.setFontSize(14);
+      // PAGE 1: Elaborate Cover Page
+      // Top gradient bar
+      doc.setFillColor(37, 99, 235);
+      doc.rect(0, 0, pageWidth, 45, 'F');
+      
+      // Decorative accent rectangles on top right
+      doc.setFillColor(29, 78, 216);
+      doc.rect(pageWidth - 60, 0, 60, 25, 'F');
+      
+      // Additional geometric decoration
+      doc.setFillColor(59, 130, 246);
+      doc.rect(pageWidth - 40, 0, 40, 15, 'F');
+      
+      // Small decorative circles
+      doc.setFillColor(96, 165, 250);
+      doc.circle(30, 35, 8, 'F');
+      doc.setFillColor(147, 197, 253);
+      doc.circle(50, 25, 5, 'F');
+      doc.circle(70, 38, 3, 'F');
+      
+      // Company logo area - large centered
+      doc.setFillColor(255, 255, 255);
+      doc.roundedRect(pageWidth / 2 - 25, 60, 50, 50, 8, 8, 'F');
+      
+      // Shadow effect for logo
+      doc.setFillColor(226, 232, 240);
+      doc.roundedRect(pageWidth / 2 - 23, 62, 50, 50, 8, 8, 'F');
+      doc.setFillColor(255, 255, 255);
+      doc.roundedRect(pageWidth / 2 - 25, 60, 50, 50, 8, 8, 'F');
+      
+      // Company initials in logo
+      doc.setFillColor(37, 99, 235);
+      doc.roundedRect(pageWidth / 2 - 20, 65, 40, 40, 6, 6, 'F');
+      doc.setTextColor(255);
+      doc.setFontSize(28);
       doc.setFont('helvetica', 'bold');
-      doc.text('INFORME COMPLETO DE PRESUPUESTO', pageWidth / 2, 50, { align: 'center' });
-
+      doc.text(companyInitials, pageWidth / 2, 92, { align: 'center' });
+      
+      // Company name - large and prominent
+      doc.setTextColor(30, 41, 59);
+      doc.setFontSize(22);
+      doc.setFont('helvetica', 'bold');
+      doc.text(companyName, pageWidth / 2, 130, { align: 'center' });
+      
+      // Company contact info
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(100, 116, 139);
+      const contactLine = [companyEmail, companyPhone].filter(Boolean).join('  •  ');
+      if (contactLine) doc.text(contactLine, pageWidth / 2, 140, { align: 'center' });
+      const addressLine = [companyAddress, companyWeb].filter(Boolean).join('  •  ');
+      if (addressLine) doc.text(addressLine, pageWidth / 2, 148, { align: 'center' });
+      
+      // Decorative divider
+      doc.setDrawColor(226, 232, 240);
+      doc.setLineWidth(0.5);
+      doc.line(pageWidth / 2 - 40, 160, pageWidth / 2 + 40, 160);
+      doc.setFillColor(37, 99, 235);
+      doc.circle(pageWidth / 2, 160, 2, 'F');
+      doc.setLineWidth(0.2);
+      
+      // Report title section
+      doc.setFillColor(248, 250, 252);
+      doc.roundedRect(20, 175, pageWidth - 40, 50, 4, 4, 'F');
+      
+      // Left accent bar
+      doc.setFillColor(37, 99, 235);
+      doc.roundedRect(20, 175, 4, 50, 2, 2, 'F');
+      
+      doc.setTextColor(37, 99, 235);
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'bold');
+      doc.text('DOCUMENTO TÉCNICO', pageWidth / 2, 188, { align: 'center' });
+      
+      doc.setTextColor(30, 41, 59);
+      doc.setFontSize(18);
+      doc.setFont('helvetica', 'bold');
+      doc.text('INFORME COMPLETO DE PRESUPUESTO', pageWidth / 2, 200, { align: 'center' });
+      
+      doc.setTextColor(71, 85, 105);
       doc.setFontSize(12);
       doc.setFont('helvetica', 'normal');
-      doc.text(presupuesto.nombre, pageWidth / 2, 58, { align: 'center' });
-
+      doc.text(presupuesto.nombre, pageWidth / 2, 215, { align: 'center' });
+      
+      // Budget ID badge
+      doc.setFillColor(241, 245, 249);
+      const badgeWidth = doc.getTextWidth(presupuestoId) + 20;
+      doc.roundedRect(pageWidth / 2 - badgeWidth / 2, 230, badgeWidth, 12, 6, 6, 'F');
+      doc.setTextColor(100, 116, 139);
       doc.setFontSize(9);
-      doc.setTextColor(100);
-      doc.text(presupuestoId, pageWidth / 2, 65, { align: 'center' });
-      doc.text(`Fecha de generación: ${format(new Date(), "d 'de' MMMM 'de' yyyy", { locale: es })}`, pageWidth / 2, 72, { align: 'center' });
-      doc.setTextColor(0);
+      doc.text(presupuestoId, pageWidth / 2, 238, { align: 'center' });
+      
+      // Date with icon-like element
+      doc.setFillColor(34, 197, 94);
+      doc.circle(pageWidth / 2 - 45, 258, 3, 'F');
+      doc.setTextColor(71, 85, 105);
+      doc.setFontSize(10);
+      doc.text(`Fecha de generación: ${format(new Date(), "d 'de' MMMM 'de' yyyy", { locale: es })}`, pageWidth / 2, 260, { align: 'center' });
+      
+      // Bottom decorative section
+      doc.setFillColor(248, 250, 252);
+      doc.rect(0, pageHeight - 25, pageWidth, 25, 'F');
+      
+      // Bottom accent line
+      doc.setFillColor(37, 99, 235);
+      doc.rect(0, pageHeight - 25, pageWidth, 3, 'F');
+      
+      // Footer text
+      doc.setTextColor(148, 163, 184);
+      doc.setFontSize(8);
+      doc.text('Documento generado automáticamente', pageWidth / 2, pageHeight - 10, { align: 'center' });
+      
+      // PAGE 2: Index
+      doc.addPage();
+      
+      // Page header for index
+      drawHeader();
 
       // Index section with improved design
-      let yPos = 88;
+      let yPos = 55;
       
       // Index box background
       doc.setFillColor(248, 250, 252);
@@ -276,17 +377,17 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
 
       yPos += 22;
       
-      // Build index items with hierarchy
+      // Build index items with hierarchy (page numbers updated for cover + index pages)
       const indexItems: { title: string; page: number; level: number; icon: string }[] = [
-        { title: 'Resumen General', page: 2, level: 1, icon: '●' },
-        { title: 'Estadísticas del presupuesto', page: 2, level: 2, icon: '○' },
-        { title: 'Desglose por Tipo de Recurso', page: 2, level: 2, icon: '○' },
+        { title: 'Resumen General', page: 3, level: 1, icon: '●' },
+        { title: 'Estadísticas del presupuesto', page: 3, level: 2, icon: '○' },
+        { title: 'Desglose por Tipo de Recurso', page: 3, level: 2, icon: '○' },
       ];
 
       if (reportSection === 'activities') {
-        indexItems.push({ title: 'Resumen de Actividades por Fase', page: 3, level: 1, icon: '●' });
+        indexItems.push({ title: 'Resumen de Actividades por Fase', page: 4, level: 1, icon: '●' });
       } else {
-        indexItems.push({ title: 'Desglose de Recursos por Fase y Actividad', page: 3, level: 1, icon: '●' });
+        indexItems.push({ title: 'Desglose de Recursos por Fase y Actividad', page: 4, level: 1, icon: '●' });
       }
 
       let sectionNum = 1;

@@ -1,7 +1,8 @@
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { BackupButton } from '@/components/BackupButton';
 import { 
   FolderKanban, 
   Calculator, 
@@ -166,10 +167,13 @@ export default function Dashboard() {
               </p>
             </div>
           </div>
-          <Button variant="outline" onClick={handleSignOut} className="gap-2">
-            <LogOut className="h-4 w-4" />
-            <span className="hidden sm:inline">Cerrar sesión</span>
-          </Button>
+          <div className="flex items-center gap-2">
+            {isAdmin() && <BackupButton module="all" variant="outline" />}
+            <Button variant="outline" onClick={handleSignOut} className="gap-2">
+              <LogOut className="h-4 w-4" />
+              <span className="hidden sm:inline">Cerrar sesión</span>
+            </Button>
+          </div>
         </div>
       </header>
 

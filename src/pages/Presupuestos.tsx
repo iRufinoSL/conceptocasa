@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { ArrowLeft, Calculator, Search, LayoutGrid, List, Plus, Pencil, Trash2, ExternalLink, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Calculator, Search, LayoutGrid, List, Plus, Pencil, Trash2, ExternalLink, RefreshCw, Copy } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { AppNavDropdown } from '@/components/AppNavDropdown';
@@ -16,6 +16,7 @@ import { toast } from 'sonner';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import { BackupButton } from '@/components/BackupButton';
 import { recalculateAllBudgetResources } from '@/lib/budget-utils';
+import { CloneBudgetDialog } from '@/components/presupuestos/CloneBudgetDialog';
 
 interface Presupuesto {
   id: string;
@@ -66,6 +67,7 @@ export default function Presupuestos() {
   const [form, setForm] = useState<PresupuestoForm>(emptyForm);
   const [isSaving, setIsSaving] = useState(false);
   const [recalculatingId, setRecalculatingId] = useState<string | null>(null);
+  const [cloneDialogOpen, setCloneDialogOpen] = useState(false);
 
   const isAdmin = roles.includes('administrador');
 
@@ -302,6 +304,12 @@ export default function Presupuestos() {
           </div>
           <div className="flex items-center gap-2">
             {isAdmin && <BackupButton module="budgets" variant="outline" />}
+            {isAdmin && (
+              <Button variant="outline" onClick={() => setCloneDialogOpen(true)}>
+                <Copy className="h-4 w-4 mr-2" />
+                Clonar Existente
+              </Button>
+            )}
             {isAdmin && (
               <Button onClick={handleNew}>
                 <Plus className="h-4 w-4 mr-2" />
@@ -631,6 +639,15 @@ export default function Presupuestos() {
         onConfirm={handleDelete}
         title="Eliminar Presupuesto"
         description={`¿Estás seguro de que deseas eliminar el presupuesto "${deletingPresupuesto?.nombre}"? Esta acción no se puede deshacer.`}
+      />
+
+      {/* Clone Budget Dialog */}
+      <CloneBudgetDialog
+        open={cloneDialogOpen}
+        onOpenChange={setCloneDialogOpen}
+        onCloneSuccess={(newBudgetId) => {
+          navigate(`/presupuestos/${newBudgetId}`);
+        }}
       />
     </div>
   );

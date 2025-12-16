@@ -201,6 +201,7 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
     try {
       const doc = new jsPDF();
       const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
 
       // Company info
       const companyName = companySettings.name || 'Mi Empresa';
@@ -210,32 +211,37 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
       const companyWeb = companySettings.website || '';
       const companyInitials = companyName.substring(0, 2).toUpperCase();
 
-      // Header with company branding
-      doc.setFillColor(37, 99, 235);
-      doc.roundedRect(14, 10, 25, 25, 3, 3, 'F');
-      doc.setTextColor(255);
-      doc.setFontSize(16);
-      doc.setFont('helvetica', 'bold');
-      doc.text(companyInitials, 26.5, 26, { align: 'center' });
-      doc.setTextColor(0);
+      // Helper function for header
+      const drawHeader = () => {
+        doc.setFillColor(37, 99, 235);
+        doc.roundedRect(14, 10, 25, 25, 3, 3, 'F');
+        doc.setTextColor(255);
+        doc.setFontSize(16);
+        doc.setFont('helvetica', 'bold');
+        doc.text(companyInitials, 26.5, 26, { align: 'center' });
+        doc.setTextColor(0);
 
-      doc.setFontSize(16);
-      doc.setFont('helvetica', 'bold');
-      doc.setTextColor(37, 99, 235);
-      doc.text(companyName, 45, 18);
-      doc.setTextColor(0);
+        doc.setFontSize(16);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(37, 99, 235);
+        doc.text(companyName, 45, 18);
+        doc.setTextColor(0);
 
-      doc.setFontSize(9);
-      doc.setFont('helvetica', 'normal');
-      doc.setTextColor(100);
-      const contactLine = [companyEmail, companyPhone].filter(Boolean).join('  |  ');
-      const addressLine = [companyAddress, companyWeb].filter(Boolean).join('  |  ');
-      if (contactLine) doc.text(contactLine, 45, 24);
-      if (addressLine) doc.text(addressLine, 45, 30);
-      doc.setTextColor(0);
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(100);
+        const contactLine = [companyEmail, companyPhone].filter(Boolean).join('  |  ');
+        const addressLine = [companyAddress, companyWeb].filter(Boolean).join('  |  ');
+        if (contactLine) doc.text(contactLine, 45, 24);
+        if (addressLine) doc.text(addressLine, 45, 30);
+        doc.setTextColor(0);
 
-      doc.setDrawColor(200);
-      doc.line(14, 40, pageWidth - 14, 40);
+        doc.setDrawColor(200);
+        doc.line(14, 40, pageWidth - 14, 40);
+      };
+
+      // PAGE 1: Cover + Index
+      drawHeader();
 
       doc.setFontSize(14);
       doc.setFont('helvetica', 'bold');
@@ -251,17 +257,66 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
       doc.text(`Fecha de generación: ${format(new Date(), "d 'de' MMMM 'de' yyyy", { locale: es })}`, pageWidth / 2, 72, { align: 'center' });
       doc.setTextColor(0);
 
-      // Section 1: General Summary
-      let yPos = 85;
+      // Index section
+      let yPos = 90;
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(37, 99, 235);
+      doc.text('ÍNDICE', 14, yPos);
+      doc.setTextColor(0);
+
+      yPos += 12;
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+
+      // Build index items
+      const indexItems = [
+        { title: '1. Resumen General', page: 2 },
+        { title: '   1.1. Estadísticas del presupuesto', page: 2 },
+        { title: '   1.2. Desglose por Tipo de Recurso', page: 2 },
+      ];
+
+      if (reportSection === 'activities') {
+        indexItems.push({ title: '2. Resumen de Actividades por Fase', page: 3 });
+      } else {
+        indexItems.push({ title: '2. Desglose de Recursos por Fase y Actividad', page: 3 });
+      }
+
+      indexItems.forEach(item => {
+        doc.text(item.title, 20, yPos);
+        // Draw dots
+        const titleWidth = doc.getTextWidth(item.title);
+        const pageNumX = pageWidth - 30;
+        const dotsStartX = 20 + titleWidth + 5;
+        const dotsEndX = pageNumX - 5;
+        doc.setTextColor(180);
+        let dotX = dotsStartX;
+        while (dotX < dotsEndX) {
+          doc.text('.', dotX, yPos);
+          dotX += 3;
+        }
+        doc.setTextColor(0);
+        doc.text(item.page.toString(), pageNumX, yPos, { align: 'right' });
+        yPos += 8;
+      });
+
+      // PAGE 2: General Summary
+      doc.addPage();
+      yPos = 20;
       doc.setFontSize(12);
       doc.setFont('helvetica', 'bold');
       doc.setTextColor(37, 99, 235);
       doc.text('1. RESUMEN GENERAL', 14, yPos);
       doc.setTextColor(0);
 
+      yPos += 12;
+      doc.setFontSize(11);
+      doc.setFont('helvetica', 'bold');
+      doc.text('1.1. Estadísticas del presupuesto', 14, yPos);
+      doc.setFont('helvetica', 'normal');
+
       yPos += 10;
       doc.setFontSize(10);
-      doc.setFont('helvetica', 'normal');
 
       const summaryData = [
         ['Total de actividades:', activities.length.toString()],
@@ -288,9 +343,8 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
       yPos += 20;
       doc.setFontSize(11);
       doc.setFont('helvetica', 'bold');
-      doc.setTextColor(37, 99, 235);
-      doc.text('Desglose por Tipo de Recurso', 14, yPos);
-      doc.setTextColor(0);
+      doc.text('1.2. Desglose por Tipo de Recurso', 14, yPos);
+      doc.setFont('helvetica', 'normal');
 
       yPos += 8;
       const typeData = Object.entries(byType).map(([type, data]) => [
@@ -513,7 +567,6 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
 
       // Footer
       const pageCount = doc.getNumberOfPages();
-      const pageHeight = doc.internal.pageSize.getHeight();
       for (let i = 1; i <= pageCount; i++) {
         doc.setPage(i);
         doc.setDrawColor(200);

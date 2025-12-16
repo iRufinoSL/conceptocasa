@@ -21,7 +21,7 @@ interface Presupuesto {
 interface CloneBudgetDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  currentBudgetId: string;
+  currentBudgetId?: string; // Optional - if provided, excludes this budget from the list
   onCloneSuccess: (newBudgetId: string) => void;
 }
 
@@ -69,11 +69,17 @@ export function CloneBudgetDialog({
   const fetchBudgets = async () => {
     setIsLoading(true);
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('presupuestos')
         .select('id, nombre, codigo_correlativo, version, poblacion, provincia')
-        .neq('id', currentBudgetId)
         .order('nombre');
+      
+      // Only exclude currentBudgetId if provided
+      if (currentBudgetId) {
+        query = query.neq('id', currentBudgetId);
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
       setBudgets(data || []);
@@ -135,18 +141,18 @@ export function CloneBudgetDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Copy className="h-5 w-5" />
-            Clonar Presupuesto
+            Crear Nuevo Presupuesto desde Plantilla
           </DialogTitle>
           <DialogDescription>
-            Selecciona un presupuesto existente para clonar su estructura completa (fases, actividades, recursos, mediciones). 
-            Los valores de mediciones y archivos del ante-proyecto NO se copian.
+            <strong>Se creará un NUEVO presupuesto</strong> copiando la estructura del presupuesto seleccionado 
+            (fases, actividades, recursos, mediciones). Los valores de mediciones y archivos NO se copian.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-4">
           {/* Source budget selection */}
           <div className="space-y-2">
-            <Label>Presupuesto a clonar</Label>
+            <Label>Selecciona el presupuesto plantilla (origen)</Label>
             {isLoading ? (
               <div className="flex items-center justify-center py-4">
                 <Loader2 className="h-5 w-5 animate-spin" />

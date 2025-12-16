@@ -10,12 +10,19 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { X, Plus, Briefcase } from 'lucide-react';
+import { X, Plus, Briefcase, Users } from 'lucide-react';
 import type { Contact } from '@/pages/CRM';
 
 interface ProfessionalActivity {
   id: string;
   name: string;
+}
+
+interface RelatedContact {
+  id: string;
+  name: string;
+  surname: string | null;
+  contact_type: string;
 }
 
 interface ContactFormProps {
@@ -30,6 +37,8 @@ export function ContactForm({ open, onOpenChange, contact, onSuccess }: ContactF
   const [isLoading, setIsLoading] = useState(false);
   const [activities, setActivities] = useState<ProfessionalActivity[]>([]);
   const [selectedActivityIds, setSelectedActivityIds] = useState<string[]>([]);
+  const [allContacts, setAllContacts] = useState<RelatedContact[]>([]);
+  const [selectedRelatedContactIds, setSelectedRelatedContactIds] = useState<string[]>([]);
   const [newTag, setNewTag] = useState('');
   const [newActivityName, setNewActivityName] = useState('');
   const [showNewActivity, setShowNewActivity] = useState(false);
@@ -38,7 +47,7 @@ export function ContactForm({ open, onOpenChange, contact, onSuccess }: ContactF
     name: '',
     surname: '',
     email: '',
-    phone: '',
+    phone: '+34 ',
     contact_type: 'Persona',
     status: 'Prospecto',
     address: '',
@@ -53,19 +62,27 @@ export function ContactForm({ open, onOpenChange, contact, onSuccess }: ContactF
   });
 
   useEffect(() => {
-    const fetchActivities = async () => {
-      const { data } = await supabase
+    const fetchData = async () => {
+      // Fetch professional activities
+      const { data: activitiesData } = await supabase
         .from('crm_professional_activities')
         .select('*')
         .order('name');
-      if (data) setActivities(data);
+      if (activitiesData) setActivities(activitiesData);
+      
+      // Fetch all contacts for related contacts selection
+      const { data: contactsData } = await supabase
+        .from('crm_contacts')
+        .select('id, name, surname, contact_type')
+        .order('name');
+      if (contactsData) setAllContacts(contactsData);
     };
-    if (open) fetchActivities();
+    if (open) fetchData();
   }, [open]);
 
   useEffect(() => {
     if (contact && open) {
-      // Fetch full contact data and activities
+      // Fetch full contact data, activities, and related contacts
       const fetchContactData = async () => {
         const { data: fullContact } = await supabase
           .from('crm_contacts')
@@ -78,7 +95,7 @@ export function ContactForm({ open, onOpenChange, contact, onSuccess }: ContactF
             name: fullContact.name || '',
             surname: fullContact.surname || '',
             email: fullContact.email || '',
-            phone: fullContact.phone || '',
+            phone: fullContact.phone || '+34 ',
             contact_type: fullContact.contact_type || 'Persona',
             status: fullContact.status || 'Prospecto',
             address: fullContact.address || '',
@@ -102,6 +119,23 @@ export function ContactForm({ open, onOpenChange, contact, onSuccess }: ContactF
         if (contactActivities) {
           setSelectedActivityIds(contactActivities.map(ca => ca.professional_activity_id));
         }
+
+        // Fetch contact's related contacts (bidirectional)
+        const { data: relationsA } = await supabase
+          .from('crm_contact_relations')
+          .select('contact_id_b')
+          .eq('contact_id_a', contact.id);
+        
+        const { data: relationsB } = await supabase
+          .from('crm_contact_relations')
+          .select('contact_id_a')
+          .eq('contact_id_b', contact.id);
+        
+        const relatedIds = [
+          ...(relationsA?.map(r => r.contact_id_b) || []),
+          ...(relationsB?.map(r => r.contact_id_a) || [])
+        ];
+        setSelectedRelatedContactIds([...new Set(relatedIds)]);
       };
       fetchContactData();
     } else if (!contact && open) {
@@ -109,7 +143,7 @@ export function ContactForm({ open, onOpenChange, contact, onSuccess }: ContactF
         name: '',
         surname: '',
         email: '',
-        phone: '',
+        phone: '+34 ',
         contact_type: 'Persona',
         status: 'Prospecto',
         address: '',
@@ -123,6 +157,7 @@ export function ContactForm({ open, onOpenChange, contact, onSuccess }: ContactF
         tags: []
       });
       setSelectedActivityIds([]);
+      setSelectedRelatedContactIds([]);
     }
   }, [contact, open]);
 
@@ -133,6 +168,17 @@ export function ContactForm({ open, onOpenChange, contact, onSuccess }: ContactF
         : [...prev, activityId]
     );
   };
+
+  const toggleRelatedContact = (contactId: string) => {
+    setSelectedRelatedContactIds(prev =>
+      prev.includes(contactId)
+        ? prev.filter(id => id !== contactId)
+        : [...prev, contactId]
+    );
+  };
+
+  // Filter out current contact from available contacts
+  const availableRelatedContacts = allContacts.filter(c => c.id !== contact?.id);
 
   const handleAddTag = () => {
     const tag = newTag.trim();
@@ -229,7 +275,7 @@ export function ContactForm({ open, onOpenChange, contact, onSuccess }: ContactF
         // Insert new activity links
         if (selectedActivityIds.length > 0) {
           const activityLinks = selectedActivityIds.map(activityId => ({
-            contact_id: contactId,
+            contact_id: contactId!,
             professional_activity_id: activityId
           }));
 
@@ -238,6 +284,32 @@ export function ContactForm({ open, onOpenChange, contact, onSuccess }: ContactF
             .insert(activityLinks);
 
           if (linkError) throw linkError;
+        }
+
+        // Update contact relations (bidirectional)
+        // First delete all existing relations for this contact
+        await supabase
+          .from('crm_contact_relations')
+          .delete()
+          .eq('contact_id_a', contactId);
+        
+        await supabase
+          .from('crm_contact_relations')
+          .delete()
+          .eq('contact_id_b', contactId);
+
+        // Insert new relations (only in one direction to avoid duplicates)
+        if (selectedRelatedContactIds.length > 0) {
+          const relationLinks = selectedRelatedContactIds.map(relatedId => ({
+            contact_id_a: contactId!,
+            contact_id_b: relatedId
+          }));
+
+          const { error: relationError } = await supabase
+            .from('crm_contact_relations')
+            .insert(relationLinks);
+
+          if (relationError) throw relationError;
         }
       }
 
@@ -303,6 +375,7 @@ export function ContactForm({ open, onOpenChange, contact, onSuccess }: ContactF
                 <SelectContent>
                   <SelectItem value="Prospecto">Prospecto</SelectItem>
                   <SelectItem value="Cliente">Cliente</SelectItem>
+                  <SelectItem value="Proveedor">Proveedor</SelectItem>
                   <SelectItem value="Inactivo">Inactivo</SelectItem>
                 </SelectContent>
               </Select>
@@ -378,6 +451,59 @@ export function ContactForm({ open, onOpenChange, contact, onSuccess }: ContactF
                 <Button type="button" variant="outline" onClick={() => { setShowNewActivity(false); setNewActivityName(''); }}>
                   Cancelar
                 </Button>
+              </div>
+            )}
+          </div>
+
+          {/* Related Contacts */}
+          <div className="space-y-2">
+            <Label className="flex items-center gap-2">
+              <Users className="h-4 w-4" />
+              Contactos Relacionados
+            </Label>
+            <ScrollArea className="h-32 rounded-md border p-2">
+              {availableRelatedContacts.length === 0 ? (
+                <p className="text-sm text-muted-foreground p-2">No hay otros contactos disponibles</p>
+              ) : (
+                <div className="space-y-2">
+                  {availableRelatedContacts.map(relContact => (
+                    <div key={relContact.id} className="flex items-center space-x-2">
+                      <Checkbox
+                        id={`related-${relContact.id}`}
+                        checked={selectedRelatedContactIds.includes(relContact.id)}
+                        onCheckedChange={() => toggleRelatedContact(relContact.id)}
+                      />
+                      <label
+                        htmlFor={`related-${relContact.id}`}
+                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer flex items-center gap-2"
+                      >
+                        {relContact.name} {relContact.surname}
+                        <Badge variant="outline" className="text-xs">
+                          {relContact.contact_type}
+                        </Badge>
+                      </label>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </ScrollArea>
+            {selectedRelatedContactIds.length > 0 && (
+              <div className="flex flex-wrap gap-1">
+                {selectedRelatedContactIds.map(id => {
+                  const relContact = allContacts.find(c => c.id === id);
+                  return relContact ? (
+                    <Badge key={id} variant="secondary" className="gap-1">
+                      {relContact.name} {relContact.surname}
+                      <button
+                        type="button"
+                        onClick={() => toggleRelatedContact(id)}
+                        className="ml-1 hover:text-destructive"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </Badge>
+                  ) : null;
+                })}
               </div>
             )}
           </div>

@@ -314,6 +314,7 @@ export function ResourcesGroupedView({
       <TableRow 
         key={resource.id} 
         className={cn(selectedIds.has(resource.id) ? 'bg-muted/50' : '')}
+        onClick={(e) => e.stopPropagation()}
       >
         {isAdmin && (
           <TableCell style={{ paddingLeft: `${indent * 16 + 8}px` }}>

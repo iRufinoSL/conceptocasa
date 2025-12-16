@@ -189,11 +189,17 @@ export function ResourceInlineEdit({
             'border border-transparent hover:border-primary/30',
             'transition-all duration-200 ease-out',
             'animate-fade-in',
+            'select-none',
             className
           )}
           onClick={(e) => {
+            e.preventDefault();
             e.stopPropagation();
+            e.nativeEvent.stopImmediatePropagation();
             setIsEditing(true);
+          }}
+          onMouseDown={(e) => {
+            e.stopPropagation();
           }}
           onKeyDown={(e) => {
             if (e.key === 'Enter' || e.key === ' ') {

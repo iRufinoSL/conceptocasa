@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,6 +13,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Plus, Pencil, Trash2, Upload, Search, ChevronRight, ChevronDown, ClipboardList, MoreHorizontal, Copy } from 'lucide-react';
 import { toast } from 'sonner';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
+import { formatCurrency } from '@/lib/format-utils';
 
 interface BudgetPhase {
   id: string;
@@ -28,6 +29,16 @@ interface BudgetActivity {
   name: string;
   code: string;
   phase_id: string | null;
+}
+
+interface BudgetResource {
+  id: string;
+  activity_id: string | null;
+  external_unit_cost: number | null;
+  safety_margin_percent: number | null;
+  sales_margin_percent: number | null;
+  manual_units: number | null;
+  related_units: number | null;
 }
 
 interface PhaseForm {
@@ -47,9 +58,28 @@ const emptyForm: PhaseForm = {
   selectedActivities: [],
 };
 
+// Calculate subtotal for a resource
+const calculateResourceSubtotal = (resource: BudgetResource): number => {
+  const externalCost = resource.external_unit_cost || 0;
+  const safetyPercent = resource.safety_margin_percent ?? 0.15;
+  const salesPercent = resource.sales_margin_percent ?? 0.25;
+  
+  const safetyMarginUd = externalCost * safetyPercent;
+  const internalCostUd = externalCost + safetyMarginUd;
+  const salesMarginUd = internalCostUd * salesPercent;
+  const salesCostUd = internalCostUd + salesMarginUd;
+  
+  const calculatedUnits = resource.manual_units !== null 
+    ? resource.manual_units 
+    : (resource.related_units || 0);
+  
+  return calculatedUnits * salesCostUd;
+};
+
 export function BudgetPhasesTab({ budgetId, isAdmin }: BudgetPhasesTabProps) {
   const [phases, setPhases] = useState<BudgetPhase[]>([]);
   const [activities, setActivities] = useState<BudgetActivity[]>([]);
+  const [resources, setResources] = useState<BudgetResource[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [formDialogOpen, setFormDialogOpen] = useState(false);
@@ -66,7 +96,7 @@ export function BudgetPhasesTab({ budgetId, isAdmin }: BudgetPhasesTabProps) {
   const fetchData = async () => {
     setIsLoading(true);
     try {
-      const [phasesResponse, activitiesResponse] = await Promise.all([
+      const [phasesResponse, activitiesResponse, resourcesResponse] = await Promise.all([
         supabase
           .from('budget_phases')
           .select('*')
@@ -75,14 +105,20 @@ export function BudgetPhasesTab({ budgetId, isAdmin }: BudgetPhasesTabProps) {
         supabase
           .from('budget_activities')
           .select('id, name, code, phase_id')
+          .eq('budget_id', budgetId),
+        supabase
+          .from('budget_activity_resources')
+          .select('id, activity_id, external_unit_cost, safety_margin_percent, sales_margin_percent, manual_units, related_units')
           .eq('budget_id', budgetId)
       ]);
 
       if (phasesResponse.error) throw phasesResponse.error;
       if (activitiesResponse.error) throw activitiesResponse.error;
+      if (resourcesResponse.error) throw resourcesResponse.error;
 
       setPhases(phasesResponse.data || []);
       setActivities(activitiesResponse.data || []);
+      setResources(resourcesResponse.data || []);
     } catch (error) {
       console.error('Error fetching data:', error);
       toast.error('Error al cargar los datos');
@@ -94,6 +130,39 @@ export function BudgetPhasesTab({ budgetId, isAdmin }: BudgetPhasesTabProps) {
   useEffect(() => {
     fetchData();
   }, [budgetId]);
+
+  // Listen for budget recalculation events
+  useEffect(() => {
+    const handleRecalculated = () => {
+      fetchData();
+    };
+    window.addEventListener('budget-recalculated', handleRecalculated);
+    return () => window.removeEventListener('budget-recalculated', handleRecalculated);
+  }, []);
+
+  // Calculate subtotals per phase
+  const phaseSubtotals = useMemo(() => {
+    const subtotals = new Map<string, number>();
+    
+    for (const phase of phases) {
+      // Get activities in this phase
+      const phaseActivities = activities.filter(a => a.phase_id === phase.id);
+      const activityIds = phaseActivities.map(a => a.id);
+      
+      // Get resources for these activities and calculate subtotal
+      const phaseResources = resources.filter(r => r.activity_id && activityIds.includes(r.activity_id));
+      const subtotal = phaseResources.reduce((sum, r) => sum + calculateResourceSubtotal(r), 0);
+      
+      subtotals.set(phase.id, subtotal);
+    }
+    
+    return subtotals;
+  }, [phases, activities, resources]);
+
+  // Calculate total
+  const totalSubtotal = useMemo(() => {
+    return Array.from(phaseSubtotals.values()).reduce((sum, val) => sum + val, 0);
+  }, [phaseSubtotals]);
 
   const handleNew = () => {
     setCurrentPhase(null);
@@ -421,9 +490,15 @@ export function BudgetPhasesTab({ budgetId, isAdmin }: BudgetPhasesTabProps) {
     <Card>
       <CardHeader>
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
+          <div className="flex-1">
             <CardTitle>CUÁNDO se hace? - Fases de Gestión</CardTitle>
             <CardDescription>Organización temporal de las fases del presupuesto</CardDescription>
+          </div>
+          <div className="flex items-center gap-4">
+            <div className="text-right">
+              <p className="text-2xl font-bold text-green-600">{formatCurrency(totalSubtotal)}</p>
+              <p className="text-xs text-muted-foreground">€SubTotal Venta Total</p>
+            </div>
           </div>
           {isAdmin && (
             <div className="flex gap-2">
@@ -473,17 +548,23 @@ export function BudgetPhasesTab({ budgetId, isAdmin }: BudgetPhasesTabProps) {
                   <div className="border rounded-lg">
                     <CollapsibleTrigger asChild>
                       <div className="flex items-center justify-between p-4 cursor-pointer hover:bg-muted/50 transition-colors">
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-3 flex-1">
                           {isExpanded ? (
                             <ChevronDown className="h-4 w-4 text-muted-foreground" />
                           ) : (
                             <ChevronRight className="h-4 w-4 text-muted-foreground" />
                           )}
-                          <div>
+                          <div className="flex-1">
                             <p className="font-medium">{generatePhaseId(phase)}</p>
                             <p className="text-sm text-muted-foreground">
                               {phaseActivities.length} actividad{phaseActivities.length !== 1 ? 'es' : ''}
                             </p>
+                          </div>
+                          <div className="text-right mr-4">
+                            <p className="font-semibold text-green-600">
+                              {formatCurrency(phaseSubtotals.get(phase.id) || 0)}
+                            </p>
+                            <p className="text-xs text-muted-foreground">€SubTotal Venta</p>
                           </div>
                         </div>
                         {isAdmin && (

@@ -8,13 +8,14 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { ArrowLeft, Calculator, Search, LayoutGrid, List, Plus, Pencil, Trash2, ExternalLink } from 'lucide-react';
+import { ArrowLeft, Calculator, Search, LayoutGrid, List, Plus, Pencil, Trash2, ExternalLink, RefreshCw } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { AppNavDropdown } from '@/components/AppNavDropdown';
 import { toast } from 'sonner';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import { BackupButton } from '@/components/BackupButton';
+import { recalculateAllBudgetResources } from '@/lib/budget-utils';
 
 interface Presupuesto {
   id: string;
@@ -64,8 +65,30 @@ export default function Presupuestos() {
   const [deletingPresupuesto, setDeletingPresupuesto] = useState<Presupuesto | null>(null);
   const [form, setForm] = useState<PresupuestoForm>(emptyForm);
   const [isSaving, setIsSaving] = useState(false);
+  const [recalculatingId, setRecalculatingId] = useState<string | null>(null);
 
   const isAdmin = roles.includes('administrador');
+
+  // Handle manual recalculation for a budget
+  const handleRecalculate = async (e: React.MouseEvent, budgetId: string) => {
+    e.stopPropagation();
+    setRecalculatingId(budgetId);
+    try {
+      const result = await recalculateAllBudgetResources(budgetId);
+      if (result.errors > 0) {
+        toast.warning(`Recalculado con ${result.errors} error(es)`);
+      } else {
+        toast.success('Presupuesto recalculado correctamente');
+      }
+      // Emit event so any open dashboard tabs can refresh
+      window.dispatchEvent(new CustomEvent('budget-recalculated'));
+    } catch (err) {
+      console.error('Error recalculating:', err);
+      toast.error('Error al recalcular');
+    } finally {
+      setRecalculatingId(null);
+    }
+  };
 
   // Generate PresupuestoID (calculated field)
   const generatePresupuestoId = (p: Presupuesto | PresupuestoForm) => {
@@ -347,6 +370,16 @@ export default function Presupuestos() {
                           <Button 
                             variant="ghost" 
                             size="icon" 
+                            title="Recalcular"
+                            onClick={(e) => handleRecalculate(e, p.id)}
+                            disabled={recalculatingId === p.id}
+                          >
+                            <RefreshCw className={`h-4 w-4 ${recalculatingId === p.id ? 'animate-spin' : ''}`} />
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            title="Editar"
                             onClick={(e) => { e.stopPropagation(); handleEdit(p); }}
                           >
                             <Pencil className="h-4 w-4" />
@@ -354,6 +387,7 @@ export default function Presupuestos() {
                           <Button 
                             variant="ghost" 
                             size="icon" 
+                            title="Eliminar"
                             onClick={(e) => { e.stopPropagation(); handleDeleteClick(p); }}
                           >
                             <Trash2 className="h-4 w-4 text-destructive" />
@@ -363,6 +397,7 @@ export default function Presupuestos() {
                       <Button 
                         variant="ghost" 
                         size="icon"
+                        title="Ir al Dashboard"
                         onClick={(e) => { e.stopPropagation(); navigate(`/presupuestos/${p.id}`); }}
                       >
                         <ExternalLink className="h-4 w-4" />
@@ -428,6 +463,16 @@ export default function Presupuestos() {
                             <Button 
                               variant="ghost" 
                               size="icon" 
+                              title="Recalcular"
+                              onClick={(e) => handleRecalculate(e, p.id)}
+                              disabled={recalculatingId === p.id}
+                            >
+                              <RefreshCw className={`h-4 w-4 ${recalculatingId === p.id ? 'animate-spin' : ''}`} />
+                            </Button>
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              title="Editar"
                               onClick={(e) => { e.stopPropagation(); handleEdit(p); }}
                             >
                               <Pencil className="h-4 w-4" />
@@ -435,6 +480,7 @@ export default function Presupuestos() {
                             <Button 
                               variant="ghost" 
                               size="icon" 
+                              title="Eliminar"
                               onClick={(e) => { e.stopPropagation(); handleDeleteClick(p); }}
                             >
                               <Trash2 className="h-4 w-4 text-destructive" />

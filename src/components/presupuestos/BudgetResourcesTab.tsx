@@ -327,7 +327,9 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
   };
 
   // Calculate derived fields for a resource
-  const calculateFields = (resource: BudgetResource) => {
+  // Note: This uses the stored related_units from the database. For consistency with
+  // BudgetActivitiesTab, make sure to recalculate via the "Recalcular" button if values seem stale.
+  const calculateFields = useCallback((resource: BudgetResource) => {
     const externalCost = resource.external_unit_cost || 0;
     const safetyPercent = resource.safety_margin_percent ?? 0.15;
     const salesPercent = resource.sales_margin_percent ?? 0.25;
@@ -352,7 +354,7 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
       calculatedUnits,
       subtotalSales,
     };
-  };
+  }, []);
 
   // Filter resources by search term
   const filteredResources = useMemo(() => {

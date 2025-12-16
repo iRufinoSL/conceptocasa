@@ -257,47 +257,94 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
       doc.text(`Fecha de generación: ${format(new Date(), "d 'de' MMMM 'de' yyyy", { locale: es })}`, pageWidth / 2, 72, { align: 'center' });
       doc.setTextColor(0);
 
-      // Index section
-      let yPos = 90;
-      doc.setFontSize(12);
+      // Index section with improved design
+      let yPos = 88;
+      
+      // Index box background
+      doc.setFillColor(248, 250, 252);
+      doc.roundedRect(14, yPos - 6, pageWidth - 28, 75, 4, 4, 'F');
+      
+      // Index header with icon-like element
+      doc.setFillColor(37, 99, 235);
+      doc.roundedRect(18, yPos - 2, 4, 16, 1, 1, 'F');
+      
+      doc.setFontSize(14);
       doc.setFont('helvetica', 'bold');
       doc.setTextColor(37, 99, 235);
-      doc.text('ÍNDICE', 14, yPos);
+      doc.text('ÍNDICE DEL DOCUMENTO', 28, yPos + 8);
       doc.setTextColor(0);
 
-      yPos += 12;
-      doc.setFontSize(10);
-      doc.setFont('helvetica', 'normal');
-
-      // Build index items
-      const indexItems = [
-        { title: '1. Resumen General', page: 2 },
-        { title: '   1.1. Estadísticas del presupuesto', page: 2 },
-        { title: '   1.2. Desglose por Tipo de Recurso', page: 2 },
+      yPos += 22;
+      
+      // Build index items with hierarchy
+      const indexItems: { title: string; page: number; level: number; icon: string }[] = [
+        { title: 'Resumen General', page: 2, level: 1, icon: '●' },
+        { title: 'Estadísticas del presupuesto', page: 2, level: 2, icon: '○' },
+        { title: 'Desglose por Tipo de Recurso', page: 2, level: 2, icon: '○' },
       ];
 
       if (reportSection === 'activities') {
-        indexItems.push({ title: '2. Resumen de Actividades por Fase', page: 3 });
+        indexItems.push({ title: 'Resumen de Actividades por Fase', page: 3, level: 1, icon: '●' });
       } else {
-        indexItems.push({ title: '2. Desglose de Recursos por Fase y Actividad', page: 3 });
+        indexItems.push({ title: 'Desglose de Recursos por Fase y Actividad', page: 3, level: 1, icon: '●' });
       }
 
-      indexItems.forEach(item => {
-        doc.text(item.title, 20, yPos);
-        // Draw dots
-        const titleWidth = doc.getTextWidth(item.title);
-        const pageNumX = pageWidth - 30;
-        const dotsStartX = 20 + titleWidth + 5;
-        const dotsEndX = pageNumX - 5;
-        doc.setTextColor(180);
-        let dotX = dotsStartX;
-        while (dotX < dotsEndX) {
-          doc.text('.', dotX, yPos);
-          dotX += 3;
+      let sectionNum = 1;
+      let subSectionNum = 0;
+      
+      indexItems.forEach((item, idx) => {
+        const indent = item.level === 1 ? 22 : 34;
+        const fontSize = item.level === 1 ? 11 : 10;
+        const fontStyle = item.level === 1 ? 'bold' : 'normal';
+        
+        doc.setFontSize(fontSize);
+        doc.setFont('helvetica', fontStyle);
+        
+        // Section numbering
+        let numberText: string;
+        if (item.level === 1) {
+          numberText = `${sectionNum}.`;
+          sectionNum++;
+          subSectionNum = 0;
+        } else {
+          subSectionNum++;
+          numberText = `${sectionNum - 1}.${subSectionNum}`;
         }
+        
+        // Draw bullet/icon
+        if (item.level === 1) {
+          doc.setFillColor(37, 99, 235);
+          doc.circle(indent - 4, yPos - 1.5, 1.5, 'F');
+        } else {
+          doc.setDrawColor(100, 116, 139);
+          doc.circle(indent - 4, yPos - 1.5, 1.2, 'S');
+        }
+        
+        // Draw number and title
+        doc.setTextColor(item.level === 1 ? 30 : 71, item.level === 1 ? 41 : 85, item.level === 1 ? 59 : 105);
+        doc.text(`${numberText} ${item.title}`, indent, yPos);
+        
+        // Draw dotted line
+        const titleWidth = doc.getTextWidth(`${numberText} ${item.title}`);
+        const pageNumX = pageWidth - 24;
+        const dotsStartX = indent + titleWidth + 4;
+        const dotsEndX = pageNumX - 8;
+        
+        doc.setDrawColor(200, 200, 200);
+        doc.setLineDashPattern([1, 2], 0);
+        doc.line(dotsStartX, yPos - 1, dotsEndX, yPos - 1);
+        doc.setLineDashPattern([], 0);
+        
+        // Page number in a small circle
+        doc.setFillColor(37, 99, 235);
+        doc.circle(pageNumX, yPos - 1.5, 4, 'F');
+        doc.setTextColor(255);
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'bold');
+        doc.text(item.page.toString(), pageNumX, yPos, { align: 'center' });
         doc.setTextColor(0);
-        doc.text(item.page.toString(), pageNumX, yPos, { align: 'right' });
-        yPos += 8;
+        
+        yPos += item.level === 1 ? 10 : 8;
       });
 
       // PAGE 2: General Summary

@@ -31,6 +31,13 @@ interface ProfessionalActivity {
   name: string;
 }
 
+interface RelatedContact {
+  id: string;
+  name: string;
+  surname: string | null;
+  contact_type: string;
+}
+
 interface ContactDetailDialogProps {
   contact: Contact | null;
   open: boolean;
@@ -40,6 +47,7 @@ interface ContactDetailDialogProps {
 export function ContactDetailDialog({ contact, open, onOpenChange }: ContactDetailDialogProps) {
   const [managements, setManagements] = useState<Management[]>([]);
   const [activityNames, setActivityNames] = useState<string[]>([]);
+  const [relatedContacts, setRelatedContacts] = useState<RelatedContact[]>([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -89,6 +97,37 @@ export function ContactDetailDialog({ contact, open, onOpenChange }: ContactDeta
       } else {
         setActivityNames([]);
       }
+
+      // Fetch related contacts (bidirectional)
+      const { data: relationsA } = await supabase
+        .from('crm_contact_relations')
+        .select('contact_id_b')
+        .eq('contact_id_a', contact.id);
+      
+      const { data: relationsB } = await supabase
+        .from('crm_contact_relations')
+        .select('contact_id_a')
+        .eq('contact_id_b', contact.id);
+      
+      const relatedIds = [
+        ...(relationsA?.map(r => r.contact_id_b) || []),
+        ...(relationsB?.map(r => r.contact_id_a) || [])
+      ];
+      const uniqueRelatedIds = [...new Set(relatedIds)];
+
+      if (uniqueRelatedIds.length > 0) {
+        const { data: relatedContactsData } = await supabase
+          .from('crm_contacts')
+          .select('id, name, surname, contact_type')
+          .in('id', uniqueRelatedIds)
+          .order('name');
+        
+        if (relatedContactsData) {
+          setRelatedContacts(relatedContactsData);
+        }
+      } else {
+        setRelatedContacts([]);
+      }
       
       setLoading(false);
     };
@@ -108,6 +147,7 @@ export function ContactDetailDialog({ contact, open, onOpenChange }: ContactDeta
     switch (status) {
       case 'Cliente': return 'default';
       case 'Prospecto': return 'secondary';
+      case 'Proveedor': return 'outline';
       case 'Inactivo': return 'outline';
       case 'Completada': return 'default';
       case 'Pendiente': return 'secondary';
@@ -242,6 +282,28 @@ export function ContactDetailDialog({ contact, open, onOpenChange }: ContactDeta
                   <p className="text-sm text-muted-foreground whitespace-pre-wrap">
                     {contact.observations}
                   </p>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Related Contacts */}
+            {relatedContacts.length > 0 && (
+              <Card>
+                <CardHeader className="py-3">
+                  <CardTitle className="text-sm font-medium flex items-center gap-2">
+                    <User className="h-4 w-4" />
+                    Contactos Relacionados ({relatedContacts.length})
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="py-0 pb-4">
+                  <div className="flex flex-wrap gap-2">
+                    {relatedContacts.map((relContact) => (
+                      <Badge key={relContact.id} variant="secondary" className="gap-1">
+                        {relContact.name} {relContact.surname}
+                        <span className="text-xs opacity-70">({relContact.contact_type})</span>
+                      </Badge>
+                    ))}
+                  </div>
                 </CardContent>
               </Card>
             )}

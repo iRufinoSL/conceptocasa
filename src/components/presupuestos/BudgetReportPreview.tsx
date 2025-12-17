@@ -30,6 +30,9 @@ interface BudgetReportPreviewProps {
     poblacion: string;
     provincia: string | null;
     portada_url?: string | null;
+    portada_text_color?: string | null;
+    portada_text_position?: string | null;
+    portada_overlay_opacity?: number | null;
   };
 }
 
@@ -294,35 +297,74 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
         // Full page cover image
         doc.addImage(portadaImgData, 'JPEG', 0, 0, pageWidth, pageHeight);
         
-        // Semi-transparent overlay at bottom for text
+        // Get style settings
+        const textColor = presupuesto.portada_text_color || '#FFFFFF';
+        const textPosition = presupuesto.portada_text_position || 'center';
+        const overlayOpacity = presupuesto.portada_overlay_opacity ?? 0.4;
+        
+        // Convert hex color to RGB
+        const hexToRgb = (hex: string) => {
+          const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+          return result ? {
+            r: parseInt(result[1], 16),
+            g: parseInt(result[2], 16),
+            b: parseInt(result[3], 16)
+          } : { r: 255, g: 255, b: 255 };
+        };
+        const rgb = hexToRgb(textColor);
+        
+        // Calculate positions based on text position setting
+        let overlayY = 0;
+        let overlayHeight = pageHeight;
+        let textBaseY = pageHeight / 2;
+        let logoY = 20;
+        
+        if (textPosition === 'top') {
+          overlayY = 0;
+          overlayHeight = 120;
+          textBaseY = 50;
+          logoY = 130;
+        } else if (textPosition === 'center') {
+          overlayY = pageHeight / 2 - 60;
+          overlayHeight = 120;
+          textBaseY = pageHeight / 2 - 20;
+          logoY = 20;
+        } else { // bottom
+          overlayY = pageHeight - 100;
+          overlayHeight = 100;
+          textBaseY = pageHeight - 65;
+          logoY = 20;
+        }
+        
+        // Semi-transparent overlay for text
         doc.setFillColor(0, 0, 0);
-        doc.setGState(new (doc as any).GState({ opacity: 0.6 }));
-        doc.rect(0, pageHeight - 100, pageWidth, 100, 'F');
+        doc.setGState(new (doc as any).GState({ opacity: overlayOpacity }));
+        doc.rect(0, overlayY, pageWidth, overlayHeight, 'F');
         doc.setGState(new (doc as any).GState({ opacity: 1 }));
         
         // Company logo on cover
         if (logoImgData) {
-          doc.addImage(logoImgData, 'JPEG', pageWidth / 2 - 20, 20, 40, 40);
+          doc.addImage(logoImgData, 'JPEG', pageWidth / 2 - 20, logoY, 40, 40);
         }
         
-        // Report title at bottom
-        doc.setTextColor(255);
+        // Report title with configurable color
+        doc.setTextColor(rgb.r, rgb.g, rgb.b);
         doc.setFontSize(10);
         doc.setFont('helvetica', 'bold');
-        doc.text('DOCUMENTO TÉCNICO', pageWidth / 2, pageHeight - 75, { align: 'center' });
+        doc.text('DOCUMENTO TÉCNICO', pageWidth / 2, textBaseY, { align: 'center' });
         
         doc.setFontSize(20);
-        doc.text('INFORME DE PRESUPUESTO', pageWidth / 2, pageHeight - 60, { align: 'center' });
+        doc.text('INFORME DE PRESUPUESTO', pageWidth / 2, textBaseY + 15, { align: 'center' });
         
         doc.setFontSize(14);
         doc.setFont('helvetica', 'normal');
-        doc.text(presupuesto.nombre, pageWidth / 2, pageHeight - 42, { align: 'center' });
+        doc.text(presupuesto.nombre, pageWidth / 2, textBaseY + 33, { align: 'center' });
         
         doc.setFontSize(10);
-        doc.text(presupuestoId, pageWidth / 2, pageHeight - 28, { align: 'center' });
+        doc.text(presupuestoId, pageWidth / 2, textBaseY + 47, { align: 'center' });
         
         doc.setFontSize(9);
-        doc.text(`Fecha: ${format(new Date(), "d 'de' MMMM 'de' yyyy", { locale: es })}`, pageWidth / 2, pageHeight - 15, { align: 'center' });
+        doc.text(`Fecha: ${format(new Date(), "d 'de' MMMM 'de' yyyy", { locale: es })}`, pageWidth / 2, textBaseY + 60, { align: 'center' });
       } else {
         // Fallback to designed cover without portada
         // Top gradient bar
@@ -1062,11 +1104,40 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
                     alt="Portada del presupuesto" 
                     className="w-full h-full object-cover"
                   />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
-                  <div className="absolute bottom-4 left-0 right-0 text-center text-white">
-                    <p className="text-sm font-medium">INFORME DE PRESUPUESTO</p>
-                    <p className="text-lg font-bold">{presupuesto.nombre}</p>
-                  </div>
+                  {/* Dynamic overlay based on position */}
+                  {(() => {
+                    const position = presupuesto.portada_text_position || 'center';
+                    const opacity = presupuesto.portada_overlay_opacity ?? 0.4;
+                    const textColor = presupuesto.portada_text_color || '#FFFFFF';
+                    
+                    const overlayClasses = position === 'top' 
+                      ? 'top-0 bg-gradient-to-b' 
+                      : position === 'center'
+                      ? 'inset-0'
+                      : 'bottom-0 bg-gradient-to-t';
+                    
+                    const textClasses = position === 'top'
+                      ? 'top-4 left-0 right-0'
+                      : position === 'center'
+                      ? 'inset-0 flex flex-col items-center justify-center'
+                      : 'bottom-4 left-0 right-0';
+                    
+                    return (
+                      <>
+                        <div 
+                          className={`absolute ${overlayClasses} ${position === 'center' ? '' : 'h-1/2'}`}
+                          style={{ 
+                            backgroundColor: position === 'center' ? `rgba(0,0,0,${opacity})` : undefined,
+                            background: position !== 'center' ? `linear-gradient(${position === 'top' ? 'to bottom' : 'to top'}, rgba(0,0,0,${opacity}), transparent)` : undefined
+                          }}
+                        />
+                        <div className={`absolute ${textClasses} text-center`} style={{ color: textColor }}>
+                          <p className="text-sm font-medium">INFORME DE PRESUPUESTO</p>
+                          <p className="text-lg font-bold">{presupuesto.nombre}</p>
+                        </div>
+                      </>
+                    );
+                  })()}
                 </div>
               )}
               

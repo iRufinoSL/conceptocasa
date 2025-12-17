@@ -18,6 +18,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { toast } from 'sonner';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
+import { searchMatch } from '@/lib/search-utils';
 import { formatCurrency, formatNumber, formatPercent } from '@/lib/format-utils';
 import { MeasurementInlineSelect, MeasurementInlineSelectHandle } from './MeasurementInlineSelect';
 import { ResourceInlineEdit } from './ResourceInlineEdit';
@@ -1060,12 +1061,11 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin }: BudgetAct
 
   // Filter activities
   const filteredActivities = activities.filter(a => {
-    const term = searchTerm.toLowerCase();
     return (
-      a.name.toLowerCase().includes(term) ||
-      a.code.toLowerCase().includes(term) ||
-      a.description?.toLowerCase().includes(term) ||
-      a.measurement_unit.toLowerCase().includes(term)
+      searchMatch(a.name, searchTerm) ||
+      searchMatch(a.code, searchTerm) ||
+      searchMatch(a.description, searchTerm) ||
+      searchMatch(a.measurement_unit, searchTerm)
     );
   });
 

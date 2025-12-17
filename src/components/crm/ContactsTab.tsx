@@ -9,6 +9,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { Mail, Phone, MapPin, Users, MoreVertical, Pencil, Trash2, LayoutGrid, List, FolderOpen, ChevronRight } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { ContactDetailDialog } from './ContactDetailDialog';
+import { searchMatch } from '@/lib/search-utils';
 import type { Contact } from '@/pages/CRM';
 
 type ViewMode = 'cards' | 'list' | 'grouped';
@@ -77,13 +78,12 @@ export function ContactsTab({ contacts, searchTerm, onEdit, onDelete }: Contacts
     let result = [...contacts];
     
     if (searchTerm) {
-      const term = searchTerm.toLowerCase();
       result = result.filter(contact =>
-        contact.name.toLowerCase().includes(term) ||
-        contact.surname?.toLowerCase().includes(term) ||
-        contact.email?.toLowerCase().includes(term) ||
-        contact.city?.toLowerCase().includes(term) ||
-        contact.tags?.some(tag => tag.toLowerCase().includes(term))
+        searchMatch(contact.name, searchTerm) ||
+        searchMatch(contact.surname, searchTerm) ||
+        searchMatch(contact.email, searchTerm) ||
+        searchMatch(contact.city, searchTerm) ||
+        contact.tags?.some(tag => searchMatch(tag, searchTerm))
       );
     }
     

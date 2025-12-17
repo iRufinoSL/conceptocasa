@@ -6,6 +6,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Calendar, Clock, ClipboardList, MoreVertical, Pencil, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { searchMatch } from '@/lib/search-utils';
 import type { Management } from '@/pages/CRM';
 
 interface ManagementsTabProps {
@@ -18,10 +19,9 @@ interface ManagementsTabProps {
 export function ManagementsTab({ managements, searchTerm, onEdit, onDelete }: ManagementsTabProps) {
   const filteredManagements = useMemo(() => {
     if (!searchTerm) return managements;
-    const term = searchTerm.toLowerCase();
     return managements.filter(management =>
-      management.title.toLowerCase().includes(term) ||
-      management.description?.toLowerCase().includes(term)
+      searchMatch(management.title, searchTerm) ||
+      searchMatch(management.description, searchTerm)
     );
   }, [managements, searchTerm]);
 

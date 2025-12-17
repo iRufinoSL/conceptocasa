@@ -1,6 +1,7 @@
 import { useState, useMemo, useCallback } from 'react';
 import { ExternalResource, ResourceType, calculateCompositeCost, getResourceComposition } from '@/types/resource';
 import { mockResources } from '@/data/mockResources';
+import { searchMatch } from '@/lib/search-utils';
 
 export function useResources() {
   const [resources, setResources] = useState<ExternalResource[]>(mockResources);
@@ -19,19 +20,18 @@ export function useResources() {
 
   const filteredResources = useMemo(() => {
     return resources.filter((resource) => {
-      const searchLower = searchTerm.toLowerCase();
       const composition = getComposition(resource);
       
-      // Search across all fields including composition
+      // Search across all fields including composition (accent-insensitive)
       const matchesSearch =
-        resource.name.toLowerCase().includes(searchLower) ||
-        resource.description.toLowerCase().includes(searchLower) ||
-        resource.id.toLowerCase().includes(searchLower) ||
-        resource.resourceType.toLowerCase().includes(searchLower) ||
-        resource.unitMeasure.toLowerCase().includes(searchLower) ||
-        resource.unitCost.toString().includes(searchLower) ||
-        composition.toLowerCase().includes(searchLower) ||
-        (resource.website && resource.website.toLowerCase().includes(searchLower));
+        searchMatch(resource.name, searchTerm) ||
+        searchMatch(resource.description, searchTerm) ||
+        searchMatch(resource.id, searchTerm) ||
+        searchMatch(resource.resourceType, searchTerm) ||
+        searchMatch(resource.unitMeasure, searchTerm) ||
+        resource.unitCost.toString().includes(searchTerm) ||
+        searchMatch(composition, searchTerm) ||
+        searchMatch(resource.website, searchTerm);
       
       const matchesType = filterType === 'all' || resource.resourceType === filterType;
       return matchesSearch && matchesType;

@@ -16,6 +16,7 @@ import { toast } from 'sonner';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import { BackupButton } from '@/components/BackupButton';
 import { recalculateAllBudgetResources } from '@/lib/budget-utils';
+import { searchMatch } from '@/lib/search-utils';
 import { CloneBudgetDialog } from '@/components/presupuestos/CloneBudgetDialog';
 
 interface Presupuesto {
@@ -256,15 +257,14 @@ export default function Presupuestos() {
 
   // Filter presupuestos
   const filteredPresupuestos = presupuestos.filter(p => {
-    const term = searchTerm.toLowerCase();
-    const presupuestoId = generatePresupuestoId(p).toLowerCase();
+    const presupuestoId = generatePresupuestoId(p);
     return (
-      p.nombre?.toLowerCase().includes(term) ||
-      p.poblacion?.toLowerCase().includes(term) ||
-      p.provincia?.toLowerCase().includes(term) ||
-      p.codigo_correlativo?.toString().includes(term) ||
-      p.version?.toLowerCase().includes(term) ||
-      presupuestoId.includes(term)
+      searchMatch(p.nombre, searchTerm) ||
+      searchMatch(p.poblacion, searchTerm) ||
+      searchMatch(p.provincia, searchTerm) ||
+      p.codigo_correlativo?.toString().includes(searchTerm) ||
+      searchMatch(p.version, searchTerm) ||
+      searchMatch(presupuestoId, searchTerm)
     );
   });
 

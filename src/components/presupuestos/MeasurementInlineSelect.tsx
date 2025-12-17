@@ -4,6 +4,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Check, CheckCircle2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatNumber } from '@/lib/format-utils';
+import { searchMatch } from '@/lib/search-utils';
 
 interface Measurement {
   id: string;
@@ -81,11 +82,10 @@ export const MeasurementInlineSelect = forwardRef<MeasurementInlineSelectHandle,
     const displayValue = currentMeasurement ? getMedicionId(currentMeasurement) : '-';
 
     const filteredMeasurements = useMemo(() => {
-      const query = searchQuery.toLowerCase();
       return measurements
         .filter(m => 
-          m.name.toLowerCase().includes(query) ||
-          getMedicionId(m).toLowerCase().includes(query)
+          searchMatch(m.name, searchQuery) ||
+          searchMatch(getMedicionId(m), searchQuery)
         )
         .sort((a, b) => a.name.localeCompare(b.name));
     }, [measurements, measurementRelations, searchQuery]);

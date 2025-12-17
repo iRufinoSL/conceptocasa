@@ -15,6 +15,7 @@ import { z } from 'zod';
 import { ArrowLeft, Plus, UserCog, Pencil, Trash2, Search, Building2 } from 'lucide-react';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import { AppNavDropdown } from '@/components/AppNavDropdown';
+import { searchMatch } from '@/lib/search-utils';
 
 const emailSchema = z.string().email('Email inválido');
 const passwordSchema = z.string()
@@ -303,8 +304,8 @@ export default function Usuarios() {
   };
 
   const filteredUsers = users.filter(u => 
-    u.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (u.full_name && u.full_name.toLowerCase().includes(searchTerm.toLowerCase()))
+    searchMatch(u.email, searchTerm) ||
+    searchMatch(u.full_name, searchTerm)
   );
 
   if (loading || rolesLoading || isLoading) {

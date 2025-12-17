@@ -46,6 +46,7 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { AppNavDropdown } from '@/components/AppNavDropdown';
 import { BackupButton } from '@/components/BackupButton';
+import { searchMatch } from '@/lib/search-utils';
 
 interface ProjectDocument {
   id: string;
@@ -425,9 +426,9 @@ export default function Documentos() {
 
   const filteredDocuments = documents.filter((doc) => {
     const matchesSearch =
-      doc.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      doc.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      doc.project?.name.toLowerCase().includes(searchTerm.toLowerCase());
+      searchMatch(doc.name, searchTerm) ||
+      searchMatch(doc.description, searchTerm) ||
+      searchMatch(doc.project?.name, searchTerm);
 
     const matchesType = filterType === 'all' || doc.document_type === filterType;
     const matchesProject = filterProject === 'all' || 

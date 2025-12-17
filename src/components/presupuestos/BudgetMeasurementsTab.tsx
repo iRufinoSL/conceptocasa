@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { Plus, Search, Edit, Trash2, Ruler, Link2, Upload, FileUp, X, Download, Copy } from 'lucide-react';
 import { formatNumber } from '@/lib/format-utils';
+import { searchMatch } from '@/lib/search-utils';
 import { NumericInput } from '@/components/ui/numeric-input';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -198,11 +199,10 @@ export function BudgetMeasurementsTab({ budgetId, isAdmin }: BudgetMeasurementsT
   // Filter measurements
   const filteredMeasurements = useMemo(() => {
     if (!searchTerm) return measurements;
-    const term = searchTerm.toLowerCase();
     return measurements.filter(m => 
-      m.name.toLowerCase().includes(term) ||
-      (m.measurement_unit || '').toLowerCase().includes(term) ||
-      generateMedicionId(m).toLowerCase().includes(term)
+      searchMatch(m.name, searchTerm) ||
+      searchMatch(m.measurement_unit, searchTerm) ||
+      searchMatch(generateMedicionId(m), searchTerm)
     );
   }, [measurements, searchTerm, relations, activities, phases]);
 

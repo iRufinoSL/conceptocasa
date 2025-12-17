@@ -10,6 +10,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import { FileDown, Printer, X } from 'lucide-react';
 import { formatCurrency, formatNumber } from '@/lib/format-utils';
 import { useCompanySettings } from '@/hooks/useCompanySettings';
@@ -72,6 +73,16 @@ interface Resource {
   activity_id: string | null;
 }
 
+interface Predesign {
+  id: string;
+  content: string;
+  description: string | null;
+  content_type: string;
+  file_path: string | null;
+  file_name: string | null;
+  file_type: string | null;
+}
+
 // Format for PDF
 const formatPdfCurrency = (value: number): string => {
   return new Intl.NumberFormat('es-ES', {
@@ -90,9 +101,12 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
   const [activities, setActivities] = useState<Activity[]>([]);
   const [phases, setPhases] = useState<Phase[]>([]);
   const [resources, setResources] = useState<Resource[]>([]);
+  const [predesigns, setPredesigns] = useState<Predesign[]>([]);
+  const [predesignUrls, setPredesignUrls] = useState<Map<string, string>>(new Map());
   const [filesCountMap, setFilesCountMap] = useState<Map<string, number>>(new Map());
   const [selectedSections, setSelectedSections] = useState<string[]>(['activities']);
   const [customNotes, setCustomNotes] = useState<string>('');
+  const [onlyWithCost, setOnlyWithCost] = useState(false);
   const printRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -104,7 +118,7 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [activitiesRes, phasesRes, resourcesRes, filesCountRes] = await Promise.all([
+      const [activitiesRes, phasesRes, resourcesRes, filesCountRes, predesignsRes] = await Promise.all([
         supabase
           .from('budget_activities')
           .select('id, name, code, description, measurement_unit, phase_id, measurement_id, start_date, duration_days, tolerance_days, end_date')
@@ -123,6 +137,11 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
         supabase
           .from('budget_activity_files')
           .select('activity_id'),
+        supabase
+          .from('budget_predesigns')
+          .select('id, content, description, content_type, file_path, file_name, file_type')
+          .eq('budget_id', presupuesto.id)
+          .order('content'),
       ]);
 
       if (activitiesRes.error) throw activitiesRes.error;
@@ -132,6 +151,21 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
       setActivities(activitiesRes.data || []);
       setPhases(phasesRes.data || []);
       setResources(resourcesRes.data || []);
+      setPredesigns(predesignsRes.data || []);
+
+      // Load signed URLs for predesigns
+      const urlMap = new Map<string, string>();
+      for (const predesign of (predesignsRes.data || [])) {
+        if (predesign.file_path) {
+          const { data } = await supabase.storage
+            .from('budget-predesigns')
+            .createSignedUrl(predesign.file_path, 3600);
+          if (data?.signedUrl) {
+            urlMap.set(predesign.id, data.signedUrl);
+          }
+        }
+      }
+      setPredesignUrls(urlMap);
 
       const filesMap = new Map<string, number>();
       (filesCountRes.data || []).forEach(f => {
@@ -207,11 +241,45 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
   // Generate report type name based on selected sections
   const getReportTypeName = () => {
     const names: string[] = [];
+    if (selectedSections.includes('predesigns')) names.push('Ante-proyecto');
     if (selectedSections.includes('activities')) names.push('Actividades');
     if (selectedSections.includes('resources')) names.push('Recursos');
     if (selectedSections.includes('time-phases')) names.push('Gestión Tiempo Fases');
     if (selectedSections.includes('time-activities')) names.push('Gestión Tiempo Actividades');
     return names.length > 0 ? names.join(' + ') : 'Resumen General';
+  };
+
+  // Group predesigns by content type
+  const getGroupedPredesigns = () => {
+    const groups: Record<string, Predesign[]> = {};
+    predesigns.forEach(item => {
+      const type = item.content_type || 'Sin tipo';
+      if (!groups[type]) groups[type] = [];
+      groups[type].push(item);
+    });
+    // Sort items within each group alphabetically
+    Object.keys(groups).forEach(key => {
+      groups[key].sort((a, b) => a.content.localeCompare(b.content, 'es'));
+    });
+    return groups;
+  };
+
+  // Filter functions for onlyWithCost
+  const getFilteredActivities = () => {
+    if (!onlyWithCost) return activities;
+    return activities.filter(a => (activityResourcesMap.get(a.id) || 0) > 0);
+  };
+
+  const getFilteredResources = () => {
+    if (!onlyWithCost) return resources;
+    return resources.filter(r => calculateFields(r).subtotalSales > 0);
+  };
+
+  const getFilteredPhases = () => {
+    if (!onlyWithCost) return phases;
+    const filteredActivities = getFilteredActivities();
+    const phaseIdsWithCost = new Set(filteredActivities.map(a => a.phase_id).filter(Boolean));
+    return phases.filter(p => phaseIdsWithCost.has(p.id));
   };
 
   const handlePrint = () => {
@@ -268,42 +336,64 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
         }
       }
 
-      // Helper function for header with logo (used on content pages)
+      // Helper function for header with logo (used on all pages)
       const drawHeader = (showLine = true) => {
+        // Reset all drawing states first
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(10);
+        doc.setTextColor(0, 0, 0);
+        doc.setDrawColor(0, 0, 0);
+        
+        // Draw logo or initials
         if (logoImgData) {
-          doc.addImage(logoImgData, 'JPEG', 14, 10, 15, 15);
+          try {
+            doc.addImage(logoImgData, 'JPEG', 14, 10, 15, 15);
+          } catch (e) {
+            console.error('Error drawing logo:', e);
+            // Fallback to initials
+            doc.setFillColor(37, 99, 235);
+            doc.roundedRect(14, 10, 15, 15, 2, 2, 'F');
+            doc.setTextColor(255, 255, 255);
+            doc.setFontSize(10);
+            doc.setFont('helvetica', 'bold');
+            doc.text(companyInitials, 21.5, 20, { align: 'center' });
+          }
         } else {
           doc.setFillColor(37, 99, 235);
           doc.roundedRect(14, 10, 15, 15, 2, 2, 'F');
-          doc.setTextColor(255);
+          doc.setTextColor(255, 255, 255);
           doc.setFontSize(10);
           doc.setFont('helvetica', 'bold');
           doc.text(companyInitials, 21.5, 20, { align: 'center' });
         }
-        doc.setTextColor(0);
 
+        // Company name - always draw
         doc.setFontSize(12);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(37, 99, 235);
         doc.text(companyName, 34, 16);
-        doc.setTextColor(0);
 
+        // Contact info - always draw
         doc.setFontSize(8);
         doc.setFont('helvetica', 'normal');
-        doc.setTextColor(100);
+        doc.setTextColor(100, 100, 100);
         const contactLine = [companyEmail, companyPhone, companyWeb].filter(Boolean).join('  |  ');
-        if (contactLine) doc.text(contactLine, 34, 22);
-        doc.setTextColor(0);
+        if (contactLine) {
+          doc.text(contactLine, 34, 22);
+        }
+
+        // Reset colors
+        doc.setTextColor(0, 0, 0);
 
         if (showLine) {
-          doc.setDrawColor(200);
+          doc.setDrawColor(200, 200, 200);
           doc.line(14, 30, pageWidth - 14, 30);
         }
       };
 
       // PAGE 1: Cover Page with Header, Cover Image, Title, and Index
-      // Draw header at top with more vertical space
-      drawHeader(false);
+      // Draw header at top
+      drawHeader(true);
       
       let yPos = 32;
       
@@ -433,6 +523,9 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
         { title: 'Resumen General', page: 2 },
       ];
 
+      if (selectedSections.includes('predesigns')) {
+        indexItems.push({ title: 'Ante-proyecto', page: 3 });
+      }
       if (selectedSections.includes('activities')) {
         indexItems.push({ title: 'Resumen de Actividades por Fase', page: 3 });
       }
@@ -879,6 +972,123 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
         });
       }
 
+      // Section: Predesigns / Ante-proyecto (only if selected)
+      if (selectedSections.includes('predesigns') && predesigns.length > 0) {
+        const groupedPredesigns = getGroupedPredesigns();
+        const contentTypes = Object.keys(groupedPredesigns).sort((a, b) => a.localeCompare(b, 'es'));
+        
+        // Load predesign images
+        const predesignImages: Map<string, string> = new Map();
+        for (const predesign of predesigns) {
+          const url = predesignUrls.get(predesign.id);
+          if (url && predesign.file_type?.startsWith('image/')) {
+            try {
+              const response = await fetch(url);
+              const blob = await response.blob();
+              const imgData = await new Promise<string>((resolve) => {
+                const reader = new FileReader();
+                reader.onloadend = () => resolve(reader.result as string);
+                reader.readAsDataURL(blob);
+              });
+              predesignImages.set(predesign.id, imgData);
+            } catch (err) {
+              console.error('Error loading predesign image:', err);
+            }
+          }
+        }
+
+        let sectionNumber = 2;
+        for (const contentType of contentTypes) {
+          const items = groupedPredesigns[contentType];
+          doc.addPage();
+          yPos = 20;
+          
+          doc.setFontSize(12);
+          doc.setFont('helvetica', 'bold');
+          doc.setTextColor(37, 99, 235);
+          doc.text(`${sectionNumber}. ANTE-PROYECTO: ${contentType.toUpperCase()}`, 14, yPos);
+          doc.setTextColor(0);
+          
+          yPos += 10;
+          
+          // 3 images per page, arranged vertically
+          const imageHeight = 70; // mm
+          const imageWidth = pageWidth - 28; // full width minus margins
+          let imageCount = 0;
+          
+          for (const item of items) {
+            if (imageCount > 0 && imageCount % 3 === 0) {
+              // New page for every 3 images
+              doc.addPage();
+              yPos = 20;
+              doc.setFontSize(12);
+              doc.setFont('helvetica', 'bold');
+              doc.setTextColor(37, 99, 235);
+              doc.text(`${sectionNumber}. ANTE-PROYECTO: ${contentType.toUpperCase()} (cont.)`, 14, yPos);
+              doc.setTextColor(0);
+              yPos += 10;
+            }
+            
+            // Draw image title
+            doc.setFontSize(10);
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(30, 41, 59);
+            doc.text(item.content, 14, yPos);
+            
+            if (item.description) {
+              doc.setFontSize(8);
+              doc.setFont('helvetica', 'normal');
+              doc.setTextColor(100, 116, 139);
+              doc.text(item.description, 14, yPos + 4);
+              yPos += 8;
+            } else {
+              yPos += 4;
+            }
+            
+            // Draw image if available
+            const imgData = predesignImages.get(item.id);
+            if (imgData) {
+              // Get image dimensions for proper aspect ratio
+              const getImgDimensions = (src: string): Promise<{ width: number; height: number }> => {
+                return new Promise((resolve) => {
+                  const img = new Image();
+                  img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
+                  img.onerror = () => resolve({ width: imageWidth, height: imageHeight });
+                  img.src = src;
+                });
+              };
+              
+              const imgDimensions = await getImgDimensions(imgData);
+              const imgAspectRatio = imgDimensions.width / imgDimensions.height;
+              
+              let drawWidth = imageWidth;
+              let drawHeight = imageWidth / imgAspectRatio;
+              
+              if (drawHeight > imageHeight) {
+                drawHeight = imageHeight;
+                drawWidth = imageHeight * imgAspectRatio;
+              }
+              
+              const offsetX = 14 + (imageWidth - drawWidth) / 2;
+              
+              doc.addImage(imgData, 'JPEG', offsetX, yPos, drawWidth, drawHeight, undefined, 'FAST');
+              yPos += drawHeight + 8;
+            } else {
+              // Placeholder for non-image files
+              doc.setFillColor(240, 240, 240);
+              doc.roundedRect(14, yPos, imageWidth, 20, 2, 2, 'F');
+              doc.setFontSize(9);
+              doc.setTextColor(100);
+              doc.text(`Archivo: ${item.file_name || 'Sin archivo'}`, 20, yPos + 12);
+              yPos += 28;
+            }
+            
+            imageCount++;
+          }
+          sectionNumber++;
+        }
+      }
+
       // Footer
       const pageCount = doc.getNumberOfPages();
       for (let i = 1; i <= pageCount; i++) {
@@ -893,6 +1103,7 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
       }
 
       const sectionSuffixes: string[] = [];
+      if (selectedSections.includes('predesigns')) sectionSuffixes.push('anteproyecto');
       if (selectedSections.includes('activities')) sectionSuffixes.push('actividades');
       if (selectedSections.includes('resources')) sectionSuffixes.push('recursos');
       if (selectedSections.includes('time-phases')) sectionSuffixes.push('tiempo_fases');
@@ -931,6 +1142,20 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
           <div className="mt-4 print:hidden">
             <Label className="text-sm font-medium mb-2 block">Seleccionar secciones a incluir:</Label>
             <div className="grid grid-cols-2 gap-2">
+              <div className="flex items-center space-x-2">
+                <Checkbox 
+                  id="predesigns" 
+                  checked={selectedSections.includes('predesigns')}
+                  onCheckedChange={(checked) => {
+                    if (checked) {
+                      setSelectedSections(prev => [...prev, 'predesigns']);
+                    } else {
+                      setSelectedSections(prev => prev.filter(s => s !== 'predesigns'));
+                    }
+                  }}
+                />
+                <Label htmlFor="predesigns" className="cursor-pointer text-sm">Ante-proyecto</Label>
+              </div>
               <div className="flex items-center space-x-2">
                 <Checkbox 
                   id="activities" 
@@ -987,6 +1212,18 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
                 />
                 <Label htmlFor="time-activities" className="cursor-pointer text-sm">Gestión del Tiempo por Actividades</Label>
               </div>
+            </div>
+            
+            {/* Filter option for SubTotal > 0 */}
+            <div className="flex items-center space-x-2 mt-4 p-3 bg-muted/30 rounded-lg">
+              <Switch 
+                id="only-with-cost" 
+                checked={onlyWithCost}
+                onCheckedChange={setOnlyWithCost}
+              />
+              <Label htmlFor="only-with-cost" className="cursor-pointer text-sm">
+                Solo mostrar Fases/Actividades/Recursos con SubTotal {'>'} 0
+              </Label>
             </div>
           </div>
         </DialogHeader>
@@ -1075,6 +1312,12 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
                       <span>1. Resumen General</span>
                       <span className="text-muted-foreground text-xs">Pág. 2</span>
                     </div>
+                    {selectedSections.includes('predesigns') && (
+                      <div className="flex justify-between">
+                        <span>2. Ante-proyecto</span>
+                        <span className="text-muted-foreground text-xs">Pág. 3</span>
+                      </div>
+                    )}
                     {selectedSections.includes('activities') && (
                       <div className="flex justify-between">
                         <span>2. Resumen de Actividades por Fase</span>
@@ -1444,6 +1687,51 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
                     </TableBody>
                   </Table>
                 </div>
+              </div>
+              )}
+
+              {/* Section: Predesigns / Ante-proyecto - only if selected */}
+              {selectedSections.includes('predesigns') && predesigns.length > 0 && (
+              <div className="print-section">
+                <h3 className="text-lg font-bold text-primary mb-4">2. ANTE-PROYECTO</h3>
+                
+                {Object.entries(getGroupedPredesigns()).sort(([a], [b]) => a.localeCompare(b, 'es')).map(([contentType, items]) => (
+                  <div key={contentType} className="mb-6">
+                    <h4 className="font-semibold text-base mb-3 text-primary/80 border-l-4 border-primary/50 pl-2">
+                      {contentType}
+                    </h4>
+                    <div className="grid grid-cols-3 gap-4">
+                      {items.map(item => {
+                        const imageUrl = predesignUrls.get(item.id);
+                        const isImage = item.file_type?.startsWith('image/');
+                        
+                        return (
+                          <Card key={item.id} className="overflow-hidden">
+                            <div className="aspect-[4/3] bg-muted flex items-center justify-center overflow-hidden">
+                              {imageUrl && isImage ? (
+                                <img 
+                                  src={imageUrl} 
+                                  alt={item.content}
+                                  className="w-full h-full object-cover"
+                                />
+                              ) : (
+                                <div className="text-muted-foreground text-sm text-center p-2">
+                                  {item.file_name || 'Sin archivo'}
+                                </div>
+                              )}
+                            </div>
+                            <CardContent className="p-2">
+                              <p className="font-medium text-sm truncate">{item.content}</p>
+                              {item.description && (
+                                <p className="text-xs text-muted-foreground truncate">{item.description}</p>
+                              )}
+                            </CardContent>
+                          </Card>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
               </div>
               )}
 

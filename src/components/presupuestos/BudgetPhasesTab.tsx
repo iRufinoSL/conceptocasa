@@ -10,7 +10,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Plus, Pencil, Trash2, Upload, Search, ChevronRight, ChevronDown, ClipboardList, MoreHorizontal, Copy, Calendar } from 'lucide-react';
+import { Plus, Pencil, Trash2, Upload, Search, ChevronRight, ChevronDown, ClipboardList, MoreHorizontal, Copy, Calendar, List, Clock } from 'lucide-react';
 import { toast } from 'sonner';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import { formatCurrency } from '@/lib/format-utils';
@@ -95,6 +95,7 @@ export function BudgetPhasesTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
   const [resources, setResources] = useState<BudgetResource[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [viewMode, setViewMode] = useState<'activities' | 'time'>('activities');
   const [formDialogOpen, setFormDialogOpen] = useState(false);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -104,6 +105,7 @@ export function BudgetPhasesTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
   const [importData, setImportData] = useState<{ name: string; code: string }[]>([]);
   const [isImporting, setIsImporting] = useState(false);
   const [expandedPhases, setExpandedPhases] = useState<Set<string>>(new Set());
+  const [editingTimeField, setEditingTimeField] = useState<{ phaseId: string; field: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fetchData = async () => {
@@ -498,7 +500,43 @@ export function BudgetPhasesTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
     return `${phaseCode || ''} ${activity.code}.- ${activity.name}`.trim();
   };
 
-  const filteredPhases = phases.filter(phase => {
+  // Handle inline time field update
+  const handleInlineTimeUpdate = async (phaseId: string, field: 'start_date' | 'duration_days', value: string | number | null) => {
+    try {
+      const updateData: any = { [field]: value };
+      const { error } = await supabase
+        .from('budget_phases')
+        .update(updateData)
+        .eq('id', phaseId);
+      
+      if (error) throw error;
+      
+      // Update local state
+      setPhases(prev => prev.map(p => 
+        p.id === phaseId ? { ...p, [field]: value } : p
+      ));
+      
+      // Refetch to get calculated fields
+      fetchData();
+      toast.success('Campo actualizado');
+    } catch (err: any) {
+      console.error('Error updating:', err);
+      toast.error('Error al actualizar');
+    }
+    setEditingTimeField(null);
+  };
+
+  // Sort phases by start_date for time view
+  const phasesSortedByDate = useMemo(() => {
+    return [...phases].sort((a, b) => {
+      if (!a.start_date && !b.start_date) return 0;
+      if (!a.start_date) return 1;
+      if (!b.start_date) return -1;
+      return a.start_date.localeCompare(b.start_date);
+    });
+  }, [phases]);
+
+  const filteredPhases = (viewMode === 'time' ? phasesSortedByDate : phases).filter(phase => {
     return (
       searchMatch(phase.name, searchTerm) ||
       searchMatch(phase.code, searchTerm)
@@ -529,8 +567,31 @@ export function BudgetPhasesTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
               <p className="text-xs text-muted-foreground">€SubTotal Venta Total</p>
             </div>
           </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-2 mt-4">
+          {/* View Mode Toggle */}
+          <div className="flex border rounded-lg">
+            <Button 
+              variant={viewMode === 'activities' ? 'default' : 'ghost'} 
+              size="sm"
+              onClick={() => setViewMode('activities')}
+              className="rounded-r-none"
+            >
+              <List className="h-4 w-4 mr-1" />
+              Actividades
+            </Button>
+            <Button 
+              variant={viewMode === 'time' ? 'default' : 'ghost'} 
+              size="sm"
+              onClick={() => setViewMode('time')}
+              className="rounded-l-none"
+            >
+              <Clock className="h-4 w-4 mr-1" />
+              Gestión Tiempo
+            </Button>
+          </div>
           {isAdmin && (
-            <div className="flex gap-2">
+            <div className="flex gap-2 ml-auto">
               <input
                 ref={fileInputRef}
                 type="file"
@@ -566,7 +627,87 @@ export function BudgetPhasesTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
           <div className="text-center py-8 text-muted-foreground">
             {searchTerm ? 'No se encontraron fases' : 'No hay fases. Importe un archivo CSV o cree una nueva fase.'}
           </div>
+        ) : viewMode === 'time' ? (
+          /* Time Management View */
+          <div className="border rounded-lg overflow-hidden">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>FaseID</TableHead>
+                  <TableHead>Fecha Inicio</TableHead>
+                  <TableHead className="text-center">Duración (días)</TableHead>
+                  <TableHead>Fecha Fin Estimada</TableHead>
+                  {isAdmin && <TableHead className="w-20">Acciones</TableHead>}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredPhases.map((phase) => (
+                  <TableRow key={phase.id}>
+                    <TableCell className="font-medium">{generatePhaseId(phase)}</TableCell>
+                    <TableCell>
+                      {isAdmin ? (
+                        <Input
+                          type="date"
+                          value={phase.start_date || ''}
+                          min={budgetStartDate || undefined}
+                          max={budgetEndDate || undefined}
+                          onChange={(e) => handleInlineTimeUpdate(phase.id, 'start_date', e.target.value || null)}
+                          className="w-36 h-8"
+                        />
+                      ) : (
+                        <span>
+                          {phase.start_date 
+                            ? format(parseISO(phase.start_date), 'dd/MM/yyyy', { locale: es })
+                            : '-'}
+                        </span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-center">
+                      {isAdmin ? (
+                        <Input
+                          type="number"
+                          value={phase.duration_days ?? ''}
+                          min={0}
+                          onChange={(e) => handleInlineTimeUpdate(phase.id, 'duration_days', e.target.value ? parseInt(e.target.value) : null)}
+                          className="w-20 h-8 text-center mx-auto"
+                        />
+                      ) : (
+                        <span>{phase.duration_days ?? '-'}</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {phase.estimated_end_date 
+                        ? format(parseISO(phase.estimated_end_date), 'dd/MM/yyyy', { locale: es })
+                        : '-'}
+                    </TableCell>
+                    {isAdmin && (
+                      <TableCell>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="bg-popover">
+                            <DropdownMenuItem onClick={() => handleEdit(phase)}>
+                              <Pencil className="h-4 w-4 mr-2" />
+                              Editar
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleDeleteClick(phase)} className="text-destructive">
+                              <Trash2 className="h-4 w-4 mr-2" />
+                              Eliminar
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    )}
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
         ) : (
+          /* Activities View (existing) */
           <div className="space-y-2">
             {filteredPhases.map((phase) => {
               const phaseActivities = getPhaseActivities(phase.id);
@@ -635,8 +776,6 @@ export function BudgetPhasesTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
                                   className="p-3 rounded-md border bg-background hover:bg-muted/50 cursor-pointer transition-colors flex items-center justify-between"
                                   onClick={() => {
                                     setCurrentPhase(null);
-                                    // Open activity edit - we need to emit an event or use a callback
-                                    // For now, navigate to the activity via a custom event
                                     window.dispatchEvent(new CustomEvent('edit-activity', { detail: activity }));
                                   }}
                                 >

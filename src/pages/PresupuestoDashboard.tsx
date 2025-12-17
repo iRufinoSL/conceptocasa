@@ -5,7 +5,11 @@ import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { ArrowLeft, Calculator, ClipboardList, Building2, FileText, Settings, Calendar, Ruler, FileDown, Image, RefreshCw, Copy } from 'lucide-react';
+import { format } from 'date-fns';
+import { es } from 'date-fns/locale';
 import { AppNavDropdown } from '@/components/AppNavDropdown';
 import { BudgetActivitiesTab } from '@/components/presupuestos/BudgetActivitiesTab';
 import { BudgetPhasesTab } from '@/components/presupuestos/BudgetPhasesTab';
@@ -28,6 +32,8 @@ interface Presupuesto {
   provincia: string | null;
   project_id: string | null;
   created_at: string;
+  start_date: string | null;
+  end_date: string | null;
 }
 
 interface Project {
@@ -209,7 +215,7 @@ export default function PresupuestoDashboard() {
 
       <main className="container mx-auto px-4 py-8">
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-6 gap-4 mb-8">
           <Card>
             <CardHeader className="pb-2">
               <CardDescription>Código</CardDescription>
@@ -232,6 +238,26 @@ export default function PresupuestoDashboard() {
             <CardHeader className="pb-2">
               <CardDescription>Proyecto</CardDescription>
               <CardTitle className="text-2xl">{project?.name || 'Sin proyecto'}</CardTitle>
+            </CardHeader>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardDescription>Fecha Inicio</CardDescription>
+              <CardTitle className="text-lg">
+                {presupuesto.start_date 
+                  ? format(new Date(presupuesto.start_date), 'dd/MM/yyyy', { locale: es })
+                  : 'Sin definir'}
+              </CardTitle>
+            </CardHeader>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardDescription>Fecha Fin</CardDescription>
+              <CardTitle className="text-lg">
+                {presupuesto.end_date 
+                  ? format(new Date(presupuesto.end_date), 'dd/MM/yyyy', { locale: es })
+                  : 'Sin definir'}
+              </CardTitle>
             </CardHeader>
           </Card>
         </div>
@@ -274,11 +300,22 @@ export default function PresupuestoDashboard() {
           </TabsContent>
 
           <TabsContent value="actividades" className="mt-6">
-            <BudgetActivitiesTab budgetId={presupuesto.id} budgetName={presupuesto.nombre} isAdmin={isAdmin} />
+            <BudgetActivitiesTab 
+              budgetId={presupuesto.id} 
+              budgetName={presupuesto.nombre} 
+              isAdmin={isAdmin}
+              budgetStartDate={presupuesto.start_date}
+              budgetEndDate={presupuesto.end_date}
+            />
           </TabsContent>
 
           <TabsContent value="fases" className="mt-6">
-            <BudgetPhasesTab budgetId={presupuesto.id} isAdmin={isAdmin} />
+            <BudgetPhasesTab 
+              budgetId={presupuesto.id} 
+              isAdmin={isAdmin}
+              budgetStartDate={presupuesto.start_date}
+              budgetEndDate={presupuesto.end_date}
+            />
           </TabsContent>
 
           <TabsContent value="recursos" className="mt-6">
@@ -300,6 +337,81 @@ export default function PresupuestoDashboard() {
                 currentBudgetName={presupuesto.nombre}
                 currentVersion={presupuesto.version}
               />
+              
+              <Card>
+                <CardHeader>
+                  <CardTitle>Fechas del Presupuesto</CardTitle>
+                  <CardDescription>Configure las fechas de inicio y fin del proyecto</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {isAdmin ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="budget-start-date">Fecha de Inicio</Label>
+                        <Input
+                          id="budget-start-date"
+                          type="date"
+                          value={presupuesto.start_date || ''}
+                          onChange={async (e) => {
+                            const newDate = e.target.value || null;
+                            const { error } = await supabase
+                              .from('presupuestos')
+                              .update({ start_date: newDate })
+                              .eq('id', presupuesto.id);
+                            if (error) {
+                              toast.error('Error al guardar fecha');
+                            } else {
+                              setPresupuesto({ ...presupuesto, start_date: newDate });
+                              toast.success('Fecha de inicio actualizada');
+                            }
+                          }}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="budget-end-date">Fecha de Fin</Label>
+                        <Input
+                          id="budget-end-date"
+                          type="date"
+                          value={presupuesto.end_date || ''}
+                          min={presupuesto.start_date || undefined}
+                          onChange={async (e) => {
+                            const newDate = e.target.value || null;
+                            const { error } = await supabase
+                              .from('presupuestos')
+                              .update({ end_date: newDate })
+                              .eq('id', presupuesto.id);
+                            if (error) {
+                              toast.error('Error al guardar fecha');
+                            } else {
+                              setPresupuesto({ ...presupuesto, end_date: newDate });
+                              toast.success('Fecha de fin actualizada');
+                            }
+                          }}
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <p className="text-sm text-muted-foreground">Fecha de Inicio</p>
+                        <p className="font-medium">
+                          {presupuesto.start_date 
+                            ? format(new Date(presupuesto.start_date), 'dd/MM/yyyy', { locale: es })
+                            : 'Sin definir'}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-muted-foreground">Fecha de Fin</p>
+                        <p className="font-medium">
+                          {presupuesto.end_date 
+                            ? format(new Date(presupuesto.end_date), 'dd/MM/yyyy', { locale: es })
+                            : 'Sin definir'}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
               
               <Card>
                 <CardHeader>

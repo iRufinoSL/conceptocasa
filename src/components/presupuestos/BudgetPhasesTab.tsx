@@ -10,11 +10,13 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Plus, Pencil, Trash2, Upload, Search, ChevronRight, ChevronDown, ClipboardList, MoreHorizontal, Copy } from 'lucide-react';
+import { Plus, Pencil, Trash2, Upload, Search, ChevronRight, ChevronDown, ClipboardList, MoreHorizontal, Copy, Calendar } from 'lucide-react';
 import { toast } from 'sonner';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import { formatCurrency } from '@/lib/format-utils';
 import { searchMatch } from '@/lib/search-utils';
+import { format, addDays, parseISO, isValid } from 'date-fns';
+import { es } from 'date-fns/locale';
 
 interface BudgetPhase {
   id: string;
@@ -23,6 +25,9 @@ interface BudgetPhase {
   code: string | null;
   order_index: number | null;
   created_at: string;
+  start_date: string | null;
+  duration_days: number | null;
+  estimated_end_date: string | null;
 }
 
 interface BudgetActivity {
@@ -47,17 +52,23 @@ interface PhaseForm {
   name: string;
   code: string;
   selectedActivities: string[];
+  start_date: string;
+  duration_days: string;
 }
 
 interface BudgetPhasesTabProps {
   budgetId: string;
   isAdmin: boolean;
+  budgetStartDate?: string | null;
+  budgetEndDate?: string | null;
 }
 
 const emptyForm: PhaseForm = {
   name: '',
   code: '',
   selectedActivities: [],
+  start_date: '',
+  duration_days: '',
 };
 
 // Calculate subtotal for a resource
@@ -78,7 +89,7 @@ const calculateResourceSubtotal = (resource: BudgetResource): number => {
   return calculatedUnits * salesCostUd;
 };
 
-export function BudgetPhasesTab({ budgetId, isAdmin }: BudgetPhasesTabProps) {
+export function BudgetPhasesTab({ budgetId, isAdmin, budgetStartDate, budgetEndDate }: BudgetPhasesTabProps) {
   const [phases, setPhases] = useState<BudgetPhase[]>([]);
   const [activities, setActivities] = useState<BudgetActivity[]>([]);
   const [resources, setResources] = useState<BudgetResource[]>([]);
@@ -191,6 +202,8 @@ export function BudgetPhasesTab({ budgetId, isAdmin }: BudgetPhasesTabProps) {
       name: phase.name,
       code: phase.code || '',
       selectedActivities: phaseActivities,
+      start_date: phase.start_date || '',
+      duration_days: phase.duration_days?.toString() || '',
     });
     setFormDialogOpen(true);
   };
@@ -216,6 +229,8 @@ export function BudgetPhasesTab({ budgetId, isAdmin }: BudgetPhasesTabProps) {
           .update({
             name: form.name.trim(),
             code: form.code.trim() || null,
+            start_date: form.start_date || null,
+            duration_days: form.duration_days ? parseInt(form.duration_days) : null,
           })
           .eq('id', currentPhase.id);
 
@@ -227,6 +242,8 @@ export function BudgetPhasesTab({ budgetId, isAdmin }: BudgetPhasesTabProps) {
             budget_id: budgetId,
             name: form.name.trim(),
             code: form.code.trim() || null,
+            start_date: form.start_date || null,
+            duration_days: form.duration_days ? parseInt(form.duration_days) : null,
           })
           .select()
           .single();

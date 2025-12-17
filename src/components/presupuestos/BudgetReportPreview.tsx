@@ -400,78 +400,75 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
         doc.setFillColor(37, 99, 235);
         doc.rect(0, 0, pageWidth, 45, 'F');
         
-        // Company logo area - large centered
-        doc.setFillColor(255, 255, 255);
-        doc.roundedRect(pageWidth / 2 - 25, 60, 50, 50, 8, 8, 'F');
-        
+        // Company logo and info - top-left (small, like portada version)
         if (logoImgData) {
-          doc.addImage(logoImgData, 'JPEG', pageWidth / 2 - 20, 65, 40, 40);
+          doc.addImage(logoImgData, 'JPEG', 14, 10, 20, 20);
         } else {
-          // Company initials in logo
+          // Fallback to initials in small box
+          doc.setFillColor(255, 255, 255);
+          doc.roundedRect(14, 10, 20, 20, 3, 3, 'F');
           doc.setFillColor(37, 99, 235);
-          doc.roundedRect(pageWidth / 2 - 20, 65, 40, 40, 6, 6, 'F');
+          doc.roundedRect(15, 11, 18, 18, 2, 2, 'F');
           doc.setTextColor(255);
-          doc.setFontSize(28);
+          doc.setFontSize(10);
           doc.setFont('helvetica', 'bold');
-          doc.text(companyInitials, pageWidth / 2, 92, { align: 'center' });
+          doc.text(companyInitials, 24, 22, { align: 'center' });
         }
         
-        // Company name - large and prominent
-        doc.setTextColor(30, 41, 59);
-        doc.setFontSize(22);
+        // Company name and contact next to logo
+        doc.setTextColor(255);
+        doc.setFontSize(14);
         doc.setFont('helvetica', 'bold');
-        doc.text(companyName, pageWidth / 2, 130, { align: 'center' });
+        doc.text(companyName, 40, 18);
         
-        // Company contact info (email, phone, website only - no address)
-        doc.setFontSize(10);
+        doc.setFontSize(8);
         doc.setFont('helvetica', 'normal');
-        doc.setTextColor(100, 116, 139);
-        const contactLine = [companyEmail, companyPhone, companyWeb].filter(Boolean).join('  •  ');
-        if (contactLine) doc.text(contactLine, pageWidth / 2, 142, { align: 'center' });
+        const contactLine = [companyEmail, companyPhone, companyWeb].filter(Boolean).join('  |  ');
+        if (contactLine) doc.text(contactLine, 40, 26);
         
         // Decorative divider
         doc.setDrawColor(226, 232, 240);
         doc.setLineWidth(0.5);
-        doc.line(pageWidth / 2 - 40, 155, pageWidth / 2 + 40, 155);
+        doc.line(pageWidth / 2 - 40, 65, pageWidth / 2 + 40, 65);
         doc.setFillColor(37, 99, 235);
-        doc.circle(pageWidth / 2, 155, 2, 'F');
+        doc.circle(pageWidth / 2, 65, 2, 'F');
         doc.setLineWidth(0.2);
         
         // Report title section
         doc.setFillColor(248, 250, 252);
-        doc.roundedRect(20, 170, pageWidth - 40, 50, 4, 4, 'F');
+        doc.roundedRect(20, 85, pageWidth - 40, 50, 4, 4, 'F');
         
         // Left accent bar
         doc.setFillColor(37, 99, 235);
-        doc.roundedRect(20, 170, 4, 50, 2, 2, 'F');
+        doc.roundedRect(20, 85, 4, 50, 2, 2, 'F');
         
         doc.setTextColor(37, 99, 235);
         doc.setFontSize(10);
         doc.setFont('helvetica', 'bold');
-        doc.text('DOCUMENTO TÉCNICO', pageWidth / 2, 183, { align: 'center' });
+        doc.text('DOCUMENTO TÉCNICO', pageWidth / 2, 98, { align: 'center' });
         
         doc.setTextColor(30, 41, 59);
         doc.setFontSize(18);
         doc.setFont('helvetica', 'bold');
-        doc.text('INFORME DE PRESUPUESTO', pageWidth / 2, 195, { align: 'center' });
+        doc.text('INFORME DE PRESUPUESTO', pageWidth / 2, 110, { align: 'center' });
         
         doc.setTextColor(71, 85, 105);
         doc.setFontSize(12);
         doc.setFont('helvetica', 'normal');
-        doc.text(presupuesto.nombre, pageWidth / 2, 210, { align: 'center' });
+        doc.text(presupuesto.nombre, pageWidth / 2, 125, { align: 'center' });
         
         // Budget ID badge
         doc.setFillColor(241, 245, 249);
         const badgeWidth = doc.getTextWidth(presupuestoId) + 20;
-        doc.roundedRect(pageWidth / 2 - badgeWidth / 2, 225, badgeWidth, 12, 6, 6, 'F');
+        doc.roundedRect(pageWidth / 2 - badgeWidth / 2, 145, badgeWidth, 12, 6, 6, 'F');
         doc.setTextColor(100, 116, 139);
         doc.setFontSize(9);
-        doc.text(presupuestoId, pageWidth / 2, 233, { align: 'center' });
+        doc.text(presupuestoId, pageWidth / 2, 153, { align: 'center' });
         
         // Date
         doc.setTextColor(71, 85, 105);
         doc.setFontSize(10);
-        doc.text(`Fecha de generación: ${format(new Date(), "d 'de' MMMM 'de' yyyy", { locale: es })}`, pageWidth / 2, 255, { align: 'center' });
+        doc.text(`Fecha de generación: ${format(new Date(), "d 'de' MMMM 'de' yyyy", { locale: es })}`, pageWidth / 2, 175, { align: 'center' });
         
         // Bottom decorative section
         doc.setFillColor(248, 250, 252);
@@ -1124,79 +1121,86 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
               <Skeleton className="h-64 w-full" />
             </div>
           ) : (
-            <div ref={printRef} className="py-6 space-y-8 print:py-0 print:space-y-4">
-              {/* Cover Preview */}
-              {presupuesto.portada_url && (
-                <div className="relative rounded-lg overflow-hidden mb-6" style={{ height: '200px' }}>
+            <div ref={printRef} className="py-6 space-y-8 print:py-0 print:space-y-4 print-content print-no-repeat">
+              {/* Cover Preview with overlaid header */}
+              <div className="relative rounded-lg overflow-hidden mb-6 print:rounded-none print:mb-4" style={{ height: presupuesto.portada_url ? '200px' : 'auto' }}>
+                {/* Cover Image */}
+                {presupuesto.portada_url && (
                   <img 
                     src={presupuesto.portada_url} 
                     alt="Portada del presupuesto" 
                     className="w-full h-full object-cover"
                   />
-                  {/* Dynamic overlay based on position */}
-                  {(() => {
-                    const position = presupuesto.portada_text_position || 'center';
-                    const opacity = presupuesto.portada_overlay_opacity ?? 0.4;
-                    const textColor = presupuesto.portada_text_color || '#FFFFFF';
-                    
-                    const overlayClasses = position === 'top' 
-                      ? 'top-0 bg-gradient-to-b' 
-                      : position === 'center'
-                      ? 'inset-0'
-                      : 'bottom-0 bg-gradient-to-t';
-                    
-                    const textClasses = position === 'top'
-                      ? 'top-4 left-0 right-0'
-                      : position === 'center'
-                      ? 'inset-0 flex flex-col items-center justify-center'
-                      : 'bottom-4 left-0 right-0';
-                    
-                    return (
-                      <>
-                        <div 
-                          className={`absolute ${overlayClasses} ${position === 'center' ? '' : 'h-1/2'}`}
-                          style={{ 
-                            backgroundColor: position === 'center' ? `rgba(0,0,0,${opacity})` : undefined,
-                            background: position !== 'center' ? `linear-gradient(${position === 'top' ? 'to bottom' : 'to top'}, rgba(0,0,0,${opacity}), transparent)` : undefined
-                          }}
+                )}
+                
+                {/* Header overlaid on cover (top-left) */}
+                <div className={`${presupuesto.portada_url ? 'absolute top-0 left-0 right-0 p-3 bg-gradient-to-b from-black/60 to-transparent' : 'p-4 border-b'}`}>
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded bg-white/90 flex items-center justify-center overflow-hidden flex-shrink-0">
+                      {companySettings.logo_url ? (
+                        <img 
+                          src={companySettings.logo_url} 
+                          alt="Logo" 
+                          className="w-full h-full object-contain"
                         />
-                        <div className={`absolute ${textClasses} text-center`} style={{ color: textColor }}>
-                          <p className="text-sm font-medium">INFORME DE PRESUPUESTO</p>
-                          <p className="text-lg font-bold">{presupuesto.nombre}</p>
-                        </div>
-                      </>
-                    );
-                  })()}
+                      ) : (
+                        <span className="text-primary font-bold text-xs">
+                          {(companySettings.name || 'MI').substring(0, 2).toUpperCase()}
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-left">
+                      <h2 className={`text-sm font-bold ${presupuesto.portada_url ? 'text-white' : 'text-primary'}`}>
+                        {companySettings.name || 'Mi Empresa'}
+                      </h2>
+                      <p className={`text-[10px] ${presupuesto.portada_url ? 'text-white/80' : 'text-muted-foreground'}`}>
+                        {[companySettings.email, companySettings.phone, companySettings.website].filter(Boolean).join(' | ')}
+                      </p>
+                    </div>
+                  </div>
                 </div>
-              )}
+                
+                {/* Cover text overlay (only when cover image exists) */}
+                {presupuesto.portada_url && (() => {
+                  const position = presupuesto.portada_text_position || 'center';
+                  const opacity = presupuesto.portada_overlay_opacity ?? 0.4;
+                  const textColor = presupuesto.portada_text_color || '#FFFFFF';
+                  
+                  const textClasses = position === 'top'
+                    ? 'top-16 left-0 right-0'
+                    : position === 'center'
+                    ? 'inset-0 flex flex-col items-center justify-center'
+                    : 'bottom-4 left-0 right-0';
+                  
+                  return (
+                    <>
+                      {position === 'center' && (
+                        <div 
+                          className="absolute inset-0"
+                          style={{ backgroundColor: `rgba(0,0,0,${opacity})` }}
+                        />
+                      )}
+                      {position === 'bottom' && (
+                        <div 
+                          className="absolute bottom-0 left-0 right-0 h-1/2"
+                          style={{ background: `linear-gradient(to top, rgba(0,0,0,${opacity}), transparent)` }}
+                        />
+                      )}
+                      <div className={`absolute ${textClasses} text-center`} style={{ color: textColor }}>
+                        <p className="text-sm font-medium">INFORME DE PRESUPUESTO</p>
+                        <p className="text-lg font-bold">{presupuesto.nombre}</p>
+                      </div>
+                    </>
+                  );
+                })()}
+              </div>
               
-              {/* Header */}
-              <div className="text-center border-b pb-6 print:pb-4">
-                <div className="flex items-center justify-center gap-4 mb-4">
-                  <div className="w-12 h-12 rounded-lg bg-primary flex items-center justify-center overflow-hidden">
-                    {companySettings.logo_url ? (
-                      <img 
-                        src={companySettings.logo_url} 
-                        alt="Logo" 
-                        className="w-full h-full object-contain"
-                      />
-                    ) : (
-                      <span className="text-primary-foreground font-bold text-lg">
-                        {(companySettings.name || 'MI').substring(0, 2).toUpperCase()}
-                      </span>
-                    )}
-                  </div>
-                  <div className="text-left">
-                    <h2 className="text-xl font-bold text-primary">{companySettings.name || 'Mi Empresa'}</h2>
-                    <p className="text-xs text-muted-foreground">
-                      {[companySettings.email, companySettings.phone, companySettings.website].filter(Boolean).join(' | ')}
-                    </p>
-                  </div>
-                </div>
-                <h1 className="text-2xl font-bold text-foreground mb-1">INFORME DE PRESUPUESTO</h1>
-                <p className="text-lg text-foreground">{presupuesto.nombre}</p>
+              {/* Report title info (below cover or standalone) */}
+              <div className="text-center pb-4 print:pb-2">
+                <h1 className="text-xl font-bold text-foreground mb-1">INFORME DE PRESUPUESTO</h1>
+                <p className="text-base text-foreground">{presupuesto.nombre}</p>
                 <p className="text-sm text-muted-foreground">{presupuestoId}</p>
-                <p className="text-xs text-muted-foreground mt-2">
+                <p className="text-xs text-muted-foreground mt-1">
                   Fecha de generación: {format(new Date(), "d 'de' MMMM 'de' yyyy", { locale: es })}
                 </p>
               </div>

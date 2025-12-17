@@ -294,9 +294,6 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
 
       // PAGE 1: Cover Page with Portada Image
       if (portadaImgData) {
-        // Full page cover image
-        doc.addImage(portadaImgData, 'JPEG', 0, 0, pageWidth, pageHeight);
-        
         // Get style settings
         const textColor = presupuesto.portada_text_color || '#FFFFFF';
         const textPosition = presupuesto.portada_text_position || 'center';
@@ -313,27 +310,58 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
         };
         const rgb = hexToRgb(textColor);
         
+        // Load image to get original dimensions for proper aspect ratio
+        const getImageDimensions = (src: string): Promise<{ width: number; height: number }> => {
+          return new Promise((resolve) => {
+            const img = new Image();
+            img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
+            img.onerror = () => resolve({ width: pageWidth, height: pageHeight }); // Fallback
+            img.src = src;
+          });
+        };
+        
+        const imgDimensions = await getImageDimensions(portadaImgData);
+        const imgAspectRatio = imgDimensions.width / imgDimensions.height;
+        const pageAspectRatio = pageWidth / pageHeight;
+        
+        let imgX = 0;
+        let imgY = 0;
+        let imgWidth = pageWidth;
+        let imgHeight = pageHeight;
+        
+        // Calculate dimensions to cover the page while maintaining aspect ratio
+        if (imgAspectRatio > pageAspectRatio) {
+          // Image is wider than page - fit to height, center horizontally
+          imgHeight = pageHeight;
+          imgWidth = pageHeight * imgAspectRatio;
+          imgX = (pageWidth - imgWidth) / 2;
+        } else {
+          // Image is taller than page - fit to width, center vertically
+          imgWidth = pageWidth;
+          imgHeight = pageWidth / imgAspectRatio;
+          imgY = (pageHeight - imgHeight) / 2;
+        }
+        
+        // Add the cover image maintaining aspect ratio (cover style)
+        doc.addImage(portadaImgData, 'JPEG', imgX, imgY, imgWidth, imgHeight, undefined, 'FAST');
+        
         // Calculate positions based on text position setting
         let overlayY = 0;
         let overlayHeight = pageHeight;
         let textBaseY = pageHeight / 2;
-        let logoY = 20;
         
         if (textPosition === 'top') {
           overlayY = 0;
           overlayHeight = 120;
           textBaseY = 50;
-          logoY = 130;
         } else if (textPosition === 'center') {
           overlayY = pageHeight / 2 - 60;
           overlayHeight = 120;
           textBaseY = pageHeight / 2 - 20;
-          logoY = 20;
         } else { // bottom
           overlayY = pageHeight - 100;
           overlayHeight = 100;
           textBaseY = pageHeight - 65;
-          logoY = 20;
         }
         
         // Semi-transparent overlay for text
@@ -342,9 +370,10 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
         doc.rect(0, overlayY, pageWidth, overlayHeight, 'F');
         doc.setGState(new (doc as any).GState({ opacity: 1 }));
         
-        // Company logo on cover
+        // Company logo - small, top-left corner, overlaid on cover image
         if (logoImgData) {
-          doc.addImage(logoImgData, 'JPEG', pageWidth / 2 - 20, logoY, 40, 40);
+          // Small logo (20x20mm) positioned in top-left corner with small margin
+          doc.addImage(logoImgData, 'JPEG', 10, 10, 20, 20);
         }
         
         // Report title with configurable color

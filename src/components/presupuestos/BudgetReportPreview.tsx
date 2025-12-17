@@ -29,6 +29,7 @@ interface BudgetReportPreviewProps {
     version: string;
     poblacion: string;
     provincia: string | null;
+    portada_url?: string | null;
   };
 }
 
@@ -211,22 +212,63 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
       const pageWidth = doc.internal.pageSize.getWidth();
       const pageHeight = doc.internal.pageSize.getHeight();
 
-      // Company info
+      // Company info (without address per user request)
       const companyName = companySettings.name || 'Mi Empresa';
       const companyEmail = companySettings.email || '';
       const companyPhone = companySettings.phone || '';
-      const companyAddress = companySettings.address || '';
       const companyWeb = companySettings.website || '';
+      const companyLogo = companySettings.logo_url || '';
       const companyInitials = companyName.substring(0, 2).toUpperCase();
 
-      // Helper function for header
+      // Budget cover image
+      const portadaUrl = presupuesto.portada_url || '';
+
+      // Load company logo if available
+      let logoImgData: string | null = null;
+      if (companyLogo) {
+        try {
+          const response = await fetch(companyLogo);
+          const blob = await response.blob();
+          logoImgData = await new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result as string);
+            reader.readAsDataURL(blob);
+          });
+        } catch (err) {
+          console.error('Error loading company logo:', err);
+        }
+      }
+
+      // Load portada image if available
+      let portadaImgData: string | null = null;
+      if (portadaUrl) {
+        try {
+          const response = await fetch(portadaUrl);
+          const blob = await response.blob();
+          portadaImgData = await new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result as string);
+            reader.readAsDataURL(blob);
+          });
+        } catch (err) {
+          console.error('Error loading portada:', err);
+        }
+      }
+
+      // Helper function for header with logo
       const drawHeader = () => {
-        doc.setFillColor(37, 99, 235);
-        doc.roundedRect(14, 10, 25, 25, 3, 3, 'F');
-        doc.setTextColor(255);
-        doc.setFontSize(16);
-        doc.setFont('helvetica', 'bold');
-        doc.text(companyInitials, 26.5, 26, { align: 'center' });
+        if (logoImgData) {
+          // Draw logo image
+          doc.addImage(logoImgData, 'JPEG', 14, 10, 25, 25);
+        } else {
+          // Fallback to initials
+          doc.setFillColor(37, 99, 235);
+          doc.roundedRect(14, 10, 25, 25, 3, 3, 'F');
+          doc.setTextColor(255);
+          doc.setFontSize(16);
+          doc.setFont('helvetica', 'bold');
+          doc.text(companyInitials, 26.5, 26, { align: 'center' });
+        }
         doc.setTextColor(0);
 
         doc.setFontSize(16);
@@ -238,127 +280,141 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
         doc.setFontSize(9);
         doc.setFont('helvetica', 'normal');
         doc.setTextColor(100);
-        const contactLine = [companyEmail, companyPhone].filter(Boolean).join('  |  ');
-        const addressLine = [companyAddress, companyWeb].filter(Boolean).join('  |  ');
-        if (contactLine) doc.text(contactLine, 45, 24);
-        if (addressLine) doc.text(addressLine, 45, 30);
+        // Only email, phone, website - no address
+        const contactLine = [companyEmail, companyPhone, companyWeb].filter(Boolean).join('  |  ');
+        if (contactLine) doc.text(contactLine, 45, 26);
         doc.setTextColor(0);
 
         doc.setDrawColor(200);
         doc.line(14, 40, pageWidth - 14, 40);
       };
 
-      // PAGE 1: Elaborate Cover Page
-      // Top gradient bar
-      doc.setFillColor(37, 99, 235);
-      doc.rect(0, 0, pageWidth, 45, 'F');
-      
-      // Decorative accent rectangles on top right
-      doc.setFillColor(29, 78, 216);
-      doc.rect(pageWidth - 60, 0, 60, 25, 'F');
-      
-      // Additional geometric decoration
-      doc.setFillColor(59, 130, 246);
-      doc.rect(pageWidth - 40, 0, 40, 15, 'F');
-      
-      // Small decorative circles
-      doc.setFillColor(96, 165, 250);
-      doc.circle(30, 35, 8, 'F');
-      doc.setFillColor(147, 197, 253);
-      doc.circle(50, 25, 5, 'F');
-      doc.circle(70, 38, 3, 'F');
-      
-      // Company logo area - large centered
-      doc.setFillColor(255, 255, 255);
-      doc.roundedRect(pageWidth / 2 - 25, 60, 50, 50, 8, 8, 'F');
-      
-      // Shadow effect for logo
-      doc.setFillColor(226, 232, 240);
-      doc.roundedRect(pageWidth / 2 - 23, 62, 50, 50, 8, 8, 'F');
-      doc.setFillColor(255, 255, 255);
-      doc.roundedRect(pageWidth / 2 - 25, 60, 50, 50, 8, 8, 'F');
-      
-      // Company initials in logo
-      doc.setFillColor(37, 99, 235);
-      doc.roundedRect(pageWidth / 2 - 20, 65, 40, 40, 6, 6, 'F');
-      doc.setTextColor(255);
-      doc.setFontSize(28);
-      doc.setFont('helvetica', 'bold');
-      doc.text(companyInitials, pageWidth / 2, 92, { align: 'center' });
-      
-      // Company name - large and prominent
-      doc.setTextColor(30, 41, 59);
-      doc.setFontSize(22);
-      doc.setFont('helvetica', 'bold');
-      doc.text(companyName, pageWidth / 2, 130, { align: 'center' });
-      
-      // Company contact info
-      doc.setFontSize(10);
-      doc.setFont('helvetica', 'normal');
-      doc.setTextColor(100, 116, 139);
-      const contactLine = [companyEmail, companyPhone].filter(Boolean).join('  •  ');
-      if (contactLine) doc.text(contactLine, pageWidth / 2, 140, { align: 'center' });
-      const addressLine = [companyAddress, companyWeb].filter(Boolean).join('  •  ');
-      if (addressLine) doc.text(addressLine, pageWidth / 2, 148, { align: 'center' });
-      
-      // Decorative divider
-      doc.setDrawColor(226, 232, 240);
-      doc.setLineWidth(0.5);
-      doc.line(pageWidth / 2 - 40, 160, pageWidth / 2 + 40, 160);
-      doc.setFillColor(37, 99, 235);
-      doc.circle(pageWidth / 2, 160, 2, 'F');
-      doc.setLineWidth(0.2);
-      
-      // Report title section
-      doc.setFillColor(248, 250, 252);
-      doc.roundedRect(20, 175, pageWidth - 40, 50, 4, 4, 'F');
-      
-      // Left accent bar
-      doc.setFillColor(37, 99, 235);
-      doc.roundedRect(20, 175, 4, 50, 2, 2, 'F');
-      
-      doc.setTextColor(37, 99, 235);
-      doc.setFontSize(10);
-      doc.setFont('helvetica', 'bold');
-      doc.text('DOCUMENTO TÉCNICO', pageWidth / 2, 188, { align: 'center' });
-      
-      doc.setTextColor(30, 41, 59);
-      doc.setFontSize(18);
-      doc.setFont('helvetica', 'bold');
-      doc.text('INFORME DE PRESUPUESTO', pageWidth / 2, 200, { align: 'center' });
-      
-      doc.setTextColor(71, 85, 105);
-      doc.setFontSize(12);
-      doc.setFont('helvetica', 'normal');
-      doc.text(presupuesto.nombre, pageWidth / 2, 215, { align: 'center' });
-      
-      // Budget ID badge
-      doc.setFillColor(241, 245, 249);
-      const badgeWidth = doc.getTextWidth(presupuestoId) + 20;
-      doc.roundedRect(pageWidth / 2 - badgeWidth / 2, 230, badgeWidth, 12, 6, 6, 'F');
-      doc.setTextColor(100, 116, 139);
-      doc.setFontSize(9);
-      doc.text(presupuestoId, pageWidth / 2, 238, { align: 'center' });
-      
-      // Date with icon-like element
-      doc.setFillColor(34, 197, 94);
-      doc.circle(pageWidth / 2 - 45, 258, 3, 'F');
-      doc.setTextColor(71, 85, 105);
-      doc.setFontSize(10);
-      doc.text(`Fecha de generación: ${format(new Date(), "d 'de' MMMM 'de' yyyy", { locale: es })}`, pageWidth / 2, 260, { align: 'center' });
-      
-      // Bottom decorative section
-      doc.setFillColor(248, 250, 252);
-      doc.rect(0, pageHeight - 25, pageWidth, 25, 'F');
-      
-      // Bottom accent line
-      doc.setFillColor(37, 99, 235);
-      doc.rect(0, pageHeight - 25, pageWidth, 3, 'F');
-      
-      // Footer text
-      doc.setTextColor(148, 163, 184);
-      doc.setFontSize(8);
-      doc.text('Documento generado automáticamente', pageWidth / 2, pageHeight - 10, { align: 'center' });
+      // PAGE 1: Cover Page with Portada Image
+      if (portadaImgData) {
+        // Full page cover image
+        doc.addImage(portadaImgData, 'JPEG', 0, 0, pageWidth, pageHeight);
+        
+        // Semi-transparent overlay at bottom for text
+        doc.setFillColor(0, 0, 0);
+        doc.setGState(new (doc as any).GState({ opacity: 0.6 }));
+        doc.rect(0, pageHeight - 100, pageWidth, 100, 'F');
+        doc.setGState(new (doc as any).GState({ opacity: 1 }));
+        
+        // Company logo on cover
+        if (logoImgData) {
+          doc.addImage(logoImgData, 'JPEG', pageWidth / 2 - 20, 20, 40, 40);
+        }
+        
+        // Report title at bottom
+        doc.setTextColor(255);
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'bold');
+        doc.text('DOCUMENTO TÉCNICO', pageWidth / 2, pageHeight - 75, { align: 'center' });
+        
+        doc.setFontSize(20);
+        doc.text('INFORME DE PRESUPUESTO', pageWidth / 2, pageHeight - 60, { align: 'center' });
+        
+        doc.setFontSize(14);
+        doc.setFont('helvetica', 'normal');
+        doc.text(presupuesto.nombre, pageWidth / 2, pageHeight - 42, { align: 'center' });
+        
+        doc.setFontSize(10);
+        doc.text(presupuestoId, pageWidth / 2, pageHeight - 28, { align: 'center' });
+        
+        doc.setFontSize(9);
+        doc.text(`Fecha: ${format(new Date(), "d 'de' MMMM 'de' yyyy", { locale: es })}`, pageWidth / 2, pageHeight - 15, { align: 'center' });
+      } else {
+        // Fallback to designed cover without portada
+        // Top gradient bar
+        doc.setFillColor(37, 99, 235);
+        doc.rect(0, 0, pageWidth, 45, 'F');
+        
+        // Company logo area - large centered
+        doc.setFillColor(255, 255, 255);
+        doc.roundedRect(pageWidth / 2 - 25, 60, 50, 50, 8, 8, 'F');
+        
+        if (logoImgData) {
+          doc.addImage(logoImgData, 'JPEG', pageWidth / 2 - 20, 65, 40, 40);
+        } else {
+          // Company initials in logo
+          doc.setFillColor(37, 99, 235);
+          doc.roundedRect(pageWidth / 2 - 20, 65, 40, 40, 6, 6, 'F');
+          doc.setTextColor(255);
+          doc.setFontSize(28);
+          doc.setFont('helvetica', 'bold');
+          doc.text(companyInitials, pageWidth / 2, 92, { align: 'center' });
+        }
+        
+        // Company name - large and prominent
+        doc.setTextColor(30, 41, 59);
+        doc.setFontSize(22);
+        doc.setFont('helvetica', 'bold');
+        doc.text(companyName, pageWidth / 2, 130, { align: 'center' });
+        
+        // Company contact info (email, phone, website only - no address)
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(100, 116, 139);
+        const contactLine = [companyEmail, companyPhone, companyWeb].filter(Boolean).join('  •  ');
+        if (contactLine) doc.text(contactLine, pageWidth / 2, 142, { align: 'center' });
+        
+        // Decorative divider
+        doc.setDrawColor(226, 232, 240);
+        doc.setLineWidth(0.5);
+        doc.line(pageWidth / 2 - 40, 155, pageWidth / 2 + 40, 155);
+        doc.setFillColor(37, 99, 235);
+        doc.circle(pageWidth / 2, 155, 2, 'F');
+        doc.setLineWidth(0.2);
+        
+        // Report title section
+        doc.setFillColor(248, 250, 252);
+        doc.roundedRect(20, 170, pageWidth - 40, 50, 4, 4, 'F');
+        
+        // Left accent bar
+        doc.setFillColor(37, 99, 235);
+        doc.roundedRect(20, 170, 4, 50, 2, 2, 'F');
+        
+        doc.setTextColor(37, 99, 235);
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'bold');
+        doc.text('DOCUMENTO TÉCNICO', pageWidth / 2, 183, { align: 'center' });
+        
+        doc.setTextColor(30, 41, 59);
+        doc.setFontSize(18);
+        doc.setFont('helvetica', 'bold');
+        doc.text('INFORME DE PRESUPUESTO', pageWidth / 2, 195, { align: 'center' });
+        
+        doc.setTextColor(71, 85, 105);
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'normal');
+        doc.text(presupuesto.nombre, pageWidth / 2, 210, { align: 'center' });
+        
+        // Budget ID badge
+        doc.setFillColor(241, 245, 249);
+        const badgeWidth = doc.getTextWidth(presupuestoId) + 20;
+        doc.roundedRect(pageWidth / 2 - badgeWidth / 2, 225, badgeWidth, 12, 6, 6, 'F');
+        doc.setTextColor(100, 116, 139);
+        doc.setFontSize(9);
+        doc.text(presupuestoId, pageWidth / 2, 233, { align: 'center' });
+        
+        // Date
+        doc.setTextColor(71, 85, 105);
+        doc.setFontSize(10);
+        doc.text(`Fecha de generación: ${format(new Date(), "d 'de' MMMM 'de' yyyy", { locale: es })}`, pageWidth / 2, 255, { align: 'center' });
+        
+        // Bottom decorative section
+        doc.setFillColor(248, 250, 252);
+        doc.rect(0, pageHeight - 25, pageWidth, 25, 'F');
+        
+        // Bottom accent line
+        doc.setFillColor(37, 99, 235);
+        doc.rect(0, pageHeight - 25, pageWidth, 3, 'F');
+        
+        // Footer text
+        doc.setTextColor(148, 163, 184);
+        doc.setFontSize(8);
+        doc.text('Documento generado automáticamente', pageWidth / 2, pageHeight - 10, { align: 'center' });
+      }
       
       // PAGE 2: Index
       doc.addPage();
@@ -998,16 +1054,42 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
             </div>
           ) : (
             <div ref={printRef} className="py-6 space-y-8 print:py-0 print:space-y-4">
+              {/* Cover Preview */}
+              {presupuesto.portada_url && (
+                <div className="relative rounded-lg overflow-hidden mb-6" style={{ height: '200px' }}>
+                  <img 
+                    src={presupuesto.portada_url} 
+                    alt="Portada del presupuesto" 
+                    className="w-full h-full object-cover"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
+                  <div className="absolute bottom-4 left-0 right-0 text-center text-white">
+                    <p className="text-sm font-medium">INFORME DE PRESUPUESTO</p>
+                    <p className="text-lg font-bold">{presupuesto.nombre}</p>
+                  </div>
+                </div>
+              )}
+              
               {/* Header */}
               <div className="text-center border-b pb-6 print:pb-4">
                 <div className="flex items-center justify-center gap-4 mb-4">
-                  <div className="w-12 h-12 rounded-lg bg-primary flex items-center justify-center text-primary-foreground font-bold text-lg">
-                    {(companySettings.name || 'MI').substring(0, 2).toUpperCase()}
+                  <div className="w-12 h-12 rounded-lg bg-primary flex items-center justify-center overflow-hidden">
+                    {companySettings.logo_url ? (
+                      <img 
+                        src={companySettings.logo_url} 
+                        alt="Logo" 
+                        className="w-full h-full object-contain"
+                      />
+                    ) : (
+                      <span className="text-primary-foreground font-bold text-lg">
+                        {(companySettings.name || 'MI').substring(0, 2).toUpperCase()}
+                      </span>
+                    )}
                   </div>
                   <div className="text-left">
                     <h2 className="text-xl font-bold text-primary">{companySettings.name || 'Mi Empresa'}</h2>
                     <p className="text-xs text-muted-foreground">
-                      {[companySettings.email, companySettings.phone].filter(Boolean).join(' | ')}
+                      {[companySettings.email, companySettings.phone, companySettings.website].filter(Boolean).join(' | ')}
                     </p>
                   </div>
                 </div>
@@ -1365,8 +1447,7 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
 
               {/* Footer */}
               <div className="text-center text-xs text-muted-foreground pt-4 border-t print:mt-8">
-                <p>{[companySettings.name, companySettings.email, companySettings.phone].filter(Boolean).join(' | ')}</p>
-                <p>{[companySettings.address, companySettings.website].filter(Boolean).join(' | ')}</p>
+                <p>{[companySettings.name, companySettings.email, companySettings.phone, companySettings.website].filter(Boolean).join(' | ')}</p>
               </div>
             </div>
           )}

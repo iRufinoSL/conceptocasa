@@ -1,11 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { toast } from 'sonner';
-import { Building2, Mail, Phone, MapPin, Globe, Save, Loader2 } from 'lucide-react';
+import { Building2, Mail, Phone, MapPin, Globe, Save, Loader2, Upload, X, Image } from 'lucide-react';
 
 interface CompanySettings {
   id: string;
@@ -21,6 +21,8 @@ export function CompanySettingsForm() {
   const [settings, setSettings] = useState<CompanySettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -59,6 +61,74 @@ export function CompanySettingsForm() {
       toast.error('Error al cargar la configuración de la empresa');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleLogoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      toast.error('Por favor selecciona una imagen válida');
+      return;
+    }
+
+    // Validate file size (max 2MB)
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error('La imagen no puede superar 2MB');
+      return;
+    }
+
+    setUploadingLogo(true);
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `company-logo-${Date.now()}.${fileExt}`;
+      const filePath = fileName;
+
+      // Delete old logo if exists
+      if (logoUrl) {
+        const oldPath = logoUrl.split('/').pop();
+        if (oldPath) {
+          await supabase.storage.from('company-logos').remove([oldPath]);
+        }
+      }
+
+      // Upload new logo
+      const { error: uploadError } = await supabase.storage
+        .from('company-logos')
+        .upload(filePath, file, { upsert: true });
+
+      if (uploadError) throw uploadError;
+
+      // Get public URL
+      const { data: urlData } = supabase.storage
+        .from('company-logos')
+        .getPublicUrl(filePath);
+
+      setLogoUrl(urlData.publicUrl);
+      toast.success('Logotipo subido correctamente');
+    } catch (error) {
+      console.error('Error uploading logo:', error);
+      toast.error('Error al subir el logotipo');
+    } finally {
+      setUploadingLogo(false);
+    }
+  };
+
+  const handleRemoveLogo = async () => {
+    if (!logoUrl) return;
+
+    try {
+      const oldPath = logoUrl.split('/').pop();
+      if (oldPath) {
+        await supabase.storage.from('company-logos').remove([oldPath]);
+      }
+      setLogoUrl('');
+      toast.success('Logotipo eliminado');
+    } catch (error) {
+      console.error('Error removing logo:', error);
+      toast.error('Error al eliminar el logotipo');
     }
   };
 
@@ -126,6 +196,63 @@ export function CompanySettingsForm() {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
+        {/* Logo Upload Section */}
+        <div className="space-y-3">
+          <Label>Logotipo de la Empresa</Label>
+          <div className="flex items-start gap-4">
+            <div className="w-24 h-24 rounded-lg border-2 border-dashed border-muted-foreground/25 flex items-center justify-center overflow-hidden bg-muted/30">
+              {logoUrl ? (
+                <img 
+                  src={logoUrl} 
+                  alt="Logo de la empresa" 
+                  className="w-full h-full object-contain"
+                />
+              ) : (
+                <Image className="h-8 w-8 text-muted-foreground/50" />
+              )}
+            </div>
+            <div className="flex flex-col gap-2">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleLogoUpload}
+                className="hidden"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploadingLogo}
+                className="gap-2"
+              >
+                {uploadingLogo ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Upload className="h-4 w-4" />
+                )}
+                {logoUrl ? 'Cambiar logotipo' : 'Subir logotipo'}
+              </Button>
+              {logoUrl && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleRemoveLogo}
+                  className="gap-2 text-destructive hover:text-destructive"
+                >
+                  <X className="h-4 w-4" />
+                  Eliminar
+                </Button>
+              )}
+              <p className="text-xs text-muted-foreground">
+                Formato JPG o PNG. Máximo 2MB.
+              </p>
+            </div>
+          </div>
+        </div>
+
         <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2">
             <Label htmlFor="company-name">Nombre de la Empresa *</Label>
@@ -197,35 +324,25 @@ export function CompanySettingsForm() {
               />
             </div>
           </div>
-
-          <div className="space-y-2 md:col-span-2">
-            <Label htmlFor="company-logo">URL del Logo (opcional)</Label>
-            <Input
-              id="company-logo"
-              value={logoUrl}
-              onChange={(e) => setLogoUrl(e.target.value)}
-              placeholder="https://ejemplo.com/logo.png"
-            />
-            <p className="text-xs text-muted-foreground">
-              Si no se proporciona un logo, se usará un marcador con las iniciales de la empresa.
-            </p>
-          </div>
         </div>
 
         {/* Preview */}
         <div className="rounded-lg border p-4 bg-muted/30">
           <p className="text-sm font-medium mb-3 text-muted-foreground">Vista previa del encabezado PDF:</p>
           <div className="flex items-start gap-4">
-            <div className="w-12 h-12 rounded-lg bg-primary flex items-center justify-center text-primary-foreground font-bold text-lg">
-              {name ? name.substring(0, 2).toUpperCase() : 'CC'}
+            <div className="w-12 h-12 rounded-lg bg-primary flex items-center justify-center overflow-hidden">
+              {logoUrl ? (
+                <img src={logoUrl} alt="Logo" className="w-full h-full object-contain" />
+              ) : (
+                <span className="text-primary-foreground font-bold text-lg">
+                  {name ? name.substring(0, 2).toUpperCase() : 'CC'}
+                </span>
+              )}
             </div>
             <div>
               <p className="font-semibold text-primary">{name || 'Nombre de la Empresa'}</p>
               <p className="text-xs text-muted-foreground">
-                {[email, phone].filter(Boolean).join('  |  ') || 'email@empresa.com  |  +34 600 000 000'}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                {[address, website].filter(Boolean).join('  |  ') || 'Dirección  |  www.empresa.com'}
+                {[email, phone, website].filter(Boolean).join('  |  ') || 'email@empresa.com  |  +34 600 000 000  |  www.empresa.com'}
               </p>
             </div>
           </div>

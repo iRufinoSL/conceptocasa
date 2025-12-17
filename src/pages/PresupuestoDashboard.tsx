@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ArrowLeft, Calculator, ClipboardList, Building2, FileText, Settings, Calendar, Ruler, FileDown, Image, RefreshCw, Copy, GanttChart } from 'lucide-react';
+import { ArrowLeft, Calculator, ClipboardList, Building2, FileText, Settings, Calendar, Ruler, FileDown, Image, RefreshCw, Copy, GanttChart, Upload, X, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { AppNavDropdown } from '@/components/AppNavDropdown';
@@ -35,6 +35,7 @@ interface Presupuesto {
   created_at: string;
   start_date: string | null;
   end_date: string | null;
+  portada_url: string | null;
 }
 
 interface Project {
@@ -54,6 +55,8 @@ export default function PresupuestoDashboard() {
   const [reportPreviewOpen, setReportPreviewOpen] = useState(false);
   const [cloneDialogOpen, setCloneDialogOpen] = useState(false);
   const [isRecalculating, setIsRecalculating] = useState(false);
+  const [uploadingPortada, setUploadingPortada] = useState(false);
+  const portadaInputRef = useRef<HTMLInputElement>(null);
 
   const isAdmin = roles.includes('administrador');
 
@@ -75,6 +78,87 @@ export default function PresupuestoDashboard() {
       toast.error('Error al recalcular');
     } finally {
       setIsRecalculating(false);
+    }
+  };
+
+  const handlePortadaUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !presupuesto) return;
+
+    if (!file.type.startsWith('image/')) {
+      toast.error('Por favor selecciona una imagen válida');
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('La imagen no puede superar 5MB');
+      return;
+    }
+
+    setUploadingPortada(true);
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `portada-${presupuesto.id}-${Date.now()}.${fileExt}`;
+
+      // Delete old portada if exists
+      if (presupuesto.portada_url) {
+        const oldPath = presupuesto.portada_url.split('/').pop();
+        if (oldPath) {
+          await supabase.storage.from('budget-covers').remove([oldPath]);
+        }
+      }
+
+      // Upload new portada
+      const { error: uploadError } = await supabase.storage
+        .from('budget-covers')
+        .upload(fileName, file, { upsert: true });
+
+      if (uploadError) throw uploadError;
+
+      // Get public URL
+      const { data: urlData } = supabase.storage
+        .from('budget-covers')
+        .getPublicUrl(fileName);
+
+      // Update presupuesto
+      const { error: updateError } = await supabase
+        .from('presupuestos')
+        .update({ portada_url: urlData.publicUrl })
+        .eq('id', presupuesto.id);
+
+      if (updateError) throw updateError;
+
+      setPresupuesto({ ...presupuesto, portada_url: urlData.publicUrl });
+      toast.success('Portada subida correctamente');
+    } catch (error) {
+      console.error('Error uploading portada:', error);
+      toast.error('Error al subir la portada');
+    } finally {
+      setUploadingPortada(false);
+    }
+  };
+
+  const handleRemovePortada = async () => {
+    if (!presupuesto?.portada_url) return;
+
+    try {
+      const oldPath = presupuesto.portada_url.split('/').pop();
+      if (oldPath) {
+        await supabase.storage.from('budget-covers').remove([oldPath]);
+      }
+
+      const { error } = await supabase
+        .from('presupuestos')
+        .update({ portada_url: null })
+        .eq('id', presupuesto.id);
+
+      if (error) throw error;
+
+      setPresupuesto({ ...presupuesto, portada_url: null });
+      toast.success('Portada eliminada');
+    } catch (error) {
+      console.error('Error removing portada:', error);
+      toast.error('Error al eliminar la portada');
     }
   };
 
@@ -421,6 +505,89 @@ export default function PresupuestoDashboard() {
                             : 'Sin definir'}
                         </p>
                       </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+              
+              {/* Portada Upload Section */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Image className="h-5 w-5 text-primary" />
+                    Portada del Presupuesto
+                  </CardTitle>
+                  <CardDescription>
+                    Esta imagen aparecerá como portada en los informes PDF del presupuesto.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {isAdmin ? (
+                    <div className="flex items-start gap-4">
+                      <div className="w-48 h-32 rounded-lg border-2 border-dashed border-muted-foreground/25 flex items-center justify-center overflow-hidden bg-muted/30">
+                        {presupuesto.portada_url ? (
+                          <img 
+                            src={presupuesto.portada_url} 
+                            alt="Portada del presupuesto" 
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <Image className="h-12 w-12 text-muted-foreground/50" />
+                        )}
+                      </div>
+                      <div className="flex flex-col gap-2">
+                        <input
+                          ref={portadaInputRef}
+                          type="file"
+                          accept="image/*"
+                          onChange={handlePortadaUpload}
+                          className="hidden"
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => portadaInputRef.current?.click()}
+                          disabled={uploadingPortada}
+                          className="gap-2"
+                        >
+                          {uploadingPortada ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Upload className="h-4 w-4" />
+                          )}
+                          {presupuesto.portada_url ? 'Cambiar portada' : 'Subir portada'}
+                        </Button>
+                        {presupuesto.portada_url && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={handleRemovePortada}
+                            className="gap-2 text-destructive hover:text-destructive"
+                          >
+                            <X className="h-4 w-4" />
+                            Eliminar
+                          </Button>
+                        )}
+                        <p className="text-xs text-muted-foreground">
+                          Formato JPG o PNG. Máximo 5MB.
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="w-48 h-32 rounded-lg border overflow-hidden bg-muted/30">
+                      {presupuesto.portada_url ? (
+                        <img 
+                          src={presupuesto.portada_url} 
+                          alt="Portada del presupuesto" 
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                          <span className="text-muted-foreground text-sm">Sin portada</span>
+                        </div>
+                      )}
                     </div>
                   )}
                 </CardContent>

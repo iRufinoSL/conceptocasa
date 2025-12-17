@@ -891,6 +891,7 @@ export type Database = {
           id: string
           nombre: string
           poblacion: string
+          portada_url: string | null
           project_id: string | null
           provincia: string | null
           start_date: string | null
@@ -906,6 +907,7 @@ export type Database = {
           id?: string
           nombre: string
           poblacion: string
+          portada_url?: string | null
           project_id?: string | null
           provincia?: string | null
           start_date?: string | null
@@ -921,6 +923,7 @@ export type Database = {
           id?: string
           nombre?: string
           poblacion?: string
+          portada_url?: string | null
           project_id?: string | null
           provincia?: string | null
           start_date?: string | null

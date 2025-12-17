@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ArrowLeft, Calculator, ClipboardList, Building2, FileText, Settings, Calendar, Ruler, FileDown, Image, RefreshCw, Copy } from 'lucide-react';
+import { ArrowLeft, Calculator, ClipboardList, Building2, FileText, Settings, Calendar, Ruler, FileDown, Image, RefreshCw, Copy, GanttChart } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { AppNavDropdown } from '@/components/AppNavDropdown';
@@ -20,6 +20,7 @@ import { BudgetVersionComparison } from '@/components/presupuestos/BudgetVersion
 import { BudgetReportPreview } from '@/components/presupuestos/BudgetReportPreview';
 import { BudgetPredesignTab } from '@/components/presupuestos/BudgetPredesignTab';
 import { CloneBudgetDialog } from '@/components/presupuestos/CloneBudgetDialog';
+import { BudgetTimelineView } from '@/components/presupuestos/BudgetTimelineView';
 import { recalculateAllBudgetResources } from '@/lib/budget-utils';
 import { toast } from 'sonner';
 
@@ -264,7 +265,7 @@ export default function PresupuestoDashboard() {
 
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-7 lg:w-auto lg:inline-grid">
+          <TabsList className="grid w-full grid-cols-8 lg:w-auto lg:inline-grid">
             <TabsTrigger value="anteproyecto" className="flex items-center gap-2">
               <Image className="h-4 w-4" />
               <span className="hidden sm:inline">Ante-proyecto</span>
@@ -276,6 +277,10 @@ export default function PresupuestoDashboard() {
             <TabsTrigger value="fases" className="flex items-center gap-2">
               <Calendar className="h-4 w-4" />
               <span className="hidden sm:inline">CUÁNDO se hace?</span>
+            </TabsTrigger>
+            <TabsTrigger value="timeline" className="flex items-center gap-2">
+              <GanttChart className="h-4 w-4" />
+              <span className="hidden sm:inline">Timeline</span>
             </TabsTrigger>
             <TabsTrigger value="recursos" className="flex items-center gap-2">
               <FileText className="h-4 w-4" />
@@ -313,6 +318,14 @@ export default function PresupuestoDashboard() {
             <BudgetPhasesTab 
               budgetId={presupuesto.id} 
               isAdmin={isAdmin}
+              budgetStartDate={presupuesto.start_date}
+              budgetEndDate={presupuesto.end_date}
+            />
+          </TabsContent>
+
+          <TabsContent value="timeline" className="mt-6">
+            <BudgetTimelineView 
+              budgetId={presupuesto.id}
               budgetStartDate={presupuesto.start_date}
               budgetEndDate={presupuesto.end_date}
             />

@@ -13,7 +13,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Search, Upload, Pencil, Trash2, MoreHorizontal, FileUp, File, X, Download, ChevronRight, ChevronDown, ChevronLeft, List, Layers, Copy, Package, Wrench, Truck, Briefcase, Eye, ArrowUpDown, ArrowUp, ArrowDown, FileDown } from 'lucide-react';
+import { Plus, Search, Upload, Pencil, Trash2, MoreHorizontal, FileUp, File, X, Download, ChevronRight, ChevronDown, ChevronLeft, List, Layers, Copy, Package, Wrench, Truck, Briefcase, Eye, ArrowUpDown, ArrowUp, ArrowDown, FileDown, Clock } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { toast } from 'sonner';
@@ -145,7 +145,7 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
   const [measurementRelations, setMeasurementRelations] = useState<MeasurementRelation[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [viewMode, setViewMode] = useState<'alphabetical' | 'grouped'>('alphabetical');
+  const [viewMode, setViewMode] = useState<'alphabetical' | 'grouped' | 'time'>('alphabetical');
   const [activitySortOrder, setActivitySortOrder] = useState<'asc' | 'desc'>('asc');
   const [expandedPhases, setExpandedPhases] = useState<Set<string>>(new Set());
   
@@ -1319,10 +1319,19 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
               variant={viewMode === 'grouped' ? 'default' : 'ghost'} 
               size="sm"
               onClick={() => setViewMode('grouped')}
-              className="rounded-l-none"
+              className="rounded-none border-l"
             >
               <Layers className="h-4 w-4 mr-1" />
               Por Fase
+            </Button>
+            <Button 
+              variant={viewMode === 'time' ? 'default' : 'ghost'} 
+              size="sm"
+              onClick={() => setViewMode('time')}
+              className="rounded-l-none border-l"
+            >
+              <Clock className="h-4 w-4 mr-1" />
+              Gestión Tiempo
             </Button>
           </div>
           <Button variant="outline" size="sm" onClick={exportActivitiesPDF}>
@@ -1792,7 +1801,163 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
         </div>
       )}
 
-      {/* Form Dialog */}
+      {/* Time Management View */}
+      {viewMode === 'time' && (
+        <div className="border rounded-lg overflow-hidden">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>ActividadID</TableHead>
+                <TableHead>Fase</TableHead>
+                <TableHead>Fecha Inicio</TableHead>
+                <TableHead className="text-center">Duración (días)</TableHead>
+                <TableHead className="text-center">Tolerancia (días)</TableHead>
+                <TableHead>Fecha Fin</TableHead>
+                {isAdmin && <TableHead className="w-20">Acciones</TableHead>}
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {[...filteredActivities]
+                .sort((a, b) => {
+                  if (!a.start_date && !b.start_date) return 0;
+                  if (!a.start_date) return 1;
+                  if (!b.start_date) return -1;
+                  return a.start_date.localeCompare(b.start_date);
+                })
+                .map((activity) => {
+                  const phase = getPhaseById(activity.phase_id);
+                  return (
+                    <TableRow key={activity.id}>
+                      <TableCell className="font-mono text-sm">{generateActivityId(activity)}</TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {phase ? `${phase.code} ${phase.name}` : '-'}
+                      </TableCell>
+                      <TableCell>
+                        {isAdmin ? (
+                          <Input
+                            type="date"
+                            value={activity.start_date || ''}
+                            min={budgetStartDate || undefined}
+                            max={budgetEndDate || undefined}
+                            onChange={async (e) => {
+                              const newValue = e.target.value || null;
+                              try {
+                                const { error } = await supabase
+                                  .from('budget_activities')
+                                  .update({ start_date: newValue })
+                                  .eq('id', activity.id);
+                                if (error) throw error;
+                                fetchData();
+                                toast.success('Fecha actualizada');
+                              } catch (err) {
+                                toast.error('Error al actualizar');
+                              }
+                            }}
+                            className="w-36 h-8"
+                          />
+                        ) : (
+                          <span>
+                            {activity.start_date 
+                              ? format(parseISO(activity.start_date), 'dd/MM/yyyy', { locale: es })
+                              : '-'}
+                          </span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        {isAdmin ? (
+                          <Input
+                            type="number"
+                            value={activity.duration_days ?? ''}
+                            min={0}
+                            onChange={async (e) => {
+                              const newValue = e.target.value ? parseInt(e.target.value) : null;
+                              try {
+                                const { error } = await supabase
+                                  .from('budget_activities')
+                                  .update({ duration_days: newValue })
+                                  .eq('id', activity.id);
+                                if (error) throw error;
+                                fetchData();
+                                toast.success('Duración actualizada');
+                              } catch (err) {
+                                toast.error('Error al actualizar');
+                              }
+                            }}
+                            className="w-20 h-8 text-center mx-auto"
+                          />
+                        ) : (
+                          <span>{activity.duration_days ?? '-'}</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        {isAdmin ? (
+                          <Input
+                            type="number"
+                            value={activity.tolerance_days ?? ''}
+                            min={0}
+                            onChange={async (e) => {
+                              const newValue = e.target.value ? parseInt(e.target.value) : null;
+                              try {
+                                const { error } = await supabase
+                                  .from('budget_activities')
+                                  .update({ tolerance_days: newValue })
+                                  .eq('id', activity.id);
+                                if (error) throw error;
+                                fetchData();
+                                toast.success('Tolerancia actualizada');
+                              } catch (err) {
+                                toast.error('Error al actualizar');
+                              }
+                            }}
+                            className="w-20 h-8 text-center mx-auto"
+                          />
+                        ) : (
+                          <span>{activity.tolerance_days ?? '-'}</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {activity.end_date 
+                          ? format(parseISO(activity.end_date), 'dd/MM/yyyy', { locale: es })
+                          : '-'}
+                      </TableCell>
+                      {isAdmin && (
+                        <TableCell>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon">
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => handleEdit(activity)}>
+                                <Pencil className="h-4 w-4 mr-2" />
+                                Editar
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleDeleteClick(activity)} className="text-destructive">
+                                <Trash2 className="h-4 w-4 mr-2" />
+                                Eliminar
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </TableCell>
+                      )}
+                    </TableRow>
+                  );
+                })}
+              {filteredActivities.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={isAdmin ? 7 : 6} className="text-center py-8 text-muted-foreground">
+                    {searchTerm 
+                      ? 'No se encontraron actividades con ese criterio'
+                      : 'No hay actividades. Crea una nueva o importa desde CSV.'}
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </div>
+      )}
+
       <Dialog open={formDialogOpen} onOpenChange={setFormDialogOpen}>
         <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>

@@ -26,13 +26,14 @@ import { BudgetResourceForm } from './BudgetResourceForm';
 import { useCompanySettings } from '@/hooks/useCompanySettings';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { format } from 'date-fns';
+import { format, addDays, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 
 interface BudgetPhase {
   id: string;
   name: string;
   code: string | null;
+  start_date: string | null;
 }
 
 interface BudgetActivity {
@@ -48,6 +49,10 @@ interface BudgetActivity {
   created_at: string;
   files_count?: number;
   resources_subtotal?: number;
+  start_date: string | null;
+  duration_days: number | null;
+  tolerance_days: number | null;
+  end_date: string | null;
 }
 
 interface Measurement {
@@ -94,12 +99,17 @@ interface ActivityForm {
   phase_id: string;
   measurement_id: string;
   uses_measurement: boolean;
+  start_date: string;
+  duration_days: string;
+  tolerance_days: string;
 }
 
 interface BudgetActivitiesTabProps {
   budgetId: string;
   budgetName: string;
   isAdmin: boolean;
+  budgetStartDate?: string | null;
+  budgetEndDate?: string | null;
 }
 
 // Format for PDF (simpler format without symbols)
@@ -121,10 +131,13 @@ const emptyForm: ActivityForm = {
   measurement_unit: 'ud',
   phase_id: '',
   measurement_id: '',
-  uses_measurement: true
+  uses_measurement: true,
+  start_date: '',
+  duration_days: '',
+  tolerance_days: ''
 };
 
-export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin }: BudgetActivitiesTabProps) {
+export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStartDate, budgetEndDate }: BudgetActivitiesTabProps) {
   const { settings: companySettings } = useCompanySettings();
   const [activities, setActivities] = useState<BudgetActivity[]>([]);
   const [phases, setPhases] = useState<BudgetPhase[]>([]);
@@ -283,7 +296,7 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin }: BudgetAct
           .order('name', { ascending: true }),
         supabase
           .from('budget_phases')
-          .select('id, name, code')
+          .select('id, name, code, start_date')
           .eq('budget_id', budgetId)
           .order('code', { ascending: true }),
         supabase
@@ -383,7 +396,10 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin }: BudgetAct
                   measurement_unit: data.measurement_unit,
                   phase_id: data.phase_id || '',
                   measurement_id: data.measurement_id || '',
-                  uses_measurement: data.uses_measurement ?? true
+                  uses_measurement: data.uses_measurement ?? true,
+                  start_date: data.start_date || '',
+                  duration_days: data.duration_days?.toString() || '',
+                  tolerance_days: data.tolerance_days?.toString() || ''
                 });
                 setFormDialogOpen(true);
               }
@@ -438,7 +454,10 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin }: BudgetAct
       measurement_unit: activity.measurement_unit,
       phase_id: activity.phase_id || '',
       measurement_id: activity.measurement_id || '',
-      uses_measurement: activity.uses_measurement ?? true
+      uses_measurement: activity.uses_measurement ?? true,
+      start_date: activity.start_date || '',
+      duration_days: activity.duration_days?.toString() || '',
+      tolerance_days: activity.tolerance_days?.toString() || ''
     });
     
     // Fetch resources for this activity
@@ -633,7 +652,10 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin }: BudgetAct
         measurement_unit: form.measurement_unit,
         phase_id: form.phase_id && form.phase_id !== '' && form.phase_id !== 'null' ? form.phase_id : null,
         measurement_id: form.measurement_id && form.measurement_id !== '' && form.measurement_id !== 'null' ? form.measurement_id : null,
-        uses_measurement: form.uses_measurement
+        uses_measurement: form.uses_measurement,
+        start_date: form.start_date || null,
+        duration_days: form.duration_days ? parseInt(form.duration_days) : null,
+        tolerance_days: form.tolerance_days ? parseInt(form.tolerance_days) : null
       };
 
       if (editingActivity) {
@@ -696,7 +718,10 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin }: BudgetAct
           code: `${activity.code}-C`,
           description: activity.description,
           measurement_unit: activity.measurement_unit,
-          phase_id: activity.phase_id
+          phase_id: activity.phase_id,
+          start_date: activity.start_date,
+          duration_days: activity.duration_days,
+          tolerance_days: activity.tolerance_days
         })
         .select()
         .single();
@@ -1930,6 +1955,76 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin }: BudgetAct
                     </Command>
                   </PopoverContent>
                 </Popover>
+              </div>
+            </div>
+
+            {/* Time Management Fields */}
+            <div className="grid grid-cols-4 gap-4 p-3 border rounded-lg bg-muted/30">
+              <div className="space-y-2">
+                <Label htmlFor="start_date">Fecha Inicio</Label>
+                <Input
+                  id="start_date"
+                  type="date"
+                  value={form.start_date}
+                  min={budgetStartDate || undefined}
+                  max={budgetEndDate || undefined}
+                  onChange={(e) => setForm({ ...form, start_date: e.target.value })}
+                />
+                {form.phase_id && !form.start_date && (
+                  <Button 
+                    type="button" 
+                    variant="link" 
+                    size="sm" 
+                    className="h-auto p-0 text-xs"
+                    onClick={() => {
+                      const phase = phases.find(p => p.id === form.phase_id);
+                      if (phase?.start_date) {
+                        setForm({ ...form, start_date: phase.start_date });
+                      }
+                    }}
+                  >
+                    Usar fecha de la fase
+                  </Button>
+                )}
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="duration_days">Duración (días)</Label>
+                <Input
+                  id="duration_days"
+                  type="number"
+                  min="0"
+                  value={form.duration_days}
+                  onChange={(e) => setForm({ ...form, duration_days: e.target.value })}
+                  placeholder="0"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="tolerance_days">Tolerancia (días)</Label>
+                <Input
+                  id="tolerance_days"
+                  type="number"
+                  min="0"
+                  value={form.tolerance_days}
+                  onChange={(e) => setForm({ ...form, tolerance_days: e.target.value })}
+                  placeholder="0"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Fecha Fin Estimada</Label>
+                <div className="h-10 px-3 py-2 border rounded-md bg-muted text-sm flex items-center">
+                  {form.start_date && (form.duration_days || form.tolerance_days) ? (
+                    format(
+                      addDays(
+                        parseISO(form.start_date), 
+                        (parseInt(form.duration_days) || 0) + (parseInt(form.tolerance_days) || 0)
+                      ),
+                      'dd/MM/yyyy',
+                      { locale: es }
+                    )
+                  ) : (
+                    <span className="text-muted-foreground">-</span>
+                  )}
+                </div>
               </div>
             </div>
 

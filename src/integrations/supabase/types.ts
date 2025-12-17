@@ -20,11 +20,15 @@ export type Database = {
           code: string
           created_at: string
           description: string | null
+          duration_days: number | null
+          end_date: string | null
           id: string
           measurement_id: string | null
           measurement_unit: string | null
           name: string
           phase_id: string | null
+          start_date: string | null
+          tolerance_days: number | null
           updated_at: string
           uses_measurement: boolean
         }
@@ -33,11 +37,15 @@ export type Database = {
           code: string
           created_at?: string
           description?: string | null
+          duration_days?: number | null
+          end_date?: string | null
           id?: string
           measurement_id?: string | null
           measurement_unit?: string | null
           name: string
           phase_id?: string | null
+          start_date?: string | null
+          tolerance_days?: number | null
           updated_at?: string
           uses_measurement?: boolean
         }
@@ -46,11 +54,15 @@ export type Database = {
           code?: string
           created_at?: string
           description?: string | null
+          duration_days?: number | null
+          end_date?: string | null
           id?: string
           measurement_id?: string | null
           measurement_unit?: string | null
           name?: string
           phase_id?: string | null
+          start_date?: string | null
+          tolerance_days?: number | null
           updated_at?: string
           uses_measurement?: boolean
         }
@@ -366,30 +378,39 @@ export type Database = {
           budget_id: string
           code: string | null
           created_at: string | null
+          duration_days: number | null
+          estimated_end_date: string | null
           id: string
           name: string
           order_index: number | null
           parent_id: string | null
+          start_date: string | null
           updated_at: string | null
         }
         Insert: {
           budget_id: string
           code?: string | null
           created_at?: string | null
+          duration_days?: number | null
+          estimated_end_date?: string | null
           id?: string
           name: string
           order_index?: number | null
           parent_id?: string | null
+          start_date?: string | null
           updated_at?: string | null
         }
         Update: {
           budget_id?: string
           code?: string | null
           created_at?: string | null
+          duration_days?: number | null
+          estimated_end_date?: string | null
           id?: string
           name?: string
           order_index?: number | null
           parent_id?: string | null
+          start_date?: string | null
           updated_at?: string | null
         }
         Relationships: [
@@ -866,11 +887,13 @@ export type Database = {
           coordenadas_lat: number | null
           coordenadas_lng: number | null
           created_at: string | null
+          end_date: string | null
           id: string
           nombre: string
           poblacion: string
           project_id: string | null
           provincia: string | null
+          start_date: string | null
           updated_at: string | null
           version: string
         }
@@ -879,11 +902,13 @@ export type Database = {
           coordenadas_lat?: number | null
           coordenadas_lng?: number | null
           created_at?: string | null
+          end_date?: string | null
           id?: string
           nombre: string
           poblacion: string
           project_id?: string | null
           provincia?: string | null
+          start_date?: string | null
           updated_at?: string | null
           version: string
         }
@@ -892,11 +917,13 @@ export type Database = {
           coordenadas_lat?: number | null
           coordenadas_lng?: number | null
           created_at?: string | null
+          end_date?: string | null
           id?: string
           nombre?: string
           poblacion?: string
           project_id?: string | null
           provincia?: string | null
+          start_date?: string | null
           updated_at?: string | null
           version?: string
         }

@@ -124,17 +124,76 @@
     margin: 10mm;
   }
   
+  @page :first {
+    margin-top: 0;
+  }
+  
   body {
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
   
-  .print-content {
-    width: 100%;
-    overflow: visible !important;
+  /* Hide non-printable elements */
+  .print\\:hidden,
+  [data-radix-dialog-overlay],
+  [data-radix-scroll-area-viewport] > div > div:not(.print-content),
+  header,
+  nav,
+  footer:not(.print-footer) {
+    display: none !important;
   }
   
-  .print-no-repeat {
+  /* Make dialog content fill the page */
+  [data-radix-dialog-content] {
+    position: static !important;
+    transform: none !important;
+    max-width: 100% !important;
+    max-height: none !important;
+    width: 100% !important;
+    height: auto !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    background: white !important;
+  }
+  
+  .print-content {
+    width: 100% !important;
+    overflow: visible !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+  
+  /* Cover page styles */
+  .print-cover {
+    page-break-after: always;
     page-break-inside: avoid;
+    height: auto;
+    min-height: 250mm;
+    position: relative;
+  }
+  
+  /* Section page breaks */
+  .print-section {
+    page-break-before: always;
+    page-break-inside: auto;
+  }
+  
+  /* Prevent breaks inside tables */
+  table {
+    page-break-inside: auto;
+  }
+  
+  tr {
+    page-break-inside: avoid;
+    page-break-after: auto;
+  }
+  
+  /* Make sure ScrollArea doesn't interfere */
+  [data-radix-scroll-area-viewport] {
+    overflow: visible !important;
+    height: auto !important;
+    max-height: none !important;
   }
 }

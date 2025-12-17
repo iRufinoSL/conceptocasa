@@ -258,45 +258,48 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
         }
       }
 
-      // Helper function for header with logo
-      const drawHeader = () => {
+      // Helper function for header with logo (used on content pages)
+      const drawHeader = (showLine = true) => {
         if (logoImgData) {
-          // Draw logo image
-          doc.addImage(logoImgData, 'JPEG', 14, 10, 25, 25);
+          doc.addImage(logoImgData, 'JPEG', 14, 10, 15, 15);
         } else {
-          // Fallback to initials
           doc.setFillColor(37, 99, 235);
-          doc.roundedRect(14, 10, 25, 25, 3, 3, 'F');
+          doc.roundedRect(14, 10, 15, 15, 2, 2, 'F');
           doc.setTextColor(255);
-          doc.setFontSize(16);
+          doc.setFontSize(10);
           doc.setFont('helvetica', 'bold');
-          doc.text(companyInitials, 26.5, 26, { align: 'center' });
+          doc.text(companyInitials, 21.5, 20, { align: 'center' });
         }
         doc.setTextColor(0);
 
-        doc.setFontSize(16);
+        doc.setFontSize(12);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(37, 99, 235);
-        doc.text(companyName, 45, 18);
+        doc.text(companyName, 34, 16);
         doc.setTextColor(0);
 
-        doc.setFontSize(9);
+        doc.setFontSize(8);
         doc.setFont('helvetica', 'normal');
         doc.setTextColor(100);
-        // Only email, phone, website - no address
         const contactLine = [companyEmail, companyPhone, companyWeb].filter(Boolean).join('  |  ');
-        if (contactLine) doc.text(contactLine, 45, 26);
+        if (contactLine) doc.text(contactLine, 34, 22);
         doc.setTextColor(0);
 
-        doc.setDrawColor(200);
-        doc.line(14, 40, pageWidth - 14, 40);
+        if (showLine) {
+          doc.setDrawColor(200);
+          doc.line(14, 30, pageWidth - 14, 30);
+        }
       };
 
-      // PAGE 1: Cover Page with Portada Image
+      // PAGE 1: Cover Page
+      // Draw header at top
+      drawHeader(false);
+      
+      let yPos = 35;
+      
       if (portadaImgData) {
         // Get style settings
         const textColor = presupuesto.portada_text_color || '#FFFFFF';
-        const textPosition = presupuesto.portada_text_position || 'center';
         const overlayOpacity = presupuesto.portada_overlay_opacity ?? 0.4;
         
         // Convert hex color to RGB
@@ -315,175 +318,79 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
           return new Promise((resolve) => {
             const img = new Image();
             img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
-            img.onerror = () => resolve({ width: pageWidth, height: pageHeight }); // Fallback
+            img.onerror = () => resolve({ width: pageWidth, height: 100 });
             img.src = src;
           });
         };
         
         const imgDimensions = await getImageDimensions(portadaImgData);
         const imgAspectRatio = imgDimensions.width / imgDimensions.height;
-        const pageAspectRatio = pageWidth / pageHeight;
         
-        let imgX = 0;
-        let imgY = 0;
-        let imgWidth = pageWidth;
-        let imgHeight = pageHeight;
+        // Cover image area (not full page - similar to screen preview)
+        const coverHeight = 80; // mm
+        const coverWidth = pageWidth - 28; // margins
+        const coverX = 14;
+        const coverY = yPos;
         
-        // Calculate dimensions to cover the page while maintaining aspect ratio
-        if (imgAspectRatio > pageAspectRatio) {
-          // Image is wider than page - fit to height, center horizontally
-          imgHeight = pageHeight;
-          imgWidth = pageHeight * imgAspectRatio;
-          imgX = (pageWidth - imgWidth) / 2;
+        // Calculate image dimensions to cover the area while maintaining aspect ratio
+        let imgWidth = coverWidth;
+        let imgHeight = coverWidth / imgAspectRatio;
+        let imgX = coverX;
+        let imgY = coverY;
+        
+        if (imgHeight < coverHeight) {
+          imgHeight = coverHeight;
+          imgWidth = coverHeight * imgAspectRatio;
+          imgX = coverX + (coverWidth - imgWidth) / 2;
         } else {
-          // Image is taller than page - fit to width, center vertically
-          imgWidth = pageWidth;
-          imgHeight = pageWidth / imgAspectRatio;
-          imgY = (pageHeight - imgHeight) / 2;
+          imgY = coverY + (coverHeight - imgHeight) / 2;
         }
         
-        // Add the cover image maintaining aspect ratio (cover style)
+        // Clip to cover area
+        doc.saveGraphicsState();
+        doc.rect(coverX, coverY, coverWidth, coverHeight, 'S');
         doc.addImage(portadaImgData, 'JPEG', imgX, imgY, imgWidth, imgHeight, undefined, 'FAST');
         
-        // Calculate positions based on text position setting
-        let overlayY = 0;
-        let overlayHeight = pageHeight;
-        let textBaseY = pageHeight / 2;
-        
-        if (textPosition === 'top') {
-          overlayY = 0;
-          overlayHeight = 120;
-          textBaseY = 50;
-        } else if (textPosition === 'center') {
-          overlayY = pageHeight / 2 - 60;
-          overlayHeight = 120;
-          textBaseY = pageHeight / 2 - 20;
-        } else { // bottom
-          overlayY = pageHeight - 100;
-          overlayHeight = 100;
-          textBaseY = pageHeight - 65;
-        }
-        
-        // Semi-transparent overlay for text
+        // Semi-transparent overlay
         doc.setFillColor(0, 0, 0);
         doc.setGState(new (doc as any).GState({ opacity: overlayOpacity }));
-        doc.rect(0, overlayY, pageWidth, overlayHeight, 'F');
+        doc.rect(coverX, coverY, coverWidth, coverHeight, 'F');
         doc.setGState(new (doc as any).GState({ opacity: 1 }));
         
-        // Company logo - small, top-left corner, overlaid on cover image
-        if (logoImgData) {
-          // Small logo (20x20mm) positioned in top-left corner with small margin
-          doc.addImage(logoImgData, 'JPEG', 10, 10, 20, 20);
-        }
-        
-        // Report title with configurable color
+        // Text on cover image
         doc.setTextColor(rgb.r, rgb.g, rgb.b);
-        doc.setFontSize(10);
+        doc.setFontSize(9);
         doc.setFont('helvetica', 'bold');
-        doc.text('DOCUMENTO TÉCNICO', pageWidth / 2, textBaseY, { align: 'center' });
-        
-        doc.setFontSize(20);
-        doc.text('INFORME DE PRESUPUESTO', pageWidth / 2, textBaseY + 15, { align: 'center' });
+        doc.text('INFORME DE PRESUPUESTO', pageWidth / 2, coverY + coverHeight / 2 - 5, { align: 'center' });
         
         doc.setFontSize(14);
-        doc.setFont('helvetica', 'normal');
-        doc.text(presupuesto.nombre, pageWidth / 2, textBaseY + 33, { align: 'center' });
+        doc.text(presupuesto.nombre, pageWidth / 2, coverY + coverHeight / 2 + 5, { align: 'center' });
         
-        doc.setFontSize(10);
-        doc.text(presupuestoId, pageWidth / 2, textBaseY + 47, { align: 'center' });
-        
-        doc.setFontSize(9);
-        doc.text(`Fecha: ${format(new Date(), "d 'de' MMMM 'de' yyyy", { locale: es })}`, pageWidth / 2, textBaseY + 60, { align: 'center' });
-      } else {
-        // Fallback to designed cover without portada
-        // Top gradient bar
-        doc.setFillColor(37, 99, 235);
-        doc.rect(0, 0, pageWidth, 45, 'F');
-        
-        // Company logo and info - top-left (small, like portada version)
-        if (logoImgData) {
-          doc.addImage(logoImgData, 'JPEG', 14, 10, 20, 20);
-        } else {
-          // Fallback to initials in small box
-          doc.setFillColor(255, 255, 255);
-          doc.roundedRect(14, 10, 20, 20, 3, 3, 'F');
-          doc.setFillColor(37, 99, 235);
-          doc.roundedRect(15, 11, 18, 18, 2, 2, 'F');
-          doc.setTextColor(255);
-          doc.setFontSize(10);
-          doc.setFont('helvetica', 'bold');
-          doc.text(companyInitials, 24, 22, { align: 'center' });
-        }
-        
-        // Company name and contact next to logo
-        doc.setTextColor(255);
-        doc.setFontSize(14);
-        doc.setFont('helvetica', 'bold');
-        doc.text(companyName, 40, 18);
-        
-        doc.setFontSize(8);
-        doc.setFont('helvetica', 'normal');
-        const contactLine = [companyEmail, companyPhone, companyWeb].filter(Boolean).join('  |  ');
-        if (contactLine) doc.text(contactLine, 40, 26);
-        
-        // Decorative divider
-        doc.setDrawColor(226, 232, 240);
-        doc.setLineWidth(0.5);
-        doc.line(pageWidth / 2 - 40, 65, pageWidth / 2 + 40, 65);
-        doc.setFillColor(37, 99, 235);
-        doc.circle(pageWidth / 2, 65, 2, 'F');
-        doc.setLineWidth(0.2);
-        
-        // Report title section
-        doc.setFillColor(248, 250, 252);
-        doc.roundedRect(20, 85, pageWidth - 40, 50, 4, 4, 'F');
-        
-        // Left accent bar
-        doc.setFillColor(37, 99, 235);
-        doc.roundedRect(20, 85, 4, 50, 2, 2, 'F');
-        
-        doc.setTextColor(37, 99, 235);
-        doc.setFontSize(10);
-        doc.setFont('helvetica', 'bold');
-        doc.text('DOCUMENTO TÉCNICO', pageWidth / 2, 98, { align: 'center' });
-        
-        doc.setTextColor(30, 41, 59);
-        doc.setFontSize(18);
-        doc.setFont('helvetica', 'bold');
-        doc.text('INFORME DE PRESUPUESTO', pageWidth / 2, 110, { align: 'center' });
-        
-        doc.setTextColor(71, 85, 105);
-        doc.setFontSize(12);
-        doc.setFont('helvetica', 'normal');
-        doc.text(presupuesto.nombre, pageWidth / 2, 125, { align: 'center' });
-        
-        // Budget ID badge
-        doc.setFillColor(241, 245, 249);
-        const badgeWidth = doc.getTextWidth(presupuestoId) + 20;
-        doc.roundedRect(pageWidth / 2 - badgeWidth / 2, 145, badgeWidth, 12, 6, 6, 'F');
-        doc.setTextColor(100, 116, 139);
-        doc.setFontSize(9);
-        doc.text(presupuestoId, pageWidth / 2, 153, { align: 'center' });
-        
-        // Date
-        doc.setTextColor(71, 85, 105);
-        doc.setFontSize(10);
-        doc.text(`Fecha de generación: ${format(new Date(), "d 'de' MMMM 'de' yyyy", { locale: es })}`, pageWidth / 2, 175, { align: 'center' });
-        
-        // Bottom decorative section
-        doc.setFillColor(248, 250, 252);
-        doc.rect(0, pageHeight - 25, pageWidth, 25, 'F');
-        
-        // Bottom accent line
-        doc.setFillColor(37, 99, 235);
-        doc.rect(0, pageHeight - 25, pageWidth, 3, 'F');
-        
-        // Footer text
-        doc.setTextColor(148, 163, 184);
-        doc.setFontSize(8);
-        doc.text('Documento generado automáticamente', pageWidth / 2, pageHeight - 10, { align: 'center' });
+        doc.restoreGraphicsState();
+        yPos = coverY + coverHeight + 15;
       }
       
+      // Report title info below cover
+      doc.setTextColor(30, 41, 59);
+      doc.setFontSize(16);
+      doc.setFont('helvetica', 'bold');
+      doc.text('INFORME DE PRESUPUESTO', pageWidth / 2, yPos, { align: 'center' });
+      
+      yPos += 10;
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'normal');
+      doc.text(presupuesto.nombre, pageWidth / 2, yPos, { align: 'center' });
+      
+      yPos += 8;
+      doc.setTextColor(100, 116, 139);
+      doc.setFontSize(10);
+      doc.text(presupuestoId, pageWidth / 2, yPos, { align: 'center' });
+      
+      yPos += 8;
+      doc.setFontSize(9);
+      doc.text(`Fecha de generación: ${format(new Date(), "d 'de' MMMM 'de' yyyy", { locale: es })}`, pageWidth / 2, yPos, { align: 'center' });
+      doc.setTextColor(0);
+
       // PAGE 2: Index
       doc.addPage();
       
@@ -491,7 +398,7 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
       drawHeader();
 
       // Index section with improved design
-      let yPos = 55;
+      yPos = 55;
       
       // Index box background
       doc.setFillColor(248, 250, 252);
@@ -1121,88 +1028,73 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
               <Skeleton className="h-64 w-full" />
             </div>
           ) : (
-            <div ref={printRef} className="py-6 space-y-8 print:py-0 print:space-y-4 print-content print-no-repeat">
-              {/* Cover Preview with overlaid header */}
-              <div className="relative rounded-lg overflow-hidden mb-6 print:rounded-none print:mb-4" style={{ height: presupuesto.portada_url ? '200px' : 'auto' }}>
-                {/* Cover Image */}
-                {presupuesto.portada_url && (
-                  <img 
-                    src={presupuesto.portada_url} 
-                    alt="Portada del presupuesto" 
-                    className="w-full h-full object-cover"
-                  />
-                )}
-                
-                {/* Header overlaid on cover (top-left) */}
-                <div className={`${presupuesto.portada_url ? 'absolute top-0 left-0 right-0 p-3 bg-gradient-to-b from-black/60 to-transparent' : 'p-4 border-b'}`}>
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded bg-white/90 flex items-center justify-center overflow-hidden flex-shrink-0">
-                      {companySettings.logo_url ? (
-                        <img 
-                          src={companySettings.logo_url} 
-                          alt="Logo" 
-                          className="w-full h-full object-contain"
-                        />
-                      ) : (
-                        <span className="text-primary font-bold text-xs">
-                          {(companySettings.name || 'MI').substring(0, 2).toUpperCase()}
-                        </span>
-                      )}
-                    </div>
-                    <div className="text-left">
-                      <h2 className={`text-sm font-bold ${presupuesto.portada_url ? 'text-white' : 'text-primary'}`}>
-                        {companySettings.name || 'Mi Empresa'}
-                      </h2>
-                      <p className={`text-[10px] ${presupuesto.portada_url ? 'text-white/80' : 'text-muted-foreground'}`}>
-                        {[companySettings.email, companySettings.phone, companySettings.website].filter(Boolean).join(' | ')}
-                      </p>
-                    </div>
+            <div ref={printRef} className="py-6 space-y-8 print:py-0 print:space-y-0 print-content">
+              {/* Cover Page - isolated for print */}
+              <div className="print-cover">
+                {/* Header - always visible at top */}
+                <div className="flex items-center gap-3 p-4 print:p-2 border-b print:border-none">
+                  <div className="w-10 h-10 print:w-8 print:h-8 rounded bg-primary/10 flex items-center justify-center overflow-hidden flex-shrink-0">
+                    {companySettings.logo_url ? (
+                      <img 
+                        src={companySettings.logo_url} 
+                        alt="Logo" 
+                        className="w-full h-full object-contain"
+                      />
+                    ) : (
+                      <span className="text-primary font-bold text-sm print:text-xs">
+                        {(companySettings.name || 'MI').substring(0, 2).toUpperCase()}
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-left">
+                    <h2 className="text-sm font-bold text-primary">
+                      {companySettings.name || 'Mi Empresa'}
+                    </h2>
+                    <p className="text-[10px] text-muted-foreground">
+                      {[companySettings.email, companySettings.phone, companySettings.website].filter(Boolean).join(' | ')}
+                    </p>
                   </div>
                 </div>
                 
-                {/* Cover text overlay (only when cover image exists) */}
-                {presupuesto.portada_url && (() => {
-                  const position = presupuesto.portada_text_position || 'center';
-                  const opacity = presupuesto.portada_overlay_opacity ?? 0.4;
-                  const textColor = presupuesto.portada_text_color || '#FFFFFF';
-                  
-                  const textClasses = position === 'top'
-                    ? 'top-16 left-0 right-0'
-                    : position === 'center'
-                    ? 'inset-0 flex flex-col items-center justify-center'
-                    : 'bottom-4 left-0 right-0';
-                  
-                  return (
-                    <>
-                      {position === 'center' && (
-                        <div 
-                          className="absolute inset-0"
-                          style={{ backgroundColor: `rgba(0,0,0,${opacity})` }}
-                        />
-                      )}
-                      {position === 'bottom' && (
-                        <div 
-                          className="absolute bottom-0 left-0 right-0 h-1/2"
-                          style={{ background: `linear-gradient(to top, rgba(0,0,0,${opacity}), transparent)` }}
-                        />
-                      )}
-                      <div className={`absolute ${textClasses} text-center`} style={{ color: textColor }}>
-                        <p className="text-sm font-medium">INFORME DE PRESUPUESTO</p>
-                        <p className="text-lg font-bold">{presupuesto.nombre}</p>
-                      </div>
-                    </>
-                  );
-                })()}
-              </div>
-              
-              {/* Report title info (below cover or standalone) */}
-              <div className="text-center pb-4 print:pb-2">
-                <h1 className="text-xl font-bold text-foreground mb-1">INFORME DE PRESUPUESTO</h1>
-                <p className="text-base text-foreground">{presupuesto.nombre}</p>
-                <p className="text-sm text-muted-foreground">{presupuestoId}</p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Fecha de generación: {format(new Date(), "d 'de' MMMM 'de' yyyy", { locale: es })}
-                </p>
+                {/* Cover Image */}
+                {presupuesto.portada_url && (
+                  <div className="relative mx-4 print:mx-0 my-4 print:my-2 rounded-lg print:rounded-none overflow-hidden" style={{ height: '180px' }}>
+                    <img 
+                      src={presupuesto.portada_url} 
+                      alt="Portada del presupuesto" 
+                      className="w-full h-full object-cover"
+                    />
+                    {/* Overlay for text */}
+                    {(() => {
+                      const position = presupuesto.portada_text_position || 'center';
+                      const opacity = presupuesto.portada_overlay_opacity ?? 0.4;
+                      const textColor = presupuesto.portada_text_color || '#FFFFFF';
+                      
+                      return (
+                        <>
+                          <div 
+                            className="absolute inset-0"
+                            style={{ backgroundColor: `rgba(0,0,0,${opacity})` }}
+                          />
+                          <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-4" style={{ color: textColor }}>
+                            <p className="text-xs font-medium uppercase tracking-wider">Informe de Presupuesto</p>
+                            <p className="text-lg font-bold mt-1">{presupuesto.nombre}</p>
+                          </div>
+                        </>
+                      );
+                    })()}
+                  </div>
+                )}
+                
+                {/* Report title info */}
+                <div className="text-center py-4 print:py-2 px-4">
+                  <h1 className="text-xl print:text-lg font-bold text-foreground mb-1">INFORME DE PRESUPUESTO</h1>
+                  <p className="text-base print:text-sm text-foreground">{presupuesto.nombre}</p>
+                  <p className="text-sm print:text-xs text-muted-foreground">{presupuestoId}</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Fecha de generación: {format(new Date(), "d 'de' MMMM 'de' yyyy", { locale: es })}
+                  </p>
+                </div>
               </div>
 
               {/* Section 1: General Summary */}
@@ -1275,7 +1167,7 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
 
               {/* Section 2: Activities Summary - only if selected */}
               {selectedSections.includes('activities') && (
-              <div className="print:break-before-page">
+              <div className="print-section">
                 <h3 className="text-lg font-bold text-primary mb-4">2. RESUMEN DE ACTIVIDADES POR FASE</h3>
                 
                 <div className="border rounded-lg overflow-hidden">
@@ -1349,7 +1241,7 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
 
               {/* Section 3: Resources Detail - only if selected */}
               {selectedSections.includes('resources') && (
-              <div className="print:break-before-page">
+              <div className="print-section">
                 <h3 className="text-lg font-bold text-primary mb-4">2. DESGLOSE DE RECURSOS POR FASE Y ACTIVIDAD</h3>
                 
                 <div className="border rounded-lg overflow-hidden">
@@ -1453,7 +1345,7 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
 
               {/* Section: Time Management by Phases - only if selected */}
               {selectedSections.includes('time-phases') && (
-              <div className="print:break-before-page">
+              <div className="print-section">
                 <h3 className="text-lg font-bold text-primary mb-4">2. GESTIÓN DEL TIEMPO POR FASES</h3>
                 
                 <div className="border rounded-lg overflow-hidden">
@@ -1501,7 +1393,7 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
 
               {/* Section: Time Management by Activities - only if selected */}
               {selectedSections.includes('time-activities') && (
-              <div className="print:break-before-page">
+              <div className="print-section">
                 <h3 className="text-lg font-bold text-primary mb-4">2. GESTIÓN DEL TIEMPO POR ACTIVIDADES</h3>
                 
                 <div className="border rounded-lg overflow-hidden">

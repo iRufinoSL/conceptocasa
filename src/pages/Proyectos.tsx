@@ -28,6 +28,7 @@ import {
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { formatCurrencyNoDecimals } from '@/lib/format-utils';
+import { searchMatch } from '@/lib/search-utils';
 import { ProjectForm } from '@/components/projects/ProjectForm';
 import { ProjectContactsManager } from '@/components/projects/ProjectContactsManager';
 import { ProjectDocumentsManager } from '@/components/projects/ProjectDocumentsManager';
@@ -167,9 +168,9 @@ export default function Proyectos() {
   useEffect(() => {
     let filtered = projects.filter(project => {
       const matchesSearch = 
-        project.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        project.location?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        project.project_type?.toLowerCase().includes(searchTerm.toLowerCase());
+        searchMatch(project.name, searchTerm) ||
+        searchMatch(project.location, searchTerm) ||
+        searchMatch(project.project_type, searchTerm);
       
       const matchesStatus = statusFilter === 'all' || project.status === statusFilter;
       

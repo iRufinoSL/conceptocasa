@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Link2, CheckCircle2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatNumber } from '@/lib/format-utils';
+import { searchMatch } from '@/lib/search-utils';
 
 interface Measurement {
   id: string;
@@ -44,9 +45,8 @@ export function MeasurementMultiSelect({
   // Filter measurements by search
   const filteredMeasurements = useMemo(() => {
     if (!searchQuery) return availableMeasurements;
-    const query = searchQuery.toLowerCase();
     return availableMeasurements.filter(m => 
-      m.name.toLowerCase().includes(query)
+      searchMatch(m.name, searchQuery)
     );
   }, [availableMeasurements, searchQuery]);
 

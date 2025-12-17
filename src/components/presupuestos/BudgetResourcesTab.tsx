@@ -11,6 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Plus, Search, Pencil, Trash2, Package, Wrench, Truck, Briefcase, FileSpreadsheet, Check, List, FolderTree, FileDown, FileText } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatCurrency, formatNumber, formatPercent } from '@/lib/format-utils';
+import { searchMatch } from '@/lib/search-utils';
 import { getActivityMeasurementUnits } from '@/lib/budget-utils';
 import { BudgetResourceForm } from './BudgetResourceForm';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
@@ -360,14 +361,13 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
   const filteredResources = useMemo(() => {
     if (!searchTerm) return resources;
     
-    const searchLower = searchTerm.toLowerCase();
     return resources.filter(resource => {
       const activityId = getActivityId(resource.activity_id);
       return (
-        resource.name.toLowerCase().includes(searchLower) ||
-        resource.resource_type?.toLowerCase().includes(searchLower) ||
-        resource.unit?.toLowerCase().includes(searchLower) ||
-        activityId.toLowerCase().includes(searchLower)
+        searchMatch(resource.name, searchTerm) ||
+        searchMatch(resource.resource_type, searchTerm) ||
+        searchMatch(resource.unit, searchTerm) ||
+        searchMatch(activityId, searchTerm)
       );
     });
   }, [resources, searchTerm, activities, phases]);

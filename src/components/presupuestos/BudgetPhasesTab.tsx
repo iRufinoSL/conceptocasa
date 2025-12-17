@@ -14,6 +14,7 @@ import { Plus, Pencil, Trash2, Upload, Search, ChevronRight, ChevronDown, Clipbo
 import { toast } from 'sonner';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import { formatCurrency } from '@/lib/format-utils';
+import { searchMatch } from '@/lib/search-utils';
 
 interface BudgetPhase {
   id: string;
@@ -481,10 +482,9 @@ export function BudgetPhasesTab({ budgetId, isAdmin }: BudgetPhasesTabProps) {
   };
 
   const filteredPhases = phases.filter(phase => {
-    const searchLower = searchTerm.toLowerCase();
     return (
-      phase.name.toLowerCase().includes(searchLower) ||
-      (phase.code && phase.code.toLowerCase().includes(searchLower))
+      searchMatch(phase.name, searchTerm) ||
+      searchMatch(phase.code, searchTerm)
     );
   });
 

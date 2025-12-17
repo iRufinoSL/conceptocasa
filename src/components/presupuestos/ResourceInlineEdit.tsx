@@ -6,6 +6,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Check, CheckCircle2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { searchMatch } from '@/lib/search-utils';
 
 interface InlineEditProps {
   value: string | number | null;
@@ -146,13 +147,13 @@ export function ResourceInlineEdit({
   const filteredOptions = useMemo(() => {
     if (!options) return [];
     
-    const query = searchQuery.toLowerCase().trim();
+    const query = searchQuery.trim();
     let filtered = options;
     
     if (query) {
       filtered = options.filter(opt => {
         const searchContent = opt.searchContent || opt.label;
-        return searchContent.toLowerCase().includes(query);
+        return searchMatch(searchContent, query);
       });
     }
     

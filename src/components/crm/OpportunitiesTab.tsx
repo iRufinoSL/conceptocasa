@@ -7,6 +7,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Target, User, Calendar, MoreVertical, Pencil, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { searchMatch } from '@/lib/search-utils';
 import type { Opportunity, Contact } from '@/pages/CRM';
 
 interface OpportunitiesTabProps {
@@ -20,10 +21,9 @@ interface OpportunitiesTabProps {
 export function OpportunitiesTab({ opportunities, contacts, searchTerm, onEdit, onDelete }: OpportunitiesTabProps) {
   const filteredOpportunities = useMemo(() => {
     if (!searchTerm) return opportunities;
-    const term = searchTerm.toLowerCase();
     return opportunities.filter(opp =>
-      opp.name.toLowerCase().includes(term) ||
-      opp.description?.toLowerCase().includes(term)
+      searchMatch(opp.name, searchTerm) ||
+      searchMatch(opp.description, searchTerm)
     );
   }, [opportunities, searchTerm]);
 

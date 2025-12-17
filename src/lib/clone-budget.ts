@@ -23,8 +23,12 @@ export async function cloneBudget(
     provincia?: string;
     coordenadas_lat?: number;
     coordenadas_lng?: number;
-  }
+  },
+  options: {
+    preserveMeasurementValues?: boolean; // true = clone complete, false = clone as template
+  } = {}
 ): Promise<CloneResult> {
+  const { preserveMeasurementValues = false } = options;
   const stats = {
     phases: 0,
     activities: 0,
@@ -125,7 +129,7 @@ export async function cloneBudget(
             budget_id: newBudgetId,
             name: measurement.name,
             measurement_unit: measurement.measurement_unit,
-            manual_units: null // Clear manual_units as requested
+            manual_units: preserveMeasurementValues ? measurement.manual_units : null
           })
           .select()
           .single();

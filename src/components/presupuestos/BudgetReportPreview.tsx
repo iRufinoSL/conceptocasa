@@ -40,12 +40,19 @@ interface Activity {
   measurement_unit: string;
   phase_id: string | null;
   measurement_id: string | null;
+  start_date: string | null;
+  duration_days: number | null;
+  tolerance_days: number | null;
+  end_date: string | null;
 }
 
 interface Phase {
   id: string;
   name: string;
   code: string | null;
+  start_date: string | null;
+  duration_days: number | null;
+  estimated_end_date: string | null;
 }
 
 interface Resource {
@@ -80,7 +87,7 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
   const [phases, setPhases] = useState<Phase[]>([]);
   const [resources, setResources] = useState<Resource[]>([]);
   const [filesCountMap, setFilesCountMap] = useState<Map<string, number>>(new Map());
-  const [reportSection, setReportSection] = useState<'activities' | 'resources'>('activities');
+  const [reportSection, setReportSection] = useState<'activities' | 'resources' | 'time-phases' | 'time-activities'>('activities');
   const [customNotes, setCustomNotes] = useState<string>('');
   const printRef = useRef<HTMLDivElement>(null);
 
@@ -96,12 +103,12 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
       const [activitiesRes, phasesRes, resourcesRes, filesCountRes] = await Promise.all([
         supabase
           .from('budget_activities')
-          .select('id, name, code, description, measurement_unit, phase_id, measurement_id')
+          .select('id, name, code, description, measurement_unit, phase_id, measurement_id, start_date, duration_days, tolerance_days, end_date')
           .eq('budget_id', presupuesto.id)
           .order('name'),
         supabase
           .from('budget_phases')
-          .select('id, name, code')
+          .select('id, name, code, start_date, duration_days, estimated_end_date')
           .eq('budget_id', presupuesto.id)
           .order('code'),
         supabase
@@ -318,7 +325,7 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
       doc.setTextColor(30, 41, 59);
       doc.setFontSize(18);
       doc.setFont('helvetica', 'bold');
-      doc.text('INFORME COMPLETO DE PRESUPUESTO', pageWidth / 2, 200, { align: 'center' });
+      doc.text('INFORME DE PRESUPUESTO', pageWidth / 2, 200, { align: 'center' });
       
       doc.setTextColor(71, 85, 105);
       doc.setFontSize(12);
@@ -744,6 +751,125 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
         });
       }
 
+      // Section: Time Management by Phases (only if selected)
+      if (reportSection === 'time-phases') {
+        doc.addPage();
+        yPos = 20;
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(37, 99, 235);
+        doc.text('2. GESTIÓN DEL TIEMPO POR FASES', 14, yPos);
+        doc.setTextColor(0);
+
+        yPos += 10;
+
+        const phasesTimeData: any[] = [];
+        
+        // Sort phases by start_date
+        const sortedPhases = [...phases].sort((a, b) => {
+          if (!a.start_date && !b.start_date) return 0;
+          if (!a.start_date) return 1;
+          if (!b.start_date) return -1;
+          return new Date(a.start_date).getTime() - new Date(b.start_date).getTime();
+        });
+
+        sortedPhases.forEach(phase => {
+          const formatDate = (date: string | null) => {
+            if (!date) return '-';
+            try {
+              return format(new Date(date), 'dd/MM/yyyy');
+            } catch {
+              return '-';
+            }
+          };
+          
+          phasesTimeData.push([
+            `${phase.code || ''} ${phase.name}`.trim(),
+            formatDate(phase.start_date),
+            phase.duration_days?.toString() || '-',
+            formatDate(phase.estimated_end_date)
+          ]);
+        });
+
+        autoTable(doc, {
+          startY: yPos,
+          head: [['Fase', 'Fecha Inicio', 'Duración (días)', 'Fecha Fin Estimada']],
+          body: phasesTimeData,
+          theme: 'striped',
+          headStyles: { fillColor: [59, 130, 246] },
+          margin: { left: 14, right: 14 },
+          styles: { fontSize: 9 },
+          columnStyles: {
+            0: { cellWidth: 80 },
+            1: { cellWidth: 35, halign: 'center' },
+            2: { cellWidth: 30, halign: 'center' },
+            3: { cellWidth: 35, halign: 'center' },
+          },
+        });
+      }
+
+      // Section: Time Management by Activities (only if selected)
+      if (reportSection === 'time-activities') {
+        doc.addPage();
+        yPos = 20;
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(37, 99, 235);
+        doc.text('2. GESTIÓN DEL TIEMPO POR ACTIVIDADES', 14, yPos);
+        doc.setTextColor(0);
+
+        yPos += 10;
+
+        const activitiesTimeData: any[] = [];
+        
+        // Sort activities by start_date
+        const sortedActivities = [...activities].sort((a, b) => {
+          if (!a.start_date && !b.start_date) return 0;
+          if (!a.start_date) return 1;
+          if (!b.start_date) return -1;
+          return new Date(a.start_date).getTime() - new Date(b.start_date).getTime();
+        });
+
+        sortedActivities.forEach(activity => {
+          const formatDate = (date: string | null) => {
+            if (!date) return '-';
+            try {
+              return format(new Date(date), 'dd/MM/yyyy');
+            } catch {
+              return '-';
+            }
+          };
+          
+          const phaseInfo = getPhaseInfo(activity.phase_id);
+          const activityId = phaseInfo.code ? `${phaseInfo.code} ${activity.code}` : activity.code;
+          
+          activitiesTimeData.push([
+            `${activityId}.-${activity.name}`,
+            formatDate(activity.start_date),
+            activity.duration_days?.toString() || '-',
+            activity.tolerance_days?.toString() || '-',
+            formatDate(activity.end_date)
+          ]);
+        });
+
+        autoTable(doc, {
+          startY: yPos,
+          head: [['ActividadID', 'Fecha Inicio', 'Duración', 'Tolerancia', 'Fecha Fin']],
+          body: activitiesTimeData,
+          theme: 'striped',
+          headStyles: { fillColor: [59, 130, 246] },
+          margin: { left: 14, right: 14 },
+          styles: { fontSize: 8 },
+          columnStyles: {
+            0: { cellWidth: 70 },
+            1: { cellWidth: 28, halign: 'center' },
+            2: { cellWidth: 22, halign: 'center' },
+            3: { cellWidth: 22, halign: 'center' },
+            4: { cellWidth: 28, halign: 'center' },
+          },
+        });
+      }
+
       // Footer
       const pageCount = doc.getNumberOfPages();
       for (let i = 1; i <= pageCount; i++) {
@@ -757,7 +883,10 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
         doc.text(`Página ${i} de ${pageCount}`, pageWidth - 14, pageHeight - 14, { align: 'right' });
       }
 
-      const fileName = `presupuesto_completo_${presupuesto.nombre.replace(/[^a-zA-Z0-9]/g, '_')}_${format(new Date(), 'yyyyMMdd')}.pdf`;
+      const sectionSuffix = reportSection === 'activities' ? 'actividades' : 
+                           reportSection === 'resources' ? 'recursos' : 
+                           reportSection === 'time-phases' ? 'tiempo_fases' : 'tiempo_actividades';
+      const fileName = `presupuesto_${sectionSuffix}_${presupuesto.nombre.replace(/[^a-zA-Z0-9]/g, '_')}_${format(new Date(), 'yyyyMMdd')}.pdf`;
       doc.save(fileName);
       toast.success('PDF exportado correctamente');
     } catch (error) {
@@ -792,16 +921,24 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
             <Label className="text-sm font-medium mb-2 block">Seleccionar sección a incluir:</Label>
             <RadioGroup
               value={reportSection}
-              onValueChange={(value) => setReportSection(value as 'activities' | 'resources')}
-              className="flex gap-4"
+              onValueChange={(value) => setReportSection(value as 'activities' | 'resources' | 'time-phases' | 'time-activities')}
+              className="grid grid-cols-2 gap-2"
             >
               <div className="flex items-center space-x-2">
                 <RadioGroupItem value="activities" id="activities" />
-                <Label htmlFor="activities" className="cursor-pointer">Resumen de Actividades por Fase</Label>
+                <Label htmlFor="activities" className="cursor-pointer text-sm">Resumen de Actividades por Fase</Label>
               </div>
               <div className="flex items-center space-x-2">
                 <RadioGroupItem value="resources" id="resources" />
-                <Label htmlFor="resources" className="cursor-pointer">Desglose de Recursos por Fase/Actividad</Label>
+                <Label htmlFor="resources" className="cursor-pointer text-sm">Desglose de Recursos por Fase/Actividad</Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="time-phases" id="time-phases" />
+                <Label htmlFor="time-phases" className="cursor-pointer text-sm">Gestión del Tiempo por Fases</Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="time-activities" id="time-activities" />
+                <Label htmlFor="time-activities" className="cursor-pointer text-sm">Gestión del Tiempo por Actividades</Label>
               </div>
             </RadioGroup>
           </div>
@@ -829,7 +966,7 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
                     </p>
                   </div>
                 </div>
-                <h1 className="text-2xl font-bold text-foreground mb-1">INFORME COMPLETO DE PRESUPUESTO</h1>
+                <h1 className="text-2xl font-bold text-foreground mb-1">INFORME DE PRESUPUESTO</h1>
                 <p className="text-lg text-foreground">{presupuesto.nombre}</p>
                 <p className="text-sm text-muted-foreground">{presupuestoId}</p>
                 <p className="text-xs text-muted-foreground mt-2">
@@ -1077,6 +1214,104 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
                         <TableCell colSpan={5} className="font-bold text-right">TOTAL PRESUPUESTO</TableCell>
                         <TableCell className="font-bold text-right">{formatCurrency(totalResourcesSubtotal)}</TableCell>
                       </TableRow>
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+              )}
+
+              {/* Section: Time Management by Phases - only if selected */}
+              {reportSection === 'time-phases' && (
+              <div className="print:break-before-page">
+                <h3 className="text-lg font-bold text-primary mb-4">2. GESTIÓN DEL TIEMPO POR FASES</h3>
+                
+                <div className="border rounded-lg overflow-hidden">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-primary/10">
+                        <TableHead className="font-bold">Fase</TableHead>
+                        <TableHead className="font-bold w-28 text-center">Fecha Inicio</TableHead>
+                        <TableHead className="font-bold w-28 text-center">Duración (días)</TableHead>
+                        <TableHead className="font-bold w-28 text-center">Fecha Fin Estimada</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {[...phases]
+                        .sort((a, b) => {
+                          if (!a.start_date && !b.start_date) return 0;
+                          if (!a.start_date) return 1;
+                          if (!b.start_date) return -1;
+                          return new Date(a.start_date).getTime() - new Date(b.start_date).getTime();
+                        })
+                        .map(phase => {
+                          const formatDate = (date: string | null) => {
+                            if (!date) return '-';
+                            try {
+                              return format(new Date(date), 'dd/MM/yyyy');
+                            } catch {
+                              return '-';
+                            }
+                          };
+                          
+                          return (
+                            <TableRow key={phase.id}>
+                              <TableCell className="font-medium">{phase.code} {phase.name}</TableCell>
+                              <TableCell className="text-center">{formatDate(phase.start_date)}</TableCell>
+                              <TableCell className="text-center">{phase.duration_days ?? '-'}</TableCell>
+                              <TableCell className="text-center">{formatDate(phase.estimated_end_date)}</TableCell>
+                            </TableRow>
+                          );
+                        })}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+              )}
+
+              {/* Section: Time Management by Activities - only if selected */}
+              {reportSection === 'time-activities' && (
+              <div className="print:break-before-page">
+                <h3 className="text-lg font-bold text-primary mb-4">2. GESTIÓN DEL TIEMPO POR ACTIVIDADES</h3>
+                
+                <div className="border rounded-lg overflow-hidden">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-primary/10">
+                        <TableHead className="font-bold">ActividadID</TableHead>
+                        <TableHead className="font-bold w-24 text-center">Fecha Inicio</TableHead>
+                        <TableHead className="font-bold w-20 text-center">Duración</TableHead>
+                        <TableHead className="font-bold w-20 text-center">Tolerancia</TableHead>
+                        <TableHead className="font-bold w-24 text-center">Fecha Fin</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {[...activities]
+                        .sort((a, b) => {
+                          if (!a.start_date && !b.start_date) return 0;
+                          if (!a.start_date) return 1;
+                          if (!b.start_date) return -1;
+                          return new Date(a.start_date).getTime() - new Date(b.start_date).getTime();
+                        })
+                        .map(activity => {
+                          const formatDate = (date: string | null) => {
+                            if (!date) return '-';
+                            try {
+                              return format(new Date(date), 'dd/MM/yyyy');
+                            } catch {
+                              return '-';
+                            }
+                          };
+                          
+                          return (
+                            <TableRow key={activity.id}>
+                              <TableCell className="font-medium">{generateActivityId(activity)}</TableCell>
+                              <TableCell className="text-center">{formatDate(activity.start_date)}</TableCell>
+                              <TableCell className="text-center">{activity.duration_days ?? '-'}</TableCell>
+                              <TableCell className="text-center">{activity.tolerance_days ?? '-'}</TableCell>
+                              <TableCell className="text-center">{formatDate(activity.end_date)}</TableCell>
+                            </TableRow>
+                          );
+                        })}
                     </TableBody>
                   </Table>
                 </div>

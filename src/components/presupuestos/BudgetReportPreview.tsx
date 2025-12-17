@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { FileDown, Printer, X } from 'lucide-react';
 import { formatCurrency, formatNumber } from '@/lib/format-utils';
@@ -87,7 +87,7 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
   const [phases, setPhases] = useState<Phase[]>([]);
   const [resources, setResources] = useState<Resource[]>([]);
   const [filesCountMap, setFilesCountMap] = useState<Map<string, number>>(new Map());
-  const [reportSection, setReportSection] = useState<'activities' | 'resources' | 'time-phases' | 'time-activities'>('activities');
+  const [selectedSections, setSelectedSections] = useState<string[]>(['activities']);
   const [customNotes, setCustomNotes] = useState<string>('');
   const printRef = useRef<HTMLDivElement>(null);
 
@@ -392,10 +392,17 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
         { title: 'Desglose por Tipo de Recurso', page: 3, level: 2, icon: '○' },
       ];
 
-      if (reportSection === 'activities') {
+      if (selectedSections.includes('activities')) {
         indexItems.push({ title: 'Resumen de Actividades por Fase', page: 4, level: 1, icon: '●' });
-      } else {
+      }
+      if (selectedSections.includes('resources')) {
         indexItems.push({ title: 'Desglose de Recursos por Fase y Actividad', page: 4, level: 1, icon: '●' });
+      }
+      if (selectedSections.includes('time-phases')) {
+        indexItems.push({ title: 'Gestión del Tiempo por Fases', page: 4, level: 1, icon: '●' });
+      }
+      if (selectedSections.includes('time-activities')) {
+        indexItems.push({ title: 'Gestión del Tiempo por Actividades', page: 4, level: 1, icon: '●' });
       }
 
       let sectionNum = 1;
@@ -554,7 +561,7 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
       });
 
       // Section 2: Activities Summary (only if selected)
-      if (reportSection === 'activities') {
+      if (selectedSections.includes('activities')) {
         doc.addPage();
         yPos = 20;
         doc.setFontSize(12);
@@ -628,7 +635,7 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
       }
 
       // Section 3: Resources Detail (only if selected)
-      if (reportSection === 'resources') {
+      if (selectedSections.includes('resources')) {
         doc.addPage();
         yPos = 20;
         doc.setFontSize(12);
@@ -752,7 +759,7 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
       }
 
       // Section: Time Management by Phases (only if selected)
-      if (reportSection === 'time-phases') {
+      if (selectedSections.includes('time-phases')) {
         doc.addPage();
         yPos = 20;
         doc.setFontSize(12);
@@ -809,7 +816,7 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
       }
 
       // Section: Time Management by Activities (only if selected)
-      if (reportSection === 'time-activities') {
+      if (selectedSections.includes('time-activities')) {
         doc.addPage();
         yPos = 20;
         doc.setFontSize(12);
@@ -883,9 +890,12 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
         doc.text(`Página ${i} de ${pageCount}`, pageWidth - 14, pageHeight - 14, { align: 'right' });
       }
 
-      const sectionSuffix = reportSection === 'activities' ? 'actividades' : 
-                           reportSection === 'resources' ? 'recursos' : 
-                           reportSection === 'time-phases' ? 'tiempo_fases' : 'tiempo_actividades';
+      const sectionSuffixes: string[] = [];
+      if (selectedSections.includes('activities')) sectionSuffixes.push('actividades');
+      if (selectedSections.includes('resources')) sectionSuffixes.push('recursos');
+      if (selectedSections.includes('time-phases')) sectionSuffixes.push('tiempo_fases');
+      if (selectedSections.includes('time-activities')) sectionSuffixes.push('tiempo_actividades');
+      const sectionSuffix = sectionSuffixes.length > 0 ? sectionSuffixes.join('_') : 'informe';
       const fileName = `presupuesto_${sectionSuffix}_${presupuesto.nombre.replace(/[^a-zA-Z0-9]/g, '_')}_${format(new Date(), 'yyyyMMdd')}.pdf`;
       doc.save(fileName);
       toast.success('PDF exportado correctamente');
@@ -916,31 +926,66 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
               </Button>
             </div>
           </div>
-          {/* Section selection */}
           <div className="mt-4 print:hidden">
-            <Label className="text-sm font-medium mb-2 block">Seleccionar sección a incluir:</Label>
-            <RadioGroup
-              value={reportSection}
-              onValueChange={(value) => setReportSection(value as 'activities' | 'resources' | 'time-phases' | 'time-activities')}
-              className="grid grid-cols-2 gap-2"
-            >
+            <Label className="text-sm font-medium mb-2 block">Seleccionar secciones a incluir:</Label>
+            <div className="grid grid-cols-2 gap-2">
               <div className="flex items-center space-x-2">
-                <RadioGroupItem value="activities" id="activities" />
+                <Checkbox 
+                  id="activities" 
+                  checked={selectedSections.includes('activities')}
+                  onCheckedChange={(checked) => {
+                    if (checked) {
+                      setSelectedSections(prev => [...prev, 'activities']);
+                    } else {
+                      setSelectedSections(prev => prev.filter(s => s !== 'activities'));
+                    }
+                  }}
+                />
                 <Label htmlFor="activities" className="cursor-pointer text-sm">Resumen de Actividades por Fase</Label>
               </div>
               <div className="flex items-center space-x-2">
-                <RadioGroupItem value="resources" id="resources" />
+                <Checkbox 
+                  id="resources" 
+                  checked={selectedSections.includes('resources')}
+                  onCheckedChange={(checked) => {
+                    if (checked) {
+                      setSelectedSections(prev => [...prev, 'resources']);
+                    } else {
+                      setSelectedSections(prev => prev.filter(s => s !== 'resources'));
+                    }
+                  }}
+                />
                 <Label htmlFor="resources" className="cursor-pointer text-sm">Desglose de Recursos por Fase/Actividad</Label>
               </div>
               <div className="flex items-center space-x-2">
-                <RadioGroupItem value="time-phases" id="time-phases" />
+                <Checkbox 
+                  id="time-phases" 
+                  checked={selectedSections.includes('time-phases')}
+                  onCheckedChange={(checked) => {
+                    if (checked) {
+                      setSelectedSections(prev => [...prev, 'time-phases']);
+                    } else {
+                      setSelectedSections(prev => prev.filter(s => s !== 'time-phases'));
+                    }
+                  }}
+                />
                 <Label htmlFor="time-phases" className="cursor-pointer text-sm">Gestión del Tiempo por Fases</Label>
               </div>
               <div className="flex items-center space-x-2">
-                <RadioGroupItem value="time-activities" id="time-activities" />
+                <Checkbox 
+                  id="time-activities" 
+                  checked={selectedSections.includes('time-activities')}
+                  onCheckedChange={(checked) => {
+                    if (checked) {
+                      setSelectedSections(prev => [...prev, 'time-activities']);
+                    } else {
+                      setSelectedSections(prev => prev.filter(s => s !== 'time-activities'));
+                    }
+                  }}
+                />
                 <Label htmlFor="time-activities" className="cursor-pointer text-sm">Gestión del Tiempo por Actividades</Label>
               </div>
-            </RadioGroup>
+            </div>
           </div>
         </DialogHeader>
 
@@ -1043,7 +1088,7 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
               <Separator className="print:hidden" />
 
               {/* Section 2: Activities Summary - only if selected */}
-              {reportSection === 'activities' && (
+              {selectedSections.includes('activities') && (
               <div className="print:break-before-page">
                 <h3 className="text-lg font-bold text-primary mb-4">2. RESUMEN DE ACTIVIDADES POR FASE</h3>
                 
@@ -1114,10 +1159,10 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
               </div>
               )}
 
-              {reportSection === 'activities' && <Separator className="print:hidden" />}
+              {selectedSections.includes('activities') && <Separator className="print:hidden" />}
 
               {/* Section 3: Resources Detail - only if selected */}
-              {reportSection === 'resources' && (
+              {selectedSections.includes('resources') && (
               <div className="print:break-before-page">
                 <h3 className="text-lg font-bold text-primary mb-4">2. DESGLOSE DE RECURSOS POR FASE Y ACTIVIDAD</h3>
                 
@@ -1221,7 +1266,7 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
               )}
 
               {/* Section: Time Management by Phases - only if selected */}
-              {reportSection === 'time-phases' && (
+              {selectedSections.includes('time-phases') && (
               <div className="print:break-before-page">
                 <h3 className="text-lg font-bold text-primary mb-4">2. GESTIÓN DEL TIEMPO POR FASES</h3>
                 
@@ -1269,7 +1314,7 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
               )}
 
               {/* Section: Time Management by Activities - only if selected */}
-              {reportSection === 'time-activities' && (
+              {selectedSections.includes('time-activities') && (
               <div className="print:break-before-page">
                 <h3 className="text-lg font-bold text-primary mb-4">2. GESTIÓN DEL TIEMPO POR ACTIVIDADES</h3>
                 

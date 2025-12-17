@@ -668,8 +668,15 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
         yPos += 10;
 
         const activitiesTableData: any[] = [];
+        
+        // Apply filter based on onlyWithCost
+        const filteredActivitiesForPdf = getFilteredActivities();
+        const filteredPhasesForPdf = getFilteredPhases();
+        
+        // Calculate filtered total
+        const filteredActivitiesTotal = filteredActivitiesForPdf.reduce((sum, a) => sum + (activityResourcesMap.get(a.id) || 0), 0);
 
-        const unassigned = activities.filter(a => !a.phase_id);
+        const unassigned = filteredActivitiesForPdf.filter(a => !a.phase_id);
         if (unassigned.length > 0) {
           const unassignedSubtotal = unassigned.reduce((sum, a) => sum + (activityResourcesMap.get(a.id) || 0), 0);
           activitiesTableData.push([
@@ -686,8 +693,8 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
           });
         }
 
-        phases.forEach(phase => {
-          const phaseActivities = activities.filter(a => a.phase_id === phase.id);
+        filteredPhasesForPdf.forEach(phase => {
+          const phaseActivities = filteredActivitiesForPdf.filter(a => a.phase_id === phase.id);
           if (phaseActivities.length === 0) return;
 
           const phaseSubtotal = phaseActivities.reduce((sum, a) => sum + (activityResourcesMap.get(a.id) || 0), 0);
@@ -709,7 +716,7 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
 
         activitiesTableData.push([
           { content: 'TOTAL ACTIVIDADES', colSpan: 3, styles: { fillColor: [34, 197, 94], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'right' } },
-          { content: formatPdfCurrency(totalResourcesSubtotal), styles: { fillColor: [34, 197, 94], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'right' } }
+          { content: formatPdfCurrency(filteredActivitiesTotal), styles: { fillColor: [34, 197, 94], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'right' } }
         ]);
 
         autoTable(doc, {
@@ -742,8 +749,16 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
         yPos += 10;
 
         const resourcesTableData: any[] = [];
+        
+        // Apply filter based on onlyWithCost
+        const filteredResourcesForPdf = getFilteredResources();
+        const filteredActivitiesForResources = getFilteredActivities();
+        const filteredPhasesForResources = getFilteredPhases();
+        
+        // Calculate filtered total
+        const filteredResourcesTotal = filteredResourcesForPdf.reduce((sum, r) => sum + calculateFields(r).subtotalSales, 0);
 
-        const unassignedResources = resources.filter(r => !r.activity_id);
+        const unassignedResources = filteredResourcesForPdf.filter(r => !r.activity_id);
         if (unassignedResources.length > 0) {
           const unassignedTotal = unassignedResources.reduce((sum, r) => sum + calculateFields(r).subtotalSales, 0);
           resourcesTableData.push([
@@ -763,9 +778,9 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
           });
         }
 
-        phases.forEach(phase => {
-          const phaseActivities = activities.filter(a => a.phase_id === phase.id);
-          const phaseResources = resources.filter(r => {
+        filteredPhasesForResources.forEach(phase => {
+          const phaseActivities = filteredActivitiesForResources.filter(a => a.phase_id === phase.id);
+          const phaseResources = filteredResourcesForPdf.filter(r => {
             const activity = activities.find(a => a.id === r.activity_id);
             return activity?.phase_id === phase.id;
           });
@@ -780,7 +795,7 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
           ]);
 
           phaseActivities.forEach(activity => {
-            const activityResources = resources.filter(r => r.activity_id === activity.id);
+            const activityResources = filteredResourcesForPdf.filter(r => r.activity_id === activity.id);
             if (activityResources.length === 0) return;
 
             const activityTotal = activityResources.reduce((sum, r) => sum + calculateFields(r).subtotalSales, 0);
@@ -804,9 +819,9 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
           });
         });
 
-        const activitiesWithoutPhase = activities.filter(a => !a.phase_id);
+        const activitiesWithoutPhase = filteredActivitiesForResources.filter(a => !a.phase_id);
         activitiesWithoutPhase.forEach(activity => {
-          const activityResources = resources.filter(r => r.activity_id === activity.id);
+          const activityResources = filteredResourcesForPdf.filter(r => r.activity_id === activity.id);
           if (activityResources.length === 0) return;
 
           const activityTotal = activityResources.reduce((sum, r) => sum + calculateFields(r).subtotalSales, 0);
@@ -831,7 +846,7 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
 
         resourcesTableData.push([
           { content: 'TOTAL PRESUPUESTO', colSpan: 5, styles: { fillColor: [34, 197, 94], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'right' } },
-          { content: formatPdfCurrency(totalResourcesSubtotal), styles: { fillColor: [34, 197, 94], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'right' } }
+          { content: formatPdfCurrency(filteredResourcesTotal), styles: { fillColor: [34, 197, 94], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'right' } }
         ]);
 
         autoTable(doc, {

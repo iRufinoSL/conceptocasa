@@ -36,6 +36,9 @@ interface Presupuesto {
   start_date: string | null;
   end_date: string | null;
   portada_url: string | null;
+  portada_text_color: string | null;
+  portada_text_position: string | null;
+  portada_overlay_opacity: number | null;
 }
 
 interface Project {
@@ -574,6 +577,86 @@ export default function PresupuestoDashboard() {
                           Formato JPG o PNG. Máximo 5MB.
                         </p>
                       </div>
+                      
+                      {/* Cover style configuration */}
+                      {presupuesto.portada_url && (
+                        <div className="border-l pl-4 ml-4 space-y-3">
+                          <p className="text-sm font-medium">Estilo del texto</p>
+                          
+                          <div className="space-y-2">
+                            <Label htmlFor="text-color" className="text-xs">Color del texto</Label>
+                            <div className="flex items-center gap-2">
+                              <Input
+                                id="text-color"
+                                type="color"
+                                value={presupuesto.portada_text_color || '#FFFFFF'}
+                                onChange={async (e) => {
+                                  const newColor = e.target.value;
+                                  const { error } = await supabase
+                                    .from('presupuestos')
+                                    .update({ portada_text_color: newColor })
+                                    .eq('id', presupuesto.id);
+                                  if (!error) {
+                                    setPresupuesto({ ...presupuesto, portada_text_color: newColor });
+                                  }
+                                }}
+                                className="w-12 h-8 p-1 cursor-pointer"
+                              />
+                              <span className="text-xs text-muted-foreground">
+                                {presupuesto.portada_text_color || '#FFFFFF'}
+                              </span>
+                            </div>
+                          </div>
+                          
+                          <div className="space-y-2">
+                            <Label htmlFor="text-position" className="text-xs">Posición del texto</Label>
+                            <select
+                              id="text-position"
+                              value={presupuesto.portada_text_position || 'center'}
+                              onChange={async (e) => {
+                                const newPosition = e.target.value;
+                                const { error } = await supabase
+                                  .from('presupuestos')
+                                  .update({ portada_text_position: newPosition })
+                                  .eq('id', presupuesto.id);
+                                if (!error) {
+                                  setPresupuesto({ ...presupuesto, portada_text_position: newPosition });
+                                }
+                              }}
+                              className="w-full h-8 px-2 text-sm border rounded-md bg-background"
+                            >
+                              <option value="top">Arriba</option>
+                              <option value="center">Centro</option>
+                              <option value="bottom">Abajo</option>
+                            </select>
+                          </div>
+                          
+                          <div className="space-y-2">
+                            <Label htmlFor="overlay-opacity" className="text-xs">
+                              Opacidad del fondo ({Math.round((presupuesto.portada_overlay_opacity || 0.4) * 100)}%)
+                            </Label>
+                            <Input
+                              id="overlay-opacity"
+                              type="range"
+                              min="0"
+                              max="1"
+                              step="0.1"
+                              value={presupuesto.portada_overlay_opacity || 0.4}
+                              onChange={async (e) => {
+                                const newOpacity = parseFloat(e.target.value);
+                                const { error } = await supabase
+                                  .from('presupuestos')
+                                  .update({ portada_overlay_opacity: newOpacity })
+                                  .eq('id', presupuesto.id);
+                                if (!error) {
+                                  setPresupuesto({ ...presupuesto, portada_overlay_opacity: newOpacity });
+                                }
+                              }}
+                              className="w-full h-2 cursor-pointer"
+                            />
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <div className="w-48 h-32 rounded-lg border overflow-hidden bg-muted/30">

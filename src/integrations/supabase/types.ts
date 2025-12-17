@@ -891,6 +891,9 @@ export type Database = {
           id: string
           nombre: string
           poblacion: string
+          portada_overlay_opacity: number | null
+          portada_text_color: string | null
+          portada_text_position: string | null
           portada_url: string | null
           project_id: string | null
           provincia: string | null
@@ -907,6 +910,9 @@ export type Database = {
           id?: string
           nombre: string
           poblacion: string
+          portada_overlay_opacity?: number | null
+          portada_text_color?: string | null
+          portada_text_position?: string | null
           portada_url?: string | null
           project_id?: string | null
           provincia?: string | null
@@ -923,6 +929,9 @@ export type Database = {
           id?: string
           nombre?: string
           poblacion?: string
+          portada_overlay_opacity?: number | null
+          portada_text_color?: string | null
+          portada_text_position?: string | null
           portada_url?: string | null
           project_id?: string | null
           provincia?: string | null

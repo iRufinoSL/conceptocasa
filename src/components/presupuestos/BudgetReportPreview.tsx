@@ -204,6 +204,16 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
 
   const presupuestoId = `${presupuesto.nombre} (${presupuesto.codigo_correlativo}/${presupuesto.version}): ${presupuesto.poblacion}`;
 
+  // Generate report type name based on selected sections
+  const getReportTypeName = () => {
+    const names: string[] = [];
+    if (selectedSections.includes('activities')) names.push('Actividades');
+    if (selectedSections.includes('resources')) names.push('Recursos');
+    if (selectedSections.includes('time-phases')) names.push('Gestión Tiempo Fases');
+    if (selectedSections.includes('time-activities')) names.push('Gestión Tiempo Actividades');
+    return names.length > 0 ? names.join(' + ') : 'Resumen General';
+  };
+
   const handlePrint = () => {
     window.print();
   };
@@ -291,11 +301,11 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
         }
       };
 
-      // PAGE 1: Cover Page
-      // Draw header at top
+      // PAGE 1: Cover Page with Header, Cover Image, Title, and Index
+      // Draw header at top with more vertical space
       drawHeader(false);
       
-      let yPos = 35;
+      let yPos = 32;
       
       if (portadaImgData) {
         // Get style settings
@@ -326,8 +336,8 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
         const imgDimensions = await getImageDimensions(portadaImgData);
         const imgAspectRatio = imgDimensions.width / imgDimensions.height;
         
-        // Cover image area (not full page - similar to screen preview)
-        const coverHeight = 80; // mm
+        // Cover image area (smaller - about 1/3 of page height)
+        const coverHeight = 60; // mm - smaller to fit index on same page
         const coverWidth = pageWidth - 28; // margins
         const coverX = 14;
         const coverY = yPos;
@@ -367,131 +377,92 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
         doc.text(presupuesto.nombre, pageWidth / 2, coverY + coverHeight / 2 + 5, { align: 'center' });
         
         doc.restoreGraphicsState();
-        yPos = coverY + coverHeight + 15;
+        yPos = coverY + coverHeight + 8;
       }
       
       // Report title info below cover
       doc.setTextColor(30, 41, 59);
-      doc.setFontSize(16);
+      doc.setFontSize(14);
       doc.setFont('helvetica', 'bold');
       doc.text('INFORME DE PRESUPUESTO', pageWidth / 2, yPos, { align: 'center' });
       
-      yPos += 10;
-      doc.setFontSize(12);
+      yPos += 6;
+      // Report type name
+      doc.setFontSize(10);
+      doc.setTextColor(37, 99, 235);
+      doc.text(getReportTypeName(), pageWidth / 2, yPos, { align: 'center' });
+      
+      yPos += 6;
+      doc.setTextColor(30, 41, 59);
+      doc.setFontSize(11);
       doc.setFont('helvetica', 'normal');
       doc.text(presupuesto.nombre, pageWidth / 2, yPos, { align: 'center' });
       
-      yPos += 8;
+      yPos += 5;
       doc.setTextColor(100, 116, 139);
-      doc.setFontSize(10);
+      doc.setFontSize(9);
       doc.text(presupuestoId, pageWidth / 2, yPos, { align: 'center' });
       
-      yPos += 8;
-      doc.setFontSize(9);
+      yPos += 5;
+      doc.setFontSize(8);
       doc.text(`Fecha de generación: ${format(new Date(), "d 'de' MMMM 'de' yyyy", { locale: es })}`, pageWidth / 2, yPos, { align: 'center' });
       doc.setTextColor(0);
 
-      // PAGE 2: Index
-      doc.addPage();
-      
-      // Page header for index
-      drawHeader();
-
-      // Index section with improved design
-      yPos = 55;
+      // Index section on the same first page
+      yPos += 10;
       
       // Index box background
       doc.setFillColor(248, 250, 252);
-      doc.roundedRect(14, yPos - 6, pageWidth - 28, 75, 4, 4, 'F');
+      const indexHeight = 50;
+      doc.roundedRect(14, yPos, pageWidth - 28, indexHeight, 3, 3, 'F');
       
       // Index header with icon-like element
       doc.setFillColor(37, 99, 235);
-      doc.roundedRect(18, yPos - 2, 4, 16, 1, 1, 'F');
+      doc.roundedRect(18, yPos + 4, 3, 12, 1, 1, 'F');
       
-      doc.setFontSize(14);
+      doc.setFontSize(11);
       doc.setFont('helvetica', 'bold');
       doc.setTextColor(37, 99, 235);
-      doc.text('ÍNDICE DEL DOCUMENTO', 28, yPos + 8);
+      doc.text('ÍNDICE DEL DOCUMENTO', 26, yPos + 12);
       doc.setTextColor(0);
 
-      yPos += 22;
+      let indexY = yPos + 20;
       
-      // Build index items with hierarchy (page numbers updated for cover + index pages)
-      const indexItems: { title: string; page: number; level: number; icon: string }[] = [
-        { title: 'Resumen General', page: 3, level: 1, icon: '●' },
-        { title: 'Estadísticas del presupuesto', page: 3, level: 2, icon: '○' },
-        { title: 'Desglose por Tipo de Recurso', page: 3, level: 2, icon: '○' },
+      // Build index items (all on page 2)
+      const indexItems: { title: string; page: number }[] = [
+        { title: 'Resumen General', page: 2 },
       ];
 
       if (selectedSections.includes('activities')) {
-        indexItems.push({ title: 'Resumen de Actividades por Fase', page: 4, level: 1, icon: '●' });
+        indexItems.push({ title: 'Resumen de Actividades por Fase', page: 3 });
       }
       if (selectedSections.includes('resources')) {
-        indexItems.push({ title: 'Desglose de Recursos por Fase y Actividad', page: 4, level: 1, icon: '●' });
+        indexItems.push({ title: 'Desglose de Recursos por Fase y Actividad', page: 3 });
       }
       if (selectedSections.includes('time-phases')) {
-        indexItems.push({ title: 'Gestión del Tiempo por Fases', page: 4, level: 1, icon: '●' });
+        indexItems.push({ title: 'Gestión del Tiempo por Fases', page: 3 });
       }
       if (selectedSections.includes('time-activities')) {
-        indexItems.push({ title: 'Gestión del Tiempo por Actividades', page: 4, level: 1, icon: '●' });
+        indexItems.push({ title: 'Gestión del Tiempo por Actividades', page: 3 });
       }
 
-      let sectionNum = 1;
-      let subSectionNum = 0;
-      
       indexItems.forEach((item, idx) => {
-        const indent = item.level === 1 ? 22 : 34;
-        const fontSize = item.level === 1 ? 11 : 10;
-        const fontStyle = item.level === 1 ? 'bold' : 'normal';
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'normal');
         
-        doc.setFontSize(fontSize);
-        doc.setFont('helvetica', fontStyle);
-        
-        // Section numbering
-        let numberText: string;
-        if (item.level === 1) {
-          numberText = `${sectionNum}.`;
-          sectionNum++;
-          subSectionNum = 0;
-        } else {
-          subSectionNum++;
-          numberText = `${sectionNum - 1}.${subSectionNum}`;
-        }
-        
-        // Draw bullet/icon
-        if (item.level === 1) {
-          doc.setFillColor(37, 99, 235);
-          doc.circle(indent - 4, yPos - 1.5, 1.5, 'F');
-        } else {
-          doc.setDrawColor(100, 116, 139);
-          doc.circle(indent - 4, yPos - 1.5, 1.2, 'S');
-        }
-        
-        // Draw number and title
-        doc.setTextColor(item.level === 1 ? 30 : 71, item.level === 1 ? 41 : 85, item.level === 1 ? 59 : 105);
-        doc.text(`${numberText} ${item.title}`, indent, yPos);
-        
-        // Draw dotted line
-        const titleWidth = doc.getTextWidth(`${numberText} ${item.title}`);
-        const pageNumX = pageWidth - 24;
-        const dotsStartX = indent + titleWidth + 4;
-        const dotsEndX = pageNumX - 8;
-        
-        doc.setDrawColor(200, 200, 200);
-        doc.setLineDashPattern([1, 2], 0);
-        doc.line(dotsStartX, yPos - 1, dotsEndX, yPos - 1);
-        doc.setLineDashPattern([], 0);
-        
-        // Page number in a small circle
+        // Draw bullet
         doc.setFillColor(37, 99, 235);
-        doc.circle(pageNumX, yPos - 1.5, 4, 'F');
-        doc.setTextColor(255);
-        doc.setFontSize(8);
-        doc.setFont('helvetica', 'bold');
-        doc.text(item.page.toString(), pageNumX, yPos, { align: 'center' });
-        doc.setTextColor(0);
+        doc.circle(22, indexY - 1, 1.2, 'F');
         
-        yPos += item.level === 1 ? 10 : 8;
+        // Draw title
+        doc.setTextColor(30, 41, 59);
+        doc.text(`${idx + 1}. ${item.title}`, 28, indexY);
+        
+        // Page number
+        doc.setTextColor(100, 116, 139);
+        doc.text(`Pág. ${item.page}`, pageWidth - 22, indexY, { align: 'right' });
+        
+        indexY += 6;
       });
 
       // PAGE 2: General Summary
@@ -1029,11 +1000,11 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
             </div>
           ) : (
             <div ref={printRef} className="py-6 space-y-8 print:py-0 print:space-y-0 print-content">
-              {/* Cover Page - isolated for print */}
+              {/* Cover Page with Header, Cover, Title, and Index */}
               <div className="print-cover">
-                {/* Header - always visible at top */}
-                <div className="flex items-center gap-3 p-4 print:p-2 border-b print:border-none">
-                  <div className="w-10 h-10 print:w-8 print:h-8 rounded bg-primary/10 flex items-center justify-center overflow-hidden flex-shrink-0">
+                {/* Header - with more vertical space */}
+                <div className="flex items-center gap-4 p-5 print:p-3 border-b print:border-none">
+                  <div className="w-12 h-12 print:w-10 print:h-10 rounded bg-primary/10 flex items-center justify-center overflow-hidden flex-shrink-0">
                     {companySettings.logo_url ? (
                       <img 
                         src={companySettings.logo_url} 
@@ -1047,18 +1018,18 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
                     )}
                   </div>
                   <div className="text-left">
-                    <h2 className="text-sm font-bold text-primary">
+                    <h2 className="text-base font-bold text-primary">
                       {companySettings.name || 'Mi Empresa'}
                     </h2>
-                    <p className="text-[10px] text-muted-foreground">
+                    <p className="text-xs text-muted-foreground mt-1">
                       {[companySettings.email, companySettings.phone, companySettings.website].filter(Boolean).join(' | ')}
                     </p>
                   </div>
                 </div>
                 
-                {/* Cover Image */}
+                {/* Cover Image - smaller, about 1/3 of page */}
                 {presupuesto.portada_url && (
-                  <div className="relative mx-4 print:mx-0 my-4 print:my-2 rounded-lg print:rounded-none overflow-hidden" style={{ height: '180px' }}>
+                  <div className="relative mx-4 print:mx-2 my-3 print:my-2 rounded-lg print:rounded-none overflow-hidden" style={{ height: '140px' }}>
                     <img 
                       src={presupuesto.portada_url} 
                       alt="Portada del presupuesto" 
@@ -1066,7 +1037,6 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
                     />
                     {/* Overlay for text */}
                     {(() => {
-                      const position = presupuesto.portada_text_position || 'center';
                       const opacity = presupuesto.portada_overlay_opacity ?? 0.4;
                       const textColor = presupuesto.portada_text_color || '#FFFFFF';
                       
@@ -1086,19 +1056,55 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
                   </div>
                 )}
                 
-                {/* Report title info */}
-                <div className="text-center py-4 print:py-2 px-4">
-                  <h1 className="text-xl print:text-lg font-bold text-foreground mb-1">INFORME DE PRESUPUESTO</h1>
-                  <p className="text-base print:text-sm text-foreground">{presupuesto.nombre}</p>
-                  <p className="text-sm print:text-xs text-muted-foreground">{presupuestoId}</p>
-                  <p className="text-xs text-muted-foreground mt-1">
+                {/* Report title info with report type name */}
+                <div className="text-center py-3 print:py-2 px-4">
+                  <h1 className="text-lg print:text-base font-bold text-foreground">INFORME DE PRESUPUESTO</h1>
+                  <p className="text-sm font-semibold text-primary mt-1">{getReportTypeName()}</p>
+                  <p className="text-sm print:text-xs text-foreground mt-1">{presupuesto.nombre}</p>
+                  <p className="text-xs print:text-[10px] text-muted-foreground">{presupuestoId}</p>
+                  <p className="text-[10px] text-muted-foreground mt-1">
                     Fecha de generación: {format(new Date(), "d 'de' MMMM 'de' yyyy", { locale: es })}
                   </p>
                 </div>
+
+                {/* Index Section - on the same first page */}
+                <div className="print-index mx-4 print:mx-2 p-4 print:p-3 bg-muted/30 rounded-lg print:rounded">
+                  <h3 className="text-sm font-bold text-primary border-l-4 border-primary pl-2 mb-3">ÍNDICE DEL DOCUMENTO</h3>
+                  <div className="space-y-1.5 text-sm">
+                    <div className="flex justify-between">
+                      <span>1. Resumen General</span>
+                      <span className="text-muted-foreground text-xs">Pág. 2</span>
+                    </div>
+                    {selectedSections.includes('activities') && (
+                      <div className="flex justify-between">
+                        <span>2. Resumen de Actividades por Fase</span>
+                        <span className="text-muted-foreground text-xs">Pág. 3</span>
+                      </div>
+                    )}
+                    {selectedSections.includes('resources') && (
+                      <div className="flex justify-between">
+                        <span>2. Desglose de Recursos por Fase y Actividad</span>
+                        <span className="text-muted-foreground text-xs">Pág. 3</span>
+                      </div>
+                    )}
+                    {selectedSections.includes('time-phases') && (
+                      <div className="flex justify-between">
+                        <span>2. Gestión del Tiempo por Fases</span>
+                        <span className="text-muted-foreground text-xs">Pág. 3</span>
+                      </div>
+                    )}
+                    {selectedSections.includes('time-activities') && (
+                      <div className="flex justify-between">
+                        <span>2. Gestión del Tiempo por Actividades</span>
+                        <span className="text-muted-foreground text-xs">Pág. 3</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
 
-              {/* Section 1: General Summary */}
-              <div>
+              {/* Section 1: General Summary - starts on new page */}
+              <div className="print-section">
                 <h3 className="text-lg font-bold text-primary mb-4">1. RESUMEN GENERAL</h3>
                 
                 <div className="grid grid-cols-3 gap-4 mb-4">

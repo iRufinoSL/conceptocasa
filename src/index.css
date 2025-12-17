@@ -165,13 +165,16 @@
     margin: 0 !important;
   }
   
-  /* Cover page styles */
+  /* Cover page styles - first page includes cover and index */
   .print-cover {
-    page-break-after: always;
     page-break-inside: avoid;
-    height: auto;
-    min-height: 250mm;
     position: relative;
+  }
+  
+  /* Index section - stays on first page with cover */
+  .print-index {
+    page-break-inside: avoid;
+    page-break-after: always;
   }
   
   /* Section page breaks */

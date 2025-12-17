@@ -1138,7 +1138,7 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-5xl max-h-[90vh] flex flex-col p-0">
-        <DialogHeader className="px-6 pt-6 pb-4 border-b print:hidden">
+        <DialogHeader className="px-6 pt-6 pb-4 border-b print:hidden flex-shrink-0">
           <div className="flex items-center justify-between">
             <DialogTitle className="text-lg font-semibold">
               Vista previa del informe
@@ -1154,9 +1154,11 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
               </Button>
             </div>
           </div>
-          <div className="mt-4 print:hidden">
-            <Label className="text-sm font-medium mb-2 block">Seleccionar secciones a incluir:</Label>
-            <div className="grid grid-cols-2 gap-2">
+          
+          {/* Section selection */}
+          <div className="mt-4 print:hidden space-y-3">
+            <Label className="text-sm font-medium block">Seleccionar secciones a incluir:</Label>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3 p-3 bg-muted/20 rounded-lg border">
               <div className="flex items-center space-x-2">
                 <Checkbox 
                   id="predesigns" 
@@ -1169,7 +1171,7 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
                     }
                   }}
                 />
-                <Label htmlFor="predesigns" className="cursor-pointer text-sm">Ante-proyecto</Label>
+                <Label htmlFor="predesigns" className="cursor-pointer text-sm font-medium">Ante-proyecto</Label>
               </div>
               <div className="flex items-center space-x-2">
                 <Checkbox 
@@ -1183,7 +1185,7 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
                     }
                   }}
                 />
-                <Label htmlFor="activities" className="cursor-pointer text-sm">Resumen de Actividades por Fase</Label>
+                <Label htmlFor="activities" className="cursor-pointer text-sm">Actividades por Fase</Label>
               </div>
               <div className="flex items-center space-x-2">
                 <Checkbox 
@@ -1197,7 +1199,7 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
                     }
                   }}
                 />
-                <Label htmlFor="resources" className="cursor-pointer text-sm">Desglose de Recursos por Fase/Actividad</Label>
+                <Label htmlFor="resources" className="cursor-pointer text-sm">Recursos por Fase/Actividad</Label>
               </div>
               <div className="flex items-center space-x-2">
                 <Checkbox 
@@ -1211,7 +1213,7 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
                     }
                   }}
                 />
-                <Label htmlFor="time-phases" className="cursor-pointer text-sm">Gestión del Tiempo por Fases</Label>
+                <Label htmlFor="time-phases" className="cursor-pointer text-sm">Tiempo por Fases</Label>
               </div>
               <div className="flex items-center space-x-2">
                 <Checkbox 
@@ -1225,19 +1227,19 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
                     }
                   }}
                 />
-                <Label htmlFor="time-activities" className="cursor-pointer text-sm">Gestión del Tiempo por Actividades</Label>
+                <Label htmlFor="time-activities" className="cursor-pointer text-sm">Tiempo por Actividades</Label>
               </div>
             </div>
             
             {/* Filter option for SubTotal > 0 */}
-            <div className="flex items-center space-x-2 mt-4 p-3 bg-muted/30 rounded-lg">
+            <div className="flex items-center space-x-3 p-3 bg-amber-50 dark:bg-amber-950/30 rounded-lg border border-amber-200 dark:border-amber-800">
               <Switch 
                 id="only-with-cost" 
                 checked={onlyWithCost}
                 onCheckedChange={setOnlyWithCost}
               />
               <Label htmlFor="only-with-cost" className="cursor-pointer text-sm">
-                Solo mostrar Fases/Actividades/Recursos con SubTotal {'>'} 0
+                <span className="font-medium">Solo con coste:</span> Mostrar solo Fases/Actividades/Recursos con SubTotal {'>'} 0
               </Label>
             </div>
           </div>

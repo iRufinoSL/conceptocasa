@@ -1283,6 +1283,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      admin_exists: { Args: never; Returns: boolean }
       can_access_activity_file: {
         Args: { file_path: string }
         Returns: boolean

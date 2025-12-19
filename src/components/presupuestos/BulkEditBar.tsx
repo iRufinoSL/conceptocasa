@@ -206,6 +206,7 @@ export function BulkEditBar({
       setBulkEditValue('');
       setConfirmDialogOpen(false);
       onRefresh();
+      onClearSelection();
     } catch (error) {
       console.error('Error bulk updating:', error);
       toast.error('Error al actualizar recursos');

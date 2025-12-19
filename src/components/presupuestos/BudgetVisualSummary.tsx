@@ -112,14 +112,13 @@ export function BudgetVisualSummary({ budgetId, budgetName }: BudgetVisualSummar
     const resourceDetails = resources.map(resource => {
       const units = resource.manual_units !== null ? resource.manual_units : (resource.related_units || 0);
       const unitCost = resource.external_unit_cost || 0;
-      const safetyPercent = resource.safety_margin_percent ?? 0.15;
-      const salesPercent = resource.sales_margin_percent ?? 0.25;
+      // Use percentage values (divide by 100) to match BudgetSummary calculation
+      const safetyPercent = resource.safety_margin_percent ?? 15;
+      const salesPercent = resource.sales_margin_percent ?? 25;
 
       const baseCost = units * unitCost;
-      const safetyMargin = baseCost * safetyPercent;
-      const withSafety = baseCost + safetyMargin;
-      const salesMargin = withSafety * salesPercent;
-      const withMargins = withSafety + salesMargin;
+      const withSafety = baseCost * (1 + safetyPercent / 100);
+      const withMargins = withSafety * (1 + salesPercent / 100);
 
       totalBaseCost += baseCost;
       totalWithSafety += withSafety;

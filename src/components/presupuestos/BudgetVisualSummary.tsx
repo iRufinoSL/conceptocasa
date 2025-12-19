@@ -4,10 +4,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatCurrency, formatNumber, formatPercent } from '@/lib/format-utils';
-import { Calculator, TrendingUp, Percent, Euro, Package, Wrench, Truck, Briefcase, Layers, ClipboardList, FileDown } from 'lucide-react';
+import { Calculator, TrendingUp, Percent, Euro, Package, Wrench, Truck, Briefcase, Layers, ClipboardList, FileDown, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Treemap } from 'recharts';
 import { BudgetSummary } from './BudgetSummary';
+import { recalculateAllBudgetResources } from '@/lib/budget-utils';
+import { toast } from 'sonner';
 
 interface BudgetResource {
   id: string;
@@ -65,6 +67,7 @@ export function BudgetVisualSummary({ budgetId, budgetName }: BudgetVisualSummar
   const [phases, setPhases] = useState<Phase[]>([]);
   const [loading, setLoading] = useState(true);
   const [summaryOpen, setSummaryOpen] = useState(false);
+  const [recalculating, setRecalculating] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -101,6 +104,25 @@ export function BudgetVisualSummary({ budgetId, budgetName }: BudgetVisualSummar
       console.error('Error fetching data:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleRecalculate = async () => {
+    setRecalculating(true);
+    try {
+      const result = await recalculateAllBudgetResources(budgetId);
+      if (result.errors > 0) {
+        toast.warning(`Recálculo completado con ${result.errors} errores`);
+      } else {
+        toast.success(`Presupuesto recalculado correctamente (${result.updated} actividades)`);
+      }
+      // Refresh the data after recalculation
+      await fetchData();
+    } catch (error) {
+      console.error('Error recalculating budget:', error);
+      toast.error('Error al recalcular el presupuesto');
+    } finally {
+      setRecalculating(false);
     }
   };
 
@@ -298,10 +320,21 @@ export function BudgetVisualSummary({ budgetId, budgetName }: BudgetVisualSummar
           <h3 className="text-lg font-semibold text-foreground">Resumen Visual del Presupuesto</h3>
           <p className="text-sm text-muted-foreground">Distribución de costes y análisis</p>
         </div>
-        <Button variant="outline" onClick={() => setSummaryOpen(true)} className="gap-2">
-          <FileDown className="h-4 w-4" />
-          Ver detalle y exportar PDF
-        </Button>
+        <div className="flex gap-2">
+          <Button 
+            variant="outline" 
+            onClick={handleRecalculate} 
+            disabled={recalculating}
+            className="gap-2"
+          >
+            <RefreshCw className={`h-4 w-4 ${recalculating ? 'animate-spin' : ''}`} />
+            {recalculating ? 'Recalculando...' : 'Recalcular Presupuesto'}
+          </Button>
+          <Button variant="outline" onClick={() => setSummaryOpen(true)} className="gap-2">
+            <FileDown className="h-4 w-4" />
+            Ver detalle y exportar PDF
+          </Button>
+        </div>
       </div>
 
       {/* Summary Cards */}

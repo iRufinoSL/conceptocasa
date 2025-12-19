@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatCurrency, formatNumber, formatPercent } from '@/lib/format-utils';
+import { percentToRatio } from '@/lib/budget-pricing';
 import { Calculator, TrendingUp, Percent, Euro, Package, Wrench, Truck, Briefcase, Layers, ClipboardList, FileDown, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Treemap } from 'recharts';
@@ -134,13 +135,13 @@ export function BudgetVisualSummary({ budgetId, budgetName }: BudgetVisualSummar
     const resourceDetails = resources.map(resource => {
       const units = resource.manual_units !== null ? resource.manual_units : (resource.related_units || 0);
       const unitCost = resource.external_unit_cost || 0;
-      // Use percentage values (divide by 100) to match BudgetSummary calculation
-      const safetyPercent = resource.safety_margin_percent ?? 15;
-      const salesPercent = resource.sales_margin_percent ?? 25;
+
+      const safetyRatio = percentToRatio(resource.safety_margin_percent, 0.15);
+      const salesRatio = percentToRatio(resource.sales_margin_percent, 0.25);
 
       const baseCost = units * unitCost;
-      const withSafety = baseCost * (1 + safetyPercent / 100);
-      const withMargins = withSafety * (1 + salesPercent / 100);
+      const withSafety = baseCost * (1 + safetyRatio);
+      const withMargins = withSafety * (1 + salesRatio);
 
       totalBaseCost += baseCost;
       totalWithSafety += withSafety;
@@ -150,8 +151,8 @@ export function BudgetVisualSummary({ budgetId, budgetName }: BudgetVisualSummar
         ...resource,
         units,
         unitCost,
-        safetyPercent,
-        salesPercent,
+        safetyPercent: safetyRatio * 100,
+        salesPercent: salesRatio * 100,
         baseCost,
         withSafety,
         withMargins

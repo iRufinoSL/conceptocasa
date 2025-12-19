@@ -7,6 +7,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { formatCurrency, formatNumber } from '@/lib/format-utils';
+import { percentToRatio } from '@/lib/budget-pricing';
 import { Calculator, TrendingUp, Percent, Euro, Package, FileDown } from 'lucide-react';
 import { useCompanySettings } from '@/hooks/useCompanySettings';
 import jsPDF from 'jspdf';
@@ -79,12 +80,13 @@ export function BudgetSummary({ budgetId, budgetName, open, onOpenChange }: Budg
     const resourceDetails = resources.map(resource => {
       const units = resource.manual_units || 0;
       const unitCost = resource.external_unit_cost || 0;
-      const safetyPercent = resource.safety_margin_percent ?? 15;
-      const salesPercent = resource.sales_margin_percent ?? 25;
+
+      const safetyRatio = percentToRatio(resource.safety_margin_percent, 0.15);
+      const salesRatio = percentToRatio(resource.sales_margin_percent, 0.25);
 
       const baseCost = units * unitCost;
-      const withSafety = baseCost * (1 + safetyPercent / 100);
-      const withMargins = withSafety * (1 + salesPercent / 100);
+      const withSafety = baseCost * (1 + safetyRatio);
+      const withMargins = withSafety * (1 + salesRatio);
 
       totalBaseCost += baseCost;
       totalWithSafety += withSafety;
@@ -94,8 +96,8 @@ export function BudgetSummary({ budgetId, budgetName, open, onOpenChange }: Budg
         ...resource,
         units,
         unitCost,
-        safetyPercent,
-        salesPercent,
+        safetyPercent: safetyRatio * 100,
+        salesPercent: salesRatio * 100,
         baseCost,
         withSafety,
         withMargins

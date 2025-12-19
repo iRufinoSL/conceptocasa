@@ -13,6 +13,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { FileDown, Printer, X } from 'lucide-react';
 import { formatCurrency, formatNumber } from '@/lib/format-utils';
+import { calcResourceSubtotal } from '@/lib/budget-pricing';
 import { useCompanySettings } from '@/hooks/useCompanySettings';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -222,17 +223,22 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
 
   // Resource calculation helper
   const calculateFields = (resource: Resource) => {
-    const externalCost = resource.external_unit_cost ?? 0;
-    const safetyMargin = resource.safety_margin_percent ?? 0.15;
-    const salesMargin = resource.sales_margin_percent ?? 0.25;
-    const safetyMarginUd = externalCost * safetyMargin;
-    const internalCostUd = externalCost + safetyMarginUd;
-    const salesMarginUd = internalCostUd * salesMargin;
-    const salesCostUd = internalCostUd + salesMarginUd;
-    const manualUnits = resource.manual_units;
-    const relatedUnits = resource.related_units ?? 0;
-    const calculatedUnits = manualUnits !== null && manualUnits !== undefined ? manualUnits : relatedUnits;
-    const subtotalSales = salesCostUd * calculatedUnits;
+    const subtotalSales = calcResourceSubtotal({
+      externalUnitCost: resource.external_unit_cost,
+      safetyPercent: resource.safety_margin_percent,
+      salesPercent: resource.sales_margin_percent,
+      manualUnits: resource.manual_units,
+      relatedUnits: resource.related_units,
+    });
+
+    // Para el resto del informe solo necesitamos subtotal + uds calculadas
+    const calculatedUnits = (resource.manual_units !== null && resource.manual_units !== undefined)
+      ? (Number(resource.manual_units) || 0)
+      : (Number(resource.related_units) || 0);
+
+    // Coste de venta por unidad (para mostrar si hiciera falta)
+    const salesCostUd = calculatedUnits > 0 ? subtotalSales / calculatedUnits : 0;
+
     return { salesCostUd, calculatedUnits, subtotalSales };
   };
 

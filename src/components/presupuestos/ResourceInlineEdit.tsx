@@ -344,7 +344,11 @@ export function ResourceInlineEdit({
 
     return (
       <EditWrapper>
-        <div className="animate-scale-in">
+        <div
+          className="animate-scale-in"
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
+        >
           <NumericInput
             ref={inputRef}
             value={numericValue}

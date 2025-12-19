@@ -18,6 +18,7 @@ import { BudgetResourceForm } from './BudgetResourceForm';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import { NumericInput } from '@/components/ui/numeric-input';
 import { ResourceInlineEdit } from './ResourceInlineEdit';
+import { BulkEditBar } from './BulkEditBar';
 import { ResourcesGroupedView } from './ResourcesGroupedView';
 import { ResourcesActivityGroupedView } from './ResourcesActivityGroupedView';
 import { useCompanySettings } from '@/hooks/useCompanySettings';
@@ -1232,128 +1233,21 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
           </div>
 
           {/* Bulk Edit Bar */}
-          {isAdmin && selectedIds.size > 0 && (
-            <div className="flex flex-wrap items-center gap-3 mb-4 p-3 bg-muted/50 rounded-lg border">
-              <Badge variant="secondary">
-                {selectedIds.size} seleccionados
-              </Badge>
-              <div className="flex items-center gap-2">
-                <Select value={bulkEditField} onValueChange={setBulkEditField}>
-                  <SelectTrigger className="w-[160px] h-9">
-                    <SelectValue placeholder="Campo a editar" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {BULK_EDIT_FIELDS.map(f => (
-                      <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                
-                {bulkEditField === 'resource_type' && (
-                  <Select value={String(bulkEditValue)} onValueChange={setBulkEditValue}>
-                    <SelectTrigger className="w-[140px] h-9">
-                      <SelectValue placeholder="Tipo" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {RESOURCE_TYPES.map(t => (
-                        <SelectItem key={t} value={t}>{t}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
-                
-                {bulkEditField === 'unit' && (
-                  <Select value={String(bulkEditValue)} onValueChange={setBulkEditValue}>
-                    <SelectTrigger className="w-[100px] h-9">
-                      <SelectValue placeholder="Ud" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {UNITS.map(u => (
-                        <SelectItem key={u} value={u}>{u}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
-                
-                {bulkEditField === 'activity_id' && (
-                  <Select value={String(bulkEditValue || '__none__')} onValueChange={setBulkEditValue}>
-                    <SelectTrigger className="w-[200px] h-9">
-                      <SelectValue placeholder="Actividad" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__none__">Sin actividad</SelectItem>
-                      {activities.map(a => {
-                        const phase = a.phase_id ? phases.find(p => p.id === a.phase_id) : null;
-                        return (
-                          <SelectItem key={a.id} value={a.id}>
-                            {phase?.code || ''} {a.code}.-{a.name}
-                          </SelectItem>
-                        );
-                      })}
-                    </SelectContent>
-                  </Select>
-                )}
-                
-                {(bulkEditField === 'safety_margin_percent' || bulkEditField === 'sales_margin_percent') && (
-                  <div className="flex items-center gap-1">
-                    <NumericInput
-                      value={typeof bulkEditValue === 'number' ? bulkEditValue * 100 : 0}
-                      onChange={(v) => setBulkEditValue(v / 100)}
-                      decimals={1}
-                      className="w-[80px] h-9"
-                      placeholder="%"
-                    />
-                    <span className="text-muted-foreground text-sm">%</span>
-                  </div>
-                )}
-                
-                {bulkEditField === 'external_unit_cost' && (
-                  <div className="flex items-center gap-1">
-                    <NumericInput
-                      value={typeof bulkEditValue === 'number' ? bulkEditValue : 0}
-                      onChange={(v) => setBulkEditValue(v)}
-                      decimals={2}
-                      className="w-[100px] h-9"
-                      placeholder="€"
-                    />
-                    <span className="text-muted-foreground text-sm">€</span>
-                  </div>
-                )}
-              </div>
-              
-              <Button 
-                size="sm" 
-                onClick={handleBulkUpdate} 
-                disabled={!bulkEditField || isBulkUpdating}
-              >
-                <Check className="h-4 w-4 mr-1" />
-                Aplicar
-              </Button>
-              
-              <div className="h-6 w-px bg-border mx-1" />
-              
-              <Button 
-                size="sm" 
-                variant="destructive"
-                onClick={() => setBulkDeleteDialogOpen(true)}
-                disabled={isBulkUpdating}
-              >
-                <Trash2 className="h-4 w-4 mr-1" />
-                Eliminar ({selectedIds.size})
-              </Button>
-              
-              <Button 
-                size="sm" 
-                variant="ghost"
-                onClick={() => {
-                  setSelectedIds(new Set());
-                  setBulkEditField('');
-                  setBulkEditValue('');
-                }}
-              >
-                Cancelar
-              </Button>
-            </div>
+          {isAdmin && (
+            <BulkEditBar
+              selectedIds={selectedIds}
+              resources={resources}
+              activities={activities}
+              phases={phases}
+              onClearSelection={() => {
+                setSelectedIds(new Set());
+                setBulkEditField('');
+                setBulkEditValue('');
+              }}
+              onRefresh={fetchData}
+              onBulkDelete={() => setBulkDeleteDialogOpen(true)}
+              isAdmin={isAdmin}
+            />
           )}
 
           {/* Resources View */}

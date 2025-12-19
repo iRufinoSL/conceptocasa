@@ -83,6 +83,19 @@ interface Predesign {
   file_type: string | null;
 }
 
+interface BudgetContactWithDetails {
+  id: string;
+  contact_id: string;
+  contact_role: 'cliente' | 'proveedor';
+  contact: {
+    id: string;
+    name: string;
+    surname: string | null;
+    email: string | null;
+    city: string | null;
+  } | null;
+}
+
 // Format for PDF
 const formatPdfCurrency = (value: number): string => {
   return new Intl.NumberFormat('es-ES', {
@@ -104,10 +117,15 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
   const [predesigns, setPredesigns] = useState<Predesign[]>([]);
   const [predesignUrls, setPredesignUrls] = useState<Map<string, string>>(new Map());
   const [filesCountMap, setFilesCountMap] = useState<Map<string, number>>(new Map());
+  const [budgetContacts, setBudgetContacts] = useState<BudgetContactWithDetails[]>([]);
   const [selectedSections, setSelectedSections] = useState<string[]>(['activities']);
   const [customNotes, setCustomNotes] = useState<string>('');
   const [onlyWithCost, setOnlyWithCost] = useState(false);
   const printRef = useRef<HTMLDivElement>(null);
+
+  // Derived data for clients and providers
+  const clients = budgetContacts.filter(bc => bc.contact_role === 'cliente');
+  const providers = budgetContacts.filter(bc => bc.contact_role === 'proveedor');
 
   useEffect(() => {
     if (open) {
@@ -118,7 +136,7 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [activitiesRes, phasesRes, resourcesRes, filesCountRes, predesignsRes] = await Promise.all([
+      const [activitiesRes, phasesRes, resourcesRes, filesCountRes, predesignsRes, budgetContactsRes] = await Promise.all([
         supabase
           .from('budget_activities')
           .select('id, name, code, description, measurement_unit, phase_id, measurement_id, start_date, duration_days, tolerance_days, end_date')
@@ -142,6 +160,10 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
           .select('id, content, description, content_type, file_path, file_name, file_type')
           .eq('budget_id', presupuesto.id)
           .order('content'),
+        supabase
+          .from('budget_contacts')
+          .select('id, contact_id, contact_role')
+          .eq('budget_id', presupuesto.id),
       ]);
 
       if (activitiesRes.error) throw activitiesRes.error;
@@ -152,6 +174,24 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
       setPhases(phasesRes.data || []);
       setResources(resourcesRes.data || []);
       setPredesigns(predesignsRes.data || []);
+
+      // Load budget contacts with contact details
+      if (budgetContactsRes.data && budgetContactsRes.data.length > 0) {
+        const contactIds = budgetContactsRes.data.map(bc => bc.contact_id);
+        const { data: contactsData } = await supabase
+          .from('crm_contacts')
+          .select('id, name, surname, email, city')
+          .in('id', contactIds);
+        
+        const enrichedContacts: BudgetContactWithDetails[] = budgetContactsRes.data.map(bc => ({
+          ...bc,
+          contact_role: bc.contact_role as 'cliente' | 'proveedor',
+          contact: contactsData?.find(c => c.id === bc.contact_id) || null
+        }));
+        setBudgetContacts(enrichedContacts);
+      } else {
+        setBudgetContacts([]);
+      }
 
       // Load signed URLs for predesigns
       const urlMap = new Map<string, string>();
@@ -588,6 +628,98 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
         yPos += 6;
       });
 
+      // Client and Provider Section
+      if (clients.length > 0 || providers.length > 0) {
+        yPos += 10;
+        doc.setFontSize(11);
+        doc.setFont('helvetica', 'bold');
+        doc.text('1.2. Cliente y Proveedor', 14, yPos);
+        doc.setFont('helvetica', 'normal');
+        yPos += 8;
+
+        // Clients
+        if (clients.length > 0) {
+          doc.setFillColor(220, 252, 231); // green-100
+          const clientBoxHeight = 8 + clients.length * 12;
+          doc.roundedRect(14, yPos - 4, (pageWidth - 32) / 2, clientBoxHeight, 2, 2, 'F');
+          
+          doc.setFontSize(9);
+          doc.setFont('helvetica', 'bold');
+          doc.setTextColor(22, 101, 52); // green-800
+          doc.text('CLIENTE', 18, yPos + 2);
+          
+          doc.setFont('helvetica', 'normal');
+          doc.setTextColor(30, 41, 59);
+          doc.setFontSize(9);
+          
+          let clientY = yPos + 10;
+          clients.forEach(c => {
+            if (c.contact) {
+              const clientName = `${c.contact.name} ${c.contact.surname || ''}`.trim();
+              doc.setFont('helvetica', 'bold');
+              doc.text(clientName, 18, clientY);
+              doc.setFont('helvetica', 'normal');
+              const clientDetails = [c.contact.email, c.contact.city].filter(Boolean).join(' | ');
+              if (clientDetails) {
+                doc.setFontSize(8);
+                doc.setTextColor(100, 116, 139);
+                doc.text(clientDetails, 18, clientY + 4);
+                doc.setTextColor(30, 41, 59);
+                doc.setFontSize(9);
+              }
+              clientY += 12;
+            }
+          });
+          
+          yPos += clientBoxHeight + 4;
+        }
+
+        // Providers
+        if (providers.length > 0) {
+          const providerStartX = clients.length > 0 ? 14 + (pageWidth - 32) / 2 + 4 : 14;
+          const providerWidth = clients.length > 0 ? (pageWidth - 32) / 2 : pageWidth - 28;
+          const providerY = clients.length > 0 ? yPos - (8 + clients.length * 12) - 4 : yPos;
+          
+          doc.setFillColor(254, 249, 195); // yellow-100
+          const providerBoxHeight = 8 + providers.length * 12;
+          doc.roundedRect(providerStartX, providerY - 4, providerWidth, providerBoxHeight, 2, 2, 'F');
+          
+          doc.setFontSize(9);
+          doc.setFont('helvetica', 'bold');
+          doc.setTextColor(133, 77, 14); // yellow-800
+          doc.text('PROVEEDOR', providerStartX + 4, providerY + 2);
+          
+          doc.setFont('helvetica', 'normal');
+          doc.setTextColor(30, 41, 59);
+          doc.setFontSize(9);
+          
+          let provY = providerY + 10;
+          providers.forEach(p => {
+            if (p.contact) {
+              const providerName = `${p.contact.name} ${p.contact.surname || ''}`.trim();
+              doc.setFont('helvetica', 'bold');
+              doc.text(providerName, providerStartX + 4, provY);
+              doc.setFont('helvetica', 'normal');
+              const providerDetails = [p.contact.email, p.contact.city].filter(Boolean).join(' | ');
+              if (providerDetails) {
+                doc.setFontSize(8);
+                doc.setTextColor(100, 116, 139);
+                doc.text(providerDetails, providerStartX + 4, provY + 4);
+                doc.setTextColor(30, 41, 59);
+                doc.setFontSize(9);
+              }
+              provY += 12;
+            }
+          });
+          
+          if (clients.length === 0) {
+            yPos += providerBoxHeight + 4;
+          }
+        }
+        
+        yPos += 4;
+      }
+
       // Custom notes section
       if (customNotes.trim()) {
         yPos += 8;
@@ -631,7 +763,7 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
       yPos += 20;
       doc.setFontSize(11);
       doc.setFont('helvetica', 'bold');
-      doc.text('1.2. Desglose por Tipo de Recurso', 14, yPos);
+      doc.text('1.3. Desglose por Tipo de Recurso', 14, yPos);
       doc.setFont('helvetica', 'normal');
 
       yPos += 8;

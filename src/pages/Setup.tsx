@@ -37,19 +37,16 @@ export default function Setup() {
 
   const checkAdminExists = async () => {
     try {
-      // Check if any administrator role exists
-      const { data, error } = await supabase
-        .from('user_roles')
-        .select('id')
-        .eq('role', 'administrador')
-        .limit(1);
+      // Use secure server-side function to check if admin exists
+      // This avoids client-side direct reads of user_roles
+      const { data, error } = await supabase.rpc('admin_exists');
 
       if (error) {
         console.error('Error checking admin:', error);
-        // If we can't check (e.g., RLS blocks access), assume admin exists for security
+        // If we can't check, assume admin exists for security
         setAdminExists(true);
       } else {
-        setAdminExists(data && data.length > 0);
+        setAdminExists(data === true);
       }
     } catch (error) {
       console.error('Error:', error);
@@ -90,12 +87,8 @@ export default function Setup() {
     setIsSubmitting(true);
     
     try {
-      // Double-check that no admin exists before proceeding
-      const { data: existingAdmins, error: checkError } = await supabase
-        .from('user_roles')
-        .select('id')
-        .eq('role', 'administrador')
-        .limit(1);
+      // Double-check using secure server-side function
+      const { data: adminAlreadyExists, error: checkError } = await supabase.rpc('admin_exists');
 
       if (checkError) {
         toast.error('Error al verificar administradores existentes');
@@ -103,7 +96,7 @@ export default function Setup() {
         return;
       }
 
-      if (existingAdmins && existingAdmins.length > 0) {
+      if (adminAlreadyExists === true) {
         toast.error('Ya existe un administrador en el sistema');
         setAdminExists(true);
         setIsSubmitting(false);

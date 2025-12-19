@@ -258,6 +258,45 @@ export type Database = {
           },
         ]
       }
+      budget_contacts: {
+        Row: {
+          budget_id: string
+          contact_id: string
+          contact_role: string
+          created_at: string
+          id: string
+        }
+        Insert: {
+          budget_id: string
+          contact_id: string
+          contact_role: string
+          created_at?: string
+          id?: string
+        }
+        Update: {
+          budget_id?: string
+          contact_id?: string
+          contact_role?: string
+          created_at?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "budget_contacts_budget_id_fkey"
+            columns: ["budget_id"]
+            isOneToOne: false
+            referencedRelation: "presupuestos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budget_contacts_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contacts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       budget_items: {
         Row: {
           budget_id: string

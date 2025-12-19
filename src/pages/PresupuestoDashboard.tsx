@@ -19,6 +19,7 @@ import { BudgetVisualSummary } from '@/components/presupuestos/BudgetVisualSumma
 import { BudgetVersionComparison } from '@/components/presupuestos/BudgetVersionComparison';
 import { BudgetReportPreview } from '@/components/presupuestos/BudgetReportPreview';
 import { BudgetPredesignTab } from '@/components/presupuestos/BudgetPredesignTab';
+import { BudgetContactsManager } from '@/components/presupuestos/BudgetContactsManager';
 import { CloneBudgetDialog } from '@/components/presupuestos/CloneBudgetDialog';
 import { BudgetTimelineView } from '@/components/presupuestos/BudgetTimelineView';
 import { recalculateAllBudgetResources } from '@/lib/budget-utils';
@@ -432,6 +433,9 @@ export default function PresupuestoDashboard() {
 
           <TabsContent value="config" className="mt-6">
             <div className="space-y-6">
+              {/* Client and Provider Manager */}
+              <BudgetContactsManager budgetId={presupuesto.id} isAdmin={isAdmin} />
+              
               <BudgetVersionComparison 
                 currentBudgetId={presupuesto.id}
                 currentBudgetName={presupuesto.nombre}

@@ -185,13 +185,17 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
           
           const { data: affectedActivities } = await supabase
             .from('budget_activities')
-            .select('id')
+            .select('id, uses_measurement')
             .eq('measurement_id', measurementId)
             .eq('budget_id', budgetId);
           
           if (!affectedActivities || affectedActivities.length === 0) return;
           
-          const activityIds = affectedActivities.map(a => a.id);
+          const activityIds = affectedActivities
+            .filter(a => a.uses_measurement)
+            .map(a => a.id);
+          
+          if (activityIds.length === 0) return;
           
           // Update related_units for all resources linked to these activities
           for (const activityId of activityIds) {
@@ -234,13 +238,17 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
           // Find activities linked to this measurement
           const { data: affectedActivities } = await supabase
             .from('budget_activities')
-            .select('id')
+            .select('id, uses_measurement')
             .eq('measurement_id', measurementId)
             .eq('budget_id', budgetId);
           
           if (!affectedActivities || affectedActivities.length === 0) return;
           
-          const activityIds = affectedActivities.map(a => a.id);
+          const activityIds = affectedActivities
+            .filter(a => a.uses_measurement)
+            .map(a => a.id);
+          
+          if (activityIds.length === 0) return;
           
           // Update related_units for all resources linked to these activities
           for (const activityId of activityIds) {

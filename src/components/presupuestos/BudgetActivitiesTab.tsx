@@ -337,8 +337,8 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
           // Calculate resources subtotal using fresh measurement data
           const activityResources = allResources.filter(r => r.activity_id === activity.id);
           const resourcesSubtotal = calculateResourceSubtotal(
-            activityResources, 
-            activity.measurement_id,
+            activityResources,
+            activity.uses_measurement ? activity.measurement_id : null,
             measurementsList,
             filteredRelations
           );

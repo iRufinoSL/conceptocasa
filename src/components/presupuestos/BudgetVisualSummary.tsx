@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatCurrency, formatNumber, formatPercent } from '@/lib/format-utils';
 import { percentToRatio } from '@/lib/budget-pricing';
-import { Calculator, TrendingUp, Percent, Euro, Package, Wrench, Truck, Briefcase, Layers, ClipboardList, FileDown, RefreshCw } from 'lucide-react';
+import { Calculator, TrendingUp, Percent, Euro, Package, Wrench, Truck, Briefcase, Layers, ClipboardList, FileDown, RefreshCw, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Treemap } from 'recharts';
 import { BudgetSummary } from './BudgetSummary';
@@ -212,6 +212,45 @@ export function BudgetVisualSummary({ budgetId, budgetName }: BudgetVisualSummar
       phaseCount: phases.length,
     };
   }, [resources, activities, phases]);
+
+  // Diagnóstico de descuadres
+  const diagnostics = useMemo(() => {
+    // 1. Recursos sin actividad
+    const resourcesWithoutActivity = calculations.resources.filter(r => !r.activity_id);
+    const resourcesWithoutActivityTotal = resourcesWithoutActivity.reduce((sum, r) => sum + r.withMargins, 0);
+
+    // 2. Actividades sin fase
+    const activitiesWithoutPhase = activities.filter(a => !a.phase_id);
+    const activitiesWithoutPhaseIds = new Set(activitiesWithoutPhase.map(a => a.id));
+    const activitiesWithoutPhaseTotal = calculations.resources
+      .filter(r => r.activity_id && activitiesWithoutPhaseIds.has(r.activity_id))
+      .reduce((sum, r) => sum + r.withMargins, 0);
+
+    // 3. Top 10 actividades con mayor importe (para detectar dónde está el grueso)
+    const activityTotals = activities.map(activity => {
+      const activityResources = calculations.resources.filter(r => r.activity_id === activity.id);
+      const total = activityResources.reduce((sum, r) => sum + r.withMargins, 0);
+      const resourceCount = activityResources.length;
+      const phase = activity.phase_id ? phases.find(p => p.id === activity.phase_id) : null;
+      return {
+        id: activity.id,
+        code: activity.code,
+        name: activity.name,
+        phaseName: phase ? `${phase.code || ''} ${phase.name}`.trim() : 'Sin fase',
+        total,
+        resourceCount,
+      };
+    }).sort((a, b) => b.total - a.total).slice(0, 10);
+
+    return {
+      resourcesWithoutActivity: resourcesWithoutActivity.length,
+      resourcesWithoutActivityTotal,
+      activitiesWithoutPhase: activitiesWithoutPhase.length,
+      activitiesWithoutPhaseTotal,
+      topActivities: activityTotals,
+      hasIssues: resourcesWithoutActivity.length > 0 || activitiesWithoutPhase.length > 0,
+    };
+  }, [calculations, activities, phases]);
 
   // Prepare chart data
   const typeChartData = useMemo(() => {
@@ -590,6 +629,111 @@ export function BudgetVisualSummary({ budgetId, budgetName }: BudgetVisualSummar
           </CardContent>
         </Card>
       </div>
+
+      {/* Diagnóstico de descuadres */}
+      <Card className={diagnostics.hasIssues ? 'border-amber-500/50 bg-amber-500/5' : 'border-green-500/30 bg-green-500/5'}>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            {diagnostics.hasIssues ? (
+              <AlertTriangle className="h-5 w-5 text-amber-600" />
+            ) : (
+              <CheckCircle2 className="h-5 w-5 text-green-600" />
+            )}
+            Diagnóstico de Descuadres
+          </CardTitle>
+          <CardDescription>
+            {diagnostics.hasIssues 
+              ? 'Se han detectado elementos que pueden causar diferencias entre subtotales'
+              : 'Todos los recursos están asignados correctamente'}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Recursos sin actividad */}
+          <div className="flex items-center justify-between p-3 rounded-lg bg-background border">
+            <div className="flex items-center gap-3">
+              <Package className={`h-5 w-5 ${diagnostics.resourcesWithoutActivity > 0 ? 'text-amber-600' : 'text-muted-foreground'}`} />
+              <div>
+                <p className="font-medium">Recursos sin actividad</p>
+                <p className="text-xs text-muted-foreground">No suman en el subtotal de Actividades ni Fases</p>
+              </div>
+            </div>
+            <div className="text-right">
+              <Badge variant={diagnostics.resourcesWithoutActivity > 0 ? 'destructive' : 'secondary'}>
+                {diagnostics.resourcesWithoutActivity}
+              </Badge>
+              {diagnostics.resourcesWithoutActivityTotal > 0 && (
+                <p className="text-xs text-amber-600 font-mono mt-1">
+                  {formatCurrency(diagnostics.resourcesWithoutActivityTotal)}
+                </p>
+              )}
+            </div>
+          </div>
+
+          {/* Actividades sin fase */}
+          <div className="flex items-center justify-between p-3 rounded-lg bg-background border">
+            <div className="flex items-center gap-3">
+              <ClipboardList className={`h-5 w-5 ${diagnostics.activitiesWithoutPhase > 0 ? 'text-amber-600' : 'text-muted-foreground'}`} />
+              <div>
+                <p className="font-medium">Actividades sin fase</p>
+                <p className="text-xs text-muted-foreground">No suman en el subtotal de Fases</p>
+              </div>
+            </div>
+            <div className="text-right">
+              <Badge variant={diagnostics.activitiesWithoutPhase > 0 ? 'destructive' : 'secondary'}>
+                {diagnostics.activitiesWithoutPhase}
+              </Badge>
+              {diagnostics.activitiesWithoutPhaseTotal > 0 && (
+                <p className="text-xs text-amber-600 font-mono mt-1">
+                  {formatCurrency(diagnostics.activitiesWithoutPhaseTotal)}
+                </p>
+              )}
+            </div>
+          </div>
+
+          {/* Top 10 actividades */}
+          {diagnostics.topActivities.length > 0 && (
+            <div className="space-y-2">
+              <p className="font-medium text-sm flex items-center gap-2">
+                <Layers className="h-4 w-4 text-primary" />
+                Top 10 Actividades por importe
+              </p>
+              <div className="rounded-lg border overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted/50">
+                    <tr>
+                      <th className="text-left p-2 font-medium">Actividad</th>
+                      <th className="text-left p-2 font-medium">Fase</th>
+                      <th className="text-right p-2 font-medium">Recursos</th>
+                      <th className="text-right p-2 font-medium">Subtotal</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {diagnostics.topActivities.map((activity, idx) => (
+                      <tr key={activity.id} className={idx % 2 === 0 ? 'bg-background' : 'bg-muted/20'}>
+                        <td className="p-2">
+                          <span className="font-mono text-xs text-muted-foreground">{activity.code}.-</span>{' '}
+                          <span className="truncate" title={activity.name}>
+                            {activity.name.length > 30 ? activity.name.substring(0, 30) + '...' : activity.name}
+                          </span>
+                        </td>
+                        <td className="p-2 text-muted-foreground text-xs">
+                          {activity.phaseName === 'Sin fase' ? (
+                            <Badge variant="outline" className="text-amber-600 border-amber-600/50">Sin fase</Badge>
+                          ) : (
+                            activity.phaseName
+                          )}
+                        </td>
+                        <td className="p-2 text-right font-mono">{activity.resourceCount}</td>
+                        <td className="p-2 text-right font-mono font-semibold">{formatCurrency(activity.total)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Budget Summary Dialog */}
       <BudgetSummary

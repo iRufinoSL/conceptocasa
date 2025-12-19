@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ArrowLeft, Calculator, ClipboardList, Building2, FileText, Settings, Calendar, Ruler, FileDown, Image, RefreshCw, Copy, GanttChart, Upload, X, Loader2, Euro, Home } from 'lucide-react';
+import { ArrowLeft, Calculator, ClipboardList, Building2, FileText, Settings, Calendar, Ruler, FileDown, Image, RefreshCw, Copy, GanttChart, Upload, X, Loader2, Euro, Home, MapPin, Users } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { AppNavDropdown } from '@/components/AppNavDropdown';
@@ -25,6 +25,7 @@ import { BudgetCostSummary } from '@/components/presupuestos/BudgetCostSummary';
 import { CloneBudgetDialog } from '@/components/presupuestos/CloneBudgetDialog';
 import { BudgetTimelineView } from '@/components/presupuestos/BudgetTimelineView';
 import { recalculateAllBudgetResources } from '@/lib/budget-utils';
+import { BudgetWorkAreasTab } from '@/components/presupuestos/BudgetWorkAreasTab';
 import { toast } from 'sonner';
 
 interface Presupuesto {
@@ -362,23 +363,31 @@ export default function PresupuestoDashboard() {
             </TabsTrigger>
             <TabsTrigger value="cuanto-cuesta" className="flex items-center gap-1.5 text-xs px-2 py-1.5">
               <Euro className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">CUÁNTO cuesta?</span>
+              <span className="hidden sm:inline">CUÁNTO?</span>
             </TabsTrigger>
             <TabsTrigger value="actividades" className="flex items-center gap-1.5 text-xs px-2 py-1.5">
               <ClipboardList className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">QUÉ hacer?</span>
+              <span className="hidden sm:inline">QUÉ?</span>
             </TabsTrigger>
             <TabsTrigger value="fases" className="flex items-center gap-1.5 text-xs px-2 py-1.5">
               <Calendar className="h-3.5 w-3.5" />
               <span className="hidden sm:inline">CUÁNDO?</span>
             </TabsTrigger>
-            <TabsTrigger value="timeline" className="flex items-center gap-1.5 text-xs px-2 py-1.5">
-              <GanttChart className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Timeline</span>
-            </TabsTrigger>
             <TabsTrigger value="recursos" className="flex items-center gap-1.5 text-xs px-2 py-1.5">
               <FileText className="h-3.5 w-3.5" />
               <span className="hidden sm:inline">CÓMO?</span>
+            </TabsTrigger>
+            <TabsTrigger value="contactos" className="flex items-center gap-1.5 text-xs px-2 py-1.5">
+              <Users className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">QUIÉN?</span>
+            </TabsTrigger>
+            <TabsTrigger value="areas-trabajo" className="flex items-center gap-1.5 text-xs px-2 py-1.5">
+              <MapPin className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">DÓNDE?</span>
+            </TabsTrigger>
+            <TabsTrigger value="timeline" className="flex items-center gap-1.5 text-xs px-2 py-1.5">
+              <GanttChart className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Timeline</span>
             </TabsTrigger>
             <TabsTrigger value="mediciones" className="flex items-center gap-1.5 text-xs px-2 py-1.5">
               <Ruler className="h-3.5 w-3.5" />
@@ -442,6 +451,14 @@ export default function PresupuestoDashboard() {
 
           <TabsContent value="recursos" className="mt-6">
             <BudgetResourcesTab budgetId={presupuesto.id} budgetName={presupuesto.nombre} isAdmin={isAdmin} />
+          </TabsContent>
+
+          <TabsContent value="contactos" className="mt-6">
+            <BudgetContactsManager budgetId={presupuesto.id} isAdmin={isAdmin} />
+          </TabsContent>
+
+          <TabsContent value="areas-trabajo" className="mt-6">
+            <BudgetWorkAreasTab budgetId={presupuesto.id} isAdmin={isAdmin} />
           </TabsContent>
 
           <TabsContent value="mediciones" className="mt-6">

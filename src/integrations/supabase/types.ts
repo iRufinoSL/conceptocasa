@@ -569,6 +569,119 @@ export type Database = {
           },
         ]
       }
+      budget_work_area_activities: {
+        Row: {
+          activity_id: string
+          created_at: string
+          id: string
+          work_area_id: string
+        }
+        Insert: {
+          activity_id: string
+          created_at?: string
+          id?: string
+          work_area_id: string
+        }
+        Update: {
+          activity_id?: string
+          created_at?: string
+          id?: string
+          work_area_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "budget_work_area_activities_activity_id_fkey"
+            columns: ["activity_id"]
+            isOneToOne: false
+            referencedRelation: "budget_activities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budget_work_area_activities_work_area_id_fkey"
+            columns: ["work_area_id"]
+            isOneToOne: false
+            referencedRelation: "budget_work_areas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      budget_work_area_measurements: {
+        Row: {
+          created_at: string
+          id: string
+          measurement_id: string
+          work_area_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          measurement_id: string
+          work_area_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          measurement_id?: string
+          work_area_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "budget_work_area_measurements_measurement_id_fkey"
+            columns: ["measurement_id"]
+            isOneToOne: false
+            referencedRelation: "budget_measurements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budget_work_area_measurements_work_area_id_fkey"
+            columns: ["work_area_id"]
+            isOneToOne: false
+            referencedRelation: "budget_work_areas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      budget_work_areas: {
+        Row: {
+          area_id: string | null
+          budget_id: string
+          created_at: string
+          id: string
+          level: string
+          name: string
+          updated_at: string
+          work_area: string
+        }
+        Insert: {
+          area_id?: string | null
+          budget_id: string
+          created_at?: string
+          id?: string
+          level?: string
+          name: string
+          updated_at?: string
+          work_area?: string
+        }
+        Update: {
+          area_id?: string | null
+          budget_id?: string
+          created_at?: string
+          id?: string
+          level?: string
+          name?: string
+          updated_at?: string
+          work_area?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "budget_work_areas_budget_id_fkey"
+            columns: ["budget_id"]
+            isOneToOne: false
+            referencedRelation: "presupuestos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       company_settings: {
         Row: {
           address: string | null

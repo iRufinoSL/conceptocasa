@@ -20,6 +20,7 @@ import { toast } from 'sonner';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import { searchMatch } from '@/lib/search-utils';
 import { formatCurrency, formatNumber, formatPercent } from '@/lib/format-utils';
+import { percentToRatio } from '@/lib/budget-pricing';
 import { MeasurementInlineSelect, MeasurementInlineSelectHandle } from './MeasurementInlineSelect';
 import { ResourceInlineEdit } from './ResourceInlineEdit';
 import { BudgetResourceForm } from './BudgetResourceForm';
@@ -267,20 +268,17 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
     
     return resources.reduce((total, resource) => {
       const externalCost = resource.external_unit_cost || 0;
-      const safetyPercent = resource.safety_margin_percent ?? 0.15;
-      const salesPercent = resource.sales_margin_percent ?? 0.25;
-      
-      const safetyMarginUd = externalCost * safetyPercent;
-      const internalCostUd = externalCost + safetyMarginUd;
-      const salesMarginUd = internalCostUd * salesPercent;
-      const salesCostUd = internalCostUd + salesMarginUd;
-      
+      const safetyRatio = percentToRatio(resource.safety_margin_percent, 0.15);
+      const salesRatio = percentToRatio(resource.sales_margin_percent, 0.25);
+
+      const salesCostUd = externalCost * (1 + safetyRatio) * (1 + salesRatio);
+
       // Use live related units if available, otherwise fallback to stored value
       const relatedUnits = activityMeasurementId ? liveRelatedUnits : (resource.related_units || 0);
-      const calculatedUnits = resource.manual_units !== null 
-        ? resource.manual_units 
+      const calculatedUnits = resource.manual_units !== null
+        ? resource.manual_units
         : relatedUnits;
-      
+
       return total + (calculatedUnits * salesCostUd);
     }, 0);
   };
@@ -2244,12 +2242,9 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
                       <TableBody>
                         {activityResources.map((resource) => {
                           const externalCost = resource.external_unit_cost || 0;
-                          const safetyPercent = resource.safety_margin_percent ?? 0.15;
-                          const salesPercent = resource.sales_margin_percent ?? 0.25;
-                          const safetyMarginUd = externalCost * safetyPercent;
-                          const internalCostUd = externalCost + safetyMarginUd;
-                          const salesMarginUd = internalCostUd * salesPercent;
-                          const salesCostUd = internalCostUd + salesMarginUd;
+                          const safetyPercent = percentToRatio(resource.safety_margin_percent, 0.15);
+                          const salesPercent = percentToRatio(resource.sales_margin_percent, 0.25);
+                          const salesCostUd = externalCost * (1 + safetyPercent) * (1 + salesPercent);
                           
                           // Calculate related units in real-time from activity's measurement
                           let liveRelatedUnits = resource.related_units || 0;

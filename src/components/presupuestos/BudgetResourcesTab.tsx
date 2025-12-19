@@ -13,6 +13,7 @@ import { toast } from 'sonner';
 import { formatCurrency, formatNumber, formatPercent } from '@/lib/format-utils';
 import { searchMatch } from '@/lib/search-utils';
 import { getActivityMeasurementUnits } from '@/lib/budget-utils';
+import { percentToRatio } from '@/lib/budget-pricing';
 import { BudgetResourceForm } from './BudgetResourceForm';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import { NumericInput } from '@/components/ui/numeric-input';
@@ -332,21 +333,21 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
   // BudgetActivitiesTab, make sure to recalculate via the "Recalcular" button if values seem stale.
   const calculateFields = useCallback((resource: BudgetResource) => {
     const externalCost = resource.external_unit_cost || 0;
-    const safetyPercent = resource.safety_margin_percent ?? 0.15;
-    const salesPercent = resource.sales_margin_percent ?? 0.25;
-    
-    const safetyMarginUd = externalCost * safetyPercent;
+    const safetyRatio = percentToRatio(resource.safety_margin_percent, 0.15);
+    const salesRatio = percentToRatio(resource.sales_margin_percent, 0.25);
+
+    const safetyMarginUd = externalCost * safetyRatio;
     const internalCostUd = externalCost + safetyMarginUd;
-    const salesMarginUd = internalCostUd * salesPercent;
+    const salesMarginUd = internalCostUd * salesRatio;
     const salesCostUd = internalCostUd + salesMarginUd;
-    
+
     // Calculated units: if manual_units is defined (including 0), use it; otherwise use related_units
-    const calculatedUnits = resource.manual_units !== null 
-      ? resource.manual_units 
+    const calculatedUnits = resource.manual_units !== null
+      ? resource.manual_units
       : (resource.related_units || 0);
-    
+
     const subtotalSales = calculatedUnits * salesCostUd;
-    
+
     return {
       safetyMarginUd,
       internalCostUd,

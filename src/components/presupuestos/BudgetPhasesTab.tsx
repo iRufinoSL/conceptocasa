@@ -14,10 +14,10 @@ import { Plus, Pencil, Trash2, Upload, Search, ChevronRight, ChevronDown, Clipbo
 import { toast } from 'sonner';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import { formatCurrency } from '@/lib/format-utils';
+import { calcResourceSubtotal } from '@/lib/budget-pricing';
 import { searchMatch } from '@/lib/search-utils';
 import { format, addDays, parseISO, isValid } from 'date-fns';
 import { es } from 'date-fns/locale';
-
 interface BudgetPhase {
   id: string;
   budget_id: string;
@@ -73,20 +73,13 @@ const emptyForm: PhaseForm = {
 
 // Calculate subtotal for a resource
 const calculateResourceSubtotal = (resource: BudgetResource): number => {
-  const externalCost = resource.external_unit_cost || 0;
-  const safetyPercent = resource.safety_margin_percent ?? 0.15;
-  const salesPercent = resource.sales_margin_percent ?? 0.25;
-  
-  const safetyMarginUd = externalCost * safetyPercent;
-  const internalCostUd = externalCost + safetyMarginUd;
-  const salesMarginUd = internalCostUd * salesPercent;
-  const salesCostUd = internalCostUd + salesMarginUd;
-  
-  const calculatedUnits = resource.manual_units !== null 
-    ? resource.manual_units 
-    : (resource.related_units || 0);
-  
-  return calculatedUnits * salesCostUd;
+  return calcResourceSubtotal({
+    externalUnitCost: resource.external_unit_cost,
+    safetyPercent: resource.safety_margin_percent,
+    salesPercent: resource.sales_margin_percent,
+    manualUnits: resource.manual_units,
+    relatedUnits: resource.related_units,
+  });
 };
 
 export function BudgetPhasesTab({ budgetId, isAdmin, budgetStartDate, budgetEndDate }: BudgetPhasesTabProps) {

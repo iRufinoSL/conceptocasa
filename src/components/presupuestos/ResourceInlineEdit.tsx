@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { NumericInput } from '@/components/ui/numeric-input';
+import { NumericInput, parseEuropeanNumber } from '@/components/ui/numeric-input';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Check, CheckCircle2 } from 'lucide-react';
@@ -87,11 +87,11 @@ export function ResourceInlineEdit({
       } else if (typeof editValue === 'number') {
         finalValue = editValue;
       } else if (typeof editValue === 'string') {
-        // Parse string to number
-        const parsed = parseFloat(editValue.replace(',', '.').replace(/\./g, ''));
+        // Parse string to number (European format aware)
+        const parsed = parseEuropeanNumber(editValue);
         finalValue = isNaN(parsed) ? (allowNull ? null : 0) : parsed;
       }
-      
+
       // Final validation: ensure it's a valid number or null
       if (finalValue !== null && (typeof finalValue !== 'number' || isNaN(finalValue))) {
         finalValue = allowNull ? null : 0;
@@ -331,10 +331,17 @@ export function ResourceInlineEdit({
   }
 
   if (type === 'number' || type === 'percent') {
-    // Get the numeric value from props for initial display
-    // When allowNull is true and value is null, pass null; otherwise parse as number
-    const numericValue = (allowNull && value === null) ? null : (typeof value === 'number' ? value : (typeof value === 'string' && value !== '' ? parseFloat(value) : 0));
-    
+    // IMPORTANT: while editing, the input must be controlled by local state (editValue)
+    // otherwise it will "snap back" to the prop value on each render.
+    const numericValue =
+      editValue === '' || editValue === undefined
+        ? (allowNull ? null : 0)
+        : editValue === null
+          ? null
+          : typeof editValue === 'number'
+            ? editValue
+            : parseEuropeanNumber(String(editValue));
+
     return (
       <EditWrapper>
         <div className="animate-scale-in">

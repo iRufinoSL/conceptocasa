@@ -5,12 +5,14 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatCurrency, formatNumber, formatPercent } from '@/lib/format-utils';
 import { percentToRatio } from '@/lib/budget-pricing';
-import { Calculator, TrendingUp, Percent, Euro, Package, Wrench, Truck, Briefcase, Layers, ClipboardList, FileDown, RefreshCw, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { Calculator, TrendingUp, Percent, Euro, Package, Wrench, Truck, Briefcase, Layers, ClipboardList, FileDown, RefreshCw, AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, Link2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Treemap } from 'recharts';
 import { BudgetSummary } from './BudgetSummary';
 import { recalculateAllBudgetResources } from '@/lib/budget-utils';
 import { toast } from 'sonner';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 
 interface BudgetResource {
   id: string;
@@ -69,6 +71,8 @@ export function BudgetVisualSummary({ budgetId, budgetName }: BudgetVisualSummar
   const [loading, setLoading] = useState(true);
   const [summaryOpen, setSummaryOpen] = useState(false);
   const [recalculating, setRecalculating] = useState(false);
+  const [orphanResourcesOpen, setOrphanResourcesOpen] = useState(false);
+  const [assigningResourceId, setAssigningResourceId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchData();
@@ -124,6 +128,26 @@ export function BudgetVisualSummary({ budgetId, budgetName }: BudgetVisualSummar
       toast.error('Error al recalcular el presupuesto');
     } finally {
       setRecalculating(false);
+    }
+  };
+
+  const assignActivityToResource = async (resourceId: string, activityId: string) => {
+    setAssigningResourceId(resourceId);
+    try {
+      const { error } = await supabase
+        .from('budget_activity_resources')
+        .update({ activity_id: activityId })
+        .eq('id', resourceId);
+      
+      if (error) throw error;
+      
+      toast.success('Actividad asignada correctamente');
+      await fetchData();
+    } catch (error) {
+      console.error('Error assigning activity:', error);
+      toast.error('Error al asignar la actividad');
+    } finally {
+      setAssigningResourceId(null);
     }
   };
 
@@ -242,9 +266,18 @@ export function BudgetVisualSummary({ budgetId, budgetName }: BudgetVisualSummar
       };
     }).sort((a, b) => b.total - a.total).slice(0, 10);
 
+    // List of orphan resources with details
+    const orphanResourcesList = resourcesWithoutActivity.map(r => ({
+      id: r.id,
+      name: r.name,
+      resourceType: r.resource_type || 'Sin tipo',
+      subtotal: r.withMargins,
+    })).sort((a, b) => b.subtotal - a.subtotal);
+
     return {
       resourcesWithoutActivity: resourcesWithoutActivity.length,
       resourcesWithoutActivityTotal,
+      orphanResourcesList,
       activitiesWithoutPhase: activitiesWithoutPhase.length,
       activitiesWithoutPhaseTotal,
       topActivities: activityTotals,
@@ -649,25 +682,76 @@ export function BudgetVisualSummary({ budgetId, budgetName }: BudgetVisualSummar
         </CardHeader>
         <CardContent className="space-y-4">
           {/* Recursos sin actividad */}
-          <div className="flex items-center justify-between p-3 rounded-lg bg-background border">
-            <div className="flex items-center gap-3">
-              <Package className={`h-5 w-5 ${diagnostics.resourcesWithoutActivity > 0 ? 'text-amber-600' : 'text-muted-foreground'}`} />
-              <div>
-                <p className="font-medium">Recursos sin actividad</p>
-                <p className="text-xs text-muted-foreground">No suman en el subtotal de Actividades ni Fases</p>
+          <Collapsible open={orphanResourcesOpen} onOpenChange={setOrphanResourcesOpen}>
+            <CollapsibleTrigger asChild>
+              <div className="flex items-center justify-between p-3 rounded-lg bg-background border cursor-pointer hover:bg-muted/50 transition-colors">
+                <div className="flex items-center gap-3">
+                  <Package className={`h-5 w-5 ${diagnostics.resourcesWithoutActivity > 0 ? 'text-amber-600' : 'text-muted-foreground'}`} />
+                  <div>
+                    <p className="font-medium">Recursos sin actividad</p>
+                    <p className="text-xs text-muted-foreground">No suman en el subtotal de Actividades ni Fases</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="text-right">
+                    <Badge variant={diagnostics.resourcesWithoutActivity > 0 ? 'destructive' : 'secondary'}>
+                      {diagnostics.resourcesWithoutActivity}
+                    </Badge>
+                    {diagnostics.resourcesWithoutActivityTotal > 0 && (
+                      <p className="text-xs text-amber-600 font-mono mt-1">
+                        {formatCurrency(diagnostics.resourcesWithoutActivityTotal)}
+                      </p>
+                    )}
+                  </div>
+                  {diagnostics.resourcesWithoutActivity > 0 && (
+                    orphanResourcesOpen ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                  )}
+                </div>
               </div>
-            </div>
-            <div className="text-right">
-              <Badge variant={diagnostics.resourcesWithoutActivity > 0 ? 'destructive' : 'secondary'}>
-                {diagnostics.resourcesWithoutActivity}
-              </Badge>
-              {diagnostics.resourcesWithoutActivityTotal > 0 && (
-                <p className="text-xs text-amber-600 font-mono mt-1">
-                  {formatCurrency(diagnostics.resourcesWithoutActivityTotal)}
-                </p>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              {diagnostics.orphanResourcesList.length > 0 && (
+                <div className="mt-2 ml-8 space-y-2 max-h-80 overflow-y-auto">
+                  {diagnostics.orphanResourcesList.map(resource => (
+                    <div key={resource.id} className="flex items-center justify-between p-2 rounded border bg-muted/30 gap-2">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate" title={resource.name}>{resource.name}</p>
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <span>{resource.resourceType}</span>
+                          <span className="font-mono">{formatCurrency(resource.subtotal)}</span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Select
+                          onValueChange={(activityId) => assignActivityToResource(resource.id, activityId)}
+                          disabled={assigningResourceId === resource.id}
+                        >
+                          <SelectTrigger className="w-[180px] h-8 text-xs">
+                            <SelectValue placeholder="Asignar actividad..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {activities.map(activity => {
+                              const phase = activity.phase_id ? phases.find(p => p.id === activity.phase_id) : null;
+                              return (
+                                <SelectItem key={activity.id} value={activity.id} className="text-xs">
+                                  <span className="font-mono mr-1">{activity.code}.-</span>
+                                  {activity.name.length > 25 ? activity.name.substring(0, 25) + '...' : activity.name}
+                                  {phase && <span className="text-muted-foreground ml-1">({phase.code || phase.name})</span>}
+                                </SelectItem>
+                              );
+                            })}
+                          </SelectContent>
+                        </Select>
+                        {assigningResourceId === resource.id && (
+                          <RefreshCw className="h-4 w-4 animate-spin text-muted-foreground" />
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
               )}
-            </div>
-          </div>
+            </CollapsibleContent>
+          </Collapsible>
 
           {/* Actividades sin fase */}
           <div className="flex items-center justify-between p-3 rounded-lg bg-background border">

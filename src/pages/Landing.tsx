@@ -507,7 +507,8 @@ const Landing = () => {
                 </div>
                 <div>
                   <h4 className="font-semibold text-foreground">Estamos cerca de ti en toda España</h4>
-                  <p className="text-muted-foreground">Domicilio Fiscal: Zoco Gran Santander, of. 201 Santander 39011 Cantabria</p>
+                  <p className="text-muted-foreground">Cantabria: Zoco Gran Santander, of. 201 Santander 39011</p>
+                  <p className="text-muted-foreground">Asturias: González Abarca, 8 bajo Avilés 33401</p>
                 </div>
               </div>
 

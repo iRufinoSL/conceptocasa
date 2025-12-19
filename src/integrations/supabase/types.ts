@@ -522,6 +522,53 @@ export type Database = {
           },
         ]
       }
+      budget_spaces: {
+        Row: {
+          budget_id: string
+          created_at: string
+          id: string
+          level: string
+          m2_built: number | null
+          m2_livable: number | null
+          name: string
+          observations: string | null
+          space_type: string
+          updated_at: string
+        }
+        Insert: {
+          budget_id: string
+          created_at?: string
+          id?: string
+          level?: string
+          m2_built?: number | null
+          m2_livable?: number | null
+          name: string
+          observations?: string | null
+          space_type?: string
+          updated_at?: string
+        }
+        Update: {
+          budget_id?: string
+          created_at?: string
+          id?: string
+          level?: string
+          m2_built?: number | null
+          m2_livable?: number | null
+          name?: string
+          observations?: string | null
+          space_type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "budget_spaces_budget_id_fkey"
+            columns: ["budget_id"]
+            isOneToOne: false
+            referencedRelation: "presupuestos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       company_settings: {
         Row: {
           address: string | null

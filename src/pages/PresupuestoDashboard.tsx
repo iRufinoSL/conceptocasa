@@ -355,46 +355,46 @@ export default function PresupuestoDashboard() {
 
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-10 lg:w-auto lg:inline-grid">
-            <TabsTrigger value="anteproyecto" className="flex items-center gap-2">
-              <Image className="h-4 w-4" />
+          <TabsList className="flex flex-wrap h-auto gap-1 p-1">
+            <TabsTrigger value="anteproyecto" className="flex items-center gap-1.5 text-xs px-2 py-1.5">
+              <Image className="h-3.5 w-3.5" />
               <span className="hidden sm:inline">Ante-proyecto</span>
             </TabsTrigger>
-            <TabsTrigger value="cuanto-cuesta" className="flex items-center gap-2">
-              <Euro className="h-4 w-4" />
+            <TabsTrigger value="cuanto-cuesta" className="flex items-center gap-1.5 text-xs px-2 py-1.5">
+              <Euro className="h-3.5 w-3.5" />
               <span className="hidden sm:inline">CUÁNTO cuesta?</span>
             </TabsTrigger>
-            <TabsTrigger value="actividades" className="flex items-center gap-2">
-              <ClipboardList className="h-4 w-4" />
-              <span className="hidden sm:inline">QUÉ hay que hacer?</span>
+            <TabsTrigger value="actividades" className="flex items-center gap-1.5 text-xs px-2 py-1.5">
+              <ClipboardList className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">QUÉ hacer?</span>
             </TabsTrigger>
-            <TabsTrigger value="fases" className="flex items-center gap-2">
-              <Calendar className="h-4 w-4" />
-              <span className="hidden sm:inline">CUÁNDO se hace?</span>
+            <TabsTrigger value="fases" className="flex items-center gap-1.5 text-xs px-2 py-1.5">
+              <Calendar className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">CUÁNDO?</span>
             </TabsTrigger>
-            <TabsTrigger value="timeline" className="flex items-center gap-2">
-              <GanttChart className="h-4 w-4" />
+            <TabsTrigger value="timeline" className="flex items-center gap-1.5 text-xs px-2 py-1.5">
+              <GanttChart className="h-3.5 w-3.5" />
               <span className="hidden sm:inline">Timeline</span>
             </TabsTrigger>
-            <TabsTrigger value="recursos" className="flex items-center gap-2">
-              <FileText className="h-4 w-4" />
-              <span className="hidden sm:inline">CÓMO hacer?</span>
+            <TabsTrigger value="recursos" className="flex items-center gap-1.5 text-xs px-2 py-1.5">
+              <FileText className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">CÓMO?</span>
             </TabsTrigger>
-            <TabsTrigger value="mediciones" className="flex items-center gap-2">
-              <Ruler className="h-4 w-4" />
-              <span className="hidden sm:inline">Mediciones Presupuesto</span>
+            <TabsTrigger value="mediciones" className="flex items-center gap-1.5 text-xs px-2 py-1.5">
+              <Ruler className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Mediciones</span>
             </TabsTrigger>
-            <TabsTrigger value="espacios" className="flex items-center gap-2">
-              <Home className="h-4 w-4" />
-              <span className="hidden sm:inline">Espacios Presupuesto</span>
+            <TabsTrigger value="espacios" className="flex items-center gap-1.5 text-xs px-2 py-1.5">
+              <Home className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Espacios</span>
             </TabsTrigger>
-            <TabsTrigger value="resumen" className="flex items-center gap-2">
-              <Calculator className="h-4 w-4" />
+            <TabsTrigger value="resumen" className="flex items-center gap-1.5 text-xs px-2 py-1.5">
+              <Calculator className="h-3.5 w-3.5" />
               <span className="hidden sm:inline">Resumen</span>
             </TabsTrigger>
-            <TabsTrigger value="config" className="flex items-center gap-2">
-              <Settings className="h-4 w-4" />
-              <span className="hidden sm:inline">Configuración</span>
+            <TabsTrigger value="config" className="flex items-center gap-1.5 text-xs px-2 py-1.5">
+              <Settings className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Config</span>
             </TabsTrigger>
           </TabsList>
 

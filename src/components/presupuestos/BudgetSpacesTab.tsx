@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -65,7 +65,7 @@ export function BudgetSpacesTab({ budgetId, isAdmin }: BudgetSpacesTabProps) {
   const [spaces, setSpaces] = useState<BudgetSpace[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [viewMode, setViewMode] = useState<'alphabetical' | 'level' | 'type'>('alphabetical');
+  const [viewMode, setViewMode] = useState<'alphabetical' | 'grouped'>('alphabetical');
   
   // Form states
   const [formOpen, setFormOpen] = useState(false);
@@ -129,47 +129,57 @@ export function BudgetSpacesTab({ budgetId, isAdmin }: BudgetSpacesTabProps) {
     return [...result].sort((a, b) => a.name.localeCompare(b.name));
   }, [spaces, searchTerm]);
 
-  // Group spaces by level
-  const spacesByLevel = useMemo(() => {
-    const grouped: Record<string, BudgetSpace[]> = {};
+  // Group spaces by level, then by type within each level
+  const spacesByLevelAndType = useMemo(() => {
+    const grouped: Record<string, Record<string, BudgetSpace[]>> = {};
+    
     filteredSpaces.forEach(space => {
       if (!grouped[space.level]) {
-        grouped[space.level] = [];
+        grouped[space.level] = {};
       }
-      grouped[space.level].push(space);
+      if (!grouped[space.level][space.space_type]) {
+        grouped[space.level][space.space_type] = [];
+      }
+      grouped[space.level][space.space_type].push(space);
     });
+    
     // Sort by LEVELS order
-    const sortedGrouped: Record<string, BudgetSpace[]> = {};
+    const sortedGrouped: Record<string, Record<string, BudgetSpace[]>> = {};
     LEVELS.forEach(level => {
       if (grouped[level]) {
-        sortedGrouped[level] = grouped[level].sort((a, b) => a.name.localeCompare(b.name));
+        sortedGrouped[level] = {};
+        // Sort types alphabetically within each level
+        Object.keys(grouped[level]).sort().forEach(type => {
+          sortedGrouped[level][type] = grouped[level][type].sort((a, b) => a.name.localeCompare(b.name));
+        });
       }
     });
+    
     // Add any custom levels not in the predefined list
     Object.keys(grouped).forEach(level => {
       if (!sortedGrouped[level]) {
-        sortedGrouped[level] = grouped[level].sort((a, b) => a.name.localeCompare(b.name));
+        sortedGrouped[level] = {};
+        Object.keys(grouped[level]).sort().forEach(type => {
+          sortedGrouped[level][type] = grouped[level][type].sort((a, b) => a.name.localeCompare(b.name));
+        });
       }
     });
+    
     return sortedGrouped;
   }, [filteredSpaces]);
 
-  // Group spaces by type
-  const spacesByType = useMemo(() => {
-    const grouped: Record<string, BudgetSpace[]> = {};
-    filteredSpaces.forEach(space => {
-      if (!grouped[space.space_type]) {
-        grouped[space.space_type] = [];
-      }
-      grouped[space.space_type].push(space);
-    });
-    // Sort groups alphabetically
-    const sortedGrouped: Record<string, BudgetSpace[]> = {};
-    Object.keys(grouped).sort().forEach(type => {
-      sortedGrouped[type] = grouped[type].sort((a, b) => a.name.localeCompare(b.name));
-    });
-    return sortedGrouped;
-  }, [filteredSpaces]);
+  // Calculate level totals
+  const getLevelTotals = (levelData: Record<string, BudgetSpace[]>) => {
+    const allSpaces = Object.values(levelData).flat();
+    return allSpaces.reduce(
+      (acc, space) => ({
+        m2_built: acc.m2_built + (space.m2_built || 0),
+        m2_livable: acc.m2_livable + (space.m2_livable || 0),
+        m2_construction: acc.m2_construction + getM2Construction(space)
+      }),
+      { m2_built: 0, m2_livable: 0, m2_construction: 0 }
+    );
+  };
 
   // Calculate totals
   const totals = useMemo(() => {
@@ -388,19 +398,15 @@ export function BudgetSpacesTab({ budgetId, isAdmin }: BudgetSpacesTabProps) {
                 className="pl-10"
               />
             </div>
-            <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as any)} className="w-auto">
+            <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as 'alphabetical' | 'grouped')} className="w-auto">
               <TabsList>
                 <TabsTrigger value="alphabetical" className="flex items-center gap-1">
                   <Search className="h-3 w-3" />
                   Alfabético
                 </TabsTrigger>
-                <TabsTrigger value="level" className="flex items-center gap-1">
+                <TabsTrigger value="grouped" className="flex items-center gap-1">
                   <Layers className="h-3 w-3" />
-                  Por Nivel
-                </TabsTrigger>
-                <TabsTrigger value="type" className="flex items-center gap-1">
-                  <Building className="h-3 w-3" />
-                  Por Tipo
+                  Por Nivel/Tipo
                 </TabsTrigger>
               </TabsList>
             </Tabs>
@@ -457,12 +463,12 @@ export function BudgetSpacesTab({ budgetId, isAdmin }: BudgetSpacesTabProps) {
             </div>
           )}
 
-          {viewMode === 'level' && (
+          {viewMode === 'grouped' && (
             <div className="rounded-md border">
               <Table>
                 {renderTableHeader()}
                 <TableBody>
-                  {Object.keys(spacesByLevel).length === 0 ? (
+                  {Object.keys(spacesByLevelAndType).length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={isAdmin ? 8 : 7} className="text-center py-8 text-muted-foreground">
                         No hay espacios registrados
@@ -470,50 +476,34 @@ export function BudgetSpacesTab({ budgetId, isAdmin }: BudgetSpacesTabProps) {
                     </TableRow>
                   ) : (
                     <>
-                      {Object.entries(spacesByLevel).map(([level, levelSpaces]) => (
-                        <>
-                          <TableRow key={`header-${level}`} className="bg-muted/30">
-                            <TableCell colSpan={isAdmin ? 8 : 7} className="font-semibold text-primary">
+                      {Object.entries(spacesByLevelAndType).map(([level, typeData]) => (
+                        <React.Fragment key={`level-${level}`}>
+                          {/* Level Header */}
+                          <TableRow className="bg-primary/10">
+                            <TableCell colSpan={isAdmin ? 8 : 7} className="font-bold text-primary">
                               <Layers className="h-4 w-4 inline mr-2" />
                               {level}
                             </TableCell>
                           </TableRow>
-                          {levelSpaces.map(renderSpaceRow)}
-                          {renderTotalsRow(`Subtotal ${level}`, getGroupTotals(levelSpaces))}
-                        </>
-                      ))}
-                      {renderTotalsRow('TOTAL GENERAL', totals, true)}
-                    </>
-                  )}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-
-          {viewMode === 'type' && (
-            <div className="rounded-md border">
-              <Table>
-                {renderTableHeader()}
-                <TableBody>
-                  {Object.keys(spacesByType).length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={isAdmin ? 8 : 7} className="text-center py-8 text-muted-foreground">
-                        No hay espacios registrados
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    <>
-                      {Object.entries(spacesByType).map(([type, typeSpaces]) => (
-                        <>
-                          <TableRow key={`header-${type}`} className="bg-muted/30">
-                            <TableCell colSpan={isAdmin ? 8 : 7} className="font-semibold text-primary">
-                              <Building className="h-4 w-4 inline mr-2" />
-                              {type}
-                            </TableCell>
-                          </TableRow>
-                          {typeSpaces.map(renderSpaceRow)}
-                          {renderTotalsRow(`Subtotal ${type}`, getGroupTotals(typeSpaces))}
-                        </>
+                          
+                          {/* Types within Level */}
+                          {Object.entries(typeData).map(([type, typeSpaces]) => (
+                            <React.Fragment key={`type-${level}-${type}`}>
+                              {/* Type SubHeader */}
+                              <TableRow className="bg-muted/30">
+                                <TableCell colSpan={isAdmin ? 8 : 7} className="font-semibold text-muted-foreground pl-8">
+                                  <Building className="h-3.5 w-3.5 inline mr-2" />
+                                  {type}
+                                </TableCell>
+                              </TableRow>
+                              {typeSpaces.map(renderSpaceRow)}
+                              {renderTotalsRow(`Subtotal ${type}`, getGroupTotals(typeSpaces))}
+                            </React.Fragment>
+                          ))}
+                          
+                          {/* Level Subtotal */}
+                          {renderTotalsRow(`Subtotal ${level}`, getLevelTotals(typeData))}
+                        </React.Fragment>
                       ))}
                       {renderTotalsRow('TOTAL GENERAL', totals, true)}
                     </>

@@ -13,7 +13,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Search, Upload, Pencil, Trash2, MoreHorizontal, FileUp, File, X, Download, ChevronRight, ChevronDown, ChevronLeft, List, Layers, Copy, Package, Wrench, Truck, Briefcase, Eye, ArrowUpDown, ArrowUp, ArrowDown, FileDown, Clock } from 'lucide-react';
+import { Plus, Search, Upload, Pencil, Trash2, MoreHorizontal, FileUp, File, X, Download, ChevronRight, ChevronDown, ChevronLeft, List, Layers, Copy, Package, Wrench, Truck, Briefcase, Eye, ArrowUpDown, ArrowUp, ArrowDown, FileDown, Clock, MapPin } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { toast } from 'sonner';
@@ -24,11 +24,25 @@ import { percentToRatio } from '@/lib/budget-pricing';
 import { MeasurementInlineSelect, MeasurementInlineSelectHandle } from './MeasurementInlineSelect';
 import { ResourceInlineEdit } from './ResourceInlineEdit';
 import { BudgetResourceForm } from './BudgetResourceForm';
+import { ActivitiesWorkAreaGroupedView } from './ActivitiesWorkAreaGroupedView';
 import { useCompanySettings } from '@/hooks/useCompanySettings';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { format, addDays, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
+
+interface WorkArea {
+  id: string;
+  name: string;
+  level: string;
+  work_area: string;
+  area_id: string;
+}
+
+interface WorkAreaRelation {
+  activity_id: string;
+  work_area_id: string;
+}
 
 interface BudgetPhase {
   id: string;
@@ -146,9 +160,11 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
   const [measurementRelations, setMeasurementRelations] = useState<MeasurementRelation[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [viewMode, setViewMode] = useState<'alphabetical' | 'grouped' | 'time'>('alphabetical');
+  const [viewMode, setViewMode] = useState<'alphabetical' | 'grouped' | 'workarea' | 'time'>('alphabetical');
   const [activitySortOrder, setActivitySortOrder] = useState<'asc' | 'desc'>('asc');
   const [expandedPhases, setExpandedPhases] = useState<Set<string>>(new Set());
+  const [workAreas, setWorkAreas] = useState<WorkArea[]>([]);
+  const [workAreaRelations, setWorkAreaRelations] = useState<WorkAreaRelation[]>([]);
   
   // Dialog states
   const [formDialogOpen, setFormDialogOpen] = useState(false);
@@ -286,7 +302,7 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
   // Fetch activities and phases
   const fetchData = async () => {
     try {
-      const [activitiesRes, phasesRes, resourcesRes, measurementsRes, measurementRelationsRes] = await Promise.all([
+      const [activitiesRes, phasesRes, resourcesRes, measurementsRes, measurementRelationsRes, workAreasRes, workAreaRelationsRes] = await Promise.all([
         supabase
           .from('budget_activities')
           .select('*')
@@ -307,7 +323,15 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
           .eq('budget_id', budgetId),
         supabase
           .from('budget_measurement_relations')
-          .select('measurement_id, related_measurement_id')
+          .select('measurement_id, related_measurement_id'),
+        supabase
+          .from('budget_work_areas')
+          .select('id, name, level, work_area, area_id')
+          .eq('budget_id', budgetId)
+          .order('area_id', { ascending: true }),
+        supabase
+          .from('budget_work_area_activities')
+          .select('activity_id, work_area_id')
       ]);
 
       if (activitiesRes.error) throw activitiesRes.error;
@@ -315,6 +339,8 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
       if (resourcesRes.error) throw resourcesRes.error;
       if (measurementsRes.error) throw measurementsRes.error;
       if (measurementRelationsRes.error) throw measurementRelationsRes.error;
+      if (workAreasRes.error) throw workAreasRes.error;
+      if (workAreaRelationsRes.error) throw workAreaRelationsRes.error;
 
       const allResources = resourcesRes.data || [];
       
@@ -323,6 +349,12 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
       const measurementIds = measurementsList.map(m => m.id);
       const filteredRelations = (measurementRelationsRes.data || []).filter(
         r => measurementIds.includes(r.measurement_id)
+      );
+
+      // Filter work area relations to only those for activities in this budget
+      const activityIds = (activitiesRes.data || []).map(a => a.id);
+      const filteredWorkAreaRelations = (workAreaRelationsRes.data || []).filter(
+        r => activityIds.includes(r.activity_id)
       );
 
       // Get file counts and resource subtotals for each activity
@@ -355,6 +387,8 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
       setPhases(phasesRes.data || []);
       setMeasurements(measurementsList);
       setMeasurementRelations(filteredRelations);
+      setWorkAreas(workAreasRes.data || []);
+      setWorkAreaRelations(filteredWorkAreaRelations);
     } catch (err: any) {
       console.error('Error fetching data:', err);
       toast.error('Error al cargar datos');
@@ -954,6 +988,32 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
     }
   };
 
+  // Update activity work areas
+  const handleUpdateActivityWorkAreas = async (activityId: string, workAreaIds: string[]) => {
+    try {
+      const currentRelations = workAreaRelations.filter(r => r.activity_id === activityId);
+      const currentWorkAreaIds = new Set(currentRelations.map(r => r.work_area_id));
+      const newWorkAreaIds = new Set(workAreaIds);
+      const toAdd = workAreaIds.filter(id => !currentWorkAreaIds.has(id));
+      const toRemove = [...currentWorkAreaIds].filter(id => !newWorkAreaIds.has(id));
+
+      if (toRemove.length > 0) {
+        await supabase.from('budget_work_area_activities').delete().eq('activity_id', activityId).in('work_area_id', toRemove);
+      }
+      if (toAdd.length > 0) {
+        await supabase.from('budget_work_area_activities').insert(toAdd.map(wid => ({ activity_id: activityId, work_area_id: wid })));
+      }
+
+      setWorkAreaRelations(prev => {
+        const filtered = prev.filter(r => r.activity_id !== activityId);
+        return [...filtered, ...workAreaIds.map(wid => ({ activity_id: activityId, work_area_id: wid }))];
+      });
+      toast.success('Áreas actualizadas');
+    } catch (err: any) {
+      toast.error('Error al actualizar áreas');
+    }
+  };
+
   // Navigate to previous/next activity in form
   const navigateToActivity = async (direction: 'prev' | 'next') => {
     if (!editingActivity) return;
@@ -1323,13 +1383,22 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
               Por Fase
             </Button>
             <Button 
+              variant={viewMode === 'workarea' ? 'default' : 'ghost'} 
+              size="sm"
+              onClick={() => setViewMode('workarea')}
+              className="rounded-none border-l"
+            >
+              <MapPin className="h-4 w-4 mr-1" />
+              Por Área
+            </Button>
+            <Button 
               variant={viewMode === 'time' ? 'default' : 'ghost'} 
               size="sm"
               onClick={() => setViewMode('time')}
               className="rounded-l-none border-l"
             >
               <Clock className="h-4 w-4 mr-1" />
-              Gestión Tiempo
+              Tiempo
             </Button>
           </div>
           <Button variant="outline" size="sm" onClick={exportActivitiesPDF}>
@@ -1797,6 +1866,27 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
             </div>
           )}
         </div>
+      )}
+
+      {/* Work Area Grouped View */}
+      {viewMode === 'workarea' && (
+        <ActivitiesWorkAreaGroupedView
+          activities={filteredActivities}
+          phases={phases}
+          workAreas={workAreas}
+          workAreaRelations={workAreaRelations}
+          measurements={measurements}
+          measurementRelations={measurementRelations}
+          isAdmin={isAdmin}
+          onEdit={handleEdit}
+          onDuplicate={handleDuplicate}
+          onDelete={handleDeleteClick}
+          onManageFiles={handleManageFiles}
+          onUpdateMeasurement={handleUpdateActivityMeasurement}
+          onUpdateWorkAreas={handleUpdateActivityWorkAreas}
+          generateActivityId={generateActivityId}
+          getMeasurementData={getMeasurementData}
+        />
       )}
 
       {/* Time Management View */}

@@ -10,11 +10,13 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { toast } from 'sonner';
 import { z } from 'zod';
-import { ArrowLeft, Plus, UserCog, Pencil, Trash2, Search, Building2 } from 'lucide-react';
+import { ArrowLeft, Plus, UserCog, Pencil, Trash2, Search, FolderOpen } from 'lucide-react';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import { AppNavDropdown } from '@/components/AppNavDropdown';
+import { UserBudgetAccessDialog } from '@/components/users/UserBudgetAccessDialog';
 import { searchMatch } from '@/lib/search-utils';
 
 const emailSchema = z.string().email('Email inválido');
@@ -32,6 +34,7 @@ interface UserProfile {
   full_name: string | null;
   created_at: string | null;
   roles: string[];
+  budgetAccessCount?: number;
 }
 
 type AppRole = 'administrador' | 'colaborador' | 'cliente';
@@ -63,6 +66,10 @@ export default function Usuarios() {
   // Delete dialog
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [deletingUser, setDeletingUser] = useState<UserProfile | null>(null);
+  
+  // Budget access dialog
+  const [isAccessOpen, setIsAccessOpen] = useState(false);
+  const [accessUser, setAccessUser] = useState<UserProfile | null>(null);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -97,7 +104,20 @@ export default function Usuarios() {
 
       if (rolesError) throw rolesError;
 
-      // Combine profiles with roles
+      // Fetch budget access counts
+      const { data: accessData, error: accessError } = await supabase
+        .from('user_presupuestos')
+        .select('user_id');
+
+      if (accessError) throw accessError;
+
+      // Count accesses per user
+      const accessCounts: Record<string, number> = {};
+      (accessData || []).forEach(a => {
+        accessCounts[a.user_id] = (accessCounts[a.user_id] || 0) + 1;
+      });
+
+      // Combine profiles with roles and access counts
       const usersWithRoles: UserProfile[] = (profiles || []).map(profile => ({
         id: profile.id,
         email: profile.email,
@@ -105,7 +125,8 @@ export default function Usuarios() {
         created_at: profile.created_at,
         roles: roles
           ?.filter(r => r.user_id === profile.id)
-          .map(r => r.role) || []
+          .map(r => r.role) || [],
+        budgetAccessCount: accessCounts[profile.id] || 0
       }));
 
       setUsers(usersWithRoles);
@@ -290,6 +311,11 @@ export default function Usuarios() {
     }
   };
 
+  const handleManageAccess = (userToManage: UserProfile) => {
+    setAccessUser(userToManage);
+    setIsAccessOpen(true);
+  };
+
   const getRoleBadgeVariant = (role: string) => {
     switch (role) {
       case 'administrador':
@@ -446,6 +472,7 @@ export default function Usuarios() {
                   <TableRow>
                     <TableHead>Usuario</TableHead>
                     <TableHead>Rol</TableHead>
+                    <TableHead>Accesos</TableHead>
                     <TableHead>Fecha Registro</TableHead>
                     <TableHead className="text-right">Acciones</TableHead>
                   </TableRow>
@@ -453,7 +480,7 @@ export default function Usuarios() {
                 <TableBody>
                   {filteredUsers.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
+                      <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
                         {searchTerm ? 'No se encontraron usuarios' : 'No hay usuarios registrados'}
                       </TableCell>
                     </TableRow>
@@ -480,28 +507,59 @@ export default function Usuarios() {
                           </div>
                         </TableCell>
                         <TableCell>
+                          <Badge 
+                            variant={u.budgetAccessCount && u.budgetAccessCount > 0 ? "secondary" : "outline"}
+                            className="cursor-pointer hover:bg-primary/10"
+                            onClick={() => handleManageAccess(u)}
+                          >
+                            {u.budgetAccessCount || 0} presupuesto{u.budgetAccessCount !== 1 ? 's' : ''}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
                           {u.created_at 
                             ? new Date(u.created_at).toLocaleDateString('es-ES')
                             : '-'
                           }
                         </TableCell>
                         <TableCell className="text-right">
-                          <div className="flex justify-end gap-2">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleEditUser(u)}
-                            >
-                              <Pencil className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleDeleteUser(u)}
-                              disabled={u.id === user?.id}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
+                          <div className="flex justify-end gap-1">
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleManageAccess(u)}
+                                >
+                                  <FolderOpen className="h-4 w-4" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>Gestionar accesos</TooltipContent>
+                            </Tooltip>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleEditUser(u)}
+                                >
+                                  <Pencil className="h-4 w-4" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>Editar usuario</TooltipContent>
+                            </Tooltip>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleDeleteUser(u)}
+                                  disabled={u.id === user?.id}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>Eliminar usuario</TooltipContent>
+                            </Tooltip>
                           </div>
                         </TableCell>
                       </TableRow>
@@ -567,6 +625,22 @@ export default function Usuarios() {
         title="Eliminar Usuario"
         description={`¿Estás seguro de que deseas eliminar al usuario ${deletingUser?.email}? Esta acción no se puede deshacer.`}
       />
+
+      {/* Budget Access Dialog */}
+      {accessUser && (
+        <UserBudgetAccessDialog
+          open={isAccessOpen}
+          onOpenChange={(open) => {
+            setIsAccessOpen(open);
+            if (!open) {
+              fetchUsers(); // Refresh user list to update access counts
+            }
+          }}
+          userId={accessUser.id}
+          userName={accessUser.full_name || ''}
+          userEmail={accessUser.email}
+        />
+      )}
     </div>
   );
 }

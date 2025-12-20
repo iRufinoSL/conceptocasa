@@ -8,6 +8,7 @@ import { formatCurrency, formatNumber, formatPercent } from '@/lib/format-utils'
 import { Pencil, Trash2, Package, Wrench, Truck, Briefcase } from 'lucide-react';
 import { ResourceInlineEdit } from './ResourceInlineEdit';
 import { cn } from '@/lib/utils';
+import type { BudgetPermissions } from '@/hooks/usePermissions';
 
 // Define editable fields for tab navigation (in display order)
 const EDITABLE_FIELDS = [
@@ -49,7 +50,7 @@ interface ResourcesActivityGroupedViewProps {
   resources: BudgetResource[];
   activities: Activity[];
   phases: Phase[];
-  isAdmin: boolean;
+  permissions: BudgetPermissions;
   selectedIds: Set<string>;
   onToggleSelect: (id: string) => void;
   onToggleSelectAll: () => void;
@@ -67,6 +68,7 @@ interface ResourcesActivityGroupedViewProps {
   getActivityId: (activityId: string | null) => string;
   expandedActivities: Set<string>;
   onExpandedActivitiesChange: (activities: Set<string>) => void;
+  canEditResource: (resource: BudgetResource) => boolean;
 }
 
 const resourceTypeIcons: Record<string, React.ReactNode> = {
@@ -90,7 +92,7 @@ export function ResourcesActivityGroupedView({
   resources,
   activities,
   phases,
-  isAdmin,
+  permissions,
   selectedIds,
   onToggleSelect,
   onToggleSelectAll,
@@ -101,6 +103,7 @@ export function ResourcesActivityGroupedView({
   getActivityId,
   expandedActivities,
   onExpandedActivitiesChange,
+  canEditResource,
 }: ResourcesActivityGroupedViewProps) {
   // Tab navigation refs
   const cellRefs = useRef<Map<string, HTMLElement | null>>(new Map());
@@ -266,12 +269,14 @@ export function ResourcesActivityGroupedView({
       cellRefs.current.set(getCellKey(resource.id, field), el);
     };
 
+    const canEdit = canEditResource(resource);
+
     return (
       <TableRow 
         key={resource.id} 
         className={cn(selectedIds.has(resource.id) ? 'bg-muted/50' : '')}
       >
-        {isAdmin && (
+        {permissions.isAdmin && (
           <TableCell style={{ paddingLeft: `${indent * 16 + 8}px` }}>
             <Checkbox
               checked={selectedIds.has(resource.id)}
@@ -280,14 +285,14 @@ export function ResourcesActivityGroupedView({
           </TableCell>
         )}
         {/* 1. Recurso */}
-        <TableCell className="font-medium" style={{ paddingLeft: isAdmin ? undefined : `${indent * 16 + 8}px` }}>
+        <TableCell className="font-medium" style={{ paddingLeft: permissions.isAdmin ? undefined : `${indent * 16 + 8}px` }}>
           <span ref={registerRef('name')} tabIndex={-1}>
             <ResourceInlineEdit
               value={resource.name}
               displayValue={resource.name}
               onSave={(v) => onInlineUpdate(resource.id, 'name', v)}
               type="text"
-              disabled={!isAdmin}
+              disabled={!canEdit}
               {...createTabHandlers('name')}
             />
           </span>
@@ -301,7 +306,7 @@ export function ResourcesActivityGroupedView({
               onSave={(v) => onInlineUpdate(resource.id, 'external_unit_cost', v)}
               type="number"
               decimals={2}
-              disabled={!isAdmin}
+              disabled={!canEdit}
               {...createTabHandlers('external_unit_cost')}
             />
           </span>
@@ -315,7 +320,7 @@ export function ResourcesActivityGroupedView({
               onSave={(v) => onInlineUpdate(resource.id, 'unit', v)}
               type="select"
               options={unitOptions}
-              disabled={!isAdmin}
+              disabled={!canEdit}
               {...createTabHandlers('unit')}
             />
           </span>
@@ -336,7 +341,7 @@ export function ResourcesActivityGroupedView({
               onSave={(v) => onInlineUpdate(resource.id, 'resource_type', v)}
               type="select"
               options={typeOptions}
-              disabled={!isAdmin}
+              disabled={!canEdit}
               {...createTabHandlers('resource_type')}
             />
           </span>
@@ -350,7 +355,7 @@ export function ResourcesActivityGroupedView({
               onSave={(v) => onInlineUpdate(resource.id, 'related_units', v)}
               type="number"
               decimals={2}
-              disabled={!isAdmin}
+              disabled={!canEdit}
               {...createTabHandlers('related_units')}
             />
           </span>
@@ -365,7 +370,7 @@ export function ResourcesActivityGroupedView({
               type="number"
               decimals={2}
               allowNull={true}
-              disabled={!isAdmin}
+              disabled={!canEdit}
               {...createTabHandlers('manual_units')}
             />
           </span>
@@ -383,7 +388,7 @@ export function ResourcesActivityGroupedView({
               onSave={(v) => onInlineUpdate(resource.id, 'safety_margin_percent', Math.max(0, v) / 100)}
               type="percent"
               decimals={1}
-              disabled={!isAdmin}
+              disabled={!canEdit}
               {...createTabHandlers('safety_margin_percent')}
             />
           </span>
@@ -402,7 +407,7 @@ export function ResourcesActivityGroupedView({
               onSave={(v) => onInlineUpdate(resource.id, 'sales_margin_percent', Math.max(0, v) / 100)}
               type="percent"
               decimals={1}
-              disabled={!isAdmin}
+              disabled={!canEdit}
               {...createTabHandlers('sales_margin_percent')}
             />
           </span>
@@ -416,13 +421,13 @@ export function ResourcesActivityGroupedView({
         <TableCell className="text-right font-mono font-semibold">
           {formatNumber(fields.calculatedUnits)}
         </TableCell>
-        {isAdmin && (
+        {permissions.isAdmin && (
           <TableCell>
             <div className="flex items-center gap-1">
-              <Button variant="ghost" size="icon" onClick={() => onEdit(resource)}>
+              <Button variant="ghost" size="icon" onClick={() => onEdit(resource)} disabled={!canEdit}>
                 <Pencil className="h-4 w-4" />
               </Button>
-              <Button variant="ghost" size="icon" onClick={() => onDelete(resource)}>
+              <Button variant="ghost" size="icon" onClick={() => onDelete(resource)} disabled={!permissions.canDelete}>
                 <Trash2 className="h-4 w-4 text-destructive" />
               </Button>
             </div>
@@ -456,7 +461,7 @@ export function ResourcesActivityGroupedView({
         <Table>
           <TableHeader>
             <TableRow>
-              {isAdmin && (
+              {permissions.isAdmin && (
                 <TableHead className="w-[40px]">
                   <Checkbox
                     checked={selectedIds.size === resources.length && resources.length > 0}
@@ -478,7 +483,7 @@ export function ResourcesActivityGroupedView({
               <TableHead className="text-right">€Venta</TableHead>
               <TableHead className="text-right">€Coste venta</TableHead>
               <TableHead className="text-right">Uds calc.</TableHead>
-              {isAdmin && <TableHead className="w-[80px]">Acciones</TableHead>}
+              {permissions.isAdmin && <TableHead className="w-[80px]">Acciones</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -496,7 +501,7 @@ export function ResourcesActivityGroupedView({
                     className="bg-muted/20 hover:bg-muted/40 cursor-pointer"
                     onClick={() => toggleActivity(activityKey)}
                   >
-                    <TableCell colSpan={isAdmin ? 15 : 14}>
+                    <TableCell colSpan={permissions.isAdmin ? 15 : 14}>
                       <div className="flex items-center gap-2">
                         {isActivityExpanded ? (
                           <ChevronDown className="h-4 w-4" />
@@ -513,7 +518,7 @@ export function ResourcesActivityGroupedView({
                         </Badge>
                       </div>
                     </TableCell>
-                    {isAdmin && <TableCell />}
+                    {permissions.isAdmin && <TableCell />}
                   </TableRow>
                   {isActivityExpanded && activityGroup.resources.map((resource) => 
                     renderResourceRow(resource, 2)

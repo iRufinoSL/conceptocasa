@@ -72,6 +72,7 @@ interface ResourcesGroupedViewProps {
   expandedActivities: Set<string>;
   onExpandedPhasesChange: (phases: Set<string>) => void;
   onExpandedActivitiesChange: (activities: Set<string>) => void;
+  canEditResource: (resource: BudgetResource) => boolean;
 }
 
 const resourceTypeIcons: Record<string, React.ReactNode> = {
@@ -109,6 +110,7 @@ export function ResourcesGroupedView({
   expandedActivities,
   onExpandedPhasesChange,
   onExpandedActivitiesChange,
+  canEditResource,
 }: ResourcesGroupedViewProps) {
   // Destructure permissions for easier access
   const { canViewCosts, canViewMargins, canViewCostDetails, canEdit, canDuplicate, canDelete, isAdmin } = permissions;

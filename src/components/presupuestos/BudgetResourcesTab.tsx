@@ -22,7 +22,7 @@ import { BulkEditBar } from './BulkEditBar';
 import { ResourcesGroupedView } from './ResourcesGroupedView';
 import { ResourcesActivityGroupedView } from './ResourcesActivityGroupedView';
 import { useCompanySettings } from '@/hooks/useCompanySettings';
-import { usePermissions } from '@/hooks/usePermissions';
+import { usePermissions, canAccessResource, canAccessActivity } from '@/hooks/usePermissions';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { format } from 'date-fns';
@@ -369,20 +369,63 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
     };
   }, []);
 
-  // Filter resources by search term
+  // Filter resources by search term and granular access
   const filteredResources = useMemo(() => {
-    if (!searchTerm) return resources;
+    let filtered = resources;
     
-    return resources.filter(resource => {
-      const activityId = getActivityId(resource.activity_id);
-      return (
-        searchMatch(resource.name, searchTerm) ||
-        searchMatch(resource.resource_type, searchTerm) ||
-        searchMatch(resource.unit, searchTerm) ||
-        searchMatch(activityId, searchTerm)
-      );
-    });
-  }, [resources, searchTerm, activities, phases]);
+    // Apply granular access filtering for non-admin users
+    if (!permissions.isAdmin && permissions.hasGranularAccess) {
+      filtered = filtered.filter(resource => {
+        // Check direct resource access
+        if (permissions.granularAccess.resourceAccess.has(resource.id)) {
+          return true;
+        }
+        // Check activity-level access (if resource is linked to an accessible activity)
+        if (resource.activity_id && permissions.granularAccess.activityAccess.has(resource.activity_id)) {
+          return true;
+        }
+        return false;
+      });
+    }
+    
+    // Apply search filter
+    if (searchTerm) {
+      filtered = filtered.filter(resource => {
+        const activityId = getActivityId(resource.activity_id);
+        return (
+          searchMatch(resource.name, searchTerm) ||
+          searchMatch(resource.resource_type, searchTerm) ||
+          searchMatch(resource.unit, searchTerm) ||
+          searchMatch(activityId, searchTerm)
+        );
+      });
+    }
+    
+    return filtered;
+  }, [resources, searchTerm, activities, phases, permissions]);
+
+  // Check if user can edit a specific resource (granular access)
+  const canEditResource = useCallback((resource: BudgetResource): boolean => {
+    // Admins can always edit
+    if (permissions.isAdmin) return true;
+    
+    // If no granular access defined, use base permissions
+    if (!permissions.hasGranularAccess) {
+      return permissions.canEdit;
+    }
+    
+    // Check direct resource access
+    const resourceLevel = permissions.granularAccess.resourceAccess.get(resource.id);
+    if (resourceLevel === 'edit') return true;
+    
+    // Check activity-level access
+    if (resource.activity_id) {
+      const activityLevel = permissions.granularAccess.activityAccess.get(resource.activity_id);
+      if (activityLevel === 'edit') return true;
+    }
+    
+    return false;
+  }, [permissions]);
 
   // Calculate totals
   const totals = useMemo(() => {
@@ -1271,13 +1314,14 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
               expandedActivities={expandedActivities}
               onExpandedPhasesChange={setExpandedPhases}
               onExpandedActivitiesChange={setExpandedActivities}
+              canEditResource={canEditResource}
             />
           ) : viewMode === 'activity' ? (
             <ResourcesActivityGroupedView
               resources={filteredResources}
               activities={activities}
               phases={phases}
-              isAdmin={isAdmin}
+              permissions={permissions}
               selectedIds={selectedIds}
               onToggleSelect={toggleSelect}
               onToggleSelectAll={toggleSelectAll}
@@ -1288,6 +1332,7 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
               getActivityId={getActivityId}
               expandedActivities={expandedActivities}
               onExpandedActivitiesChange={setExpandedActivities}
+              canEditResource={canEditResource}
             />
           ) : (
             <div className="rounded-md border overflow-x-auto">
@@ -1331,6 +1376,7 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
                     filteredResources.map((resource) => {
                       const fields = calculateFields(resource);
                       const activityDisplay = getActivityId(resource.activity_id);
+                      const canEdit = canEditResource(resource);
                       
                       const unitOptions = UNITS.map(u => ({ value: u, label: u }));
                       const typeOptions = RESOURCE_TYPES.map(t => ({ value: t, label: t }));
@@ -1358,7 +1404,7 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
                               displayValue={resource.name}
                               onSave={(v) => handleInlineUpdate(resource.id, 'name', v)}
                               type="text"
-                              disabled={!isAdmin}
+                              disabled={!canEdit}
                             />
                           </TableCell>
                           <TableCell className="text-right font-mono">
@@ -1368,7 +1414,7 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
                               onSave={(v) => handleInlineUpdate(resource.id, 'external_unit_cost', v)}
                               type="number"
                               decimals={2}
-                              disabled={!isAdmin}
+                              disabled={!canEdit}
                             />
                           </TableCell>
                           <TableCell>
@@ -1378,7 +1424,7 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
                               onSave={(v) => handleInlineUpdate(resource.id, 'unit', v)}
                               type="select"
                               options={unitOptions}
-                              disabled={!isAdmin}
+                              disabled={!canEdit}
                             />
                           </TableCell>
                           <TableCell>
@@ -1395,7 +1441,7 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
                               onSave={(v) => handleInlineUpdate(resource.id, 'resource_type', v)}
                               type="select"
                               options={typeOptions}
-                              disabled={!isAdmin}
+                              disabled={!canEdit}
                             />
                           </TableCell>
                           <TableCell className="text-right font-mono">
@@ -1405,7 +1451,7 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
                               onSave={(v) => handleInlineUpdate(resource.id, 'safety_margin_percent', Math.max(0, v) / 100)}
                               type="percent"
                               decimals={1}
-                              disabled={!isAdmin}
+                              disabled={!canEdit}
                             />
                           </TableCell>
                           <TableCell className="text-right font-mono text-muted-foreground">
@@ -1421,7 +1467,7 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
                               onSave={(v) => handleInlineUpdate(resource.id, 'sales_margin_percent', Math.max(0, v) / 100)}
                               type="percent"
                               decimals={1}
-                              disabled={!isAdmin}
+                              disabled={!canEdit}
                             />
                           </TableCell>
                           <TableCell className="text-right font-mono text-muted-foreground">
@@ -1438,7 +1484,7 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
                               type="number"
                               decimals={2}
                               allowNull={true}
-                              disabled={!isAdmin}
+                              disabled={!canEdit}
                             />
                           </TableCell>
                           <TableCell className="text-right font-mono">
@@ -1448,7 +1494,7 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
                               onSave={(v) => handleInlineUpdate(resource.id, 'related_units', v)}
                               type="number"
                               decimals={2}
-                              disabled={!isAdmin}
+                              disabled={!canEdit}
                             />
                           </TableCell>
                           <TableCell className="text-right font-mono font-semibold">
@@ -1464,7 +1510,7 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
                               onSave={(v) => handleInlineUpdate(resource.id, 'activity_id', v)}
                               type="select"
                               options={activityOptions}
-                              disabled={!isAdmin}
+                              disabled={!canEdit}
                             />
                           </TableCell>
                           {isAdmin && (
@@ -1474,6 +1520,7 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
                                   variant="ghost"
                                   size="icon"
                                   onClick={() => handleEdit(resource)}
+                                  disabled={!canEdit}
                                 >
                                   <Pencil className="h-4 w-4" />
                                 </Button>
@@ -1481,6 +1528,7 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
                                   variant="ghost"
                                   size="icon"
                                   onClick={() => handleDelete(resource)}
+                                  disabled={!permissions.canDelete}
                                 >
                                   <Trash2 className="h-4 w-4 text-destructive" />
                                 </Button>

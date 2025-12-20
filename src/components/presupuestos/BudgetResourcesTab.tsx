@@ -121,6 +121,7 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
     showPhaseSubtotals?: boolean;
     showActivitySubtotals?: boolean;
     expandAll?: boolean;
+    hideUnassignedPhase?: boolean;
   } | undefined;
   
   // Available view modes based on role settings
@@ -1357,6 +1358,7 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
               visibleColumns={recursosSettings?.visibleColumns}
               showPhaseSubtotals={recursosSettings?.showPhaseSubtotals}
               showActivitySubtotals={recursosSettings?.showActivitySubtotals}
+              hideUnassignedPhase={recursosSettings?.hideUnassignedPhase}
             />
           ) : viewMode === 'activity' ? (
             <ResourcesActivityGroupedView

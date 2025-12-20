@@ -282,15 +282,17 @@ export default function PresupuestoDashboard() {
               <p className="text-xs text-muted-foreground">{generatePresupuestoId()}</p>
             </div>
           </div>
-          <Button 
-            variant="outline" 
-            size="sm"
-            onClick={() => setReportPreviewOpen(true)}
-            className="flex items-center gap-2"
-          >
-            <FileDown className="h-4 w-4" />
-            Informe PDF
-          </Button>
+          {isAdmin && (
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => setReportPreviewOpen(true)}
+              className="flex items-center gap-2"
+            >
+              <FileDown className="h-4 w-4" />
+              Informe PDF
+            </Button>
+          )}
           {project && (
             <Button 
               variant="outline" 
@@ -373,10 +375,12 @@ export default function PresupuestoDashboard() {
               <Calendar className="h-3.5 w-3.5" />
               <span className="hidden sm:inline">CUÁNDO?</span>
             </TabsTrigger>
-            <TabsTrigger value="recursos" className="flex items-center gap-1.5 text-xs px-2 py-1.5">
-              <FileText className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">CÓMO?</span>
-            </TabsTrigger>
+            {isAdmin && (
+              <TabsTrigger value="recursos" className="flex items-center gap-1.5 text-xs px-2 py-1.5">
+                <FileText className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">CÓMO?</span>
+              </TabsTrigger>
+            )}
             <TabsTrigger value="contactos" className="flex items-center gap-1.5 text-xs px-2 py-1.5">
               <Users className="h-3.5 w-3.5" />
               <span className="hidden sm:inline">QUIÉN?</span>

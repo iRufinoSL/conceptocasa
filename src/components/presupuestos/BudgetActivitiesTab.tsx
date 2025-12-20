@@ -1242,12 +1242,10 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
     const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.getWidth();
     
-    // Company info from settings
+    // Company info from settings - only name, email, phone (no address per user request)
     const companyName = companySettings.name || 'Mi Empresa';
     const companyEmail = companySettings.email || '';
     const companyPhone = companySettings.phone || '';
-    const companyAddress = companySettings.address || '';
-    const companyWeb = companySettings.website || '';
     const companyInitials = companyName.substring(0, 2).toUpperCase();
     
     // Header with company branding
@@ -1259,7 +1257,7 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
     doc.text(companyInitials, 26.5, 26, { align: 'center' });
     doc.setTextColor(0);
     
-    // Company name and contact
+    // Company name and contact (only email and phone, no address)
     doc.setFontSize(16);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(37, 99, 235);
@@ -1269,10 +1267,8 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
     doc.setFontSize(9);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(100);
-    const contactLine = [companyEmail, companyPhone].filter(Boolean).join('  |  ');
-    const addressLine = [companyAddress, companyWeb].filter(Boolean).join('  |  ');
-    if (contactLine) doc.text(contactLine, 45, 24);
-    if (addressLine) doc.text(addressLine, 45, 30);
+    const contactLine = [companyEmail, companyPhone].filter(Boolean).join('; ');
+    if (contactLine) doc.text(contactLine, 45, 26);
     doc.setTextColor(0);
     
     // Separator line

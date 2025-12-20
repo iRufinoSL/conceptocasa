@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Treemap } from 'recharts';
 import { BudgetSummary } from './BudgetSummary';
-import { recalculateAllBudgetResources } from '@/lib/budget-utils';
+import { recalculateAllBudgetResources, syncActivityResourcesRelatedUnits } from '@/lib/budget-utils';
 import { toast } from 'sonner';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 
@@ -140,6 +140,9 @@ export function BudgetVisualSummary({ budgetId, budgetName }: BudgetVisualSummar
         .eq('id', resourceId);
       
       if (error) throw error;
+      
+      // Sync related_units for the assigned activity
+      await syncActivityResourcesRelatedUnits(activityId);
       
       toast.success('Actividad asignada correctamente');
       await fetchData();

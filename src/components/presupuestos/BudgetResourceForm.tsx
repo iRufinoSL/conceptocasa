@@ -12,7 +12,7 @@ import { Check, ChevronsUpDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { formatCurrency, formatPercent } from '@/lib/format-utils';
-import { getActivityMeasurementUnits } from '@/lib/budget-utils';
+import { getActivityMeasurementUnits, syncActivityResourcesRelatedUnits } from '@/lib/budget-utils';
 
 interface BudgetResource {
   id: string;
@@ -231,6 +231,11 @@ export function BudgetResourceForm({
         
         if (error) throw error;
         toast.success('Recurso creado correctamente');
+      }
+
+      // Sync related_units for the activity if resource is assigned to one
+      if (activityId) {
+        await syncActivityResourcesRelatedUnits(activityId);
       }
 
       onSave();

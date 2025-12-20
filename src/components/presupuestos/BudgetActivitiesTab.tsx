@@ -21,6 +21,7 @@ import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import { searchMatch } from '@/lib/search-utils';
 import { formatCurrency, formatNumber, formatPercent } from '@/lib/format-utils';
 import { percentToRatio } from '@/lib/budget-pricing';
+import { syncActivityResourcesRelatedUnits } from '@/lib/budget-utils';
 import { MeasurementInlineSelect, MeasurementInlineSelectHandle } from './MeasurementInlineSelect';
 import { ResourceInlineEdit } from './ResourceInlineEdit';
 import { BudgetResourceForm } from './BudgetResourceForm';
@@ -690,6 +691,8 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
         tolerance_days: form.tolerance_days ? parseInt(form.tolerance_days) : null
       };
 
+      let savedActivityId: string | null = null;
+
       if (editingActivity) {
         const { error } = await supabase
           .from('budget_activities')
@@ -697,14 +700,23 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
           .eq('id', editingActivity.id);
 
         if (error) throw error;
+        savedActivityId = editingActivity.id;
         toast.success('Actividad actualizada');
       } else {
-        const { error } = await supabase
+        const { data: newActivity, error } = await supabase
           .from('budget_activities')
-          .insert(data);
+          .insert(data)
+          .select('id')
+          .single();
 
         if (error) throw error;
+        savedActivityId = newActivity?.id || null;
         toast.success('Actividad creada');
+      }
+
+      // Sync related_units for the activity's resources
+      if (savedActivityId) {
+        await syncActivityResourcesRelatedUnits(savedActivityId);
       }
 
       setFormDialogOpen(false);
@@ -976,6 +988,9 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
         .eq('id', activityId);
 
       if (error) throw error;
+      
+      // Sync related_units for the activity's resources
+      await syncActivityResourcesRelatedUnits(activityId);
       
       // Update local state
       setActivities(prev => prev.map(a => 
@@ -1486,6 +1501,8 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
                                 .update({ uses_measurement: newValue })
                                 .eq('id', activity.id);
                               if (error) throw error;
+                              // Sync related_units for the activity's resources
+                              await syncActivityResourcesRelatedUnits(activity.id);
                               fetchData();
                               toast.success(`Usa Medición: ${newValue ? 'Sí' : 'No'}`);
                             } catch (err: any) {

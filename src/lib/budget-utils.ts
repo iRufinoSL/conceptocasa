@@ -185,7 +185,7 @@ export async function recalculateAllBudgetResources(budgetId: string): Promise<{
   let errors = 0;
   
   try {
-    // Get all activities for this budget
+    // Get all activities for this budget with their resources
     const { data: activities, error: actError } = await supabase
       .from('budget_activities')
       .select('id, measurement_id, uses_measurement')
@@ -208,10 +208,12 @@ export async function recalculateAllBudgetResources(budgetId: string): Promise<{
     
     const measurementMap = new Map(measurements?.map(m => [m.id, m.manual_units || 0]) || []);
     
-    // Get all measurement relations for this budget
+    // Get all measurement relations for this budget's measurements
+    const measurementIds = measurements?.map(m => m.id) || [];
     const { data: relations, error: relError } = await supabase
       .from('budget_measurement_relations')
-      .select('measurement_id, related_measurement_id');
+      .select('measurement_id, related_measurement_id')
+      .in('measurement_id', measurementIds.length > 0 ? measurementIds : ['__none__']);
     
     if (relError) {
       console.error('Error fetching relations:', relError);
@@ -220,7 +222,7 @@ export async function recalculateAllBudgetResources(budgetId: string): Promise<{
     // Build a map of measurement_id -> sum of related measurements' units
     const relatedUnitsMap = new Map<string, number>();
     
-    if (relations) {
+    if (relations && relations.length > 0) {
       // Group relations by measurement_id
       const relationsByMeasurement = new Map<string, string[]>();
       for (const rel of relations) {
@@ -236,42 +238,45 @@ export async function recalculateAllBudgetResources(budgetId: string): Promise<{
       }
     }
     
-    // Calculate related_units for each activity
-    const activityUnitsMap = new Map<string, number>();
+    // Build batch updates - group by related_units value for efficiency
+    const updatesByRelatedUnits = new Map<number, string[]>();
     
     for (const activity of activities) {
-      if (!activity.uses_measurement) {
-        // If uses_measurement is false, related_units should be 0
-        activityUnitsMap.set(activity.id, 0);
-      } else if (activity.measurement_id) {
+      let relatedUnits = 0;
+      
+      if (activity.uses_measurement !== false && activity.measurement_id) {
         // Check if measurement has relations
         const relatedSum = relatedUnitsMap.get(activity.measurement_id);
         if (relatedSum !== undefined) {
-          activityUnitsMap.set(activity.id, relatedSum);
+          relatedUnits = relatedSum;
         } else {
           // Use measurement's own manual_units
-          activityUnitsMap.set(activity.id, measurementMap.get(activity.measurement_id) || 0);
+          relatedUnits = measurementMap.get(activity.measurement_id) || 0;
         }
-      } else {
-        // No measurement linked, related_units should be null/0
-        activityUnitsMap.set(activity.id, 0);
       }
+      
+      const existing = updatesByRelatedUnits.get(relatedUnits) || [];
+      existing.push(activity.id);
+      updatesByRelatedUnits.set(relatedUnits, existing);
     }
     
-    // Update resources for each activity
-    for (const [activityId, relatedUnits] of activityUnitsMap) {
-      const { error: updateError, count } = await supabase
-        .from('budget_activity_resources')
-        .update({ related_units: relatedUnits })
-        .eq('activity_id', activityId)
-        .select('id');
-      
-      if (updateError) {
-        console.error(`Error updating resources for activity ${activityId}:`, updateError);
-        errors++;
-      } else {
-        // Count isn't directly available, but we track success
-        updated++;
+    // Perform batch updates
+    for (const [relatedUnits, activityIds] of updatesByRelatedUnits) {
+      // Update in batches of 50 to avoid query limits
+      const batchSize = 50;
+      for (let i = 0; i < activityIds.length; i += batchSize) {
+        const batch = activityIds.slice(i, i + batchSize);
+        const { error: updateError } = await supabase
+          .from('budget_activity_resources')
+          .update({ related_units: relatedUnits })
+          .in('activity_id', batch);
+        
+        if (updateError) {
+          console.error(`Error updating resources batch:`, updateError);
+          errors++;
+        } else {
+          updated += batch.length;
+        }
       }
     }
     
@@ -292,5 +297,76 @@ export async function recalculateAllBudgetResources(budgetId: string): Promise<{
   } catch (error) {
     console.error('Error recalculating budget resources:', error);
     return { updated, errors: errors + 1 };
+  }
+}
+
+/**
+ * Sync related_units for resources of a specific activity.
+ * Call this when an activity's measurement_id changes or when saving resources.
+ */
+export async function syncActivityResourcesRelatedUnits(activityId: string): Promise<void> {
+  try {
+    // Get activity with its measurement_id and uses_measurement flag
+    const { data: activity, error: actError } = await supabase
+      .from('budget_activities')
+      .select('measurement_id, uses_measurement, budget_id')
+      .eq('id', activityId)
+      .single();
+    
+    if (actError || !activity) {
+      console.log('Activity not found:', activityId);
+      return;
+    }
+    
+    let relatedUnits: number | null = null;
+    
+    if (activity.uses_measurement !== false && activity.measurement_id) {
+      // Get the measurement and its relations
+      const { data: measurement, error: measError } = await supabase
+        .from('budget_measurements')
+        .select('id, manual_units')
+        .eq('id', activity.measurement_id)
+        .single();
+      
+      if (!measError && measurement) {
+        // Get relations for this measurement
+        const { data: relations, error: relError } = await supabase
+          .from('budget_measurement_relations')
+          .select('related_measurement_id')
+          .eq('measurement_id', measurement.id);
+        
+        if (!relError && relations && relations.length > 0) {
+          const relatedIds = relations.map(r => r.related_measurement_id);
+          const { data: relatedMeasurements, error: relMeasError } = await supabase
+            .from('budget_measurements')
+            .select('manual_units')
+            .in('id', relatedIds);
+          
+          if (!relMeasError && relatedMeasurements && relatedMeasurements.length > 0) {
+            relatedUnits = relatedMeasurements.reduce((sum, m) => sum + (m.manual_units || 0), 0);
+          } else {
+            relatedUnits = measurement.manual_units || 0;
+          }
+        } else {
+          relatedUnits = measurement.manual_units || 0;
+        }
+      }
+    } else {
+      relatedUnits = 0;
+    }
+    
+    // Update all resources linked to this activity
+    const { error: updateError } = await supabase
+      .from('budget_activity_resources')
+      .update({ related_units: relatedUnits })
+      .eq('activity_id', activityId);
+    
+    if (updateError) {
+      console.error('Error updating resources related_units for activity:', updateError);
+    } else {
+      console.log(`Synced related_units (${relatedUnits}) for activity ${activityId}`);
+    }
+  } catch (error) {
+    console.error('Error syncing activity resources related_units:', error);
   }
 }

@@ -22,6 +22,7 @@ import { BulkEditBar } from './BulkEditBar';
 import { ResourcesGroupedView } from './ResourcesGroupedView';
 import { ResourcesActivityGroupedView } from './ResourcesActivityGroupedView';
 import { useCompanySettings } from '@/hooks/useCompanySettings';
+import { usePermissions } from '@/hooks/usePermissions';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { format } from 'date-fns';
@@ -100,6 +101,7 @@ const UNITS = ['m2', 'm3', 'ml', 'ud', 'h', 'día', 'mes', 'kg', 'l', 'km'];
 
 export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetResourcesTabProps) {
   const { settings: companySettings } = useCompanySettings();
+  const permissions = usePermissions(budgetId);
   const [resources, setResources] = useState<BudgetResource[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
   const [phases, setPhases] = useState<Phase[]>([]);
@@ -1256,7 +1258,7 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
               resources={filteredResources}
               activities={activities}
               phases={phases}
-              isAdmin={isAdmin}
+              permissions={permissions}
               selectedIds={selectedIds}
               onToggleSelect={toggleSelect}
               onToggleSelectAll={toggleSelectAll}

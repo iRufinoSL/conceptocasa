@@ -85,11 +85,25 @@ function escapeHtml(text: string): string {
 
 const handler = async (req: Request): Promise<Response> => {
   const origin = req.headers.get("origin");
-  const corsHeaders = getCorsHeaders(origin);
+  const corsHeaders = {
+    ...getCorsHeaders(origin),
+    // Ensure caches don’t mix responses across origins
+    "Vary": "Origin",
+    // Basic hardening headers
+    "X-Content-Type-Options": "nosniff",
+  };
 
   // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
+  }
+
+  // Only allow POST
+  if (req.method !== "POST") {
+    return new Response(
+      JSON.stringify({ error: "Método no permitido" }),
+      { status: 405, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
   }
 
   // Validate origin - reject requests from unauthorized origins
@@ -102,31 +116,58 @@ const handler = async (req: Request): Promise<Response> => {
   }
 
   try {
+    // Enforce JSON requests
+    const contentType = req.headers.get("content-type") || "";
+    if (!contentType.toLowerCase().includes("application/json")) {
+      return new Response(
+        JSON.stringify({ error: "Content-Type debe ser application/json" }),
+        { status: 415, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     // Get client IP for rate limiting
-    const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || 
-               req.headers.get("x-real-ip") || 
+    const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+               req.headers.get("x-real-ip") ||
                "anonymous";
 
-    // Check rate limit
-    const rateLimit = checkRateLimit(ip);
+    // Check rate limit (keyed by IP+origin to reduce false positives behind NAT)
+    const rateLimitKey = `${ip}::${origin ?? ""}`;
+    const rateLimit = checkRateLimit(rateLimitKey);
     if (!rateLimit.allowed) {
       console.warn(`Rate limit exceeded for IP: ${ip}`);
       return new Response(
         JSON.stringify({ error: "Has enviado demasiados mensajes. Por favor, inténtalo de nuevo más tarde." }),
-        { 
-          status: 429, 
-          headers: { 
-            ...corsHeaders, 
+        {
+          status: 429,
+          headers: {
+            ...corsHeaders,
             "Content-Type": "application/json",
-            "Retry-After": "3600"
-          } 
+            "Retry-After": "3600",
+          },
         }
       );
     }
 
-    const { name, email, phone, subject, message }: ContactEmailRequest = await req.json();
+    let body: unknown;
+    try {
+      body = await req.json();
+    } catch {
+      return new Response(
+        JSON.stringify({ error: "JSON inválido" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
-    console.log("Received contact form submission from IP:", ip, "- Origin:", origin, "- Remaining requests:", rateLimit.remaining);
+    const { name, email, phone, subject, message }: ContactEmailRequest = body as ContactEmailRequest;
+
+    console.log(
+      "Received contact form submission from IP:",
+      ip,
+      "- Origin:",
+      origin,
+      "- Remaining requests:",
+      rateLimit.remaining
+    );
 
     // Validate required fields
     if (!name || !email || !phone || !message) {

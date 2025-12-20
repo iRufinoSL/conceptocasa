@@ -168,17 +168,46 @@ export default function Usuarios() {
     return Object.keys(errors).length === 0;
   };
 
+  const sendCredentialsEmail = async (email: string, name: string, password: string) => {
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      
+      if (!token) {
+        console.error('No auth token available');
+        return false;
+      }
+
+      const response = await supabase.functions.invoke('send-user-credentials', {
+        body: {
+          userEmail: email,
+          userName: name,
+          tempPassword: password,
+          loginUrl: `${window.location.origin}/auth`
+        }
+      });
+
+      if (response.error) {
+        console.error('Error sending credentials email:', response.error);
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Error invoking send-user-credentials:', error);
+      return false;
+    }
+  };
+
   const handleCreateUser = async () => {
     if (!validateCreateForm()) return;
     
     setIsCreating(true);
     try {
-      // First create the profile manually (admin creates user)
-      // Note: Full admin user creation requires Supabase Admin API
-      // For now, we create the profile and show instructions
+      // Store password before signup (we need it for the email)
+      const tempPassword = newPassword;
       
-      // Create user via signUp - but this will sign out the current admin!
-      // To avoid this, we need to use a different approach
+      // Create user via signUp
       const { data, error } = await supabase.auth.signUp({
         email: newEmail,
         password: newPassword,
@@ -205,23 +234,28 @@ export default function Usuarios() {
           console.error('Error assigning role:', roleError);
           toast.error('Usuario creado pero hubo un error al asignar el rol');
         }
-      }
 
-      toast.success(
-        'Usuario creado correctamente. El usuario recibirá un email de confirmación.',
-        { duration: 5000 }
-      );
-      
-      // Show info about credentials
-      toast.info(
-        `Credenciales asignadas:\nEmail: ${newEmail}\nContraseña: (la que definiste)\n\nComunica estos datos al usuario de forma segura.`,
-        { duration: 10000 }
-      );
+        // Send credentials email automatically
+        const emailSent = await sendCredentialsEmail(newEmail, newFullName, tempPassword);
+        
+        if (emailSent) {
+          toast.success(
+            'Usuario creado correctamente. Se ha enviado un email con las credenciales de acceso.',
+            { duration: 5000 }
+          );
+        } else {
+          toast.success('Usuario creado correctamente.', { duration: 3000 });
+          toast.warning(
+            `No se pudo enviar el email automáticamente. Comunica las credenciales manualmente:\nEmail: ${newEmail}\nContraseña: (la que definiste)`,
+            { duration: 10000 }
+          );
+        }
+      }
       
       setIsCreateOpen(false);
       resetCreateForm();
       
-      // Re-login admin if needed (signUp may have changed session)
+      // Refresh users list
       setTimeout(() => {
         fetchUsers();
       }, 500);

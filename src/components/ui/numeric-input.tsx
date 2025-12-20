@@ -180,25 +180,26 @@ const NumericInput = React.forwardRef<HTMLInputElement, NumericInputProps>(
     
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
       const inputValue = e.target.value;
-      
+
       // Allow empty input
       if (inputValue === '' || inputValue.trim() === '') {
         setDisplayValue('');
         onChange(allowNull ? null : 0);
         return;
       }
-      
+
       // Allow valid numeric input characters (digits, comma, period, minus, dots for thousands)
       const validPattern = /^-?[\d.,\s]*$/;
       if (!validPattern.test(inputValue)) {
         return;
       }
-      
+
       // Format with thousands separators while typing
+      // IMPORTANT: parse the formatted value (not the raw inputValue) to avoid cases like "2.0000" -> 2
       const formatted = formatWithThousands(inputValue, decimals);
       setDisplayValue(formatted);
-      
-      const numericValue = parseEuropeanNumber(inputValue);
+
+      const numericValue = parseEuropeanNumber(formatted);
       onChange(numericValue);
     };
     

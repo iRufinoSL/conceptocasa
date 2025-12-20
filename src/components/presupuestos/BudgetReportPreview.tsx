@@ -14,6 +14,7 @@ import { Switch } from '@/components/ui/switch';
 import { FileDown, Printer, X } from 'lucide-react';
 import { formatCurrency, formatNumber } from '@/lib/format-utils';
 import { calcResourceSubtotal } from '@/lib/budget-pricing';
+import { recalculateAllBudgetResources } from '@/lib/budget-utils';
 import { useCompanySettings } from '@/hooks/useCompanySettings';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -328,13 +329,31 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
     return phases.filter(p => phaseIdsWithCost.has(p.id));
   };
 
-  const handlePrint = () => {
+  const handlePrint = async () => {
+    try {
+      toast.message('Recalculando presupuesto…');
+      const result = await recalculateAllBudgetResources(presupuesto.id);
+      if (result.errors > 0) {
+        toast.warning('Recalculado con avisos. Revisa los recursos/mediciones.');
+      }
+    } catch (error) {
+      console.error('Error recalculando antes de imprimir:', error);
+      toast.error('No se pudo recalcular antes de imprimir');
+      return;
+    }
+
     window.print();
   };
 
   const exportToPDF = async () => {
     setIsExporting(true);
     try {
+      toast.message('Recalculando presupuesto…');
+      const result = await recalculateAllBudgetResources(presupuesto.id);
+      if (result.errors > 0) {
+        toast.warning('Recalculado con avisos. Revisa los recursos/mediciones.');
+      }
+
       const doc = new jsPDF();
       const pageWidth = doc.internal.pageSize.getWidth();
       const pageHeight = doc.internal.pageSize.getHeight();

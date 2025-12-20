@@ -12,6 +12,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { Plus, Trash2, Edit2, MapPin, List, Layers, ChevronDown, ChevronRight } from 'lucide-react';
 import { formatCurrency } from '@/lib/format-utils';
+import { calcResourceSubtotal } from '@/lib/budget-pricing';
 
 interface WorkArea {
   id: string;
@@ -109,14 +110,17 @@ export function BudgetWorkAreasTab({ budgetId, isAdmin }: BudgetWorkAreasTabProp
         // Get resources for those activities
         const { data: resources } = await supabase
           .from('budget_activity_resources')
-          .select('external_unit_cost, manual_units, safety_margin_percent, sales_margin_percent')
+          .select('external_unit_cost, manual_units, related_units, safety_margin_percent, sales_margin_percent')
           .in('activity_id', activityIds);
 
         const subtotal = (resources || []).reduce((sum, r) => {
-          const baseCost = (r.external_unit_cost || 0) * (r.manual_units || 0);
-          const withSafety = baseCost * (1 + (r.safety_margin_percent || 0) / 100);
-          const withMargin = withSafety * (1 + (r.sales_margin_percent || 0) / 100);
-          return sum + withMargin;
+          return sum + calcResourceSubtotal({
+            externalUnitCost: r.external_unit_cost,
+            safetyPercent: r.safety_margin_percent,
+            salesPercent: r.sales_margin_percent,
+            manualUnits: r.manual_units,
+            relatedUnits: r.related_units
+          });
         }, 0);
 
         return { ...area, resources_subtotal: subtotal };

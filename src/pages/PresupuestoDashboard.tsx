@@ -401,10 +401,12 @@ export default function PresupuestoDashboard() {
               <Home className="h-3.5 w-3.5" />
               <span className="hidden sm:inline">Espacios</span>
             </TabsTrigger>
-            <TabsTrigger value="resumen" className="flex items-center gap-1.5 text-xs px-2 py-1.5">
-              <Calculator className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Resumen</span>
-            </TabsTrigger>
+            {isAdmin && (
+              <TabsTrigger value="resumen" className="flex items-center gap-1.5 text-xs px-2 py-1.5">
+                <Calculator className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Resumen</span>
+              </TabsTrigger>
+            )}
             <TabsTrigger value="config" className="flex items-center gap-1.5 text-xs px-2 py-1.5">
               <Settings className="h-3.5 w-3.5" />
               <span className="hidden sm:inline">Config</span>

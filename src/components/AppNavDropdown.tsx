@@ -34,7 +34,7 @@ const navItems: NavItem[] = [
   { title: 'CRM', path: '/crm', icon: Users },
   { title: 'Agenda', path: '/agenda', icon: Calendar },
   { title: 'Documentos', path: '/documentos', icon: FileText },
-  { title: 'Recursos', path: '/recursos', icon: Package },
+  { title: 'Recursos', path: '/recursos', icon: Package, adminOnly: true },
   { title: 'Usuarios', path: '/usuarios', icon: Users, adminOnly: true },
   { title: 'Configuración', path: '/configuracion', icon: Settings, adminOnly: true },
 ];

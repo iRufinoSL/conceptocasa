@@ -85,6 +85,29 @@ interface Predesign {
   file_type: string | null;
 }
 
+interface Measurement {
+  id: string;
+  name: string;
+  manual_units: number | null;
+  measurement_unit: string | null;
+}
+
+interface MeasurementRelation {
+  id: string;
+  measurement_id: string;
+  related_measurement_id: string;
+}
+
+interface BudgetSpace {
+  id: string;
+  name: string;
+  space_type: string;
+  level: string;
+  m2_built: number | null;
+  m2_livable: number | null;
+  observations: string | null;
+}
+
 interface BudgetContactWithDetails {
   id: string;
   contact_id: string;
@@ -120,6 +143,9 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
   const [predesignUrls, setPredesignUrls] = useState<Map<string, string>>(new Map());
   const [filesCountMap, setFilesCountMap] = useState<Map<string, number>>(new Map());
   const [budgetContacts, setBudgetContacts] = useState<BudgetContactWithDetails[]>([]);
+  const [measurements, setMeasurements] = useState<Measurement[]>([]);
+  const [measurementRelations, setMeasurementRelations] = useState<MeasurementRelation[]>([]);
+  const [spaces, setSpaces] = useState<BudgetSpace[]>([]);
   const [selectedSections, setSelectedSections] = useState<string[]>(['activities']);
   const [customNotes, setCustomNotes] = useState<string>('');
   const [onlyWithCost, setOnlyWithCost] = useState(false);
@@ -138,7 +164,7 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [activitiesRes, phasesRes, resourcesRes, filesCountRes, predesignsRes, budgetContactsRes] = await Promise.all([
+      const [activitiesRes, phasesRes, resourcesRes, filesCountRes, predesignsRes, budgetContactsRes, measurementsRes, measurementRelationsRes, spacesRes] = await Promise.all([
         supabase
           .from('budget_activities')
           .select('id, name, code, description, measurement_unit, phase_id, measurement_id, start_date, duration_days, tolerance_days, end_date')
@@ -166,6 +192,19 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
           .from('budget_contacts')
           .select('id, contact_id, contact_role')
           .eq('budget_id', presupuesto.id),
+        supabase
+          .from('budget_measurements')
+          .select('id, name, manual_units, measurement_unit')
+          .eq('budget_id', presupuesto.id)
+          .order('name'),
+        supabase
+          .from('budget_measurement_relations')
+          .select('id, measurement_id, related_measurement_id'),
+        supabase
+          .from('budget_spaces')
+          .select('id, name, space_type, level, m2_built, m2_livable, observations')
+          .eq('budget_id', presupuesto.id)
+          .order('name'),
       ]);
 
       if (activitiesRes.error) throw activitiesRes.error;
@@ -176,6 +215,18 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
       setPhases(phasesRes.data || []);
       setResources(resourcesRes.data || []);
       setPredesigns(predesignsRes.data || []);
+      
+      // Set measurements and filter relations to this budget
+      const measurementsData = measurementsRes.data || [];
+      setMeasurements(measurementsData);
+      const measurementIds = measurementsData.map(m => m.id);
+      const filteredRelations = (measurementRelationsRes.data || []).filter(
+        r => measurementIds.includes(r.measurement_id)
+      );
+      setMeasurementRelations(filteredRelations);
+      
+      // Set spaces
+      setSpaces(spacesRes.data || []);
 
       // Load budget contacts with contact details
       if (budgetContactsRes.data && budgetContactsRes.data.length > 0) {
@@ -293,6 +344,9 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
     if (selectedSections.includes('resources')) names.push('Recursos');
     if (selectedSections.includes('time-phases')) names.push('Gestión Tiempo Fases');
     if (selectedSections.includes('time-activities')) names.push('Gestión Tiempo Actividades');
+    if (selectedSections.includes('measurements')) names.push('Mediciones');
+    if (selectedSections.includes('spaces-alphabetical')) names.push('Espacios Alfabético');
+    if (selectedSections.includes('spaces-grouped')) names.push('Espacios por Nivel/Tipo');
     return names.length > 0 ? names.join(' + ') : 'Resumen General';
   };
 
@@ -309,6 +363,115 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
       groups[key].sort((a, b) => a.content.localeCompare(b.content, 'es'));
     });
     return groups;
+  };
+
+  // Measurements helper functions
+  const getRelatedUnits = (measurementId: string): number => {
+    const relatedIds = measurementRelations
+      .filter(r => r.measurement_id === measurementId)
+      .map(r => r.related_measurement_id);
+    
+    return relatedIds.reduce((sum, relId) => {
+      const relMeasurement = measurements.find(m => m.id === relId);
+      return sum + (relMeasurement?.manual_units || 0);
+    }, 0);
+  };
+
+  const getCalculatedUnits = (measurement: Measurement): number => {
+    const relatedUnits = getRelatedUnits(measurement.id);
+    if (relatedUnits > 0) {
+      return relatedUnits;
+    }
+    return measurement.manual_units || 0;
+  };
+
+  const getRelatedActivitiesForMeasurement = (measurementId: string) => {
+    return activities.filter(a => a.measurement_id === measurementId);
+  };
+
+  const generateMeasurementId = (measurement: Measurement): string => {
+    const udsCalculo = getCalculatedUnits(measurement);
+    const unit = measurement.measurement_unit || 'ud';
+    const relatedActivities = getRelatedActivitiesForMeasurement(measurement.id);
+    
+    if (relatedActivities.length === 0) {
+      return `${formatNumber(udsCalculo)}/${unit}: Sin actividad`;
+    }
+    
+    const activityNames = relatedActivities.map(a => {
+      const phase = phases.find(p => p.id === a.phase_id);
+      const phaseCode = phase?.code || '';
+      return `${phaseCode} ${a.code}.-${a.name}`;
+    }).join(', ');
+    
+    return `${formatNumber(udsCalculo)}/${unit}: ${activityNames}`;
+  };
+
+  // Spaces helper functions
+  const LEVELS_ORDER = ['Sótano', 'Planta Baja', 'Nivel 1', 'Nivel 2', 'Nivel 3', 'Nivel 4', 'Cubierta', 'Ático'];
+  
+  const getM2Construction = (space: BudgetSpace): number => {
+    const built = space.m2_built || 0;
+    const livable = space.m2_livable || 0;
+    return built - livable;
+  };
+
+  const spacesTotals = spaces.reduce(
+    (acc, space) => ({
+      m2_built: acc.m2_built + (space.m2_built || 0),
+      m2_livable: acc.m2_livable + (space.m2_livable || 0),
+      m2_construction: acc.m2_construction + getM2Construction(space)
+    }),
+    { m2_built: 0, m2_livable: 0, m2_construction: 0 }
+  );
+
+  const getSpacesByLevelAndType = () => {
+    const grouped: Record<string, Record<string, BudgetSpace[]>> = {};
+    
+    spaces.forEach(space => {
+      if (!grouped[space.level]) {
+        grouped[space.level] = {};
+      }
+      if (!grouped[space.level][space.space_type]) {
+        grouped[space.level][space.space_type] = [];
+      }
+      grouped[space.level][space.space_type].push(space);
+    });
+    
+    // Sort by LEVELS order
+    const sortedGrouped: Record<string, Record<string, BudgetSpace[]>> = {};
+    LEVELS_ORDER.forEach(level => {
+      if (grouped[level]) {
+        sortedGrouped[level] = {};
+        Object.keys(grouped[level]).sort().forEach(type => {
+          sortedGrouped[level][type] = grouped[level][type].sort((a, b) => a.name.localeCompare(b.name));
+        });
+      }
+    });
+    
+    // Add any custom levels not in the predefined list
+    Object.keys(grouped).forEach(level => {
+      if (!sortedGrouped[level]) {
+        sortedGrouped[level] = {};
+        Object.keys(grouped[level]).sort().forEach(type => {
+          sortedGrouped[level][type] = grouped[level][type].sort((a, b) => a.name.localeCompare(b.name));
+        });
+      }
+    });
+    
+    return sortedGrouped;
+  };
+
+  const getLevelTotals = (levelData: Record<string, BudgetSpace[]>) => {
+    const allSpaces = Object.values(levelData).flat();
+    return allSpaces.reduce(
+      (acc, space) => ({
+        m2_built: acc.m2_built + (space.m2_built || 0),
+        m2_livable: acc.m2_livable + (space.m2_livable || 0),
+        m2_construction: acc.m2_construction + getM2Construction(space)
+      }),
+      { m2_built: 0, m2_livable: 0, m2_construction: 0 }
+    );
   };
 
   // Filter functions for onlyWithCost
@@ -1261,17 +1424,204 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
         }
       }
 
+      // Section: Measurements List (only if selected) - A4 Landscape
+      if (selectedSections.includes('measurements') && measurements.length > 0) {
+        doc.addPage('landscape');
+        const landscapeWidth = doc.internal.pageSize.getWidth();
+        yPos = 20;
+        
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(37, 99, 235);
+        doc.text('2. LISTADO DE MEDICIONES', 14, yPos);
+        doc.setTextColor(0);
+
+        yPos += 10;
+
+        const measurementsData: any[] = [];
+        
+        [...measurements].sort((a, b) => a.name.localeCompare(b.name)).forEach(measurement => {
+          measurementsData.push([
+            measurement.name,
+            formatNumber(measurement.manual_units || 0),
+            measurement.measurement_unit || 'ud',
+            formatNumber(getCalculatedUnits(measurement)),
+            generateMeasurementId(measurement)
+          ]);
+        });
+
+        // Total row
+        measurementsData.push([
+          { content: 'TOTAL MEDICIONES', colSpan: 3, styles: { fillColor: [219, 234, 254], fontStyle: 'bold', halign: 'right' } },
+          { content: measurements.length.toString(), styles: { fillColor: [219, 234, 254], fontStyle: 'bold', halign: 'right' } },
+          { content: '', styles: { fillColor: [219, 234, 254] } }
+        ]);
+
+        // Calculate proportional column widths for landscape A4 (297mm - 28mm margins = 269mm usable)
+        const usableWidth = landscapeWidth - 28;
+        autoTable(doc, {
+          startY: yPos,
+          head: [['Nombre', 'Uds. Manual', 'Unidad', 'Uds. Cálculo', 'MediciónID']],
+          body: measurementsData,
+          theme: 'striped',
+          headStyles: { fillColor: [59, 130, 246] },
+          margin: { left: 14, right: 14 },
+          styles: { fontSize: 9, cellPadding: 3, overflow: 'linebreak' },
+          columnStyles: {
+            0: { cellWidth: usableWidth * 0.20 },
+            1: { cellWidth: usableWidth * 0.10, halign: 'right' },
+            2: { cellWidth: usableWidth * 0.08, halign: 'center' },
+            3: { cellWidth: usableWidth * 0.10, halign: 'right' },
+            4: { cellWidth: usableWidth * 0.52 },
+          },
+        });
+      }
+
+      // Section: Spaces List Alphabetical (only if selected) - A4 Landscape
+      if (selectedSections.includes('spaces-alphabetical') && spaces.length > 0) {
+        doc.addPage('landscape');
+        const landscapeWidth = doc.internal.pageSize.getWidth();
+        yPos = 20;
+        
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(37, 99, 235);
+        doc.text('2. LISTADO DE ESPACIOS (ALFABÉTICO)', 14, yPos);
+        doc.setTextColor(0);
+
+        yPos += 10;
+
+        const spacesAlphaData: any[] = [];
+        
+        [...spaces].sort((a, b) => a.name.localeCompare(b.name)).forEach(space => {
+          spacesAlphaData.push([
+            space.name,
+            space.space_type,
+            space.level,
+            formatNumber(space.m2_built || 0),
+            formatNumber(space.m2_livable || 0),
+            formatNumber(getM2Construction(space))
+          ]);
+        });
+
+        // Total row
+        spacesAlphaData.push([
+          { content: 'TOTAL', colSpan: 3, styles: { fillColor: [219, 234, 254], fontStyle: 'bold', halign: 'right' } },
+          { content: formatNumber(spacesTotals.m2_built), styles: { fillColor: [219, 234, 254], fontStyle: 'bold', halign: 'right' } },
+          { content: formatNumber(spacesTotals.m2_livable), styles: { fillColor: [219, 234, 254], fontStyle: 'bold', halign: 'right' } },
+          { content: formatNumber(spacesTotals.m2_construction), styles: { fillColor: [219, 234, 254], fontStyle: 'bold', halign: 'right' } }
+        ]);
+
+        // Calculate proportional column widths for landscape A4
+        const usableWidth = landscapeWidth - 28;
+        autoTable(doc, {
+          startY: yPos,
+          head: [['Nombre', 'Tipo', 'Nivel', 'm² Construidos', 'm² Habitables', 'm² Construcción']],
+          body: spacesAlphaData,
+          theme: 'striped',
+          headStyles: { fillColor: [59, 130, 246] },
+          margin: { left: 14, right: 14 },
+          styles: { fontSize: 9, cellPadding: 3, overflow: 'linebreak' },
+          columnStyles: {
+            0: { cellWidth: usableWidth * 0.25 },
+            1: { cellWidth: usableWidth * 0.18 },
+            2: { cellWidth: usableWidth * 0.15 },
+            3: { cellWidth: usableWidth * 0.14, halign: 'right' },
+            4: { cellWidth: usableWidth * 0.14, halign: 'right' },
+            5: { cellWidth: usableWidth * 0.14, halign: 'right' },
+          },
+        });
+      }
+
+      // Section: Spaces List Grouped (only if selected) - A4 Landscape
+      if (selectedSections.includes('spaces-grouped') && spaces.length > 0) {
+        doc.addPage('landscape');
+        const landscapeWidth = doc.internal.pageSize.getWidth();
+        yPos = 20;
+        
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(37, 99, 235);
+        doc.text('2. LISTADO DE ESPACIOS (POR NIVEL/TIPO)', 14, yPos);
+        doc.setTextColor(0);
+
+        yPos += 10;
+
+        const spacesGroupedData: any[] = [];
+        const groupedSpaces = getSpacesByLevelAndType();
+        
+        Object.entries(groupedSpaces).forEach(([level, typeData]) => {
+          const levelTotals = getLevelTotals(typeData);
+          
+          // Level header row
+          spacesGroupedData.push([
+            { content: level, colSpan: 3, styles: { fillColor: [59, 130, 246], textColor: [255, 255, 255], fontStyle: 'bold' } },
+            { content: formatNumber(levelTotals.m2_built), styles: { fillColor: [59, 130, 246], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'right' } },
+            { content: formatNumber(levelTotals.m2_livable), styles: { fillColor: [59, 130, 246], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'right' } },
+            { content: formatNumber(levelTotals.m2_construction), styles: { fillColor: [59, 130, 246], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'right' } }
+          ]);
+          
+          Object.entries(typeData).forEach(([type, typeSpaces]) => {
+            // Type subheader
+            spacesGroupedData.push([
+              { content: `  ${type}`, colSpan: 6, styles: { fillColor: [240, 240, 240], fontStyle: 'italic' } }
+            ]);
+            
+            typeSpaces.forEach(space => {
+              spacesGroupedData.push([
+                `    ${space.name}`,
+                space.space_type,
+                space.level,
+                formatNumber(space.m2_built || 0),
+                formatNumber(space.m2_livable || 0),
+                formatNumber(getM2Construction(space))
+              ]);
+            });
+          });
+        });
+
+        // Grand total row
+        spacesGroupedData.push([
+          { content: 'TOTAL GENERAL', colSpan: 3, styles: { fillColor: [34, 197, 94], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'right' } },
+          { content: formatNumber(spacesTotals.m2_built), styles: { fillColor: [34, 197, 94], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'right' } },
+          { content: formatNumber(spacesTotals.m2_livable), styles: { fillColor: [34, 197, 94], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'right' } },
+          { content: formatNumber(spacesTotals.m2_construction), styles: { fillColor: [34, 197, 94], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'right' } }
+        ]);
+
+        // Calculate proportional column widths for landscape A4
+        const usableWidth = landscapeWidth - 28;
+        autoTable(doc, {
+          startY: yPos,
+          head: [['Nombre', 'Tipo', 'Nivel', 'm² Construidos', 'm² Habitables', 'm² Construcción']],
+          body: spacesGroupedData,
+          theme: 'striped',
+          headStyles: { fillColor: [59, 130, 246] },
+          margin: { left: 14, right: 14 },
+          styles: { fontSize: 9, cellPadding: 3, overflow: 'linebreak' },
+          columnStyles: {
+            0: { cellWidth: usableWidth * 0.25 },
+            1: { cellWidth: usableWidth * 0.18 },
+            2: { cellWidth: usableWidth * 0.15 },
+            3: { cellWidth: usableWidth * 0.14, halign: 'right' },
+            4: { cellWidth: usableWidth * 0.14, halign: 'right' },
+            5: { cellWidth: usableWidth * 0.14, halign: 'right' },
+          },
+        });
+      }
+
       // Footer
       const pageCount = doc.getNumberOfPages();
       for (let i = 1; i <= pageCount; i++) {
         doc.setPage(i);
+        const currentPageWidth = doc.internal.pageSize.getWidth();
+        const currentPageHeight = doc.internal.pageSize.getHeight();
         doc.setDrawColor(200);
-        doc.line(14, pageHeight - 20, pageWidth - 14, pageHeight - 20);
+        doc.line(14, currentPageHeight - 20, currentPageWidth - 14, currentPageHeight - 20);
         doc.setFontSize(7);
         doc.setTextColor(120);
         const footerInfo = [companyName, companyEmail, companyPhone].filter(Boolean).join(' | ');
-        doc.text(footerInfo, 14, pageHeight - 14);
-        doc.text(`Página ${i} de ${pageCount}`, pageWidth - 14, pageHeight - 14, { align: 'right' });
+        doc.text(footerInfo, 14, currentPageHeight - 14);
+        doc.text(`Página ${i} de ${pageCount}`, currentPageWidth - 14, currentPageHeight - 14, { align: 'right' });
       }
 
       const sectionSuffixes: string[] = [];
@@ -1280,6 +1630,9 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
       if (selectedSections.includes('resources')) sectionSuffixes.push('recursos');
       if (selectedSections.includes('time-phases')) sectionSuffixes.push('tiempo_fases');
       if (selectedSections.includes('time-activities')) sectionSuffixes.push('tiempo_actividades');
+      if (selectedSections.includes('measurements')) sectionSuffixes.push('mediciones');
+      if (selectedSections.includes('spaces-alphabetical')) sectionSuffixes.push('espacios_alfa');
+      if (selectedSections.includes('spaces-grouped')) sectionSuffixes.push('espacios_nivel');
       const sectionSuffix = sectionSuffixes.length > 0 ? sectionSuffixes.join('_') : 'informe';
       const fileName = `presupuesto_${sectionSuffix}_${presupuesto.nombre.replace(/[^a-zA-Z0-9]/g, '_')}_${format(new Date(), 'yyyyMMdd')}.pdf`;
       doc.save(fileName);
@@ -1385,6 +1738,48 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
                   }}
                 />
                 <Label htmlFor="time-activities" className="cursor-pointer text-sm">Tiempo por Actividades</Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <Checkbox 
+                  id="measurements" 
+                  checked={selectedSections.includes('measurements')}
+                  onCheckedChange={(checked) => {
+                    if (checked) {
+                      setSelectedSections(prev => [...prev, 'measurements']);
+                    } else {
+                      setSelectedSections(prev => prev.filter(s => s !== 'measurements'));
+                    }
+                  }}
+                />
+                <Label htmlFor="measurements" className="cursor-pointer text-sm">Listado de Mediciones</Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <Checkbox 
+                  id="spaces-alphabetical" 
+                  checked={selectedSections.includes('spaces-alphabetical')}
+                  onCheckedChange={(checked) => {
+                    if (checked) {
+                      setSelectedSections(prev => [...prev, 'spaces-alphabetical']);
+                    } else {
+                      setSelectedSections(prev => prev.filter(s => s !== 'spaces-alphabetical'));
+                    }
+                  }}
+                />
+                <Label htmlFor="spaces-alphabetical" className="cursor-pointer text-sm">Espacios (Alfabético)</Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <Checkbox 
+                  id="spaces-grouped" 
+                  checked={selectedSections.includes('spaces-grouped')}
+                  onCheckedChange={(checked) => {
+                    if (checked) {
+                      setSelectedSections(prev => [...prev, 'spaces-grouped']);
+                    } else {
+                      setSelectedSections(prev => prev.filter(s => s !== 'spaces-grouped'));
+                    }
+                  }}
+                />
+                <Label htmlFor="spaces-grouped" className="cursor-pointer text-sm">Espacios (Nivel/Tipo)</Label>
               </div>
             </div>
             
@@ -1513,6 +1908,24 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
                     {selectedSections.includes('time-activities') && (
                       <div className="flex justify-between">
                         <span>2. Gestión del Tiempo por Actividades</span>
+                        <span className="text-muted-foreground text-xs">Pág. 3</span>
+                      </div>
+                    )}
+                    {selectedSections.includes('measurements') && (
+                      <div className="flex justify-between">
+                        <span>2. Listado de Mediciones</span>
+                        <span className="text-muted-foreground text-xs">Pág. 3</span>
+                      </div>
+                    )}
+                    {selectedSections.includes('spaces-alphabetical') && (
+                      <div className="flex justify-between">
+                        <span>2. Listado de Espacios (Alfabético)</span>
+                        <span className="text-muted-foreground text-xs">Pág. 3</span>
+                      </div>
+                    )}
+                    {selectedSections.includes('spaces-grouped') && (
+                      <div className="flex justify-between">
+                        <span>2. Listado de Espacios (Por Nivel/Tipo)</span>
                         <span className="text-muted-foreground text-xs">Pág. 3</span>
                       </div>
                     )}
@@ -1906,6 +2319,177 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
                     </div>
                   </div>
                 ))}
+              </div>
+              )}
+
+              {/* Section: Measurements List - only if selected */}
+              {selectedSections.includes('measurements') && (
+              <div className="print-section">
+                <h3 className="text-lg font-bold text-primary mb-4">2. LISTADO DE MEDICIONES</h3>
+                
+                <div className="border rounded-lg overflow-hidden">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-primary/10">
+                        <TableHead className="font-bold">Nombre</TableHead>
+                        <TableHead className="font-bold w-24 text-right">Uds. Manual</TableHead>
+                        <TableHead className="font-bold w-20 text-center">Unidad</TableHead>
+                        <TableHead className="font-bold w-24 text-right">Uds. Cálculo</TableHead>
+                        <TableHead className="font-bold">MediciónID</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {measurements.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                            No hay mediciones registradas
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        <>
+                          {[...measurements].sort((a, b) => a.name.localeCompare(b.name)).map(measurement => (
+                            <TableRow key={measurement.id}>
+                              <TableCell className="font-medium">{measurement.name}</TableCell>
+                              <TableCell className="text-right font-mono">{formatNumber(measurement.manual_units || 0)}</TableCell>
+                              <TableCell className="text-center">{measurement.measurement_unit || 'ud'}</TableCell>
+                              <TableCell className="text-right font-mono">{formatNumber(getCalculatedUnits(measurement))}</TableCell>
+                              <TableCell className="text-sm">{generateMeasurementId(measurement)}</TableCell>
+                            </TableRow>
+                          ))}
+                          <TableRow className="bg-primary/10 font-bold">
+                            <TableCell colSpan={3} className="font-bold">TOTAL MEDICIONES</TableCell>
+                            <TableCell className="text-right font-bold">{measurements.length}</TableCell>
+                            <TableCell></TableCell>
+                          </TableRow>
+                        </>
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+              )}
+
+              {/* Section: Spaces List Alphabetical - only if selected */}
+              {selectedSections.includes('spaces-alphabetical') && (
+              <div className="print-section">
+                <h3 className="text-lg font-bold text-primary mb-4">2. LISTADO DE ESPACIOS (ALFABÉTICO)</h3>
+                
+                <div className="border rounded-lg overflow-hidden">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-primary/10">
+                        <TableHead className="font-bold">Nombre</TableHead>
+                        <TableHead className="font-bold">Tipo</TableHead>
+                        <TableHead className="font-bold">Nivel</TableHead>
+                        <TableHead className="font-bold w-24 text-right">m² Construidos</TableHead>
+                        <TableHead className="font-bold w-24 text-right">m² Habitables</TableHead>
+                        <TableHead className="font-bold w-24 text-right">m² Construcción</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {spaces.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                            No hay espacios registrados
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        <>
+                          {[...spaces].sort((a, b) => a.name.localeCompare(b.name)).map(space => (
+                            <TableRow key={space.id}>
+                              <TableCell className="font-medium">{space.name}</TableCell>
+                              <TableCell>{space.space_type}</TableCell>
+                              <TableCell>{space.level}</TableCell>
+                              <TableCell className="text-right font-mono">{formatNumber(space.m2_built || 0)}</TableCell>
+                              <TableCell className="text-right font-mono">{formatNumber(space.m2_livable || 0)}</TableCell>
+                              <TableCell className="text-right font-mono">{formatNumber(getM2Construction(space))}</TableCell>
+                            </TableRow>
+                          ))}
+                          <TableRow className="bg-primary/10 font-bold">
+                            <TableCell colSpan={3}>TOTAL</TableCell>
+                            <TableCell className="text-right">{formatNumber(spacesTotals.m2_built)}</TableCell>
+                            <TableCell className="text-right">{formatNumber(spacesTotals.m2_livable)}</TableCell>
+                            <TableCell className="text-right">{formatNumber(spacesTotals.m2_construction)}</TableCell>
+                          </TableRow>
+                        </>
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+              )}
+
+              {/* Section: Spaces List by Level/Type - only if selected */}
+              {selectedSections.includes('spaces-grouped') && (
+              <div className="print-section">
+                <h3 className="text-lg font-bold text-primary mb-4">2. LISTADO DE ESPACIOS (POR NIVEL/TIPO)</h3>
+                
+                <div className="border rounded-lg overflow-hidden">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-primary/10">
+                        <TableHead className="font-bold">Nombre</TableHead>
+                        <TableHead className="font-bold">Tipo</TableHead>
+                        <TableHead className="font-bold">Nivel</TableHead>
+                        <TableHead className="font-bold w-24 text-right">m² Construidos</TableHead>
+                        <TableHead className="font-bold w-24 text-right">m² Habitables</TableHead>
+                        <TableHead className="font-bold w-24 text-right">m² Construcción</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {spaces.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                            No hay espacios registrados
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        <>
+                          {Object.entries(getSpacesByLevelAndType()).map(([level, typeData]) => {
+                            const levelTotals = getLevelTotals(typeData);
+                            return (
+                              <React.Fragment key={`level-${level}`}>
+                                {/* Level Header */}
+                                <TableRow className="bg-primary text-primary-foreground">
+                                  <TableCell colSpan={3} className="font-bold">{level}</TableCell>
+                                  <TableCell className="text-right font-bold">{formatNumber(levelTotals.m2_built)}</TableCell>
+                                  <TableCell className="text-right font-bold">{formatNumber(levelTotals.m2_livable)}</TableCell>
+                                  <TableCell className="text-right font-bold">{formatNumber(levelTotals.m2_construction)}</TableCell>
+                                </TableRow>
+                                
+                                {/* Types within Level */}
+                                {Object.entries(typeData).map(([type, typeSpaces]) => (
+                                  <React.Fragment key={`type-${level}-${type}`}>
+                                    {/* Type SubHeader */}
+                                    <TableRow className="bg-muted/50">
+                                      <TableCell colSpan={6} className="font-semibold text-muted-foreground pl-6">{type}</TableCell>
+                                    </TableRow>
+                                    {typeSpaces.map(space => (
+                                      <TableRow key={space.id}>
+                                        <TableCell className="pl-10 font-medium">{space.name}</TableCell>
+                                        <TableCell>{space.space_type}</TableCell>
+                                        <TableCell>{space.level}</TableCell>
+                                        <TableCell className="text-right font-mono">{formatNumber(space.m2_built || 0)}</TableCell>
+                                        <TableCell className="text-right font-mono">{formatNumber(space.m2_livable || 0)}</TableCell>
+                                        <TableCell className="text-right font-mono">{formatNumber(getM2Construction(space))}</TableCell>
+                                      </TableRow>
+                                    ))}
+                                  </React.Fragment>
+                                ))}
+                              </React.Fragment>
+                            );
+                          })}
+                          <TableRow className="bg-green-500 text-white font-bold">
+                            <TableCell colSpan={3}>TOTAL GENERAL</TableCell>
+                            <TableCell className="text-right">{formatNumber(spacesTotals.m2_built)}</TableCell>
+                            <TableCell className="text-right">{formatNumber(spacesTotals.m2_livable)}</TableCell>
+                            <TableCell className="text-right">{formatNumber(spacesTotals.m2_construction)}</TableCell>
+                          </TableRow>
+                        </>
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
               </div>
               )}
 

@@ -193,7 +193,7 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
           if (!affectedActivities || affectedActivities.length === 0) return;
           
           const activityIds = affectedActivities
-            .filter(a => a.uses_measurement)
+            .filter(a => a.uses_measurement !== false)
             .map(a => a.id);
           
           if (activityIds.length === 0) return;
@@ -246,7 +246,7 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
           if (!affectedActivities || affectedActivities.length === 0) return;
           
           const activityIds = affectedActivities
-            .filter(a => a.uses_measurement)
+            .filter(a => a.uses_measurement !== false)
             .map(a => a.id);
           
           if (activityIds.length === 0) return;

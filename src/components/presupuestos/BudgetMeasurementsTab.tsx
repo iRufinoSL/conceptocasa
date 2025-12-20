@@ -8,8 +8,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
-import { Plus, Search, Edit, Trash2, Ruler, Link2, Upload, FileUp, X, Download, Copy } from 'lucide-react';
+import { Plus, Search, Edit, Trash2, Ruler, Link2, Upload, FileUp, X, Download, Copy, List, Layers } from 'lucide-react';
 import { formatNumber } from '@/lib/format-utils';
 import { searchMatch } from '@/lib/search-utils';
 import { NumericInput } from '@/components/ui/numeric-input';
@@ -17,6 +18,7 @@ import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ResourceInlineEdit } from '@/components/presupuestos/ResourceInlineEdit';
 import { MeasurementMultiSelect } from '@/components/presupuestos/MeasurementMultiSelect';
+import { MeasurementsWorkAreaGroupedView } from '@/components/presupuestos/MeasurementsWorkAreaGroupedView';
 import { syncAllAffectedResources, syncResourcesRelatedUnits } from '@/lib/budget-utils';
 import * as XLSX from 'xlsx';
 
@@ -54,6 +56,18 @@ interface Phase {
   code: string | null;
 }
 
+interface WorkArea {
+  id: string;
+  name: string;
+  level: string;
+  work_area: string;
+}
+
+interface WorkAreaMeasurement {
+  work_area_id: string;
+  measurement_id: string;
+}
+
 interface BudgetMeasurementsTabProps {
   budgetId: string;
   isAdmin: boolean;
@@ -66,8 +80,11 @@ export function BudgetMeasurementsTab({ budgetId, isAdmin }: BudgetMeasurementsT
   const [relations, setRelations] = useState<MeasurementRelation[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
   const [phases, setPhases] = useState<Phase[]>([]);
+  const [workAreas, setWorkAreas] = useState<WorkArea[]>([]);
+  const [workAreaMeasurements, setWorkAreaMeasurements] = useState<WorkAreaMeasurement[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [viewMode, setViewMode] = useState<'alphabetic' | 'grouped'>('alphabetic');
   
   // Form states
   const [formOpen, setFormOpen] = useState(false);
@@ -109,17 +126,21 @@ export function BudgetMeasurementsTab({ budgetId, isAdmin }: BudgetMeasurementsT
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [measurementsRes, relationsRes, activitiesRes, phasesRes] = await Promise.all([
+      const [measurementsRes, relationsRes, activitiesRes, phasesRes, workAreasRes, workAreaMeasurementsRes] = await Promise.all([
         supabase.from('budget_measurements').select('*').eq('budget_id', budgetId).order('name'),
         supabase.from('budget_measurement_relations').select('*'),
         supabase.from('budget_activities').select('id, name, code, phase_id, measurement_id').eq('budget_id', budgetId),
-        supabase.from('budget_phases').select('id, name, code').eq('budget_id', budgetId)
+        supabase.from('budget_phases').select('id, name, code').eq('budget_id', budgetId),
+        supabase.from('budget_work_areas').select('id, name, level, work_area').eq('budget_id', budgetId),
+        supabase.from('budget_work_area_measurements').select('work_area_id, measurement_id')
       ]);
 
       if (measurementsRes.error) throw measurementsRes.error;
       if (relationsRes.error) throw relationsRes.error;
       if (activitiesRes.error) throw activitiesRes.error;
       if (phasesRes.error) throw phasesRes.error;
+      if (workAreasRes.error) throw workAreasRes.error;
+      if (workAreaMeasurementsRes.error) throw workAreaMeasurementsRes.error;
 
       setMeasurements(measurementsRes.data || []);
       
@@ -131,6 +152,13 @@ export function BudgetMeasurementsTab({ budgetId, isAdmin }: BudgetMeasurementsT
       setRelations(filteredRelations);
       setActivities(activitiesRes.data || []);
       setPhases(phasesRes.data || []);
+      setWorkAreas(workAreasRes.data || []);
+      
+      // Filter work area measurements to only those belonging to this budget's measurements
+      const filteredWaMeasurements = (workAreaMeasurementsRes.data || []).filter(
+        wam => measurementIds.includes(wam.measurement_id)
+      );
+      setWorkAreaMeasurements(filteredWaMeasurements);
     } catch (error) {
       console.error('Error fetching data:', error);
       toast.error('Error al cargar las mediciones');
@@ -969,9 +997,21 @@ export function BudgetMeasurementsTab({ budgetId, isAdmin }: BudgetMeasurementsT
           </div>
         </CardHeader>
         <CardContent>
-          {/* Search */}
-          <div className="mb-4">
-            <div className="relative">
+          {/* View Mode Tabs + Search */}
+          <div className="flex flex-col sm:flex-row sm:items-center gap-4 mb-4">
+            <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as 'alphabetic' | 'grouped')} className="w-auto">
+              <TabsList>
+                <TabsTrigger value="alphabetic" className="flex items-center gap-2">
+                  <List className="h-4 w-4" />
+                  Alfabético
+                </TabsTrigger>
+                <TabsTrigger value="grouped" className="flex items-center gap-2">
+                  <Layers className="h-4 w-4" />
+                  Por Área
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
+            <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Buscar mediciones..."
@@ -982,8 +1022,28 @@ export function BudgetMeasurementsTab({ budgetId, isAdmin }: BudgetMeasurementsT
             </div>
           </div>
 
-          {/* Table */}
-          {filteredMeasurements.length === 0 ? (
+          {/* Grouped View */}
+          {viewMode === 'grouped' ? (
+            <MeasurementsWorkAreaGroupedView
+              measurements={filteredMeasurements}
+              relations={relations}
+              workAreas={workAreas}
+              workAreaMeasurements={workAreaMeasurements}
+              activities={activities}
+              isAdmin={isAdmin}
+              onEdit={openEditForm}
+              onDuplicate={handleDuplicate}
+              onDelete={(m) => {
+                setMeasurementToDelete(m);
+                setDeleteDialogOpen(true);
+              }}
+              getRelatedUnits={getRelatedUnits}
+              getCalculatedUnits={getCalculatedUnits}
+              getRelatedMeasurements={getRelatedMeasurements}
+              getRelatedActivities={getRelatedActivities}
+              generateMedicionId={generateMedicionId}
+            />
+          ) : filteredMeasurements.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground">
               {searchTerm ? 'No se encontraron mediciones' : 'No hay mediciones. Crea la primera.'}
             </div>

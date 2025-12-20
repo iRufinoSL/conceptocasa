@@ -754,10 +754,10 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
     }
   };
 
-  // Duplicate activity with all related files
+  // Duplicate activity with all related files and resources
   const handleDuplicate = async (activity: BudgetActivity) => {
     try {
-      // Create duplicated activity
+      // Create duplicated activity - including measurement_id and uses_measurement
       const { data: newActivity, error: activityError } = await supabase
         .from('budget_activities')
         .insert({
@@ -766,6 +766,8 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
           code: `${activity.code}-C`,
           description: activity.description,
           measurement_unit: activity.measurement_unit,
+          measurement_id: activity.measurement_id, // Keep measurement relation
+          uses_measurement: activity.uses_measurement, // Keep uses_measurement flag
           phase_id: activity.phase_id,
           start_date: activity.start_date,
           duration_days: activity.duration_days,
@@ -775,6 +777,39 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
         .single();
 
       if (activityError) throw activityError;
+
+      // Get resources from original activity
+      const { data: originalResources, error: resourcesError } = await supabase
+        .from('budget_activity_resources')
+        .select('*')
+        .eq('activity_id', activity.id);
+
+      if (resourcesError) throw resourcesError;
+
+      // Duplicate resources if any
+      if (originalResources && originalResources.length > 0) {
+        const resourcesToInsert = originalResources.map(resource => ({
+          budget_id: budgetId,
+          activity_id: newActivity.id,
+          name: `${resource.name} (copia)`,
+          description: resource.description,
+          resource_type: resource.resource_type,
+          unit: resource.unit,
+          manual_units: resource.manual_units,
+          related_units: resource.related_units,
+          external_unit_cost: resource.external_unit_cost,
+          safety_margin_percent: resource.safety_margin_percent,
+          sales_margin_percent: resource.sales_margin_percent
+        }));
+
+        const { error: insertResourcesError } = await supabase
+          .from('budget_activity_resources')
+          .insert(resourcesToInsert);
+
+        if (insertResourcesError) {
+          console.error('Error duplicating resources:', insertResourcesError);
+        }
+      }
 
       // Get files from original activity
       const { data: files, error: filesError } = await supabase
@@ -823,7 +858,7 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
         }
       }
 
-      toast.success('Actividad duplicada');
+      toast.success('Actividad duplicada con recursos');
       fetchData();
     } catch (err: any) {
       console.error('Error duplicating:', err);

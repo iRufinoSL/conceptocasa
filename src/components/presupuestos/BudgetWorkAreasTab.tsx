@@ -10,7 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { Plus, Trash2, Edit2, MapPin, List, Layers } from 'lucide-react';
+import { Plus, Trash2, Edit2, MapPin, List, Layers, ChevronDown, ChevronRight } from 'lucide-react';
 import { formatCurrency } from '@/lib/format-utils';
 
 interface WorkArea {
@@ -58,11 +58,27 @@ export function BudgetWorkAreasTab({ budgetId, isAdmin }: BudgetWorkAreasTabProp
   const [viewMode, setViewMode] = useState<'alphabetic' | 'grouped'>('grouped');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingArea, setEditingArea] = useState<WorkArea | null>(null);
+  const [expandedLevels, setExpandedLevels] = useState<Set<string>>(new Set(LEVELS));
   const [formData, setFormData] = useState({
     name: '',
     level: 'Nivel 1',
     work_area: 'Espacios'
   });
+
+  const toggleLevel = (level: string) => {
+    setExpandedLevels(prev => {
+      const next = new Set(prev);
+      if (next.has(level)) {
+        next.delete(level);
+      } else {
+        next.add(level);
+      }
+      return next;
+    });
+  };
+
+  const expandAllLevels = () => setExpandedLevels(new Set(LEVELS));
+  const collapseAllLevels = () => setExpandedLevels(new Set());
 
   const fetchWorkAreas = async () => {
     setIsLoading(true);
@@ -351,7 +367,15 @@ export function BudgetWorkAreasTab({ budgetId, isAdmin }: BudgetWorkAreasTabProp
                 </TableBody>
               </Table>
             ) : (
-              <div className="space-y-6">
+              <div className="space-y-4">
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={expandAllLevels}>
+                    Expandir todo
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={collapseAllLevels}>
+                    Colapsar todo
+                  </Button>
+                </div>
                 {LEVELS.map((level) => {
                   const areasInLevel = groupedByLevel[level] || [];
                   if (areasInLevel.length === 0) return null;
@@ -360,67 +384,84 @@ export function BudgetWorkAreasTab({ budgetId, isAdmin }: BudgetWorkAreasTabProp
                     (sum, wa) => sum + (wa.resources_subtotal || 0),
                     0
                   );
+                  const isExpanded = expandedLevels.has(level);
 
                   return (
                     <div key={level} className="border rounded-lg overflow-hidden">
-                      <div className="bg-muted/50 px-4 py-2 flex items-center justify-between">
-                        <h3 className="font-semibold flex items-center gap-2">
-                          <Layers className="h-4 w-4" />
-                          {level}
+                      <button
+                        className="w-full bg-muted/50 px-4 py-3 flex items-center justify-between hover:bg-muted/70 transition-colors"
+                        onClick={() => toggleLevel(level)}
+                      >
+                        <div className="flex items-center gap-3">
+                          {isExpanded ? (
+                            <ChevronDown className="h-4 w-4" />
+                          ) : (
+                            <ChevronRight className="h-4 w-4" />
+                          )}
+                          <Layers className="h-4 w-4 text-primary" />
+                          <span className="font-semibold">{level}</span>
                           <Badge variant="secondary">{areasInLevel.length}</Badge>
-                        </h3>
+                        </div>
                         <span className="font-medium text-primary">
                           {formatCurrency(levelSubtotal)}
                         </span>
-                      </div>
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Nombre</TableHead>
-                            <TableHead>Área de Trabajo</TableHead>
-                            <TableHead>AreaID</TableHead>
-                            <TableHead className="text-right">€ SubTotal</TableHead>
-                            {isAdmin && <TableHead className="w-20">Acciones</TableHead>}
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {areasInLevel.map((area) => (
-                            <TableRow key={area.id}>
-                              <TableCell className="font-medium">{area.name}</TableCell>
-                              <TableCell>{area.work_area}</TableCell>
-                              <TableCell>
-                                <code className="text-xs bg-muted px-2 py-1 rounded">
-                                  {area.area_id}
-                                </code>
-                              </TableCell>
-                              <TableCell className="text-right font-medium">
-                                {formatCurrency(area.resources_subtotal || 0)}
-                              </TableCell>
-                              {isAdmin && (
-                                <TableCell>
-                                  <div className="flex gap-1">
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      onClick={() => handleOpenDialog(area)}
-                                    >
-                                      <Edit2 className="h-4 w-4" />
-                                    </Button>
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      className="text-destructive hover:text-destructive"
-                                      onClick={() => handleDelete(area.id)}
-                                    >
-                                      <Trash2 className="h-4 w-4" />
-                                    </Button>
-                                  </div>
-                                </TableCell>
-                              )}
+                      </button>
+                      {isExpanded && (
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Nombre</TableHead>
+                              <TableHead>Área de Trabajo</TableHead>
+                              <TableHead>AreaID</TableHead>
+                              <TableHead className="text-right">€ SubTotal</TableHead>
+                              {isAdmin && <TableHead className="w-20">Acciones</TableHead>}
                             </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
+                          </TableHeader>
+                          <TableBody>
+                            {areasInLevel.map((area) => (
+                              <TableRow key={area.id}>
+                                <TableCell className="font-medium">{area.name}</TableCell>
+                                <TableCell>{area.work_area}</TableCell>
+                                <TableCell>
+                                  <code className="text-xs bg-muted px-2 py-1 rounded">
+                                    {area.area_id}
+                                  </code>
+                                </TableCell>
+                                <TableCell className="text-right font-medium">
+                                  {formatCurrency(area.resources_subtotal || 0)}
+                                </TableCell>
+                                {isAdmin && (
+                                  <TableCell>
+                                    <div className="flex gap-1">
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleOpenDialog(area);
+                                        }}
+                                      >
+                                        <Edit2 className="h-4 w-4" />
+                                      </Button>
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="text-destructive hover:text-destructive"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleDelete(area.id);
+                                        }}
+                                      >
+                                        <Trash2 className="h-4 w-4" />
+                                      </Button>
+                                    </div>
+                                  </TableCell>
+                                )}
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      )}
                     </div>
                   );
                 })}

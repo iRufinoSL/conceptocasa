@@ -1390,6 +1390,7 @@ export type Database = {
       }
       tab_visibility_settings: {
         Row: {
+          advanced_settings: Json | null
           created_at: string
           id: string
           role: Database["public"]["Enums"]["app_role"]
@@ -1397,6 +1398,7 @@ export type Database = {
           visible_tabs: string[]
         }
         Insert: {
+          advanced_settings?: Json | null
           created_at?: string
           id?: string
           role: Database["public"]["Enums"]["app_role"]
@@ -1404,6 +1406,7 @@ export type Database = {
           visible_tabs?: string[]
         }
         Update: {
+          advanced_settings?: Json | null
           created_at?: string
           id?: string
           role?: Database["public"]["Enums"]["app_role"]

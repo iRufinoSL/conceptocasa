@@ -2,8 +2,9 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { CompanySettingsForm } from '@/components/settings/CompanySettingsForm';
+import { TabVisibilitySettingsComponent } from '@/components/settings/TabVisibilitySettings';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Building2, Settings, ArrowLeft } from 'lucide-react';
+import { Building2, Settings, ArrowLeft, Eye } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { AppNavDropdown } from '@/components/AppNavDropdown';
 
@@ -88,10 +89,18 @@ export default function Configuracion() {
               <Building2 className="h-4 w-4" />
               Empresa
             </TabsTrigger>
+            <TabsTrigger value="visibility" className="gap-2">
+              <Eye className="h-4 w-4" />
+              Visibilidad de Pestañas
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="company">
             <CompanySettingsForm />
+          </TabsContent>
+
+          <TabsContent value="visibility">
+            <TabVisibilitySettingsComponent />
           </TabsContent>
         </Tabs>
       </main>

@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
+import { useTabVisibility } from '@/hooks/useTabVisibility';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -66,6 +67,7 @@ export default function PresupuestoDashboard() {
   const portadaInputRef = useRef<HTMLInputElement>(null);
 
   const isAdmin = roles.includes('administrador');
+  const { isTabVisible } = useTabVisibility();
 
   const handleRecalculateAll = async () => {
     if (!id) return;
@@ -359,58 +361,78 @@ export default function PresupuestoDashboard() {
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="flex flex-wrap h-auto gap-1 p-1">
-            <TabsTrigger value="anteproyecto" className="flex items-center gap-1.5 text-xs px-2 py-1.5">
-              <Image className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Ante-proyecto</span>
-            </TabsTrigger>
-            <TabsTrigger value="cuanto-cuesta" className="flex items-center gap-1.5 text-xs px-2 py-1.5">
-              <Euro className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">CUÁNTO?</span>
-            </TabsTrigger>
-            <TabsTrigger value="actividades" className="flex items-center gap-1.5 text-xs px-2 py-1.5">
-              <ClipboardList className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">QUÉ?</span>
-            </TabsTrigger>
-            <TabsTrigger value="fases" className="flex items-center gap-1.5 text-xs px-2 py-1.5">
-              <Calendar className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">CUÁNDO?</span>
-            </TabsTrigger>
-            {isAdmin && (
+            {isTabVisible('anteproyecto') && (
+              <TabsTrigger value="anteproyecto" className="flex items-center gap-1.5 text-xs px-2 py-1.5">
+                <Image className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Ante-proyecto</span>
+              </TabsTrigger>
+            )}
+            {isTabVisible('cuanto-cuesta') && (
+              <TabsTrigger value="cuanto-cuesta" className="flex items-center gap-1.5 text-xs px-2 py-1.5">
+                <Euro className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">CUÁNTO?</span>
+              </TabsTrigger>
+            )}
+            {isTabVisible('actividades') && (
+              <TabsTrigger value="actividades" className="flex items-center gap-1.5 text-xs px-2 py-1.5">
+                <ClipboardList className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">QUÉ?</span>
+              </TabsTrigger>
+            )}
+            {isTabVisible('fases') && (
+              <TabsTrigger value="fases" className="flex items-center gap-1.5 text-xs px-2 py-1.5">
+                <Calendar className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">CUÁNDO?</span>
+              </TabsTrigger>
+            )}
+            {isTabVisible('recursos') && (
               <TabsTrigger value="recursos" className="flex items-center gap-1.5 text-xs px-2 py-1.5">
                 <FileText className="h-3.5 w-3.5" />
                 <span className="hidden sm:inline">CÓMO?</span>
               </TabsTrigger>
             )}
-            <TabsTrigger value="contactos" className="flex items-center gap-1.5 text-xs px-2 py-1.5">
-              <Users className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">QUIÉN?</span>
-            </TabsTrigger>
-            <TabsTrigger value="areas-trabajo" className="flex items-center gap-1.5 text-xs px-2 py-1.5">
-              <MapPin className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">DÓNDE?</span>
-            </TabsTrigger>
-            <TabsTrigger value="timeline" className="flex items-center gap-1.5 text-xs px-2 py-1.5">
-              <GanttChart className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Timeline</span>
-            </TabsTrigger>
-            <TabsTrigger value="mediciones" className="flex items-center gap-1.5 text-xs px-2 py-1.5">
-              <Ruler className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Mediciones</span>
-            </TabsTrigger>
-            <TabsTrigger value="espacios" className="flex items-center gap-1.5 text-xs px-2 py-1.5">
-              <Home className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Espacios</span>
-            </TabsTrigger>
-            {isAdmin && (
+            {isTabVisible('contactos') && (
+              <TabsTrigger value="contactos" className="flex items-center gap-1.5 text-xs px-2 py-1.5">
+                <Users className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">QUIÉN?</span>
+              </TabsTrigger>
+            )}
+            {isTabVisible('zonas') && (
+              <TabsTrigger value="areas-trabajo" className="flex items-center gap-1.5 text-xs px-2 py-1.5">
+                <MapPin className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">DÓNDE?</span>
+              </TabsTrigger>
+            )}
+            {isTabVisible('timeline') && (
+              <TabsTrigger value="timeline" className="flex items-center gap-1.5 text-xs px-2 py-1.5">
+                <GanttChart className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Timeline</span>
+              </TabsTrigger>
+            )}
+            {isTabVisible('mediciones') && (
+              <TabsTrigger value="mediciones" className="flex items-center gap-1.5 text-xs px-2 py-1.5">
+                <Ruler className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Mediciones</span>
+              </TabsTrigger>
+            )}
+            {isTabVisible('espacios') && (
+              <TabsTrigger value="espacios" className="flex items-center gap-1.5 text-xs px-2 py-1.5">
+                <Home className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Espacios</span>
+              </TabsTrigger>
+            )}
+            {isTabVisible('resumen') && (
               <TabsTrigger value="resumen" className="flex items-center gap-1.5 text-xs px-2 py-1.5">
                 <Calculator className="h-3.5 w-3.5" />
                 <span className="hidden sm:inline">Resumen</span>
               </TabsTrigger>
             )}
-            <TabsTrigger value="config" className="flex items-center gap-1.5 text-xs px-2 py-1.5">
-              <Settings className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Config</span>
-            </TabsTrigger>
+            {isTabVisible('config') && (
+              <TabsTrigger value="config" className="flex items-center gap-1.5 text-xs px-2 py-1.5">
+                <Settings className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Config</span>
+              </TabsTrigger>
+            )}
           </TabsList>
 
           <TabsContent value="anteproyecto" className="mt-6">

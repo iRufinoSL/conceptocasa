@@ -371,7 +371,7 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
           const activityResources = allResources.filter(r => r.activity_id === activity.id);
           const resourcesSubtotal = calculateResourceSubtotal(
             activityResources,
-            activity.uses_measurement ? activity.measurement_id : null,
+            activity.uses_measurement !== false ? activity.measurement_id : null,
             measurementsList,
             filteredRelations
           );
@@ -937,13 +937,13 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
 
   // Get measurement data for an activity
   const getMeasurementData = (activity: BudgetActivity): { measurement: Measurement | null; relatedUnits: number; medicionId: string } => {
-    // If uses_measurement is false, return 0 for related units
-    if (!activity.uses_measurement) {
+    // If uses_measurement is explicitly false, return 0 for related units
+    if (activity.uses_measurement === false) {
       const measurement = activity.measurement_id ? measurements.find(m => m.id === activity.measurement_id) : null;
-      return { 
-        measurement, 
-        relatedUnits: 0, 
-        medicionId: measurement ? `0,00/${measurement.measurement_unit || 'ud'}: ${measurement.name}` : '-' 
+      return {
+        measurement,
+        relatedUnits: 0,
+        medicionId: measurement ? `0,00/${measurement.measurement_unit || 'ud'}: ${measurement.name}` : '-'
       };
     }
     
@@ -1511,13 +1511,13 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
                           }}
                           className="cursor-pointer hover:opacity-80 transition-opacity"
                         >
-                          <Badge variant={activity.uses_measurement ? 'default' : 'secondary'} className="text-xs">
-                            {activity.uses_measurement ? 'Sí' : 'No'}
+                          <Badge variant={activity.uses_measurement !== false ? 'default' : 'secondary'} className="text-xs">
+                            {activity.uses_measurement !== false ? 'Sí' : 'No'}
                           </Badge>
                         </button>
                       ) : (
-                        <Badge variant={activity.uses_measurement ? 'default' : 'secondary'} className="text-xs">
-                          {activity.uses_measurement ? 'Sí' : 'No'}
+                        <Badge variant={activity.uses_measurement !== false ? 'default' : 'secondary'} className="text-xs">
+                          {activity.uses_measurement !== false ? 'Sí' : 'No'}
                         </Badge>
                       )}
                     </TableCell>

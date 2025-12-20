@@ -346,10 +346,10 @@ export function ActivitiesWorkAreaGroupedView({
                                     </TableCell>
                                     <TableCell className="text-center">
                                       <Badge 
-                                        variant={activity.uses_measurement ? 'default' : 'secondary'} 
+                                        variant={activity.uses_measurement !== false ? 'default' : 'secondary'} 
                                         className="text-xs"
                                       >
-                                        {activity.uses_measurement ? 'Sí' : 'No'}
+                                        {activity.uses_measurement !== false ? 'Sí' : 'No'}
                                       </Badge>
                                     </TableCell>
                                     <TableCell className="font-medium">{activity.name}</TableCell>

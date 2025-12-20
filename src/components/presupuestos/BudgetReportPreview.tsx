@@ -1611,6 +1611,10 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
 
       // Footer
       const pageCount = doc.getNumberOfPages();
+      const footerTextHeight = 3; // Height of footer text in mm (font size 7 ≈ 2.5-3mm)
+      const footerLogoHeight = footerTextHeight; // Same height as text
+      const footerLogoWidth = footerLogoHeight * 3; // 3:1 aspect ratio (width:height)
+      
       for (let i = 1; i <= pageCount; i++) {
         doc.setPage(i);
         const currentPageWidth = doc.internal.pageSize.getWidth();
@@ -1619,8 +1623,22 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
         doc.line(14, currentPageHeight - 20, currentPageWidth - 14, currentPageHeight - 20);
         doc.setFontSize(7);
         doc.setTextColor(120);
+        
+        let footerTextX = 14;
+        
+        // Add logo before company name if available
+        if (logoImgData) {
+          try {
+            const logoY = currentPageHeight - 14 - footerLogoHeight + 1; // Align with text baseline
+            doc.addImage(logoImgData, 'JPEG', 14, logoY, footerLogoWidth, footerLogoHeight);
+            footerTextX = 14 + footerLogoWidth + 2; // Position text after logo with small gap
+          } catch (e) {
+            console.error('Error drawing footer logo:', e);
+          }
+        }
+        
         const footerInfo = [companyName, companyEmail, companyPhone].filter(Boolean).join(' | ');
-        doc.text(footerInfo, 14, currentPageHeight - 14);
+        doc.text(footerInfo, footerTextX, currentPageHeight - 14);
         doc.text(`Página ${i} de ${pageCount}`, currentPageWidth - 14, currentPageHeight - 14, { align: 'right' });
       }
 

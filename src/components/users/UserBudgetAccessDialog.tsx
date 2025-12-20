@@ -8,9 +8,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { toast } from 'sonner';
-import { Search, FolderOpen } from 'lucide-react';
+import { Search, FolderOpen, Settings2 } from 'lucide-react';
 import { searchMatch } from '@/lib/search-utils';
+import { UserGranularAccessDialog } from './UserGranularAccessDialog';
 
 type AppRole = 'administrador' | 'colaborador' | 'cliente';
 
@@ -47,6 +49,10 @@ export function UserBudgetAccessDialog({
   const [isSaving, setIsSaving] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [pendingChanges, setPendingChanges] = useState<Map<string, { action: 'add' | 'remove' | 'update'; role?: AppRole }>>(new Map());
+  
+  // Granular access dialog state
+  const [isGranularOpen, setIsGranularOpen] = useState(false);
+  const [granularPresupuesto, setGranularPresupuesto] = useState<Presupuesto | null>(null);
 
   useEffect(() => {
     if (open) {
@@ -208,6 +214,11 @@ export function UserBudgetAccessDialog({
 
   const accessCount = presupuestos.filter(p => hasAccess(p.id)).length;
 
+  const handleOpenGranular = (presupuesto: Presupuesto) => {
+    setGranularPresupuesto(presupuesto);
+    setIsGranularOpen(true);
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl max-h-[80vh] flex flex-col">
@@ -256,6 +267,7 @@ export function UserBudgetAccessDialog({
                   <TableHead>Población</TableHead>
                   <TableHead>Versión</TableHead>
                   <TableHead className="w-40">Rol</TableHead>
+                  <TableHead className="w-16">Granular</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -293,6 +305,23 @@ export function UserBudgetAccessDialog({
                           </SelectContent>
                         </Select>
                       </TableCell>
+                      <TableCell>
+                        {hasAccessToBudget && (role === 'colaborador' || role === 'cliente') && (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
+                                onClick={() => handleOpenGranular(presupuesto)}
+                              >
+                                <Settings2 className="h-4 w-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Accesos granulares</TooltipContent>
+                          </Tooltip>
+                        )}
+                      </TableCell>
                     </TableRow>
                   );
                 })}
@@ -310,6 +339,18 @@ export function UserBudgetAccessDialog({
           </Button>
         </DialogFooter>
       </DialogContent>
+
+      {/* Granular Access Dialog */}
+      {granularPresupuesto && (
+        <UserGranularAccessDialog
+          open={isGranularOpen}
+          onOpenChange={setIsGranularOpen}
+          userId={userId}
+          userName={userName || userEmail}
+          presupuestoId={granularPresupuesto.id}
+          presupuestoNombre={granularPresupuesto.nombre}
+        />
+      )}
     </Dialog>
   );
 }

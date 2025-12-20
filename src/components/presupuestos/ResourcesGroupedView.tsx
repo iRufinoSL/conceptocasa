@@ -450,25 +450,29 @@ export function ResourcesGroupedView({
             />
           </span>
         </TableCell>
-        {/* 7. Uds manual */}
-        <TableCell className="text-right font-mono">
-          <span ref={registerRef('manual_units')} tabIndex={-1}>
-            <ResourceInlineEdit
-              value={resource.manual_units}
-              displayValue={resource.manual_units !== null ? formatNumber(resource.manual_units) : '-'}
-              onSave={(v) => onInlineUpdate(resource.id, 'manual_units', v)}
-              type="number"
-              decimals={2}
-              allowNull={true}
-              disabled={!canEdit}
-              {...createTabHandlers('manual_units')}
-            />
-          </span>
-        </TableCell>
-        {/* 8. €SubTotal - always visible */}
-        <TableCell className="text-right font-mono font-bold text-primary">
-          {formatCurrency(fields.subtotalSales)}
-        </TableCell>
+        {/* 7. Uds manual - conditionally visible */}
+        {isColumnVisible('manualUnits') && (
+          <TableCell className="text-right font-mono">
+            <span ref={registerRef('manual_units')} tabIndex={-1}>
+              <ResourceInlineEdit
+                value={resource.manual_units}
+                displayValue={resource.manual_units !== null ? formatNumber(resource.manual_units) : '-'}
+                onSave={(v) => onInlineUpdate(resource.id, 'manual_units', v)}
+                type="number"
+                decimals={2}
+                allowNull={true}
+                disabled={!canEdit}
+                {...createTabHandlers('manual_units')}
+              />
+            </span>
+          </TableCell>
+        )}
+        {/* 8. €SubTotal - conditionally visible */}
+        {isColumnVisible('subtotal') && (
+          <TableCell className="text-right font-mono font-bold text-primary">
+            {formatCurrency(fields.subtotalSales)}
+          </TableCell>
+        )}
         {/* Margin columns - only visible to those with canViewMargins */}
         {canViewMargins && (
           <>
@@ -520,10 +524,12 @@ export function ResourcesGroupedView({
             )}
           </>
         )}
-        {/* Uds calculadas - always visible */}
-        <TableCell className="text-right font-mono font-semibold">
-          {formatNumber(fields.calculatedUnits)}
-        </TableCell>
+        {/* Uds calculadas - conditionally visible */}
+        {isColumnVisible('calculatedUnits') && (
+          <TableCell className="text-right font-mono font-semibold">
+            {formatNumber(fields.calculatedUnits)}
+          </TableCell>
+        )}
         {/* Actions column - based on permissions */}
         {(canEdit || canDuplicate || canDelete) && (
           <TableCell>
@@ -588,8 +594,8 @@ export function ResourcesGroupedView({
               <TableHead>Tipo</TableHead>
               <TableHead className="min-w-[180px]">ActividadID</TableHead>
               <TableHead className="text-right">Uds rel.</TableHead>
-              <TableHead className="text-right">Uds man.</TableHead>
-              <TableHead className="text-right">€SubT</TableHead>
+              {isColumnVisible('manualUnits') && <TableHead className="text-right">Uds man.</TableHead>}
+              {isColumnVisible('subtotal') && <TableHead className="text-right">€SubT</TableHead>}
               {canViewMargins && (
                 <>
                   <TableHead className="text-right">%Seg.</TableHead>
@@ -608,10 +614,8 @@ export function ResourcesGroupedView({
                   )}
                 </>
               )}
-              <TableHead className="text-right">Uds calc.</TableHead>
+              {isColumnVisible('calculatedUnits') && <TableHead className="text-right">Uds calc.</TableHead>}
               {(canEdit || canDuplicate || canDelete) && <TableHead className="w-[100px]">Acciones</TableHead>}
-              <TableHead className="text-right">Uds calc.</TableHead>
-              {isAdmin && <TableHead className="w-[80px]">Acciones</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>

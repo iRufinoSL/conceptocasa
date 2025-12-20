@@ -8,6 +8,7 @@ import { formatCurrency, formatNumber } from '@/lib/format-utils';
 import { MeasurementInlineSelect, MeasurementInlineSelectHandle } from './MeasurementInlineSelect';
 import { WorkAreaInlineSelect, WorkAreaInlineSelectHandle } from './WorkAreaInlineSelect';
 import { cn } from '@/lib/utils';
+import { BudgetPermissions } from '@/hooks/usePermissions';
 
 const LEVELS = [
   'Cota 0 terreno',
@@ -71,7 +72,8 @@ interface ActivitiesWorkAreaGroupedViewProps {
   workAreaRelations: WorkAreaRelation[];
   measurements: Measurement[];
   measurementRelations: MeasurementRelation[];
-  isAdmin: boolean;
+  permissions: BudgetPermissions;
+  canEditActivity: (activityId: string) => boolean;
   onEdit: (activity: BudgetActivity) => void;
   onDuplicate: (activity: BudgetActivity) => void;
   onDelete: (activity: BudgetActivity) => void;
@@ -89,7 +91,8 @@ export function ActivitiesWorkAreaGroupedView({
   workAreaRelations,
   measurements,
   measurementRelations,
-  isAdmin,
+  permissions,
+  canEditActivity,
   onEdit,
   onDuplicate,
   onDelete,
@@ -331,7 +334,7 @@ export function ActivitiesWorkAreaGroupedView({
                                 <TableHead>MediciónID</TableHead>
                                 <TableHead className="text-right">€SubTotal</TableHead>
                                 <TableHead>Archivos</TableHead>
-                                {isAdmin && <TableHead className="w-20">Acciones</TableHead>}
+                                {(permissions.isAdmin || permissions.canEdit) && <TableHead className="w-20">Acciones</TableHead>}
                               </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -357,7 +360,7 @@ export function ActivitiesWorkAreaGroupedView({
                                       {phase ? `${phase.code} ${phase.name}` : '-'}
                                     </TableCell>
                                     <TableCell className="max-w-[150px]">
-                                      {isAdmin ? (
+                                      {canEditActivity(activity.id) ? (
                                         <WorkAreaInlineSelect
                                           ref={(el) => workAreaRefs.current.set(activity.id, el)}
                                           activityId={activity.id}
@@ -376,7 +379,7 @@ export function ActivitiesWorkAreaGroupedView({
                                       {activity.measurement_id ? formatNumber(relatedUnits) : '-'}
                                     </TableCell>
                                     <TableCell className="text-sm max-w-[200px]">
-                                      {isAdmin ? (
+                                      {canEditActivity(activity.id) ? (
                                         <MeasurementInlineSelect
                                           ref={(el) => measurementRefs.current.set(activity.id, el)}
                                           activityId={activity.id}
@@ -405,7 +408,7 @@ export function ActivitiesWorkAreaGroupedView({
                                         {activity.files_count || 0}
                                       </Button>
                                     </TableCell>
-                                    {isAdmin && (
+                                    {canEditActivity(activity.id) && (
                                       <TableCell>
                                         <DropdownMenu>
                                           <DropdownMenuTrigger asChild>
@@ -418,21 +421,25 @@ export function ActivitiesWorkAreaGroupedView({
                                               <Pencil className="h-4 w-4 mr-2" />
                                               Editar
                                             </DropdownMenuItem>
-                                            <DropdownMenuItem onClick={() => onDuplicate(activity)}>
-                                              <Copy className="h-4 w-4 mr-2" />
-                                              Duplicar
-                                            </DropdownMenuItem>
-                                            <DropdownMenuItem onClick={() => onManageFiles(activity)}>
-                                              <FileUp className="h-4 w-4 mr-2" />
-                                              Archivos
-                                            </DropdownMenuItem>
-                                            <DropdownMenuItem
-                                              className="text-destructive"
-                                              onClick={() => onDelete(activity)}
-                                            >
-                                              <Trash2 className="h-4 w-4 mr-2" />
-                                              Eliminar
-                                            </DropdownMenuItem>
+                                            {permissions.isAdmin && (
+                                              <>
+                                                <DropdownMenuItem onClick={() => onDuplicate(activity)}>
+                                                  <Copy className="h-4 w-4 mr-2" />
+                                                  Duplicar
+                                                </DropdownMenuItem>
+                                                <DropdownMenuItem onClick={() => onManageFiles(activity)}>
+                                                  <FileUp className="h-4 w-4 mr-2" />
+                                                  Archivos
+                                                </DropdownMenuItem>
+                                                <DropdownMenuItem
+                                                  className="text-destructive"
+                                                  onClick={() => onDelete(activity)}
+                                                >
+                                                  <Trash2 className="h-4 w-4 mr-2" />
+                                                  Eliminar
+                                                </DropdownMenuItem>
+                                              </>
+                                            )}
                                           </DropdownMenuContent>
                                         </DropdownMenu>
                                       </TableCell>

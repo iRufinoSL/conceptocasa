@@ -254,7 +254,7 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
   // Calculate resource subtotal for an activity (with live measurement data)
   // Uses passed-in measurements data to avoid stale state issues
   const calculateResourceSubtotal = (
-    resources: any[], 
+    resources: any[],
     activityMeasurementId?: string | null,
     measurementsList?: Measurement[],
     relationsList?: MeasurementRelation[]
@@ -262,7 +262,7 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
     // Use passed-in data or fall back to state
     const measurementsData = measurementsList || measurements;
     const relationsData = relationsList || measurementRelations;
-    
+
     // Calculate live related units from measurement if available
     let liveRelatedUnits = 0;
     if (activityMeasurementId) {
@@ -271,18 +271,22 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
         const relatedMeasurementIds = relationsData
           .filter(r => r.measurement_id === measurement.id)
           .map(r => r.related_measurement_id);
-        
+
         if (relatedMeasurementIds.length > 0) {
-          liveRelatedUnits = relatedMeasurementIds.reduce((sum, relId) => {
+          const sum = relatedMeasurementIds.reduce((acc, relId) => {
             const relMeasurement = measurementsData.find(m => m.id === relId);
-            return sum + (relMeasurement?.manual_units || 0);
+            return acc + (relMeasurement?.manual_units || 0);
           }, 0);
+
+          // Important: if relations exist but sum is 0 (legacy imports / empty relations),
+          // treat as "no effective relations" and use the measurement's own units.
+          liveRelatedUnits = sum > 0 ? sum : (measurement.manual_units || 0);
         } else {
           liveRelatedUnits = measurement.manual_units || 0;
         }
       }
     }
-    
+
     return resources.reduce((total, resource) => {
       const externalCost = resource.external_unit_cost || 0;
       const safetyRatio = percentToRatio(resource.safety_margin_percent, 0.15);

@@ -5,16 +5,18 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { formatCurrency, formatNumber, formatPercent } from '@/lib/format-utils';
-import { Pencil, Trash2, Package, Wrench, Truck, Briefcase } from 'lucide-react';
+import { Pencil, Trash2, Copy, Package, Wrench, Truck, Briefcase } from 'lucide-react';
 import { ResourceInlineEdit } from './ResourceInlineEdit';
 import { cn } from '@/lib/utils';
+import type { BudgetPermissions } from '@/hooks/usePermissions';
 
 // Define editable fields for tab navigation (in display order)
-const EDITABLE_FIELDS = [
+// Note: cost/margin fields will be conditionally excluded based on permissions
+const ALL_EDITABLE_FIELDS = [
   'name', 'external_unit_cost', 'unit', 'resource_type', 'activity_id',
   'related_units', 'manual_units', 'safety_margin_percent', 'sales_margin_percent'
 ] as const;
-type EditableField = typeof EDITABLE_FIELDS[number];
+type EditableField = typeof ALL_EDITABLE_FIELDS[number];
 
 interface BudgetResource {
   id: string;
@@ -49,12 +51,13 @@ interface ResourcesGroupedViewProps {
   resources: BudgetResource[];
   activities: Activity[];
   phases: Phase[];
-  isAdmin: boolean;
+  permissions: BudgetPermissions;
   selectedIds: Set<string>;
   onToggleSelect: (id: string) => void;
   onToggleSelectAll: () => void;
   onEdit: (resource: BudgetResource) => void;
   onDelete: (resource: BudgetResource) => void;
+  onDuplicate?: (resource: BudgetResource) => void;
   onInlineUpdate: (id: string, field: string, value: any) => Promise<void>;
   calculateFields: (resource: BudgetResource) => {
     safetyMarginUd: number;
@@ -92,12 +95,13 @@ export function ResourcesGroupedView({
   resources,
   activities,
   phases,
-  isAdmin,
+  permissions,
   selectedIds,
   onToggleSelect,
   onToggleSelectAll,
   onEdit,
   onDelete,
+  onDuplicate,
   onInlineUpdate,
   calculateFields,
   getActivityId,
@@ -106,6 +110,17 @@ export function ResourcesGroupedView({
   onExpandedPhasesChange,
   onExpandedActivitiesChange,
 }: ResourcesGroupedViewProps) {
+  // Destructure permissions for easier access
+  const { canViewCosts, canViewMargins, canViewCostDetails, canEdit, canDuplicate, canDelete, isAdmin } = permissions;
+  
+  // Build editable fields list based on permissions
+  const EDITABLE_FIELDS = useMemo(() => {
+    const fields: EditableField[] = ['name'];
+    if (canViewCosts) fields.push('external_unit_cost');
+    fields.push('unit', 'resource_type', 'activity_id', 'related_units', 'manual_units');
+    if (canViewMargins) fields.push('safety_margin_percent', 'sales_margin_percent');
+    return fields;
+  }, [canViewCosts, canViewMargins]);
   // Tab navigation refs
   const cellRefs = useRef<Map<string, HTMLElement | null>>(new Map());
   const getCellKey = (resourceId: string, field: EditableField) => `${resourceId}-${field}`;
@@ -316,6 +331,7 @@ export function ResourcesGroupedView({
         className={cn(selectedIds.has(resource.id) ? 'bg-muted/50' : '')}
         onClick={(e) => e.stopPropagation()}
       >
+        {/* Checkbox for selection (admin only) */}
         {isAdmin && (
           <TableCell style={{ paddingLeft: `${indent * 16 + 8}px` }}>
             <Checkbox
@@ -332,25 +348,27 @@ export function ResourcesGroupedView({
               displayValue={resource.name}
               onSave={(v) => onInlineUpdate(resource.id, 'name', v)}
               type="text"
-              disabled={!isAdmin}
+              disabled={!canEdit}
               {...createTabHandlers('name')}
             />
           </span>
         </TableCell>
-        {/* 2. €Coste ud externa */}
-        <TableCell className="text-right font-mono">
-          <span ref={registerRef('external_unit_cost')} tabIndex={-1}>
-            <ResourceInlineEdit
-              value={resource.external_unit_cost}
-              displayValue={formatCurrency(resource.external_unit_cost || 0)}
-              onSave={(v) => onInlineUpdate(resource.id, 'external_unit_cost', v)}
-              type="number"
-              decimals={2}
-              disabled={!isAdmin}
-              {...createTabHandlers('external_unit_cost')}
-            />
-          </span>
-        </TableCell>
+        {/* 2. €Coste ud externa - only visible to those with canViewCosts */}
+        {canViewCosts && (
+          <TableCell className="text-right font-mono">
+            <span ref={registerRef('external_unit_cost')} tabIndex={-1}>
+              <ResourceInlineEdit
+                value={resource.external_unit_cost}
+                displayValue={formatCurrency(resource.external_unit_cost || 0)}
+                onSave={(v) => onInlineUpdate(resource.id, 'external_unit_cost', v)}
+                type="number"
+                decimals={2}
+                disabled={!canEdit}
+                {...createTabHandlers('external_unit_cost')}
+              />
+            </span>
+          </TableCell>
+        )}
         {/* 3. Ud medida */}
         <TableCell>
           <span ref={registerRef('unit')} tabIndex={-1}>
@@ -360,7 +378,7 @@ export function ResourcesGroupedView({
               onSave={(v) => onInlineUpdate(resource.id, 'unit', v)}
               type="select"
               options={unitOptions}
-              disabled={!isAdmin}
+              disabled={!canEdit}
               {...createTabHandlers('unit')}
             />
           </span>
@@ -381,12 +399,12 @@ export function ResourcesGroupedView({
               onSave={(v) => onInlineUpdate(resource.id, 'resource_type', v)}
               type="select"
               options={typeOptions}
-              disabled={!isAdmin}
+              disabled={!canEdit}
               {...createTabHandlers('resource_type')}
             />
           </span>
         </TableCell>
-        {/* 5. Actividad relacionada - moved after Tipo Recurso */}
+        {/* 5. Actividad relacionada */}
         <TableCell>
           <span ref={registerRef('activity_id')} tabIndex={-1}>
             <ResourceInlineEdit
@@ -395,7 +413,7 @@ export function ResourcesGroupedView({
               onSave={(v) => onInlineUpdate(resource.id, 'activity_id', v === '__none__' ? null : v)}
               type="searchable-select"
               options={activityOptions}
-              disabled={!isAdmin}
+              disabled={!canEdit}
               {...createTabHandlers('activity_id')}
             />
           </span>
@@ -409,7 +427,7 @@ export function ResourcesGroupedView({
               onSave={(v) => onInlineUpdate(resource.id, 'related_units', v)}
               type="number"
               decimals={2}
-              disabled={!isAdmin}
+              disabled={!canEdit}
               {...createTabHandlers('related_units')}
             />
           </span>
@@ -424,66 +442,89 @@ export function ResourcesGroupedView({
               type="number"
               decimals={2}
               allowNull={true}
-              disabled={!isAdmin}
+              disabled={!canEdit}
               {...createTabHandlers('manual_units')}
             />
           </span>
         </TableCell>
-        {/* 8. €SubTotal */}
+        {/* 8. €SubTotal - always visible */}
         <TableCell className="text-right font-mono font-bold text-primary">
           {formatCurrency(fields.subtotalSales)}
         </TableCell>
-        {/* Remaining columns */}
-        <TableCell className="text-right font-mono">
-          <span ref={registerRef('safety_margin_percent')} tabIndex={-1}>
-            <ResourceInlineEdit
-              value={(resource.safety_margin_percent ?? 0.15) * 100}
-              displayValue={formatPercent(resource.safety_margin_percent ?? 0.15)}
-              onSave={(v) => onInlineUpdate(resource.id, 'safety_margin_percent', Math.max(0, v) / 100)}
-              type="percent"
-              decimals={1}
-              disabled={!isAdmin}
-              {...createTabHandlers('safety_margin_percent')}
-            />
-          </span>
-        </TableCell>
-        <TableCell className="text-right font-mono text-muted-foreground">
-          {formatCurrency(fields.safetyMarginUd)}
-        </TableCell>
-        <TableCell className="text-right font-mono text-muted-foreground">
-          {formatCurrency(fields.internalCostUd)}
-        </TableCell>
-        <TableCell className="text-right font-mono">
-          <span ref={registerRef('sales_margin_percent')} tabIndex={-1}>
-            <ResourceInlineEdit
-              value={(resource.sales_margin_percent ?? 0.25) * 100}
-              displayValue={formatPercent(resource.sales_margin_percent ?? 0.25)}
-              onSave={(v) => onInlineUpdate(resource.id, 'sales_margin_percent', Math.max(0, v) / 100)}
-              type="percent"
-              decimals={1}
-              disabled={!isAdmin}
-              {...createTabHandlers('sales_margin_percent')}
-            />
-          </span>
-        </TableCell>
-        <TableCell className="text-right font-mono text-muted-foreground">
-          {formatCurrency(fields.salesMarginUd)}
-        </TableCell>
-        <TableCell className="text-right font-mono font-semibold">
-          {formatCurrency(fields.salesCostUd)}
-        </TableCell>
+        {/* Margin columns - only visible to those with canViewMargins */}
+        {canViewMargins && (
+          <>
+            <TableCell className="text-right font-mono">
+              <span ref={registerRef('safety_margin_percent')} tabIndex={-1}>
+                <ResourceInlineEdit
+                  value={(resource.safety_margin_percent ?? 0.15) * 100}
+                  displayValue={formatPercent(resource.safety_margin_percent ?? 0.15)}
+                  onSave={(v) => onInlineUpdate(resource.id, 'safety_margin_percent', Math.max(0, v) / 100)}
+                  type="percent"
+                  decimals={1}
+                  disabled={!canEdit}
+                  {...createTabHandlers('safety_margin_percent')}
+                />
+              </span>
+            </TableCell>
+            {canViewCostDetails && (
+              <>
+                <TableCell className="text-right font-mono text-muted-foreground">
+                  {formatCurrency(fields.safetyMarginUd)}
+                </TableCell>
+                <TableCell className="text-right font-mono text-muted-foreground">
+                  {formatCurrency(fields.internalCostUd)}
+                </TableCell>
+              </>
+            )}
+            <TableCell className="text-right font-mono">
+              <span ref={registerRef('sales_margin_percent')} tabIndex={-1}>
+                <ResourceInlineEdit
+                  value={(resource.sales_margin_percent ?? 0.25) * 100}
+                  displayValue={formatPercent(resource.sales_margin_percent ?? 0.25)}
+                  onSave={(v) => onInlineUpdate(resource.id, 'sales_margin_percent', Math.max(0, v) / 100)}
+                  type="percent"
+                  decimals={1}
+                  disabled={!canEdit}
+                  {...createTabHandlers('sales_margin_percent')}
+                />
+              </span>
+            </TableCell>
+            {canViewCostDetails && (
+              <>
+                <TableCell className="text-right font-mono text-muted-foreground">
+                  {formatCurrency(fields.salesMarginUd)}
+                </TableCell>
+                <TableCell className="text-right font-mono font-semibold">
+                  {formatCurrency(fields.salesCostUd)}
+                </TableCell>
+              </>
+            )}
+          </>
+        )}
+        {/* Uds calculadas - always visible */}
         <TableCell className="text-right font-mono font-semibold">
           {formatNumber(fields.calculatedUnits)}
         </TableCell>
-        {isAdmin && (
+        {/* Actions column - based on permissions */}
+        {(canEdit || canDuplicate || canDelete) && (
           <TableCell>
             <div className="flex items-center gap-1">
-              <Button variant="ghost" size="icon" onClick={() => onEdit(resource)}>
-                <Pencil className="h-4 w-4" />
-              </Button>
-              <Button variant="ghost" size="icon" onClick={() => onDelete(resource)}>
-                <Trash2 className="h-4 w-4 text-destructive" />
-              </Button>
+              {canEdit && (
+                <Button variant="ghost" size="icon" onClick={() => onEdit(resource)}>
+                  <Pencil className="h-4 w-4" />
+                </Button>
+              )}
+              {canDuplicate && onDuplicate && (
+                <Button variant="ghost" size="icon" onClick={() => onDuplicate(resource)}>
+                  <Copy className="h-4 w-4" />
+                </Button>
+              )}
+              {canDelete && (
+                <Button variant="ghost" size="icon" onClick={() => onDelete(resource)}>
+                  <Trash2 className="h-4 w-4 text-destructive" />
+                </Button>
+              )}
             </div>
           </TableCell>
         )}
@@ -524,19 +565,33 @@ export function ResourcesGroupedView({
                 </TableHead>
               )}
               <TableHead className="min-w-[200px]">Recurso</TableHead>
-              <TableHead className="text-right">€Coste ud ext.</TableHead>
+              {canViewCosts && <TableHead className="text-right">€Coste ud ext.</TableHead>}
               <TableHead>Ud</TableHead>
               <TableHead>Tipo</TableHead>
               <TableHead className="min-w-[180px]">ActividadID</TableHead>
               <TableHead className="text-right">Uds rel.</TableHead>
               <TableHead className="text-right">Uds man.</TableHead>
               <TableHead className="text-right">€SubT</TableHead>
-              <TableHead className="text-right">%Seg.</TableHead>
-              <TableHead className="text-right">€Seg.</TableHead>
-              <TableHead className="text-right">€Coste int.</TableHead>
-              <TableHead className="text-right">%Venta</TableHead>
-              <TableHead className="text-right">€Venta</TableHead>
-              <TableHead className="text-right">€Coste venta</TableHead>
+              {canViewMargins && (
+                <>
+                  <TableHead className="text-right">%Seg.</TableHead>
+                  {canViewCostDetails && (
+                    <>
+                      <TableHead className="text-right">€Seg.</TableHead>
+                      <TableHead className="text-right">€Coste int.</TableHead>
+                    </>
+                  )}
+                  <TableHead className="text-right">%Venta</TableHead>
+                  {canViewCostDetails && (
+                    <>
+                      <TableHead className="text-right">€Venta</TableHead>
+                      <TableHead className="text-right">€Coste venta</TableHead>
+                    </>
+                  )}
+                </>
+              )}
+              <TableHead className="text-right">Uds calc.</TableHead>
+              {(canEdit || canDuplicate || canDelete) && <TableHead className="w-[100px]">Acciones</TableHead>}
               <TableHead className="text-right">Uds calc.</TableHead>
               {isAdmin && <TableHead className="w-[80px]">Acciones</TableHead>}
             </TableRow>

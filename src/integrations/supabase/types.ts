@@ -1388,6 +1388,30 @@ export type Database = {
           },
         ]
       }
+      tab_visibility_settings: {
+        Row: {
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          updated_at: string
+          visible_tabs: string[]
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          updated_at?: string
+          visible_tabs?: string[]
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          updated_at?: string
+          visible_tabs?: string[]
+        }
+        Relationships: []
+      }
       user_activity_access: {
         Row: {
           access_level: string

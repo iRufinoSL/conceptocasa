@@ -11,6 +11,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { Checkbox } from '@/components/ui/checkbox';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from 'sonner';
 import { z } from 'zod';
 import { ArrowLeft, Plus, UserCog, Pencil, Trash2, Search, FolderOpen } from 'lucide-react';
@@ -39,6 +41,13 @@ interface UserProfile {
 
 type AppRole = 'administrador' | 'colaborador' | 'cliente';
 
+interface Presupuesto {
+  id: string;
+  nombre: string;
+  codigo_correlativo: number;
+  version: string;
+}
+
 export default function Usuarios() {
   const navigate = useNavigate();
   const { user, isAdmin, loading, rolesLoading } = useAuth();
@@ -53,8 +62,13 @@ export default function Usuarios() {
   const [newPassword, setNewPassword] = useState('');
   const [newFullName, setNewFullName] = useState('');
   const [newRole, setNewRole] = useState<AppRole>('cliente');
+  const [selectedBudgets, setSelectedBudgets] = useState<string[]>([]);
+  const [selectedBudgetRole, setSelectedBudgetRole] = useState<AppRole>('cliente');
   const [isCreating, setIsCreating] = useState(false);
   const [createErrors, setCreateErrors] = useState<{ email?: string; password?: string }>({});
+  
+  // Available budgets for selection
+  const [presupuestos, setPresupuestos] = useState<Presupuesto[]>([]);
   
   // Edit user dialog
   const [isEditOpen, setIsEditOpen] = useState(false);
@@ -86,12 +100,27 @@ export default function Usuarios() {
     }
   }, [user, loading, rolesLoading, navigate]);
 
-  // Fetch users when ready
+  // Fetch users and budgets when ready
   useEffect(() => {
     if (!loading && !rolesLoading && user && isAdmin()) {
       fetchUsers();
+      fetchPresupuestos();
     }
   }, [user, loading, rolesLoading]);
+
+  const fetchPresupuestos = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('presupuestos')
+        .select('id, nombre, codigo_correlativo, version')
+        .order('codigo_correlativo', { ascending: false });
+
+      if (error) throw error;
+      setPresupuestos(data || []);
+    } catch (error) {
+      console.error('Error fetching presupuestos:', error);
+    }
+  };
 
   const fetchUsers = async () => {
     setIsLoading(true);
@@ -235,6 +264,24 @@ export default function Usuarios() {
           toast.error('Usuario creado pero hubo un error al asignar el rol');
         }
 
+        // Assign selected budget access
+        if (selectedBudgets.length > 0) {
+          const budgetAccess = selectedBudgets.map(budgetId => ({
+            user_id: data.user!.id,
+            presupuesto_id: budgetId,
+            role: selectedBudgetRole
+          }));
+
+          const { error: accessError } = await supabase
+            .from('user_presupuestos')
+            .insert(budgetAccess);
+
+          if (accessError) {
+            console.error('Error assigning budget access:', accessError);
+            toast.error('Usuario creado pero hubo un error al asignar acceso a presupuestos');
+          }
+        }
+
         // Send credentials email automatically
         const emailSent = await sendCredentialsEmail(newEmail, newFullName, tempPassword);
         
@@ -276,7 +323,17 @@ export default function Usuarios() {
     setNewPassword('');
     setNewFullName('');
     setNewRole('cliente');
+    setSelectedBudgets([]);
+    setSelectedBudgetRole('cliente');
     setCreateErrors({});
+  };
+
+  const toggleBudgetSelection = (budgetId: string) => {
+    setSelectedBudgets(prev => 
+      prev.includes(budgetId) 
+        ? prev.filter(id => id !== budgetId)
+        : [...prev, budgetId]
+    );
   };
 
   const handleEditUser = (userToEdit: UserProfile) => {
@@ -488,6 +545,59 @@ export default function Usuarios() {
                       <SelectItem value="cliente">Cliente</SelectItem>
                     </SelectContent>
                   </Select>
+                </div>
+                
+                {/* Budget Access Selection */}
+                <div className="space-y-2">
+                  <Label>Acceso a Presupuestos</Label>
+                  <p className="text-xs text-muted-foreground mb-2">
+                    Selecciona los presupuestos a los que tendrá acceso el usuario
+                  </p>
+                  {presupuestos.length > 0 ? (
+                    <>
+                      <ScrollArea className="h-[150px] border rounded-md p-3">
+                        <div className="space-y-2">
+                          {presupuestos.map((p) => (
+                            <div key={p.id} className="flex items-center space-x-2">
+                              <Checkbox
+                                id={`budget-${p.id}`}
+                                checked={selectedBudgets.includes(p.id)}
+                                onCheckedChange={() => toggleBudgetSelection(p.id)}
+                              />
+                              <label
+                                htmlFor={`budget-${p.id}`}
+                                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer flex-1"
+                              >
+                                {p.codigo_correlativo.toString().padStart(4, '0')} - {p.nombre} ({p.version})
+                              </label>
+                            </div>
+                          ))}
+                        </div>
+                      </ScrollArea>
+                      {selectedBudgets.length > 0 && (
+                        <div className="space-y-2 mt-3">
+                          <Label htmlFor="budget-role">Rol en presupuestos seleccionados</Label>
+                          <Select value={selectedBudgetRole} onValueChange={(value: AppRole) => setSelectedBudgetRole(value)}>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Seleccionar rol" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="administrador">Administrador</SelectItem>
+                              <SelectItem value="colaborador">Colaborador</SelectItem>
+                              <SelectItem value="cliente">Cliente</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <p className="text-xs text-muted-foreground">
+                            {selectedBudgets.length} presupuesto{selectedBudgets.length !== 1 ? 's' : ''} seleccionado{selectedBudgets.length !== 1 ? 's' : ''}
+                          </p>
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <p className="text-sm text-muted-foreground italic">
+                      No hay presupuestos disponibles
+                    </p>
+                  )}
                 </div>
               </div>
               <DialogFooter>

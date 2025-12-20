@@ -76,6 +76,7 @@ interface ResourcesGroupedViewProps {
   visibleColumns?: string[];
   showPhaseSubtotals?: boolean;
   showActivitySubtotals?: boolean;
+  hideUnassignedPhase?: boolean;
 }
 
 const resourceTypeIcons: Record<string, React.ReactNode> = {
@@ -117,6 +118,7 @@ export function ResourcesGroupedView({
   visibleColumns,
   showPhaseSubtotals = true,
   showActivitySubtotals = true,
+  hideUnassignedPhase = false,
 }: ResourcesGroupedViewProps) {
   // Destructure permissions for easier access
   const { canViewCosts, canViewMargins, canViewCostDetails, canEdit, canDuplicate, canDelete, isAdmin } = permissions;
@@ -211,14 +213,15 @@ export function ResourcesGroupedView({
       });
     });
 
-    // Convert to sorted array
+    // Convert to sorted array, optionally filtering out unassigned phase
     return Array.from(phaseMap.entries())
+      .filter(([key]) => !hideUnassignedPhase || key !== '__no_phase__')
       .sort(([keyA, a], [keyB, b]) => {
         if (keyA === '__no_phase__') return 1;
         if (keyB === '__no_phase__') return -1;
         return (a.phase?.code || '').localeCompare(b.phase?.code || '');
       });
-  }, [resources, activities, phases]);
+  }, [resources, activities, phases, hideUnassignedPhase]);
 
   // Get flat list of resources in display order for navigation
   const flatResourceList = useMemo(() => {

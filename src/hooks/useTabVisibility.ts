@@ -9,6 +9,7 @@ export interface TabAdvancedSettings {
     showPhaseSubtotals?: boolean;
     showActivitySubtotals?: boolean;
     expandAll?: boolean;
+    hideUnassignedPhase?: boolean;
   };
 }
 

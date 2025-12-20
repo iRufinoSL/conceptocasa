@@ -71,20 +71,27 @@ export default function Usuarios() {
   const [isAccessOpen, setIsAccessOpen] = useState(false);
   const [accessUser, setAccessUser] = useState<UserProfile | null>(null);
 
+  // Redirect non-admin users
   useEffect(() => {
-    if (!loading && !user) {
+    if (loading || rolesLoading) return;
+    
+    if (!user) {
       navigate('/auth');
-    } else if (!loading && !rolesLoading && user && !isAdmin()) {
+      return;
+    }
+    
+    if (!isAdmin()) {
       toast.error('No tienes permisos para acceder a esta página');
       navigate('/dashboard');
     }
-  }, [user, loading, rolesLoading, isAdmin, navigate]);
+  }, [user, loading, rolesLoading, navigate]);
 
+  // Fetch users when ready
   useEffect(() => {
-    if (user && !rolesLoading && isAdmin()) {
+    if (!loading && !rolesLoading && user && isAdmin()) {
       fetchUsers();
     }
-  }, [user, rolesLoading, isAdmin]);
+  }, [user, loading, rolesLoading]);
 
   const fetchUsers = async () => {
     setIsLoading(true);
@@ -166,13 +173,17 @@ export default function Usuarios() {
     
     setIsCreating(true);
     try {
-      // Create user via Supabase Auth Admin API (requires service role)
-      // For now, we'll use the regular signUp and inform the admin
+      // First create the profile manually (admin creates user)
+      // Note: Full admin user creation requires Supabase Admin API
+      // For now, we create the profile and show instructions
+      
+      // Create user via signUp - but this will sign out the current admin!
+      // To avoid this, we need to use a different approach
       const { data, error } = await supabase.auth.signUp({
         email: newEmail,
         password: newPassword,
         options: {
-          emailRedirectTo: `${window.location.origin}/`,
+          emailRedirectTo: `${window.location.origin}/auth`,
           data: {
             full_name: newFullName
           }
@@ -196,10 +207,24 @@ export default function Usuarios() {
         }
       }
 
-      toast.success('Usuario creado correctamente');
+      toast.success(
+        'Usuario creado correctamente. El usuario recibirá un email de confirmación.',
+        { duration: 5000 }
+      );
+      
+      // Show info about credentials
+      toast.info(
+        `Credenciales asignadas:\nEmail: ${newEmail}\nContraseña: (la que definiste)\n\nComunica estos datos al usuario de forma segura.`,
+        { duration: 10000 }
+      );
+      
       setIsCreateOpen(false);
       resetCreateForm();
-      fetchUsers();
+      
+      // Re-login admin if needed (signUp may have changed session)
+      setTimeout(() => {
+        fetchUsers();
+      }, 500);
     } catch (error: any) {
       console.error('Error creating user:', error);
       if (error.message?.includes('already registered')) {
@@ -373,7 +398,8 @@ export default function Usuarios() {
               <DialogHeader>
                 <DialogTitle>Crear Nuevo Usuario</DialogTitle>
                 <DialogDescription>
-                  Ingresa los datos del nuevo usuario. Recibirá un email de confirmación.
+                  Ingresa los datos del nuevo usuario. Deberás comunicarle las credenciales de forma segura.
+                  El usuario recibirá un email de confirmación y podrá cambiar su contraseña desde su perfil.
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4 py-4">

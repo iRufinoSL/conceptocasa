@@ -27,6 +27,7 @@ import { ResourceInlineEdit } from './ResourceInlineEdit';
 import { BudgetResourceForm } from './BudgetResourceForm';
 import { ActivitiesWorkAreaGroupedView } from './ActivitiesWorkAreaGroupedView';
 import { useCompanySettings } from '@/hooks/useCompanySettings';
+import { usePermissions, canAccessActivity, BudgetPermissions } from '@/hooks/usePermissions';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { format, addDays, parseISO } from 'date-fns';
@@ -155,6 +156,7 @@ const emptyForm: ActivityForm = {
 
 export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStartDate, budgetEndDate }: BudgetActivitiesTabProps) {
   const { settings: companySettings } = useCompanySettings();
+  const permissions = usePermissions(budgetId);
   const [activities, setActivities] = useState<BudgetActivity[]>([]);
   const [phases, setPhases] = useState<BudgetPhase[]>([]);
   const [measurements, setMeasurements] = useState<Measurement[]>([]);
@@ -1196,15 +1198,39 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
     }
   };
 
-  // Filter activities
-  const filteredActivities = activities.filter(a => {
-    return (
-      searchMatch(a.name, searchTerm) ||
-      searchMatch(a.code, searchTerm) ||
-      searchMatch(a.description, searchTerm) ||
-      searchMatch(a.measurement_unit, searchTerm)
-    );
-  });
+  // Filter activities based on search and granular permissions
+  const filteredActivities = useMemo(() => {
+    let filtered = activities.filter(a => {
+      return (
+        searchMatch(a.name, searchTerm) ||
+        searchMatch(a.code, searchTerm) ||
+        searchMatch(a.description, searchTerm) ||
+        searchMatch(a.measurement_unit, searchTerm)
+      );
+    });
+
+    // Apply granular permissions filter for non-admin users with granular access
+    if (!permissions.isAdmin && permissions.hasGranularAccess) {
+      filtered = filtered.filter(activity => 
+        canAccessActivity(permissions, activity.id, 'view')
+      );
+    }
+
+    return filtered;
+  }, [activities, searchTerm, permissions]);
+
+  // Check if user can edit a specific activity
+  const canEditActivity = useCallback((activityId: string): boolean => {
+    if (permissions.isAdmin) return true;
+    if (!permissions.canEdit) return false;
+    
+    // If user has granular access, check specific activity permissions
+    if (permissions.hasGranularAccess) {
+      return canAccessActivity(permissions, activityId, 'edit');
+    }
+    
+    return permissions.canEdit;
+  }, [permissions]);
 
   // Calculate total for PDF export
   const totalResourcesSubtotal = useMemo(() => {
@@ -1519,7 +1545,7 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
                 <TableHead>MediciónID</TableHead>
                 <TableHead className="text-right">€SubTotal Recursos</TableHead>
                 <TableHead>Archivos</TableHead>
-                {isAdmin && <TableHead className="w-20">Acciones</TableHead>}
+                {(isAdmin || permissions.canEdit) && <TableHead className="w-20">Acciones</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -1530,7 +1556,7 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
                   <TableRow key={activity.id}>
                     <TableCell className="font-mono text-sm">{generateActivityId(activity)}</TableCell>
                     <TableCell className="text-center">
-                      {isAdmin ? (
+                      {canEditActivity(activity.id) ? (
                         <button
                           onClick={async () => {
                             const newValue = !activity.uses_measurement;
@@ -1569,7 +1595,7 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
                       {activity.measurement_id ? formatNumber(relatedUnits) : '-'}
                     </TableCell>
                     <TableCell className="text-sm max-w-[200px]">
-                      {isAdmin ? (
+                      {canEditActivity(activity.id) ? (
                         <MeasurementInlineSelect
                           ref={(el) => registerCellRef(activity.id, el)}
                           activityId={activity.id}
@@ -1602,7 +1628,7 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
                         {activity.files_count || 0}
                       </Button>
                     </TableCell>
-                    {isAdmin && (
+                    {canEditActivity(activity.id) && (
                       <TableCell>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
@@ -1615,21 +1641,25 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
                               <Pencil className="h-4 w-4 mr-2" />
                               Editar
                             </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleDuplicate(activity)}>
-                              <Copy className="h-4 w-4 mr-2" />
-                              Duplicar
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleManageFiles(activity)}>
-                              <FileUp className="h-4 w-4 mr-2" />
-                              Archivos
-                            </DropdownMenuItem>
-                            <DropdownMenuItem 
-                              onClick={() => handleDeleteClick(activity)}
-                              className="text-destructive"
-                            >
-                              <Trash2 className="h-4 w-4 mr-2" />
-                              Eliminar
-                            </DropdownMenuItem>
+                            {isAdmin && (
+                              <>
+                                <DropdownMenuItem onClick={() => handleDuplicate(activity)}>
+                                  <Copy className="h-4 w-4 mr-2" />
+                                  Duplicar
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleManageFiles(activity)}>
+                                  <FileUp className="h-4 w-4 mr-2" />
+                                  Archivos
+                                </DropdownMenuItem>
+                                <DropdownMenuItem 
+                                  onClick={() => handleDeleteClick(activity)}
+                                  className="text-destructive"
+                                >
+                                  <Trash2 className="h-4 w-4 mr-2" />
+                                  Eliminar
+                                </DropdownMenuItem>
+                              </>
+                            )}
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </TableCell>
@@ -1639,7 +1669,7 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
               })}
               {filteredActivities.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={isAdmin ? 9 : 8} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={(isAdmin || permissions.canEdit) ? 9 : 8} className="text-center py-8 text-muted-foreground">
                     {searchTerm 
                       ? 'No se encontraron actividades con ese criterio'
                       : 'No hay actividades. Crea una nueva o importa desde CSV.'}
@@ -1704,7 +1734,7 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
                               <TableHead>MediciónID</TableHead>
                               <TableHead className="text-right">€SubTotal Recursos</TableHead>
                               <TableHead>Archivos</TableHead>
-                              {isAdmin && <TableHead className="w-20">Acciones</TableHead>}
+                              {(isAdmin || permissions.canEdit) && <TableHead className="w-20">Acciones</TableHead>}
                             </TableRow>
                           </TableHeader>
                           <TableBody>
@@ -1718,7 +1748,7 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
                                     {activity.measurement_id ? formatNumber(relatedUnits) : '-'}
                                   </TableCell>
                                   <TableCell className="text-sm max-w-[150px]">
-                                    {isAdmin ? (
+                                    {canEditActivity(activity.id) ? (
                                       <MeasurementInlineSelect
                                         ref={(el) => registerCellRef(activity.id, el)}
                                         activityId={activity.id}
@@ -1745,7 +1775,7 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
                                       <File className="h-4 w-4 mr-1" />{activity.files_count || 0}
                                     </Button>
                                   </TableCell>
-                                  {isAdmin && (
+                                  {canEditActivity(activity.id) && (
                                     <TableCell>
                                       <DropdownMenu>
                                         <DropdownMenuTrigger asChild>
@@ -1755,12 +1785,16 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
                                           <DropdownMenuItem onClick={() => handleEdit(activity)}>
                                             <Pencil className="h-4 w-4 mr-2" />Editar
                                           </DropdownMenuItem>
-                                          <DropdownMenuItem onClick={() => handleDuplicate(activity)}>
-                                            <Copy className="h-4 w-4 mr-2" />Duplicar
-                                          </DropdownMenuItem>
-                                          <DropdownMenuItem onClick={() => handleDeleteClick(activity)} className="text-destructive">
-                                            <Trash2 className="h-4 w-4 mr-2" />Eliminar
-                                          </DropdownMenuItem>
+                                          {isAdmin && (
+                                            <>
+                                              <DropdownMenuItem onClick={() => handleDuplicate(activity)}>
+                                                <Copy className="h-4 w-4 mr-2" />Duplicar
+                                              </DropdownMenuItem>
+                                              <DropdownMenuItem onClick={() => handleDeleteClick(activity)} className="text-destructive">
+                                                <Trash2 className="h-4 w-4 mr-2" />Eliminar
+                                              </DropdownMenuItem>
+                                            </>
+                                          )}
                                         </DropdownMenuContent>
                                       </DropdownMenu>
                                     </TableCell>
@@ -1841,7 +1875,7 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
                             <TableHead>MediciónID</TableHead>
                             <TableHead className="text-right">€SubTotal Recursos</TableHead>
                             <TableHead>Archivos</TableHead>
-                            {isAdmin && <TableHead className="w-20">Acciones</TableHead>}
+                            {(isAdmin || permissions.canEdit) && <TableHead className="w-20">Acciones</TableHead>}
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -1855,7 +1889,7 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
                                   {activity.measurement_id ? formatNumber(relatedUnits) : '-'}
                                 </TableCell>
                                 <TableCell className="text-sm max-w-[150px]">
-                                  {isAdmin ? (
+                                  {canEditActivity(activity.id) ? (
                                     <MeasurementInlineSelect
                                       ref={(el) => registerCellRef(activity.id, el)}
                                       activityId={activity.id}
@@ -1882,7 +1916,7 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
                                     <File className="h-4 w-4 mr-1" />{activity.files_count || 0}
                                   </Button>
                                 </TableCell>
-                                {isAdmin && (
+                                {canEditActivity(activity.id) && (
                                   <TableCell>
                                     <DropdownMenu>
                                       <DropdownMenuTrigger asChild>
@@ -1892,12 +1926,16 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
                                         <DropdownMenuItem onClick={() => handleEdit(activity)}>
                                           <Pencil className="h-4 w-4 mr-2" />Editar
                                         </DropdownMenuItem>
-                                        <DropdownMenuItem onClick={() => handleDuplicate(activity)}>
-                                          <Copy className="h-4 w-4 mr-2" />Duplicar
-                                        </DropdownMenuItem>
-                                        <DropdownMenuItem onClick={() => handleDeleteClick(activity)} className="text-destructive">
-                                          <Trash2 className="h-4 w-4 mr-2" />Eliminar
-                                        </DropdownMenuItem>
+                                        {isAdmin && (
+                                          <>
+                                            <DropdownMenuItem onClick={() => handleDuplicate(activity)}>
+                                              <Copy className="h-4 w-4 mr-2" />Duplicar
+                                            </DropdownMenuItem>
+                                            <DropdownMenuItem onClick={() => handleDeleteClick(activity)} className="text-destructive">
+                                              <Trash2 className="h-4 w-4 mr-2" />Eliminar
+                                            </DropdownMenuItem>
+                                          </>
+                                        )}
                                       </DropdownMenuContent>
                                     </DropdownMenu>
                                   </TableCell>
@@ -1933,7 +1971,8 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
           workAreaRelations={workAreaRelations}
           measurements={measurements}
           measurementRelations={measurementRelations}
-          isAdmin={isAdmin}
+          permissions={permissions}
+          canEditActivity={canEditActivity}
           onEdit={handleEdit}
           onDuplicate={handleDuplicate}
           onDelete={handleDeleteClick}
@@ -1957,7 +1996,7 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
                 <TableHead className="text-center">Duración (días)</TableHead>
                 <TableHead className="text-center">Tolerancia (días)</TableHead>
                 <TableHead>Fecha Fin</TableHead>
-                {isAdmin && <TableHead className="w-20">Acciones</TableHead>}
+                {(isAdmin || permissions.canEdit) && <TableHead className="w-20">Acciones</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -1977,7 +2016,7 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
                         {phase ? `${phase.code} ${phase.name}` : '-'}
                       </TableCell>
                       <TableCell>
-                        {isAdmin ? (
+                        {canEditActivity(activity.id) ? (
                           <Input
                             type="date"
                             value={activity.start_date || ''}
@@ -2008,7 +2047,7 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
                         )}
                       </TableCell>
                       <TableCell className="text-center">
-                        {isAdmin ? (
+                        {canEditActivity(activity.id) ? (
                           <Input
                             type="number"
                             value={activity.duration_days ?? ''}
@@ -2034,7 +2073,7 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
                         )}
                       </TableCell>
                       <TableCell className="text-center">
-                        {isAdmin ? (
+                        {canEditActivity(activity.id) ? (
                           <Input
                             type="number"
                             value={activity.tolerance_days ?? ''}
@@ -2064,7 +2103,7 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
                           ? format(parseISO(activity.end_date), 'dd/MM/yyyy', { locale: es })
                           : '-'}
                       </TableCell>
-                      {isAdmin && (
+                      {canEditActivity(activity.id) && (
                         <TableCell>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
@@ -2077,10 +2116,12 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
                                 <Pencil className="h-4 w-4 mr-2" />
                                 Editar
                               </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => handleDeleteClick(activity)} className="text-destructive">
-                                <Trash2 className="h-4 w-4 mr-2" />
-                                Eliminar
-                              </DropdownMenuItem>
+                              {isAdmin && (
+                                <DropdownMenuItem onClick={() => handleDeleteClick(activity)} className="text-destructive">
+                                  <Trash2 className="h-4 w-4 mr-2" />
+                                  Eliminar
+                                </DropdownMenuItem>
+                              )}
                             </DropdownMenuContent>
                           </DropdownMenu>
                         </TableCell>
@@ -2090,7 +2131,7 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
                 })}
               {filteredActivities.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={isAdmin ? 7 : 6} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={(isAdmin || permissions.canEdit) ? 7 : 6} className="text-center py-8 text-muted-foreground">
                     {searchTerm 
                       ? 'No se encontraron actividades con ese criterio'
                       : 'No hay actividades. Crea una nueva o importa desde CSV.'}

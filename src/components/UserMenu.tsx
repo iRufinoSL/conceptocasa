@@ -23,11 +23,11 @@ export function UserMenu() {
 
   const handleSignOut = async () => {
     const { error } = await signOut();
+    // Navigate to auth even if there's an error (session might already be invalid on server)
+    toast.success('Sesión cerrada');
+    navigate('/auth');
     if (error) {
-      toast.error(error.message);
-    } else {
-      toast.success('Sesión cerrada');
-      navigate('/auth');
+      console.warn('[UserMenu] Sign out warning:', error.message);
     }
   };
 

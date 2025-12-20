@@ -73,6 +73,9 @@ interface ResourcesGroupedViewProps {
   onExpandedPhasesChange: (phases: Set<string>) => void;
   onExpandedActivitiesChange: (activities: Set<string>) => void;
   canEditResource: (resource: BudgetResource) => boolean;
+  visibleColumns?: string[];
+  showPhaseSubtotals?: boolean;
+  showActivitySubtotals?: boolean;
 }
 
 const resourceTypeIcons: Record<string, React.ReactNode> = {
@@ -111,9 +114,19 @@ export function ResourcesGroupedView({
   onExpandedPhasesChange,
   onExpandedActivitiesChange,
   canEditResource,
+  visibleColumns,
+  showPhaseSubtotals = true,
+  showActivitySubtotals = true,
 }: ResourcesGroupedViewProps) {
   // Destructure permissions for easier access
   const { canViewCosts, canViewMargins, canViewCostDetails, canEdit, canDuplicate, canDelete, isAdmin } = permissions;
+  
+  // Define default columns if not specified
+  const defaultColumns = ['activityId', 'usesMeasurement', 'activity', 'phase', 'unit', 'relatedUnits', 'measurementId', 'subtotal', 'files', 'actions'];
+  const columnsToShow = visibleColumns || defaultColumns;
+  
+  // Helper function to check if a column should be visible
+  const isColumnVisible = (columnId: string) => columnsToShow.includes(columnId);
   
   // Build editable fields list based on permissions
   const EDITABLE_FIELDS = useMemo(() => {

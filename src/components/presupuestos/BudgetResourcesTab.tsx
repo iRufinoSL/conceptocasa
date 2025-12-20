@@ -23,6 +23,7 @@ import { ResourcesGroupedView } from './ResourcesGroupedView';
 import { ResourcesActivityGroupedView } from './ResourcesActivityGroupedView';
 import { useCompanySettings } from '@/hooks/useCompanySettings';
 import { usePermissions, canAccessResource, canAccessActivity } from '@/hooks/usePermissions';
+import { useTabVisibility } from '@/hooks/useTabVisibility';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { format } from 'date-fns';
@@ -102,6 +103,7 @@ const UNITS = ['m2', 'm3', 'ml', 'ud', 'h', 'día', 'mes', 'kg', 'l', 'km'];
 export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetResourcesTabProps) {
   const { settings: companySettings } = useCompanySettings();
   const permissions = usePermissions(budgetId);
+  const { getTabAdvancedSettings, userRole } = useTabVisibility();
   const [resources, setResources] = useState<BudgetResource[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
   const [phases, setPhases] = useState<Phase[]>([]);
@@ -111,7 +113,28 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
   const [editingResource, setEditingResource] = useState<BudgetResource | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [resourceToDelete, setResourceToDelete] = useState<BudgetResource | null>(null);
-  const [viewMode, setViewMode] = useState<'list' | 'grouped' | 'activity'>('list');
+  
+  // Get advanced settings for recursos tab
+  const recursosSettings = getTabAdvancedSettings('recursos') as {
+    viewModes?: string[];
+    visibleColumns?: string[];
+    showPhaseSubtotals?: boolean;
+    showActivitySubtotals?: boolean;
+    expandAll?: boolean;
+  } | undefined;
+  
+  // Available view modes based on role settings
+  const availableViewModes = recursosSettings?.viewModes || ['list', 'grouped', 'activity'];
+  
+  // Determine initial view mode - default to first available
+  const getInitialViewMode = (): 'list' | 'grouped' | 'activity' => {
+    if (availableViewModes.includes('grouped')) return 'grouped';
+    if (availableViewModes.includes('list')) return 'list';
+    if (availableViewModes.includes('activity')) return 'activity';
+    return 'grouped';
+  };
+  
+  const [viewMode, setViewMode] = useState<'list' | 'grouped' | 'activity'>(getInitialViewMode());
   
   // Expanded state for grouped views (lifted up to preserve state after edit)
   const [expandedPhases, setExpandedPhases] = useState<Set<string>>(new Set());
@@ -122,6 +145,14 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
   const [bulkEditField, setBulkEditField] = useState<string>('');
   const [bulkEditValue, setBulkEditValue] = useState<string | number>('');
   const [isBulkUpdating, setIsBulkUpdating] = useState(false);
+  
+  // Auto-expand all phases/activities if configured
+  useEffect(() => {
+    if (recursosSettings?.expandAll && phases.length > 0 && activities.length > 0) {
+      setExpandedPhases(new Set(['__no_phase__', ...phases.map(p => p.id)]));
+      setExpandedActivities(new Set(activities.map(a => a.id)));
+    }
+  }, [recursosSettings?.expandAll, phases, activities]);
 
   const fetchData = async () => {
     try {
@@ -1235,39 +1266,47 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
               />
             </div>
             <div className="flex items-center gap-2">
-              {/* View Mode Toggle */}
-              <div className="flex items-center border rounded-md">
-                <Button
-                  variant={viewMode === 'list' ? 'secondary' : 'ghost'}
-                  size="sm"
-                  className="rounded-r-none"
-                  onClick={() => setViewMode('list')}
-                  title="Lista alfabética"
-                >
-                  <List className="h-4 w-4 mr-1" />
-                  Lista
-                </Button>
-                <Button
-                  variant={viewMode === 'activity' ? 'secondary' : 'ghost'}
-                  size="sm"
-                  className="rounded-none border-x"
-                  onClick={() => setViewMode('activity')}
-                  title="Agrupado por Actividad"
-                >
-                  <FileText className="h-4 w-4 mr-1" />
-                  Actividad
-                </Button>
-                <Button
-                  variant={viewMode === 'grouped' ? 'secondary' : 'ghost'}
-                  size="sm"
-                  className="rounded-l-none"
-                  onClick={() => setViewMode('grouped')}
-                  title="Agrupado por Fase y Actividad"
-                >
-                  <FolderTree className="h-4 w-4 mr-1" />
-                  Fase
-                </Button>
-              </div>
+              {/* View Mode Toggle - only show available modes */}
+              {availableViewModes.length > 1 && (
+                <div className="flex items-center border rounded-md">
+                  {availableViewModes.includes('list') && (
+                    <Button
+                      variant={viewMode === 'list' ? 'secondary' : 'ghost'}
+                      size="sm"
+                      className={availableViewModes.indexOf('list') === 0 ? 'rounded-r-none' : 'rounded-none border-x'}
+                      onClick={() => setViewMode('list')}
+                      title="Lista alfabética"
+                    >
+                      <List className="h-4 w-4 mr-1" />
+                      Lista
+                    </Button>
+                  )}
+                  {availableViewModes.includes('activity') && (
+                    <Button
+                      variant={viewMode === 'activity' ? 'secondary' : 'ghost'}
+                      size="sm"
+                      className="rounded-none border-x"
+                      onClick={() => setViewMode('activity')}
+                      title="Agrupado por Actividad"
+                    >
+                      <FileText className="h-4 w-4 mr-1" />
+                      Actividad
+                    </Button>
+                  )}
+                  {availableViewModes.includes('grouped') && (
+                    <Button
+                      variant={viewMode === 'grouped' ? 'secondary' : 'ghost'}
+                      size="sm"
+                      className={availableViewModes.indexOf('grouped') === availableViewModes.length - 1 ? 'rounded-l-none' : 'rounded-none'}
+                      onClick={() => setViewMode('grouped')}
+                      title="Agrupado por Fase y Actividad"
+                    >
+                      <FolderTree className="h-4 w-4 mr-1" />
+                      Fase
+                    </Button>
+                  )}
+                </div>
+              )}
               <Badge variant="secondary" className="text-sm">
                 {filteredResources.length} recursos
               </Badge>
@@ -1315,6 +1354,9 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
               onExpandedPhasesChange={setExpandedPhases}
               onExpandedActivitiesChange={setExpandedActivities}
               canEditResource={canEditResource}
+              visibleColumns={recursosSettings?.visibleColumns}
+              showPhaseSubtotals={recursosSettings?.showPhaseSubtotals}
+              showActivitySubtotals={recursosSettings?.showActivitySubtotals}
             />
           ) : viewMode === 'activity' ? (
             <ResourcesActivityGroupedView

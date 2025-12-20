@@ -2,10 +2,26 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 
+export interface TabAdvancedSettings {
+  recursos?: {
+    viewModes?: string[];
+    visibleColumns?: string[];
+    showPhaseSubtotals?: boolean;
+    showActivitySubtotals?: boolean;
+    expandAll?: boolean;
+  };
+}
+
 export interface TabVisibilitySettings {
   administrador: string[];
   colaborador: string[];
   cliente: string[];
+}
+
+export interface AdvancedSettingsByRole {
+  administrador: TabAdvancedSettings;
+  colaborador: TabAdvancedSettings;
+  cliente: TabAdvancedSettings;
 }
 
 const DEFAULT_SETTINGS: TabVisibilitySettings = {
@@ -14,11 +30,42 @@ const DEFAULT_SETTINGS: TabVisibilitySettings = {
   cliente: ['anteproyecto', 'cuanto-cuesta', 'actividades', 'fases', 'timeline', 'contactos']
 };
 
+const DEFAULT_ADVANCED_SETTINGS: AdvancedSettingsByRole = {
+  administrador: {
+    recursos: {
+      viewModes: ['alphabetical', 'grouped', 'workarea', 'time'],
+      visibleColumns: ['activityId', 'usesMeasurement', 'activity', 'phase', 'unit', 'relatedUnits', 'measurementId', 'subtotal', 'files', 'actions'],
+      showPhaseSubtotals: true,
+      showActivitySubtotals: true,
+      expandAll: false
+    }
+  },
+  colaborador: {
+    recursos: {
+      viewModes: ['alphabetical', 'grouped', 'workarea', 'time'],
+      visibleColumns: ['activityId', 'usesMeasurement', 'activity', 'phase', 'unit', 'relatedUnits', 'measurementId', 'subtotal', 'files', 'actions'],
+      showPhaseSubtotals: true,
+      showActivitySubtotals: true,
+      expandAll: false
+    }
+  },
+  cliente: {
+    recursos: {
+      viewModes: ['grouped'],
+      visibleColumns: ['activityId', 'activity', 'phase', 'unit', 'relatedUnits', 'measurementId'],
+      showPhaseSubtotals: true,
+      showActivitySubtotals: true,
+      expandAll: true
+    }
+  }
+};
+
 type AppRole = 'administrador' | 'colaborador' | 'cliente';
 
 export function useTabVisibility() {
   const { roles } = useAuth();
   const [settings, setSettings] = useState<TabVisibilitySettings>(DEFAULT_SETTINGS);
+  const [advancedSettings, setAdvancedSettings] = useState<AdvancedSettingsByRole>(DEFAULT_ADVANCED_SETTINGS);
   const [isLoading, setIsLoading] = useState(true);
 
   // Get the primary role (highest privilege)
@@ -29,6 +76,8 @@ export function useTabVisibility() {
     return null;
   };
 
+  const userRole = getUserRole();
+
   useEffect(() => {
     fetchSettings();
   }, []);
@@ -37,18 +86,25 @@ export function useTabVisibility() {
     try {
       const { data, error } = await supabase
         .from('tab_visibility_settings')
-        .select('role, visible_tabs');
+        .select('role, visible_tabs, advanced_settings');
 
       if (error) throw error;
 
       if (data && data.length > 0) {
         const newSettings: TabVisibilitySettings = { ...DEFAULT_SETTINGS };
-        data.forEach((item: { role: string; visible_tabs: string[] }) => {
-          if (item.role === 'administrador' || item.role === 'colaborador' || item.role === 'cliente') {
-            newSettings[item.role] = item.visible_tabs;
+        const newAdvanced: AdvancedSettingsByRole = { ...DEFAULT_ADVANCED_SETTINGS };
+        
+        data.forEach((item) => {
+          const role = item.role as AppRole;
+          if (role === 'administrador' || role === 'colaborador' || role === 'cliente') {
+            newSettings[role] = item.visible_tabs;
+            if (item.advanced_settings && typeof item.advanced_settings === 'object') {
+              newAdvanced[role] = item.advanced_settings as TabAdvancedSettings;
+            }
           }
         });
         setSettings(newSettings);
+        setAdvancedSettings(newAdvanced);
       }
     } catch (error) {
       console.error('Error fetching tab visibility settings:', error);
@@ -95,12 +151,31 @@ export function useTabVisibility() {
     return settings[role] || [];
   };
 
+  const getAdvancedSettingsForRole = (role: keyof TabVisibilitySettings): TabAdvancedSettings => {
+    return advancedSettings[role] || {};
+  };
+
+  // Get current user's advanced settings for a specific tab
+  const getTabAdvancedSettings = (tabId: string): TabAdvancedSettings[keyof TabAdvancedSettings] | undefined => {
+    const role = getUserRole();
+    if (!role) return undefined;
+    
+    const roleAdvanced = advancedSettings[role];
+    if (!roleAdvanced) return undefined;
+    
+    return roleAdvanced[tabId as keyof TabAdvancedSettings];
+  };
+
   return {
     settings,
+    advancedSettings,
     isLoading,
     isTabVisible,
     updateSettings,
     getVisibleTabsForRole,
+    getAdvancedSettingsForRole,
+    getTabAdvancedSettings,
+    userRole,
     refetch: fetchSettings
   };
 }

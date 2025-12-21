@@ -15,7 +15,6 @@ interface CloneResult {
     workAreas: number;
     workAreaMeasurements: number;
     workAreaActivities: number;
-    activityFiles: number;
     budgetContacts: number;
     budgetItems: number;
     budgetConcepts: number;
@@ -63,7 +62,6 @@ export async function cloneBudget(
     workAreas: 0,
     workAreaMeasurements: 0,
     workAreaActivities: 0,
-    activityFiles: 0,
     budgetContacts: 0,
     budgetItems: 0,
     budgetConcepts: 0,
@@ -485,94 +483,29 @@ export async function cloneBudget(
       }
     }
 
-    // 12) Clone activity files + copy objects in storage (ONLY in clon completo)
-    if (preserveMeasurementValues) {
-      const { data: sourceFiles, error: filesError } = await supabase
-        .from("budget_activity_files")
-        .select("*")
-        .in(
-          "activity_id",
-          (sourceActivities || []).map((a) => a.id)
-        );
-
-      if (filesError) throw new Error(filesError.message);
-
-      if (sourceFiles?.length) {
-        for (const file of sourceFiles) {
-          const newActivityId = activityIdMap.get(file.activity_id);
-          if (!newActivityId) continue;
-
-          const ext = safeExtFromFilename(file.file_name);
-          const newPath = `${newActivityId}/${Date.now()}${ext}`;
-
-          const { error: copyError } = await supabase.storage.from("activity-files").copy(file.file_path, newPath);
-          if (copyError) continue;
-
-          const { error: dbError } = await supabase.from("budget_activity_files").insert({
-            ...file,
-            id: undefined,
-            created_at: undefined,
-            activity_id: newActivityId,
-            file_path: newPath,
-          });
-
-          if (!dbError) stats.activityFiles++;
-        }
-      }
-    }
-
-    // 13) Clone predesigns (texts always; files only in clon completo)
+    // 12) Clone predesigns (texts always, files excluded per user request)
     const { data: sourcePredesigns, error: predesignsError } = await supabase
       .from("budget_predesigns")
       .select("*")
       .eq("budget_id", sourceBudgetId);
 
-    if (predesignsError) throw new Error(predisignsError.message);
+    if (predesignsError) throw new Error(predesignsError.message);
 
     if (sourcePredesigns?.length) {
       for (const predesign of sourcePredesigns) {
-        if (!preserveMeasurementValues) {
-          const { error } = await supabase.from("budget_predesigns").insert({
-            ...predesign,
-            id: undefined,
-            created_at: undefined,
-            updated_at: undefined,
-            budget_id: newBudgetId,
-            file_name: null,
-            file_path: null,
-            file_type: null,
-            file_size: null,
-            uploaded_by: null,
-          });
-          if (!error) stats.predesigns++;
-          continue;
-        }
-
-        let newFilePath: string | null = null;
-        if (predesign.file_path) {
-          const ext = safeExtFromFilename(predisign.file_name);
-          newFilePath = `${newBudgetId}/${crypto.randomUUID()}${ext}`;
-
-          const { error: copyError } = await supabase.storage
-            .from("budget-predesigns")
-            .copy(predisign.file_path, newFilePath);
-
-          if (copyError) newFilePath = null;
-        }
-
+        // Clone predesign entry without files (files excluded from clone)
         const { error } = await supabase.from("budget_predesigns").insert({
           ...predesign,
           id: undefined,
           created_at: undefined,
           updated_at: undefined,
           budget_id: newBudgetId,
-          file_path: newFilePath,
-          file_name: newFilePath ? predesign.file_name : null,
-          file_type: newFilePath ? predesign.file_type : null,
-          file_size: newFilePath ? predesign.file_size : null,
-          uploaded_by: newFilePath ? predesign.uploaded_by : null,
+          file_name: null,
+          file_path: null,
+          file_type: null,
+          file_size: null,
+          uploaded_by: null,
         });
-
         if (!error) stats.predesigns++;
       }
     }

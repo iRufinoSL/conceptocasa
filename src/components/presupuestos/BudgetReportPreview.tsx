@@ -1196,7 +1196,6 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
 
         filteredPhasesForPdf.forEach(phase => {
           const phaseActivities = filteredActivitiesForPdf.filter(a => a.phase_id === phase.id);
-          if (phaseActivities.length === 0) return;
 
           const phaseSubtotal = phaseActivities.reduce((sum, a) => sum + (activityResourcesMap.get(a.id) || 0), 0);
 
@@ -2426,7 +2425,6 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
                       {/* Phases with activities */}
                       {phases.map(phase => {
                         const phaseActivities = activities.filter(a => a.phase_id === phase.id);
-                        if (phaseActivities.length === 0) return null;
                         
                         const phaseSubtotal = phaseActivities.reduce((sum, a) => sum + (activityResourcesMap.get(a.id) || 0), 0);
                         

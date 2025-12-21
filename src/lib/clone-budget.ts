@@ -67,6 +67,8 @@ export async function cloneBudget(
     budgetConcepts: 0,
   };
 
+  let newBudgetId: string | undefined;
+
   try {
     // 0) Load source presupuesto (so we can clone ALL fields)
     const { data: sourceBudget, error: sourceBudgetError } = await supabase
@@ -114,9 +116,7 @@ export async function cloneBudget(
       throw new Error(`Error creando presupuesto: ${budgetError?.message}`);
     }
 
-    const newBudgetId = newBudget.id as string;
-
-    // 2.1) Ensure current user keeps access to new budget (best-effort)
+    newBudgetId = newBudget.id as string;
     try {
       const { data: authData } = await supabase.auth.getUser();
       const userId = authData?.user?.id;
@@ -529,6 +529,21 @@ export async function cloneBudget(
     return { success: true, newBudgetId, stats };
   } catch (error: any) {
     console.error("Error cloning budget:", error);
-    return { success: false, error: error.message || "Error desconocido al clonar" };
+
+    // Si el proceso falla a mitad, puede quedar una copia parcial.
+    // Intentamos limpiar el presupuesto nuevo (best-effort).
+    if (newBudgetId) {
+      try {
+        await supabase.from("user_presupuestos").delete().eq("presupuesto_id", newBudgetId);
+        await supabase.from("presupuestos").delete().eq("id", newBudgetId);
+      } catch {
+        // silent
+      }
+    }
+
+    return {
+      success: false,
+      error: error.message || "Error desconocido al clonar",
+    };
   }
 }

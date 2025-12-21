@@ -4,6 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { InactivityHandler } from "@/components/InactivityHandler";
+import { AuthProvider } from "@/context/AuthContext";
 import Landing from "./pages/Landing";
 import Dashboard from "./pages/Dashboard";
 import Recursos from "./pages/Recursos";
@@ -27,24 +28,26 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
-        <InactivityHandler />
-        <Routes>
-          <Route path="/" element={<Landing />} />
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/recursos" element={<Recursos />} />
-          <Route path="/presupuestos" element={<Presupuestos />} />
-          <Route path="/presupuestos/:id" element={<PresupuestoDashboard />} />
-          <Route path="/proyectos" element={<Proyectos />} />
-          <Route path="/crm" element={<CRM />} />
-          <Route path="/agenda" element={<Agenda />} />
-          <Route path="/documentos" element={<Documentos />} />
-          <Route path="/usuarios" element={<Usuarios />} />
-          <Route path="/configuracion" element={<Configuracion />} />
-          <Route path="/setup" element={<Setup />} />
-          <Route path="/auth" element={<Auth />} />
-          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-          <Route path="*" element={<NotFound />} />
-        </Routes>
+        <AuthProvider>
+          <InactivityHandler />
+          <Routes>
+            <Route path="/" element={<Landing />} />
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/recursos" element={<Recursos />} />
+            <Route path="/presupuestos" element={<Presupuestos />} />
+            <Route path="/presupuestos/:id" element={<PresupuestoDashboard />} />
+            <Route path="/proyectos" element={<Proyectos />} />
+            <Route path="/crm" element={<CRM />} />
+            <Route path="/agenda" element={<Agenda />} />
+            <Route path="/documentos" element={<Documentos />} />
+            <Route path="/usuarios" element={<Usuarios />} />
+            <Route path="/configuracion" element={<Configuracion />} />
+            <Route path="/setup" element={<Setup />} />
+            <Route path="/auth" element={<Auth />} />
+            {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>

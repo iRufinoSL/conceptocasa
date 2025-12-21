@@ -30,7 +30,23 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog';
-import { ArrowLeft, Download, FileText, Search, Filter, FolderOpen, Upload, Plus, Eye, X, Trash2, Pencil } from 'lucide-react';
+import { 
+  ArrowLeft, 
+  Download, 
+  FileText, 
+  Search, 
+  Filter, 
+  FolderOpen, 
+  Upload, 
+  Plus, 
+  Eye, 
+  X, 
+  Trash2, 
+  Pencil,
+  Link as LinkIcon,
+  ExternalLink,
+  Save
+} from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -56,6 +72,7 @@ interface ProjectDocument {
   file_type: string | null;
   file_size: number | null;
   document_type: string | null;
+  document_url: string | null;
   created_at: string | null;
   project_id: string | null;
   project?: {
@@ -64,15 +81,19 @@ interface ProjectDocument {
   } | null;
 }
 
-const documentTypeLabels: Record<string, string> = {
-  plano: 'Plano',
-  contrato: 'Contrato',
-  factura: 'Factura',
-  presupuesto: 'Presupuesto',
-  foto: 'Fotografía',
-  informe: 'Informe',
-  otro: 'Otro',
-};
+const DEFAULT_DOCUMENT_TYPES = [
+  'Plano',
+  'Presupuesto',
+  'Contrato',
+  'Factura',
+  'Informe',
+  'Fotografía',
+  'Certificado',
+  'Licencia',
+  'Memoria',
+  'Enlace web',
+  'Otro'
+];
 
 const toSafeStorageKey = (input: string) => {
   const normalized = input
@@ -100,6 +121,15 @@ const buildDocumentStoragePath = (folder: string, originalName: string) => {
   return `${safeFolder}/${safeFile}`;
 };
 
+const isValidUrl = (url: string) => {
+  try {
+    new URL(url);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
 export default function Documentos() {
   const navigate = useNavigate();
   const { user, loading, isAdmin } = useAuth();
@@ -110,13 +140,21 @@ export default function Documentos() {
   const [filterType, setFilterType] = useState<string>('all');
   const [filterProject, setFilterProject] = useState<string>('all');
 
+  // Custom document types
+  const [customTypes, setCustomTypes] = useState<string[]>([]);
+  const allDocumentTypes = [...DEFAULT_DOCUMENT_TYPES, ...customTypes.filter(t => !DEFAULT_DOCUMENT_TYPES.includes(t))];
+
   // Upload state
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [uploadName, setUploadName] = useState('');
   const [uploadProjectId, setUploadProjectId] = useState<string>('');
-  const [uploadDocType, setUploadDocType] = useState<string>('otro');
+  const [uploadDocType, setUploadDocType] = useState<string>('Otro');
   const [uploadDescription, setUploadDescription] = useState('');
+  const [uploadUrl, setUploadUrl] = useState('');
+  const [isAddingCustomType, setIsAddingCustomType] = useState(false);
+  const [newCustomType, setNewCustomType] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Preview state
@@ -135,9 +173,14 @@ export default function Documentos() {
   const [documentToEdit, setDocumentToEdit] = useState<ProjectDocument | null>(null);
   const [editName, setEditName] = useState('');
   const [editDescription, setEditDescription] = useState('');
-  const [editDocType, setEditDocType] = useState('otro');
+  const [editDocType, setEditDocType] = useState('Otro');
   const [editProjectId, setEditProjectId] = useState<string>('');
+  const [editUrl, setEditUrl] = useState('');
+  const [editFile, setEditFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
+  const [isAddingEditCustomType, setIsAddingEditCustomType] = useState(false);
+  const [newEditCustomType, setNewEditCustomType] = useState('');
+  const editFileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -165,6 +208,12 @@ export default function Documentos() {
 
       if (error) throw error;
       setDocuments(data || []);
+      
+      // Extract custom types from existing documents
+      const existingTypes = (data || [])
+        .map(d => d.document_type)
+        .filter((t): t is string => !!t && !DEFAULT_DOCUMENT_TYPES.includes(t));
+      setCustomTypes([...new Set(existingTypes)]);
     } catch (error) {
       console.error('Error fetching documents:', error);
       toast.error('Error al cargar los documentos');
@@ -216,6 +265,10 @@ export default function Documentos() {
     }
   };
 
+  const handleOpenUrl = (url: string) => {
+    window.open(url, '_blank', 'noopener,noreferrer');
+  };
+
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -224,59 +277,110 @@ export default function Documentos() {
         return;
       }
       setSelectedFile(file);
+      // Auto-fill name if empty
+      if (!uploadName) {
+        setUploadName(file.name);
+      }
     }
   };
 
+  const handleAddCustomType = () => {
+    if (!newCustomType.trim()) return;
+    
+    const trimmed = newCustomType.trim();
+    if (!allDocumentTypes.includes(trimmed)) {
+      setCustomTypes([...customTypes, trimmed]);
+      setUploadDocType(trimmed);
+    } else {
+      setUploadDocType(trimmed);
+    }
+    setNewCustomType('');
+    setIsAddingCustomType(false);
+  };
+
+  const handleAddEditCustomType = () => {
+    if (!newEditCustomType.trim()) return;
+    
+    const trimmed = newEditCustomType.trim();
+    if (!allDocumentTypes.includes(trimmed)) {
+      setCustomTypes([...customTypes, trimmed]);
+      setEditDocType(trimmed);
+    } else {
+      setEditDocType(trimmed);
+    }
+    setNewEditCustomType('');
+    setIsAddingEditCustomType(false);
+  };
+
   const handleUpload = async () => {
-    if (!selectedFile) {
-      toast.error('Selecciona un archivo');
+    if (!uploadName.trim()) {
+      toast.error('El nombre del documento es obligatorio');
+      return;
+    }
+
+    if (uploadUrl && !isValidUrl(uploadUrl)) {
+      toast.error('La URL no es válida');
       return;
     }
 
     setUploading(true);
     try {
-      const fileName = buildDocumentStoragePath(uploadProjectId || 'general', selectedFile.name);
+      let filePath: string | null = null;
+      let fileType: string | null = null;
+      let fileSize: number | null = null;
 
-      const { error: uploadError } = await supabase.storage
-        .from('project-documents')
-        .upload(fileName, selectedFile);
+      // Upload file if selected
+      if (selectedFile) {
+        const fileName = buildDocumentStoragePath(uploadProjectId || 'general', selectedFile.name);
 
-      if (uploadError) {
-        console.error('Storage upload error:', uploadError);
-        if (uploadError.message?.includes('row-level security') || uploadError.message?.includes('policy')) {
-          toast.error('No tienes permisos para subir documentos');
-        } else {
-          toast.error(`Error de almacenamiento: ${uploadError.message}`);
+        const { error: uploadError } = await supabase.storage
+          .from('project-documents')
+          .upload(fileName, selectedFile);
+
+        if (uploadError) {
+          console.error('Storage upload error:', uploadError);
+          if (uploadError.message?.includes('row-level security') || uploadError.message?.includes('policy')) {
+            toast.error('No tienes permisos para subir documentos');
+          } else {
+            toast.error(`Error de almacenamiento: ${uploadError.message}`);
+          }
+          return;
         }
-        return;
+
+        filePath = fileName;
+        fileType = selectedFile.type;
+        fileSize = selectedFile.size;
       }
 
       const { error: dbError } = await supabase.from('project_documents').insert({
         project_id: uploadProjectId || null,
-        name: selectedFile.name,
-        description: uploadDescription || null,
-        file_path: fileName,
-        file_type: selectedFile.type,
-        file_size: selectedFile.size,
+        name: uploadName.trim(),
+        description: uploadDescription.trim() || null,
+        file_path: filePath,
+        file_type: fileType,
+        file_size: fileSize,
         document_type: uploadDocType,
+        document_url: uploadUrl.trim() || null,
         uploaded_by: user?.id,
       });
 
       if (dbError) {
         console.error('Database insert error:', dbError);
         // Clean up uploaded file
-        await supabase.storage.from('project-documents').remove([fileName]);
+        if (filePath) {
+          await supabase.storage.from('project-documents').remove([filePath]);
+        }
         toast.error(`Error de base de datos: ${dbError.message}`);
         return;
       }
 
-      toast.success('Documento subido correctamente');
+      toast.success('Documento guardado correctamente');
       setUploadDialogOpen(false);
       resetUploadForm();
       fetchDocuments();
     } catch (error: any) {
       console.error('Error uploading document:', error);
-      toast.error(error?.message || 'Error al subir el documento');
+      toast.error(error?.message || 'Error al guardar el documento');
     } finally {
       setUploading(false);
     }
@@ -284,9 +388,13 @@ export default function Documentos() {
 
   const resetUploadForm = () => {
     setSelectedFile(null);
+    setUploadName('');
     setUploadProjectId('');
-    setUploadDocType('otro');
+    setUploadDocType('Otro');
     setUploadDescription('');
+    setUploadUrl('');
+    setIsAddingCustomType(false);
+    setNewCustomType('');
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -318,7 +426,7 @@ export default function Documentos() {
     try {
       const { data, error } = await supabase.storage
         .from('project-documents')
-        .createSignedUrl(doc.file_path, 300); // 5 min URL
+        .createSignedUrl(doc.file_path, 300);
 
       if (error) throw error;
 
@@ -383,23 +491,76 @@ export default function Documentos() {
     setDocumentToEdit(doc);
     setEditName(doc.name);
     setEditDescription(doc.description || '');
-    setEditDocType(doc.document_type || 'otro');
+    setEditDocType(doc.document_type || 'Otro');
     setEditProjectId(doc.project_id || '');
+    setEditUrl(doc.document_url || '');
+    setEditFile(null);
     setEditDialogOpen(true);
+  };
+
+  const handleEditFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 50 * 1024 * 1024) {
+        toast.error('El archivo no puede superar 50MB');
+        return;
+      }
+      setEditFile(file);
+    }
   };
 
   const handleEditSave = async () => {
     if (!documentToEdit) return;
 
+    if (!editName.trim()) {
+      toast.error('El nombre es obligatorio');
+      return;
+    }
+
+    if (editUrl && !isValidUrl(editUrl)) {
+      toast.error('La URL no es válida');
+      return;
+    }
+
     setSaving(true);
     try {
+      let newFilePath: string | null = documentToEdit.file_path;
+      let newFileType: string | null = documentToEdit.file_type;
+      let newFileSize: number | null = documentToEdit.file_size;
+
+      // If new file selected, upload it and delete old one
+      if (editFile) {
+        const fileName = buildDocumentStoragePath(editProjectId || 'general', editFile.name);
+        
+        const { error: uploadError } = await supabase.storage
+          .from('project-documents')
+          .upload(fileName, editFile);
+
+        if (uploadError) throw uploadError;
+
+        // Delete old file if exists
+        if (documentToEdit.file_path) {
+          await supabase.storage
+            .from('project-documents')
+            .remove([documentToEdit.file_path]);
+        }
+
+        newFilePath = fileName;
+        newFileType = editFile.type;
+        newFileSize = editFile.size;
+      }
+
       const { error } = await supabase
         .from('project_documents')
         .update({
-          name: editName,
-          description: editDescription || null,
+          name: editName.trim(),
+          description: editDescription.trim() || null,
           document_type: editDocType,
           project_id: editProjectId || null,
+          document_url: editUrl.trim() || null,
+          file_path: newFilePath,
+          file_type: newFileType,
+          file_size: newFileSize,
         })
         .eq('id', documentToEdit.id);
 
@@ -408,6 +569,8 @@ export default function Documentos() {
       toast.success('Documento actualizado correctamente');
       setEditDialogOpen(false);
       setDocumentToEdit(null);
+      setEditFile(null);
+      if (editFileInputRef.current) editFileInputRef.current.value = '';
       fetchDocuments();
     } catch (error) {
       console.error('Error updating document:', error);
@@ -463,7 +626,7 @@ export default function Documentos() {
                 <div>
                   <h1 className="text-xl font-bold text-foreground">Gestión Documental</h1>
                   <p className="text-sm text-muted-foreground">
-                    Todos los documentos de proyectos
+                    Todos los documentos
                   </p>
                 </div>
               </div>
@@ -473,7 +636,7 @@ export default function Documentos() {
               {isAdmin() && (
                 <Button onClick={() => setUploadDialogOpen(true)} className="gap-2">
                   <Plus className="h-4 w-4" />
-                  <span className="hidden sm:inline">Subir documento</span>
+                  <span className="hidden sm:inline">Nuevo documento</span>
                 </Button>
               )}
             </div>
@@ -508,9 +671,9 @@ export default function Documentos() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todos los tipos</SelectItem>
-                  {Object.entries(documentTypeLabels).map(([value, label]) => (
-                    <SelectItem key={value} value={value}>
-                      {label}
+                  {allDocumentTypes.map((type) => (
+                    <SelectItem key={type} value={type}>
+                      {type}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -568,7 +731,15 @@ export default function Documentos() {
                       <TableRow key={doc.id}>
                         <TableCell>
                           <div>
-                            <p className="font-medium">{doc.name}</p>
+                            <div className="flex items-center gap-2">
+                              <p className="font-medium">{doc.name}</p>
+                              {doc.document_url && (
+                                <Badge variant="secondary" className="text-xs">
+                                  <LinkIcon className="h-3 w-3 mr-1" />
+                                  URL
+                                </Badge>
+                              )}
+                            </div>
                             {doc.description && (
                               <p className="text-sm text-muted-foreground truncate max-w-xs">
                                 {doc.description}
@@ -586,13 +757,13 @@ export default function Documentos() {
                         <TableCell>
                           {doc.document_type ? (
                             <Badge variant="secondary">
-                              {documentTypeLabels[doc.document_type] || doc.document_type}
+                              {doc.document_type}
                             </Badge>
                           ) : (
                             <span className="text-muted-foreground">-</span>
                           )}
                         </TableCell>
-                        <TableCell>{formatFileSize(doc.file_size)}</TableCell>
+                        <TableCell>{doc.file_path ? formatFileSize(doc.file_size) : '-'}</TableCell>
                         <TableCell>
                           {doc.created_at
                             ? format(new Date(doc.created_at), 'dd MMM yyyy', { locale: es })
@@ -600,6 +771,16 @@ export default function Documentos() {
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex items-center justify-end gap-1">
+                            {doc.document_url && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleOpenUrl(doc.document_url!)}
+                                title="Abrir enlace"
+                              >
+                                <ExternalLink className="h-4 w-4" />
+                              </Button>
+                            )}
                             {canPreview(doc) && (
                               <Button
                                 variant="ghost"
@@ -610,15 +791,16 @@ export default function Documentos() {
                                 <Eye className="h-4 w-4" />
                               </Button>
                             )}
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleDownload(doc)}
-                              disabled={!doc.file_path}
-                              title="Descargar"
-                            >
-                              <Download className="h-4 w-4" />
-                            </Button>
+                            {doc.file_path && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleDownload(doc)}
+                                title="Descargar"
+                              >
+                                <Download className="h-4 w-4" />
+                              </Button>
+                            )}
                             {isAdmin() && (
                               <>
                                 <Button
@@ -654,70 +836,165 @@ export default function Documentos() {
 
       {/* Upload Dialog */}
       <Dialog open={uploadDialogOpen} onOpenChange={setUploadDialogOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Upload className="h-5 w-5" />
-              Subir documento
+              <Plus className="h-5 w-5" />
+              Nuevo documento
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
+            {/* Document Name */}
             <div className="space-y-2">
-              <Label>Proyecto (opcional)</Label>
-              <Select 
-                value={uploadProjectId || '__none__'} 
-                onValueChange={(val) => setUploadProjectId(val === '__none__' ? '' : val)}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Sin proyecto asignado" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none__">Sin proyecto</SelectItem>
-                  {projects.map((project) => (
-                    <SelectItem key={project.id} value={project.id}>
-                      {project.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>Tipo de documento</Label>
-              <Select value={uploadDocType} onValueChange={setUploadDocType}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {Object.entries(documentTypeLabels).map(([value, label]) => (
-                    <SelectItem key={value} value={value}>
-                      {label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>Archivo *</Label>
+              <Label>Nombre del documento *</Label>
               <Input
-                ref={fileInputRef}
-                type="file"
-                onChange={handleFileSelect}
-                accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.zip"
+                value={uploadName}
+                onChange={(e) => setUploadName(e.target.value)}
+                placeholder="Nombre del documento..."
+                maxLength={200}
               />
-              {selectedFile && (
-                <p className="text-sm text-muted-foreground">
-                  {selectedFile.name} ({formatFileSize(selectedFile.size)})
-                </p>
-              )}
             </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              {/* Document Type with custom option */}
+              <div className="space-y-2">
+                <Label>Tipo de documento</Label>
+                {isAddingCustomType ? (
+                  <div className="flex gap-2">
+                    <Input
+                      value={newCustomType}
+                      onChange={(e) => setNewCustomType(e.target.value)}
+                      placeholder="Nuevo tipo..."
+                      maxLength={50}
+                      autoFocus
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') handleAddCustomType();
+                        if (e.key === 'Escape') {
+                          setIsAddingCustomType(false);
+                          setNewCustomType('');
+                        }
+                      }}
+                    />
+                    <Button size="icon" variant="ghost" onClick={handleAddCustomType}>
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                    <Button size="icon" variant="ghost" onClick={() => {
+                      setIsAddingCustomType(false);
+                      setNewCustomType('');
+                    }}>
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex gap-2">
+                    <Select value={uploadDocType} onValueChange={setUploadDocType}>
+                      <SelectTrigger className="flex-1">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {allDocumentTypes.map((type) => (
+                          <SelectItem key={type} value={type}>{type}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Button 
+                      size="icon" 
+                      variant="outline" 
+                      onClick={() => setIsAddingCustomType(true)}
+                      title="Añadir tipo personalizado"
+                    >
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                  </div>
+                )}
+              </div>
+
+              {/* Project */}
+              <div className="space-y-2">
+                <Label>Proyecto (opcional)</Label>
+                <Select 
+                  value={uploadProjectId || '__none__'} 
+                  onValueChange={(val) => setUploadProjectId(val === '__none__' ? '' : val)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Sin proyecto" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">Sin proyecto</SelectItem>
+                    {projects.map((project) => (
+                      <SelectItem key={project.id} value={project.id}>
+                        {project.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* URL field */}
             <div className="space-y-2">
-              <Label>Descripción</Label>
+              <Label>URL (opcional)</Label>
+              <Input
+                value={uploadUrl}
+                onChange={(e) => setUploadUrl(e.target.value)}
+                placeholder="https://ejemplo.com/documento"
+                type="url"
+              />
+            </div>
+
+            {/* Description */}
+            <div className="space-y-2">
+              <Label>Descripción (opcional)</Label>
               <Textarea
                 value={uploadDescription}
                 onChange={(e) => setUploadDescription(e.target.value)}
-                placeholder="Descripción del documento (opcional)"
-                rows={3}
+                placeholder="Descripción del documento..."
+                maxLength={500}
+                rows={2}
               />
+            </div>
+
+            {/* File Upload */}
+            <div className="space-y-2">
+              <Label>Archivo (opcional)</Label>
+              <div className="flex gap-2 items-center">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  className="hidden"
+                  onChange={handleFileSelect}
+                  accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx,.zip,.txt"
+                />
+                <Button
+                  variant="outline"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploading}
+                  className="flex-1"
+                >
+                  <Upload className="h-4 w-4 mr-2" />
+                  {selectedFile ? selectedFile.name : 'Seleccionar archivo'}
+                </Button>
+                {selectedFile && (
+                  <Button 
+                    variant="ghost" 
+                    size="icon"
+                    onClick={() => {
+                      setSelectedFile(null);
+                      if (fileInputRef.current) fileInputRef.current.value = '';
+                    }}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+              {selectedFile && (
+                <p className="text-xs text-muted-foreground">
+                  {formatFileSize(selectedFile.size)}
+                </p>
+              )}
+              <p className="text-xs text-muted-foreground">
+                Formatos: PDF, imágenes, Word, Excel, ZIP. Máximo 50MB.
+              </p>
             </div>
           </div>
           <DialogFooter>
@@ -732,9 +1009,10 @@ export default function Documentos() {
             </Button>
             <Button
               onClick={handleUpload}
-              disabled={uploading || !selectedFile}
+              disabled={uploading || !uploadName.trim()}
             >
-              {uploading ? 'Subiendo...' : 'Subir'}
+              <Save className="h-4 w-4 mr-2" />
+              {uploading ? 'Guardando...' : 'Guardar'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -800,7 +1078,7 @@ export default function Documentos() {
 
       {/* Edit Dialog */}
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Pencil className="h-5 w-5" />
@@ -808,56 +1086,175 @@ export default function Documentos() {
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
+            {/* Edit Name */}
             <div className="space-y-2">
               <Label>Nombre *</Label>
               <Input
                 value={editName}
                 onChange={(e) => setEditName(e.target.value)}
                 placeholder="Nombre del documento"
+                maxLength={200}
               />
             </div>
-            <div className="space-y-2">
-              <Label>Proyecto (opcional)</Label>
-              <Select 
-                value={editProjectId || '__none__'} 
-                onValueChange={(val) => setEditProjectId(val === '__none__' ? '' : val)}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Sin proyecto asignado" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none__">Sin proyecto</SelectItem>
-                  {projects.map((project) => (
-                    <SelectItem key={project.id} value={project.id}>
-                      {project.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+
+            <div className="grid grid-cols-2 gap-3">
+              {/* Edit Type with custom option */}
+              <div className="space-y-2">
+                <Label>Tipo de documento</Label>
+                {isAddingEditCustomType ? (
+                  <div className="flex gap-2">
+                    <Input
+                      value={newEditCustomType}
+                      onChange={(e) => setNewEditCustomType(e.target.value)}
+                      placeholder="Nuevo tipo..."
+                      maxLength={50}
+                      autoFocus
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') handleAddEditCustomType();
+                        if (e.key === 'Escape') {
+                          setIsAddingEditCustomType(false);
+                          setNewEditCustomType('');
+                        }
+                      }}
+                    />
+                    <Button size="icon" variant="ghost" onClick={handleAddEditCustomType}>
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                    <Button size="icon" variant="ghost" onClick={() => {
+                      setIsAddingEditCustomType(false);
+                      setNewEditCustomType('');
+                    }}>
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex gap-2">
+                    <Select value={editDocType} onValueChange={setEditDocType}>
+                      <SelectTrigger className="flex-1">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {allDocumentTypes.map((type) => (
+                          <SelectItem key={type} value={type}>{type}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Button 
+                      size="icon" 
+                      variant="outline" 
+                      onClick={() => setIsAddingEditCustomType(true)}
+                      title="Añadir tipo personalizado"
+                    >
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                  </div>
+                )}
+              </div>
+
+              {/* Edit Project */}
+              <div className="space-y-2">
+                <Label>Proyecto (opcional)</Label>
+                <Select 
+                  value={editProjectId || '__none__'} 
+                  onValueChange={(val) => setEditProjectId(val === '__none__' ? '' : val)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Sin proyecto" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">Sin proyecto</SelectItem>
+                    {projects.map((project) => (
+                      <SelectItem key={project.id} value={project.id}>
+                        {project.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
+
+            {/* Edit URL */}
             <div className="space-y-2">
-              <Label>Tipo de documento</Label>
-              <Select value={editDocType} onValueChange={setEditDocType}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {Object.entries(documentTypeLabels).map(([value, label]) => (
-                    <SelectItem key={value} value={value}>
-                      {label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label>URL</Label>
+              <Input
+                value={editUrl}
+                onChange={(e) => setEditUrl(e.target.value)}
+                placeholder="https://ejemplo.com/documento"
+                type="url"
+              />
             </div>
+
+            {/* Edit Description */}
             <div className="space-y-2">
               <Label>Descripción</Label>
               <Textarea
                 value={editDescription}
                 onChange={(e) => setEditDescription(e.target.value)}
-                placeholder="Descripción del documento (opcional)"
-                rows={3}
+                placeholder="Descripción del documento..."
+                maxLength={500}
+                rows={2}
               />
+            </div>
+
+            {/* File Upload/Replace */}
+            <div className="space-y-2">
+              <Label>Archivo {documentToEdit?.file_path ? '(reemplazar)' : '(añadir)'}</Label>
+              
+              {/* Current file info */}
+              {documentToEdit?.file_path && !editFile && (
+                <div className="p-2 bg-muted rounded text-sm flex items-center justify-between">
+                  <div>
+                    <span className="text-muted-foreground">Actual: </span>
+                    <span className="font-medium">{documentToEdit.file_path.split('/').pop()}</span>
+                    <span className="text-muted-foreground ml-2">({formatFileSize(documentToEdit.file_size)})</span>
+                  </div>
+                </div>
+              )}
+              
+              {/* New file selected */}
+              {editFile && (
+                <div className="p-2 bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded text-sm flex items-center justify-between">
+                  <div>
+                    <span className="text-green-700 dark:text-green-300">Nuevo: </span>
+                    <span className="font-medium">{editFile.name}</span>
+                    <span className="text-muted-foreground ml-2">({formatFileSize(editFile.size)})</span>
+                  </div>
+                  <Button 
+                    variant="ghost" 
+                    size="icon"
+                    className="h-6 w-6"
+                    onClick={() => {
+                      setEditFile(null);
+                      if (editFileInputRef.current) editFileInputRef.current.value = '';
+                    }}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              )}
+              
+              {/* File input */}
+              <div className="flex gap-2">
+                <input
+                  ref={editFileInputRef}
+                  type="file"
+                  className="hidden"
+                  onChange={handleEditFileSelect}
+                  accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx,.zip,.txt"
+                />
+                <Button
+                  variant="outline"
+                  onClick={() => editFileInputRef.current?.click()}
+                  disabled={saving}
+                  className="w-full"
+                >
+                  <Upload className="h-4 w-4 mr-2" />
+                  {editFile ? 'Cambiar archivo' : documentToEdit?.file_path ? 'Reemplazar archivo' : 'Añadir archivo'}
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Formatos: PDF, imágenes, Word, Excel, ZIP. Máximo 50MB.
+              </p>
             </div>
           </div>
           <DialogFooter>
@@ -866,6 +1263,7 @@ export default function Documentos() {
               onClick={() => {
                 setEditDialogOpen(false);
                 setDocumentToEdit(null);
+                setEditFile(null);
               }}
             >
               Cancelar
@@ -874,6 +1272,7 @@ export default function Documentos() {
               onClick={handleEditSave}
               disabled={saving || !editName.trim()}
             >
+              <Save className="h-4 w-4 mr-2" />
               {saving ? 'Guardando...' : 'Guardar'}
             </Button>
           </DialogFooter>

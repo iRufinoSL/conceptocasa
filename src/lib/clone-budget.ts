@@ -254,12 +254,18 @@ export async function cloneBudget(
     if (sourceActivities?.length) {
       for (const activity of sourceActivities) {
         const newPhaseId = activity.phase_id ? phaseIdMap.get(activity.phase_id) : null;
-        const newMeasurementId = activity.measurement_id ? measurementIdMap.get(activity.measurement_id) : null;
+        const newMeasurementId = activity.measurement_id
+          ? measurementIdMap.get(activity.measurement_id)
+          : null;
+
+        // NOTE: budget_activities.end_date es una columna GENERATED ALWAYS, no se puede insertar.
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { end_date, ...activityInsertable } = activity as any;
 
         const { data: newActivity, error: activityError } = await supabase
           .from("budget_activities")
           .insert({
-            ...activity,
+            ...activityInsertable,
             id: undefined,
             created_at: undefined,
             updated_at: undefined,

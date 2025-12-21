@@ -1,4 +1,4 @@
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from "@/integrations/supabase/client";
 
 interface CloneResult {
   success: boolean;
@@ -15,26 +15,44 @@ interface CloneResult {
     workAreas: number;
     workAreaMeasurements: number;
     workAreaActivities: number;
+    activityFiles: number;
+    budgetContacts: number;
+    budgetItems: number;
+    budgetConcepts: number;
   };
+}
+
+type NewBudgetData = {
+  nombre: string;
+  version: string;
+  poblacion: string;
+  provincia?: string;
+  coordenadas_lat?: number;
+  coordenadas_lng?: number;
+  project_id?: string | null;
+};
+
+type CloneOptions = {
+  /** true = clon completo (incluye valores), false = plantilla */
+  preserveMeasurementValues?: boolean;
+};
+
+function safeExtFromFilename(filename: string | null | undefined) {
+  if (!filename) return "";
+  const parts = filename.split(".");
+  if (parts.length < 2) return "";
+  const ext = parts.pop()?.trim();
+  return ext ? `.${ext}` : "";
 }
 
 export async function cloneBudget(
   sourceBudgetId: string,
-  newBudgetData: {
-    nombre: string;
-    version: string;
-    poblacion: string;
-    provincia?: string;
-    coordenadas_lat?: number;
-    coordenadas_lng?: number;
-    project_id?: string | null;
-  },
-  options: {
-    preserveMeasurementValues?: boolean; // true = clone complete, false = clone as template
-  } = {}
+  newBudgetData: NewBudgetData,
+  options: CloneOptions = {}
 ): Promise<CloneResult> {
   const { preserveMeasurementValues = false } = options;
-  const stats = {
+
+  const stats: NonNullable<CloneResult["stats"]> = {
     phases: 0,
     activities: 0,
     resources: 0,
@@ -44,353 +62,524 @@ export async function cloneBudget(
     spaces: 0,
     workAreas: 0,
     workAreaMeasurements: 0,
-    workAreaActivities: 0
+    workAreaActivities: 0,
+    activityFiles: 0,
+    budgetContacts: 0,
+    budgetItems: 0,
+    budgetConcepts: 0,
   };
 
   try {
-    // 1. Get next correlative code
+    // 0) Load source presupuesto (so we can clone ALL fields)
+    const { data: sourceBudget, error: sourceBudgetError } = await supabase
+      .from("presupuestos")
+      .select("*")
+      .eq("id", sourceBudgetId)
+      .maybeSingle();
+
+    if (sourceBudgetError || !sourceBudget) {
+      throw new Error(
+        `No se pudo cargar el presupuesto origen: ${sourceBudgetError?.message || "no encontrado"}`
+      );
+    }
+
+    // 1) Get next correlative code
     const { data: maxCodeData } = await supabase
-      .from('presupuestos')
-      .select('codigo_correlativo')
-      .order('codigo_correlativo', { ascending: false })
+      .from("presupuestos")
+      .select("codigo_correlativo")
+      .order("codigo_correlativo", { ascending: false })
       .limit(1);
-    
+
     const nextCode = (maxCodeData?.[0]?.codigo_correlativo || 0) + 1;
 
-    // 2. Create new presupuesto
+    // 2) Create new presupuesto: clone ALL fields from source, override only what's explicitly set
     const { data: newBudget, error: budgetError } = await supabase
-      .from('presupuestos')
+      .from("presupuestos")
       .insert({
-        nombre: newBudgetData.nombre,
+        ...sourceBudget,
+        id: undefined,
+        created_at: undefined,
+        updated_at: undefined,
         codigo_correlativo: nextCode,
+        nombre: newBudgetData.nombre,
         version: newBudgetData.version,
         poblacion: newBudgetData.poblacion,
-        provincia: newBudgetData.provincia || null,
-        coordenadas_lat: newBudgetData.coordenadas_lat || null,
-        coordenadas_lng: newBudgetData.coordenadas_lng || null,
-        project_id: newBudgetData.project_id || null
+        provincia: newBudgetData.provincia ?? sourceBudget.provincia ?? null,
+        coordenadas_lat: newBudgetData.coordenadas_lat ?? sourceBudget.coordenadas_lat ?? null,
+        coordenadas_lng: newBudgetData.coordenadas_lng ?? sourceBudget.coordenadas_lng ?? null,
+        project_id: newBudgetData.project_id ?? sourceBudget.project_id ?? null,
       })
-      .select()
+      .select("*")
       .single();
 
     if (budgetError || !newBudget) {
       throw new Error(`Error creando presupuesto: ${budgetError?.message}`);
     }
 
-    const newBudgetId = newBudget.id;
+    const newBudgetId = newBudget.id as string;
 
-    // 3. Clone phases and build ID mapping
-    const { data: sourcePhases } = await supabase
-      .from('budget_phases')
-      .select('*')
-      .eq('budget_id', sourceBudgetId)
-      .order('order_index');
+    // 2.1) Ensure current user keeps access to new budget (best-effort)
+    try {
+      const { data: authData } = await supabase.auth.getUser();
+      const userId = authData?.user?.id;
+      if (userId) {
+        const { data: accessRow } = await supabase
+          .from("user_presupuestos")
+          .select("role")
+          .eq("user_id", userId)
+          .eq("presupuesto_id", sourceBudgetId)
+          .maybeSingle();
 
-    const phaseIdMap = new Map<string, string>(); // old ID -> new ID
-
-    if (sourcePhases && sourcePhases.length > 0) {
-      for (const phase of sourcePhases) {
-        const { data: newPhase, error: phaseError } = await supabase
-          .from('budget_phases')
-          .insert({
-            budget_id: newBudgetId,
-            name: phase.name,
-            code: phase.code,
-            order_index: phase.order_index,
-            parent_id: null // Will update after all phases are created
-          })
-          .select()
-          .single();
-
-        if (!phaseError && newPhase) {
-          phaseIdMap.set(phase.id, newPhase.id);
-          stats.phases++;
+        if (accessRow?.role) {
+          await supabase.from("user_presupuestos").insert({
+            user_id: userId,
+            presupuesto_id: newBudgetId,
+            role: accessRow.role,
+          });
         }
       }
+    } catch {
+      // silent
+    }
 
-      // Update parent_id references for nested phases
+    // 3) Clone phases and build ID mapping
+    const { data: sourcePhases, error: phasesError } = await supabase
+      .from("budget_phases")
+      .select("*")
+      .eq("budget_id", sourceBudgetId)
+      .order("order_index");
+
+    if (phasesError) throw new Error(phasesError.message);
+
+    const phaseIdMap = new Map<string, string>();
+
+    if (sourcePhases?.length) {
       for (const phase of sourcePhases) {
-        if (phase.parent_id && phaseIdMap.has(phase.parent_id)) {
-          const newPhaseId = phaseIdMap.get(phase.id);
-          const newParentId = phaseIdMap.get(phase.parent_id);
-          if (newPhaseId && newParentId) {
-            await supabase
-              .from('budget_phases')
-              .update({ parent_id: newParentId })
-              .eq('id', newPhaseId);
-          }
-        }
+        const { data: newPhase, error: phaseError } = await supabase
+          .from("budget_phases")
+          .insert({
+            ...phase,
+            id: undefined,
+            created_at: undefined,
+            updated_at: undefined,
+            budget_id: newBudgetId,
+            parent_id: null,
+          })
+          .select("*")
+          .single();
+
+        if (phaseError || !newPhase) throw new Error(phaseError?.message);
+        phaseIdMap.set(phase.id, newPhase.id);
+        stats.phases++;
+      }
+
+      for (const phase of sourcePhases) {
+        if (!phase.parent_id) continue;
+        const newPhaseId = phaseIdMap.get(phase.id);
+        const newParentId = phaseIdMap.get(phase.parent_id);
+        if (!newPhaseId || !newParentId) continue;
+        await supabase.from("budget_phases").update({ parent_id: newParentId }).eq("id", newPhaseId);
       }
     }
 
-    // 4. Clone measurements and build ID mapping
-    const { data: sourceMeasurements } = await supabase
-      .from('budget_measurements')
-      .select('*')
-      .eq('budget_id', sourceBudgetId);
+    // 4) Clone measurements and build ID mapping
+    const { data: sourceMeasurements, error: measurementsError } = await supabase
+      .from("budget_measurements")
+      .select("*")
+      .eq("budget_id", sourceBudgetId);
 
-    const measurementIdMap = new Map<string, string>(); // old ID -> new ID
+    if (measurementsError) throw new Error(measurementsError.message);
 
-    if (sourceMeasurements && sourceMeasurements.length > 0) {
+    const measurementIdMap = new Map<string, string>();
+
+    if (sourceMeasurements?.length) {
       for (const measurement of sourceMeasurements) {
         const { data: newMeasurement, error: measurementError } = await supabase
-          .from('budget_measurements')
+          .from("budget_measurements")
           .insert({
+            ...measurement,
+            id: undefined,
+            created_at: undefined,
+            updated_at: undefined,
             budget_id: newBudgetId,
-            name: measurement.name,
-            measurement_unit: measurement.measurement_unit,
-            manual_units: preserveMeasurementValues ? measurement.manual_units : null
+            manual_units: preserveMeasurementValues ? measurement.manual_units : null,
           })
-          .select()
+          .select("*")
           .single();
 
-        if (!measurementError && newMeasurement) {
-          measurementIdMap.set(measurement.id, newMeasurement.id);
-          stats.measurements++;
-        }
+        if (measurementError || !newMeasurement) throw new Error(measurementError?.message);
+        measurementIdMap.set(measurement.id, newMeasurement.id);
+        stats.measurements++;
       }
 
       // Clone measurement relations
-      const { data: sourceRelations } = await supabase
-        .from('budget_measurement_relations')
-        .select('*')
-        .in('measurement_id', sourceMeasurements.map(m => m.id));
+      const { data: sourceRelations, error: relationsError } = await supabase
+        .from("budget_measurement_relations")
+        .select("*")
+        .in(
+          "measurement_id",
+          sourceMeasurements.map((m) => m.id)
+        );
 
-      if (sourceRelations && sourceRelations.length > 0) {
-        for (const relation of sourceRelations) {
-          const newMeasurementId = measurementIdMap.get(relation.measurement_id);
-          const newRelatedId = measurementIdMap.get(relation.related_measurement_id);
-          
-          if (newMeasurementId && newRelatedId) {
-            const { error: relationError } = await supabase
-              .from('budget_measurement_relations')
-              .insert({
-                measurement_id: newMeasurementId,
-                related_measurement_id: newRelatedId
-              });
+      if (relationsError) throw new Error(relationsError.message);
 
-            if (!relationError) {
-              stats.measurementRelations++;
-            }
-          }
+      if (sourceRelations?.length) {
+        for (const rel of sourceRelations) {
+          const newMeasurementId = measurementIdMap.get(rel.measurement_id);
+          const newRelatedId = measurementIdMap.get(rel.related_measurement_id);
+          if (!newMeasurementId || !newRelatedId) continue;
+          const { error } = await supabase.from("budget_measurement_relations").insert({
+            measurement_id: newMeasurementId,
+            related_measurement_id: newRelatedId,
+          });
+          if (!error) stats.measurementRelations++;
         }
       }
     }
 
-    // 5. Clone activities and build ID mapping
-    const { data: sourceActivities } = await supabase
-      .from('budget_activities')
-      .select('*')
-      .eq('budget_id', sourceBudgetId);
+    // 5) Clone activities and build ID mapping
+    const { data: sourceActivities, error: activitiesError } = await supabase
+      .from("budget_activities")
+      .select("*")
+      .eq("budget_id", sourceBudgetId);
 
-    const activityIdMap = new Map<string, string>(); // old ID -> new ID
+    if (activitiesError) throw new Error(activitiesError.message);
 
-    if (sourceActivities && sourceActivities.length > 0) {
+    const activityIdMap = new Map<string, string>();
+
+    if (sourceActivities?.length) {
       for (const activity of sourceActivities) {
         const newPhaseId = activity.phase_id ? phaseIdMap.get(activity.phase_id) : null;
         const newMeasurementId = activity.measurement_id ? measurementIdMap.get(activity.measurement_id) : null;
 
         const { data: newActivity, error: activityError } = await supabase
-          .from('budget_activities')
+          .from("budget_activities")
           .insert({
+            ...activity,
+            id: undefined,
+            created_at: undefined,
+            updated_at: undefined,
             budget_id: newBudgetId,
-            name: activity.name,
-            code: activity.code,
-            description: activity.description,
-            measurement_unit: activity.measurement_unit,
-            uses_measurement: activity.uses_measurement,
             phase_id: newPhaseId,
-            measurement_id: newMeasurementId
+            measurement_id: newMeasurementId,
           })
-          .select()
+          .select("*")
           .single();
 
-        if (!activityError && newActivity) {
-          activityIdMap.set(activity.id, newActivity.id);
-          stats.activities++;
-        }
+        if (activityError || !newActivity) throw new Error(activityError?.message);
+        activityIdMap.set(activity.id, newActivity.id);
+        stats.activities++;
       }
     }
 
-    // 6. Clone resources (linked to new activities)
-    const { data: sourceResources } = await supabase
-      .from('budget_activity_resources')
-      .select('*')
-      .eq('budget_id', sourceBudgetId);
+    // 6) Clone resources (linked to new activities)
+    const { data: sourceResources, error: resourcesError } = await supabase
+      .from("budget_activity_resources")
+      .select("*")
+      .eq("budget_id", sourceBudgetId);
 
-    if (sourceResources && sourceResources.length > 0) {
+    if (resourcesError) throw new Error(resourcesError.message);
+
+    if (sourceResources?.length) {
       for (const resource of sourceResources) {
         const newActivityId = resource.activity_id ? activityIdMap.get(resource.activity_id) : null;
 
-        const { error: resourceError } = await supabase
-          .from('budget_activity_resources')
-          .insert({
-            budget_id: newBudgetId,
-            activity_id: newActivityId,
-            name: resource.name,
-            description: resource.description,
-            external_unit_cost: resource.external_unit_cost,
-            unit: resource.unit,
-            resource_type: resource.resource_type,
-            safety_margin_percent: resource.safety_margin_percent,
-            sales_margin_percent: resource.sales_margin_percent,
-            manual_units: resource.manual_units,
-            related_units: null // Will be recalculated
-          });
+        const { error: resourceError } = await supabase.from("budget_activity_resources").insert({
+          ...resource,
+          id: undefined,
+          created_at: undefined,
+          updated_at: undefined,
+          budget_id: newBudgetId,
+          activity_id: newActivityId,
+          related_units: preserveMeasurementValues ? resource.related_units : null,
+        });
 
-        if (!resourceError) {
-          stats.resources++;
-        }
+        if (resourceError) throw new Error(resourceError.message);
+        stats.resources++;
       }
     }
 
-    // 7. Clone spaces (budget_spaces)
-    const { data: sourceSpaces } = await supabase
-      .from('budget_spaces')
-      .select('*')
-      .eq('budget_id', sourceBudgetId);
+    // 7) Clone spaces (budget_spaces) + map space IDs (for work areas area_id)
+    const { data: sourceSpaces, error: spacesError } = await supabase
+      .from("budget_spaces")
+      .select("*")
+      .eq("budget_id", sourceBudgetId);
 
-    if (sourceSpaces && sourceSpaces.length > 0) {
+    if (spacesError) throw new Error(spacesError.message);
+
+    const spaceIdMap = new Map<string, string>();
+
+    if (sourceSpaces?.length) {
       for (const space of sourceSpaces) {
-        const { error: spaceError } = await supabase
-          .from('budget_spaces')
+        const { data: newSpace, error: spaceError } = await supabase
+          .from("budget_spaces")
           .insert({
+            ...space,
+            id: undefined,
+            created_at: undefined,
+            updated_at: undefined,
             budget_id: newBudgetId,
-            name: space.name,
-            level: space.level,
-            space_type: space.space_type,
             m2_built: preserveMeasurementValues ? space.m2_built : null,
             m2_livable: preserveMeasurementValues ? space.m2_livable : null,
-            observations: space.observations
-          });
+          })
+          .select("*")
+          .single();
 
-        if (!spaceError) {
-          stats.spaces++;
-        }
+        if (spaceError || !newSpace) throw new Error(spaceError?.message);
+        spaceIdMap.set(space.id, newSpace.id);
+        stats.spaces++;
       }
     }
 
-    // 8. Clone work areas and build ID mapping
-    const { data: sourceWorkAreas } = await supabase
-      .from('budget_work_areas')
-      .select('*')
-      .eq('budget_id', sourceBudgetId);
+    // 8) Clone work areas and build ID mapping
+    const { data: sourceWorkAreas, error: workAreasError } = await supabase
+      .from("budget_work_areas")
+      .select("*")
+      .eq("budget_id", sourceBudgetId);
 
-    const workAreaIdMap = new Map<string, string>(); // old ID -> new ID
+    if (workAreasError) throw new Error(workAreasError.message);
 
-    if (sourceWorkAreas && sourceWorkAreas.length > 0) {
+    const workAreaIdMap = new Map<string, string>();
+
+    if (sourceWorkAreas?.length) {
       for (const workArea of sourceWorkAreas) {
+        const mappedAreaId = workArea.area_id ? spaceIdMap.get(workArea.area_id) ?? workArea.area_id : null;
+
         const { data: newWorkArea, error: workAreaError } = await supabase
-          .from('budget_work_areas')
+          .from("budget_work_areas")
           .insert({
+            ...workArea,
+            id: undefined,
+            created_at: undefined,
+            updated_at: undefined,
             budget_id: newBudgetId,
-            name: workArea.name,
-            level: workArea.level,
-            work_area: workArea.work_area,
-            area_id: workArea.area_id
+            area_id: mappedAreaId,
           })
-          .select()
+          .select("*")
           .single();
 
-        if (!workAreaError && newWorkArea) {
-          workAreaIdMap.set(workArea.id, newWorkArea.id);
-          stats.workAreas++;
-        }
+        if (workAreaError || !newWorkArea) throw new Error(workAreaError?.message);
+        workAreaIdMap.set(workArea.id, newWorkArea.id);
+        stats.workAreas++;
       }
 
       // Clone work area measurements
-      const { data: sourceWorkAreaMeasurements } = await supabase
-        .from('budget_work_area_measurements')
-        .select('*')
-        .in('work_area_id', sourceWorkAreas.map(wa => wa.id));
+      const { data: sourceWorkAreaMeasurements, error: wamError } = await supabase
+        .from("budget_work_area_measurements")
+        .select("*")
+        .in(
+          "work_area_id",
+          sourceWorkAreas.map((wa) => wa.id)
+        );
 
-      if (sourceWorkAreaMeasurements && sourceWorkAreaMeasurements.length > 0) {
+      if (wamError) throw new Error(wamError.message);
+
+      if (sourceWorkAreaMeasurements?.length) {
         for (const wam of sourceWorkAreaMeasurements) {
           const newWorkAreaId = workAreaIdMap.get(wam.work_area_id);
           const newMeasurementId = measurementIdMap.get(wam.measurement_id);
-
-          if (newWorkAreaId && newMeasurementId) {
-            const { error: wamError } = await supabase
-              .from('budget_work_area_measurements')
-              .insert({
-                work_area_id: newWorkAreaId,
-                measurement_id: newMeasurementId
-              });
-
-            if (!wamError) {
-              stats.workAreaMeasurements++;
-            }
-          }
+          if (!newWorkAreaId || !newMeasurementId) continue;
+          const { error } = await supabase.from("budget_work_area_measurements").insert({
+            ...wam,
+            id: undefined,
+            created_at: undefined,
+            work_area_id: newWorkAreaId,
+            measurement_id: newMeasurementId,
+          });
+          if (!error) stats.workAreaMeasurements++;
         }
       }
 
       // Clone work area activities
-      const { data: sourceWorkAreaActivities } = await supabase
-        .from('budget_work_area_activities')
-        .select('*')
-        .in('work_area_id', sourceWorkAreas.map(wa => wa.id));
+      const { data: sourceWorkAreaActivities, error: waaError } = await supabase
+        .from("budget_work_area_activities")
+        .select("*")
+        .in(
+          "work_area_id",
+          sourceWorkAreas.map((wa) => wa.id)
+        );
 
-      if (sourceWorkAreaActivities && sourceWorkAreaActivities.length > 0) {
+      if (waaError) throw new Error(waaError.message);
+
+      if (sourceWorkAreaActivities?.length) {
         for (const waa of sourceWorkAreaActivities) {
           const newWorkAreaId = workAreaIdMap.get(waa.work_area_id);
           const newActivityId = activityIdMap.get(waa.activity_id);
-
-          if (newWorkAreaId && newActivityId) {
-            const { error: waaError } = await supabase
-              .from('budget_work_area_activities')
-              .insert({
-                work_area_id: newWorkAreaId,
-                activity_id: newActivityId
-              });
-
-            if (!waaError) {
-              stats.workAreaActivities++;
-            }
-          }
+          if (!newWorkAreaId || !newActivityId) continue;
+          const { error } = await supabase.from("budget_work_area_activities").insert({
+            ...waa,
+            id: undefined,
+            created_at: undefined,
+            work_area_id: newWorkAreaId,
+            activity_id: newActivityId,
+          });
+          if (!error) stats.workAreaActivities++;
         }
       }
     }
 
-    // 9. Clone predesigns (structure only, no files)
-    const { data: sourcePredesigns } = await supabase
-      .from('budget_predesigns')
-      .select('*')
-      .eq('budget_id', sourceBudgetId);
+    // 9) Clone budget_contacts
+    const { data: sourceBudgetContacts, error: budgetContactsError } = await supabase
+      .from("budget_contacts")
+      .select("*")
+      .eq("budget_id", sourceBudgetId);
 
-    if (sourcePredesigns && sourcePredesigns.length > 0) {
+    if (budgetContactsError) throw new Error(budgetContactsError.message);
+
+    if (sourceBudgetContacts?.length) {
+      for (const bc of sourceBudgetContacts) {
+        const { error } = await supabase.from("budget_contacts").insert({
+          ...bc,
+          id: undefined,
+          created_at: undefined,
+          budget_id: newBudgetId,
+        });
+        if (!error) stats.budgetContacts++;
+      }
+    }
+
+    // 10) Clone budget_items
+    const { data: sourceBudgetItems, error: budgetItemsError } = await supabase
+      .from("budget_items")
+      .select("*")
+      .eq("budget_id", sourceBudgetId);
+
+    if (budgetItemsError) throw new Error(budgetItemsError.message);
+
+    if (sourceBudgetItems?.length) {
+      for (const item of sourceBudgetItems) {
+        const { error } = await supabase.from("budget_items").insert({
+          ...item,
+          id: undefined,
+          created_at: undefined,
+          updated_at: undefined,
+          budget_id: newBudgetId,
+        });
+        if (!error) stats.budgetItems++;
+      }
+    }
+
+    // 11) Clone budget_concepts (map phase + measurement)
+    const { data: sourceBudgetConcepts, error: conceptsError } = await supabase
+      .from("budget_concepts")
+      .select("*")
+      .eq("budget_id", sourceBudgetId);
+
+    if (conceptsError) throw new Error(conceptsError.message);
+
+    if (sourceBudgetConcepts?.length) {
+      for (const concept of sourceBudgetConcepts) {
+        const newPhaseId = concept.phase_id ? phaseIdMap.get(concept.phase_id) : null;
+        const newMeasurementId = concept.measurement_id ? measurementIdMap.get(concept.measurement_id) : null;
+
+        const { error } = await supabase.from("budget_concepts").insert({
+          ...concept,
+          id: undefined,
+          created_at: undefined,
+          updated_at: undefined,
+          budget_id: newBudgetId,
+          phase_id: newPhaseId,
+          measurement_id: newMeasurementId,
+        });
+        if (!error) stats.budgetConcepts++;
+      }
+    }
+
+    // 12) Clone activity files + copy objects in storage (ONLY in clon completo)
+    if (preserveMeasurementValues) {
+      const { data: sourceFiles, error: filesError } = await supabase
+        .from("budget_activity_files")
+        .select("*")
+        .in(
+          "activity_id",
+          (sourceActivities || []).map((a) => a.id)
+        );
+
+      if (filesError) throw new Error(filesError.message);
+
+      if (sourceFiles?.length) {
+        for (const file of sourceFiles) {
+          const newActivityId = activityIdMap.get(file.activity_id);
+          if (!newActivityId) continue;
+
+          const ext = safeExtFromFilename(file.file_name);
+          const newPath = `${newActivityId}/${Date.now()}${ext}`;
+
+          const { error: copyError } = await supabase.storage.from("activity-files").copy(file.file_path, newPath);
+          if (copyError) continue;
+
+          const { error: dbError } = await supabase.from("budget_activity_files").insert({
+            ...file,
+            id: undefined,
+            created_at: undefined,
+            activity_id: newActivityId,
+            file_path: newPath,
+          });
+
+          if (!dbError) stats.activityFiles++;
+        }
+      }
+    }
+
+    // 13) Clone predesigns (texts always; files only in clon completo)
+    const { data: sourcePredesigns, error: predesignsError } = await supabase
+      .from("budget_predesigns")
+      .select("*")
+      .eq("budget_id", sourceBudgetId);
+
+    if (predesignsError) throw new Error(predisignsError.message);
+
+    if (sourcePredesigns?.length) {
       for (const predesign of sourcePredesigns) {
-        const { error: predesignError } = await supabase
-          .from('budget_predesigns')
-          .insert({
+        if (!preserveMeasurementValues) {
+          const { error } = await supabase.from("budget_predesigns").insert({
+            ...predesign,
+            id: undefined,
+            created_at: undefined,
+            updated_at: undefined,
             budget_id: newBudgetId,
-            content: predesign.content,
-            content_type: predesign.content_type,
-            description: predesign.description,
-            // Clear file references - user needs to upload new files
             file_name: null,
             file_path: null,
             file_type: null,
             file_size: null,
-            uploaded_by: null
+            uploaded_by: null,
           });
-
-        if (!predesignError) {
-          stats.predesigns++;
+          if (!error) stats.predesigns++;
+          continue;
         }
+
+        let newFilePath: string | null = null;
+        if (predesign.file_path) {
+          const ext = safeExtFromFilename(predisign.file_name);
+          newFilePath = `${newBudgetId}/${crypto.randomUUID()}${ext}`;
+
+          const { error: copyError } = await supabase.storage
+            .from("budget-predesigns")
+            .copy(predisign.file_path, newFilePath);
+
+          if (copyError) newFilePath = null;
+        }
+
+        const { error } = await supabase.from("budget_predesigns").insert({
+          ...predesign,
+          id: undefined,
+          created_at: undefined,
+          updated_at: undefined,
+          budget_id: newBudgetId,
+          file_path: newFilePath,
+          file_name: newFilePath ? predesign.file_name : null,
+          file_type: newFilePath ? predesign.file_type : null,
+          file_size: newFilePath ? predesign.file_size : null,
+          uploaded_by: newFilePath ? predesign.uploaded_by : null,
+        });
+
+        if (!error) stats.predesigns++;
       }
     }
 
-    return {
-      success: true,
-      newBudgetId,
-      stats
-    };
-
+    return { success: true, newBudgetId, stats };
   } catch (error: any) {
-    console.error('Error cloning budget:', error);
-    return {
-      success: false,
-      error: error.message || 'Error desconocido al clonar'
-    };
+    console.error("Error cloning budget:", error);
+    return { success: false, error: error.message || "Error desconocido al clonar" };
   }
 }

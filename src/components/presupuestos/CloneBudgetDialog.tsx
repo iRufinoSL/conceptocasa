@@ -42,10 +42,10 @@ export function CloneBudgetDialog({
   
   // Form for new budget data
   const [form, setForm] = useState({
-    nombre: '',
-    version: 'v1.0',
-    poblacion: '',
-    provincia: ''
+    nombre: "",
+    version: "",
+    poblacion: "",
+    provincia: "",
   });
 
   // Fetch available budgets to clone from
@@ -62,9 +62,9 @@ export function CloneBudgetDialog({
       if (selected) {
         setForm({
           nombre: `${selected.nombre} (copia)`,
-          version: 'v1.0',
+          version: selected.version,
           poblacion: selected.poblacion,
-          provincia: selected.provincia || ''
+          provincia: selected.provincia || "",
         });
       }
     }

@@ -93,7 +93,9 @@ export function ProjectDocumentsManager({
   const [editType, setEditType] = useState('');
   const [editDescription, setEditDescription] = useState('');
   const [editUrl, setEditUrl] = useState('');
+  const [editFile, setEditFile] = useState<File | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const editFileInputRef = useRef<HTMLInputElement>(null);
 
   // Combine default and custom types
   const allDocumentTypes = [...DEFAULT_DOCUMENT_TYPES, ...customTypes.filter(t => !DEFAULT_DOCUMENT_TYPES.includes(t))];
@@ -293,6 +295,20 @@ export function ProjectDocumentsManager({
     setEditType('');
     setEditDescription('');
     setEditUrl('');
+    setEditFile(null);
+    if (editFileInputRef.current) editFileInputRef.current.value = '';
+  };
+
+  const handleEditFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 50 * 1024 * 1024) {
+      toast({ title: 'Error', description: 'El archivo no puede superar los 50MB', variant: 'destructive' });
+      return;
+    }
+
+    setEditFile(file);
   };
 
   const handleSaveEdit = async () => {
@@ -311,13 +327,43 @@ export function ProjectDocumentsManager({
     setIsSaving(true);
 
     try {
+      let newFilePath: string | null = editingDoc.file_path;
+      let newFileType: string | null = editingDoc.file_type;
+      let newFileSize: number | null = editingDoc.file_size;
+
+      // If new file selected, upload it and delete old one
+      if (editFile) {
+        // Upload new file
+        const fileName = `${projectId}/${Date.now()}-${editFile.name}`;
+        
+        const { error: uploadError } = await supabase.storage
+          .from('project-documents')
+          .upload(fileName, editFile);
+
+        if (uploadError) throw uploadError;
+
+        // Delete old file if exists
+        if (editingDoc.file_path) {
+          await supabase.storage
+            .from('project-documents')
+            .remove([editingDoc.file_path]);
+        }
+
+        newFilePath = fileName;
+        newFileType = editFile.type;
+        newFileSize = editFile.size;
+      }
+
       const { error } = await supabase
         .from('project_documents')
         .update({
           name: editName.trim(),
           document_type: editType,
           description: editDescription.trim() || null,
-          document_url: editUrl.trim() || null
+          document_url: editUrl.trim() || null,
+          file_path: newFilePath,
+          file_type: newFileType,
+          file_size: newFileSize
         })
         .eq('id', editingDoc.id);
 
@@ -584,14 +630,66 @@ export function ProjectDocumentsManager({
               />
             </div>
 
-            {/* File info (read-only) */}
-            {editingDoc.file_path && (
-              <div className="p-2 bg-muted rounded text-sm">
-                <span className="text-muted-foreground">Archivo: </span>
-                <span className="font-medium">{editingDoc.file_path.split('/').pop()}</span>
-                <span className="text-muted-foreground ml-2">({formatFileSize(editingDoc.file_size)})</span>
+            {/* File Upload/Replace */}
+            <div className="space-y-2">
+              <Label>Archivo {editingDoc.file_path ? '(reemplazar)' : '(añadir)'}</Label>
+              
+              {/* Current file info */}
+              {editingDoc.file_path && !editFile && (
+                <div className="p-2 bg-muted rounded text-sm flex items-center justify-between">
+                  <div>
+                    <span className="text-muted-foreground">Actual: </span>
+                    <span className="font-medium">{editingDoc.file_path.split('/').pop()}</span>
+                    <span className="text-muted-foreground ml-2">({formatFileSize(editingDoc.file_size)})</span>
+                  </div>
+                </div>
+              )}
+              
+              {/* New file selected */}
+              {editFile && (
+                <div className="p-2 bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded text-sm flex items-center justify-between">
+                  <div>
+                    <span className="text-green-700 dark:text-green-300">Nuevo: </span>
+                    <span className="font-medium">{editFile.name}</span>
+                    <span className="text-muted-foreground ml-2">({formatFileSize(editFile.size)})</span>
+                  </div>
+                  <Button 
+                    variant="ghost" 
+                    size="icon"
+                    className="h-6 w-6"
+                    onClick={() => {
+                      setEditFile(null);
+                      if (editFileInputRef.current) editFileInputRef.current.value = '';
+                    }}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              )}
+              
+              {/* File input */}
+              <div className="flex gap-2">
+                <input
+                  ref={editFileInputRef}
+                  type="file"
+                  className="hidden"
+                  onChange={handleEditFileChange}
+                  accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx,.zip,.txt"
+                />
+                <Button
+                  variant="outline"
+                  onClick={() => editFileInputRef.current?.click()}
+                  disabled={isSaving}
+                  className="w-full"
+                >
+                  <Upload className="h-4 w-4 mr-2" />
+                  {editFile ? 'Cambiar archivo' : editingDoc.file_path ? 'Reemplazar archivo' : 'Añadir archivo'}
+                </Button>
               </div>
-            )}
+              <p className="text-xs text-muted-foreground">
+                Formatos: PDF, imágenes, Word, Excel, ZIP. Máximo 50MB.
+              </p>
+            </div>
 
             <div className="flex gap-2">
               <Button variant="outline" onClick={cancelEditing} className="flex-1">

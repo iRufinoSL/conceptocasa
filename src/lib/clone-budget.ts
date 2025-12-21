@@ -153,10 +153,15 @@ export async function cloneBudget(
 
     if (sourcePhases?.length) {
       for (const phase of sourcePhases) {
+        // NOTE: budget_phases.estimated_end_date es una columna GENERATED ALWAYS, no se puede insertar.
+        // Extraemos campos permitidos y omitimos los generados.
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { estimated_end_date, ...phaseInsertable } = phase as any;
+
         const { data: newPhase, error: phaseError } = await supabase
           .from("budget_phases")
           .insert({
-            ...phase,
+            ...phaseInsertable,
             id: undefined,
             created_at: undefined,
             updated_at: undefined,
@@ -165,6 +170,7 @@ export async function cloneBudget(
           })
           .select("*")
           .single();
+
 
         if (phaseError || !newPhase) throw new Error(phaseError?.message);
         phaseIdMap.set(phase.id, newPhase.id);
@@ -339,9 +345,16 @@ export async function cloneBudget(
 
     const workAreaIdMap = new Map<string, string>();
 
+    const isUuid = (v: string) =>
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v);
+
     if (sourceWorkAreas?.length) {
       for (const workArea of sourceWorkAreas) {
-        const mappedAreaId = workArea.area_id ? spaceIdMap.get(workArea.area_id) ?? workArea.area_id : null;
+        // area_id suele guardar el UUID del espacio del presupuesto origen.
+        // Si no existe mapeo hacia el nuevo espacio, lo dejamos en null para evitar referencias rotas.
+        const mappedAreaId = workArea.area_id
+          ? (spaceIdMap.get(workArea.area_id) ?? (isUuid(workArea.area_id) ? null : workArea.area_id))
+          : null;
 
         const { data: newWorkArea, error: workAreaError } = await supabase
           .from("budget_work_areas")
@@ -355,6 +368,7 @@ export async function cloneBudget(
           })
           .select("*")
           .single();
+
 
         if (workAreaError || !newWorkArea) throw new Error(workAreaError?.message);
         workAreaIdMap.set(workArea.id, newWorkArea.id);

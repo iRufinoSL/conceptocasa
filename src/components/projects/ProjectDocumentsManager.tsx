@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { 
@@ -12,11 +13,16 @@ import {
   Upload, 
   Trash2, 
   Download, 
-  Eye,
+  Edit,
   File,
   Image,
   FileSpreadsheet,
-  FileArchive
+  FileArchive,
+  Link as LinkIcon,
+  ExternalLink,
+  Plus,
+  X,
+  Save
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -29,6 +35,8 @@ interface ProjectDocument {
   file_type: string | null;
   file_size: number | null;
   document_type: string | null;
+  document_url: string | null;
+  tags: string[] | null;
   created_at: string | null;
 }
 
@@ -40,7 +48,7 @@ interface ProjectDocumentsManagerProps {
   canEdit: boolean;
 }
 
-const DOCUMENT_TYPES = [
+const DEFAULT_DOCUMENT_TYPES = [
   'Plano',
   'Presupuesto',
   'Contrato',
@@ -50,6 +58,7 @@ const DOCUMENT_TYPES = [
   'Certificado',
   'Licencia',
   'Memoria',
+  'Enlace web',
   'Otro'
 ];
 
@@ -65,8 +74,29 @@ export function ProjectDocumentsManager({
   const [documents, setDocuments] = useState<ProjectDocument[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
+  
+  // Form state for new document
+  const [docName, setDocName] = useState('');
   const [selectedType, setSelectedType] = useState('Otro');
   const [description, setDescription] = useState('');
+  const [documentUrl, setDocumentUrl] = useState('');
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  
+  // Custom document type
+  const [customTypes, setCustomTypes] = useState<string[]>([]);
+  const [isAddingCustomType, setIsAddingCustomType] = useState(false);
+  const [newCustomType, setNewCustomType] = useState('');
+  
+  // Edit mode
+  const [editingDoc, setEditingDoc] = useState<ProjectDocument | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editType, setEditType] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [editUrl, setEditUrl] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+
+  // Combine default and custom types
+  const allDocumentTypes = [...DEFAULT_DOCUMENT_TYPES, ...customTypes.filter(t => !DEFAULT_DOCUMENT_TYPES.includes(t))];
 
   const fetchDocuments = async () => {
     setIsLoading(true);
@@ -78,6 +108,12 @@ export function ProjectDocumentsManager({
 
     if (!error && data) {
       setDocuments(data);
+      
+      // Extract custom types from existing documents
+      const existingTypes = data
+        .map(d => d.document_type)
+        .filter((t): t is string => !!t && !DEFAULT_DOCUMENT_TYPES.includes(t));
+      setCustomTypes([...new Set(existingTypes)]);
     }
     setIsLoading(false);
   };
@@ -88,7 +124,18 @@ export function ProjectDocumentsManager({
     }
   }, [open, projectId]);
 
-  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const resetForm = () => {
+    setDocName('');
+    setSelectedType('Otro');
+    setDescription('');
+    setDocumentUrl('');
+    setSelectedFile(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -97,46 +144,86 @@ export function ProjectDocumentsManager({
       return;
     }
 
+    setSelectedFile(file);
+    // Auto-fill name if empty
+    if (!docName) {
+      setDocName(file.name);
+    }
+  };
+
+  const handleSaveDocument = async () => {
+    // Validate: need at least a name
+    if (!docName.trim()) {
+      toast({ title: 'Error', description: 'El nombre del documento es obligatorio', variant: 'destructive' });
+      return;
+    }
+
+    // Validate URL if provided
+    if (documentUrl && !isValidUrl(documentUrl)) {
+      toast({ title: 'Error', description: 'La URL no es válida', variant: 'destructive' });
+      return;
+    }
+
     setIsUploading(true);
 
     try {
-      // Upload to storage
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${projectId}/${Date.now()}-${file.name}`;
-      
-      const { error: uploadError } = await supabase.storage
-        .from('project-documents')
-        .upload(fileName, file);
+      let filePath: string | null = null;
+      let fileType: string | null = null;
+      let fileSize: number | null = null;
 
-      if (uploadError) throw uploadError;
+      // Upload file if selected
+      if (selectedFile) {
+        const fileName = `${projectId}/${Date.now()}-${selectedFile.name}`;
+        
+        const { error: uploadError } = await supabase.storage
+          .from('project-documents')
+          .upload(fileName, selectedFile);
 
-      // Create document record
+        if (uploadError) throw uploadError;
+
+        filePath = fileName;
+        fileType = selectedFile.type;
+        fileSize = selectedFile.size;
+      }
+
+      // Create document record (with or without file)
       const { error: dbError } = await supabase
         .from('project_documents')
         .insert({
           project_id: projectId,
-          name: file.name,
-          description: description || null,
-          file_path: fileName,
-          file_type: file.type,
-          file_size: file.size,
-          document_type: selectedType
+          name: docName.trim(),
+          description: description.trim() || null,
+          file_path: filePath,
+          file_type: fileType,
+          file_size: fileSize,
+          document_type: selectedType,
+          document_url: documentUrl.trim() || null
         });
 
       if (dbError) throw dbError;
 
-      toast({ title: 'Documento subido correctamente' });
-      setDescription('');
-      setSelectedType('Otro');
+      toast({ title: 'Documento guardado correctamente' });
+      resetForm();
       fetchDocuments();
     } catch (error: any) {
       toast({ title: 'Error', description: error.message, variant: 'destructive' });
     } finally {
       setIsUploading(false);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
     }
+  };
+
+  const handleAddCustomType = () => {
+    if (!newCustomType.trim()) return;
+    
+    const trimmed = newCustomType.trim();
+    if (!allDocumentTypes.includes(trimmed)) {
+      setCustomTypes([...customTypes, trimmed]);
+      setSelectedType(trimmed);
+    } else {
+      setSelectedType(trimmed);
+    }
+    setNewCustomType('');
+    setIsAddingCustomType(false);
   };
 
   const handleDownload = async (doc: ProjectDocument) => {
@@ -162,9 +249,13 @@ export function ProjectDocumentsManager({
     }
   };
 
+  const handleOpenUrl = (url: string) => {
+    window.open(url, '_blank', 'noopener,noreferrer');
+  };
+
   const handleDelete = async (doc: ProjectDocument) => {
     try {
-      // Delete from storage
+      // Delete from storage if has file
       if (doc.file_path) {
         const { error: storageError } = await supabase.storage
           .from('project-documents')
@@ -188,7 +279,76 @@ export function ProjectDocumentsManager({
     }
   };
 
-  const getFileIcon = (fileType: string | null) => {
+  const startEditing = (doc: ProjectDocument) => {
+    setEditingDoc(doc);
+    setEditName(doc.name);
+    setEditType(doc.document_type || 'Otro');
+    setEditDescription(doc.description || '');
+    setEditUrl(doc.document_url || '');
+  };
+
+  const cancelEditing = () => {
+    setEditingDoc(null);
+    setEditName('');
+    setEditType('');
+    setEditDescription('');
+    setEditUrl('');
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingDoc) return;
+    
+    if (!editName.trim()) {
+      toast({ title: 'Error', description: 'El nombre es obligatorio', variant: 'destructive' });
+      return;
+    }
+
+    if (editUrl && !isValidUrl(editUrl)) {
+      toast({ title: 'Error', description: 'La URL no es válida', variant: 'destructive' });
+      return;
+    }
+
+    setIsSaving(true);
+
+    try {
+      const { error } = await supabase
+        .from('project_documents')
+        .update({
+          name: editName.trim(),
+          document_type: editType,
+          description: editDescription.trim() || null,
+          document_url: editUrl.trim() || null
+        })
+        .eq('id', editingDoc.id);
+
+      if (error) throw error;
+
+      toast({ title: 'Documento actualizado' });
+      cancelEditing();
+      fetchDocuments();
+    } catch (error: any) {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const isValidUrl = (url: string) => {
+    try {
+      new URL(url);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  const getFileIcon = (doc: ProjectDocument) => {
+    // If has URL but no file, show link icon
+    if (doc.document_url && !doc.file_path) {
+      return <LinkIcon className="h-5 w-5 text-blue-600" />;
+    }
+    
+    const fileType = doc.file_type;
     if (!fileType) return <File className="h-5 w-5" />;
     if (fileType.startsWith('image/')) return <Image className="h-5 w-5 text-green-600" />;
     if (fileType.includes('pdf')) return <FileText className="h-5 w-5 text-red-600" />;
@@ -215,55 +375,237 @@ export function ProjectDocumentsManager({
           <p className="text-sm text-muted-foreground">{projectName}</p>
         </DialogHeader>
 
-        {/* Upload Form */}
-        {canEdit && (
-          <div className="space-y-3 p-4 bg-muted/50 rounded-lg">
-            <p className="text-sm font-medium">Subir documento</p>
+        {/* Add/Upload Form */}
+        {canEdit && !editingDoc && (
+          <div className="space-y-4 p-4 bg-muted/50 rounded-lg">
+            <p className="text-sm font-medium">Añadir documento</p>
+            
+            {/* Document Name */}
+            <div className="space-y-2">
+              <Label htmlFor="doc-name">Nombre del documento *</Label>
+              <Input
+                id="doc-name"
+                value={docName}
+                onChange={(e) => setDocName(e.target.value)}
+                placeholder="Nombre del documento..."
+                maxLength={200}
+              />
+            </div>
+
             <div className="grid grid-cols-2 gap-3">
+              {/* Document Type with custom option */}
               <div className="space-y-2">
                 <Label htmlFor="doc-type">Tipo de documento</Label>
-                <Select value={selectedType} onValueChange={setSelectedType}>
+                {isAddingCustomType ? (
+                  <div className="flex gap-2">
+                    <Input
+                      value={newCustomType}
+                      onChange={(e) => setNewCustomType(e.target.value)}
+                      placeholder="Nuevo tipo..."
+                      maxLength={50}
+                      autoFocus
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') handleAddCustomType();
+                        if (e.key === 'Escape') {
+                          setIsAddingCustomType(false);
+                          setNewCustomType('');
+                        }
+                      }}
+                    />
+                    <Button size="icon" variant="ghost" onClick={handleAddCustomType}>
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                    <Button size="icon" variant="ghost" onClick={() => {
+                      setIsAddingCustomType(false);
+                      setNewCustomType('');
+                    }}>
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex gap-2">
+                    <Select value={selectedType} onValueChange={setSelectedType}>
+                      <SelectTrigger className="flex-1">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {allDocumentTypes.map((type) => (
+                          <SelectItem key={type} value={type}>{type}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Button 
+                      size="icon" 
+                      variant="outline" 
+                      onClick={() => setIsAddingCustomType(true)}
+                      title="Añadir tipo personalizado"
+                    >
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                  </div>
+                )}
+              </div>
+              
+              {/* URL field */}
+              <div className="space-y-2">
+                <Label htmlFor="doc-url">URL (opcional)</Label>
+                <Input
+                  id="doc-url"
+                  value={documentUrl}
+                  onChange={(e) => setDocumentUrl(e.target.value)}
+                  placeholder="https://ejemplo.com/documento"
+                  type="url"
+                />
+              </div>
+            </div>
+
+            {/* Description */}
+            <div className="space-y-2">
+              <Label htmlFor="description">Descripción (opcional)</Label>
+              <Textarea
+                id="description"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Descripción del documento..."
+                maxLength={500}
+                rows={2}
+              />
+            </div>
+
+            {/* File Upload */}
+            <div className="space-y-2">
+              <Label>Archivo (opcional)</Label>
+              <div className="flex gap-2 items-center">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  className="hidden"
+                  onChange={handleFileChange}
+                  accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx,.zip,.txt"
+                />
+                <Button
+                  variant="outline"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isUploading}
+                  className="flex-1"
+                >
+                  <Upload className="h-4 w-4 mr-2" />
+                  {selectedFile ? selectedFile.name : 'Seleccionar archivo'}
+                </Button>
+                {selectedFile && (
+                  <Button 
+                    variant="ghost" 
+                    size="icon"
+                    onClick={() => {
+                      setSelectedFile(null);
+                      if (fileInputRef.current) fileInputRef.current.value = '';
+                    }}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Formatos: PDF, imágenes, Word, Excel, ZIP. Máximo 50MB.
+              </p>
+            </div>
+
+            {/* Save Button */}
+            <Button
+              onClick={handleSaveDocument}
+              disabled={isUploading || !docName.trim()}
+              className="w-full"
+            >
+              <Save className="h-4 w-4 mr-2" />
+              {isUploading ? 'Guardando...' : 'Guardar documento'}
+            </Button>
+          </div>
+        )}
+
+        {/* Edit Form */}
+        {editingDoc && (
+          <div className="space-y-4 p-4 bg-blue-50 dark:bg-blue-950/30 rounded-lg border border-blue-200 dark:border-blue-800">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-medium text-blue-700 dark:text-blue-300">Editar documento</p>
+              <Button variant="ghost" size="icon" onClick={cancelEditing}>
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+            
+            {/* Edit Name */}
+            <div className="space-y-2">
+              <Label htmlFor="edit-name">Nombre *</Label>
+              <Input
+                id="edit-name"
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                maxLength={200}
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              {/* Edit Type */}
+              <div className="space-y-2">
+                <Label htmlFor="edit-type">Tipo de documento</Label>
+                <Select value={editType} onValueChange={setEditType}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {DOCUMENT_TYPES.map((type) => (
+                    {allDocumentTypes.map((type) => (
                       <SelectItem key={type} value={type}>{type}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
+              
+              {/* Edit URL */}
               <div className="space-y-2">
-                <Label htmlFor="description">Descripción (opcional)</Label>
+                <Label htmlFor="edit-url">URL</Label>
                 <Input
-                  id="description"
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Descripción breve..."
-                  maxLength={200}
+                  id="edit-url"
+                  value={editUrl}
+                  onChange={(e) => setEditUrl(e.target.value)}
+                  placeholder="https://ejemplo.com/documento"
+                  type="url"
                 />
               </div>
             </div>
-            <div className="flex gap-2">
-              <input
-                ref={fileInputRef}
-                type="file"
-                className="hidden"
-                onChange={handleFileSelect}
-                accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx,.zip,.txt"
+
+            {/* Edit Description */}
+            <div className="space-y-2">
+              <Label htmlFor="edit-description">Descripción</Label>
+              <Textarea
+                id="edit-description"
+                value={editDescription}
+                onChange={(e) => setEditDescription(e.target.value)}
+                maxLength={500}
+                rows={2}
               />
-              <Button
-                onClick={() => fileInputRef.current?.click()}
-                disabled={isUploading}
-                className="w-full"
+            </div>
+
+            {/* File info (read-only) */}
+            {editingDoc.file_path && (
+              <div className="p-2 bg-muted rounded text-sm">
+                <span className="text-muted-foreground">Archivo: </span>
+                <span className="font-medium">{editingDoc.file_path.split('/').pop()}</span>
+                <span className="text-muted-foreground ml-2">({formatFileSize(editingDoc.file_size)})</span>
+              </div>
+            )}
+
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={cancelEditing} className="flex-1">
+                Cancelar
+              </Button>
+              <Button 
+                onClick={handleSaveEdit} 
+                disabled={isSaving || !editName.trim()}
+                className="flex-1"
               >
-                <Upload className="h-4 w-4 mr-2" />
-                {isUploading ? 'Subiendo...' : 'Seleccionar archivo'}
+                <Save className="h-4 w-4 mr-2" />
+                {isSaving ? 'Guardando...' : 'Guardar cambios'}
               </Button>
             </div>
-            <p className="text-xs text-muted-foreground">
-              Formatos: PDF, imágenes, Word, Excel, ZIP. Máximo 50MB.
-            </p>
           </div>
         )}
 
@@ -288,17 +630,25 @@ export function ProjectDocumentsManager({
                   className="flex items-center gap-3 p-3 bg-card border rounded-lg group hover:bg-muted/50 transition-colors"
                 >
                   <div className="p-2 bg-muted rounded">
-                    {getFileIcon(doc.file_type)}
+                    {getFileIcon(doc)}
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="font-medium truncate text-sm">{doc.name}</p>
-                    <div className="flex items-center gap-2 mt-1">
+                    <div className="flex items-center gap-2 mt-1 flex-wrap">
                       <Badge variant="outline" className="text-xs">
                         {doc.document_type || 'Otro'}
                       </Badge>
-                      <span className="text-xs text-muted-foreground">
-                        {formatFileSize(doc.file_size)}
-                      </span>
+                      {doc.file_path && (
+                        <span className="text-xs text-muted-foreground">
+                          {formatFileSize(doc.file_size)}
+                        </span>
+                      )}
+                      {doc.document_url && (
+                        <Badge variant="secondary" className="text-xs">
+                          <LinkIcon className="h-3 w-3 mr-1" />
+                          URL
+                        </Badge>
+                      )}
                       {doc.created_at && (
                         <span className="text-xs text-muted-foreground">
                           {format(new Date(doc.created_at), 'd MMM yyyy', { locale: es })}
@@ -312,23 +662,49 @@ export function ProjectDocumentsManager({
                     )}
                   </div>
                   <div className="flex items-center gap-1">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8"
-                      onClick={() => handleDownload(doc)}
-                    >
-                      <Download className="h-4 w-4" />
-                    </Button>
-                    {canEdit && (
+                    {doc.document_url && (
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-8 w-8 text-destructive hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
-                        onClick={() => handleDelete(doc)}
+                        className="h-8 w-8"
+                        onClick={() => handleOpenUrl(doc.document_url!)}
+                        title="Abrir enlace"
                       >
-                        <Trash2 className="h-4 w-4" />
+                        <ExternalLink className="h-4 w-4" />
                       </Button>
+                    )}
+                    {doc.file_path && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={() => handleDownload(doc)}
+                        title="Descargar archivo"
+                      >
+                        <Download className="h-4 w-4" />
+                      </Button>
+                    )}
+                    {canEdit && (
+                      <>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
+                          onClick={() => startEditing(doc)}
+                          title="Editar documento"
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-destructive hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
+                          onClick={() => handleDelete(doc)}
+                          title="Eliminar documento"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </>
                     )}
                   </div>
                 </div>

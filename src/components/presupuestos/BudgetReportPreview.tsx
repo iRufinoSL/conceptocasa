@@ -1099,6 +1099,22 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
         // Phases table sorted by code alphabetically
         const sortedPhasesForPdf = [...phases].sort((a, b) => (a.code || '').localeCompare(b.code || ''));
         
+        // Helper to calculate subtotal for a phase
+        const getPhaseSubtotal = (phaseId: string): number => {
+          const phaseActivities = activities.filter(a => a.phase_id === phaseId);
+          const activityIds = phaseActivities.map(a => a.id);
+          const phaseResources = resources.filter(r => r.activity_id && activityIds.includes(r.activity_id));
+          return phaseResources.reduce((sum, r) => {
+            return sum + calcResourceSubtotal({
+              externalUnitCost: r.external_unit_cost,
+              safetyPercent: r.safety_margin_percent,
+              salesPercent: r.sales_margin_percent,
+              manualUnits: r.manual_units,
+              relatedUnits: r.related_units,
+            });
+          }, 0);
+        };
+        
         const phasesData = sortedPhasesForPdf.map(phase => {
           const formatDate = (date: string | null) => {
             if (!date) return '-';
@@ -1109,29 +1125,33 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
             }
           };
           
+          const phaseSubtotal = getPhaseSubtotal(phase.id);
+          
           return [
             phase.code || '-',
             phase.name,
             formatDate(phase.start_date),
             phase.duration_days ? `${phase.duration_days} días` : '-',
-            formatDate(phase.estimated_end_date)
+            formatDate(phase.estimated_end_date),
+            formatPdfCurrency(phaseSubtotal)
           ];
         });
 
         autoTable(doc, {
           startY: yPos,
-          head: [['FaseID', 'Nombre', 'Fecha Inicio', 'Duración', 'Fecha Fin']],
+          head: [['FaseID', 'Nombre', 'Fecha Inicio', 'Duración', 'Fecha Fin', '€SubTotal']],
           body: phasesData,
           theme: 'striped',
           headStyles: { fillColor: [59, 130, 246] },
           margin: { left: 14, right: 14 },
           styles: { fontSize: 9 },
           columnStyles: {
-            0: { cellWidth: 25 },
-            1: { cellWidth: 65 },
-            2: { cellWidth: 28, halign: 'center' },
-            3: { cellWidth: 28, halign: 'center' },
-            4: { cellWidth: 28, halign: 'center' },
+            0: { cellWidth: 22 },
+            1: { cellWidth: 50 },
+            2: { cellWidth: 25, halign: 'center' },
+            3: { cellWidth: 24, halign: 'center' },
+            4: { cellWidth: 25, halign: 'center' },
+            5: { cellWidth: 28, halign: 'right' },
           },
         });
       }
@@ -2313,31 +2333,51 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
                         <TableHead className="font-bold w-28 text-center">Fecha Inicio</TableHead>
                         <TableHead className="font-bold w-24 text-center">Duración</TableHead>
                         <TableHead className="font-bold w-28 text-center">Fecha Fin</TableHead>
+                        <TableHead className="font-bold w-28 text-right">€SubTotal</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {phases.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                          <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                             No hay fases registradas
                           </TableCell>
                         </TableRow>
                       ) : (
-                        [...phases].sort((a, b) => (a.code || '').localeCompare(b.code || '')).map(phase => (
-                          <TableRow key={phase.id}>
-                            <TableCell className="font-mono font-medium">{phase.code || '-'}</TableCell>
-                            <TableCell className="font-medium">{phase.name}</TableCell>
-                            <TableCell className="text-center">
-                              {phase.start_date ? format(new Date(phase.start_date), 'dd/MM/yyyy') : '-'}
-                            </TableCell>
-                            <TableCell className="text-center">
-                              {phase.duration_days ? `${phase.duration_days} días` : '-'}
-                            </TableCell>
-                            <TableCell className="text-center">
-                              {phase.estimated_end_date ? format(new Date(phase.estimated_end_date), 'dd/MM/yyyy') : '-'}
-                            </TableCell>
-                          </TableRow>
-                        ))
+                        [...phases].sort((a, b) => (a.code || '').localeCompare(b.code || '')).map(phase => {
+                          // Calculate subtotal for this phase
+                          const phaseActivities = activities.filter(a => a.phase_id === phase.id);
+                          const activityIds = phaseActivities.map(a => a.id);
+                          const phaseResources = resources.filter(r => r.activity_id && activityIds.includes(r.activity_id));
+                          const phaseSubtotal = phaseResources.reduce((sum, r) => {
+                            return sum + calcResourceSubtotal({
+                              externalUnitCost: r.external_unit_cost,
+                              safetyPercent: r.safety_margin_percent,
+                              salesPercent: r.sales_margin_percent,
+                              manualUnits: r.manual_units,
+                              relatedUnits: r.related_units,
+                            });
+                          }, 0);
+                          
+                          return (
+                            <TableRow key={phase.id}>
+                              <TableCell className="font-mono font-medium">{phase.code || '-'}</TableCell>
+                              <TableCell className="font-medium">{phase.name}</TableCell>
+                              <TableCell className="text-center">
+                                {phase.start_date ? format(new Date(phase.start_date), 'dd/MM/yyyy') : '-'}
+                              </TableCell>
+                              <TableCell className="text-center">
+                                {phase.duration_days ? `${phase.duration_days} días` : '-'}
+                              </TableCell>
+                              <TableCell className="text-center">
+                                {phase.estimated_end_date ? format(new Date(phase.estimated_end_date), 'dd/MM/yyyy') : '-'}
+                              </TableCell>
+                              <TableCell className="text-right font-medium">
+                                {formatCurrency(phaseSubtotal)}
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })
                       )}
                     </TableBody>
                   </Table>

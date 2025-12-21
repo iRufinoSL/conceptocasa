@@ -339,6 +339,7 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
   // Generate report type name based on selected sections
   const getReportTypeName = () => {
     const names: string[] = [];
+    if (selectedSections.includes('cuanto-cuando')) names.push('CUÁNTO cuesta + CUÁNDO hacer');
     if (selectedSections.includes('predesigns')) names.push('Ante-proyecto');
     if (selectedSections.includes('activities')) names.push('Actividades');
     if (selectedSections.includes('resources')) names.push('Recursos');
@@ -751,6 +752,9 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
         { title: 'Resumen General', page: 2 },
       ];
 
+      if (selectedSections.includes('cuanto-cuando')) {
+        indexItems.push({ title: 'CUÁNTO cuesta + CUÁNDO hacer', page: 3 });
+      }
       if (selectedSections.includes('predesigns')) {
         indexItems.push({ title: 'Ante-proyecto', page: 3 });
       }
@@ -974,6 +978,163 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
           2: { cellWidth: 50, halign: 'right' },
         },
       });
+
+      // Section: CUÁNTO cuesta + CUÁNDO hacer (only if selected)
+      if (selectedSections.includes('cuanto-cuando')) {
+        doc.addPage();
+        yPos = 20;
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(37, 99, 235);
+        doc.text('2. ¿CUÁNTO CUESTA? PRESUPUESTO', 14, yPos);
+        doc.setTextColor(0);
+
+        yPos += 10;
+
+        // Draw portada image if available
+        if (portadaImgData) {
+          const coverHeight = 50;
+          const coverWidth = pageWidth - 28;
+          const coverX = 14;
+          const coverY = yPos;
+          
+          try {
+            doc.addImage(portadaImgData, 'JPEG', coverX, coverY, coverWidth, coverHeight, undefined, 'FAST');
+            
+            // Semi-transparent overlay
+            doc.setFillColor(0, 0, 0);
+            doc.setGState(new (doc as any).GState({ opacity: presupuesto.portada_overlay_opacity ?? 0.4 }));
+            doc.rect(coverX, coverY, coverWidth, coverHeight, 'F');
+            doc.setGState(new (doc as any).GState({ opacity: 1 }));
+            
+            // Text on cover image
+            const textColor = presupuesto.portada_text_color || '#FFFFFF';
+            const hexToRgb = (hex: string) => {
+              const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+              return result ? {
+                r: parseInt(result[1], 16),
+                g: parseInt(result[2], 16),
+                b: parseInt(result[3], 16)
+              } : { r: 255, g: 255, b: 255 };
+            };
+            const rgb = hexToRgb(textColor);
+            doc.setTextColor(rgb.r, rgb.g, rgb.b);
+            doc.setFontSize(10);
+            doc.setFont('helvetica', 'bold');
+            doc.text(presupuesto.nombre, pageWidth / 2, coverY + coverHeight / 2 - 2, { align: 'center' });
+            doc.setFontSize(8);
+            doc.setFont('helvetica', 'normal');
+            doc.text(`${presupuesto.poblacion}${presupuesto.provincia ? `, ${presupuesto.provincia}` : ''}`, pageWidth / 2, coverY + coverHeight / 2 + 5, { align: 'center' });
+            
+            doc.setTextColor(0, 0, 0);
+            yPos = coverY + coverHeight + 10;
+          } catch (e) {
+            console.error('Error drawing portada in CUÁNTO:', e);
+          }
+        }
+
+        // Budget info
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'bold');
+        doc.text('Datos del Presupuesto', 14, yPos);
+        doc.setFont('helvetica', 'normal');
+        yPos += 6;
+        
+        const budgetInfoData = [
+          ['Nombre:', presupuesto.nombre],
+          ['Código:', presupuesto.codigo_correlativo.toString()],
+          ['Versión:', presupuesto.version],
+          ['Ubicación:', `${presupuesto.poblacion}${presupuesto.provincia ? `, ${presupuesto.provincia}` : ''}`],
+        ];
+        
+        budgetInfoData.forEach(([label, value]) => {
+          doc.setFontSize(9);
+          doc.text(label, 14, yPos);
+          doc.text(value, 50, yPos);
+          yPos += 5;
+        });
+
+        yPos += 8;
+
+        // Cost summary
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'bold');
+        doc.text('Resumen de Costes', 14, yPos);
+        yPos += 8;
+
+        // Calculate values
+        const costPerM2Built = spacesTotals.m2_built > 0 ? totalResourcesSubtotal / spacesTotals.m2_built : 0;
+        const costPerM2Livable = spacesTotals.m2_livable > 0 ? totalResourcesSubtotal / spacesTotals.m2_livable : 0;
+
+        const costSummaryData = [
+          ['Subtotal Recursos (PVP):', formatPdfCurrency(totalResourcesSubtotal)],
+          ['m² Construidos:', `${formatNumber(spacesTotals.m2_built)} m²`],
+          ['m² Habitables:', `${formatNumber(spacesTotals.m2_livable)} m²`],
+          ['€ Coste por m² Construido:', formatPdfCurrency(costPerM2Built)],
+          ['€ Coste por m² Habitable:', formatPdfCurrency(costPerM2Livable)],
+        ];
+
+        autoTable(doc, {
+          startY: yPos,
+          body: costSummaryData,
+          theme: 'plain',
+          margin: { left: 14, right: 14 },
+          styles: { fontSize: 10 },
+          columnStyles: {
+            0: { cellWidth: 60, fontStyle: 'bold' },
+            1: { cellWidth: 60, halign: 'right' },
+          },
+        });
+
+        yPos = (doc as any).lastAutoTable.finalY + 15;
+
+        // CUÁNDO hacer - Phases section
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(37, 99, 235);
+        doc.text('¿CUÁNDO HACER? FASES', 14, yPos);
+        doc.setTextColor(0);
+        yPos += 8;
+
+        // Phases table sorted by code alphabetically
+        const sortedPhasesForPdf = [...phases].sort((a, b) => (a.code || '').localeCompare(b.code || ''));
+        
+        const phasesData = sortedPhasesForPdf.map(phase => {
+          const formatDate = (date: string | null) => {
+            if (!date) return '-';
+            try {
+              return format(new Date(date), 'dd/MM/yyyy');
+            } catch {
+              return '-';
+            }
+          };
+          
+          return [
+            phase.code || '-',
+            phase.name,
+            formatDate(phase.start_date),
+            phase.duration_days ? `${phase.duration_days} días` : '-',
+            formatDate(phase.estimated_end_date)
+          ];
+        });
+
+        autoTable(doc, {
+          startY: yPos,
+          head: [['FaseID', 'Nombre', 'Fecha Inicio', 'Duración', 'Fecha Fin']],
+          body: phasesData,
+          theme: 'striped',
+          headStyles: { fillColor: [59, 130, 246] },
+          margin: { left: 14, right: 14 },
+          styles: { fontSize: 9 },
+          columnStyles: {
+            0: { cellWidth: 25 },
+            1: { cellWidth: 65 },
+            2: { cellWidth: 28, halign: 'center' },
+            3: { cellWidth: 28, halign: 'center' },
+            4: { cellWidth: 28, halign: 'center' },
+          },
+        });
+      }
 
       // Section 2: Activities Summary (only if selected)
       if (selectedSections.includes('activities')) {
@@ -1689,6 +1850,20 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3 p-3 bg-muted/20 rounded-lg border">
               <div className="flex items-center space-x-2">
                 <Checkbox 
+                  id="cuanto-cuando" 
+                  checked={selectedSections.includes('cuanto-cuando')}
+                  onCheckedChange={(checked) => {
+                    if (checked) {
+                      setSelectedSections(prev => [...prev, 'cuanto-cuando']);
+                    } else {
+                      setSelectedSections(prev => prev.filter(s => s !== 'cuanto-cuando'));
+                    }
+                  }}
+                />
+                <Label htmlFor="cuanto-cuando" className="cursor-pointer text-sm font-medium text-primary">CUÁNTO cuesta + CUÁNDO hacer</Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <Checkbox 
                   id="predesigns" 
                   checked={selectedSections.includes('predesigns')}
                   onCheckedChange={(checked) => {
@@ -1699,7 +1874,7 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
                     }
                   }}
                 />
-                <Label htmlFor="predesigns" className="cursor-pointer text-sm font-medium">Ante-proyecto</Label>
+                <Label htmlFor="predesigns" className="cursor-pointer text-sm">Ante-proyecto</Label>
               </div>
               <div className="flex items-center space-x-2">
                 <Checkbox 
@@ -1899,6 +2074,12 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
                       <span>1. Resumen General</span>
                       <span className="text-muted-foreground text-xs">Pág. 2</span>
                     </div>
+                    {selectedSections.includes('cuanto-cuando') && (
+                      <div className="flex justify-between">
+                        <span>2. CUÁNTO cuesta + CUÁNDO hacer</span>
+                        <span className="text-muted-foreground text-xs">Pág. 3</span>
+                      </div>
+                    )}
                     {selectedSections.includes('predesigns') && (
                       <div className="flex justify-between">
                         <span>2. Ante-proyecto</span>
@@ -2018,6 +2199,153 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
               </div>
 
               <Separator className="print:hidden" />
+
+              {/* Section: CUÁNTO cuesta + CUÁNDO hacer - only if selected */}
+              {selectedSections.includes('cuanto-cuando') && (
+              <div className="print-section">
+                <h3 className="text-lg font-bold text-primary mb-4">2. ¿CUÁNTO CUESTA? PRESUPUESTO</h3>
+                
+                {/* Budget Info with Cover Image */}
+                <div className="mb-6">
+                  {presupuesto.portada_url && (
+                    <div className="relative rounded-lg overflow-hidden mb-4" style={{ height: '180px' }}>
+                      <img 
+                        src={presupuesto.portada_url} 
+                        alt="Portada del presupuesto" 
+                        className="w-full h-full object-cover"
+                      />
+                      <div 
+                        className="absolute inset-0"
+                        style={{ backgroundColor: `rgba(0,0,0,${presupuesto.portada_overlay_opacity ?? 0.4})` }}
+                      />
+                      <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-4" style={{ color: presupuesto.portada_text_color || '#FFFFFF' }}>
+                        <p className="text-sm font-medium uppercase tracking-wider">Presupuesto</p>
+                        <p className="text-xl font-bold mt-1">{presupuesto.nombre}</p>
+                        <p className="text-sm mt-1">{presupuesto.poblacion}{presupuesto.provincia ? `, ${presupuesto.provincia}` : ''}</p>
+                      </div>
+                    </div>
+                  )}
+                  
+                  <div className="p-4 bg-muted/50 rounded-lg">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                      <div>
+                        <span className="text-muted-foreground">Nombre:</span>
+                        <p className="font-medium">{presupuesto.nombre}</p>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Código:</span>
+                        <p className="font-medium">{presupuesto.codigo_correlativo}</p>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Versión:</span>
+                        <p className="font-medium">{presupuesto.version}</p>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Ubicación:</span>
+                        <p className="font-medium">{presupuesto.poblacion}{presupuesto.provincia ? `, ${presupuesto.provincia}` : ''}</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Cost Summary Cards */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                  <Card className="bg-primary/5 border-primary/20">
+                    <CardContent className="pt-4">
+                      <p className="text-sm text-muted-foreground">Subtotal Recursos</p>
+                      <p className="text-2xl font-bold text-primary">{formatCurrency(totalResourcesSubtotal)}</p>
+                      <p className="text-xs text-muted-foreground">Total PVP de {resources.length} recursos</p>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="pt-4">
+                      <p className="text-sm text-muted-foreground">m² Construidos</p>
+                      <p className="text-2xl font-bold">{formatNumber(spacesTotals.m2_built)} m²</p>
+                      <p className="text-xs text-muted-foreground">De {spaces.length} espacios</p>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="pt-4">
+                      <p className="text-sm text-muted-foreground">m² Habitables</p>
+                      <p className="text-2xl font-bold">{formatNumber(spacesTotals.m2_livable)} m²</p>
+                      <p className="text-xs text-muted-foreground">De {spaces.length} espacios</p>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* Cost per m2 */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                  <Card className="bg-amber-500/10 border-amber-500/20">
+                    <CardContent className="pt-4">
+                      <p className="text-sm font-medium text-amber-600">€ Coste por m² Construido</p>
+                      <p className="text-3xl font-bold text-amber-600">
+                        {formatCurrency(spacesTotals.m2_built > 0 ? totalResourcesSubtotal / spacesTotals.m2_built : 0)}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {formatCurrency(totalResourcesSubtotal)} ÷ {formatNumber(spacesTotals.m2_built)} m²
+                      </p>
+                    </CardContent>
+                  </Card>
+                  <Card className="bg-emerald-500/10 border-emerald-500/20">
+                    <CardContent className="pt-4">
+                      <p className="text-sm font-medium text-emerald-600">€ Coste por m² Habitable</p>
+                      <p className="text-3xl font-bold text-emerald-600">
+                        {formatCurrency(spacesTotals.m2_livable > 0 ? totalResourcesSubtotal / spacesTotals.m2_livable : 0)}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {formatCurrency(totalResourcesSubtotal)} ÷ {formatNumber(spacesTotals.m2_livable)} m²
+                      </p>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                <Separator className="my-6" />
+
+                {/* CUÁNDO hacer - Phases List */}
+                <h3 className="text-lg font-bold text-primary mb-4">¿CUÁNDO HACER? FASES</h3>
+                
+                <div className="border rounded-lg overflow-hidden">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-primary/10">
+                        <TableHead className="font-bold">FaseID</TableHead>
+                        <TableHead className="font-bold">Nombre</TableHead>
+                        <TableHead className="font-bold w-28 text-center">Fecha Inicio</TableHead>
+                        <TableHead className="font-bold w-24 text-center">Duración</TableHead>
+                        <TableHead className="font-bold w-28 text-center">Fecha Fin</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {phases.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                            No hay fases registradas
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        [...phases].sort((a, b) => (a.code || '').localeCompare(b.code || '')).map(phase => (
+                          <TableRow key={phase.id}>
+                            <TableCell className="font-mono font-medium">{phase.code || '-'}</TableCell>
+                            <TableCell className="font-medium">{phase.name}</TableCell>
+                            <TableCell className="text-center">
+                              {phase.start_date ? format(new Date(phase.start_date), 'dd/MM/yyyy') : '-'}
+                            </TableCell>
+                            <TableCell className="text-center">
+                              {phase.duration_days ? `${phase.duration_days} días` : '-'}
+                            </TableCell>
+                            <TableCell className="text-center">
+                              {phase.estimated_end_date ? format(new Date(phase.estimated_end_date), 'dd/MM/yyyy') : '-'}
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+              )}
+
+              {selectedSections.includes('cuanto-cuando') && <Separator className="print:hidden" />}
 
               {/* Section 2: Activities Summary - only if selected */}
               {selectedSections.includes('activities') && (

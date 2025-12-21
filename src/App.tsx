@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { InactivityHandler } from "@/components/InactivityHandler";
 import { AuthProvider } from "@/context/AuthContext";
+import { ProtectedRoute } from "@/components/ProtectedRoute";
 import Landing from "./pages/Landing";
 import Dashboard from "./pages/Dashboard";
 import Recursos from "./pages/Recursos";
@@ -31,20 +32,26 @@ const App = () => (
         <AuthProvider>
           <InactivityHandler />
           <Routes>
+            {/* Public routes */}
             <Route path="/" element={<Landing />} />
-            <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/recursos" element={<Recursos />} />
-            <Route path="/presupuestos" element={<Presupuestos />} />
-            <Route path="/presupuestos/:id" element={<PresupuestoDashboard />} />
-            <Route path="/proyectos" element={<Proyectos />} />
-            <Route path="/crm" element={<CRM />} />
-            <Route path="/agenda" element={<Agenda />} />
-            <Route path="/documentos" element={<Documentos />} />
-            <Route path="/usuarios" element={<Usuarios />} />
-            <Route path="/configuracion" element={<Configuracion />} />
-            <Route path="/setup" element={<Setup />} />
             <Route path="/auth" element={<Auth />} />
-            {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+            <Route path="/setup" element={<Setup />} />
+            
+            {/* Protected routes - require authentication */}
+            <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+            <Route path="/presupuestos" element={<ProtectedRoute><Presupuestos /></ProtectedRoute>} />
+            <Route path="/presupuestos/:id" element={<ProtectedRoute><PresupuestoDashboard /></ProtectedRoute>} />
+            <Route path="/proyectos" element={<ProtectedRoute><Proyectos /></ProtectedRoute>} />
+            <Route path="/crm" element={<ProtectedRoute><CRM /></ProtectedRoute>} />
+            <Route path="/agenda" element={<ProtectedRoute><Agenda /></ProtectedRoute>} />
+            <Route path="/documentos" element={<ProtectedRoute><Documentos /></ProtectedRoute>} />
+            
+            {/* Admin-only routes */}
+            <Route path="/recursos" element={<ProtectedRoute requireAdmin><Recursos /></ProtectedRoute>} />
+            <Route path="/usuarios" element={<ProtectedRoute requireAdmin><Usuarios /></ProtectedRoute>} />
+            <Route path="/configuracion" element={<ProtectedRoute requireAdmin><Configuracion /></ProtectedRoute>} />
+            
+            {/* Catch-all */}
             <Route path="*" element={<NotFound />} />
           </Routes>
         </AuthProvider>

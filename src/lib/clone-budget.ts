@@ -356,25 +356,21 @@ export async function cloneBudget(
 
     if (sourceWorkAreas?.length) {
       for (const workArea of sourceWorkAreas) {
-        // area_id suele guardar el UUID del espacio del presupuesto origen.
-        // Si no existe mapeo hacia el nuevo espacio, lo dejamos en null para evitar referencias rotas.
-        const mappedAreaId = workArea.area_id
-          ? (spaceIdMap.get(workArea.area_id) ?? (isUuid(workArea.area_id) ? null : workArea.area_id))
-          : null;
+        // NOTE: budget_work_areas.area_id es una columna GENERATED ALWAYS, no se puede insertar.
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { area_id, ...workAreaInsertable } = workArea as any;
 
         const { data: newWorkArea, error: workAreaError } = await supabase
           .from("budget_work_areas")
           .insert({
-            ...workArea,
+            ...workAreaInsertable,
             id: undefined,
             created_at: undefined,
             updated_at: undefined,
             budget_id: newBudgetId,
-            area_id: mappedAreaId,
           })
           .select("*")
           .single();
-
 
         if (workAreaError || !newWorkArea) throw new Error(workAreaError?.message);
         workAreaIdMap.set(workArea.id, newWorkArea.id);

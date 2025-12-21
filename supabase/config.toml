@@ -4,4 +4,4 @@ project_id = "slarpzopcnnaeaipmfje"
 verify_jwt = false
 
 [functions.send-user-credentials]
-verify_jwt = false
+verify_jwt = true

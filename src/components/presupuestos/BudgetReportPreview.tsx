@@ -1170,9 +1170,10 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
 
         const activitiesTableData: any[] = [];
         
-        // Apply filter based on onlyWithCost
+        // Apply filter based on onlyWithCost for activities, but always show all phases
         const filteredActivitiesForPdf = getFilteredActivities();
-        const filteredPhasesForPdf = getFilteredPhases();
+        // Always use all phases to show phases with SubTotal = 0
+        const allPhasesForPdf = [...phases].sort((a, b) => (a.code || '').localeCompare(b.code || ''));
         
         // Calculate filtered total
         const filteredActivitiesTotal = filteredActivitiesForPdf.reduce((sum, a) => sum + (activityResourcesMap.get(a.id) || 0), 0);
@@ -1194,8 +1195,8 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
           });
         }
 
-        filteredPhasesForPdf.forEach(phase => {
-          const phaseActivities = filteredActivitiesForPdf.filter(a => a.phase_id === phase.id);
+        allPhasesForPdf.forEach(phase => {
+          const phaseActivities = activities.filter(a => a.phase_id === phase.id);
 
           const phaseSubtotal = phaseActivities.reduce((sum, a) => sum + (activityResourcesMap.get(a.id) || 0), 0);
 

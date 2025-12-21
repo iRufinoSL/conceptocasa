@@ -11,6 +11,10 @@ interface CloneResult {
     measurements: number;
     measurementRelations: number;
     predesigns: number;
+    spaces: number;
+    workAreas: number;
+    workAreaMeasurements: number;
+    workAreaActivities: number;
   };
 }
 
@@ -23,6 +27,7 @@ export async function cloneBudget(
     provincia?: string;
     coordenadas_lat?: number;
     coordenadas_lng?: number;
+    project_id?: string | null;
   },
   options: {
     preserveMeasurementValues?: boolean; // true = clone complete, false = clone as template
@@ -35,7 +40,11 @@ export async function cloneBudget(
     resources: 0,
     measurements: 0,
     measurementRelations: 0,
-    predesigns: 0
+    predesigns: 0,
+    spaces: 0,
+    workAreas: 0,
+    workAreaMeasurements: 0,
+    workAreaActivities: 0
   };
 
   try {
@@ -58,7 +67,8 @@ export async function cloneBudget(
         poblacion: newBudgetData.poblacion,
         provincia: newBudgetData.provincia || null,
         coordenadas_lat: newBudgetData.coordenadas_lat || null,
-        coordenadas_lng: newBudgetData.coordenadas_lng || null
+        coordenadas_lng: newBudgetData.coordenadas_lng || null,
+        project_id: newBudgetData.project_id || null
       })
       .select()
       .single();
@@ -113,7 +123,7 @@ export async function cloneBudget(
       }
     }
 
-    // 4. Clone measurements (without manual_units values) and build ID mapping
+    // 4. Clone measurements and build ID mapping
     const { data: sourceMeasurements } = await supabase
       .from('budget_measurements')
       .select('*')
@@ -234,7 +244,114 @@ export async function cloneBudget(
       }
     }
 
-    // 7. Clone predesigns (structure only, no files)
+    // 7. Clone spaces (budget_spaces)
+    const { data: sourceSpaces } = await supabase
+      .from('budget_spaces')
+      .select('*')
+      .eq('budget_id', sourceBudgetId);
+
+    if (sourceSpaces && sourceSpaces.length > 0) {
+      for (const space of sourceSpaces) {
+        const { error: spaceError } = await supabase
+          .from('budget_spaces')
+          .insert({
+            budget_id: newBudgetId,
+            name: space.name,
+            level: space.level,
+            space_type: space.space_type,
+            m2_built: preserveMeasurementValues ? space.m2_built : null,
+            m2_livable: preserveMeasurementValues ? space.m2_livable : null,
+            observations: space.observations
+          });
+
+        if (!spaceError) {
+          stats.spaces++;
+        }
+      }
+    }
+
+    // 8. Clone work areas and build ID mapping
+    const { data: sourceWorkAreas } = await supabase
+      .from('budget_work_areas')
+      .select('*')
+      .eq('budget_id', sourceBudgetId);
+
+    const workAreaIdMap = new Map<string, string>(); // old ID -> new ID
+
+    if (sourceWorkAreas && sourceWorkAreas.length > 0) {
+      for (const workArea of sourceWorkAreas) {
+        const { data: newWorkArea, error: workAreaError } = await supabase
+          .from('budget_work_areas')
+          .insert({
+            budget_id: newBudgetId,
+            name: workArea.name,
+            level: workArea.level,
+            work_area: workArea.work_area,
+            area_id: workArea.area_id
+          })
+          .select()
+          .single();
+
+        if (!workAreaError && newWorkArea) {
+          workAreaIdMap.set(workArea.id, newWorkArea.id);
+          stats.workAreas++;
+        }
+      }
+
+      // Clone work area measurements
+      const { data: sourceWorkAreaMeasurements } = await supabase
+        .from('budget_work_area_measurements')
+        .select('*')
+        .in('work_area_id', sourceWorkAreas.map(wa => wa.id));
+
+      if (sourceWorkAreaMeasurements && sourceWorkAreaMeasurements.length > 0) {
+        for (const wam of sourceWorkAreaMeasurements) {
+          const newWorkAreaId = workAreaIdMap.get(wam.work_area_id);
+          const newMeasurementId = measurementIdMap.get(wam.measurement_id);
+
+          if (newWorkAreaId && newMeasurementId) {
+            const { error: wamError } = await supabase
+              .from('budget_work_area_measurements')
+              .insert({
+                work_area_id: newWorkAreaId,
+                measurement_id: newMeasurementId
+              });
+
+            if (!wamError) {
+              stats.workAreaMeasurements++;
+            }
+          }
+        }
+      }
+
+      // Clone work area activities
+      const { data: sourceWorkAreaActivities } = await supabase
+        .from('budget_work_area_activities')
+        .select('*')
+        .in('work_area_id', sourceWorkAreas.map(wa => wa.id));
+
+      if (sourceWorkAreaActivities && sourceWorkAreaActivities.length > 0) {
+        for (const waa of sourceWorkAreaActivities) {
+          const newWorkAreaId = workAreaIdMap.get(waa.work_area_id);
+          const newActivityId = activityIdMap.get(waa.activity_id);
+
+          if (newWorkAreaId && newActivityId) {
+            const { error: waaError } = await supabase
+              .from('budget_work_area_activities')
+              .insert({
+                work_area_id: newWorkAreaId,
+                activity_id: newActivityId
+              });
+
+            if (!waaError) {
+              stats.workAreaActivities++;
+            }
+          }
+        }
+      }
+    }
+
+    // 9. Clone predesigns (structure only, no files)
     const { data: sourcePredesigns } = await supabase
       .from('budget_predesigns')
       .select('*')

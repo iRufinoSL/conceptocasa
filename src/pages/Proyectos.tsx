@@ -23,8 +23,12 @@ import {
   Trash2,
   Users,
   FileText,
-  Calculator
+  Calculator,
+  Archive,
+  ChevronDown,
+  ChevronRight
 } from 'lucide-react';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { formatCurrencyNoDecimals } from '@/lib/format-utils';
@@ -49,6 +53,7 @@ interface Project {
   start_date: string | null;
   end_date: string | null;
   created_at: string | null;
+  archived: boolean;
 }
 
 interface ProjectContact {
@@ -92,6 +97,7 @@ export default function Proyectos() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [projectToDelete, setProjectToDelete] = useState<Project | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -182,6 +188,26 @@ export default function Proyectos() {
     
     setFilteredProjects(filtered);
   }, [searchTerm, statusFilter, projects]);
+
+  // Separate active and archived projects
+  const activeProjects = filteredProjects.filter(p => !p.archived);
+  const archivedProjects = filteredProjects.filter(p => p.archived);
+
+  // Handle archive toggle
+  const handleArchiveToggle = async (project: Project) => {
+    try {
+      const { error } = await supabase
+        .from('projects')
+        .update({ archived: !project.archived })
+        .eq('id', project.id);
+
+      if (error) throw error;
+      toast({ title: project.archived ? 'Proyecto desarchivado' : 'Proyecto archivado' });
+      fetchProjects();
+    } catch (error: any) {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    }
+  };
 
   const handleAddNew = () => {
     setEditingProject(null);
@@ -331,12 +357,14 @@ export default function Proyectos() {
           </Select>
           <div className="flex items-center gap-2 text-sm text-muted-foreground whitespace-nowrap">
             <Building2 className="h-4 w-4" />
-            <span>{filteredProjects.length} proyectos</span>
+            <span>{activeProjects.length} activos{archivedProjects.length > 0 && `, ${archivedProjects.length} archivados`}</span>
           </div>
         </div>
 
-        {/* Projects Grid */}
-        {filteredProjects.length === 0 ? (
+        {/* Active Projects Section */}
+        {activeProjects.length > 0 && (
+        {/* Projects Grid - Active */}
+        {activeProjects.length === 0 && archivedProjects.length === 0 ? (
           <Card className="py-16">
             <CardContent className="text-center">
               <FolderOpen className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
@@ -352,17 +380,19 @@ export default function Proyectos() {
             </CardContent>
           </Card>
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {filteredProjects.map((project) => {
-              const contacts = projectContacts[project.id] || [];
-              const budgetCount = projectBudgetCounts[project.id] || 0;
-              return (
-                <Card
-                  key={project.id}
-                  className="group hover:shadow-lg hover:border-primary/50 transition-all duration-200"
-                >
-                  <CardHeader className="pb-3">
-                    <div className="flex items-start justify-between">
+          <>
+            {activeProjects.length > 0 && (
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 mb-6">
+                {activeProjects.map((project) => {
+                  const contacts = projectContacts[project.id] || [];
+                  const budgetCount = projectBudgetCounts[project.id] || 0;
+                  return (
+                    <Card
+                      key={project.id}
+                      className="group hover:shadow-lg hover:border-primary/50 transition-all duration-200"
+                    >
+                      <CardHeader className="pb-3">
+                        <div className="flex items-start justify-between">
                       <CardTitle className="text-lg line-clamp-1 flex-1">{project.name}</CardTitle>
                       <div className="flex items-center gap-1">
                         <Badge variant={getStatusVariant(project.status)}>
@@ -391,6 +421,10 @@ export default function Proyectos() {
                               <DropdownMenuItem onClick={() => handleEdit(project)}>
                                 <Pencil className="h-4 w-4 mr-2" />
                                 Editar
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleArchiveToggle(project)}>
+                                <Archive className="h-4 w-4 mr-2" />
+                                {project.archived ? 'Desarchivar' : 'Archivar'}
                               </DropdownMenuItem>
                               <DropdownMenuItem onClick={() => handleDeleteClick(project)} className="text-destructive">
                                 <Trash2 className="h-4 w-4 mr-2" />

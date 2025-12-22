@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { ArrowLeft, Calculator, Search, LayoutGrid, List, Plus, Pencil, Trash2, ExternalLink, RefreshCw, Copy } from 'lucide-react';
+import { ArrowLeft, Calculator, Search, LayoutGrid, List, Plus, Pencil, Trash2, ExternalLink, RefreshCw, Copy, Archive, ChevronDown, ChevronRight } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { AppNavDropdown } from '@/components/AppNavDropdown';
@@ -18,6 +18,8 @@ import { BackupButton } from '@/components/BackupButton';
 import { recalculateAllBudgetResources } from '@/lib/budget-utils';
 import { searchMatch } from '@/lib/search-utils';
 import { CloneBudgetDialog } from '@/components/presupuestos/CloneBudgetDialog';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Badge } from '@/components/ui/badge';
 
 interface Presupuesto {
   id: string;
@@ -30,6 +32,7 @@ interface Presupuesto {
   coordenadas_lng: number | null;
   created_at: string;
   project_id: string | null;
+  archived: boolean;
 }
 
 interface PresupuestoForm {
@@ -52,6 +55,180 @@ const emptyForm: PresupuestoForm = {
   coordenadas_lng: ''
 };
 
+// Subcomponent for Card view
+interface PresupuestoCardProps {
+  p: Presupuesto;
+  isAdmin: boolean;
+  recalculatingId: string | null;
+  onRecalculate: (e: React.MouseEvent, id: string) => void;
+  onEdit: (p: Presupuesto) => void;
+  onDelete: (p: Presupuesto) => void;
+  onArchiveToggle: (e: React.MouseEvent, p: Presupuesto) => void;
+  onNavigate: (id: string) => void;
+  generatePresupuestoId: (p: Presupuesto) => string;
+  isArchived?: boolean;
+}
+
+const PresupuestoCard = ({ p, isAdmin, recalculatingId, onRecalculate, onEdit, onDelete, onArchiveToggle, onNavigate, generatePresupuestoId, isArchived }: PresupuestoCardProps) => (
+  <Card 
+    className={`hover:shadow-md transition-shadow cursor-pointer group ${isArchived ? 'border-dashed' : ''}`}
+    onClick={() => onNavigate(p.id)}
+  >
+    <CardHeader className="pb-2">
+      <div className="flex items-start justify-between">
+        <div className="flex-1">
+          <CardTitle className="text-lg group-hover:text-primary transition-colors">
+            {p.nombre}
+          </CardTitle>
+          <CardDescription className="text-xs mt-1">
+            {generatePresupuestoId(p)}
+          </CardDescription>
+        </div>
+        <div className="flex gap-1">
+          {isAdmin && (
+            <>
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                title="Recalcular"
+                onClick={(e) => onRecalculate(e, p.id)}
+                disabled={recalculatingId === p.id}
+              >
+                <RefreshCw className={`h-4 w-4 ${recalculatingId === p.id ? 'animate-spin' : ''}`} />
+              </Button>
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                title={isArchived ? "Desarchivar" : "Archivar"}
+                onClick={(e) => onArchiveToggle(e, p)}
+              >
+                <Archive className={`h-4 w-4 ${isArchived ? 'text-primary' : ''}`} />
+              </Button>
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                title="Editar"
+                onClick={(e) => { e.stopPropagation(); onEdit(p); }}
+              >
+                <Pencil className="h-4 w-4" />
+              </Button>
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                title="Eliminar"
+                onClick={(e) => { e.stopPropagation(); onDelete(p); }}
+              >
+                <Trash2 className="h-4 w-4 text-destructive" />
+              </Button>
+            </>
+          )}
+          <Button 
+            variant="ghost" 
+            size="icon"
+            title="Ir al Dashboard"
+            onClick={(e) => { e.stopPropagation(); onNavigate(p.id); }}
+          >
+            <ExternalLink className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+    </CardHeader>
+    <CardContent>
+      <div className="space-y-1 text-sm text-muted-foreground">
+        <p><strong>Código:</strong> {p.codigo_correlativo}</p>
+        <p><strong>Versión:</strong> {p.version}</p>
+        <p><strong>Población:</strong> {p.poblacion}</p>
+        {p.provincia && <p><strong>Provincia:</strong> {p.provincia}</p>}
+        {p.coordenadas_lat && p.coordenadas_lng && (
+          <p><strong>Coordenadas:</strong> {p.coordenadas_lat}, {p.coordenadas_lng}</p>
+        )}
+        <p><strong>Creado:</strong> {format(new Date(p.created_at), 'dd/MM/yyyy', { locale: es })}</p>
+      </div>
+    </CardContent>
+  </Card>
+);
+
+// Subcomponent for Row view
+interface PresupuestoRowProps {
+  p: Presupuesto;
+  isAdmin: boolean;
+  recalculatingId: string | null;
+  onRecalculate: (e: React.MouseEvent, id: string) => void;
+  onEdit: (p: Presupuesto) => void;
+  onDelete: (p: Presupuesto) => void;
+  onArchiveToggle: (e: React.MouseEvent, p: Presupuesto) => void;
+  onNavigate: (id: string) => void;
+  generatePresupuestoId: (p: Presupuesto) => string;
+  isArchived?: boolean;
+}
+
+const PresupuestoRow = ({ p, isAdmin, recalculatingId, onRecalculate, onEdit, onDelete, onArchiveToggle, onNavigate, generatePresupuestoId, isArchived }: PresupuestoRowProps) => (
+  <TableRow 
+    className={`hover:bg-muted/50 cursor-pointer ${isArchived ? 'opacity-75' : ''}`}
+    onClick={() => onNavigate(p.id)}
+  >
+    <TableCell className="text-xs text-muted-foreground max-w-xs truncate">
+      {generatePresupuestoId(p)}
+    </TableCell>
+    <TableCell className="font-medium hover:text-primary transition-colors">
+      {p.nombre}
+    </TableCell>
+    <TableCell>{p.codigo_correlativo}</TableCell>
+    <TableCell>{p.version}</TableCell>
+    <TableCell>{p.poblacion}</TableCell>
+    <TableCell>{p.provincia || '-'}</TableCell>
+    <TableCell>{format(new Date(p.created_at), 'dd/MM/yyyy', { locale: es })}</TableCell>
+    <TableCell>
+      <div className="flex gap-1">
+        {isAdmin && (
+          <>
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              title="Recalcular"
+              onClick={(e) => onRecalculate(e, p.id)}
+              disabled={recalculatingId === p.id}
+            >
+              <RefreshCw className={`h-4 w-4 ${recalculatingId === p.id ? 'animate-spin' : ''}`} />
+            </Button>
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              title={isArchived ? "Desarchivar" : "Archivar"}
+              onClick={(e) => onArchiveToggle(e, p)}
+            >
+              <Archive className={`h-4 w-4 ${isArchived ? 'text-primary' : ''}`} />
+            </Button>
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              title="Editar"
+              onClick={(e) => { e.stopPropagation(); onEdit(p); }}
+            >
+              <Pencil className="h-4 w-4" />
+            </Button>
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              title="Eliminar"
+              onClick={(e) => { e.stopPropagation(); onDelete(p); }}
+            >
+              <Trash2 className="h-4 w-4 text-destructive" />
+            </Button>
+          </>
+        )}
+        <Button 
+          variant="ghost" 
+          size="icon"
+          onClick={(e) => { e.stopPropagation(); onNavigate(p.id); }}
+        >
+          <ExternalLink className="h-4 w-4" />
+        </Button>
+      </div>
+    </TableCell>
+  </TableRow>
+);
+
 export default function Presupuestos() {
   const navigate = useNavigate();
   const { user, loading, roles } = useAuth();
@@ -69,6 +246,7 @@ export default function Presupuestos() {
   const [isSaving, setIsSaving] = useState(false);
   const [recalculatingId, setRecalculatingId] = useState<string | null>(null);
   const [cloneDialogOpen, setCloneDialogOpen] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
 
   const isAdmin = roles.includes('administrador');
 
@@ -255,7 +433,25 @@ export default function Presupuestos() {
     }
   };
 
-  // Filter presupuestos
+  // Handle archive toggle
+  const handleArchiveToggle = async (e: React.MouseEvent, p: Presupuesto) => {
+    e.stopPropagation();
+    try {
+      const { error } = await supabase
+        .from('presupuestos')
+        .update({ archived: !p.archived })
+        .eq('id', p.id);
+
+      if (error) throw error;
+      toast.success(p.archived ? 'Presupuesto desarchivado' : 'Presupuesto archivado');
+      fetchPresupuestos();
+    } catch (err: any) {
+      console.error('Error toggling archive:', err);
+      toast.error(err.message || 'Error al cambiar estado');
+    }
+  };
+
+  // Filter presupuestos - separate active from archived
   const filteredPresupuestos = presupuestos.filter(p => {
     const presupuestoId = generatePresupuestoId(p);
     return (
@@ -267,6 +463,9 @@ export default function Presupuestos() {
       searchMatch(presupuestoId, searchTerm)
     );
   });
+
+  const activePresupuestos = filteredPresupuestos.filter(p => !p.archived);
+  const archivedPresupuestos = filteredPresupuestos.filter(p => p.archived);
 
   if (loading || isLoading) {
     return (
@@ -350,169 +549,150 @@ export default function Presupuestos() {
 
         {/* Results count */}
         <p className="text-sm text-muted-foreground mb-4">
-          {filteredPresupuestos.length} presupuesto(s) encontrado(s)
+          {activePresupuestos.length} activo(s){archivedPresupuestos.length > 0 && `, ${archivedPresupuestos.length} archivado(s)`}
         </p>
 
-        {/* Cards View */}
-        {viewMode === 'cards' && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredPresupuestos.map((p) => (
-              <Card 
-                key={p.id} 
-                className="hover:shadow-md transition-shadow cursor-pointer group"
-                onClick={() => navigate(`/presupuestos/${p.id}`)}
-              >
-                <CardHeader className="pb-2">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <CardTitle className="text-lg group-hover:text-primary transition-colors">
-                        {p.nombre}
-                      </CardTitle>
-                      <CardDescription className="text-xs mt-1">
-                        {generatePresupuestoId(p)}
-                      </CardDescription>
-                    </div>
-                    <div className="flex gap-1">
-                      {isAdmin && (
-                        <>
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            title="Recalcular"
-                            onClick={(e) => handleRecalculate(e, p.id)}
-                            disabled={recalculatingId === p.id}
-                          >
-                            <RefreshCw className={`h-4 w-4 ${recalculatingId === p.id ? 'animate-spin' : ''}`} />
-                          </Button>
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            title="Editar"
-                            onClick={(e) => { e.stopPropagation(); handleEdit(p); }}
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            title="Eliminar"
-                            onClick={(e) => { e.stopPropagation(); handleDeleteClick(p); }}
-                          >
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
-                        </>
-                      )}
-                      <Button 
-                        variant="ghost" 
-                        size="icon"
-                        title="Ir al Dashboard"
-                        onClick={(e) => { e.stopPropagation(); navigate(`/presupuestos/${p.id}`); }}
-                      >
-                        <ExternalLink className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-1 text-sm text-muted-foreground">
-                    <p><strong>Código:</strong> {p.codigo_correlativo}</p>
-                    <p><strong>Versión:</strong> {p.version}</p>
-                    <p><strong>Población:</strong> {p.poblacion}</p>
-                    {p.provincia && <p><strong>Provincia:</strong> {p.provincia}</p>}
-                    {p.coordenadas_lat && p.coordenadas_lng && (
-                      <p><strong>Coordenadas:</strong> {p.coordenadas_lat}, {p.coordenadas_lng}</p>
-                    )}
-                    <p><strong>Creado:</strong> {format(new Date(p.created_at), 'dd/MM/yyyy', { locale: es })}</p>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+        {/* Active Presupuestos Section */}
+        {activePresupuestos.length > 0 && (
+          <>
+            <div className="flex items-center gap-2 mb-4">
+              <Badge variant="default" className="bg-primary/10 text-primary hover:bg-primary/20">
+                Activos ({activePresupuestos.length})
+              </Badge>
+            </div>
+
+            {/* Cards View - Active */}
+            {viewMode === 'cards' && (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+                {activePresupuestos.map((p) => (
+                  <PresupuestoCard 
+                    key={p.id} 
+                    p={p} 
+                    isAdmin={isAdmin}
+                    recalculatingId={recalculatingId}
+                    onRecalculate={handleRecalculate}
+                    onEdit={handleEdit}
+                    onDelete={handleDeleteClick}
+                    onArchiveToggle={handleArchiveToggle}
+                    onNavigate={(id) => navigate(`/presupuestos/${id}`)}
+                    generatePresupuestoId={generatePresupuestoId}
+                  />
+                ))}
+              </div>
+            )}
+
+            {/* List View - Active */}
+            {viewMode === 'list' && (
+              <div className="border rounded-lg overflow-hidden mb-6">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>PresupuestoID</TableHead>
+                      <TableHead>Nombre</TableHead>
+                      <TableHead>Código</TableHead>
+                      <TableHead>Versión</TableHead>
+                      <TableHead>Población</TableHead>
+                      <TableHead>Provincia</TableHead>
+                      <TableHead>Creado</TableHead>
+                      <TableHead className="w-40">Acciones</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {activePresupuestos.map((p) => (
+                      <PresupuestoRow
+                        key={p.id}
+                        p={p}
+                        isAdmin={isAdmin}
+                        recalculatingId={recalculatingId}
+                        onRecalculate={handleRecalculate}
+                        onEdit={handleEdit}
+                        onDelete={handleDeleteClick}
+                        onArchiveToggle={handleArchiveToggle}
+                        onNavigate={(id) => navigate(`/presupuestos/${id}`)}
+                        generatePresupuestoId={generatePresupuestoId}
+                      />
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </>
         )}
 
-        {/* List View */}
-        {viewMode === 'list' && (
-          <div className="border rounded-lg overflow-hidden">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>PresupuestoID</TableHead>
-                  <TableHead>Nombre</TableHead>
-                  <TableHead>Código</TableHead>
-                  <TableHead>Versión</TableHead>
-                  <TableHead>Población</TableHead>
-                  <TableHead>Provincia</TableHead>
-                  <TableHead>Creado</TableHead>
-                  <TableHead className="w-32">Acciones</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredPresupuestos.map((p) => (
-                  <TableRow 
-                    key={p.id} 
-                    className="hover:bg-muted/50 cursor-pointer"
-                    onClick={() => navigate(`/presupuestos/${p.id}`)}
-                  >
-                    <TableCell className="text-xs text-muted-foreground max-w-xs truncate">
-                      {generatePresupuestoId(p)}
-                    </TableCell>
-                    <TableCell className="font-medium hover:text-primary transition-colors">
-                      {p.nombre}
-                    </TableCell>
-                    <TableCell>{p.codigo_correlativo}</TableCell>
-                    <TableCell>{p.version}</TableCell>
-                    <TableCell>{p.poblacion}</TableCell>
-                    <TableCell>{p.provincia || '-'}</TableCell>
-                    <TableCell>{format(new Date(p.created_at), 'dd/MM/yyyy', { locale: es })}</TableCell>
-                    <TableCell>
-                      <div className="flex gap-1">
-                        {isAdmin && (
-                          <>
-                            <Button 
-                              variant="ghost" 
-                              size="icon" 
-                              title="Recalcular"
-                              onClick={(e) => handleRecalculate(e, p.id)}
-                              disabled={recalculatingId === p.id}
-                            >
-                              <RefreshCw className={`h-4 w-4 ${recalculatingId === p.id ? 'animate-spin' : ''}`} />
-                            </Button>
-                            <Button 
-                              variant="ghost" 
-                              size="icon" 
-                              title="Editar"
-                              onClick={(e) => { e.stopPropagation(); handleEdit(p); }}
-                            >
-                              <Pencil className="h-4 w-4" />
-                            </Button>
-                            <Button 
-                              variant="ghost" 
-                              size="icon" 
-                              title="Eliminar"
-                              onClick={(e) => { e.stopPropagation(); handleDeleteClick(p); }}
-                            >
-                              <Trash2 className="h-4 w-4 text-destructive" />
-                            </Button>
-                          </>
-                        )}
-                        <Button 
-                          variant="ghost" 
-                          size="icon"
-                          onClick={(e) => { e.stopPropagation(); navigate(`/presupuestos/${p.id}`); }}
-                        >
-                          <ExternalLink className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+        {/* Archived Presupuestos Section */}
+        {archivedPresupuestos.length > 0 && (
+          <Collapsible open={showArchived} onOpenChange={setShowArchived} className="mt-6">
+            <CollapsibleTrigger asChild>
+              <Button variant="ghost" className="flex items-center gap-2 mb-4 text-muted-foreground hover:text-foreground">
+                {showArchived ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                <Archive className="h-4 w-4" />
+                <span>Archivados ({archivedPresupuestos.length})</span>
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              {/* Cards View - Archived */}
+              {viewMode === 'cards' && (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 opacity-75">
+                  {archivedPresupuestos.map((p) => (
+                    <PresupuestoCard 
+                      key={p.id} 
+                      p={p} 
+                      isAdmin={isAdmin}
+                      recalculatingId={recalculatingId}
+                      onRecalculate={handleRecalculate}
+                      onEdit={handleEdit}
+                      onDelete={handleDeleteClick}
+                      onArchiveToggle={handleArchiveToggle}
+                      onNavigate={(id) => navigate(`/presupuestos/${id}`)}
+                      generatePresupuestoId={generatePresupuestoId}
+                      isArchived
+                    />
+                  ))}
+                </div>
+              )}
+
+              {/* List View - Archived */}
+              {viewMode === 'list' && (
+                <div className="border rounded-lg overflow-hidden opacity-75">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>PresupuestoID</TableHead>
+                        <TableHead>Nombre</TableHead>
+                        <TableHead>Código</TableHead>
+                        <TableHead>Versión</TableHead>
+                        <TableHead>Población</TableHead>
+                        <TableHead>Provincia</TableHead>
+                        <TableHead>Creado</TableHead>
+                        <TableHead className="w-40">Acciones</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {archivedPresupuestos.map((p) => (
+                        <PresupuestoRow
+                          key={p.id}
+                          p={p}
+                          isAdmin={isAdmin}
+                          recalculatingId={recalculatingId}
+                          onRecalculate={handleRecalculate}
+                          onEdit={handleEdit}
+                          onDelete={handleDeleteClick}
+                          onArchiveToggle={handleArchiveToggle}
+                          onNavigate={(id) => navigate(`/presupuestos/${id}`)}
+                          generatePresupuestoId={generatePresupuestoId}
+                          isArchived
+                        />
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CollapsibleContent>
+          </Collapsible>
         )}
 
         {/* Empty state */}
-        {filteredPresupuestos.length === 0 && (
+        {activePresupuestos.length === 0 && archivedPresupuestos.length === 0 && (
           <div className="text-center py-12">
             <Calculator className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
             <h3 className="text-lg font-medium text-foreground mb-2">

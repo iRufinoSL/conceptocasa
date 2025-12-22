@@ -573,42 +573,47 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
         doc.setTextColor(0, 0, 0);
         doc.setDrawColor(0, 0, 0);
         
+        // Header starts at y=12 with proper margins to prevent cutting
+        const headerY = 12;
+        const logoSize = 12; // Slightly smaller logo to fit better
+        
         // Draw logo or initials
         if (logoImgData) {
           try {
-            doc.addImage(logoImgData, 'JPEG', 14, 10, 15, 15);
+            doc.addImage(logoImgData, 'JPEG', 14, headerY, logoSize, logoSize);
           } catch (e) {
             console.error('Error drawing logo:', e);
             // Fallback to initials
             doc.setFillColor(37, 99, 235);
-            doc.roundedRect(14, 10, 15, 15, 2, 2, 'F');
+            doc.roundedRect(14, headerY, logoSize, logoSize, 2, 2, 'F');
             doc.setTextColor(255, 255, 255);
-            doc.setFontSize(10);
+            doc.setFontSize(8);
             doc.setFont('helvetica', 'bold');
-            doc.text(companyInitials, 21.5, 20, { align: 'center' });
+            doc.text(companyInitials, 14 + logoSize / 2, headerY + logoSize / 2 + 2, { align: 'center' });
           }
         } else {
           doc.setFillColor(37, 99, 235);
-          doc.roundedRect(14, 10, 15, 15, 2, 2, 'F');
+          doc.roundedRect(14, headerY, logoSize, logoSize, 2, 2, 'F');
           doc.setTextColor(255, 255, 255);
-          doc.setFontSize(10);
+          doc.setFontSize(8);
           doc.setFont('helvetica', 'bold');
-          doc.text(companyInitials, 21.5, 20, { align: 'center' });
+          doc.text(companyInitials, 14 + logoSize / 2, headerY + logoSize / 2 + 2, { align: 'center' });
         }
 
-        // Company name - always draw
-        doc.setFontSize(12);
+        // Company name - positioned next to logo with proper vertical alignment
+        const textX = 14 + logoSize + 4;
+        doc.setFontSize(11);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(37, 99, 235);
-        doc.text(companyName, 34, 16);
+        doc.text(companyName, textX, headerY + 5);
 
-        // Contact info - always draw
-        doc.setFontSize(8);
+        // Contact info - below company name
+        doc.setFontSize(7);
         doc.setFont('helvetica', 'normal');
         doc.setTextColor(100, 100, 100);
         const contactLine = [companyEmail, companyPhone, companyWeb].filter(Boolean).join('  |  ');
         if (contactLine) {
-          doc.text(contactLine, 34, 22);
+          doc.text(contactLine, textX, headerY + 10);
         }
 
         // Reset colors
@@ -616,7 +621,7 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
 
         if (showLine) {
           doc.setDrawColor(200, 200, 200);
-          doc.line(14, 30, pageWidth - 14, 30);
+          doc.line(14, headerY + logoSize + 4, pageWidth - 14, headerY + logoSize + 4);
         }
       };
 
@@ -624,7 +629,8 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
       // Draw header at top
       drawHeader(true);
       
-      let yPos = 32;
+      // Start content after header (header ends at y=28)
+      let yPos = 30;
       
       if (portadaImgData) {
         // Get style settings
@@ -942,42 +948,48 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
         yPos += notesHeight + 4;
       }
 
-      yPos += 4;
-      doc.setFillColor(34, 197, 94);
-      doc.roundedRect(14, yPos - 4, pageWidth - 28, 10, 2, 2, 'F');
-      doc.setTextColor(255);
-      doc.setFont('helvetica', 'bold');
-      doc.text('TOTAL PRESUPUESTO:', 18, yPos + 3);
-      doc.text(formatPdfCurrency(totalResourcesSubtotal), pageWidth - 18, yPos + 3, { align: 'right' });
-      doc.setTextColor(0);
-      doc.setFont('helvetica', 'normal');
+      // Check if ONLY Ante-proyecto is selected (no other sections)
+      const isOnlyAnteproyecto = selectedSections.length === 1 && selectedSections.includes('predesigns');
+      
+      // Only show Total Presupuesto and Desglose if NOT only Ante-proyecto
+      if (!isOnlyAnteproyecto) {
+        yPos += 4;
+        doc.setFillColor(34, 197, 94);
+        doc.roundedRect(14, yPos - 4, pageWidth - 28, 10, 2, 2, 'F');
+        doc.setTextColor(255);
+        doc.setFont('helvetica', 'bold');
+        doc.text('TOTAL PRESUPUESTO:', 18, yPos + 3);
+        doc.text(formatPdfCurrency(totalResourcesSubtotal), pageWidth - 18, yPos + 3, { align: 'right' });
+        doc.setTextColor(0);
+        doc.setFont('helvetica', 'normal');
 
-      yPos += 20;
-      doc.setFontSize(11);
-      doc.setFont('helvetica', 'bold');
-      doc.text('1.3. Desglose por Tipo de Recurso', 14, yPos);
-      doc.setFont('helvetica', 'normal');
+        yPos += 20;
+        doc.setFontSize(11);
+        doc.setFont('helvetica', 'bold');
+        doc.text('1.3. Desglose por Tipo de Recurso', 14, yPos);
+        doc.setFont('helvetica', 'normal');
 
-      yPos += 8;
-      const typeData = Object.entries(byType).map(([type, data]) => [
-        type,
-        data.count.toString(),
-        formatPdfCurrency(data.total)
-      ]);
+        yPos += 8;
+        const typeData = Object.entries(byType).map(([type, data]) => [
+          type,
+          data.count.toString(),
+          formatPdfCurrency(data.total)
+        ]);
 
-      autoTable(doc, {
-        startY: yPos,
-        head: [['Tipo', 'Cantidad', 'Total']],
-        body: typeData,
-        theme: 'striped',
-        headStyles: { fillColor: [59, 130, 246] },
-        margin: { left: 14, right: 14 },
-        columnStyles: {
-          0: { cellWidth: 80 },
-          1: { cellWidth: 30, halign: 'right' },
-          2: { cellWidth: 50, halign: 'right' },
-        },
-      });
+        autoTable(doc, {
+          startY: yPos,
+          head: [['Tipo', 'Cantidad', 'Total']],
+          body: typeData,
+          theme: 'striped',
+          headStyles: { fillColor: [59, 130, 246] },
+          margin: { left: 14, right: 14 },
+          columnStyles: {
+            0: { cellWidth: 80 },
+            1: { cellWidth: 30, halign: 'right' },
+            2: { cellWidth: 50, halign: 'right' },
+          },
+        });
+      }
 
       // Section: CUÁNTO cuesta + CUÁNDO hacer (only if selected)
       if (selectedSections.includes('cuanto-cuando')) {

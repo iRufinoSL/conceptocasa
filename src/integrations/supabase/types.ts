@@ -1082,6 +1082,7 @@ export type Database = {
       }
       presupuestos: {
         Row: {
+          archived: boolean
           codigo_correlativo: number
           coordenadas_lat: number | null
           coordenadas_lng: number | null
@@ -1101,6 +1102,7 @@ export type Database = {
           version: string
         }
         Insert: {
+          archived?: boolean
           codigo_correlativo: number
           coordenadas_lat?: number | null
           coordenadas_lng?: number | null
@@ -1120,6 +1122,7 @@ export type Database = {
           version: string
         }
         Update: {
+          archived?: boolean
           codigo_correlativo?: number
           coordenadas_lat?: number | null
           coordenadas_lng?: number | null
@@ -1337,6 +1340,7 @@ export type Database = {
       }
       projects: {
         Row: {
+          archived: boolean
           budget: number | null
           created_at: string | null
           created_by: string | null
@@ -1351,6 +1355,7 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
+          archived?: boolean
           budget?: number | null
           created_at?: string | null
           created_by?: string | null
@@ -1365,6 +1370,7 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
+          archived?: boolean
           budget?: number | null
           created_at?: string | null
           created_by?: string | null

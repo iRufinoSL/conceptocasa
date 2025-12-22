@@ -361,9 +361,7 @@ export default function Proyectos() {
           </div>
         </div>
 
-        {/* Active Projects Section */}
-        {activeProjects.length > 0 && (
-        {/* Projects Grid - Active */}
+        {/* Projects Grid */}
         {activeProjects.length === 0 && archivedProjects.length === 0 ? (
           <Card className="py-16">
             <CardContent className="text-center">
@@ -381,6 +379,7 @@ export default function Proyectos() {
           </Card>
         ) : (
           <>
+            {/* Active Projects */}
             {activeProjects.length > 0 && (
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 mb-6">
                 {activeProjects.map((project) => {
@@ -393,10 +392,10 @@ export default function Proyectos() {
                     >
                       <CardHeader className="pb-3">
                         <div className="flex items-start justify-between">
-                      <CardTitle className="text-lg line-clamp-1 flex-1">{project.name}</CardTitle>
-                      <div className="flex items-center gap-1">
-                        <Badge variant={getStatusVariant(project.status)}>
-                          {getStatusLabel(project.status)}
+                          <CardTitle className="text-lg line-clamp-1 flex-1">{project.name}</CardTitle>
+                          <div className="flex items-center gap-1">
+                            <Badge variant={getStatusVariant(project.status)}>
+                              {getStatusLabel(project.status)}
                         </Badge>
                         {canEdit && (
                           <DropdownMenu>
@@ -513,7 +512,9 @@ export default function Proyectos() {
                 </Card>
               );
             })}
-          </div>
+              </div>
+            )}
+          </>
         )}
       </main>
 

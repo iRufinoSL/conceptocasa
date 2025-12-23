@@ -16,15 +16,11 @@ import { searchMatch } from '@/lib/search-utils';
 import { NumericInput } from '@/components/ui/numeric-input';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import { Checkbox } from '@/components/ui/checkbox';
-import { ResourceInlineEdit } from '@/components/presupuestos/ResourceInlineEdit';
 import { MeasurementMultiSelect } from '@/components/presupuestos/MeasurementMultiSelect';
 import { MeasurementsWorkAreaGroupedView } from '@/components/presupuestos/MeasurementsWorkAreaGroupedView';
 import { syncAllAffectedResources, syncResourcesRelatedUnits } from '@/lib/budget-utils';
 import * as XLSX from 'xlsx';
 
-// Define editable fields per row for tab navigation
-const EDITABLE_FIELDS = ['name', 'manual_units', 'measurement_unit'] as const;
-type EditableField = typeof EDITABLE_FIELDS[number];
 
 interface Measurement {
   id: string;
@@ -107,21 +103,8 @@ export function BudgetMeasurementsTab({ budgetId, isAdmin }: BudgetMeasurementsT
   const [isImporting, setIsImporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Tab navigation refs - stores refs for each editable cell
-  const cellRefs = useRef<Map<string, HTMLElement | null>>(new Map());
-
-  // Get cell key for ref storage
-  const getCellKey = (measurementId: string, field: EditableField) => `${measurementId}-${field}`;
-
-  // Focus a specific cell
-  const focusCell = useCallback((measurementId: string, field: EditableField) => {
-    const key = getCellKey(measurementId, field);
-    const element = cellRefs.current.get(key);
-    if (element) {
-      element.focus();
-      element.click();
-    }
-  }, []);
+  // When opening the edit form from the list, store scroll position so we can restore it after saving
+  const returnToListRef = useRef<{ top: number; measurementId: string } | null>(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -234,38 +217,6 @@ export function BudgetMeasurementsTab({ budgetId, isAdmin }: BudgetMeasurementsT
     );
   }, [measurements, searchTerm, relations, activities, phases]);
 
-  // Navigate to next/prev editable field (must be after filteredMeasurements)
-  const navigateToField = useCallback((currentMeasurementId: string, currentField: EditableField, direction: 'next' | 'prev') => {
-    const currentFieldIndex = EDITABLE_FIELDS.indexOf(currentField);
-    const currentRowIndex = filteredMeasurements.findIndex(m => m.id === currentMeasurementId);
-    
-    if (currentRowIndex === -1) return;
-
-    let nextRowIndex = currentRowIndex;
-    let nextFieldIndex = currentFieldIndex;
-
-    if (direction === 'next') {
-      nextFieldIndex++;
-      if (nextFieldIndex >= EDITABLE_FIELDS.length) {
-        nextFieldIndex = 0;
-        nextRowIndex++;
-      }
-    } else {
-      nextFieldIndex--;
-      if (nextFieldIndex < 0) {
-        nextFieldIndex = EDITABLE_FIELDS.length - 1;
-        nextRowIndex--;
-      }
-    }
-
-    // Check bounds
-    if (nextRowIndex < 0 || nextRowIndex >= filteredMeasurements.length) return;
-
-    const nextMeasurement = filteredMeasurements[nextRowIndex];
-    const nextField = EDITABLE_FIELDS[nextFieldIndex];
-    
-    focusCell(nextMeasurement.id, nextField);
-  }, [filteredMeasurements, focusCell]);
 
   const openCreateForm = () => {
     setEditingMeasurement(null);
@@ -279,7 +230,11 @@ export function BudgetMeasurementsTab({ budgetId, isAdmin }: BudgetMeasurementsT
     setFormOpen(true);
   };
 
-  const openEditForm = (measurement: Measurement) => {
+  const openEditForm = (measurement: Measurement, opts?: { captureScroll?: boolean }) => {
+    if (opts?.captureScroll) {
+      returnToListRef.current = { top: window.scrollY, measurementId: measurement.id };
+    }
+
     const relatedIds = relations
       .filter(r => r.measurement_id === measurement.id)
       .map(r => r.related_measurement_id);
@@ -403,7 +358,16 @@ export function BudgetMeasurementsTab({ budgetId, isAdmin }: BudgetMeasurementsT
       }
 
       setFormOpen(false);
-      fetchData();
+      await fetchData();
+
+      // If user opened the form from the list, restore scroll position to where they came from
+      if (returnToListRef.current) {
+        const { top } = returnToListRef.current;
+        returnToListRef.current = null;
+        requestAnimationFrame(() => {
+          window.scrollTo({ top, behavior: 'instant' });
+        });
+      }
     } catch (error) {
       console.error('Error saving measurement:', error);
       toast.error('Error al guardar la medición');
@@ -517,67 +481,6 @@ export function BudgetMeasurementsTab({ budgetId, isAdmin }: BudgetMeasurementsT
     return isNaN(parsed) ? null : parsed;
   };
 
-  // Inline edit handlers
-  const handleInlineUpdate = useCallback(async (
-    measurementId: string,
-    field: string,
-    value: any
-  ) => {
-    try {
-      const { error } = await supabase
-        .from('budget_measurements')
-        .update({ [field]: value })
-        .eq('id', measurementId);
-
-      if (error) throw error;
-
-      // If manual_units changed, sync related_units for affected resources
-      if (field === 'manual_units') {
-        await syncAllAffectedResources(measurementId);
-      }
-
-      // IMPORTANT: await refresh so navigation/unmount doesn't lose optimistic state
-      await fetchData();
-    } catch (error) {
-      console.error('Error updating measurement:', error);
-      toast.error('Error al actualizar');
-      throw error;
-    }
-  }, [fetchData]);
-
-  // Handle inline activity update
-  const handleActivityUpdate = useCallback(async (
-    measurementId: string,
-    selectedActivityIds: string[]
-  ) => {
-    try {
-      // First, unlink all activities currently linked to this measurement
-      await supabase
-        .from('budget_activities')
-        .update({ measurement_id: null })
-        .eq('measurement_id', measurementId);
-
-      // Then link selected activities
-      if (selectedActivityIds.length > 0) {
-        const { error } = await supabase
-          .from('budget_activities')
-          .update({ measurement_id: measurementId })
-          .in('id', selectedActivityIds);
-
-        if (error) throw error;
-      }
-
-      // Sync related_units for resources of the newly linked activities
-      await syncResourcesRelatedUnits(measurementId);
-
-      toast.success('Actividades actualizadas');
-      fetchData();
-    } catch (error) {
-      console.error('Error updating activities:', error);
-      toast.error('Error al actualizar actividades');
-    }
-  }, []);
-
   // Handle inline related measurements update
   const handleRelatedMeasurementsUpdate = useCallback(async (
     measurementId: string,
@@ -613,25 +516,7 @@ export function BudgetMeasurementsTab({ budgetId, isAdmin }: BudgetMeasurementsT
       console.error('Error updating related measurements:', error);
       toast.error('Error al actualizar mediciones relacionadas');
     }
-  }, []);
-
-  // Get activity options for inline edit
-  const getActivityOptions = useCallback((measurementId: string) => {
-    // Include activities that have no measurement or belong to this measurement
-    const availableActs = activities.filter(a => 
-      !a.measurement_id || a.measurement_id === measurementId
-    );
-    
-    return availableActs.map(a => {
-      const phase = phases.find(p => p.id === a.phase_id);
-      const activityId = `${phase?.code || ''} ${a.code}.-${a.name}`;
-      return {
-        value: a.id,
-        label: activityId,
-        searchContent: `${phase?.code || ''} ${phase?.name || ''} ${a.code} ${a.name}`
-      };
-    }).sort((a, b) => a.label.localeCompare(b.label));
-  }, [activities, phases]);
+  }, [fetchData]);
 
   // Get formatted activities display for a measurement
   const getActivitiesDisplay = useCallback((measurementId: string): string => {
@@ -1066,68 +951,32 @@ export function BudgetMeasurementsTab({ budgetId, isAdmin }: BudgetMeasurementsT
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredMeasurements.map((measurement, rowIndex) => {
+                  {filteredMeasurements.map((measurement) => {
                     const relatedUnits = getRelatedUnits(measurement.id);
                     const calculatedUnits = getCalculatedUnits(measurement);
                     const relatedMeasurements = getRelatedMeasurements(measurement.id);
                     const medicionId = generateMedicionId(measurement);
-                    const relatedActs = getRelatedActivities(measurement.id);
-
-                    // Create tab navigation handlers for each field
-                    const createTabHandlers = (field: EditableField) => ({
-                      onTabNext: () => navigateToField(measurement.id, field, 'next'),
-                      onTabPrev: () => navigateToField(measurement.id, field, 'prev'),
-                    });
 
                     return (
                       <TableRow key={measurement.id}>
                         <TableCell className="font-medium">
-                          <span 
-                            ref={(el) => cellRefs.current.set(getCellKey(measurement.id, 'name'), el)}
-                            tabIndex={-1}
+                          <button
+                            type="button"
+                            className="w-full text-left px-2 py-1 -mx-1 rounded-md transition-colors truncate hover:bg-primary/10 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-1"
+                            onClick={() => isAdmin && openEditForm(measurement, { captureScroll: true })}
+                            title={isAdmin ? 'Editar medición' : measurement.name}
+                            disabled={!isAdmin}
                           >
-                            <ResourceInlineEdit
-                              value={measurement.name}
-                              onSave={(v) => handleInlineUpdate(measurement.id, 'name', v)}
-                              type="text"
-                              disabled={!isAdmin}
-                              tabIndex={rowIndex * EDITABLE_FIELDS.length}
-                              {...createTabHandlers('name')}
-                            />
-                          </span>
+                            <span className="truncate block">{measurement.name}</span>
+                          </button>
                         </TableCell>
                         <TableCell className="text-right">
-                          <span 
-                            ref={(el) => cellRefs.current.set(getCellKey(measurement.id, 'manual_units'), el)}
-                            tabIndex={-1}
-                          >
-                            <ResourceInlineEdit
-                              value={measurement.manual_units}
-                              onSave={(v) => handleInlineUpdate(measurement.id, 'manual_units', v)}
-                              type="number"
-                              decimals={2}
-                              disabled={!isAdmin}
-                              displayValue={measurement.manual_units !== null ? formatNumber(measurement.manual_units) : '-'}
-                              tabIndex={rowIndex * EDITABLE_FIELDS.length + 1}
-                              {...createTabHandlers('manual_units')}
-                            />
+                          <span className="text-sm">
+                            {measurement.manual_units !== null ? formatNumber(measurement.manual_units) : '-'}
                           </span>
                         </TableCell>
                         <TableCell>
-                          <span 
-                            ref={(el) => cellRefs.current.set(getCellKey(measurement.id, 'measurement_unit'), el)}
-                            tabIndex={-1}
-                          >
-                            <ResourceInlineEdit
-                              value={measurement.measurement_unit || 'ud'}
-                              onSave={(v) => handleInlineUpdate(measurement.id, 'measurement_unit', v)}
-                              type="select"
-                              options={MEASUREMENT_UNITS.map(u => ({ value: u, label: u }))}
-                              disabled={!isAdmin}
-                              tabIndex={rowIndex * EDITABLE_FIELDS.length + 2}
-                              {...createTabHandlers('measurement_unit')}
-                            />
-                          </span>
+                          <span className="text-sm">{measurement.measurement_unit || 'ud'}</span>
                         </TableCell>
                         <TableCell className="max-w-[200px]">
                           <MeasurementMultiSelect
@@ -1145,24 +994,17 @@ export function BudgetMeasurementsTab({ budgetId, isAdmin }: BudgetMeasurementsT
                           {formatNumber(calculatedUnits)}
                         </TableCell>
                         <TableCell className="max-w-[200px]">
-                          <ResourceInlineEdit
-                            value={relatedActs.map(a => a.id).join(',')}
-                            onSave={async (v) => {
-                              const ids = v ? String(v).split(',').filter(Boolean) : [];
-                              await handleActivityUpdate(measurement.id, ids);
-                            }}
-                            type="searchable-select"
-                            options={[
-                              { value: '__none__', label: 'Sin actividad', searchContent: 'sin actividad ninguna' },
-                              ...getActivityOptions(measurement.id)
-                            ]}
+                          <button
+                            type="button"
+                            className="w-full text-left px-2 py-1 -mx-1 rounded-md transition-colors truncate hover:bg-primary/10 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-1"
+                            onClick={() => isAdmin && openEditForm(measurement, { captureScroll: true })}
+                            title={isAdmin ? 'Editar actividades en el formulario' : getActivitiesDisplay(measurement.id)}
                             disabled={!isAdmin}
-                            displayValue={
-                              <span className="text-sm text-muted-foreground truncate block max-w-[180px]" title={getActivitiesDisplay(measurement.id)}>
-                                {getActivitiesDisplay(measurement.id)}
-                              </span>
-                            }
-                          />
+                          >
+                            <span className="text-sm text-muted-foreground truncate block max-w-[180px]">
+                              {getActivitiesDisplay(measurement.id)}
+                            </span>
+                          </button>
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground max-w-[300px] truncate">
                           {medicionId}
@@ -1173,7 +1015,7 @@ export function BudgetMeasurementsTab({ budgetId, isAdmin }: BudgetMeasurementsT
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                onClick={() => openEditForm(measurement)}
+                                onClick={() => openEditForm(measurement, { captureScroll: true })}
                                 title="Editar"
                               >
                                 <Edit className="h-4 w-4" />

@@ -127,12 +127,12 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
   // Available view modes based on role settings
   const availableViewModes = recursosSettings?.viewModes || ['list', 'grouped', 'activity'];
   
-  // Determine initial view mode - default to first available
+  // Determine initial view mode - default to 'list' first (alphabetically sorted with bulk selection)
   const getInitialViewMode = (): 'list' | 'grouped' | 'activity' => {
-    if (availableViewModes.includes('grouped')) return 'grouped';
     if (availableViewModes.includes('list')) return 'list';
+    if (availableViewModes.includes('grouped')) return 'grouped';
     if (availableViewModes.includes('activity')) return 'activity';
-    return 'grouped';
+    return 'list';
   };
   
   const [viewMode, setViewMode] = useState<'list' | 'grouped' | 'activity'>(getInitialViewMode());

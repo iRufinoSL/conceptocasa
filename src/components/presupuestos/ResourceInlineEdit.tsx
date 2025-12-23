@@ -1,10 +1,10 @@
-import { useState, useRef, useEffect, useMemo } from 'react';
+import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { NumericInput, parseEuropeanNumber } from '@/components/ui/numeric-input';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Check, CheckCircle2 } from 'lucide-react';
+import { Check, CheckCircle2, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { searchMatch } from '@/lib/search-utils';
 import { toast } from 'sonner';
@@ -23,6 +23,29 @@ interface InlineEditProps {
   onTabPrev?: () => void;
   allowNull?: boolean;
 }
+
+// Global counter to track active saves across all instances
+let activeSaveCount = 0;
+
+const blockNavigation = (e: BeforeUnloadEvent) => {
+  e.preventDefault();
+  e.returnValue = 'Hay cambios guardándose. ¿Seguro que quieres salir?';
+  return e.returnValue;
+};
+
+const incrementSaveCount = () => {
+  activeSaveCount++;
+  if (activeSaveCount === 1) {
+    window.addEventListener('beforeunload', blockNavigation);
+  }
+};
+
+const decrementSaveCount = () => {
+  activeSaveCount = Math.max(0, activeSaveCount - 1);
+  if (activeSaveCount === 0) {
+    window.removeEventListener('beforeunload', blockNavigation);
+  }
+};
 
 export function ResourceInlineEdit({
   value,
@@ -66,10 +89,19 @@ export function ResourceInlineEdit({
     }
   }, [isEditing]);
 
-  const triggerSuccess = () => {
+  // Cleanup on unmount - ensure we don't leave navigation blocked
+  useEffect(() => {
+    return () => {
+      if (isSaving) {
+        decrementSaveCount();
+      }
+    };
+  }, [isSaving]);
+
+  const triggerSuccess = useCallback(() => {
     setShowSuccess(true);
     setTimeout(() => setShowSuccess(false), 1200);
-  };
+  }, []);
 
   const handleSave = async () => {
     if (isSaving) return;
@@ -112,6 +144,7 @@ export function ResourceInlineEdit({
     }
 
     setIsSaving(true);
+    incrementSaveCount();
     try {
       console.log(`ResourceInlineEdit saving: ${finalValue} (type: ${typeof finalValue}, allowNull: ${allowNull})`);
       await onSave(finalValue);
@@ -128,6 +161,7 @@ export function ResourceInlineEdit({
       toast.error('No se pudo guardar el valor');
       // Keep editing so the user can retry / correct
     } finally {
+      decrementSaveCount();
       setIsSaving(false);
     }
   };
@@ -190,6 +224,26 @@ export function ResourceInlineEdit({
     </div>
   );
 
+  // Show saving indicator when save is in progress (even when not in editing mode)
+  if (isSaving) {
+    return (
+      <EditWrapper>
+        <span
+          className={cn(
+            'px-1.5 py-0.5 -mx-1 rounded-md inline-flex items-center gap-1.5',
+            'bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400',
+            'border border-amber-200 dark:border-amber-800',
+            'text-xs font-medium',
+            className
+          )}
+        >
+          <Loader2 className="h-3 w-3 animate-spin" />
+          <span>Guardando...</span>
+        </span>
+      </EditWrapper>
+    );
+  }
+
   if (!isEditing) {
     return (
       <EditWrapper>
@@ -244,6 +298,7 @@ export function ResourceInlineEdit({
       }
 
       setIsSaving(true);
+      incrementSaveCount();
       try {
         await onSave(finalValue);
         triggerSuccess();
@@ -256,6 +311,7 @@ export function ResourceInlineEdit({
         toast.error('No se pudo guardar el valor');
         // Keep editing open
       } finally {
+        decrementSaveCount();
         setIsSaving(false);
       }
     };
@@ -320,6 +376,7 @@ export function ResourceInlineEdit({
               }
 
               setIsSaving(true);
+              incrementSaveCount();
               try {
                 await onSave(finalValue);
                 triggerSuccess();
@@ -331,6 +388,7 @@ export function ResourceInlineEdit({
                 console.error('ResourceInlineEdit select save failed:', error);
                 toast.error('No se pudo guardar el valor');
               } finally {
+                decrementSaveCount();
                 setIsSaving(false);
               }
             }}

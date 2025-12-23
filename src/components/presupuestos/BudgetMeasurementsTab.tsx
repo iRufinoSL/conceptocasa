@@ -123,7 +123,7 @@ export function BudgetMeasurementsTab({ budgetId, isAdmin }: BudgetMeasurementsT
     }
   }, []);
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     setLoading(true);
     try {
       const [measurementsRes, relationsRes, activitiesRes, phasesRes, workAreasRes, workAreaMeasurementsRes] = await Promise.all([
@@ -143,7 +143,7 @@ export function BudgetMeasurementsTab({ budgetId, isAdmin }: BudgetMeasurementsT
       if (workAreaMeasurementsRes.error) throw workAreaMeasurementsRes.error;
 
       setMeasurements(measurementsRes.data || []);
-      
+
       // Filter relations to only those belonging to this budget's measurements
       const measurementIds = (measurementsRes.data || []).map(m => m.id);
       const filteredRelations = (relationsRes.data || []).filter(
@@ -153,7 +153,7 @@ export function BudgetMeasurementsTab({ budgetId, isAdmin }: BudgetMeasurementsT
       setActivities(activitiesRes.data || []);
       setPhases(phasesRes.data || []);
       setWorkAreas(workAreasRes.data || []);
-      
+
       // Filter work area measurements to only those belonging to this budget's measurements
       const filteredWaMeasurements = (workAreaMeasurementsRes.data || []).filter(
         wam => measurementIds.includes(wam.measurement_id)
@@ -165,11 +165,11 @@ export function BudgetMeasurementsTab({ budgetId, isAdmin }: BudgetMeasurementsT
     } finally {
       setLoading(false);
     }
-  };
+  }, [budgetId]);
 
   useEffect(() => {
     fetchData();
-  }, [budgetId]);
+  }, [fetchData]);
 
   // Calculate related units for a measurement
   const getRelatedUnits = (measurementId: string): number => {
@@ -530,18 +530,20 @@ export function BudgetMeasurementsTab({ budgetId, isAdmin }: BudgetMeasurementsT
         .eq('id', measurementId);
 
       if (error) throw error;
-      
+
       // If manual_units changed, sync related_units for affected resources
       if (field === 'manual_units') {
         await syncAllAffectedResources(measurementId);
       }
-      
-      fetchData();
+
+      // IMPORTANT: await refresh so navigation/unmount doesn't lose optimistic state
+      await fetchData();
     } catch (error) {
       console.error('Error updating measurement:', error);
       toast.error('Error al actualizar');
+      throw error;
     }
-  }, [budgetId]);
+  }, [fetchData]);
 
   // Handle inline activity update
   const handleActivityUpdate = useCallback(async (

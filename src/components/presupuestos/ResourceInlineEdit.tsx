@@ -7,6 +7,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Check, CheckCircle2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { searchMatch } from '@/lib/search-utils';
+import { toast } from 'sonner';
 
 interface InlineEditProps {
   value: string | number | null;
@@ -72,12 +73,12 @@ export function ResourceInlineEdit({
 
   const handleSave = async () => {
     if (isSaving) return;
-    
+
     // Store scroll position before saving
     const scrollPosition = window.scrollY;
-    
+
     let finalValue: any = editValue;
-    
+
     if (type === 'number' || type === 'percent') {
       // editValue can be: number, null (from allowNull NumericInput), or '' (empty string)
       if (editValue === null) {
@@ -97,7 +98,7 @@ export function ResourceInlineEdit({
         finalValue = allowNull ? null : 0;
       }
     }
-    
+
     if ((type === 'select' || type === 'searchable-select') && editValue === '__none__') {
       finalValue = null;
     }
@@ -105,21 +106,30 @@ export function ResourceInlineEdit({
     // Always save for numbers/percents since comparison is tricky with formatting
     const shouldSave = (type === 'number' || type === 'percent') ? true : finalValue !== value;
 
-    if (shouldSave) {
-      setIsSaving(true);
-      try {
-        console.log(`ResourceInlineEdit saving: ${finalValue} (type: ${typeof finalValue}, allowNull: ${allowNull})`);
-        await onSave(finalValue);
-        triggerSuccess();
-        // Restore scroll position after save completes
-        requestAnimationFrame(() => {
-          window.scrollTo({ top: scrollPosition, behavior: 'instant' });
-        });
-      } finally {
-        setIsSaving(false);
-      }
+    if (!shouldSave) {
+      setIsEditing(false);
+      return;
     }
-    setIsEditing(false);
+
+    setIsSaving(true);
+    try {
+      console.log(`ResourceInlineEdit saving: ${finalValue} (type: ${typeof finalValue}, allowNull: ${allowNull})`);
+      await onSave(finalValue);
+      triggerSuccess();
+
+      // Restore scroll position after save completes
+      requestAnimationFrame(() => {
+        window.scrollTo({ top: scrollPosition, behavior: 'instant' });
+      });
+
+      setIsEditing(false);
+    } catch (error) {
+      console.error('ResourceInlineEdit save failed:', error);
+      toast.error('No se pudo guardar el valor');
+      // Keep editing so the user can retry / correct
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleKeyDown = async (e: React.KeyboardEvent) => {
@@ -223,22 +233,30 @@ export function ResourceInlineEdit({
   }
 
   if (type === 'searchable-select' && options) {
-    const handleSelect = (selectedValue: string) => {
+    const handleSelect = async (selectedValue: string) => {
       const scrollPosition = window.scrollY;
       setEditValue(selectedValue);
       const finalValue = selectedValue === '__none__' ? null : selectedValue;
-      if (finalValue !== value) {
-        setIsSaving(true);
-        onSave(finalValue).finally(() => {
-          setIsSaving(false);
-          setIsEditing(false);
-          triggerSuccess();
-          requestAnimationFrame(() => {
-            window.scrollTo({ top: scrollPosition, behavior: 'instant' });
-          });
-        });
-      } else {
+
+      if (finalValue === value) {
         setIsEditing(false);
+        return;
+      }
+
+      setIsSaving(true);
+      try {
+        await onSave(finalValue);
+        triggerSuccess();
+        setIsEditing(false);
+        requestAnimationFrame(() => {
+          window.scrollTo({ top: scrollPosition, behavior: 'instant' });
+        });
+      } catch (error) {
+        console.error('ResourceInlineEdit select save failed:', error);
+        toast.error('No se pudo guardar el valor');
+        // Keep editing open
+      } finally {
+        setIsSaving(false);
       }
     };
 
@@ -291,23 +309,29 @@ export function ResourceInlineEdit({
         <div className="animate-scale-in">
           <Select
             value={String(editValue || '__none__')}
-            onValueChange={(v) => {
+            onValueChange={async (v) => {
               const scrollPosition = window.scrollY;
               setEditValue(v);
-              // Auto-save on select
               const finalValue = v === '__none__' ? null : v;
-              if (finalValue !== value) {
-                setIsSaving(true);
-                onSave(finalValue).finally(() => {
-                  setIsSaving(false);
-                  setIsEditing(false);
-                  triggerSuccess();
-                  requestAnimationFrame(() => {
-                    window.scrollTo({ top: scrollPosition, behavior: 'instant' });
-                  });
-                });
-              } else {
+
+              if (finalValue === value) {
                 setIsEditing(false);
+                return;
+              }
+
+              setIsSaving(true);
+              try {
+                await onSave(finalValue);
+                triggerSuccess();
+                setIsEditing(false);
+                requestAnimationFrame(() => {
+                  window.scrollTo({ top: scrollPosition, behavior: 'instant' });
+                });
+              } catch (error) {
+                console.error('ResourceInlineEdit select save failed:', error);
+                toast.error('No se pudo guardar el valor');
+              } finally {
+                setIsSaving(false);
               }
             }}
             open={true}

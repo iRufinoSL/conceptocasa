@@ -4,7 +4,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { NumericInput, parseEuropeanNumber } from '@/components/ui/numeric-input';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Check, CheckCircle2, Loader2 } from 'lucide-react';
+import { Check, CheckCircle2, Loader2, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { searchMatch } from '@/lib/search-utils';
 import { toast } from 'sonner';
@@ -64,9 +64,11 @@ export function ResourceInlineEdit({
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState<string | number | null>(value ?? '');
   const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [showSuccess, setShowSuccess] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     if (isEditing && inputRef.current) {
@@ -100,8 +102,25 @@ export function ResourceInlineEdit({
 
   const triggerSuccess = useCallback(() => {
     setShowSuccess(true);
+    setSaveError(false);
     setTimeout(() => setShowSuccess(false), 1200);
   }, []);
+
+  const handleCancel = useCallback(() => {
+    // Abort any in-progress save
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    // Reset to original value
+    setEditValue(value ?? '');
+    setIsEditing(false);
+    setIsSaving(false);
+    setSaveError(false);
+    if (activeSaveCount > 0) {
+      decrementSaveCount();
+    }
+  }, [value]);
 
   const handleSave = async () => {
     if (isSaving) return;
@@ -159,6 +178,7 @@ export function ResourceInlineEdit({
     } catch (error) {
       console.error('ResourceInlineEdit save failed:', error);
       toast.error('No se pudo guardar el valor');
+      setSaveError(true);
       // Keep editing so the user can retry / correct
     } finally {
       decrementSaveCount();
@@ -224,7 +244,7 @@ export function ResourceInlineEdit({
     </div>
   );
 
-  // Show saving indicator when save is in progress (even when not in editing mode)
+  // Show saving indicator when save is in progress
   if (isSaving) {
     return (
       <EditWrapper>
@@ -239,6 +259,62 @@ export function ResourceInlineEdit({
         >
           <Loader2 className="h-3 w-3 animate-spin" />
           <span>Guardando...</span>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              handleCancel();
+            }}
+            className="ml-0.5 p-0.5 rounded hover:bg-amber-200 dark:hover:bg-amber-800 transition-colors"
+            title="Cancelar"
+          >
+            <X className="h-3 w-3" />
+          </button>
+        </span>
+      </EditWrapper>
+    );
+  }
+
+  // Show error state with retry/cancel options
+  if (saveError && !isEditing) {
+    return (
+      <EditWrapper>
+        <span
+          className={cn(
+            'px-1.5 py-0.5 -mx-1 rounded-md inline-flex items-center gap-1.5',
+            'bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-400',
+            'border border-red-200 dark:border-red-800',
+            'text-xs font-medium',
+            className
+          )}
+        >
+          <span>Error</span>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setSaveError(false);
+              setIsEditing(true);
+            }}
+            className="ml-0.5 px-1.5 py-0.5 rounded bg-red-100 dark:bg-red-900 hover:bg-red-200 dark:hover:bg-red-800 transition-colors text-xs"
+            title="Reintentar"
+          >
+            Reintentar
+          </button>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              handleCancel();
+            }}
+            className="p-0.5 rounded hover:bg-red-200 dark:hover:bg-red-800 transition-colors"
+            title="Descartar cambios"
+          >
+            <X className="h-3 w-3" />
+          </button>
         </span>
       </EditWrapper>
     );
@@ -309,6 +385,7 @@ export function ResourceInlineEdit({
       } catch (error) {
         console.error('ResourceInlineEdit select save failed:', error);
         toast.error('No se pudo guardar el valor');
+        setSaveError(true);
         // Keep editing open
       } finally {
         decrementSaveCount();
@@ -387,6 +464,7 @@ export function ResourceInlineEdit({
               } catch (error) {
                 console.error('ResourceInlineEdit select save failed:', error);
                 toast.error('No se pudo guardar el valor');
+                setSaveError(true);
               } finally {
                 decrementSaveCount();
                 setIsSaving(false);

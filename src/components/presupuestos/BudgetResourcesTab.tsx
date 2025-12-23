@@ -124,8 +124,25 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
     hideUnassignedPhase?: boolean;
   } | undefined;
   
-  // Available view modes based on role settings
-  const availableViewModes = recursosSettings?.viewModes || ['list', 'grouped', 'activity'];
+  // Available view modes based on role settings.
+  // Always include both required views:
+  // 1) 'list' (alfabético + selección + edición masiva)
+  // 2) 'grouped' (Fases/Actividades)
+  const availableViewModes = useMemo(() => {
+    const configured = recursosSettings?.viewModes;
+    const base = configured && configured.length > 0 ? configured : ['list', 'grouped', 'activity'];
+
+    const modeSet = new Set<string>(base);
+    modeSet.add('list');
+    modeSet.add('grouped');
+
+    const ordered: Array<'list' | 'grouped' | 'activity'> = [];
+    (['list', 'grouped', 'activity'] as const).forEach((m) => {
+      if (modeSet.has(m)) ordered.push(m);
+    });
+
+    return ordered;
+  }, [recursosSettings?.viewModes]);
   
   // Determine initial view mode - default to 'list' first (alphabetically sorted with bulk selection)
   const getInitialViewMode = (): 'list' | 'grouped' | 'activity' => {
@@ -136,8 +153,13 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
   };
   
   const [viewMode, setViewMode] = useState<'list' | 'grouped' | 'activity'>(getInitialViewMode());
-  
-  // Expanded state for grouped views (lifted up to preserve state after edit)
+
+  // If role/tab settings change, ensure we always stay on an allowed view.
+  useEffect(() => {
+    if (!availableViewModes.includes(viewMode)) {
+      setViewMode(getInitialViewMode());
+    }
+  }, [availableViewModes, viewMode]);
   const [expandedPhases, setExpandedPhases] = useState<Set<string>>(new Set());
   const [expandedActivities, setExpandedActivities] = useState<Set<string>>(new Set());
   

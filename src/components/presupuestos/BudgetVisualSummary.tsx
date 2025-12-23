@@ -45,11 +45,15 @@ interface BudgetVisualSummaryProps {
   budgetName: string;
 }
 
+// Valid resource types (exclude invalid types like "herramientas")
+const VALID_RESOURCE_TYPES = ['Producto', 'Mano de obra', 'Alquiler', 'Servicio', 'Impuestos'];
+
 const RESOURCE_TYPE_COLORS: Record<string, string> = {
   'Producto': 'hsl(217, 91%, 60%)',
   'Mano de obra': 'hsl(142, 76%, 36%)',
   'Alquiler': 'hsl(38, 92%, 50%)',
   'Servicio': 'hsl(346, 77%, 49%)',
+  'Impuestos': 'hsl(280, 60%, 50%)',
   'Sin tipo': 'hsl(220, 9%, 46%)',
 };
 
@@ -288,15 +292,20 @@ export function BudgetVisualSummary({ budgetId, budgetName }: BudgetVisualSummar
     };
   }, [calculations, activities, phases]);
 
-  // Prepare chart data
+  // Prepare chart data - only include valid resource types
   const typeChartData = useMemo(() => {
     return Object.entries(calculations.byType)
+      .filter(([name]) => {
+        // Only include valid types (exclude invalid ones like "herramientas")
+        return name === 'Sin tipo' || VALID_RESOURCE_TYPES.includes(name);
+      })
       .map(([name, data]) => ({
         name,
         value: data.total,
         count: data.count,
         color: RESOURCE_TYPE_COLORS[name] || RESOURCE_TYPE_COLORS['Sin tipo'],
       }))
+      .filter(item => item.value > 0)
       .sort((a, b) => b.value - a.value);
   }, [calculations.byType]);
 

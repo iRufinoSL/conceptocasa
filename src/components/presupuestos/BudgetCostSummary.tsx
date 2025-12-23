@@ -1,10 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
-import { Calculator, Home, Euro, TrendingUp, Building2 } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Calculator, Home, Euro, TrendingUp, Building2, Package } from 'lucide-react';
 import { formatNumber, formatCurrency } from '@/lib/format-utils';
 import { calcResourceSubtotal } from '@/lib/budget-pricing';
+import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 interface BudgetCostSummaryProps {
   budgetId: string;
@@ -22,6 +24,7 @@ interface Resource {
   related_units: number | null;
   safety_margin_percent: number | null;
   sales_margin_percent: number | null;
+  resource_type: string | null;
 }
 
 interface Space {
@@ -29,6 +32,18 @@ interface Space {
   m2_built: number | null;
   m2_livable: number | null;
 }
+
+// Valid resource types (exclude invalid types like "herramientas")
+const VALID_RESOURCE_TYPES = ['Producto', 'Mano de obra', 'Alquiler', 'Servicio'];
+const IMPUESTOS_TYPE = 'Impuestos';
+
+const RESOURCE_TYPE_COLORS: Record<string, string> = {
+  'Producto': 'hsl(217, 91%, 60%)',
+  'Mano de obra': 'hsl(142, 76%, 36%)',
+  'Alquiler': 'hsl(38, 92%, 50%)',
+  'Servicio': 'hsl(346, 77%, 49%)',
+  'Sin tipo': 'hsl(220, 9%, 46%)',
+};
 
 export function BudgetCostSummary({
   budgetId,
@@ -49,7 +64,7 @@ export function BudgetCostSummary({
         const [resourcesRes, spacesRes] = await Promise.all([
           supabase
             .from('budget_activity_resources')
-            .select('id, external_unit_cost, manual_units, related_units, safety_margin_percent, sales_margin_percent')
+            .select('id, external_unit_cost, manual_units, related_units, safety_margin_percent, sales_margin_percent, resource_type')
             .eq('budget_id', budgetId),
           supabase
             .from('budget_spaces')
@@ -94,13 +109,96 @@ export function BudgetCostSummary({
     return sum + total;
   }, 0);
 
+  // Calculate subtotal excluding "Impuestos" type (gastos construcción)
+  const subtotalGastosConstruccion = resources.reduce((sum, resource) => {
+    // Skip resources with type "Impuestos"
+    if (resource.resource_type === IMPUESTOS_TYPE) {
+      return sum;
+    }
+    const total = calcResourceSubtotal({
+      externalUnitCost: resource.external_unit_cost,
+      safetyPercent: resource.safety_margin_percent,
+      salesPercent: resource.sales_margin_percent,
+      manualUnits: resource.manual_units,
+      relatedUnits: resource.related_units
+    });
+    return sum + total;
+  }, 0);
+
   // Calculate total m2
   const totalM2Built = spaces.reduce((sum, space) => sum + (space.m2_built || 0), 0);
   const totalM2Livable = spaces.reduce((sum, space) => sum + (space.m2_livable || 0), 0);
 
-  // Calculate cost per m2
+  // Calculate cost per m2 (total)
   const costPerM2Built = totalM2Built > 0 ? subtotalResources / totalM2Built : 0;
   const costPerM2Livable = totalM2Livable > 0 ? subtotalResources / totalM2Livable : 0;
+
+  // Calculate cost per m2 (gastos construcción - excludes Impuestos)
+  const costPerM2BuiltGastos = totalM2Built > 0 ? subtotalGastosConstruccion / totalM2Built : 0;
+  const costPerM2LivableGastos = totalM2Livable > 0 ? subtotalGastosConstruccion / totalM2Livable : 0;
+
+  // Prepare chart data - group by resource type (only valid types)
+  const typeChartData = useMemo(() => {
+    const byType = resources.reduce((acc, resource) => {
+      const type = resource.resource_type || 'Sin tipo';
+      // Only include valid types (exclude invalid ones like "herramientas")
+      if (type !== 'Sin tipo' && !VALID_RESOURCE_TYPES.includes(type) && type !== IMPUESTOS_TYPE) {
+        return acc;
+      }
+      const total = calcResourceSubtotal({
+        externalUnitCost: resource.external_unit_cost,
+        safetyPercent: resource.safety_margin_percent,
+        salesPercent: resource.sales_margin_percent,
+        manualUnits: resource.manual_units,
+        relatedUnits: resource.related_units
+      });
+      if (!acc[type]) {
+        acc[type] = { count: 0, total: 0 };
+      }
+      acc[type].count++;
+      acc[type].total += total;
+      return acc;
+    }, {} as Record<string, { count: number; total: number }>);
+
+    return Object.entries(byType)
+      .map(([name, data]) => ({
+        name,
+        value: data.total,
+        count: data.count,
+        color: RESOURCE_TYPE_COLORS[name] || RESOURCE_TYPE_COLORS['Sin tipo'],
+      }))
+      .filter(item => item.value > 0)
+      .sort((a, b) => b.value - a.value);
+  }, [resources]);
+
+  const CustomTooltip = ({ active, payload }: any) => {
+    if (active && payload && payload.length) {
+      return (
+        <div className="bg-popover border rounded-lg shadow-lg p-3">
+          <p className="font-medium text-foreground">{payload[0]?.payload?.name}</p>
+          <p className="text-primary font-mono font-bold">{formatCurrency(payload[0]?.value || 0)}</p>
+          {payload[0]?.payload?.count && (
+            <p className="text-muted-foreground text-sm">{payload[0].payload.count} recursos</p>
+          )}
+        </div>
+      );
+    }
+    return null;
+  };
+
+  const CustomPieLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent }: any) => {
+    if (percent < 0.05) return null;
+    const RADIAN = Math.PI / 180;
+    const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
+    const x = cx + radius * Math.cos(-midAngle * RADIAN);
+    const y = cy + radius * Math.sin(-midAngle * RADIAN);
+
+    return (
+      <text x={x} y={y} fill="white" textAnchor="middle" dominantBaseline="central" className="text-xs font-medium">
+        {`${(percent * 100).toFixed(0)}%`}
+      </text>
+    );
+  };
 
   if (loading) {
     return (
@@ -210,16 +308,16 @@ export function BudgetCostSummary({
 
           <Separator />
 
-          {/* Cost per m2 */}
+          {/* Cost per m2 - 4 cards in 2x2 grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Cost per m2 Built */}
+            {/* Cost per m2 Built Total */}
             <Card className="bg-gradient-to-br from-amber-500/10 to-orange-500/10 border-amber-500/20">
               <CardContent className="pt-6">
                 <div className="flex items-center gap-3 mb-2">
                   <div className="p-2 rounded-full bg-amber-500/20">
                     <TrendingUp className="h-5 w-5 text-amber-600" />
                   </div>
-                  <span className="text-sm font-medium">€ Coste por m² Construido</span>
+                  <span className="text-sm font-medium">€ Coste por m² Construido Total</span>
                 </div>
                 <div className="text-4xl font-bold text-amber-600">
                   {formatCurrency(costPerM2Built)}
@@ -235,14 +333,14 @@ export function BudgetCostSummary({
               </CardContent>
             </Card>
 
-            {/* Cost per m2 Livable */}
+            {/* Cost per m2 Livable Total */}
             <Card className="bg-gradient-to-br from-emerald-500/10 to-teal-500/10 border-emerald-500/20">
               <CardContent className="pt-6">
                 <div className="flex items-center gap-3 mb-2">
                   <div className="p-2 rounded-full bg-emerald-500/20">
                     <TrendingUp className="h-5 w-5 text-emerald-600" />
                   </div>
-                  <span className="text-sm font-medium">€ Coste por m² Habitable</span>
+                  <span className="text-sm font-medium">€ Coste por m² Habitable Total</span>
                 </div>
                 <div className="text-4xl font-bold text-emerald-600">
                   {formatCurrency(costPerM2Livable)}
@@ -257,13 +355,113 @@ export function BudgetCostSummary({
                 )}
               </CardContent>
             </Card>
+
+            {/* Cost per m2 Built Gastos Construcción */}
+            <Card className="bg-gradient-to-br from-blue-500/10 to-indigo-500/10 border-blue-500/20">
+              <CardContent className="pt-6">
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="p-2 rounded-full bg-blue-500/20">
+                    <TrendingUp className="h-5 w-5 text-blue-600" />
+                  </div>
+                  <span className="text-sm font-medium">€ Coste por m² Gastos Construcción</span>
+                </div>
+                <div className="text-4xl font-bold text-blue-600">
+                  {formatCurrency(costPerM2BuiltGastos)}
+                </div>
+                <p className="text-sm text-muted-foreground mt-2">
+                  {formatCurrency(subtotalGastosConstruccion)} ÷ {formatNumber(totalM2Built)} m²
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Excluye tipo "Impuestos"
+                </p>
+              </CardContent>
+            </Card>
+
+            {/* Cost per m2 Livable Gastos Construcción */}
+            <Card className="bg-gradient-to-br from-violet-500/10 to-purple-500/10 border-violet-500/20">
+              <CardContent className="pt-6">
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="p-2 rounded-full bg-violet-500/20">
+                    <TrendingUp className="h-5 w-5 text-violet-600" />
+                  </div>
+                  <span className="text-sm font-medium">€ Coste por m² Habitable Gastos Construcción</span>
+                </div>
+                <div className="text-4xl font-bold text-violet-600">
+                  {formatCurrency(costPerM2LivableGastos)}
+                </div>
+                <p className="text-sm text-muted-foreground mt-2">
+                  {formatCurrency(subtotalGastosConstruccion)} ÷ {formatNumber(totalM2Livable)} m²
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Excluye tipo "Impuestos"
+                </p>
+              </CardContent>
+            </Card>
           </div>
+
+          <Separator />
+
+          {/* Resource Type Distribution Chart */}
+          {typeChartData.length > 0 && (
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Package className="h-4 w-4 text-primary" />
+                  Distribución por Tipo de Recurso
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="h-72">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={typeChartData}
+                        cx="50%"
+                        cy="50%"
+                        labelLine={false}
+                        label={CustomPieLabel}
+                        outerRadius={100}
+                        innerRadius={40}
+                        dataKey="value"
+                        strokeWidth={2}
+                        stroke="hsl(var(--background))"
+                      >
+                        {typeChartData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip content={<CustomTooltip />} />
+                      <Legend 
+                        verticalAlign="bottom" 
+                        height={36}
+                        formatter={(value) => <span className="text-foreground text-sm">{value}</span>}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+                {/* Type badges with values */}
+                <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t">
+                  {typeChartData.map((type) => (
+                    <Badge 
+                      key={type.name} 
+                      variant="outline" 
+                      className="text-xs py-1.5 px-3"
+                      style={{ borderColor: type.color, color: type.color }}
+                    >
+                      {type.name}: {formatCurrency(type.value)}
+                    </Badge>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Info Note */}
           <div className="p-4 bg-blue-500/10 rounded-lg border border-blue-500/20">
             <p className="text-sm text-blue-700 dark:text-blue-300">
               <strong>Nota:</strong> El coste por m² se calcula dividiendo el subtotal de recursos (PVP) 
               entre los metros cuadrados totales registrados en la sección de Espacios del presupuesto.
+              Los cálculos de "Gastos Construcción" excluyen los recursos de tipo "Impuestos".
             </p>
           </div>
         </CardContent>

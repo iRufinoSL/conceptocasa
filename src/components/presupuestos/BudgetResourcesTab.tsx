@@ -21,6 +21,7 @@ import { ResourceInlineEdit } from './ResourceInlineEdit';
 import { BulkEditBar } from './BulkEditBar';
 import { ResourcesGroupedView } from './ResourcesGroupedView';
 import { ResourcesActivityGroupedView } from './ResourcesActivityGroupedView';
+import { ResourcesTypeGroupedView } from './ResourcesTypeGroupedView';
 import { useCompanySettings } from '@/hooks/useCompanySettings';
 import { usePermissions, canAccessResource, canAccessActivity } from '@/hooks/usePermissions';
 import { useTabVisibility } from '@/hooks/useTabVisibility';
@@ -130,14 +131,15 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
   // 2) 'grouped' (Fases/Actividades)
   const availableViewModes = useMemo(() => {
     const configured = recursosSettings?.viewModes;
-    const base = configured && configured.length > 0 ? configured : ['list', 'grouped', 'activity'];
+    const base = configured && configured.length > 0 ? configured : ['list', 'grouped', 'activity', 'type'];
 
     const modeSet = new Set<string>(base);
     modeSet.add('list');
     modeSet.add('grouped');
+    modeSet.add('type');
 
-    const ordered: Array<'list' | 'grouped' | 'activity'> = [];
-    (['list', 'grouped', 'activity'] as const).forEach((m) => {
+    const ordered: Array<'list' | 'grouped' | 'activity' | 'type'> = [];
+    (['list', 'type', 'grouped', 'activity'] as const).forEach((m) => {
       if (modeSet.has(m)) ordered.push(m);
     });
 
@@ -145,14 +147,15 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
   }, [recursosSettings?.viewModes]);
   
   // Determine initial view mode - default to 'list' first (alphabetically sorted with bulk selection)
-  const getInitialViewMode = (): 'list' | 'grouped' | 'activity' => {
+  const getInitialViewMode = (): 'list' | 'grouped' | 'activity' | 'type' => {
     if (availableViewModes.includes('list')) return 'list';
+    if (availableViewModes.includes('type')) return 'type';
     if (availableViewModes.includes('grouped')) return 'grouped';
     if (availableViewModes.includes('activity')) return 'activity';
     return 'list';
   };
   
-  const [viewMode, setViewMode] = useState<'list' | 'grouped' | 'activity'>(getInitialViewMode());
+  const [viewMode, setViewMode] = useState<'list' | 'grouped' | 'activity' | 'type'>(getInitialViewMode());
 
   // If role/tab settings change, ensure we always stay on an allowed view.
   useEffect(() => {
@@ -1304,6 +1307,18 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
                       Lista
                     </Button>
                   )}
+                  {availableViewModes.includes('type') && (
+                    <Button
+                      variant={viewMode === 'type' ? 'secondary' : 'ghost'}
+                      size="sm"
+                      className="rounded-none border-x"
+                      onClick={() => setViewMode('type')}
+                      title="Agrupado por Tipo de Recurso"
+                    >
+                      <Package className="h-4 w-4 mr-1" />
+                      Tipo
+                    </Button>
+                  )}
                   {availableViewModes.includes('activity') && (
                     <Button
                       variant={viewMode === 'activity' ? 'secondary' : 'ghost'}
@@ -1398,6 +1413,22 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
               getActivityId={getActivityId}
               expandedActivities={expandedActivities}
               onExpandedActivitiesChange={setExpandedActivities}
+              canEditResource={canEditResource}
+            />
+          ) : viewMode === 'type' ? (
+            <ResourcesTypeGroupedView
+              resources={filteredResources}
+              activities={activities}
+              phases={phases}
+              permissions={permissions}
+              selectedIds={selectedIds}
+              onToggleSelect={toggleSelect}
+              onToggleSelectAll={toggleSelectAll}
+              onEdit={handleEdit}
+              onDelete={handleDelete}
+              onInlineUpdate={handleInlineUpdate}
+              calculateFields={calculateFields}
+              getActivityId={getActivityId}
               canEditResource={canEditResource}
             />
           ) : (

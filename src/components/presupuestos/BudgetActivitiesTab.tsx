@@ -13,7 +13,8 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Search, Upload, Pencil, Trash2, MoreHorizontal, FileUp, File, X, Download, ChevronRight, ChevronDown, ChevronLeft, List, Layers, Copy, Package, Wrench, Truck, Briefcase, Eye, ArrowUpDown, ArrowUp, ArrowDown, FileDown, Clock, MapPin } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Plus, Search, Upload, Pencil, Trash2, MoreHorizontal, FileUp, File, X, Download, ChevronRight, ChevronDown, ChevronLeft, List, Layers, Copy, Package, Wrench, Truck, Briefcase, Eye, ArrowUpDown, ArrowUp, ArrowDown, FileDown, Clock, MapPin, Settings2 } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { toast } from 'sonner';
@@ -26,6 +27,8 @@ import { MeasurementInlineSelect, MeasurementInlineSelectHandle } from './Measur
 import { ResourceInlineEdit } from './ResourceInlineEdit';
 import { BudgetResourceForm } from './BudgetResourceForm';
 import { ActivitiesWorkAreaGroupedView } from './ActivitiesWorkAreaGroupedView';
+import { ActivitiesBulkEditBar } from './ActivitiesBulkEditBar';
+import { ActivitiesOptionsGroupedView } from './ActivitiesOptionsGroupedView';
 import { useCompanySettings } from '@/hooks/useCompanySettings';
 import { usePermissions, canAccessActivity, BudgetPermissions } from '@/hooks/usePermissions';
 import jsPDF from 'jspdf';
@@ -63,6 +66,7 @@ interface BudgetActivity {
   phase_id: string | null;
   measurement_id: string | null;
   uses_measurement: boolean;
+  opciones: string[];
   created_at: string;
   files_count?: number;
   resources_subtotal?: number;
@@ -116,6 +120,7 @@ interface ActivityForm {
   phase_id: string;
   measurement_id: string;
   uses_measurement: boolean;
+  opciones: string[];
   start_date: string;
   duration_days: string;
   tolerance_days: string;
@@ -149,6 +154,7 @@ const emptyForm: ActivityForm = {
   phase_id: '',
   measurement_id: '',
   uses_measurement: true,
+  opciones: ['A', 'B', 'C'],
   start_date: '',
   duration_days: '',
   tolerance_days: ''
@@ -163,7 +169,9 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
   const [measurementRelations, setMeasurementRelations] = useState<MeasurementRelation[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [viewMode, setViewMode] = useState<'alphabetical' | 'grouped' | 'workarea' | 'time'>('alphabetical');
+  const [viewMode, setViewMode] = useState<'alphabetical' | 'grouped' | 'workarea' | 'time' | 'options'>('alphabetical');
+  const [selectedActivityIds, setSelectedActivityIds] = useState<Set<string>>(new Set());
+  const [expandedOptions, setExpandedOptions] = useState<Set<string>>(new Set(['A', 'B', 'C']));
   const [activitySortOrder, setActivitySortOrder] = useState<'asc' | 'desc'>('asc');
   const [expandedPhases, setExpandedPhases] = useState<Set<string>>(new Set());
   const [workAreas, setWorkAreas] = useState<WorkArea[]>([]);
@@ -436,6 +444,7 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
                   phase_id: data.phase_id || '',
                   measurement_id: data.measurement_id || '',
                   uses_measurement: data.uses_measurement ?? true,
+                  opciones: data.opciones || ['A', 'B', 'C'],
                   start_date: data.start_date || '',
                   duration_days: data.duration_days?.toString() || '',
                   tolerance_days: data.tolerance_days?.toString() || ''
@@ -494,6 +503,7 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
       phase_id: activity.phase_id || '',
       measurement_id: activity.measurement_id || '',
       uses_measurement: activity.uses_measurement ?? true,
+      opciones: activity.opciones || ['A', 'B', 'C'],
       start_date: activity.start_date || '',
       duration_days: activity.duration_days?.toString() || '',
       tolerance_days: activity.tolerance_days?.toString() || ''
@@ -692,6 +702,7 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
         phase_id: form.phase_id && form.phase_id !== '' && form.phase_id !== 'null' ? form.phase_id : null,
         measurement_id: form.measurement_id && form.measurement_id !== '' && form.measurement_id !== 'null' ? form.measurement_id : null,
         uses_measurement: form.uses_measurement,
+        opciones: form.opciones.length > 0 ? form.opciones : ['A', 'B', 'C'],
         start_date: form.start_date || null,
         duration_days: form.duration_days ? parseInt(form.duration_days) : null,
         tolerance_days: form.tolerance_days ? parseInt(form.tolerance_days) : null
@@ -1471,10 +1482,19 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
               variant={viewMode === 'time' ? 'default' : 'ghost'} 
               size="sm"
               onClick={() => setViewMode('time')}
-              className="rounded-l-none border-l"
+              className="rounded-none border-l"
             >
               <Clock className="h-4 w-4 mr-1" />
               Tiempo
+            </Button>
+            <Button 
+              variant={viewMode === 'options' ? 'default' : 'ghost'} 
+              size="sm"
+              onClick={() => setViewMode('options')}
+              className="rounded-l-none border-l"
+            >
+              <Settings2 className="h-4 w-4 mr-1" />
+              Por Opción
             </Button>
           </div>
           <Button variant="outline" size="sm" onClick={exportActivitiesPDF}>
@@ -1526,15 +1546,60 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
         );
       })()}
 
+      {/* Bulk Edit Bar for Activities */}
+      <ActivitiesBulkEditBar
+        selectedIds={selectedActivityIds}
+        activities={activities.map(a => ({
+          id: a.id,
+          name: a.name,
+          code: a.code,
+          uses_measurement: a.uses_measurement,
+          opciones: a.opciones || ['A', 'B', 'C'],
+          phase_id: a.phase_id,
+        }))}
+        phases={phases}
+        onClearSelection={() => setSelectedActivityIds(new Set())}
+        onRefresh={fetchData}
+        onBulkDelete={async () => {
+          if (!confirm(`¿Eliminar ${selectedActivityIds.size} actividades?`)) return;
+          try {
+            const { error } = await supabase
+              .from('budget_activities')
+              .delete()
+              .in('id', Array.from(selectedActivityIds));
+            if (error) throw error;
+            toast.success(`${selectedActivityIds.size} actividades eliminadas`);
+            setSelectedActivityIds(new Set());
+            fetchData();
+          } catch (err: any) {
+            toast.error('Error al eliminar');
+          }
+        }}
+        isAdmin={isAdmin}
+      />
+
       {/* Alphabetical View */}
       {viewMode === 'alphabetical' && (
         <div className="border rounded-lg overflow-hidden">
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-10">
+                  <Checkbox
+                    checked={filteredActivities.length > 0 && filteredActivities.every(a => selectedActivityIds.has(a.id))}
+                    onCheckedChange={(checked) => {
+                      if (checked) {
+                        setSelectedActivityIds(new Set(filteredActivities.map(a => a.id)));
+                      } else {
+                        setSelectedActivityIds(new Set());
+                      }
+                    }}
+                  />
+                </TableHead>
                 <TableHead>ActividadID</TableHead>
                 <TableHead className="text-center w-16">Usa Med.</TableHead>
                 <TableHead>Actividad</TableHead>
+                <TableHead>Opciones</TableHead>
                 <TableHead>Fase</TableHead>
                 <TableHead>Unidad</TableHead>
                 <TableHead className="text-right">Uds Relac.</TableHead>
@@ -1548,8 +1613,23 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
               {filteredActivities.map((activity) => {
                 const phase = getPhaseById(activity.phase_id);
                 const { relatedUnits, medicionId } = getMeasurementData(activity);
+                const opciones = activity.opciones || ['A', 'B', 'C'];
                 return (
-                  <TableRow key={activity.id}>
+                  <TableRow key={activity.id} className={selectedActivityIds.has(activity.id) ? 'bg-primary/5' : ''}>
+                    <TableCell>
+                      <Checkbox
+                        checked={selectedActivityIds.has(activity.id)}
+                        onCheckedChange={() => {
+                          const newSet = new Set(selectedActivityIds);
+                          if (newSet.has(activity.id)) {
+                            newSet.delete(activity.id);
+                          } else {
+                            newSet.add(activity.id);
+                          }
+                          setSelectedActivityIds(newSet);
+                        }}
+                      />
+                    </TableCell>
                     <TableCell className="font-mono text-sm">{generateActivityId(activity)}</TableCell>
                     <TableCell className="text-center">
                       {canEditActivity(activity.id) ? (
@@ -1562,7 +1642,6 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
                                 .update({ uses_measurement: newValue })
                                 .eq('id', activity.id);
                               if (error) throw error;
-                              // Sync related_units for the activity's resources
                               await syncActivityResourcesRelatedUnits(activity.id);
                               fetchData();
                               toast.success(`Usa Medición: ${newValue ? 'Sí' : 'No'}`);
@@ -1583,6 +1662,23 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
                       )}
                     </TableCell>
                     <TableCell className="font-medium">{activity.name}</TableCell>
+                    <TableCell>
+                      <div className="flex gap-0.5">
+                        {opciones.map(op => (
+                          <Badge 
+                            key={op} 
+                            variant="outline" 
+                            className={`text-xs px-1.5 ${
+                              op === 'A' ? 'border-blue-500 text-blue-600' :
+                              op === 'B' ? 'border-amber-500 text-amber-600' :
+                              'border-emerald-500 text-emerald-600'
+                            }`}
+                          >
+                            {op}
+                          </Badge>
+                        ))}
+                      </div>
+                    </TableCell>
                     <TableCell className="text-muted-foreground">
                       {phase ? `${phase.code} ${phase.name}` : '-'}
                     </TableCell>
@@ -1665,7 +1761,7 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
               })}
               {filteredActivities.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={(isAdmin || permissions.canEdit) ? 9 : 8} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={(isAdmin || permissions.canEdit) ? 12 : 11} className="text-center py-8 text-muted-foreground">
                     {searchTerm 
                       ? 'No se encontraron actividades con ese criterio'
                       : 'No hay actividades. Crea una nueva o importa desde CSV.'}
@@ -1675,6 +1771,73 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
             </TableBody>
           </Table>
         </div>
+      )}
+
+      {/* Options Grouped View */}
+      {viewMode === 'options' && (
+        <ActivitiesOptionsGroupedView
+          activities={filteredActivities.map(a => ({
+            id: a.id,
+            name: a.name,
+            code: a.code,
+            uses_measurement: a.uses_measurement,
+            opciones: a.opciones || ['A', 'B', 'C'],
+            phase_id: a.phase_id,
+            resources_subtotal: a.resources_subtotal,
+            files_count: a.files_count,
+          }))}
+          phases={phases}
+          isAdmin={isAdmin}
+          canEdit={permissions.canEdit}
+          selectedIds={selectedActivityIds}
+          expandedOptions={expandedOptions}
+          onToggleExpanded={(option) => {
+            setExpandedOptions(prev => {
+              const newSet = new Set(prev);
+              if (newSet.has(option)) {
+                newSet.delete(option);
+              } else {
+                newSet.add(option);
+              }
+              return newSet;
+            });
+          }}
+          onToggleSelected={(id) => {
+            setSelectedActivityIds(prev => {
+              const newSet = new Set(prev);
+              if (newSet.has(id)) {
+                newSet.delete(id);
+              } else {
+                newSet.add(id);
+              }
+              return newSet;
+            });
+          }}
+          onSelectAll={() => {
+            if (filteredActivities.every(a => selectedActivityIds.has(a.id))) {
+              setSelectedActivityIds(new Set());
+            } else {
+              setSelectedActivityIds(new Set(filteredActivities.map(a => a.id)));
+            }
+          }}
+          onEdit={(activity) => {
+            const fullActivity = activities.find(a => a.id === activity.id);
+            if (fullActivity) handleEdit(fullActivity);
+          }}
+          onDelete={(activity) => {
+            const fullActivity = activities.find(a => a.id === activity.id);
+            if (fullActivity) handleDeleteClick(fullActivity);
+          }}
+          onDuplicate={(activity) => {
+            const fullActivity = activities.find(a => a.id === activity.id);
+            if (fullActivity) handleDuplicate(fullActivity);
+          }}
+          onManageFiles={(activity) => {
+            const fullActivity = activities.find(a => a.id === activity.id);
+            if (fullActivity) handleManageFiles(fullActivity);
+          }}
+          canEditActivity={canEditActivity}
+        />
       )}
 
       {/* Grouped by Phase View */}
@@ -2301,6 +2464,35 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
                     </Command>
                   </PopoverContent>
                 </Popover>
+              </div>
+            </div>
+
+            {/* Opciones Field */}
+            <div className="flex items-center justify-between py-2 px-3 border rounded-lg bg-muted/30">
+              <div className="space-y-0.5">
+                <Label className="text-sm font-medium">Opciones</Label>
+                <p className="text-xs text-muted-foreground">Selecciona en qué opciones (A, B, C) está incluida esta actividad</p>
+              </div>
+              <div className="flex gap-3">
+                {['A', 'B', 'C'].map(opcion => (
+                  <label key={opcion} className="flex items-center gap-1.5 cursor-pointer">
+                    <Checkbox
+                      checked={form.opciones.includes(opcion)}
+                      onCheckedChange={(checked) => {
+                        if (checked) {
+                          setForm({ ...form, opciones: [...form.opciones, opcion].sort() });
+                        } else {
+                          setForm({ ...form, opciones: form.opciones.filter(o => o !== opcion) });
+                        }
+                      }}
+                    />
+                    <span className={`text-sm font-medium ${
+                      opcion === 'A' ? 'text-blue-600' :
+                      opcion === 'B' ? 'text-amber-600' :
+                      'text-emerald-600'
+                    }`}>{opcion}</span>
+                  </label>
+                ))}
               </div>
             </div>
 

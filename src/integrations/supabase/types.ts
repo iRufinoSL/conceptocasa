@@ -26,6 +26,7 @@ export type Database = {
           measurement_id: string | null
           measurement_unit: string | null
           name: string
+          opciones: string[]
           phase_id: string | null
           start_date: string | null
           tolerance_days: number | null
@@ -43,6 +44,7 @@ export type Database = {
           measurement_id?: string | null
           measurement_unit?: string | null
           name: string
+          opciones?: string[]
           phase_id?: string | null
           start_date?: string | null
           tolerance_days?: number | null
@@ -60,6 +62,7 @@ export type Database = {
           measurement_id?: string | null
           measurement_unit?: string | null
           name?: string
+          opciones?: string[]
           phase_id?: string | null
           start_date?: string | null
           tolerance_days?: number | null

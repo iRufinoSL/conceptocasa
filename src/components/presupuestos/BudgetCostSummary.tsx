@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Calculator, Home, Euro, TrendingUp, Building2, Package } from 'lucide-react';
+import { Calculator, Home, Euro, TrendingUp, Building2, Package, LayoutGrid } from 'lucide-react';
 import { formatNumber, formatCurrency } from '@/lib/format-utils';
 import { calcResourceSubtotal } from '@/lib/budget-pricing';
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recharts';
@@ -497,9 +497,13 @@ export function BudgetCostSummary({
 
           <Separator />
 
-          {/* Tabs for Options A, B, C */}
-          <Tabs defaultValue="A" className="w-full">
-            <TabsList className="grid w-full grid-cols-3 mb-6">
+          {/* Tabs for Options A, B, C and Comparison */}
+          <Tabs defaultValue="comparativa" className="w-full">
+            <TabsList className="grid w-full grid-cols-4 mb-6">
+              <TabsTrigger value="comparativa" className="flex items-center gap-2">
+                <LayoutGrid className="h-4 w-4" />
+                Comparativa
+              </TabsTrigger>
               <TabsTrigger value="A" className="flex items-center gap-2">
                 <Badge variant="outline" className="bg-amber-500/20 text-amber-600 border-amber-500/30">A</Badge>
                 Opción A
@@ -513,6 +517,215 @@ export function BudgetCostSummary({
                 Opción C
               </TabsTrigger>
             </TabsList>
+
+            {/* Comparison View */}
+            <TabsContent value="comparativa">
+              <div className="space-y-6">
+                {/* Comparison Header */}
+                <div className="grid grid-cols-4 gap-4">
+                  <div className="font-medium text-muted-foreground flex items-center">Métrica</div>
+                  {OPTIONS.map(option => (
+                    <div key={option} className="text-center">
+                      <Badge 
+                        variant="outline" 
+                        className={`${OPTION_COLORS[option].text} ${OPTION_COLORS[option].border} bg-gradient-to-br ${OPTION_COLORS[option].from} ${OPTION_COLORS[option].to} px-4 py-1`}
+                      >
+                        Opción {option}
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
+
+                <Separator />
+
+                {/* Subtotal Recursos */}
+                <div className="grid grid-cols-4 gap-4 items-center">
+                  <div className="flex items-center gap-2 text-sm font-medium">
+                    <Calculator className="h-4 w-4 text-primary" />
+                    Subtotal Recursos
+                  </div>
+                  {OPTIONS.map(option => (
+                    <Card key={option} className={`bg-gradient-to-br ${OPTION_COLORS[option].from} ${OPTION_COLORS[option].to} ${OPTION_COLORS[option].border}`}>
+                      <CardContent className="py-4 text-center">
+                        <div className={`text-2xl font-bold ${OPTION_COLORS[option].text}`}>
+                          {formatCurrency(optionMetrics[option].subtotalResources)}
+                        </div>
+                        <p className="text-xs text-muted-foreground">{optionMetrics[option].resourceCount} recursos</p>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+
+                {/* € Coste por m² Construido Total */}
+                <div className="grid grid-cols-4 gap-4 items-center">
+                  <div className="flex items-center gap-2 text-sm font-medium">
+                    <TrendingUp className="h-4 w-4 text-amber-600" />
+                    € / m² Construido Total
+                  </div>
+                  {OPTIONS.map(option => (
+                    <Card key={option} className={`bg-gradient-to-br ${OPTION_COLORS[option].from} ${OPTION_COLORS[option].to} ${OPTION_COLORS[option].border}`}>
+                      <CardContent className="py-4 text-center">
+                        <div className={`text-2xl font-bold ${OPTION_COLORS[option].text}`}>
+                          {formatCurrency(optionMetrics[option].costPerM2Built)}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+
+                {/* € Coste por m² Habitable Total */}
+                <div className="grid grid-cols-4 gap-4 items-center">
+                  <div className="flex items-center gap-2 text-sm font-medium">
+                    <TrendingUp className="h-4 w-4 text-emerald-600" />
+                    € / m² Habitable Total
+                  </div>
+                  {OPTIONS.map(option => (
+                    <Card key={option} className={`bg-gradient-to-br ${OPTION_COLORS[option].from} ${OPTION_COLORS[option].to} ${OPTION_COLORS[option].border}`}>
+                      <CardContent className="py-4 text-center">
+                        <div className={`text-2xl font-bold ${OPTION_COLORS[option].text}`}>
+                          {formatCurrency(optionMetrics[option].costPerM2Livable)}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+
+                {/* € Coste por m² Gastos Construcción */}
+                <div className="grid grid-cols-4 gap-4 items-center">
+                  <div className="flex items-center gap-2 text-sm font-medium">
+                    <TrendingUp className="h-4 w-4 text-blue-600" />
+                    € / m² Gastos Construcción
+                  </div>
+                  {OPTIONS.map(option => (
+                    <Card key={option} className={`bg-gradient-to-br ${OPTION_COLORS[option].from} ${OPTION_COLORS[option].to} ${OPTION_COLORS[option].border}`}>
+                      <CardContent className="py-4 text-center">
+                        <div className={`text-2xl font-bold ${OPTION_COLORS[option].text}`}>
+                          {formatCurrency(optionMetrics[option].costPerM2BuiltGastos)}
+                        </div>
+                        <p className="text-xs text-muted-foreground">Excluye Impuestos</p>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+
+                {/* € Coste por m² Habitable Gastos Construcción */}
+                <div className="grid grid-cols-4 gap-4 items-center">
+                  <div className="flex items-center gap-2 text-sm font-medium">
+                    <TrendingUp className="h-4 w-4 text-violet-600" />
+                    € / m² Hab. Gastos Const.
+                  </div>
+                  {OPTIONS.map(option => (
+                    <Card key={option} className={`bg-gradient-to-br ${OPTION_COLORS[option].from} ${OPTION_COLORS[option].to} ${OPTION_COLORS[option].border}`}>
+                      <CardContent className="py-4 text-center">
+                        <div className={`text-2xl font-bold ${OPTION_COLORS[option].text}`}>
+                          {formatCurrency(optionMetrics[option].costPerM2LivableGastos)}
+                        </div>
+                        <p className="text-xs text-muted-foreground">Excluye Impuestos</p>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+
+                <Separator />
+
+                {/* Charts Side by Side */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  {OPTIONS.map(option => (
+                    <Card key={option}>
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-sm flex items-center gap-2">
+                          <Package className="h-4 w-4" />
+                          Distribución Opción {option}
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        {optionMetrics[option].chartData.length > 0 ? (
+                          <>
+                            <div className="h-48">
+                              <ResponsiveContainer width="100%" height="100%">
+                                <PieChart>
+                                  <Pie
+                                    data={optionMetrics[option].chartData}
+                                    cx="50%"
+                                    cy="50%"
+                                    labelLine={false}
+                                    label={CustomPieLabel}
+                                    outerRadius={70}
+                                    innerRadius={30}
+                                    dataKey="value"
+                                    strokeWidth={2}
+                                    stroke="hsl(var(--background))"
+                                  >
+                                    {optionMetrics[option].chartData.map((entry, index) => (
+                                      <Cell key={`cell-${index}`} fill={entry.color} />
+                                    ))}
+                                  </Pie>
+                                  <Tooltip content={<CustomTooltip />} />
+                                </PieChart>
+                              </ResponsiveContainer>
+                            </div>
+                            <div className="flex flex-wrap gap-1 mt-2 pt-2 border-t">
+                              {optionMetrics[option].chartData.map((type) => (
+                                <Badge 
+                                  key={type.name} 
+                                  variant="outline" 
+                                  className="text-[10px] py-0.5 px-1.5"
+                                  style={{ borderColor: type.color, color: type.color }}
+                                >
+                                  {type.name}: {formatCurrency(type.value)}
+                                </Badge>
+                              ))}
+                            </div>
+                          </>
+                        ) : (
+                          <div className="h-48 flex items-center justify-center text-muted-foreground text-sm">
+                            Sin recursos
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+
+                {/* Difference Summary */}
+                <Card className="bg-muted/30">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm">Diferencia entre opciones</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-3 gap-4 text-center">
+                      <div>
+                        <p className="text-xs text-muted-foreground mb-1">A vs B</p>
+                        <p className={`font-bold ${optionMetrics['A'].subtotalResources > optionMetrics['B'].subtotalResources ? 'text-red-500' : 'text-emerald-500'}`}>
+                          {formatCurrency(Math.abs(optionMetrics['A'].subtotalResources - optionMetrics['B'].subtotalResources))}
+                          <span className="text-xs ml-1">
+                            ({optionMetrics['A'].subtotalResources > optionMetrics['B'].subtotalResources ? 'A más caro' : 'B más caro'})
+                          </span>
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground mb-1">B vs C</p>
+                        <p className={`font-bold ${optionMetrics['B'].subtotalResources > optionMetrics['C'].subtotalResources ? 'text-red-500' : 'text-emerald-500'}`}>
+                          {formatCurrency(Math.abs(optionMetrics['B'].subtotalResources - optionMetrics['C'].subtotalResources))}
+                          <span className="text-xs ml-1">
+                            ({optionMetrics['B'].subtotalResources > optionMetrics['C'].subtotalResources ? 'B más caro' : 'C más caro'})
+                          </span>
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground mb-1">A vs C</p>
+                        <p className={`font-bold ${optionMetrics['A'].subtotalResources > optionMetrics['C'].subtotalResources ? 'text-red-500' : 'text-emerald-500'}`}>
+                          {formatCurrency(Math.abs(optionMetrics['A'].subtotalResources - optionMetrics['C'].subtotalResources))}
+                          <span className="text-xs ml-1">
+                            ({optionMetrics['A'].subtotalResources > optionMetrics['C'].subtotalResources ? 'A más caro' : 'C más caro'})
+                          </span>
+                        </p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            </TabsContent>
 
             {OPTIONS.map(option => (
               <TabsContent key={option} value={option}>

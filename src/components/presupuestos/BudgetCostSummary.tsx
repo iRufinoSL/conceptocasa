@@ -8,6 +8,7 @@ import { Calculator, Home, Euro, TrendingUp, Building2, Package, LayoutGrid } fr
 import { formatNumber, formatCurrency } from '@/lib/format-utils';
 import { calcResourceSubtotal } from '@/lib/budget-pricing';
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { getAllAvailableOptions, getDisplayOptions, OPTION_COLORS } from '@/lib/options-utils';
 
 interface BudgetCostSummaryProps {
   budgetId: string;
@@ -39,7 +40,6 @@ interface Space {
 // Valid resource types (exclude invalid types like "herramientas")
 const VALID_RESOURCE_TYPES = ['Producto', 'Mano de obra', 'Alquiler', 'Servicio'];
 const IMPUESTOS_TYPE = 'Impuestos';
-const OPTIONS = ['A', 'B', 'C'] as const;
 
 const RESOURCE_TYPE_COLORS: Record<string, string> = {
   'Producto': 'hsl(217, 91%, 60%)',
@@ -47,12 +47,6 @@ const RESOURCE_TYPE_COLORS: Record<string, string> = {
   'Alquiler': 'hsl(38, 92%, 50%)',
   'Servicio': 'hsl(346, 77%, 49%)',
   'Sin tipo': 'hsl(220, 9%, 46%)',
-};
-
-const OPTION_COLORS: Record<string, { from: string; to: string; border: string; text: string }> = {
-  'A': { from: 'from-amber-500/10', to: 'to-orange-500/10', border: 'border-amber-500/20', text: 'text-amber-600' },
-  'B': { from: 'from-emerald-500/10', to: 'to-teal-500/10', border: 'border-emerald-500/20', text: 'text-emerald-600' },
-  'C': { from: 'from-violet-500/10', to: 'to-purple-500/10', border: 'border-violet-500/20', text: 'text-violet-600' },
 };
 
 export function BudgetCostSummary({
@@ -131,10 +125,33 @@ export function BudgetCostSummary({
   const totalM2Built = spaces.reduce((sum, space) => sum + (space.m2_built || 0), 0);
   const totalM2Livable = spaces.reduce((sum, space) => sum + (space.m2_livable || 0), 0);
 
+  // Determine available options - always includes A, sorted A first
+  const availableOptions = useMemo(() => {
+    // Collect all unique options from spaces and resources
+    const allOptions = new Set<string>();
+    spaces.forEach(s => {
+      (s.opciones || ['A']).forEach(opt => allOptions.add(opt));
+    });
+    resources.forEach(r => {
+      (r.activity_opciones || ['A']).forEach(opt => allOptions.add(opt));
+    });
+    
+    // If no options found, default to A
+    if (allOptions.size === 0) {
+      return ['A'];
+    }
+    
+    // Sort to ensure A is always first
+    return Array.from(allOptions).sort((a, b) => {
+      const order: Record<string, number> = { 'A': 0, 'B': 1, 'C': 2 };
+      return (order[a] ?? 99) - (order[b] ?? 99);
+    });
+  }, [spaces, resources]);
+
   // Calculate m2 per option
   const m2ByOption = useMemo(() => {
     const result: Record<string, { m2_built: number; m2_livable: number }> = {};
-    OPTIONS.forEach(option => {
+    availableOptions.forEach(option => {
       const optionSpaces = spaces.filter(s => s.opciones?.includes(option));
       result[option] = optionSpaces.reduce(
         (acc, space) => ({
@@ -145,7 +162,7 @@ export function BudgetCostSummary({
       );
     });
     return result;
-  }, [spaces]);
+  }, [spaces, availableOptions]);
 
   // Helper function to calculate resource subtotal
   const getResourceSubtotal = (resource: Resource) => {
@@ -221,7 +238,7 @@ export function BudgetCostSummary({
   // Calculate metrics for each option using option-specific m2
   const optionMetrics = useMemo(() => {
     const result: Record<string, ReturnType<typeof calculateMetrics> & { chartData: ReturnType<typeof calculateChartData> }> = {};
-    OPTIONS.forEach(option => {
+    availableOptions.forEach(option => {
       const filteredResources = filterResourcesByOption(option);
       const optionM2 = m2ByOption[option] || { m2_built: 0, m2_livable: 0 };
       result[option] = {
@@ -230,7 +247,7 @@ export function BudgetCostSummary({
       };
     });
     return result;
-  }, [resources, spaces, m2ByOption]);
+  }, [resources, spaces, m2ByOption, availableOptions]);
 
   const CustomTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
@@ -527,37 +544,31 @@ export function BudgetCostSummary({
           <Separator />
 
           {/* Tabs for Options A, B, C and Comparison */}
-          <Tabs defaultValue="comparativa" className="w-full">
-            <TabsList className="grid w-full grid-cols-4 mb-6">
+          <Tabs defaultValue="A" className="w-full">
+            <TabsList className={`grid w-full mb-6`} style={{ gridTemplateColumns: `repeat(${availableOptions.length + 1}, minmax(0, 1fr))` }}>
               <TabsTrigger value="comparativa" className="flex items-center gap-2">
                 <LayoutGrid className="h-4 w-4" />
                 Comparativa
               </TabsTrigger>
-              <TabsTrigger value="A" className="flex items-center gap-2">
-                <Badge variant="outline" className="bg-amber-500/20 text-amber-600 border-amber-500/30">A</Badge>
-                Opción A
-              </TabsTrigger>
-              <TabsTrigger value="B" className="flex items-center gap-2">
-                <Badge variant="outline" className="bg-emerald-500/20 text-emerald-600 border-emerald-500/30">B</Badge>
-                Opción B
-              </TabsTrigger>
-              <TabsTrigger value="C" className="flex items-center gap-2">
-                <Badge variant="outline" className="bg-violet-500/20 text-violet-600 border-violet-500/30">C</Badge>
-                Opción C
-              </TabsTrigger>
+              {availableOptions.map(option => (
+                <TabsTrigger key={option} value={option} className="flex items-center gap-2">
+                  <Badge variant="outline" className={`${OPTION_COLORS[option]?.bg || 'bg-gray-500'}/20 ${OPTION_COLORS[option]?.text || 'text-gray-600'} ${OPTION_COLORS[option]?.border || 'border-gray-500/30'}`}>{option}</Badge>
+                  Opción {option}
+                </TabsTrigger>
+              ))}
             </TabsList>
 
             {/* Comparison View */}
             <TabsContent value="comparativa">
               <div className="space-y-6">
                 {/* Comparison Header */}
-                <div className="grid grid-cols-4 gap-4">
+                <div className="gap-4" style={{ display: 'grid', gridTemplateColumns: `200px repeat(${availableOptions.length}, 1fr)` }}>
                   <div className="font-medium text-muted-foreground flex items-center">Métrica</div>
-                  {OPTIONS.map(option => (
+                  {availableOptions.map(option => (
                     <div key={option} className="text-center">
                       <Badge 
                         variant="outline" 
-                        className={`${OPTION_COLORS[option].text} ${OPTION_COLORS[option].border} bg-gradient-to-br ${OPTION_COLORS[option].from} ${OPTION_COLORS[option].to} px-4 py-1`}
+                        className={`${OPTION_COLORS[option]?.text || 'text-gray-600'} ${OPTION_COLORS[option]?.border || 'border-gray-500/20'} bg-gradient-to-br ${OPTION_COLORS[option]?.from || 'from-gray-500/10'} ${OPTION_COLORS[option]?.to || 'to-gray-500/10'} px-4 py-1`}
                       >
                         Opción {option}
                       </Badge>
@@ -568,16 +579,16 @@ export function BudgetCostSummary({
                 <Separator />
 
                 {/* m² Construidos por Opción */}
-                <div className="grid grid-cols-4 gap-4 items-center">
+                <div className="gap-4 items-center" style={{ display: 'grid', gridTemplateColumns: `200px repeat(${availableOptions.length}, 1fr)` }}>
                   <div className="flex items-center gap-2 text-sm font-medium">
                     <Home className="h-4 w-4 text-muted-foreground" />
                     m² Construidos
                   </div>
-                  {OPTIONS.map(option => (
-                    <Card key={option} className={`bg-gradient-to-br ${OPTION_COLORS[option].from} ${OPTION_COLORS[option].to} ${OPTION_COLORS[option].border}`}>
+                  {availableOptions.map(option => (
+                    <Card key={option} className={`bg-gradient-to-br ${OPTION_COLORS[option]?.from || 'from-gray-500/10'} ${OPTION_COLORS[option]?.to || 'to-gray-500/10'} ${OPTION_COLORS[option]?.border || 'border-gray-500/20'}`}>
                       <CardContent className="py-4 text-center">
-                        <div className={`text-2xl font-bold ${OPTION_COLORS[option].text}`}>
-                          {formatNumber(optionMetrics[option].m2_built)} m²
+                        <div className={`text-2xl font-bold ${OPTION_COLORS[option]?.text || 'text-gray-600'}`}>
+                          {formatNumber(optionMetrics[option]?.m2_built || 0)} m²
                         </div>
                       </CardContent>
                     </Card>
@@ -585,16 +596,16 @@ export function BudgetCostSummary({
                 </div>
 
                 {/* m² Habitables por Opción */}
-                <div className="grid grid-cols-4 gap-4 items-center">
+                <div className="gap-4 items-center" style={{ display: 'grid', gridTemplateColumns: `200px repeat(${availableOptions.length}, 1fr)` }}>
                   <div className="flex items-center gap-2 text-sm font-medium">
                     <Home className="h-4 w-4 text-muted-foreground" />
                     m² Habitables
                   </div>
-                  {OPTIONS.map(option => (
-                    <Card key={option} className={`bg-gradient-to-br ${OPTION_COLORS[option].from} ${OPTION_COLORS[option].to} ${OPTION_COLORS[option].border}`}>
+                  {availableOptions.map(option => (
+                    <Card key={option} className={`bg-gradient-to-br ${OPTION_COLORS[option]?.from || 'from-gray-500/10'} ${OPTION_COLORS[option]?.to || 'to-gray-500/10'} ${OPTION_COLORS[option]?.border || 'border-gray-500/20'}`}>
                       <CardContent className="py-4 text-center">
-                        <div className={`text-2xl font-bold ${OPTION_COLORS[option].text}`}>
-                          {formatNumber(optionMetrics[option].m2_livable)} m²
+                        <div className={`text-2xl font-bold ${OPTION_COLORS[option]?.text || 'text-gray-600'}`}>
+                          {formatNumber(optionMetrics[option]?.m2_livable || 0)} m²
                         </div>
                       </CardContent>
                     </Card>
@@ -604,34 +615,34 @@ export function BudgetCostSummary({
                 <Separator />
 
                 {/* Subtotal Recursos */}
-                <div className="grid grid-cols-4 gap-4 items-center">
+                <div className="gap-4 items-center" style={{ display: 'grid', gridTemplateColumns: `200px repeat(${availableOptions.length}, 1fr)` }}>
                   <div className="flex items-center gap-2 text-sm font-medium">
                     <Calculator className="h-4 w-4 text-primary" />
                     Subtotal Recursos
                   </div>
-                  {OPTIONS.map(option => (
-                    <Card key={option} className={`bg-gradient-to-br ${OPTION_COLORS[option].from} ${OPTION_COLORS[option].to} ${OPTION_COLORS[option].border}`}>
+                  {availableOptions.map(option => (
+                    <Card key={option} className={`bg-gradient-to-br ${OPTION_COLORS[option]?.from || 'from-gray-500/10'} ${OPTION_COLORS[option]?.to || 'to-gray-500/10'} ${OPTION_COLORS[option]?.border || 'border-gray-500/20'}`}>
                       <CardContent className="py-4 text-center">
-                        <div className={`text-2xl font-bold ${OPTION_COLORS[option].text}`}>
-                          {formatCurrency(optionMetrics[option].subtotalResources)}
+                        <div className={`text-2xl font-bold ${OPTION_COLORS[option]?.text || 'text-gray-600'}`}>
+                          {formatCurrency(optionMetrics[option]?.subtotalResources || 0)}
                         </div>
-                        <p className="text-xs text-muted-foreground">{optionMetrics[option].resourceCount} recursos</p>
+                        <p className="text-xs text-muted-foreground">{optionMetrics[option]?.resourceCount || 0} recursos</p>
                       </CardContent>
                     </Card>
                   ))}
                 </div>
 
                 {/* € Coste por m² Construido Total */}
-                <div className="grid grid-cols-4 gap-4 items-center">
+                <div className="gap-4 items-center" style={{ display: 'grid', gridTemplateColumns: `200px repeat(${availableOptions.length}, 1fr)` }}>
                   <div className="flex items-center gap-2 text-sm font-medium">
                     <TrendingUp className="h-4 w-4 text-amber-600" />
                     € / m² Construido Total
                   </div>
-                  {OPTIONS.map(option => (
-                    <Card key={option} className={`bg-gradient-to-br ${OPTION_COLORS[option].from} ${OPTION_COLORS[option].to} ${OPTION_COLORS[option].border}`}>
+                  {availableOptions.map(option => (
+                    <Card key={option} className={`bg-gradient-to-br ${OPTION_COLORS[option]?.from || 'from-gray-500/10'} ${OPTION_COLORS[option]?.to || 'to-gray-500/10'} ${OPTION_COLORS[option]?.border || 'border-gray-500/20'}`}>
                       <CardContent className="py-4 text-center">
-                        <div className={`text-2xl font-bold ${OPTION_COLORS[option].text}`}>
-                          {formatCurrency(optionMetrics[option].costPerM2Built)}
+                        <div className={`text-2xl font-bold ${OPTION_COLORS[option]?.text || 'text-gray-600'}`}>
+                          {formatCurrency(optionMetrics[option]?.costPerM2Built || 0)}
                         </div>
                       </CardContent>
                     </Card>
@@ -639,16 +650,16 @@ export function BudgetCostSummary({
                 </div>
 
                 {/* € Coste por m² Habitable Total */}
-                <div className="grid grid-cols-4 gap-4 items-center">
+                <div className="gap-4 items-center" style={{ display: 'grid', gridTemplateColumns: `200px repeat(${availableOptions.length}, 1fr)` }}>
                   <div className="flex items-center gap-2 text-sm font-medium">
                     <TrendingUp className="h-4 w-4 text-emerald-600" />
                     € / m² Habitable Total
                   </div>
-                  {OPTIONS.map(option => (
-                    <Card key={option} className={`bg-gradient-to-br ${OPTION_COLORS[option].from} ${OPTION_COLORS[option].to} ${OPTION_COLORS[option].border}`}>
+                  {availableOptions.map(option => (
+                    <Card key={option} className={`bg-gradient-to-br ${OPTION_COLORS[option]?.from || 'from-gray-500/10'} ${OPTION_COLORS[option]?.to || 'to-gray-500/10'} ${OPTION_COLORS[option]?.border || 'border-gray-500/20'}`}>
                       <CardContent className="py-4 text-center">
-                        <div className={`text-2xl font-bold ${OPTION_COLORS[option].text}`}>
-                          {formatCurrency(optionMetrics[option].costPerM2Livable)}
+                        <div className={`text-2xl font-bold ${OPTION_COLORS[option]?.text || 'text-gray-600'}`}>
+                          {formatCurrency(optionMetrics[option]?.costPerM2Livable || 0)}
                         </div>
                       </CardContent>
                     </Card>
@@ -656,16 +667,16 @@ export function BudgetCostSummary({
                 </div>
 
                 {/* € Coste por m² Gastos Construcción */}
-                <div className="grid grid-cols-4 gap-4 items-center">
+                <div className="gap-4 items-center" style={{ display: 'grid', gridTemplateColumns: `200px repeat(${availableOptions.length}, 1fr)` }}>
                   <div className="flex items-center gap-2 text-sm font-medium">
                     <TrendingUp className="h-4 w-4 text-blue-600" />
                     € / m² Gastos Construcción
                   </div>
-                  {OPTIONS.map(option => (
-                    <Card key={option} className={`bg-gradient-to-br ${OPTION_COLORS[option].from} ${OPTION_COLORS[option].to} ${OPTION_COLORS[option].border}`}>
+                  {availableOptions.map(option => (
+                    <Card key={option} className={`bg-gradient-to-br ${OPTION_COLORS[option]?.from || 'from-gray-500/10'} ${OPTION_COLORS[option]?.to || 'to-gray-500/10'} ${OPTION_COLORS[option]?.border || 'border-gray-500/20'}`}>
                       <CardContent className="py-4 text-center">
-                        <div className={`text-2xl font-bold ${OPTION_COLORS[option].text}`}>
-                          {formatCurrency(optionMetrics[option].costPerM2BuiltGastos)}
+                        <div className={`text-2xl font-bold ${OPTION_COLORS[option]?.text || 'text-gray-600'}`}>
+                          {formatCurrency(optionMetrics[option]?.costPerM2BuiltGastos || 0)}
                         </div>
                         <p className="text-xs text-muted-foreground">Excluye Impuestos</p>
                       </CardContent>
@@ -674,16 +685,16 @@ export function BudgetCostSummary({
                 </div>
 
                 {/* € Coste por m² Habitable Gastos Construcción */}
-                <div className="grid grid-cols-4 gap-4 items-center">
+                <div className="gap-4 items-center" style={{ display: 'grid', gridTemplateColumns: `200px repeat(${availableOptions.length}, 1fr)` }}>
                   <div className="flex items-center gap-2 text-sm font-medium">
                     <TrendingUp className="h-4 w-4 text-violet-600" />
                     € / m² Hab. Gastos Const.
                   </div>
-                  {OPTIONS.map(option => (
-                    <Card key={option} className={`bg-gradient-to-br ${OPTION_COLORS[option].from} ${OPTION_COLORS[option].to} ${OPTION_COLORS[option].border}`}>
+                  {availableOptions.map(option => (
+                    <Card key={option} className={`bg-gradient-to-br ${OPTION_COLORS[option]?.from || 'from-gray-500/10'} ${OPTION_COLORS[option]?.to || 'to-gray-500/10'} ${OPTION_COLORS[option]?.border || 'border-gray-500/20'}`}>
                       <CardContent className="py-4 text-center">
-                        <div className={`text-2xl font-bold ${OPTION_COLORS[option].text}`}>
-                          {formatCurrency(optionMetrics[option].costPerM2LivableGastos)}
+                        <div className={`text-2xl font-bold ${OPTION_COLORS[option]?.text || 'text-gray-600'}`}>
+                          {formatCurrency(optionMetrics[option]?.costPerM2LivableGastos || 0)}
                         </div>
                         <p className="text-xs text-muted-foreground">Excluye Impuestos</p>
                       </CardContent>
@@ -694,8 +705,8 @@ export function BudgetCostSummary({
                 <Separator />
 
                 {/* Charts Side by Side */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  {OPTIONS.map(option => (
+                <div className={`grid grid-cols-1 gap-6`} style={{ gridTemplateColumns: `repeat(${Math.min(availableOptions.length, 3)}, 1fr)` }}>
+                  {availableOptions.map(option => (
                     <Card key={option}>
                       <CardHeader className="pb-2">
                         <CardTitle className="text-sm flex items-center gap-2">
@@ -704,7 +715,7 @@ export function BudgetCostSummary({
                         </CardTitle>
                       </CardHeader>
                       <CardContent>
-                        {optionMetrics[option].chartData.length > 0 ? (
+                        {optionMetrics[option]?.chartData?.length > 0 ? (
                           <>
                             <div className="h-48">
                               <ResponsiveContainer width="100%" height="100%">
@@ -752,49 +763,48 @@ export function BudgetCostSummary({
                   ))}
                 </div>
 
-                {/* Difference Summary */}
-                <Card className="bg-muted/30">
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm">Diferencia entre opciones</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="grid grid-cols-3 gap-4 text-center">
-                      <div>
-                        <p className="text-xs text-muted-foreground mb-1">A vs B</p>
-                        <p className={`font-bold ${optionMetrics['A'].subtotalResources > optionMetrics['B'].subtotalResources ? 'text-red-500' : 'text-emerald-500'}`}>
-                          {formatCurrency(Math.abs(optionMetrics['A'].subtotalResources - optionMetrics['B'].subtotalResources))}
-                          <span className="text-xs ml-1">
-                            ({optionMetrics['A'].subtotalResources > optionMetrics['B'].subtotalResources ? 'A más caro' : 'B más caro'})
-                          </span>
-                        </p>
+                {/* Difference Summary - only show if we have multiple options */}
+                {availableOptions.length >= 2 && (
+                  <Card className="bg-muted/30">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm">Diferencia entre opciones</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="flex flex-wrap gap-4 justify-center text-center">
+                        {availableOptions.length >= 2 && availableOptions.includes('A') && availableOptions.includes('B') && (
+                          <div>
+                            <p className="text-xs text-muted-foreground mb-1">A vs B</p>
+                            <p className={`font-bold ${(optionMetrics['A']?.subtotalResources || 0) > (optionMetrics['B']?.subtotalResources || 0) ? 'text-red-500' : 'text-emerald-500'}`}>
+                              {formatCurrency(Math.abs((optionMetrics['A']?.subtotalResources || 0) - (optionMetrics['B']?.subtotalResources || 0)))}
+                            </p>
+                          </div>
+                        )}
+                        {availableOptions.includes('B') && availableOptions.includes('C') && (
+                          <div>
+                            <p className="text-xs text-muted-foreground mb-1">B vs C</p>
+                            <p className={`font-bold ${(optionMetrics['B']?.subtotalResources || 0) > (optionMetrics['C']?.subtotalResources || 0) ? 'text-red-500' : 'text-emerald-500'}`}>
+                              {formatCurrency(Math.abs((optionMetrics['B']?.subtotalResources || 0) - (optionMetrics['C']?.subtotalResources || 0)))}
+                            </p>
+                          </div>
+                        )}
+                        {availableOptions.includes('A') && availableOptions.includes('C') && (
+                          <div>
+                            <p className="text-xs text-muted-foreground mb-1">A vs C</p>
+                            <p className={`font-bold ${(optionMetrics['A']?.subtotalResources || 0) > (optionMetrics['C']?.subtotalResources || 0) ? 'text-red-500' : 'text-emerald-500'}`}>
+                              {formatCurrency(Math.abs((optionMetrics['A']?.subtotalResources || 0) - (optionMetrics['C']?.subtotalResources || 0)))}
+                            </p>
+                          </div>
+                        )}
                       </div>
-                      <div>
-                        <p className="text-xs text-muted-foreground mb-1">B vs C</p>
-                        <p className={`font-bold ${optionMetrics['B'].subtotalResources > optionMetrics['C'].subtotalResources ? 'text-red-500' : 'text-emerald-500'}`}>
-                          {formatCurrency(Math.abs(optionMetrics['B'].subtotalResources - optionMetrics['C'].subtotalResources))}
-                          <span className="text-xs ml-1">
-                            ({optionMetrics['B'].subtotalResources > optionMetrics['C'].subtotalResources ? 'B más caro' : 'C más caro'})
-                          </span>
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-muted-foreground mb-1">A vs C</p>
-                        <p className={`font-bold ${optionMetrics['A'].subtotalResources > optionMetrics['C'].subtotalResources ? 'text-red-500' : 'text-emerald-500'}`}>
-                          {formatCurrency(Math.abs(optionMetrics['A'].subtotalResources - optionMetrics['C'].subtotalResources))}
-                          <span className="text-xs ml-1">
-                            ({optionMetrics['A'].subtotalResources > optionMetrics['C'].subtotalResources ? 'A más caro' : 'C más caro'})
-                          </span>
-                        </p>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
+                    </CardContent>
+                  </Card>
+                )}
               </div>
             </TabsContent>
 
-            {OPTIONS.map(option => (
+            {availableOptions.map(option => (
               <TabsContent key={option} value={option}>
-                {renderMetricsSection(option, optionMetrics[option])}
+                {optionMetrics[option] && renderMetricsSection(option, optionMetrics[option])}
               </TabsContent>
             ))}
           </Tabs>

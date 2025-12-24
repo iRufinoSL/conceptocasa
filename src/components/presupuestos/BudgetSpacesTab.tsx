@@ -17,6 +17,7 @@ import { formatNumber } from '@/lib/format-utils';
 import { searchMatch } from '@/lib/search-utils';
 import { NumericInput } from '@/components/ui/numeric-input';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
+import { getAllAvailableOptions, getDisplayOptions, OPTION_COLORS, DEFAULT_OPTIONS } from '@/lib/options-utils';
 
 interface BudgetSpace {
   id: string;

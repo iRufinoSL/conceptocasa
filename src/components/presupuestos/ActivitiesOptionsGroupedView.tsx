@@ -7,6 +7,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { ChevronRight, ChevronDown, Pencil, Trash2, MoreHorizontal, File, Copy } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { formatCurrency } from '@/lib/format-utils';
+import { getAllAvailableOptions, getDisplayOptions, OPTION_COLORS } from '@/lib/options-utils';
 
 interface BudgetActivity {
   id: string;

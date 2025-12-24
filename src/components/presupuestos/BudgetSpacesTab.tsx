@@ -65,7 +65,7 @@ const LEVELS = [
   'Ático'
 ];
 
-// OPTIONS removed - now using getAllAvailableOptions from options-utils
+const OPTIONS = ['A', 'B', 'C'] as const;
 
 export function BudgetSpacesTab({ budgetId, isAdmin }: BudgetSpacesTabProps) {
   const [spaces, setSpaces] = useState<BudgetSpace[]>([]);
@@ -200,14 +200,10 @@ export function BudgetSpacesTab({ budgetId, isAdmin }: BudgetSpacesTabProps) {
     );
   }, [filteredSpaces]);
 
-  // Calculate totals per option - always with A first
-  const availableOptions = useMemo(() => {
-    return getAllAvailableOptions(spaces);
-  }, [spaces]);
-
+  // Calculate totals per option
   const totalsByOption = useMemo(() => {
     const result: Record<string, { m2_built: number; m2_livable: number; m2_construction: number; count: number }> = {};
-    availableOptions.forEach(option => {
+    OPTIONS.forEach(option => {
       const optionSpaces = filteredSpaces.filter(s => s.opciones?.includes(option));
       result[option] = optionSpaces.reduce(
         (acc, space) => ({
@@ -220,7 +216,7 @@ export function BudgetSpacesTab({ budgetId, isAdmin }: BudgetSpacesTabProps) {
       );
     });
     return result;
-  }, [filteredSpaces, availableOptions]);
+  }, [filteredSpaces]);
 
   // Calculate group totals
   const getGroupTotals = (spacesGroup: BudgetSpace[]) => {
@@ -339,14 +335,16 @@ export function BudgetSpacesTab({ budgetId, isAdmin }: BudgetSpacesTabProps) {
       <TableCell>{space.level}</TableCell>
       <TableCell>
         <div className="flex gap-1">
-          {getDisplayOptions(space.opciones).map(opt => (
+          {OPTIONS.map(opt => (
             <Badge
               key={opt}
-              variant="default"
+              variant={space.opciones?.includes(opt) ? 'default' : 'outline'}
               className={`text-xs ${
-                opt === 'A' ? 'bg-amber-500 hover:bg-amber-600' 
-                  : opt === 'B' ? 'bg-emerald-500 hover:bg-emerald-600'
-                  : 'bg-violet-500 hover:bg-violet-600'
+                space.opciones?.includes(opt)
+                  ? opt === 'A' ? 'bg-amber-500 hover:bg-amber-600' 
+                    : opt === 'B' ? 'bg-emerald-500 hover:bg-emerald-600'
+                    : 'bg-violet-500 hover:bg-violet-600'
+                  : 'opacity-30'
               }`}
             >
               {opt}
@@ -491,16 +489,20 @@ export function BudgetSpacesTab({ budgetId, isAdmin }: BudgetSpacesTabProps) {
             </Card>
           </div>
 
-          {/* Totals per Option - always A first */}
-          <div className={`grid grid-cols-1 gap-4 mb-6`} style={{ gridTemplateColumns: `repeat(${Math.min(availableOptions.length, 3)}, 1fr)` }}>
-            {availableOptions.map(opt => {
-              const optTotals = totalsByOption[opt] || { m2_built: 0, m2_livable: 0, m2_construction: 0, count: 0 };
-              const colors = OPTION_COLORS[opt] || { from: 'from-gray-500/10', to: 'to-gray-500/10', border: 'border-gray-500/20', text: 'text-gray-600', bg: 'bg-gray-500' };
+          {/* Totals per Option */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            {OPTIONS.map(opt => {
+              const optTotals = totalsByOption[opt];
+              const colors = opt === 'A' 
+                ? 'bg-amber-500/10 border-amber-500/20 text-amber-600' 
+                : opt === 'B' 
+                  ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600'
+                  : 'bg-violet-500/10 border-violet-500/20 text-violet-600';
               return (
-                <Card key={opt} className={`bg-gradient-to-br ${colors.from} ${colors.to} ${colors.border} border`}>
+                <Card key={opt} className={`${colors.split(' ').slice(0, 2).join(' ')} border`}>
                   <CardContent className="pt-4">
                     <div className="flex items-center justify-between mb-2">
-                      <Badge className={colors.bg}>
+                      <Badge className={opt === 'A' ? 'bg-amber-500' : opt === 'B' ? 'bg-emerald-500' : 'bg-violet-500'}>
                         Opción {opt}
                       </Badge>
                       <span className="text-sm text-muted-foreground">{optTotals.count} espacios</span>
@@ -508,15 +510,15 @@ export function BudgetSpacesTab({ budgetId, isAdmin }: BudgetSpacesTabProps) {
                     <div className="grid grid-cols-3 gap-2 text-sm">
                       <div>
                         <div className="text-muted-foreground text-xs">m² Construidos</div>
-                        <div className={`font-bold ${colors.text}`}>{formatNumber(optTotals.m2_built)}</div>
+                        <div className={`font-bold ${colors.split(' ')[2]}`}>{formatNumber(optTotals.m2_built)}</div>
                       </div>
                       <div>
                         <div className="text-muted-foreground text-xs">m² Habitables</div>
-                        <div className={`font-bold ${colors.text}`}>{formatNumber(optTotals.m2_livable)}</div>
+                        <div className={`font-bold ${colors.split(' ')[2]}`}>{formatNumber(optTotals.m2_livable)}</div>
                       </div>
                       <div>
                         <div className="text-muted-foreground text-xs">m² Construcción</div>
-                        <div className={`font-bold ${colors.text}`}>{formatNumber(optTotals.m2_construction)}</div>
+                        <div className={`font-bold ${colors.split(' ')[2]}`}>{formatNumber(optTotals.m2_construction)}</div>
                       </div>
                     </div>
                   </CardContent>
@@ -692,7 +694,7 @@ export function BudgetSpacesTab({ budgetId, isAdmin }: BudgetSpacesTabProps) {
             <div className="space-y-2">
               <Label>Opciones</Label>
               <div className="flex gap-4">
-                {DEFAULT_OPTIONS.map(opt => (
+                {OPTIONS.map(opt => (
                   <div key={opt} className="flex items-center gap-2">
                     <Checkbox
                       id={`option-${opt}`}
@@ -701,7 +703,7 @@ export function BudgetSpacesTab({ budgetId, isAdmin }: BudgetSpacesTabProps) {
                         setFormData(prev => ({
                           ...prev,
                           opciones: checked
-                            ? [...prev.opciones, opt].sort()
+                            ? [...prev.opciones, opt]
                             : prev.opciones.filter(o => o !== opt)
                         }));
                       }}
@@ -709,7 +711,7 @@ export function BudgetSpacesTab({ budgetId, isAdmin }: BudgetSpacesTabProps) {
                     <label
                       htmlFor={`option-${opt}`}
                       className={`text-sm font-medium cursor-pointer ${
-                        OPTION_COLORS[opt]?.text || 'text-gray-600'
+                        opt === 'A' ? 'text-amber-600' : opt === 'B' ? 'text-emerald-600' : 'text-violet-600'
                       }`}
                     >
                       Opción {opt}

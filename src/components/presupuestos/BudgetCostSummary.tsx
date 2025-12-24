@@ -88,7 +88,7 @@ export function BudgetCostSummary({
           safety_margin_percent: r.safety_margin_percent,
           sales_margin_percent: r.sales_margin_percent,
           resource_type: r.resource_type,
-          activity_opciones: getDisplayOptions(r.budget_activities?.opciones),
+          activity_opciones: r.budget_activities?.opciones || ['A', 'B', 'C'],
         }));
 
         // Map spaces with their opciones
@@ -96,7 +96,7 @@ export function BudgetCostSummary({
           id: s.id,
           m2_built: s.m2_built,
           m2_livable: s.m2_livable,
-          opciones: getDisplayOptions(s.opciones),
+          opciones: s.opciones || ['A', 'B', 'C'],
         }));
 
         setResources(mappedResources);

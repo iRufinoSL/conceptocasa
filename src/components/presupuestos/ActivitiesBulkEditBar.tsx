@@ -54,7 +54,7 @@ const BULK_EDIT_FIELDS = [
   { value: 'phase_id', label: 'Fase', type: 'phase' },
 ];
 
-const OPCIONES = ['A', 'B', 'C']; // Keep fixed for bulk edit options selection
+const OPCIONES = ['A', 'B', 'C'];
 
 export function ActivitiesBulkEditBar({
   selectedIds,

@@ -43,7 +43,7 @@ interface ActivitiesOptionsGroupedViewProps {
   canEditActivity: (activityId: string) => boolean;
 }
 
-// OPCIONES removed - now using getAllAvailableOptions from options-utils
+const OPCIONES = ['A', 'B', 'C'];
 
 export function ActivitiesOptionsGroupedView({
   activities,
@@ -61,22 +61,16 @@ export function ActivitiesOptionsGroupedView({
   onManageFiles,
   canEditActivity,
 }: ActivitiesOptionsGroupedViewProps) {
-  // Determine available options from activities, always with A first
-  const availableOptions = useMemo(() => {
-    return getAllAvailableOptions(activities);
-  }, [activities]);
-
   // Group activities by option
   const groupedByOption = useMemo(() => {
-    const groups: Record<string, BudgetActivity[]> = {};
-    
-    // Initialize groups for all available options
-    availableOptions.forEach(opt => {
-      groups[opt] = [];
-    });
+    const groups: Record<string, BudgetActivity[]> = {
+      'A': [],
+      'B': [],
+      'C': [],
+    };
 
     activities.forEach(activity => {
-      const opciones = getDisplayOptions(activity.opciones);
+      const opciones = activity.opciones || ['A', 'B', 'C'];
       opciones.forEach(opcion => {
         if (groups[opcion]) {
           groups[opcion].push(activity);
@@ -90,19 +84,19 @@ export function ActivitiesOptionsGroupedView({
     });
 
     return groups;
-  }, [activities, availableOptions]);
+  }, [activities]);
 
   // Calculate subtotals per option
   const subtotals = useMemo(() => {
     const result: Record<string, number> = {};
-    availableOptions.forEach(opcion => {
+    OPCIONES.forEach(opcion => {
       result[opcion] = groupedByOption[opcion]?.reduce(
         (sum, activity) => sum + (activity.resources_subtotal || 0),
         0
       ) || 0;
     });
     return result;
-  }, [groupedByOption, availableOptions]);
+  }, [groupedByOption]);
 
   const getPhaseById = (phaseId: string | null) => {
     if (!phaseId) return null;
@@ -135,8 +129,8 @@ export function ActivitiesOptionsGroupedView({
         </Badge>
       </div>
 
-      {/* Groups by Option - always A first */}
-      {availableOptions.map(opcion => {
+      {/* Groups by Option */}
+      {OPCIONES.map(opcion => {
         const activitiesInOption = groupedByOption[opcion] || [];
         const isExpanded = expandedOptions.has(opcion);
         const subtotal = subtotals[opcion];
@@ -158,7 +152,11 @@ export function ActivitiesOptionsGroupedView({
                     )}
                     <Badge 
                       variant="default" 
-                      className={`text-lg px-3 py-1 ${OPTION_COLORS[opcion]?.bg || 'bg-gray-500'} hover:opacity-90`}
+                      className={`text-lg px-3 py-1 ${
+                        opcion === 'A' ? 'bg-blue-500 hover:bg-blue-600' :
+                        opcion === 'B' ? 'bg-amber-500 hover:bg-amber-600' :
+                        'bg-emerald-500 hover:bg-emerald-600'
+                      }`}
                     >
                       Opción {opcion}
                     </Badge>
@@ -215,11 +213,15 @@ export function ActivitiesOptionsGroupedView({
                               <TableCell className="font-medium">{activity.name}</TableCell>
                               <TableCell>
                                 <div className="flex gap-1">
-                                  {getDisplayOptions(activity.opciones).map(op => (
+                                  {opciones.map(op => (
                                     <Badge 
                                       key={op} 
                                       variant="outline" 
-                                      className={`text-xs ${OPTION_COLORS[op]?.border || 'border-gray-500'} ${OPTION_COLORS[op]?.text || 'text-gray-600'}`}
+                                      className={`text-xs ${
+                                        op === 'A' ? 'border-blue-500 text-blue-600' :
+                                        op === 'B' ? 'border-amber-500 text-amber-600' :
+                                        'border-emerald-500 text-emerald-600'
+                                      }`}
                                     >
                                       {op}
                                     </Badge>

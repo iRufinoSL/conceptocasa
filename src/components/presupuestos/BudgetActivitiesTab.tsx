@@ -23,6 +23,7 @@ import { searchMatch } from '@/lib/search-utils';
 import { formatCurrency, formatNumber, formatPercent } from '@/lib/format-utils';
 import { percentToRatio } from '@/lib/budget-pricing';
 import { syncActivityResourcesRelatedUnits } from '@/lib/budget-utils';
+import { DEFAULT_OPTIONS, OPTION_COLORS, getDisplayOptions } from '@/lib/options-utils';
 import { MeasurementInlineSelect, MeasurementInlineSelectHandle } from './MeasurementInlineSelect';
 import { ResourceInlineEdit } from './ResourceInlineEdit';
 import { BudgetResourceForm } from './BudgetResourceForm';
@@ -2474,7 +2475,7 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
                 <p className="text-xs text-muted-foreground">Selecciona en qué opciones (A, B, C) está incluida esta actividad</p>
               </div>
               <div className="flex gap-3">
-                {['A', 'B', 'C'].map(opcion => (
+                {DEFAULT_OPTIONS.map(opcion => (
                   <label key={opcion} className="flex items-center gap-1.5 cursor-pointer">
                     <Checkbox
                       checked={form.opciones.includes(opcion)}
@@ -2486,11 +2487,7 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
                         }
                       }}
                     />
-                    <span className={`text-sm font-medium ${
-                      opcion === 'A' ? 'text-blue-600' :
-                      opcion === 'B' ? 'text-amber-600' :
-                      'text-emerald-600'
-                    }`}>{opcion}</span>
+                    <span className={`text-sm font-medium ${OPTION_COLORS[opcion]?.text || 'text-gray-600'}`}>{opcion}</span>
                   </label>
                 ))}
               </div>

@@ -535,6 +535,7 @@ export type Database = {
           m2_livable: number | null
           name: string
           observations: string | null
+          opciones: string[]
           space_type: string
           updated_at: string
         }
@@ -547,6 +548,7 @@ export type Database = {
           m2_livable?: number | null
           name: string
           observations?: string | null
+          opciones?: string[]
           space_type?: string
           updated_at?: string
         }
@@ -559,6 +561,7 @@ export type Database = {
           m2_livable?: number | null
           name?: string
           observations?: string | null
+          opciones?: string[]
           space_type?: string
           updated_at?: string
         }

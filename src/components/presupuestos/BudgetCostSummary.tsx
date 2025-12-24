@@ -33,6 +33,7 @@ interface Space {
   id: string;
   m2_built: number | null;
   m2_livable: number | null;
+  opciones: string[];
 }
 
 // Valid resource types (exclude invalid types like "herramientas")
@@ -77,7 +78,7 @@ export function BudgetCostSummary({
             .eq('budget_id', budgetId),
           supabase
             .from('budget_spaces')
-            .select('id, m2_built, m2_livable')
+            .select('id, m2_built, m2_livable, opciones')
             .eq('budget_id', budgetId)
         ]);
 
@@ -96,8 +97,16 @@ export function BudgetCostSummary({
           activity_opciones: r.budget_activities?.opciones || ['A', 'B', 'C'],
         }));
 
+        // Map spaces with their opciones
+        const mappedSpaces: Space[] = (spacesRes.data || []).map((s: any) => ({
+          id: s.id,
+          m2_built: s.m2_built,
+          m2_livable: s.m2_livable,
+          opciones: s.opciones || ['A', 'B', 'C'],
+        }));
+
         setResources(mappedResources);
-        setSpaces(spacesRes.data || []);
+        setSpaces(mappedSpaces);
       } catch (error) {
         console.error('Error fetching cost summary data:', error);
       } finally {
@@ -118,9 +127,25 @@ export function BudgetCostSummary({
     };
   }, [budgetId]);
 
-  // Calculate total m2
+  // Calculate total m2 (general - for display)
   const totalM2Built = spaces.reduce((sum, space) => sum + (space.m2_built || 0), 0);
   const totalM2Livable = spaces.reduce((sum, space) => sum + (space.m2_livable || 0), 0);
+
+  // Calculate m2 per option
+  const m2ByOption = useMemo(() => {
+    const result: Record<string, { m2_built: number; m2_livable: number }> = {};
+    OPTIONS.forEach(option => {
+      const optionSpaces = spaces.filter(s => s.opciones?.includes(option));
+      result[option] = optionSpaces.reduce(
+        (acc, space) => ({
+          m2_built: acc.m2_built + (space.m2_built || 0),
+          m2_livable: acc.m2_livable + (space.m2_livable || 0),
+        }),
+        { m2_built: 0, m2_livable: 0 }
+      );
+    });
+    return result;
+  }, [spaces]);
 
   // Helper function to calculate resource subtotal
   const getResourceSubtotal = (resource: Resource) => {
@@ -138,8 +163,8 @@ export function BudgetCostSummary({
     return resources.filter(r => r.activity_opciones.includes(option));
   };
 
-  // Calculate metrics for a given set of resources
-  const calculateMetrics = (resourceList: Resource[]) => {
+  // Calculate metrics for a given set of resources and m2 values
+  const calculateMetrics = (resourceList: Resource[], optionM2: { m2_built: number; m2_livable: number }) => {
     const subtotalResources = resourceList.reduce((sum, resource) => sum + getResourceSubtotal(resource), 0);
     
     const subtotalGastosConstruccion = resourceList.reduce((sum, resource) => {
@@ -147,10 +172,11 @@ export function BudgetCostSummary({
       return sum + getResourceSubtotal(resource);
     }, 0);
 
-    const costPerM2Built = totalM2Built > 0 ? subtotalResources / totalM2Built : 0;
-    const costPerM2Livable = totalM2Livable > 0 ? subtotalResources / totalM2Livable : 0;
-    const costPerM2BuiltGastos = totalM2Built > 0 ? subtotalGastosConstruccion / totalM2Built : 0;
-    const costPerM2LivableGastos = totalM2Livable > 0 ? subtotalGastosConstruccion / totalM2Livable : 0;
+    const { m2_built, m2_livable } = optionM2;
+    const costPerM2Built = m2_built > 0 ? subtotalResources / m2_built : 0;
+    const costPerM2Livable = m2_livable > 0 ? subtotalResources / m2_livable : 0;
+    const costPerM2BuiltGastos = m2_built > 0 ? subtotalGastosConstruccion / m2_built : 0;
+    const costPerM2LivableGastos = m2_livable > 0 ? subtotalGastosConstruccion / m2_livable : 0;
 
     return {
       subtotalResources,
@@ -159,7 +185,9 @@ export function BudgetCostSummary({
       costPerM2Livable,
       costPerM2BuiltGastos,
       costPerM2LivableGastos,
-      resourceCount: resourceList.length
+      resourceCount: resourceList.length,
+      m2_built,
+      m2_livable
     };
   };
 
@@ -190,18 +218,19 @@ export function BudgetCostSummary({
       .sort((a, b) => b.value - a.value);
   };
 
-  // Calculate metrics for each option
+  // Calculate metrics for each option using option-specific m2
   const optionMetrics = useMemo(() => {
     const result: Record<string, ReturnType<typeof calculateMetrics> & { chartData: ReturnType<typeof calculateChartData> }> = {};
     OPTIONS.forEach(option => {
       const filteredResources = filterResourcesByOption(option);
+      const optionM2 = m2ByOption[option] || { m2_built: 0, m2_livable: 0 };
       result[option] = {
-        ...calculateMetrics(filteredResources),
+        ...calculateMetrics(filteredResources, optionM2),
         chartData: calculateChartData(filteredResources)
       };
     });
     return result;
-  }, [resources, totalM2Built, totalM2Livable]);
+  }, [resources, spaces, m2ByOption]);
 
   const CustomTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
@@ -258,38 +287,38 @@ export function BudgetCostSummary({
             </CardContent>
           </Card>
 
-          {/* Total m2 Construidos */}
-          <Card>
+          {/* Total m2 Construidos for this Option */}
+          <Card className={`bg-gradient-to-br ${colors.from} ${colors.to} ${colors.border}`}>
             <CardContent className="pt-6">
               <div className="flex items-center gap-3 mb-2">
-                <div className="p-2 rounded-full bg-muted">
-                  <Home className="h-5 w-5 text-muted-foreground" />
+                <div className={`p-2 rounded-full ${colors.from.replace('from-', 'bg-').replace('/10', '/20')}`}>
+                  <Home className={`h-5 w-5 ${colors.text}`} />
                 </div>
-                <span className="text-sm text-muted-foreground">m² Construidos</span>
+                <span className="text-sm text-muted-foreground">m² Construidos (Opción {option})</span>
               </div>
-              <div className="text-3xl font-bold">
-                {formatNumber(totalM2Built)} m²
+              <div className={`text-3xl font-bold ${colors.text}`}>
+                {formatNumber(metrics.m2_built)} m²
               </div>
               <p className="text-xs text-muted-foreground mt-1">
-                De {spaces.length} espacios
+                Espacios asignados a opción {option}
               </p>
             </CardContent>
           </Card>
 
-          {/* Total m2 Habitables */}
-          <Card>
+          {/* Total m2 Habitables for this Option */}
+          <Card className={`bg-gradient-to-br ${colors.from} ${colors.to} ${colors.border}`}>
             <CardContent className="pt-6">
               <div className="flex items-center gap-3 mb-2">
-                <div className="p-2 rounded-full bg-muted">
-                  <Home className="h-5 w-5 text-muted-foreground" />
+                <div className={`p-2 rounded-full ${colors.from.replace('from-', 'bg-').replace('/10', '/20')}`}>
+                  <Home className={`h-5 w-5 ${colors.text}`} />
                 </div>
-                <span className="text-sm text-muted-foreground">m² Habitables</span>
+                <span className="text-sm text-muted-foreground">m² Habitables (Opción {option})</span>
               </div>
-              <div className="text-3xl font-bold">
-                {formatNumber(totalM2Livable)} m²
+              <div className={`text-3xl font-bold ${colors.text}`}>
+                {formatNumber(metrics.m2_livable)} m²
               </div>
               <p className="text-xs text-muted-foreground mt-1">
-                De {spaces.length} espacios
+                Espacios asignados a opción {option}
               </p>
             </CardContent>
           </Card>
@@ -306,40 +335,40 @@ export function BudgetCostSummary({
                 <div className={`p-2 rounded-full ${colors.from.replace('from-', 'bg-').replace('/10', '/20')}`}>
                   <TrendingUp className={`h-5 w-5 ${colors.text}`} />
                 </div>
-                <span className="text-sm font-medium">€ Coste por m² Construido Total</span>
+                <span className="text-sm font-medium">€ Coste por m² Construido (Opción {option})</span>
               </div>
               <div className={`text-4xl font-bold ${colors.text}`}>
                 {formatCurrency(metrics.costPerM2Built)}
               </div>
               <p className="text-sm text-muted-foreground mt-2">
-                {formatCurrency(metrics.subtotalResources)} ÷ {formatNumber(totalM2Built)} m²
+                {formatCurrency(metrics.subtotalResources)} ÷ {formatNumber(metrics.m2_built)} m²
               </p>
-              {totalM2Built === 0 && (
+              {metrics.m2_built === 0 && (
                 <p className={`text-xs ${colors.text} mt-2`}>
-                  ⚠️ Añade espacios para calcular el coste por m²
+                  ⚠️ Añade espacios con opción {option} para calcular
                 </p>
               )}
             </CardContent>
           </Card>
 
           {/* Cost per m2 Livable Total */}
-          <Card className="bg-gradient-to-br from-emerald-500/10 to-teal-500/10 border-emerald-500/20">
+          <Card className={`bg-gradient-to-br ${colors.from} ${colors.to} ${colors.border}`}>
             <CardContent className="pt-6">
               <div className="flex items-center gap-3 mb-2">
-                <div className="p-2 rounded-full bg-emerald-500/20">
-                  <TrendingUp className="h-5 w-5 text-emerald-600" />
+                <div className={`p-2 rounded-full ${colors.from.replace('from-', 'bg-').replace('/10', '/20')}`}>
+                  <TrendingUp className={`h-5 w-5 ${colors.text}`} />
                 </div>
-                <span className="text-sm font-medium">€ Coste por m² Habitable Total</span>
+                <span className="text-sm font-medium">€ Coste por m² Habitable (Opción {option})</span>
               </div>
-              <div className="text-4xl font-bold text-emerald-600">
+              <div className={`text-4xl font-bold ${colors.text}`}>
                 {formatCurrency(metrics.costPerM2Livable)}
               </div>
               <p className="text-sm text-muted-foreground mt-2">
-                {formatCurrency(metrics.subtotalResources)} ÷ {formatNumber(totalM2Livable)} m²
+                {formatCurrency(metrics.subtotalResources)} ÷ {formatNumber(metrics.m2_livable)} m²
               </p>
-              {totalM2Livable === 0 && (
-                <p className="text-xs text-emerald-600 mt-2">
-                  ⚠️ Añade espacios para calcular el coste por m²
+              {metrics.m2_livable === 0 && (
+                <p className={`text-xs ${colors.text} mt-2`}>
+                  ⚠️ Añade espacios con opción {option} para calcular
                 </p>
               )}
             </CardContent>
@@ -352,13 +381,13 @@ export function BudgetCostSummary({
                 <div className="p-2 rounded-full bg-blue-500/20">
                   <TrendingUp className="h-5 w-5 text-blue-600" />
                 </div>
-                <span className="text-sm font-medium">€ Coste por m² Gastos Construcción</span>
+                <span className="text-sm font-medium">€ Gastos Construcción / m² Construido (Opción {option})</span>
               </div>
               <div className="text-4xl font-bold text-blue-600">
                 {formatCurrency(metrics.costPerM2BuiltGastos)}
               </div>
               <p className="text-sm text-muted-foreground mt-2">
-                {formatCurrency(metrics.subtotalGastosConstruccion)} ÷ {formatNumber(totalM2Built)} m²
+                {formatCurrency(metrics.subtotalGastosConstruccion)} ÷ {formatNumber(metrics.m2_built)} m²
               </p>
               <p className="text-xs text-muted-foreground mt-1">
                 Excluye tipo "Impuestos"
@@ -373,13 +402,13 @@ export function BudgetCostSummary({
                 <div className="p-2 rounded-full bg-violet-500/20">
                   <TrendingUp className="h-5 w-5 text-violet-600" />
                 </div>
-                <span className="text-sm font-medium">€ Coste por m² Habitable Gastos Construcción</span>
+                <span className="text-sm font-medium">€ Gastos Construcción / m² Habitable (Opción {option})</span>
               </div>
               <div className="text-4xl font-bold text-violet-600">
                 {formatCurrency(metrics.costPerM2LivableGastos)}
               </div>
               <p className="text-sm text-muted-foreground mt-2">
-                {formatCurrency(metrics.subtotalGastosConstruccion)} ÷ {formatNumber(totalM2Livable)} m²
+                {formatCurrency(metrics.subtotalGastosConstruccion)} ÷ {formatNumber(metrics.m2_livable)} m²
               </p>
               <p className="text-xs text-muted-foreground mt-1">
                 Excluye tipo "Impuestos"

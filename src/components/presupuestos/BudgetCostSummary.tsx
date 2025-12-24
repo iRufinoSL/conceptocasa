@@ -567,6 +567,42 @@ export function BudgetCostSummary({
 
                 <Separator />
 
+                {/* m² Construidos por Opción */}
+                <div className="grid grid-cols-4 gap-4 items-center">
+                  <div className="flex items-center gap-2 text-sm font-medium">
+                    <Home className="h-4 w-4 text-muted-foreground" />
+                    m² Construidos
+                  </div>
+                  {OPTIONS.map(option => (
+                    <Card key={option} className={`bg-gradient-to-br ${OPTION_COLORS[option].from} ${OPTION_COLORS[option].to} ${OPTION_COLORS[option].border}`}>
+                      <CardContent className="py-4 text-center">
+                        <div className={`text-2xl font-bold ${OPTION_COLORS[option].text}`}>
+                          {formatNumber(optionMetrics[option].m2_built)} m²
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+
+                {/* m² Habitables por Opción */}
+                <div className="grid grid-cols-4 gap-4 items-center">
+                  <div className="flex items-center gap-2 text-sm font-medium">
+                    <Home className="h-4 w-4 text-muted-foreground" />
+                    m² Habitables
+                  </div>
+                  {OPTIONS.map(option => (
+                    <Card key={option} className={`bg-gradient-to-br ${OPTION_COLORS[option].from} ${OPTION_COLORS[option].to} ${OPTION_COLORS[option].border}`}>
+                      <CardContent className="py-4 text-center">
+                        <div className={`text-2xl font-bold ${OPTION_COLORS[option].text}`}>
+                          {formatNumber(optionMetrics[option].m2_livable)} m²
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+
+                <Separator />
+
                 {/* Subtotal Recursos */}
                 <div className="grid grid-cols-4 gap-4 items-center">
                   <div className="flex items-center gap-2 text-sm font-medium">

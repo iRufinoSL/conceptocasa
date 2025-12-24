@@ -11,6 +11,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { Plus, Search, Edit, Trash2, Home, Layers, Building } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import { formatNumber } from '@/lib/format-utils';
 import { searchMatch } from '@/lib/search-utils';
 import { NumericInput } from '@/components/ui/numeric-input';
@@ -25,6 +27,7 @@ interface BudgetSpace {
   m2_built: number | null;
   m2_livable: number | null;
   observations: string | null;
+  opciones: string[];
   created_at: string;
   updated_at: string;
 }
@@ -61,6 +64,8 @@ const LEVELS = [
   'Ático'
 ];
 
+const OPTIONS = ['A', 'B', 'C'] as const;
+
 export function BudgetSpacesTab({ budgetId, isAdmin }: BudgetSpacesTabProps) {
   const [spaces, setSpaces] = useState<BudgetSpace[]>([]);
   const [loading, setLoading] = useState(true);
@@ -76,7 +81,8 @@ export function BudgetSpacesTab({ budgetId, isAdmin }: BudgetSpacesTabProps) {
     level: 'Nivel 1',
     m2_built: null as number | null,
     m2_livable: null as number | null,
-    observations: ''
+    observations: '',
+    opciones: ['A', 'B', 'C'] as string[]
   });
   
   // Delete dialog
@@ -193,6 +199,24 @@ export function BudgetSpacesTab({ budgetId, isAdmin }: BudgetSpacesTabProps) {
     );
   }, [filteredSpaces]);
 
+  // Calculate totals per option
+  const totalsByOption = useMemo(() => {
+    const result: Record<string, { m2_built: number; m2_livable: number; m2_construction: number; count: number }> = {};
+    OPTIONS.forEach(option => {
+      const optionSpaces = filteredSpaces.filter(s => s.opciones?.includes(option));
+      result[option] = optionSpaces.reduce(
+        (acc, space) => ({
+          m2_built: acc.m2_built + (space.m2_built || 0),
+          m2_livable: acc.m2_livable + (space.m2_livable || 0),
+          m2_construction: acc.m2_construction + getM2Construction(space),
+          count: acc.count + 1
+        }),
+        { m2_built: 0, m2_livable: 0, m2_construction: 0, count: 0 }
+      );
+    });
+    return result;
+  }, [filteredSpaces]);
+
   // Calculate group totals
   const getGroupTotals = (spacesGroup: BudgetSpace[]) => {
     return spacesGroup.reduce(
@@ -213,7 +237,8 @@ export function BudgetSpacesTab({ budgetId, isAdmin }: BudgetSpacesTabProps) {
       level: 'Nivel 1',
       m2_built: null,
       m2_livable: null,
-      observations: ''
+      observations: '',
+      opciones: ['A', 'B', 'C']
     });
     setFormOpen(true);
   };
@@ -226,7 +251,8 @@ export function BudgetSpacesTab({ budgetId, isAdmin }: BudgetSpacesTabProps) {
       level: space.level,
       m2_built: space.m2_built,
       m2_livable: space.m2_livable,
-      observations: space.observations || ''
+      observations: space.observations || '',
+      opciones: space.opciones || ['A', 'B', 'C']
     });
     setFormOpen(true);
   };
@@ -247,7 +273,8 @@ export function BudgetSpacesTab({ budgetId, isAdmin }: BudgetSpacesTabProps) {
             level: formData.level,
             m2_built: formData.m2_built,
             m2_livable: formData.m2_livable,
-            observations: formData.observations || null
+            observations: formData.observations || null,
+            opciones: formData.opciones
           })
           .eq('id', editingSpace.id);
 
@@ -263,7 +290,8 @@ export function BudgetSpacesTab({ budgetId, isAdmin }: BudgetSpacesTabProps) {
             level: formData.level,
             m2_built: formData.m2_built,
             m2_livable: formData.m2_livable,
-            observations: formData.observations || null
+            observations: formData.observations || null,
+            opciones: formData.opciones
           });
 
         if (error) throw error;
@@ -304,6 +332,25 @@ export function BudgetSpacesTab({ budgetId, isAdmin }: BudgetSpacesTabProps) {
       <TableCell className="font-medium">{space.name}</TableCell>
       <TableCell>{space.space_type}</TableCell>
       <TableCell>{space.level}</TableCell>
+      <TableCell>
+        <div className="flex gap-1">
+          {OPTIONS.map(opt => (
+            <Badge
+              key={opt}
+              variant={space.opciones?.includes(opt) ? 'default' : 'outline'}
+              className={`text-xs ${
+                space.opciones?.includes(opt)
+                  ? opt === 'A' ? 'bg-amber-500 hover:bg-amber-600' 
+                    : opt === 'B' ? 'bg-emerald-500 hover:bg-emerald-600'
+                    : 'bg-violet-500 hover:bg-violet-600'
+                  : 'opacity-30'
+              }`}
+            >
+              {opt}
+            </Badge>
+          ))}
+        </div>
+      </TableCell>
       <TableCell className="text-right">{formatNumber(space.m2_built || 0)}</TableCell>
       <TableCell className="text-right">{formatNumber(space.m2_livable || 0)}</TableCell>
       <TableCell className="text-right">{formatNumber(getM2Construction(space))}</TableCell>
@@ -332,7 +379,7 @@ export function BudgetSpacesTab({ budgetId, isAdmin }: BudgetSpacesTabProps) {
 
   const renderTotalsRow = (label: string, groupTotals: { m2_built: number; m2_livable: number; m2_construction: number }, isGrandTotal = false) => (
     <TableRow className={isGrandTotal ? 'bg-primary/10 font-bold' : 'bg-muted/50 font-semibold'}>
-      <TableCell colSpan={3}>{label}</TableCell>
+      <TableCell colSpan={4}>{label}</TableCell>
       <TableCell className="text-right">{formatNumber(groupTotals.m2_built)}</TableCell>
       <TableCell className="text-right">{formatNumber(groupTotals.m2_livable)}</TableCell>
       <TableCell className="text-right">{formatNumber(groupTotals.m2_construction)}</TableCell>
@@ -347,6 +394,7 @@ export function BudgetSpacesTab({ budgetId, isAdmin }: BudgetSpacesTabProps) {
         <TableHead>Nombre</TableHead>
         <TableHead>Tipo</TableHead>
         <TableHead>Nivel</TableHead>
+        <TableHead>Opciones</TableHead>
         <TableHead className="text-right">m² construidos</TableHead>
         <TableHead className="text-right">m² habitables</TableHead>
         <TableHead className="text-right">m² construcción</TableHead>
@@ -413,7 +461,7 @@ export function BudgetSpacesTab({ budgetId, isAdmin }: BudgetSpacesTabProps) {
           </div>
 
           {/* Summary Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
             <Card>
               <CardContent className="pt-4">
                 <div className="text-sm text-muted-foreground">Total Espacios</div>
@@ -438,6 +486,44 @@ export function BudgetSpacesTab({ budgetId, isAdmin }: BudgetSpacesTabProps) {
                 <div className="text-2xl font-bold">{formatNumber(totals.m2_construction)}</div>
               </CardContent>
             </Card>
+          </div>
+
+          {/* Totals per Option */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            {OPTIONS.map(opt => {
+              const optTotals = totalsByOption[opt];
+              const colors = opt === 'A' 
+                ? 'bg-amber-500/10 border-amber-500/20 text-amber-600' 
+                : opt === 'B' 
+                  ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600'
+                  : 'bg-violet-500/10 border-violet-500/20 text-violet-600';
+              return (
+                <Card key={opt} className={`${colors.split(' ').slice(0, 2).join(' ')} border`}>
+                  <CardContent className="pt-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <Badge className={opt === 'A' ? 'bg-amber-500' : opt === 'B' ? 'bg-emerald-500' : 'bg-violet-500'}>
+                        Opción {opt}
+                      </Badge>
+                      <span className="text-sm text-muted-foreground">{optTotals.count} espacios</span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 text-sm">
+                      <div>
+                        <div className="text-muted-foreground text-xs">m² Construidos</div>
+                        <div className={`font-bold ${colors.split(' ')[2]}`}>{formatNumber(optTotals.m2_built)}</div>
+                      </div>
+                      <div>
+                        <div className="text-muted-foreground text-xs">m² Habitables</div>
+                        <div className={`font-bold ${colors.split(' ')[2]}`}>{formatNumber(optTotals.m2_livable)}</div>
+                      </div>
+                      <div>
+                        <div className="text-muted-foreground text-xs">m² Construcción</div>
+                        <div className={`font-bold ${colors.split(' ')[2]}`}>{formatNumber(optTotals.m2_construction)}</div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
 
           {/* Table Views */}
@@ -600,6 +686,37 @@ export function BudgetSpacesTab({ budgetId, isAdmin }: BudgetSpacesTabProps) {
               <div className="text-sm text-muted-foreground">m² Construcción (calculado)</div>
               <div className="text-xl font-bold">
                 {formatNumber((formData.m2_built || 0) - (formData.m2_livable || 0))} m²
+              </div>
+            </div>
+
+            {/* Opciones field */}
+            <div className="space-y-2">
+              <Label>Opciones</Label>
+              <div className="flex gap-4">
+                {OPTIONS.map(opt => (
+                  <div key={opt} className="flex items-center gap-2">
+                    <Checkbox
+                      id={`option-${opt}`}
+                      checked={formData.opciones.includes(opt)}
+                      onCheckedChange={(checked) => {
+                        setFormData(prev => ({
+                          ...prev,
+                          opciones: checked
+                            ? [...prev.opciones, opt]
+                            : prev.opciones.filter(o => o !== opt)
+                        }));
+                      }}
+                    />
+                    <label
+                      htmlFor={`option-${opt}`}
+                      className={`text-sm font-medium cursor-pointer ${
+                        opt === 'A' ? 'text-amber-600' : opt === 'B' ? 'text-emerald-600' : 'text-violet-600'
+                      }`}
+                    >
+                      Opción {opt}
+                    </label>
+                  </div>
+                ))}
               </div>
             </div>
 

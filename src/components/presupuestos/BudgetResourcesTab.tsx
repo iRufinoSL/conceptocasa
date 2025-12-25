@@ -1311,14 +1311,17 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
           </div>
           {/* Option Subtotals */}
           <div className="flex items-center gap-4 flex-wrap">
-            {(['A', 'B', 'C'] as const).map(opt => (
-              <div key={opt} className="text-right">
-                <p className={`text-lg font-bold ${OPTION_COLORS[opt]?.text || 'text-primary'}`}>
-                  {formatCurrency(optionSubtotals[opt] || 0)}
-                </p>
-                <p className="text-xs text-muted-foreground">SubTotal {opt}</p>
-              </div>
-            ))}
+            {(['A', 'B', 'C'] as const).map(opt => {
+              const colors = OPTION_COLORS[opt];
+              return (
+                <div key={opt} className="text-right">
+                  <p className={`text-lg font-bold ${colors?.text || ''} ${colors?.textDark || ''}`}>
+                    {formatCurrency(optionSubtotals[opt] || 0)}
+                  </p>
+                  <p className="text-xs text-muted-foreground">SubTotal {opt}</p>
+                </div>
+              );
+            })}
           </div>
         </CardHeader>
         <CardContent>

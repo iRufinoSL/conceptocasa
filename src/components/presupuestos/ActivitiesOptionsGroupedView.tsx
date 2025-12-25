@@ -137,6 +137,7 @@ export function ActivitiesOptionsGroupedView({
         const activitiesInOption = groupedByOption[opcion] || [];
         const isExpanded = expandedOptions.has(opcion);
         const subtotal = subtotals[opcion];
+        const colors = OPTION_COLORS[opcion];
 
         return (
           <Collapsible 
@@ -155,11 +156,7 @@ export function ActivitiesOptionsGroupedView({
                     )}
                     <Badge 
                       variant="default" 
-                      className={`text-lg px-3 py-1 ${
-                        opcion === 'A' ? 'bg-blue-500 hover:bg-blue-600' :
-                        opcion === 'B' ? 'bg-amber-500 hover:bg-amber-600' :
-                        'bg-emerald-500 hover:bg-emerald-600'
-                      }`}
+                      className={`text-lg px-3 py-1 ${colors?.bg || ''} ${colors?.hover || ''}`}
                     >
                       Opción {opcion}
                     </Badge>
@@ -251,17 +248,9 @@ export function ActivitiesOptionsGroupedView({
                                           <Badge 
                                             variant={isOpSelected ? "default" : "outline"}
                                             className={`text-xs ${
-                                              op === 'A' 
-                                                ? isOpSelected 
-                                                  ? 'bg-blue-500 hover:bg-blue-600 text-white' 
-                                                  : 'border-blue-500/40 text-blue-400 hover:border-blue-500 hover:text-blue-600'
-                                                : op === 'B' 
-                                                  ? isOpSelected 
-                                                    ? 'bg-amber-500 hover:bg-amber-600 text-white' 
-                                                    : 'border-amber-500/40 text-amber-400 hover:border-amber-500 hover:text-amber-600'
-                                                  : isOpSelected 
-                                                    ? 'bg-emerald-500 hover:bg-emerald-600 text-white' 
-                                                    : 'border-emerald-500/40 text-emerald-400 hover:border-emerald-500 hover:text-emerald-600'
+                                              isOpSelected 
+                                                ? `${OPTION_COLORS[op]?.bg || ''} ${OPTION_COLORS[op]?.hover || ''} text-white` 
+                                                : `${OPTION_COLORS[op]?.borderSolid || ''}/40 ${OPTION_COLORS[op]?.text || ''} opacity-60 hover:opacity-100`
                                             }`}
                                           >
                                             {op}
@@ -276,11 +265,7 @@ export function ActivitiesOptionsGroupedView({
                                       <Badge 
                                         key={op} 
                                         variant="outline" 
-                                        className={`text-xs ${
-                                          op === 'A' ? 'border-blue-500 text-blue-600' :
-                                          op === 'B' ? 'border-amber-500 text-amber-600' :
-                                          'border-emerald-500 text-emerald-600'
-                                        }`}
+                                        className={`text-xs ${OPTION_COLORS[op]?.borderSolid || ''} ${OPTION_COLORS[op]?.text || ''}`}
                                       >
                                         {op}
                                       </Badge>

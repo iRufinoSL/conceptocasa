@@ -20,6 +20,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { toast } from 'sonner';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import { searchMatch } from '@/lib/search-utils';
+import { OPTION_COLORS } from '@/lib/options-utils';
 import { formatCurrency, formatNumber, formatPercent } from '@/lib/format-utils';
 import { percentToRatio } from '@/lib/budget-pricing';
 import { syncActivityResourcesRelatedUnits } from '@/lib/budget-utils';
@@ -1550,33 +1551,24 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
               </div>
             </div>
             <div className="grid grid-cols-3 gap-4">
-              {OPCIONES.map(op => (
-                <div key={op} className={`rounded-lg p-3 border ${
-                  op === 'A' ? 'bg-blue-500/10 border-blue-500/30' :
-                  op === 'B' ? 'bg-amber-500/10 border-amber-500/30' :
-                  'bg-emerald-500/10 border-emerald-500/30'
-                }`}>
-                  <div className="flex items-center justify-between">
-                    <Badge 
-                      variant="default" 
-                      className={`text-sm px-2 ${
-                        op === 'A' ? 'bg-blue-500 hover:bg-blue-600' :
-                        op === 'B' ? 'bg-amber-500 hover:bg-amber-600' :
-                        'bg-emerald-500 hover:bg-emerald-600'
-                      }`}
-                    >
-                      Opción {op}
-                    </Badge>
-                    <p className={`text-lg font-bold font-mono ${
-                      op === 'A' ? 'text-blue-600' :
-                      op === 'B' ? 'text-amber-600' :
-                      'text-emerald-600'
-                    }`}>
-                      {formatCurrency(subtotalsByOption[op])}
-                    </p>
+              {OPCIONES.map(op => {
+                const colors = OPTION_COLORS[op];
+                return (
+                  <div key={op} className={`rounded-lg p-3 border ${colors?.bgLight || ''} ${colors?.bgLightDark || ''} ${colors?.border || ''}`}>
+                    <div className="flex items-center justify-between">
+                      <Badge 
+                        variant="default" 
+                        className={`text-sm px-2 ${colors?.bg || ''} ${colors?.hover || ''}`}
+                      >
+                        Opción {op}
+                      </Badge>
+                      <p className={`text-lg font-bold font-mono ${colors?.text || ''} ${colors?.textDark || ''}`}>
+                        {formatCurrency(subtotalsByOption[op])}
+                      </p>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         );

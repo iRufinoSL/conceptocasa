@@ -8,6 +8,7 @@ import { ChevronRight, ChevronDown, Pencil, Trash2, MoreHorizontal, File, Copy }
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { formatCurrency } from '@/lib/format-utils';
 import { getAllAvailableOptions, getDisplayOptions, OPTION_COLORS } from '@/lib/options-utils';
+import { toast } from 'sonner';
 
 interface BudgetActivity {
   id: string;
@@ -41,6 +42,7 @@ interface ActivitiesOptionsGroupedViewProps {
   onDuplicate: (activity: BudgetActivity) => void;
   onManageFiles: (activity: BudgetActivity) => void;
   canEditActivity: (activityId: string) => boolean;
+  onUpdateOpciones?: (activityId: string, opciones: string[]) => void;
 }
 
 const OPCIONES = ['A', 'B', 'C'];
@@ -60,6 +62,7 @@ export function ActivitiesOptionsGroupedView({
   onDuplicate,
   onManageFiles,
   canEditActivity,
+  onUpdateOpciones,
 }: ActivitiesOptionsGroupedViewProps) {
   // Group activities by option
   const groupedByOption = useMemo(() => {
@@ -210,23 +213,80 @@ export function ActivitiesOptionsGroupedView({
                                 />
                               </TableCell>
                               <TableCell className="font-mono text-sm">{activity.code}</TableCell>
-                              <TableCell className="font-medium">{activity.name}</TableCell>
+                              <TableCell className="font-medium">
+                                {canEditActivity(activity.id) ? (
+                                  <button
+                                    onClick={() => onEdit(activity)}
+                                    className="text-left hover:text-primary hover:underline transition-colors cursor-pointer"
+                                  >
+                                    {activity.name}
+                                  </button>
+                                ) : (
+                                  activity.name
+                                )}
+                              </TableCell>
                               <TableCell>
-                                <div className="flex gap-1">
-                                  {opciones.map(op => (
-                                    <Badge 
-                                      key={op} 
-                                      variant="outline" 
-                                      className={`text-xs ${
-                                        op === 'A' ? 'border-blue-500 text-blue-600' :
-                                        op === 'B' ? 'border-amber-500 text-amber-600' :
-                                        'border-emerald-500 text-emerald-600'
-                                      }`}
-                                    >
-                                      {op}
-                                    </Badge>
-                                  ))}
-                                </div>
+                                {canEditActivity(activity.id) && onUpdateOpciones ? (
+                                  <div className="flex gap-1">
+                                    {['A', 'B', 'C'].map(op => {
+                                      const isOpSelected = opciones.includes(op);
+                                      return (
+                                        <button
+                                          key={op}
+                                          onClick={() => {
+                                            let newOpciones: string[];
+                                            if (isOpSelected) {
+                                              if (opciones.length === 1) {
+                                                toast.error('Debe haber al menos una opción seleccionada');
+                                                return;
+                                              }
+                                              newOpciones = opciones.filter(o => o !== op);
+                                            } else {
+                                              newOpciones = [...opciones, op].sort();
+                                            }
+                                            onUpdateOpciones(activity.id, newOpciones);
+                                          }}
+                                          className="cursor-pointer hover:opacity-80 transition-opacity"
+                                        >
+                                          <Badge 
+                                            variant={isOpSelected ? "default" : "outline"}
+                                            className={`text-xs ${
+                                              op === 'A' 
+                                                ? isOpSelected 
+                                                  ? 'bg-blue-500 hover:bg-blue-600 text-white' 
+                                                  : 'border-blue-500/40 text-blue-400 hover:border-blue-500 hover:text-blue-600'
+                                                : op === 'B' 
+                                                  ? isOpSelected 
+                                                    ? 'bg-amber-500 hover:bg-amber-600 text-white' 
+                                                    : 'border-amber-500/40 text-amber-400 hover:border-amber-500 hover:text-amber-600'
+                                                  : isOpSelected 
+                                                    ? 'bg-emerald-500 hover:bg-emerald-600 text-white' 
+                                                    : 'border-emerald-500/40 text-emerald-400 hover:border-emerald-500 hover:text-emerald-600'
+                                            }`}
+                                          >
+                                            {op}
+                                          </Badge>
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                ) : (
+                                  <div className="flex gap-1">
+                                    {opciones.map(op => (
+                                      <Badge 
+                                        key={op} 
+                                        variant="outline" 
+                                        className={`text-xs ${
+                                          op === 'A' ? 'border-blue-500 text-blue-600' :
+                                          op === 'B' ? 'border-amber-500 text-amber-600' :
+                                          'border-emerald-500 text-emerald-600'
+                                        }`}
+                                      >
+                                        {op}
+                                      </Badge>
+                                    ))}
+                                  </div>
+                                )}
                               </TableCell>
                               <TableCell className="text-muted-foreground">
                                 {phase ? `${phase.code} ${phase.name}` : '-'}

@@ -45,6 +45,7 @@ interface Presupuesto {
   portada_text_color: string | null;
   portada_text_position: string | null;
   portada_overlay_opacity: number | null;
+  comparativa_opciones: string | null;
 }
 
 interface Project {
@@ -447,6 +448,21 @@ export default function PresupuestoDashboard() {
               budgetVersion={presupuesto.version}
               budgetLocation={presupuesto.poblacion}
               budgetProvince={presupuesto.provincia}
+              comparativaOpciones={presupuesto.comparativa_opciones}
+              isAdmin={isAdmin}
+              onComparativaOpcionesChange={async (value) => {
+                try {
+                  const { error } = await supabase
+                    .from('presupuestos')
+                    .update({ comparativa_opciones: value })
+                    .eq('id', presupuesto.id);
+                  if (error) throw error;
+                  setPresupuesto({ ...presupuesto, comparativa_opciones: value });
+                } catch (err) {
+                  console.error('Error updating comparativa_opciones:', err);
+                  toast.error('Error al guardar');
+                }
+              }}
             />
           </TabsContent>
 

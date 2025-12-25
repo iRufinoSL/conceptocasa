@@ -8,7 +8,9 @@ import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Plus, Search, Pencil, Trash2, Package, Wrench, Truck, Briefcase, FileSpreadsheet, Check, List, FolderTree, FileDown, FileText } from 'lucide-react';
+import { Plus, Search, Pencil, Trash2, Package, Wrench, Truck, Briefcase, FileSpreadsheet, Check, List, FolderTree, FileDown, FileText, LayoutGrid } from 'lucide-react';
+import { OPTION_COLORS } from '@/lib/options-utils';
+import { ResourcesOptionsGroupedView } from './ResourcesOptionsGroupedView';
 import { toast } from 'sonner';
 import { formatCurrency, formatNumber, formatPercent } from '@/lib/format-utils';
 import { searchMatch } from '@/lib/search-utils';
@@ -52,6 +54,7 @@ interface Activity {
   code: string;
   name: string;
   phase_id: string | null;
+  opciones: string[];
 }
 
 interface Phase {
@@ -131,15 +134,16 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
   // 2) 'grouped' (Fases/Actividades)
   const availableViewModes = useMemo(() => {
     const configured = recursosSettings?.viewModes;
-    const base = configured && configured.length > 0 ? configured : ['list', 'grouped', 'activity', 'type'];
+    const base = configured && configured.length > 0 ? configured : ['list', 'grouped', 'activity', 'type', 'options'];
 
     const modeSet = new Set<string>(base);
     modeSet.add('list');
     modeSet.add('grouped');
     modeSet.add('type');
+    modeSet.add('options');
 
-    const ordered: Array<'list' | 'grouped' | 'activity' | 'type'> = [];
-    (['list', 'type', 'grouped', 'activity'] as const).forEach((m) => {
+    const ordered: Array<'list' | 'grouped' | 'activity' | 'type' | 'options'> = [];
+    (['list', 'type', 'grouped', 'activity', 'options'] as const).forEach((m) => {
       if (modeSet.has(m)) ordered.push(m);
     });
 
@@ -147,19 +151,21 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
   }, [recursosSettings?.viewModes]);
   
   // Determine initial view mode - default to 'list' first (alphabetically sorted with bulk selection)
-  const getInitialViewMode = (): 'list' | 'grouped' | 'activity' | 'type' => {
+  const getInitialViewMode = (): 'list' | 'grouped' | 'activity' | 'type' | 'options' => {
     if (availableViewModes.includes('list')) return 'list';
     if (availableViewModes.includes('type')) return 'type';
     if (availableViewModes.includes('grouped')) return 'grouped';
     if (availableViewModes.includes('activity')) return 'activity';
+    if (availableViewModes.includes('options')) return 'options';
     return 'list';
   };
   
-  const [viewMode, setViewMode] = useState<'list' | 'grouped' | 'activity' | 'type'>(getInitialViewMode());
+  const [viewMode, setViewMode] = useState<'list' | 'grouped' | 'activity' | 'type' | 'options'>(getInitialViewMode());
+  const [expandedOptions, setExpandedOptions] = useState<Set<string>>(new Set()); // collapsed by default
 
   // If role/tab settings change, ensure we always stay on an allowed view.
   useEffect(() => {
-    if (!availableViewModes.includes(viewMode)) {
+    if (viewMode !== 'options' && !availableViewModes.includes(viewMode)) {
       setViewMode(getInitialViewMode());
     }
   }, [availableViewModes, viewMode]);
@@ -193,7 +199,7 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
           .order('name'),
         supabase
           .from('budget_activities')
-          .select('id, code, name, phase_id')
+          .select('id, code, name, phase_id, opciones')
           .eq('budget_id', budgetId)
           .order('code'),
         supabase
@@ -494,6 +500,29 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
       };
     }, { subtotal: 0, count: 0 });
   }, [filteredResources]);
+
+  // Calculate subtotals per option (A, B, C)
+  const optionSubtotals = useMemo(() => {
+    const result: Record<string, number> = { A: 0, B: 0, C: 0 };
+    resources.forEach(resource => {
+      const activity = activities.find(a => a.id === resource.activity_id);
+      const activityOpciones = activity?.opciones || ['A', 'B', 'C'];
+      const fields = calculateFields(resource);
+      activityOpciones.forEach(opcion => {
+        if (result[opcion] !== undefined) result[opcion] += fields.subtotalSales;
+      });
+    });
+    return result;
+  }, [resources, activities, calculateFields]);
+
+  const toggleOptionExpanded = (option: string) => {
+    setExpandedOptions(prev => {
+      const next = new Set(prev);
+      if (next.has(option)) next.delete(option);
+      else next.add(option);
+      return next;
+    });
+  };
 
   // Export resources to PDF with detailed cost breakdown
   const exportResourcesPDF = () => {
@@ -1242,41 +1271,54 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
   return (
     <>
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
-          <div>
-            <CardTitle>CÓMO hacer? - Recursos</CardTitle>
-            <CardDescription>
-              Gestión de recursos del presupuesto ({resources.length} recursos)
-            </CardDescription>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={exportResourcesPDF}>
-              <FileDown className="h-4 w-4 mr-2" />
-              Exportar PDF
-            </Button>
-            {isAdmin && (
-              <>
-                <label htmlFor="file-upload" className="cursor-pointer">
-                  <Button variant="outline" size="sm" asChild>
-                    <span>
-                      <FileSpreadsheet className="h-4 w-4 mr-2" />
-                      Importar CSV/Excel
-                    </span>
+        <CardHeader className="flex flex-col space-y-4 pb-4">
+          <div className="flex flex-row items-center justify-between">
+            <div>
+              <CardTitle>CÓMO hacer? - Recursos</CardTitle>
+              <CardDescription>
+                Gestión de recursos del presupuesto ({resources.length} recursos)
+              </CardDescription>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={exportResourcesPDF}>
+                <FileDown className="h-4 w-4 mr-2" />
+                Exportar PDF
+              </Button>
+              {isAdmin && (
+                <>
+                  <label htmlFor="file-upload" className="cursor-pointer">
+                    <Button variant="outline" size="sm" asChild>
+                      <span>
+                        <FileSpreadsheet className="h-4 w-4 mr-2" />
+                        Importar CSV/Excel
+                      </span>
+                    </Button>
+                  </label>
+                  <input
+                    id="file-upload"
+                    type="file"
+                    accept=".csv,.xlsx,.xls"
+                    className="hidden"
+                    onChange={handleImportFile}
+                  />
+                  <Button size="sm" onClick={() => setFormOpen(true)}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Nuevo Recurso
                   </Button>
-                </label>
-                <input
-                  id="file-upload"
-                  type="file"
-                  accept=".csv,.xlsx,.xls"
-                  className="hidden"
-                  onChange={handleImportFile}
-                />
-                <Button size="sm" onClick={() => setFormOpen(true)}>
-                  <Plus className="h-4 w-4 mr-2" />
-                  Nuevo Recurso
-                </Button>
-              </>
-            )}
+                </>
+              )}
+            </div>
+          </div>
+          {/* Option Subtotals */}
+          <div className="flex items-center gap-4 flex-wrap">
+            {(['A', 'B', 'C'] as const).map(opt => (
+              <div key={opt} className="text-right">
+                <p className={`text-lg font-bold ${OPTION_COLORS[opt]?.text || 'text-primary'}`}>
+                  {formatCurrency(optionSubtotals[opt] || 0)}
+                </p>
+                <p className="text-xs text-muted-foreground">SubTotal {opt}</p>
+              </div>
+            ))}
           </div>
         </CardHeader>
         <CardContent>
@@ -1335,7 +1377,7 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
                     <Button
                       variant={viewMode === 'grouped' ? 'secondary' : 'ghost'}
                       size="sm"
-                      className={availableViewModes.indexOf('grouped') === availableViewModes.length - 1 ? 'rounded-l-none' : 'rounded-none'}
+                      className="rounded-none border-x"
                       onClick={() => setViewMode('grouped')}
                       title="Agrupado por Fase y Actividad"
                     >
@@ -1343,6 +1385,16 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
                       Fase
                     </Button>
                   )}
+                  <Button
+                    variant={viewMode === 'options' ? 'secondary' : 'ghost'}
+                    size="sm"
+                    className="rounded-l-none"
+                    onClick={() => setViewMode('options')}
+                    title="Agrupado por Opción"
+                  >
+                    <LayoutGrid className="h-4 w-4 mr-1" />
+                    Por Opción
+                  </Button>
                 </div>
               )}
               <Badge variant="secondary" className="text-sm">
@@ -1430,6 +1482,21 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
               calculateFields={calculateFields}
               getActivityId={getActivityId}
               canEditResource={canEditResource}
+            />
+          ) : viewMode === 'options' ? (
+            <ResourcesOptionsGroupedView
+              resources={filteredResources}
+              activities={activities}
+              phases={phases}
+              isAdmin={isAdmin}
+              selectedIds={selectedIds}
+              expandedOptions={expandedOptions}
+              onToggleExpanded={toggleOptionExpanded}
+              onToggleSelected={toggleSelect}
+              onSelectAll={toggleSelectAll}
+              onEdit={handleEdit}
+              onDelete={handleDelete}
+              canEditResource={(id) => canEditResource(resources.find(r => r.id === id) || resources[0])}
             />
           ) : (
             <div className="rounded-md border overflow-x-auto">

@@ -4,7 +4,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Calculator, Home, Euro, TrendingUp, Building2, Package, LayoutGrid } from 'lucide-react';
+import { Calculator, Home, Euro, TrendingUp, Building2, Package, LayoutGrid, FileText } from 'lucide-react';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
 import { formatNumber, formatCurrency } from '@/lib/format-utils';
 import { calcResourceSubtotal } from '@/lib/budget-pricing';
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recharts';
@@ -17,6 +19,9 @@ interface BudgetCostSummaryProps {
   budgetVersion: string;
   budgetLocation: string;
   budgetProvince: string | null;
+  comparativaOpciones: string | null;
+  onComparativaOpcionesChange?: (value: string) => void;
+  isAdmin: boolean;
 }
 
 interface Resource {
@@ -55,7 +60,10 @@ export function BudgetCostSummary({
   budgetCode,
   budgetVersion,
   budgetLocation,
-  budgetProvince
+  budgetProvince,
+  comparativaOpciones,
+  onComparativaOpcionesChange,
+  isAdmin
 }: BudgetCostSummaryProps) {
   const [resources, setResources] = useState<Resource[]>([]);
   const [spaces, setSpaces] = useState<Space[]>([]);
@@ -521,7 +529,7 @@ export function BudgetCostSummary({
               <Building2 className="h-5 w-5" />
               Datos del Presupuesto
             </h3>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm mb-4">
               <div>
                 <span className="text-muted-foreground">Nombre:</span>
                 <p className="font-medium">{budgetName}</p>
@@ -538,6 +546,27 @@ export function BudgetCostSummary({
                 <span className="text-muted-foreground">Ubicación:</span>
                 <p className="font-medium">{budgetLocation}{budgetProvince ? `, ${budgetProvince}` : ''}</p>
               </div>
+            </div>
+            
+            {/* Comparativa Opciones Field */}
+            <div className="mt-4 pt-4 border-t">
+              <Label htmlFor="comparativa-opciones" className="flex items-center gap-2 text-sm font-medium mb-2">
+                <FileText className="h-4 w-4" />
+                Comparativa Opciones
+              </Label>
+              {isAdmin ? (
+                <Textarea
+                  id="comparativa-opciones"
+                  placeholder="Descripción comparativa de las opciones A, B, C..."
+                  value={comparativaOpciones || ''}
+                  onChange={(e) => onComparativaOpcionesChange?.(e.target.value)}
+                  className="min-h-[80px]"
+                />
+              ) : (
+                <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+                  {comparativaOpciones || 'Sin descripción comparativa'}
+                </p>
+              )}
             </div>
           </div>
 

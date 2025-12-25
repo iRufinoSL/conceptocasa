@@ -63,6 +63,7 @@ interface ActivityWithOpciones {
 export function BudgetWorkAreasTab({ budgetId, isAdmin }: BudgetWorkAreasTabProps) {
   const [workAreas, setWorkAreas] = useState<WorkArea[]>([]);
   const [activities, setActivities] = useState<ActivityWithOpciones[]>([]);
+  const [activityLinks, setActivityLinks] = useState<{ work_area_id: string; activity_id: string }[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'alphabetic' | 'grouped' | 'options'>('grouped');
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -94,7 +95,7 @@ export function BudgetWorkAreasTab({ budgetId, isAdmin }: BudgetWorkAreasTabProp
     setIsLoading(true);
     try {
       // Fetch work areas and activities in parallel
-      const [workAreasRes, activitiesRes] = await Promise.all([
+      const [workAreasRes, activitiesRes, allActivityLinksRes] = await Promise.all([
         supabase
           .from('budget_work_areas')
           .select('*')
@@ -104,13 +105,17 @@ export function BudgetWorkAreasTab({ budgetId, isAdmin }: BudgetWorkAreasTabProp
         supabase
           .from('budget_activities')
           .select('id, opciones')
-          .eq('budget_id', budgetId)
+          .eq('budget_id', budgetId),
+        supabase
+          .from('budget_work_area_activities')
+          .select('work_area_id, activity_id')
       ]);
 
       if (workAreasRes.error) throw workAreasRes.error;
       if (activitiesRes.error) throw activitiesRes.error;
 
       setActivities(activitiesRes.data || []);
+      setActivityLinks(allActivityLinksRes.data || []);
 
       // Calculate resources subtotal for each work area
       const enrichedData = await Promise.all((workAreasRes.data || []).map(async (area) => {
@@ -363,8 +368,10 @@ export function BudgetWorkAreasTab({ budgetId, isAdmin }: BudgetWorkAreasTabProp
               <WorkAreasOptionsGroupedView
                 workAreas={workAreas}
                 activities={activities}
+                activityLinks={activityLinks}
+                isAdmin={isAdmin}
                 expandedOptions={expandedOptions}
-                onToggleOption={(opt) => {
+                onToggleExpanded={(opt) => {
                   setExpandedOptions(prev => {
                     const next = new Set(prev);
                     if (next.has(opt)) next.delete(opt);
@@ -372,6 +379,8 @@ export function BudgetWorkAreasTab({ budgetId, isAdmin }: BudgetWorkAreasTabProp
                     return next;
                   });
                 }}
+                onEdit={handleOpenDialog}
+                onDelete={handleDelete}
               />
             ) : viewMode === 'alphabetic' ? (
               <Table>

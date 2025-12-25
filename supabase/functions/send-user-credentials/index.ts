@@ -35,7 +35,7 @@ function getCorsHeaders(origin: string | null): Record<string, string> {
 interface SendCredentialsRequest {
   userEmail: string;
   userName: string;
-  tempPassword: string;
+  setupLink?: boolean; // New flag for setup link flow
   loginUrl: string;
 }
 
@@ -90,6 +90,8 @@ const handler = async (req: Request): Promise<Response> => {
     // Create Supabase client with user's token
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    
     const supabase = createClient(supabaseUrl, supabaseAnonKey, {
       global: { headers: { Authorization: authHeader } }
     });
@@ -116,10 +118,10 @@ const handler = async (req: Request): Promise<Response> => {
     }
 
     // Parse request body
-    const { userEmail, userName, tempPassword, loginUrl }: SendCredentialsRequest = await req.json();
+    const { userEmail, userName, setupLink, loginUrl }: SendCredentialsRequest = await req.json();
 
     // Validate required fields
-    if (!userEmail || !userName || !tempPassword || !loginUrl) {
+    if (!userEmail || !userName || !loginUrl) {
       return new Response(
         JSON.stringify({ error: "Faltan campos obligatorios" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -140,13 +142,36 @@ const handler = async (req: Request): Promise<Response> => {
     const safeEmail = escapeHtml(userEmail);
     const safeLoginUrl = escapeHtml(loginUrl);
 
-    console.log(`Sending credentials email to: ${userEmail}`);
+    console.log(`Sending setup email to: ${userEmail}, setupLink mode: ${setupLink}`);
 
-    // Send credentials email
+    // Use service role client to generate password reset link
+    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+    
+    // Generate a password reset link for the user
+    const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
+      type: 'recovery',
+      email: userEmail,
+      options: {
+        redirectTo: loginUrl
+      }
+    });
+
+    if (linkError) {
+      console.error("Error generating reset link:", linkError);
+      return new Response(
+        JSON.stringify({ error: "Error al generar enlace de configuración" }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Extract the action link from the response
+    const setupUrl = linkData.properties?.action_link || safeLoginUrl;
+
+    // Send welcome email with setup link (more secure - no password in email)
     const emailResponse = await resend.emails.send({
       from: "Concepto.Casa <onboarding@resend.dev>",
       to: [userEmail],
-      subject: "Bienvenido/a a Concepto.Casa - Tus credenciales de acceso",
+      subject: "Bienvenido/a a Concepto.Casa - Configura tu acceso",
       html: `
         <!DOCTYPE html>
         <html>
@@ -162,30 +187,27 @@ const handler = async (req: Request): Promise<Response> => {
           <div style="background: #f9fafb; padding: 30px; border: 1px solid #e5e7eb; border-top: none;">
             <p style="font-size: 16px;">Hola <strong>${safeName}</strong>,</p>
             
-            <p style="font-size: 16px;">Se ha creado una cuenta para ti en nuestra plataforma. A continuación encontrarás tus credenciales de acceso:</p>
+            <p style="font-size: 16px;">Se ha creado una cuenta para ti en nuestra plataforma. Para comenzar a usar tu cuenta, necesitas configurar tu contraseña.</p>
             
             <div style="background: white; border: 2px solid #e5e7eb; border-radius: 8px; padding: 20px; margin: 20px 0;">
-              <p style="margin: 0 0 10px 0;"><strong>📧 Email:</strong></p>
-              <p style="background: #f3f4f6; padding: 10px; border-radius: 4px; font-family: monospace; margin: 0 0 15px 0;">${safeEmail}</p>
-              
-              <p style="margin: 0 0 10px 0;"><strong>🔐 Contraseña temporal:</strong></p>
-              <p style="background: #fef3c7; padding: 10px; border-radius: 4px; font-family: monospace; margin: 0; border: 1px solid #f59e0b;">${escapeHtml(tempPassword)}</p>
-            </div>
-            
-            <div style="background: #fff3cd; border: 1px solid #ffc107; border-radius: 8px; padding: 15px; margin: 20px 0;">
-              <p style="margin: 0; color: #856404;">
-                <strong>⚠️ Importante:</strong> Por seguridad, te recomendamos cambiar tu contraseña después de iniciar sesión por primera vez.
-              </p>
+              <p style="margin: 0 0 10px 0;"><strong>📧 Tu email de acceso:</strong></p>
+              <p style="background: #f3f4f6; padding: 10px; border-radius: 4px; font-family: monospace; margin: 0;">${safeEmail}</p>
             </div>
             
             <div style="text-align: center; margin: 30px 0;">
-              <a href="${safeLoginUrl}" style="display: inline-block; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; text-decoration: none; padding: 14px 30px; border-radius: 8px; font-weight: bold; font-size: 16px;">
-                Iniciar Sesión
+              <a href="${setupUrl}" style="display: inline-block; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; text-decoration: none; padding: 14px 30px; border-radius: 8px; font-weight: bold; font-size: 16px;">
+                Configurar mi contraseña
               </a>
             </div>
             
+            <div style="background: #dbeafe; border: 1px solid #3b82f6; border-radius: 8px; padding: 15px; margin: 20px 0;">
+              <p style="margin: 0; color: #1e40af;">
+                <strong>🔒 Seguridad:</strong> Este enlace es único y personal. No lo compartas con nadie. El enlace expirará en 24 horas.
+              </p>
+            </div>
+            
             <p style="font-size: 14px; color: #6b7280;">Si no puedes hacer clic en el botón, copia y pega este enlace en tu navegador:</p>
-            <p style="font-size: 12px; color: #9ca3af; word-break: break-all;">${safeLoginUrl}</p>
+            <p style="font-size: 12px; color: #9ca3af; word-break: break-all;">${setupUrl}</p>
           </div>
           
           <div style="background: #1f2937; padding: 20px; border-radius: 0 0 10px 10px; text-align: center;">
@@ -194,7 +216,7 @@ const handler = async (req: Request): Promise<Response> => {
               <strong style="color: white;">El equipo de Concepto.Casa</strong>
             </p>
             <p style="color: #6b7280; margin: 10px 0 0 0; font-size: 12px;">
-              Este email fue enviado automáticamente. Por favor, no respondas a este mensaje.
+              Este email fue enviado automáticamente. Si no solicitaste esta cuenta, puedes ignorar este mensaje.
             </p>
           </div>
         </body>
@@ -202,10 +224,10 @@ const handler = async (req: Request): Promise<Response> => {
       `,
     });
 
-    console.log("Credentials email sent successfully:", emailResponse);
+    console.log("Setup email sent successfully:", emailResponse);
 
     return new Response(
-      JSON.stringify({ success: true, message: "Email enviado correctamente" }),
+      JSON.stringify({ success: true, message: "Email de configuración enviado correctamente" }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error: any) {

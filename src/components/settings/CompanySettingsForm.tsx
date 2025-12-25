@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { toast } from 'sonner';
 import { Building2, Mail, Phone, MapPin, Globe, Save, Loader2, Upload, X, Image } from 'lucide-react';
+import { useSignedUrl, extractFilePath } from '@/hooks/useSignedUrl';
 
 interface CompanySettings {
   id: string;
@@ -29,7 +30,10 @@ export function CompanySettingsForm() {
   const [phone, setPhone] = useState('');
   const [address, setAddress] = useState('');
   const [website, setWebsite] = useState('');
-  const [logoUrl, setLogoUrl] = useState('');
+  const [logoPath, setLogoPath] = useState<string | null>(null);
+  
+  // Get signed URL for logo display
+  const { signedUrl: logoDisplayUrl } = useSignedUrl(logoPath, { bucket: 'company-logos' });
 
   useEffect(() => {
     fetchSettings();
@@ -54,7 +58,8 @@ export function CompanySettingsForm() {
         setPhone(data.phone || '');
         setAddress(data.address || '');
         setWebsite(data.website || '');
-        setLogoUrl(data.logo_url || '');
+        // Extract file path from stored URL or use as-is if already a path
+        setLogoPath(extractFilePath(data.logo_url));
       }
     } catch (error) {
       console.error('Error fetching company settings:', error);
@@ -84,29 +89,21 @@ export function CompanySettingsForm() {
     try {
       const fileExt = file.name.split('.').pop();
       const fileName = `company-logo-${Date.now()}.${fileExt}`;
-      const filePath = fileName;
 
       // Delete old logo if exists
-      if (logoUrl) {
-        const oldPath = logoUrl.split('/').pop();
-        if (oldPath) {
-          await supabase.storage.from('company-logos').remove([oldPath]);
-        }
+      if (logoPath) {
+        await supabase.storage.from('company-logos').remove([logoPath]);
       }
 
       // Upload new logo
       const { error: uploadError } = await supabase.storage
         .from('company-logos')
-        .upload(filePath, file, { upsert: true });
+        .upload(fileName, file, { upsert: true });
 
       if (uploadError) throw uploadError;
 
-      // Get public URL
-      const { data: urlData } = supabase.storage
-        .from('company-logos')
-        .getPublicUrl(filePath);
-
-      setLogoUrl(urlData.publicUrl);
+      // Store the file path (not URL)
+      setLogoPath(fileName);
       toast.success('Logotipo subido correctamente');
     } catch (error) {
       console.error('Error uploading logo:', error);
@@ -117,14 +114,11 @@ export function CompanySettingsForm() {
   };
 
   const handleRemoveLogo = async () => {
-    if (!logoUrl) return;
+    if (!logoPath) return;
 
     try {
-      const oldPath = logoUrl.split('/').pop();
-      if (oldPath) {
-        await supabase.storage.from('company-logos').remove([oldPath]);
-      }
-      setLogoUrl('');
+      await supabase.storage.from('company-logos').remove([logoPath]);
+      setLogoPath(null);
       toast.success('Logotipo eliminado');
     } catch (error) {
       console.error('Error removing logo:', error);
@@ -146,7 +140,7 @@ export function CompanySettingsForm() {
         phone: phone.trim() || null,
         address: address.trim() || null,
         website: website.trim() || null,
-        logo_url: logoUrl.trim() || null,
+        logo_url: logoPath || null, // Store file path, not URL
       };
 
       if (settings?.id) {
@@ -201,9 +195,9 @@ export function CompanySettingsForm() {
           <Label>Logotipo de la Empresa</Label>
           <div className="flex items-start gap-4">
             <div className="w-24 h-24 rounded-lg border-2 border-dashed border-muted-foreground/25 flex items-center justify-center overflow-hidden bg-muted/30">
-              {logoUrl ? (
+              {logoDisplayUrl ? (
                 <img 
-                  src={logoUrl} 
+                  src={logoDisplayUrl} 
                   alt="Logo de la empresa" 
                   className="w-full h-full object-contain"
                 />
@@ -232,9 +226,9 @@ export function CompanySettingsForm() {
                 ) : (
                   <Upload className="h-4 w-4" />
                 )}
-                {logoUrl ? 'Cambiar logotipo' : 'Subir logotipo'}
+                {logoPath ? 'Cambiar logotipo' : 'Subir logotipo'}
               </Button>
-              {logoUrl && (
+              {logoPath && (
                 <Button
                   type="button"
                   variant="ghost"
@@ -331,8 +325,8 @@ export function CompanySettingsForm() {
           <p className="text-sm font-medium mb-3 text-muted-foreground">Vista previa del encabezado PDF:</p>
           <div className="flex items-start gap-4">
             <div className="w-12 h-12 rounded-lg bg-primary flex items-center justify-center overflow-hidden">
-              {logoUrl ? (
-                <img src={logoUrl} alt="Logo" className="w-full h-full object-contain" />
+              {logoDisplayUrl ? (
+                <img src={logoDisplayUrl} alt="Logo" className="w-full h-full object-contain" />
               ) : (
                 <span className="text-primary-foreground font-bold text-lg">
                   {name ? name.substring(0, 2).toUpperCase() : 'CC'}

@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useTabVisibility } from '@/hooks/useTabVisibility';
+import { useSignedUrl, extractFilePath } from '@/hooks/useSignedUrl';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -109,9 +110,9 @@ export default function PresupuestoDashboard() {
       const fileExt = file.name.split('.').pop();
       const fileName = `portada-${presupuesto.id}-${Date.now()}.${fileExt}`;
 
-      // Delete old portada if exists
+      // Delete old portada if exists (extract path from stored value)
       if (presupuesto.portada_url) {
-        const oldPath = presupuesto.portada_url.split('/').pop();
+        const oldPath = extractFilePath(presupuesto.portada_url);
         if (oldPath) {
           await supabase.storage.from('budget-covers').remove([oldPath]);
         }
@@ -124,20 +125,15 @@ export default function PresupuestoDashboard() {
 
       if (uploadError) throw uploadError;
 
-      // Get public URL
-      const { data: urlData } = supabase.storage
-        .from('budget-covers')
-        .getPublicUrl(fileName);
-
-      // Update presupuesto
+      // Update presupuesto with file path (not URL)
       const { error: updateError } = await supabase
         .from('presupuestos')
-        .update({ portada_url: urlData.publicUrl })
+        .update({ portada_url: fileName })
         .eq('id', presupuesto.id);
 
       if (updateError) throw updateError;
 
-      setPresupuesto({ ...presupuesto, portada_url: urlData.publicUrl });
+      setPresupuesto({ ...presupuesto, portada_url: fileName });
       toast.success('Portada subida correctamente');
     } catch (error) {
       console.error('Error uploading portada:', error);
@@ -151,9 +147,9 @@ export default function PresupuestoDashboard() {
     if (!presupuesto?.portada_url) return;
 
     try {
-      const oldPath = presupuesto.portada_url.split('/').pop();
-      if (oldPath) {
-        await supabase.storage.from('budget-covers').remove([oldPath]);
+      const filePath = extractFilePath(presupuesto.portada_url);
+      if (filePath) {
+        await supabase.storage.from('budget-covers').remove([filePath]);
       }
 
       const { error } = await supabase
@@ -170,6 +166,10 @@ export default function PresupuestoDashboard() {
       toast.error('Error al eliminar la portada');
     }
   };
+
+  // Get signed URL for portada display
+  const portadaPath = presupuesto?.portada_url ? extractFilePath(presupuesto.portada_url) : null;
+  const { signedUrl: portadaDisplayUrl } = useSignedUrl(portadaPath, { bucket: 'budget-covers' });
 
   // Listen for edit-activity events to switch to activities tab
   useEffect(() => {
@@ -602,9 +602,9 @@ export default function PresupuestoDashboard() {
                   {isAdmin ? (
                     <div className="flex items-start gap-4">
                       <div className="w-48 h-32 rounded-lg border-2 border-dashed border-muted-foreground/25 flex items-center justify-center overflow-hidden bg-muted/30">
-                        {presupuesto.portada_url ? (
+                        {portadaDisplayUrl ? (
                           <img 
-                            src={presupuesto.portada_url} 
+                            src={portadaDisplayUrl} 
                             alt="Portada del presupuesto" 
                             className="w-full h-full object-cover"
                           />

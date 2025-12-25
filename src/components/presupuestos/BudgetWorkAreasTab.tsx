@@ -57,7 +57,10 @@ const WORK_AREAS = [
 
 interface ActivityWithOpciones {
   id: string;
+  name: string;
+  code: string;
   opciones: string[];
+  resources_subtotal?: number;
 }
 
 export function BudgetWorkAreasTab({ budgetId, isAdmin }: BudgetWorkAreasTabProps) {
@@ -104,7 +107,7 @@ export function BudgetWorkAreasTab({ budgetId, isAdmin }: BudgetWorkAreasTabProp
           .order('work_area', { ascending: true }),
         supabase
           .from('budget_activities')
-          .select('id, opciones')
+          .select('id, name, code, opciones')
           .eq('budget_id', budgetId),
         supabase
           .from('budget_work_area_activities')
@@ -114,7 +117,27 @@ export function BudgetWorkAreasTab({ budgetId, isAdmin }: BudgetWorkAreasTabProp
       if (workAreasRes.error) throw workAreasRes.error;
       if (activitiesRes.error) throw activitiesRes.error;
 
-      setActivities(activitiesRes.data || []);
+      // Calculate subtotal for each activity
+      const activitiesWithSubtotals = await Promise.all((activitiesRes.data || []).map(async (act) => {
+        const { data: resources } = await supabase
+          .from('budget_activity_resources')
+          .select('external_unit_cost, manual_units, related_units, safety_margin_percent, sales_margin_percent')
+          .eq('activity_id', act.id);
+        
+        const subtotal = (resources || []).reduce((sum, r) => {
+          return sum + calcResourceSubtotal({
+            externalUnitCost: r.external_unit_cost,
+            safetyPercent: r.safety_margin_percent,
+            salesPercent: r.sales_margin_percent,
+            manualUnits: r.manual_units,
+            relatedUnits: r.related_units
+          });
+        }, 0);
+        
+        return { ...act, resources_subtotal: subtotal };
+      }));
+
+      setActivities(activitiesWithSubtotals);
       setActivityLinks(allActivityLinksRes.data || []);
 
       // Calculate resources subtotal for each work area
@@ -266,6 +289,22 @@ export function BudgetWorkAreasTab({ budgetId, isAdmin }: BudgetWorkAreasTabProp
 
   const totalSubtotal = workAreas.reduce((sum, wa) => sum + (wa.resources_subtotal || 0), 0);
 
+  // Find activities without work areas
+  const activityIdsWithWorkArea = new Set(activityLinks.map(link => link.activity_id));
+  const activitiesWithoutWorkArea = activities.filter(a => !activityIdsWithWorkArea.has(a.id));
+
+  // Calculate option subtotals based on activities linked to work areas
+  const optionSubtotals = { A: 0, B: 0, C: 0 };
+  activityLinks.forEach(link => {
+    const activity = activities.find(a => a.id === link.activity_id);
+    if (activity) {
+      const subtotal = activity.resources_subtotal || 0;
+      if (activity.opciones?.includes('A')) optionSubtotals.A += subtotal;
+      if (activity.opciones?.includes('B')) optionSubtotals.B += subtotal;
+      if (activity.opciones?.includes('C')) optionSubtotals.C += subtotal;
+    }
+  });
+
   if (isLoading) {
     return (
       <Card>
@@ -310,17 +349,23 @@ export function BudgetWorkAreasTab({ budgetId, isAdmin }: BudgetWorkAreasTabProp
               )}
             </div>
           </div>
-          {/* Option Subtotals - placeholder for now, showing total for all */}
+          {/* Option Subtotals - now correctly calculated */}
           <div className="flex items-center gap-4 flex-wrap">
             {(['A', 'B', 'C'] as const).map(opt => (
               <div key={opt} className="text-right">
                 <p className={`text-lg font-bold ${OPTION_COLORS[opt]?.text || 'text-primary'}`}>
-                  {formatCurrency(totalSubtotal)}
+                  {formatCurrency(optionSubtotals[opt])}
                 </p>
                 <p className="text-xs text-muted-foreground">SubTotal {opt}</p>
               </div>
             ))}
           </div>
+          {/* Warning for activities without work area */}
+          {activitiesWithoutWorkArea.length > 0 && (
+            <div className="mt-2 text-sm text-amber-600 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-md px-3 py-2">
+              <strong>{activitiesWithoutWorkArea.length} actividades</strong> sin área de trabajo asignada
+            </div>
+          )}
         </div>
       </CardHeader>
       <CardContent>
@@ -532,6 +577,60 @@ export function BudgetWorkAreasTab({ budgetId, isAdmin }: BudgetWorkAreasTabProp
                     </div>
                   );
                 })}
+              </div>
+            )}
+
+            {/* Activities without work area section */}
+            {activitiesWithoutWorkArea.length > 0 && (
+              <div className="mt-6 border rounded-lg border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-950/20 overflow-hidden">
+                <div className="bg-amber-100/50 dark:bg-amber-900/30 px-4 py-3 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <MapPin className="h-4 w-4 text-amber-600" />
+                    <span className="font-semibold text-amber-800 dark:text-amber-200">Sin Área Trabajo</span>
+                    <Badge variant="outline" className="border-amber-400 text-amber-700 dark:text-amber-300">
+                      {activitiesWithoutWorkArea.length} actividades
+                    </Badge>
+                  </div>
+                  <span className="font-medium text-amber-700 dark:text-amber-300">
+                    {formatCurrency(activitiesWithoutWorkArea.reduce((sum, a) => sum + (a.resources_subtotal || 0), 0))}
+                  </span>
+                </div>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Código</TableHead>
+                      <TableHead>Nombre Actividad</TableHead>
+                      <TableHead>Opciones</TableHead>
+                      <TableHead className="text-right">€ SubTotal</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {activitiesWithoutWorkArea.sort((a, b) => a.code.localeCompare(b.code)).map((activity) => (
+                      <TableRow key={activity.id} className="bg-amber-50/30 dark:bg-amber-950/10">
+                        <TableCell>
+                          <code className="text-xs bg-muted px-2 py-1 rounded">{activity.code}</code>
+                        </TableCell>
+                        <TableCell className="font-medium">{activity.name}</TableCell>
+                        <TableCell>
+                          <div className="flex gap-1">
+                            {activity.opciones?.map(opt => (
+                              <Badge 
+                                key={opt} 
+                                variant="outline" 
+                                className={`${OPTION_COLORS[opt as 'A'|'B'|'C']?.bg || ''} ${OPTION_COLORS[opt as 'A'|'B'|'C']?.text || ''} text-xs`}
+                              >
+                                {opt}
+                              </Badge>
+                            ))}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right font-medium">
+                          {formatCurrency(activity.resources_subtotal || 0)}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
               </div>
             )}
           </>

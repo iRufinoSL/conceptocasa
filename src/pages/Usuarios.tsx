@@ -59,13 +59,12 @@ export default function Usuarios() {
   // Create user dialog
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [newEmail, setNewEmail] = useState('');
-  const [newPassword, setNewPassword] = useState('');
   const [newFullName, setNewFullName] = useState('');
   const [newRole, setNewRole] = useState<AppRole>('cliente');
   const [selectedBudgets, setSelectedBudgets] = useState<string[]>([]);
   const [selectedBudgetRole, setSelectedBudgetRole] = useState<AppRole>('cliente');
   const [isCreating, setIsCreating] = useState(false);
-  const [createErrors, setCreateErrors] = useState<{ email?: string; password?: string }>({});
+  const [createErrors, setCreateErrors] = useState<{ email?: string }>({});
   
   // Available budgets for selection
   const [presupuestos, setPresupuestos] = useState<Presupuesto[]>([]);
@@ -175,7 +174,7 @@ export default function Usuarios() {
   };
 
   const validateCreateForm = () => {
-    const errors: { email?: string; password?: string } = {};
+    const errors: { email?: string } = {};
     
     try {
       emailSchema.parse(newEmail);
@@ -185,19 +184,12 @@ export default function Usuarios() {
       }
     }
     
-    try {
-      passwordSchema.parse(newPassword);
-    } catch (e) {
-      if (e instanceof z.ZodError) {
-        errors.password = e.errors[0].message;
-      }
-    }
-    
     setCreateErrors(errors);
     return Object.keys(errors).length === 0;
   };
 
-  const sendCredentialsEmail = async (email: string, name: string, password: string) => {
+  // Send setup link email instead of password (more secure)
+  const sendSetupLinkEmail = async (email: string, name: string) => {
     try {
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData.session?.access_token;
@@ -211,13 +203,13 @@ export default function Usuarios() {
         body: {
           userEmail: email,
           userName: name,
-          tempPassword: password,
+          setupLink: true, // Flag to indicate we're sending a setup link
           loginUrl: `${window.location.origin}/auth`
         }
       });
 
       if (response.error) {
-        console.error('Error sending credentials email:', response.error);
+        console.error('Error sending setup email:', response.error);
         return false;
       }
 
@@ -228,18 +220,35 @@ export default function Usuarios() {
     }
   };
 
+  // Generate a secure random password for initial account creation
+  const generateSecurePassword = () => {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$%&*';
+    let password = '';
+    // Ensure we have at least one of each required type
+    password += 'A'; // uppercase
+    password += 'a'; // lowercase
+    password += '1'; // number
+    password += '!'; // special
+    // Fill remaining with random chars
+    for (let i = 0; i < 12; i++) {
+      password += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    // Shuffle the password
+    return password.split('').sort(() => Math.random() - 0.5).join('');
+  };
+
   const handleCreateUser = async () => {
     if (!validateCreateForm()) return;
     
     setIsCreating(true);
     try {
-      // Store password before signup (we need it for the email)
-      const tempPassword = newPassword;
+      // Generate a secure random password for initial account (user will set their own via setup link)
+      const secureInitialPassword = generateSecurePassword();
       
-      // Create user via signUp
+      // Create user via signUp with generated secure password
       const { data, error } = await supabase.auth.signUp({
         email: newEmail,
-        password: newPassword,
+        password: secureInitialPassword,
         options: {
           emailRedirectTo: `${window.location.origin}/auth`,
           data: {
@@ -282,18 +291,18 @@ export default function Usuarios() {
           }
         }
 
-        // Send credentials email automatically
-        const emailSent = await sendCredentialsEmail(newEmail, newFullName, tempPassword);
+        // Send setup link email (more secure than sending password)
+        const emailSent = await sendSetupLinkEmail(newEmail, newFullName);
         
         if (emailSent) {
           toast.success(
-            'Usuario creado correctamente. Se ha enviado un email con las credenciales de acceso.',
+            'Usuario creado. Se ha enviado un email con el enlace para configurar su contraseña.',
             { duration: 5000 }
           );
         } else {
           toast.success('Usuario creado correctamente.', { duration: 3000 });
           toast.warning(
-            `No se pudo enviar el email automáticamente. Comunica las credenciales manualmente:\nEmail: ${newEmail}\nContraseña: (la que definiste)`,
+            `No se pudo enviar el email automáticamente. El usuario deberá usar "Olvidé mi contraseña" para configurar su acceso.`,
             { duration: 10000 }
           );
         }
@@ -320,7 +329,6 @@ export default function Usuarios() {
 
   const resetCreateForm = () => {
     setNewEmail('');
-    setNewPassword('');
     setNewFullName('');
     setNewRole('cliente');
     setSelectedBudgets([]);
@@ -507,20 +515,9 @@ export default function Usuarios() {
                     <p className="text-sm text-destructive">{createErrors.email}</p>
                   )}
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="new-password">Contraseña *</Label>
-                  <Input
-                    id="new-password"
-                    type="password"
-                    placeholder="••••••••"
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                  />
-                  {createErrors.password && (
-                    <p className="text-sm text-destructive">{createErrors.password}</p>
-                  )}
-                  <p className="text-xs text-muted-foreground">
-                    Mínimo 8 caracteres, mayúsculas, minúsculas, números y carácter especial.
+                <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-md p-3">
+                  <p className="text-sm text-blue-700 dark:text-blue-300">
+                    <strong>🔒 Seguridad:</strong> El usuario recibirá un email con un enlace seguro para configurar su propia contraseña. No es necesario definir una contraseña aquí.
                   </p>
                 </div>
                 <div className="space-y-2">

@@ -171,7 +171,7 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
   const [searchTerm, setSearchTerm] = useState('');
   const [viewMode, setViewMode] = useState<'alphabetical' | 'grouped' | 'workarea' | 'time' | 'options'>('alphabetical');
   const [selectedActivityIds, setSelectedActivityIds] = useState<Set<string>>(new Set());
-  const [expandedOptions, setExpandedOptions] = useState<Set<string>>(new Set(['A', 'B', 'C']));
+  const [expandedOptions, setExpandedOptions] = useState<Set<string>>(new Set());
   const [activitySortOrder, setActivitySortOrder] = useState<'asc' | 'desc'>('asc');
   const [expandedPhases, setExpandedPhases] = useState<Set<string>>(new Set());
   const [workAreas, setWorkAreas] = useState<WorkArea[]>([]);
@@ -1527,20 +1527,56 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
         />
       </div>
 
-      {/* Budget Total Summary */}
+      {/* Budget Total Summary with Option Subtotals */}
       {(() => {
-        const totalResourcesSubtotal = activities.reduce(
-          (total, activity) => total + (activity.resources_subtotal || 0),
-          0
-        );
+        const OPCIONES = ['A', 'B', 'C'];
+        const subtotalsByOption: Record<string, number> = { A: 0, B: 0, C: 0 };
+        
+        activities.forEach(activity => {
+          const opciones = activity.opciones || ['A', 'B', 'C'];
+          opciones.forEach(op => {
+            if (subtotalsByOption[op] !== undefined) {
+              subtotalsByOption[op] += (activity.resources_subtotal || 0);
+            }
+          });
+        });
+
         return (
-          <div className="bg-gradient-to-r from-primary/10 to-primary/5 border border-primary/20 rounded-lg p-4 flex items-center justify-between">
-            <div>
-              <p className="text-sm text-muted-foreground">Total Presupuesto Recursos</p>
-              <p className="text-xs text-muted-foreground">{activities.length} actividades</p>
+          <div className="bg-gradient-to-r from-primary/10 to-primary/5 border border-primary/20 rounded-lg p-4">
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <p className="text-sm text-muted-foreground">Total Presupuesto Recursos</p>
+                <p className="text-xs text-muted-foreground">{activities.length} actividades</p>
+              </div>
             </div>
-            <div className="text-right">
-              <p className="text-2xl font-bold font-mono text-primary">{formatCurrency(totalResourcesSubtotal)}</p>
+            <div className="grid grid-cols-3 gap-4">
+              {OPCIONES.map(op => (
+                <div key={op} className={`rounded-lg p-3 border ${
+                  op === 'A' ? 'bg-blue-500/10 border-blue-500/30' :
+                  op === 'B' ? 'bg-amber-500/10 border-amber-500/30' :
+                  'bg-emerald-500/10 border-emerald-500/30'
+                }`}>
+                  <div className="flex items-center justify-between">
+                    <Badge 
+                      variant="default" 
+                      className={`text-sm px-2 ${
+                        op === 'A' ? 'bg-blue-500 hover:bg-blue-600' :
+                        op === 'B' ? 'bg-amber-500 hover:bg-amber-600' :
+                        'bg-emerald-500 hover:bg-emerald-600'
+                      }`}
+                    >
+                      Opción {op}
+                    </Badge>
+                    <p className={`text-lg font-bold font-mono ${
+                      op === 'A' ? 'text-blue-600' :
+                      op === 'B' ? 'text-amber-600' :
+                      'text-emerald-600'
+                    }`}>
+                      {formatCurrency(subtotalsByOption[op])}
+                    </p>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         );
@@ -1661,23 +1697,91 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
                         </Badge>
                       )}
                     </TableCell>
-                    <TableCell className="font-medium">{activity.name}</TableCell>
+                    <TableCell className="font-medium">
+                      {canEditActivity(activity.id) ? (
+                        <button
+                          onClick={() => handleEdit(activity)}
+                          className="text-left hover:text-primary hover:underline transition-colors cursor-pointer"
+                        >
+                          {activity.name}
+                        </button>
+                      ) : (
+                        activity.name
+                      )}
+                    </TableCell>
                     <TableCell>
-                      <div className="flex gap-0.5">
-                        {opciones.map(op => (
-                          <Badge 
-                            key={op} 
-                            variant="outline" 
-                            className={`text-xs px-1.5 ${
-                              op === 'A' ? 'border-blue-500 text-blue-600' :
-                              op === 'B' ? 'border-amber-500 text-amber-600' :
-                              'border-emerald-500 text-emerald-600'
-                            }`}
-                          >
-                            {op}
-                          </Badge>
-                        ))}
-                      </div>
+                      {canEditActivity(activity.id) ? (
+                        <div className="flex gap-0.5">
+                          {['A', 'B', 'C'].map(op => {
+                            const isSelected = opciones.includes(op);
+                            return (
+                              <button
+                                key={op}
+                                onClick={async () => {
+                                  let newOpciones: string[];
+                                  if (isSelected) {
+                                    // Don't allow deselecting if it's the only one
+                                    if (opciones.length === 1) {
+                                      toast.error('Debe haber al menos una opción seleccionada');
+                                      return;
+                                    }
+                                    newOpciones = opciones.filter(o => o !== op);
+                                  } else {
+                                    newOpciones = [...opciones, op].sort();
+                                  }
+                                  try {
+                                    const { error } = await supabase
+                                      .from('budget_activities')
+                                      .update({ opciones: newOpciones })
+                                      .eq('id', activity.id);
+                                    if (error) throw error;
+                                    fetchData();
+                                    toast.success(`Opciones actualizadas`);
+                                  } catch (err: any) {
+                                    toast.error('Error al actualizar opciones');
+                                  }
+                                }}
+                                className="cursor-pointer hover:opacity-80 transition-opacity"
+                              >
+                                <Badge 
+                                  variant={isSelected ? "default" : "outline"}
+                                  className={`text-xs px-1.5 ${
+                                    op === 'A' 
+                                      ? isSelected 
+                                        ? 'bg-blue-500 hover:bg-blue-600 text-white' 
+                                        : 'border-blue-500/40 text-blue-400 hover:border-blue-500 hover:text-blue-600'
+                                      : op === 'B' 
+                                        ? isSelected 
+                                          ? 'bg-amber-500 hover:bg-amber-600 text-white' 
+                                          : 'border-amber-500/40 text-amber-400 hover:border-amber-500 hover:text-amber-600'
+                                        : isSelected 
+                                          ? 'bg-emerald-500 hover:bg-emerald-600 text-white' 
+                                          : 'border-emerald-500/40 text-emerald-400 hover:border-emerald-500 hover:text-emerald-600'
+                                  }`}
+                                >
+                                  {op}
+                                </Badge>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <div className="flex gap-0.5">
+                          {opciones.map(op => (
+                            <Badge 
+                              key={op} 
+                              variant="outline" 
+                              className={`text-xs px-1.5 ${
+                                op === 'A' ? 'border-blue-500 text-blue-600' :
+                                op === 'B' ? 'border-amber-500 text-amber-600' :
+                                'border-emerald-500 text-emerald-600'
+                              }`}
+                            >
+                              {op}
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
                     </TableCell>
                     <TableCell className="text-muted-foreground">
                       {phase ? `${phase.code} ${phase.name}` : '-'}
@@ -1837,6 +1941,19 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
             if (fullActivity) handleManageFiles(fullActivity);
           }}
           canEditActivity={canEditActivity}
+          onUpdateOpciones={async (activityId, newOpciones) => {
+            try {
+              const { error } = await supabase
+                .from('budget_activities')
+                .update({ opciones: newOpciones })
+                .eq('id', activityId);
+              if (error) throw error;
+              fetchData();
+              toast.success('Opciones actualizadas');
+            } catch (err: any) {
+              toast.error('Error al actualizar opciones');
+            }
+          }}
         />
       )}
 

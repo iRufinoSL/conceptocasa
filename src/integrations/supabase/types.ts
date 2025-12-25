@@ -1090,6 +1090,7 @@ export type Database = {
         Row: {
           archived: boolean
           codigo_correlativo: number
+          comparativa_opciones: string | null
           coordenadas_lat: number | null
           coordenadas_lng: number | null
           created_at: string | null
@@ -1110,6 +1111,7 @@ export type Database = {
         Insert: {
           archived?: boolean
           codigo_correlativo: number
+          comparativa_opciones?: string | null
           coordenadas_lat?: number | null
           coordenadas_lng?: number | null
           created_at?: string | null
@@ -1130,6 +1132,7 @@ export type Database = {
         Update: {
           archived?: boolean
           codigo_correlativo?: number
+          comparativa_opciones?: string | null
           coordenadas_lat?: number | null
           coordenadas_lng?: number | null
           created_at?: string | null

@@ -10,8 +10,11 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Plus, Pencil, Trash2, Upload, Search, ChevronRight, ChevronDown, ClipboardList, MoreHorizontal, Copy, Calendar, List, Clock } from 'lucide-react';
+import { Plus, Pencil, Trash2, Upload, Search, ChevronRight, ChevronDown, ClipboardList, MoreHorizontal, Copy, Calendar, List, Clock, LayoutGrid } from 'lucide-react';
 import { toast } from 'sonner';
+import { Badge } from '@/components/ui/badge';
+import { PhasesOptionsGroupedView } from './PhasesOptionsGroupedView';
+import { OPTION_COLORS } from '@/lib/options-utils';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import { formatCurrency } from '@/lib/format-utils';
 import { calcResourceSubtotal } from '@/lib/budget-pricing';
@@ -36,6 +39,7 @@ interface BudgetActivity {
   code: string;
   phase_id: string | null;
   subtotal?: number;
+  opciones: string[];
 }
 
 interface BudgetResource {
@@ -88,7 +92,7 @@ export function BudgetPhasesTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
   const [resources, setResources] = useState<BudgetResource[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [viewMode, setViewMode] = useState<'activities' | 'time'>('activities');
+  const [viewMode, setViewMode] = useState<'activities' | 'time' | 'options'>('activities');
   const [formDialogOpen, setFormDialogOpen] = useState(false);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -98,6 +102,7 @@ export function BudgetPhasesTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
   const [importData, setImportData] = useState<{ name: string; code: string }[]>([]);
   const [isImporting, setIsImporting] = useState(false);
   const [expandedPhases, setExpandedPhases] = useState<Set<string>>(new Set());
+  const [expandedOptions, setExpandedOptions] = useState<Set<string>>(new Set()); // collapsed by default
   const [editingTimeField, setEditingTimeField] = useState<{ phaseId: string; field: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -112,7 +117,7 @@ export function BudgetPhasesTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
           .order('code', { ascending: true }),
         supabase
           .from('budget_activities')
-          .select('id, name, code, phase_id')
+          .select('id, name, code, phase_id, opciones')
           .eq('budget_id', budgetId),
         supabase
           .from('budget_activity_resources')
@@ -182,6 +187,29 @@ export function BudgetPhasesTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
   const totalSubtotal = useMemo(() => {
     return Array.from(phaseSubtotals.values()).reduce((sum, val) => sum + val, 0);
   }, [phaseSubtotals]);
+
+  // Calculate subtotals per option (A, B, C)
+  const optionSubtotals = useMemo(() => {
+    const result: Record<string, number> = { A: 0, B: 0, C: 0 };
+    activities.forEach(activity => {
+      const activityOpciones = activity.opciones || ['A', 'B', 'C'];
+      const activityResources = resources.filter(r => r.activity_id === activity.id);
+      const activitySubtotal = activityResources.reduce((sum, r) => sum + calculateResourceSubtotal(r), 0);
+      activityOpciones.forEach(opcion => {
+        if (result[opcion] !== undefined) result[opcion] += activitySubtotal;
+      });
+    });
+    return result;
+  }, [activities, resources]);
+
+  const toggleOptionExpanded = (option: string) => {
+    setExpandedOptions(prev => {
+      const next = new Set(prev);
+      if (next.has(option)) next.delete(option);
+      else next.add(option);
+      return next;
+    });
+  };
 
   const handleNew = () => {
     setCurrentPhase(null);
@@ -554,11 +582,16 @@ export function BudgetPhasesTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
             <CardTitle>CUÁNDO se hace? - Fases de Gestión</CardTitle>
             <CardDescription>Organización temporal de las fases del presupuesto</CardDescription>
           </div>
-          <div className="flex items-center gap-4">
-            <div className="text-right">
-              <p className="text-2xl font-bold text-green-600">{formatCurrency(totalSubtotal)}</p>
-              <p className="text-xs text-muted-foreground">€SubTotal Venta Total</p>
-            </div>
+          <div className="flex items-center gap-4 flex-wrap">
+            {/* Option Subtotals */}
+            {(['A', 'B', 'C'] as const).map(opt => (
+              <div key={opt} className="text-right">
+                <p className={`text-lg font-bold ${OPTION_COLORS[opt]?.text || 'text-primary'}`}>
+                  {formatCurrency(optionSubtotals[opt] || 0)}
+                </p>
+                <p className="text-xs text-muted-foreground">SubTotal {opt}</p>
+              </div>
+            ))}
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2 mt-4">
@@ -577,10 +610,19 @@ export function BudgetPhasesTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
               variant={viewMode === 'time' ? 'default' : 'ghost'} 
               size="sm"
               onClick={() => setViewMode('time')}
-              className="rounded-l-none"
+              className="rounded-none border-x"
             >
               <Clock className="h-4 w-4 mr-1" />
               Gestión Tiempo
+            </Button>
+            <Button 
+              variant={viewMode === 'options' ? 'default' : 'ghost'} 
+              size="sm"
+              onClick={() => setViewMode('options')}
+              className="rounded-l-none"
+            >
+              <LayoutGrid className="h-4 w-4 mr-1" />
+              Por Opción
             </Button>
           </div>
           {isAdmin && (

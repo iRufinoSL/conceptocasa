@@ -63,28 +63,77 @@ export function ensureOptionA(opciones: string[]): string[] {
 }
 
 /**
- * Colors for each option
+ * Unified colors for each option - USE THESE EVERYWHERE
+ * A = Blue, B = Amber, C = Emerald
  */
-export const OPTION_COLORS: Record<string, { from: string; to: string; border: string; text: string; bg: string }> = {
+export const OPTION_COLORS: Record<string, { 
+  from: string; 
+  to: string; 
+  border: string; 
+  borderSolid: string;
+  text: string; 
+  textDark: string;
+  bg: string;
+  bgLight: string;
+  bgLightDark: string;
+  hover: string;
+}> = {
   'A': { 
-    from: 'from-amber-500/10', 
-    to: 'to-orange-500/10', 
-    border: 'border-amber-500/20', 
-    text: 'text-amber-600',
-    bg: 'bg-amber-500'
+    from: 'from-blue-500/10', 
+    to: 'to-blue-600/10', 
+    border: 'border-blue-500/30', 
+    borderSolid: 'border-blue-500',
+    text: 'text-blue-600',
+    textDark: 'dark:text-blue-400',
+    bg: 'bg-blue-500',
+    bgLight: 'bg-blue-500/10',
+    bgLightDark: 'dark:bg-blue-500/20',
+    hover: 'hover:bg-blue-600'
   },
   'B': { 
-    from: 'from-emerald-500/10', 
-    to: 'to-teal-500/10', 
-    border: 'border-emerald-500/20', 
-    text: 'text-emerald-600',
-    bg: 'bg-emerald-500'
+    from: 'from-amber-500/10', 
+    to: 'to-amber-600/10', 
+    border: 'border-amber-500/30', 
+    borderSolid: 'border-amber-500',
+    text: 'text-amber-600',
+    textDark: 'dark:text-amber-400',
+    bg: 'bg-amber-500',
+    bgLight: 'bg-amber-500/10',
+    bgLightDark: 'dark:bg-amber-500/20',
+    hover: 'hover:bg-amber-600'
   },
   'C': { 
-    from: 'from-violet-500/10', 
-    to: 'to-purple-500/10', 
-    border: 'border-violet-500/20', 
-    text: 'text-violet-600',
-    bg: 'bg-violet-500'
+    from: 'from-emerald-500/10', 
+    to: 'to-emerald-600/10', 
+    border: 'border-emerald-500/30', 
+    borderSolid: 'border-emerald-500',
+    text: 'text-emerald-600',
+    textDark: 'dark:text-emerald-400',
+    bg: 'bg-emerald-500',
+    bgLight: 'bg-emerald-500/10',
+    bgLightDark: 'dark:bg-emerald-500/20',
+    hover: 'hover:bg-emerald-600'
   },
 };
+
+/**
+ * Helper to get option color classes for badges
+ */
+export function getOptionBadgeClasses(option: string, selected: boolean = true): string {
+  const colors = OPTION_COLORS[option];
+  if (!colors) return '';
+  
+  if (selected) {
+    return `${colors.bg} ${colors.hover} text-white`;
+  }
+  return `${colors.borderSolid}/40 ${colors.text} hover:${colors.borderSolid} hover:${colors.text}`;
+}
+
+/**
+ * Helper to get option card background classes
+ */
+export function getOptionCardClasses(option: string): string {
+  const colors = OPTION_COLORS[option];
+  if (!colors) return '';
+  return `${colors.bgLight} ${colors.bgLightDark} ${colors.border}`;
+}

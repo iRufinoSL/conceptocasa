@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { extractFilePath, getSignedUrl } from '@/hooks/useSignedUrl';
 
 export interface CompanySettings {
   id: string;
@@ -9,6 +10,7 @@ export interface CompanySettings {
   address: string | null;
   website: string | null;
   logo_url: string | null;
+  logo_signed_url?: string | null; // Signed URL for display
 }
 
 const DEFAULT_SETTINGS: CompanySettings = {
@@ -19,6 +21,7 @@ const DEFAULT_SETTINGS: CompanySettings = {
   address: 'Barcelona, España',
   website: 'www.concepto.casa',
   logo_url: null,
+  logo_signed_url: null,
 };
 
 export function useCompanySettings() {
@@ -42,7 +45,19 @@ export function useCompanySettings() {
       }
 
       if (data) {
-        setSettings(data);
+        // Get signed URL for logo if it exists
+        let logoSignedUrl: string | null = null;
+        if (data.logo_url) {
+          const logoPath = extractFilePath(data.logo_url);
+          if (logoPath) {
+            logoSignedUrl = await getSignedUrl('company-logos', logoPath);
+          }
+        }
+        
+        setSettings({
+          ...data,
+          logo_signed_url: logoSignedUrl,
+        });
       }
     } catch (error) {
       console.error('Error fetching company settings:', error);

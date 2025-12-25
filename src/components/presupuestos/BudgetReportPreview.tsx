@@ -16,6 +16,7 @@ import { formatCurrency, formatNumber } from '@/lib/format-utils';
 import { calcResourceSubtotal } from '@/lib/budget-pricing';
 import { recalculateAllBudgetResources } from '@/lib/budget-utils';
 import { useCompanySettings } from '@/hooks/useCompanySettings';
+import { extractFilePath, getSignedUrl } from '@/hooks/useSignedUrl';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { toast } from 'sonner';
@@ -149,6 +150,7 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
   const [selectedSections, setSelectedSections] = useState<string[]>(['activities']);
   const [customNotes, setCustomNotes] = useState<string>('');
   const [onlyWithCost, setOnlyWithCost] = useState(false);
+  const [portadaSignedUrl, setPortadaSignedUrl] = useState<string | null>(null);
   const printRef = useRef<HTMLDivElement>(null);
 
   // Derived data for clients and providers
@@ -259,6 +261,17 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
         }
       }
       setPredesignUrls(urlMap);
+
+      // Load signed URL for portada
+      if (presupuesto.portada_url) {
+        const portadaPath = extractFilePath(presupuesto.portada_url);
+        if (portadaPath) {
+          const signedUrl = await getSignedUrl('budget-covers', portadaPath);
+          setPortadaSignedUrl(signedUrl);
+        }
+      } else {
+        setPortadaSignedUrl(null);
+      }
 
       const filesMap = new Map<string, number>();
       (filesCountRes.data || []).forEach(f => {
@@ -527,11 +540,11 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
       const companyEmail = companySettings.email || '';
       const companyPhone = companySettings.phone || '';
       const companyWeb = companySettings.website || '';
-      const companyLogo = companySettings.logo_url || '';
+      const companyLogo = companySettings.logo_signed_url || '';
       const companyInitials = companyName.substring(0, 2).toUpperCase();
 
-      // Budget cover image
-      const portadaUrl = presupuesto.portada_url || '';
+      // Budget cover image - use signed URL
+      const portadaUrl = portadaSignedUrl || '';
 
       // Load company logo if available
       let logoImgData: string | null = null;
@@ -2036,9 +2049,9 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
                 {/* Header - with more vertical space */}
                 <div className="flex items-center gap-4 p-5 print:p-3 border-b print:border-none">
                   <div className="w-12 h-12 print:w-10 print:h-10 rounded bg-primary/10 flex items-center justify-center overflow-hidden flex-shrink-0">
-                    {companySettings.logo_url ? (
+                    {companySettings.logo_signed_url ? (
                       <img 
-                        src={companySettings.logo_url} 
+                        src={companySettings.logo_signed_url} 
                         alt="Logo" 
                         className="w-full h-full object-contain"
                       />
@@ -2059,10 +2072,10 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
                 </div>
                 
                 {/* Cover Image - smaller, about 1/3 of page */}
-                {presupuesto.portada_url && (
+                {portadaSignedUrl && (
                   <div className="relative mx-4 print:mx-2 my-3 print:my-2 rounded-lg print:rounded-none overflow-hidden" style={{ height: '140px' }}>
                     <img 
-                      src={presupuesto.portada_url} 
+                      src={portadaSignedUrl} 
                       alt="Portada del presupuesto" 
                       className="w-full h-full object-cover"
                     />
@@ -2239,10 +2252,10 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
                 
                 {/* Budget Info with Cover Image */}
                 <div className="mb-6">
-                  {presupuesto.portada_url && (
+                  {portadaSignedUrl && (
                     <div className="relative rounded-lg overflow-hidden mb-4" style={{ height: '180px' }}>
                       <img 
-                        src={presupuesto.portada_url} 
+                        src={portadaSignedUrl} 
                         alt="Portada del presupuesto" 
                         className="w-full h-full object-cover"
                       />

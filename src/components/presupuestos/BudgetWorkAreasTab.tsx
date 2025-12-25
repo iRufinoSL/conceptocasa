@@ -10,7 +10,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { Plus, Trash2, Edit2, MapPin, List, Layers, ChevronDown, ChevronRight } from 'lucide-react';
+import { Plus, Trash2, Edit2, MapPin, List, Layers, ChevronDown, ChevronRight, LayoutGrid } from 'lucide-react';
+import { WorkAreasOptionsGroupedView } from './WorkAreasOptionsGroupedView';
+import { OPTION_COLORS } from '@/lib/options-utils';
 import { formatCurrency } from '@/lib/format-utils';
 import { calcResourceSubtotal } from '@/lib/budget-pricing';
 
@@ -53,13 +55,20 @@ const WORK_AREAS = [
   'Vivienda general'
 ];
 
+interface ActivityWithOpciones {
+  id: string;
+  opciones: string[];
+}
+
 export function BudgetWorkAreasTab({ budgetId, isAdmin }: BudgetWorkAreasTabProps) {
   const [workAreas, setWorkAreas] = useState<WorkArea[]>([]);
+  const [activities, setActivities] = useState<ActivityWithOpciones[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [viewMode, setViewMode] = useState<'alphabetic' | 'grouped'>('grouped');
+  const [viewMode, setViewMode] = useState<'alphabetic' | 'grouped' | 'options'>('grouped');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingArea, setEditingArea] = useState<WorkArea | null>(null);
   const [expandedLevels, setExpandedLevels] = useState<Set<string>>(new Set(LEVELS));
+  const [expandedOptions, setExpandedOptions] = useState<Set<string>>(new Set()); // collapsed by default
   const [formData, setFormData] = useState({
     name: '',
     level: 'Nivel 1',
@@ -84,17 +93,27 @@ export function BudgetWorkAreasTab({ budgetId, isAdmin }: BudgetWorkAreasTabProp
   const fetchWorkAreas = async () => {
     setIsLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('budget_work_areas')
-        .select('*')
-        .eq('budget_id', budgetId)
-        .order('level', { ascending: true })
-        .order('work_area', { ascending: true });
+      // Fetch work areas and activities in parallel
+      const [workAreasRes, activitiesRes] = await Promise.all([
+        supabase
+          .from('budget_work_areas')
+          .select('*')
+          .eq('budget_id', budgetId)
+          .order('level', { ascending: true })
+          .order('work_area', { ascending: true }),
+        supabase
+          .from('budget_activities')
+          .select('id, opciones')
+          .eq('budget_id', budgetId)
+      ]);
 
-      if (error) throw error;
+      if (workAreasRes.error) throw workAreasRes.error;
+      if (activitiesRes.error) throw activitiesRes.error;
+
+      setActivities(activitiesRes.data || []);
 
       // Calculate resources subtotal for each work area
-      const enrichedData = await Promise.all((data || []).map(async (area) => {
+      const enrichedData = await Promise.all((workAreasRes.data || []).map(async (area) => {
         // Get linked activities
         const { data: activityLinks } = await supabase
           .from('budget_work_area_activities')
@@ -263,26 +282,39 @@ export function BudgetWorkAreasTab({ budgetId, isAdmin }: BudgetWorkAreasTabProp
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center justify-between">
-          <div>
-            <CardTitle className="flex items-center gap-2">
-              <MapPin className="h-5 w-5 text-primary" />
-              DÓNDE? - Áreas de Trabajo
-            </CardTitle>
-            <CardDescription>
-              Define las áreas de trabajo del presupuesto y su relación con actividades y mediciones
-            </CardDescription>
+        <div className="flex flex-col gap-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <MapPin className="h-5 w-5 text-primary" />
+                DÓNDE? - Áreas de Trabajo
+              </CardTitle>
+              <CardDescription>
+                Define las áreas de trabajo del presupuesto y su relación con actividades y mediciones
+              </CardDescription>
+            </div>
+            <div className="flex items-center gap-2">
+              <Badge variant="secondary" className="text-lg px-3 py-1">
+                Total: {formatCurrency(totalSubtotal)}
+              </Badge>
+              {isAdmin && (
+                <Button onClick={() => handleOpenDialog()} size="sm">
+                  <Plus className="h-4 w-4 mr-1" />
+                  Nueva Área
+                </Button>
+              )}
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <Badge variant="secondary" className="text-lg px-3 py-1">
-              Total: {formatCurrency(totalSubtotal)}
-            </Badge>
-            {isAdmin && (
-              <Button onClick={() => handleOpenDialog()} size="sm">
-                <Plus className="h-4 w-4 mr-1" />
-                Nueva Área
-              </Button>
-            )}
+          {/* Option Subtotals - placeholder for now, showing total for all */}
+          <div className="flex items-center gap-4 flex-wrap">
+            {(['A', 'B', 'C'] as const).map(opt => (
+              <div key={opt} className="text-right">
+                <p className={`text-lg font-bold ${OPTION_COLORS[opt]?.text || 'text-primary'}`}>
+                  {formatCurrency(totalSubtotal)}
+                </p>
+                <p className="text-xs text-muted-foreground">SubTotal {opt}</p>
+              </div>
+            ))}
           </div>
         </div>
       </CardHeader>
@@ -317,9 +349,31 @@ export function BudgetWorkAreasTab({ budgetId, isAdmin }: BudgetWorkAreasTabProp
                 <List className="h-4 w-4 mr-1" />
                 Alfabético
               </Button>
+              <Button
+                variant={viewMode === 'options' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setViewMode('options')}
+              >
+                <LayoutGrid className="h-4 w-4 mr-1" />
+                Por Opción
+              </Button>
             </div>
 
-            {viewMode === 'alphabetic' ? (
+            {viewMode === 'options' ? (
+              <WorkAreasOptionsGroupedView
+                workAreas={workAreas}
+                activities={activities}
+                expandedOptions={expandedOptions}
+                onToggleOption={(opt) => {
+                  setExpandedOptions(prev => {
+                    const next = new Set(prev);
+                    if (next.has(opt)) next.delete(opt);
+                    else next.add(opt);
+                    return next;
+                  });
+                }}
+              />
+            ) : viewMode === 'alphabetic' ? (
               <Table>
                 <TableHeader>
                   <TableRow>

@@ -246,7 +246,7 @@ export default function Recursos() {
       <ResourceForm
         open={formOpen}
         onOpenChange={setFormOpen}
-        resource={editingResource}
+        resource={editingResource ? allResources.find(r => r.id === editingResource.id) || editingResource : null}
         onSubmit={handleSubmit}
         onUpdate={handleUpdate}
         allResources={allResources}

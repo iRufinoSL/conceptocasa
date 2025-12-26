@@ -166,14 +166,55 @@ export function ContactDetailDialog({ contact, open, onOpenChange }: ContactDeta
     }
   };
 
-  const InfoRow = ({ icon: Icon, label, value }: { icon: any; label: string; value: string | null | undefined }) => {
+  const InfoRow = ({ icon: Icon, label, value, type }: { icon: any; label: string; value: string | null | undefined; type?: 'email' | 'phone' | 'website' | 'text' }) => {
     if (!value) return null;
+    
+    const renderValue = () => {
+      switch (type) {
+        case 'email':
+          return (
+            <a 
+              href={`mailto:${value}`}
+              className="text-sm break-words hover:underline hover:text-primary transition-colors"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {value}
+            </a>
+          );
+        case 'phone':
+          return (
+            <a 
+              href={`tel:${value.replace(/[^\d+]/g, '')}`}
+              className="text-sm break-words hover:underline hover:text-primary transition-colors"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {value}
+            </a>
+          );
+        case 'website':
+          const fullUrl = value.startsWith('http') ? value : `https://${value}`;
+          return (
+            <a 
+              href={fullUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-sm break-words hover:underline hover:text-primary transition-colors"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {value}
+            </a>
+          );
+        default:
+          return <p className="text-sm break-words">{value}</p>;
+      }
+    };
+    
     return (
       <div className="flex items-start gap-3 py-2">
         <Icon className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
         <div className="min-w-0">
           <p className="text-xs text-muted-foreground">{label}</p>
-          <p className="text-sm break-words">{value}</p>
+          {renderValue()}
         </div>
       </div>
     );
@@ -223,9 +264,9 @@ export function ContactDetailDialog({ contact, open, onOpenChange }: ContactDeta
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="py-0 pb-4">
-                  <InfoRow icon={Mail} label="Email" value={contact.email} />
-                  <InfoRow icon={Phone} label="Teléfono" value={contact.phone} />
-                  <InfoRow icon={Globe} label="Sitio Web" value={contact.website} />
+                  <InfoRow icon={Mail} label="Email" value={contact.email} type="email" />
+                  <InfoRow icon={Phone} label="Teléfono" value={contact.phone} type="phone" />
+                  <InfoRow icon={Globe} label="Sitio Web" value={contact.website} type="website" />
                   <InfoRow icon={FileText} label="NIF/DNI" value={contact.nif_dni} />
                 </CardContent>
               </Card>

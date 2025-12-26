@@ -272,8 +272,28 @@ export function ContactsTab({ contacts, searchTerm, onEdit, onDelete }: Contacts
                       <span className="font-medium">{contact.name} {contact.surname}</span>
                     </div>
                   </TableCell>
-                  <TableCell className="text-muted-foreground">{contact.email || '-'}</TableCell>
-                  <TableCell className="text-muted-foreground">{contact.phone || '-'}</TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {contact.email ? (
+                      <a 
+                        href={`mailto:${contact.email}`}
+                        className="hover:underline hover:text-primary transition-colors"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {contact.email}
+                      </a>
+                    ) : '-'}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {contact.phone ? (
+                      <a 
+                        href={`tel:${contact.phone.replace(/[^\d+]/g, '')}`}
+                        className="hover:underline hover:text-primary transition-colors"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {contact.phone}
+                      </a>
+                    ) : '-'}
+                  </TableCell>
                   <TableCell className="text-muted-foreground">{contact.city || '-'}</TableCell>
                   <TableCell>
                     {getActivityNames(contact.id).length > 0 ? (

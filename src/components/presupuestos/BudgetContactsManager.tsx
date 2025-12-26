@@ -172,7 +172,27 @@ export function BudgetContactsManager({ budgetId, isAdmin }: BudgetContactsManag
                 {bc.contact ? `${bc.contact.name} ${bc.contact.surname || ''}` : 'Contacto no encontrado'}
               </p>
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                {bc.contact?.email && <span>{bc.contact.email}</span>}
+                {bc.contact?.email && (
+                  <a 
+                    href={`mailto:${bc.contact.email}`}
+                    className="hover:underline hover:text-primary transition-colors"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {bc.contact.email}
+                  </a>
+                )}
+                {bc.contact?.phone && (
+                  <>
+                    <span>•</span>
+                    <a 
+                      href={`tel:${bc.contact.phone.replace(/[^\d+]/g, '')}`}
+                      className="hover:underline hover:text-primary transition-colors"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {bc.contact.phone}
+                    </a>
+                  </>
+                )}
                 {bc.contact?.city && <span>• {bc.contact.city}</span>}
               </div>
             </div>

@@ -96,16 +96,42 @@ export function ResourceSupplierSelect({ value, onChange }: ResourceSupplierSele
             <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-[400px] p-0" align="start">
-          <Command>
+        <PopoverContent className="w-[400px] p-0 bg-popover z-50" align="start">
+          <Command className="bg-popover">
             <CommandInput placeholder="Buscar contacto..." />
-            <CommandList>
+            <CommandList className="max-h-[300px]">
               <CommandEmpty>
-                <div className="py-4 text-center text-sm text-muted-foreground">
-                  No se encontraron contactos.
+                <div className="py-4 text-center">
+                  <p className="text-sm text-muted-foreground mb-3">
+                    No se encontraron contactos.
+                  </p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setOpen(false);
+                      setShowNewContactDialog(true);
+                    }}
+                    className="gap-2"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Crear nuevo contacto
+                  </Button>
                 </div>
               </CommandEmpty>
               <CommandGroup>
+                {/* New contact option - always visible at top */}
+                <CommandItem
+                  value="__new_contact__"
+                  onSelect={() => {
+                    setOpen(false);
+                    setShowNewContactDialog(true);
+                  }}
+                  className="text-accent font-medium border-b border-border mb-1 rounded-none"
+                >
+                  <Plus className="mr-2 h-4 w-4" />
+                  Crear nuevo contacto
+                </CommandItem>
                 {/* Option to clear selection */}
                 {value && (
                   <CommandItem
@@ -114,28 +140,16 @@ export function ResourceSupplierSelect({ value, onChange }: ResourceSupplierSele
                       onChange(null, null);
                       setOpen(false);
                     }}
-                    className="text-muted-foreground"
+                    className="text-muted-foreground italic"
                   >
-                    <span className="italic">Sin suministrador</span>
+                    Sin suministrador
                   </CommandItem>
                 )}
-                {/* New contact option */}
-                <CommandItem
-                  value="__new__"
-                  onSelect={() => {
-                    setOpen(false);
-                    setShowNewContactDialog(true);
-                  }}
-                  className="text-accent"
-                >
-                  <Plus className="mr-2 h-4 w-4" />
-                  Crear nuevo contacto
-                </CommandItem>
                 {/* Contact list */}
                 {contacts.map((contact) => (
                   <CommandItem
                     key={contact.id}
-                    value={`${contact.name} ${contact.surname || ''} ${contact.city || ''}`}
+                    value={`${contact.name} ${contact.surname || ''} ${contact.city || ''} ${contact.email || ''}`}
                     onSelect={() => {
                       onChange(contact.id, contact);
                       setOpen(false);

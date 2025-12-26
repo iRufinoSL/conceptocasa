@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react';
 import { ResourceFile } from '@/types/resource';
 import { Button } from '@/components/ui/button';
+import { Progress } from '@/components/ui/progress';
 import { 
   Upload, 
   Trash2, 
@@ -9,7 +10,8 @@ import {
   File, 
   Download,
   Eye,
-  X 
+  X,
+  Loader2
 } from 'lucide-react';
 import {
   Dialog,
@@ -28,6 +30,12 @@ interface ResourceFileManagerProps {
   readOnly?: boolean;
 }
 
+interface UploadingFile {
+  name: string;
+  progress: number;
+  size: number;
+}
+
 export function ResourceFileManager({ 
   resourceId, 
   files, 
@@ -37,6 +45,7 @@ export function ResourceFileManager({
   readOnly = false 
 }: ResourceFileManagerProps) {
   const [uploading, setUploading] = useState(false);
+  const [uploadingFiles, setUploadingFiles] = useState<UploadingFile[]>([]);
   const [previewFile, setPreviewFile] = useState<ResourceFile | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -44,11 +53,47 @@ export function ResourceFileManager({
     const selectedFiles = e.target.files;
     if (!selectedFiles || selectedFiles.length === 0) return;
 
+    const filesArray = Array.from(selectedFiles);
+    
+    // Initialize uploading state for all files
+    setUploadingFiles(filesArray.map(f => ({ 
+      name: f.name, 
+      progress: 0, 
+      size: f.size 
+    })));
     setUploading(true);
-    for (const file of Array.from(selectedFiles)) {
+
+    for (let i = 0; i < filesArray.length; i++) {
+      const file = filesArray[i];
+      
+      // Update progress to show we're starting this file
+      setUploadingFiles(prev => prev.map((f, idx) => 
+        idx === i ? { ...f, progress: 10 } : f
+      ));
+
+      // Simulate progress while uploading
+      const progressInterval = setInterval(() => {
+        setUploadingFiles(prev => prev.map((f, idx) => 
+          idx === i && f.progress < 90 
+            ? { ...f, progress: f.progress + Math.random() * 15 } 
+            : f
+        ));
+      }, 200);
+
       await onUpload(resourceId, file);
+
+      // Mark as complete
+      clearInterval(progressInterval);
+      setUploadingFiles(prev => prev.map((f, idx) => 
+        idx === i ? { ...f, progress: 100 } : f
+      ));
     }
+
+    // Small delay to show completion
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
     setUploading(false);
+    setUploadingFiles([]);
     
     // Reset input
     if (fileInputRef.current) {
@@ -84,6 +129,30 @@ export function ResourceFileManager({
 
   return (
     <div className="space-y-3">
+      {/* Upload Progress */}
+      {uploading && uploadingFiles.length > 0 && (
+        <div className="space-y-2 p-3 border border-primary/20 rounded-lg bg-primary/5 animate-fade-in">
+          <div className="flex items-center gap-2 text-sm font-medium text-primary">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            <span>Subiendo archivos...</span>
+          </div>
+          {uploadingFiles.map((file, index) => (
+            <div key={index} className="space-y-1">
+              <div className="flex items-center justify-between text-xs">
+                <span className="truncate max-w-[200px] text-foreground">{file.name}</span>
+                <span className="text-muted-foreground">
+                  {Math.min(Math.round(file.progress), 100)}%
+                </span>
+              </div>
+              <Progress 
+                value={Math.min(file.progress, 100)} 
+                className="h-2"
+              />
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* File list */}
       {files.length > 0 && (
         <div className="space-y-2">

@@ -58,3 +58,16 @@ export const formatPercent = (value: number | null | undefined, decimals: number
     maximumFractionDigits: decimals,
   }).format(value);
 };
+
+/**
+ * Format bytes to human readable size (e.g., 1.5 MB)
+ */
+export const formatBytes = (bytes: number, decimals: number = 2): string => {
+  if (bytes === 0) return '0 Bytes';
+  
+  const k = 1024;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(decimals)) + ' ' + sizes[i];
+};

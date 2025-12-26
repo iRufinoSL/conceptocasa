@@ -1086,6 +1086,146 @@ export type Database = {
         }
         Relationships: []
       }
+      external_resource_files: {
+        Row: {
+          created_at: string | null
+          file_name: string
+          file_path: string
+          file_size: number | null
+          file_type: string | null
+          id: string
+          resource_id: string
+          uploaded_by: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          file_name: string
+          file_path: string
+          file_size?: number | null
+          file_type?: string | null
+          id?: string
+          resource_id: string
+          uploaded_by?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          file_name?: string
+          file_path?: string
+          file_size?: number | null
+          file_type?: string | null
+          id?: string
+          resource_id?: string
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "external_resource_files_resource_id_fkey"
+            columns: ["resource_id"]
+            isOneToOne: false
+            referencedRelation: "external_resources"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "external_resource_files_uploaded_by_fkey"
+            columns: ["uploaded_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      external_resource_relations: {
+        Row: {
+          created_at: string | null
+          id: string
+          quantity: number | null
+          related_resource_id: string
+          resource_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          quantity?: number | null
+          related_resource_id: string
+          resource_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          quantity?: number | null
+          related_resource_id?: string
+          resource_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "external_resource_relations_related_resource_id_fkey"
+            columns: ["related_resource_id"]
+            isOneToOne: false
+            referencedRelation: "external_resources"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "external_resource_relations_resource_id_fkey"
+            columns: ["resource_id"]
+            isOneToOne: false
+            referencedRelation: "external_resources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      external_resources: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          id: string
+          image_url: string | null
+          name: string
+          registration_date: string | null
+          resource_type: string | null
+          supplier_id: string | null
+          unit_cost: number | null
+          unit_measure: string | null
+          updated_at: string | null
+          website: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          image_url?: string | null
+          name: string
+          registration_date?: string | null
+          resource_type?: string | null
+          supplier_id?: string | null
+          unit_cost?: number | null
+          unit_measure?: string | null
+          updated_at?: string | null
+          website?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          image_url?: string | null
+          name?: string
+          registration_date?: string | null
+          resource_type?: string | null
+          supplier_id?: string | null
+          unit_cost?: number | null
+          unit_measure?: string | null
+          updated_at?: string | null
+          website?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "external_resources_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contacts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       presupuestos: {
         Row: {
           archived: boolean

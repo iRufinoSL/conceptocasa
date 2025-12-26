@@ -10,14 +10,19 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Plus, Trash2 } from 'lucide-react';
 import { formatCurrency } from '@/lib/format-utils';
+import { ResourceSupplierSelect } from './ResourceSupplierSelect';
+import { ResourceFileManager } from './ResourceFileManager';
 
 interface ResourceFormProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   resource?: ExternalResource | null;
-  onSubmit: (data: Omit<ExternalResource, 'id' | 'createdAt' | 'updatedAt'>) => void;
+  onSubmit: (data: Omit<ExternalResource, 'id' | 'createdAt' | 'updatedAt' | 'files'>) => void;
   onUpdate?: (id: string, data: Partial<ExternalResource>) => void;
   allResources: ExternalResource[];
+  onUploadFile?: (resourceId: string, file: File) => Promise<boolean>;
+  onDeleteFile?: (fileId: string, filePath: string) => Promise<boolean>;
+  getFileUrl?: (filePath: string) => string;
 }
 
 const initialFormState = {
@@ -30,9 +35,20 @@ const initialFormState = {
   website: '',
   relatedResources: [] as RelatedResource[],
   registrationDate: new Date().toISOString().split('T')[0],
+  supplierId: null as string | null,
 };
 
-export function ResourceForm({ open, onOpenChange, resource, onSubmit, onUpdate, allResources }: ResourceFormProps) {
+export function ResourceForm({ 
+  open, 
+  onOpenChange, 
+  resource, 
+  onSubmit, 
+  onUpdate, 
+  allResources,
+  onUploadFile,
+  onDeleteFile,
+  getFileUrl,
+}: ResourceFormProps) {
   const [formData, setFormData] = useState(initialFormState);
 
   // Get available resources for selection (exclude current resource being edited)
@@ -53,6 +69,7 @@ export function ResourceForm({ open, onOpenChange, resource, onSubmit, onUpdate,
         website: resource.website || '',
         relatedResources: resource.relatedResources || [],
         registrationDate: regDate,
+        supplierId: resource.supplierId || null,
       });
     } else {
       setFormData({
@@ -113,7 +130,7 @@ export function ResourceForm({ open, onOpenChange, resource, onSubmit, onUpdate,
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-xl font-bold">
             {resource ? 'Editar Recurso' : 'Nuevo Recurso'}
@@ -202,6 +219,18 @@ export function ResourceForm({ open, onOpenChange, resource, onSubmit, onUpdate,
             </Select>
           </div>
 
+          {/* Supplier Section */}
+          <div className="space-y-2">
+            <Label>Suministrador</Label>
+            <ResourceSupplierSelect
+              value={formData.supplierId}
+              onChange={(value) => setFormData({ ...formData, supplierId: value })}
+            />
+            <p className="text-xs text-muted-foreground">
+              Selecciona un contacto del CRM o crea uno nuevo como suministrador
+            </p>
+          </div>
+
           {/* Related Resources Section */}
           <div className="space-y-3 p-4 border border-border rounded-lg bg-muted/30">
             <div className="flex items-center justify-between">
@@ -272,6 +301,20 @@ export function ResourceForm({ open, onOpenChange, resource, onSubmit, onUpdate,
               </div>
             )}
           </div>
+
+          {/* Files Section - Only for existing resources */}
+          {resource && onUploadFile && onDeleteFile && getFileUrl && (
+            <div className="space-y-3 p-4 border border-border rounded-lg bg-muted/30">
+              <Label className="text-base font-semibold">Archivos adjuntos</Label>
+              <ResourceFileManager
+                resourceId={resource.id}
+                files={resource.files || []}
+                onUpload={onUploadFile}
+                onDelete={onDeleteFile}
+                getFileUrl={getFileUrl}
+              />
+            </div>
+          )}
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">

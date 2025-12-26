@@ -9,6 +9,17 @@ export interface RelatedResource {
   quantity: number;
 }
 
+export interface ResourceFile {
+  id: string;
+  resource_id: string;
+  file_name: string;
+  file_path: string;
+  file_type: string | null;
+  file_size: number | null;
+  uploaded_by: string | null;
+  created_at: string;
+}
+
 export interface ExternalResource {
   id: string;
   name: string;
@@ -22,6 +33,16 @@ export interface ExternalResource {
   registrationDate: Date;
   createdAt: Date;
   updatedAt: Date;
+  supplierId?: string | null;
+  supplier?: {
+    id: string;
+    name: string;
+    surname?: string | null;
+    email?: string | null;
+    phone?: string | null;
+    city?: string | null;
+  } | null;
+  files?: ResourceFile[];
 }
 
 export const UNIT_MEASURES: UnitMeasure[] = ['m2', 'm3', 'ml', 'mes', 'ud', 'kg', 'hora', 'día'];

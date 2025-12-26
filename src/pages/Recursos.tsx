@@ -32,6 +32,10 @@ export default function Recursos() {
     deleteResource,
     duplicateResource,
     getEffectiveCost,
+    loading,
+    uploadFile,
+    deleteFile,
+    getFileUrl,
   } = useResources();
 
   const [formOpen, setFormOpen] = useState(false);
@@ -74,9 +78,9 @@ export default function Recursos() {
     }
   };
 
-  const handleDeleteConfirm = () => {
+  const handleDeleteConfirm = async () => {
     if (resourceToDelete) {
-      deleteResource(resourceToDelete.id);
+      await deleteResource(resourceToDelete.id);
       toast({
         title: 'Recurso eliminado',
         description: `"${resourceToDelete.name}" ha sido eliminado correctamente.`,
@@ -94,12 +98,12 @@ export default function Recursos() {
     });
   };
 
-  const handleDuplicate = (id: string) => {
-    const duplicated = duplicateResource(id);
+  const handleDuplicate = async (id: string) => {
+    const duplicated = await duplicateResource(id);
     if (duplicated) {
       toast({
         title: 'Recurso duplicado',
-        description: `"${duplicated.name}" ha sido creado correctamente.`,
+        description: `Recurso duplicado correctamente.`,
       });
     }
   };
@@ -246,6 +250,9 @@ export default function Recursos() {
         onSubmit={handleSubmit}
         onUpdate={handleUpdate}
         allResources={allResources}
+        onUploadFile={uploadFile}
+        onDeleteFile={deleteFile}
+        getFileUrl={getFileUrl}
       />
 
       {/* Delete Confirmation */}

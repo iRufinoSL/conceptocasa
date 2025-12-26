@@ -362,86 +362,93 @@ export default function PresupuestoDashboard() {
 
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="flex flex-wrap h-auto gap-1 p-1">
-            {isTabVisible('anteproyecto') && (
-              <TabsTrigger value="anteproyecto" className="flex items-center gap-1.5 text-xs px-2 py-1.5">
-                <Image className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">Ante-proyecto</span>
-              </TabsTrigger>
-            )}
-            {isTabVisible('cuanto-cuesta') && (
-              <TabsTrigger value="cuanto-cuesta" className="flex items-center gap-1.5 text-xs px-2 py-1.5">
-                <Euro className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">CUÁNTO?</span>
-              </TabsTrigger>
-            )}
-            {isTabVisible('actividades') && (
-              <TabsTrigger value="actividades" className="flex items-center gap-1.5 text-xs px-2 py-1.5">
-                <ClipboardList className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">QUÉ?</span>
-              </TabsTrigger>
-            )}
-            {isTabVisible('fases') && (
-              <TabsTrigger value="fases" className="flex items-center gap-1.5 text-xs px-2 py-1.5">
-                <Calendar className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">CUÁNDO?</span>
-              </TabsTrigger>
-            )}
-            {isTabVisible('recursos') && (
-              <TabsTrigger value="recursos" className="flex items-center gap-1.5 text-xs px-2 py-1.5">
-                <FileText className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">CÓMO?</span>
-              </TabsTrigger>
-            )}
-            {isTabVisible('contactos') && (
-              <TabsTrigger value="contactos" className="flex items-center gap-1.5 text-xs px-2 py-1.5">
-                <Users className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">QUIÉN?</span>
-              </TabsTrigger>
-            )}
-            {isTabVisible('zonas') && (
-              <TabsTrigger value="areas-trabajo" className="flex items-center gap-1.5 text-xs px-2 py-1.5">
-                <MapPin className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">DÓNDE?</span>
-              </TabsTrigger>
-            )}
-            {isTabVisible('timeline') && (
-              <TabsTrigger value="timeline" className="flex items-center gap-1.5 text-xs px-2 py-1.5">
-                <GanttChart className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">Timeline</span>
-              </TabsTrigger>
-            )}
-            {isTabVisible('mediciones') && (
-              <TabsTrigger value="mediciones" className="flex items-center gap-1.5 text-xs px-2 py-1.5">
-                <Ruler className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">Mediciones</span>
-              </TabsTrigger>
-            )}
-            {isTabVisible('espacios') && (
-              <TabsTrigger value="espacios" className="flex items-center gap-1.5 text-xs px-2 py-1.5">
-                <Home className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">Espacios</span>
-              </TabsTrigger>
-            )}
-            {isTabVisible('documentos') && (
-              <TabsTrigger value="documentos" className="flex items-center gap-1.5 text-xs px-2 py-1.5">
-                <FolderOpen className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">Documentos</span>
-              </TabsTrigger>
-            )}
-            {isTabVisible('resumen') && (
-              <TabsTrigger value="resumen" className="flex items-center gap-1.5 text-xs px-2 py-1.5">
-                <Calculator className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">Resumen</span>
-              </TabsTrigger>
-            )}
-            {isTabVisible('config') && (
-              <TabsTrigger value="config" className="flex items-center gap-1.5 text-xs px-2 py-1.5">
-                <Settings className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">Config</span>
-              </TabsTrigger>
-            )}
-          </TabsList>
+          <div className="space-y-1">
+            {/* Primera línea: Pestañas principales (preguntas) */}
+            <TabsList className="flex flex-wrap h-auto gap-1 p-1 w-full justify-start">
+              {isTabVisible('cuanto-cuesta') && (
+                <TabsTrigger value="cuanto-cuesta" className="flex items-center gap-1.5 text-xs px-3 py-2 font-semibold">
+                  <Euro className="h-4 w-4" />
+                  <span>CUÁNTO?</span>
+                </TabsTrigger>
+              )}
+              {isTabVisible('actividades') && (
+                <TabsTrigger value="actividades" className="flex items-center gap-1.5 text-xs px-3 py-2 font-semibold">
+                  <ClipboardList className="h-4 w-4" />
+                  <span>QUÉ?</span>
+                </TabsTrigger>
+              )}
+              {isTabVisible('recursos') && (
+                <TabsTrigger value="recursos" className="flex items-center gap-1.5 text-xs px-3 py-2 font-semibold">
+                  <FileText className="h-4 w-4" />
+                  <span>CÓMO?</span>
+                </TabsTrigger>
+              )}
+              {isTabVisible('fases') && (
+                <TabsTrigger value="fases" className="flex items-center gap-1.5 text-xs px-3 py-2 font-semibold">
+                  <Calendar className="h-4 w-4" />
+                  <span>CUÁNDO?</span>
+                </TabsTrigger>
+              )}
+              {isTabVisible('zonas') && (
+                <TabsTrigger value="areas-trabajo" className="flex items-center gap-1.5 text-xs px-3 py-2 font-semibold">
+                  <MapPin className="h-4 w-4" />
+                  <span>DÓNDE?</span>
+                </TabsTrigger>
+              )}
+              {isTabVisible('contactos') && (
+                <TabsTrigger value="contactos" className="flex items-center gap-1.5 text-xs px-3 py-2 font-semibold">
+                  <Users className="h-4 w-4" />
+                  <span>QUIÉN?</span>
+                </TabsTrigger>
+              )}
+            </TabsList>
+
+            {/* Segunda línea: Pestañas secundarias */}
+            <TabsList className="flex flex-wrap h-auto gap-1 p-1 w-full justify-start">
+              {isTabVisible('anteproyecto') && (
+                <TabsTrigger value="anteproyecto" className="flex items-center gap-1.5 text-xs px-2 py-1.5">
+                  <Image className="h-3.5 w-3.5" />
+                  <span>Ante-proyecto</span>
+                </TabsTrigger>
+              )}
+              {isTabVisible('mediciones') && (
+                <TabsTrigger value="mediciones" className="flex items-center gap-1.5 text-xs px-2 py-1.5">
+                  <Ruler className="h-3.5 w-3.5" />
+                  <span>Mediciones</span>
+                </TabsTrigger>
+              )}
+              {isTabVisible('espacios') && (
+                <TabsTrigger value="espacios" className="flex items-center gap-1.5 text-xs px-2 py-1.5">
+                  <Home className="h-3.5 w-3.5" />
+                  <span>Espacios</span>
+                </TabsTrigger>
+              )}
+              {isTabVisible('documentos') && (
+                <TabsTrigger value="documentos" className="flex items-center gap-1.5 text-xs px-2 py-1.5">
+                  <FolderOpen className="h-3.5 w-3.5" />
+                  <span>Documentos</span>
+                </TabsTrigger>
+              )}
+              {isTabVisible('resumen') && (
+                <TabsTrigger value="resumen" className="flex items-center gap-1.5 text-xs px-2 py-1.5">
+                  <Calculator className="h-3.5 w-3.5" />
+                  <span>Resumen</span>
+                </TabsTrigger>
+              )}
+              {isTabVisible('timeline') && (
+                <TabsTrigger value="timeline" className="flex items-center gap-1.5 text-xs px-2 py-1.5">
+                  <GanttChart className="h-3.5 w-3.5" />
+                  <span>Timeline</span>
+                </TabsTrigger>
+              )}
+              {isTabVisible('config') && (
+                <TabsTrigger value="config" className="flex items-center gap-1.5 text-xs px-2 py-1.5">
+                  <Settings className="h-3.5 w-3.5" />
+                  <span>Config</span>
+                </TabsTrigger>
+              )}
+            </TabsList>
+          </div>
 
           <TabsContent value="anteproyecto" className="mt-6">
             <BudgetPredesignTab budgetId={presupuesto.id} isAdmin={isAdmin} />

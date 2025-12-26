@@ -130,7 +130,20 @@ export function ResourceForm({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
+      <DialogContent 
+        className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto"
+        onPointerDownOutside={(e) => {
+          // Prevent closing when interacting with file dialogs or other portaled elements
+          const target = e.target as HTMLElement;
+          if (target.closest('input[type="file"]') || target.tagName === 'INPUT') {
+            e.preventDefault();
+          }
+        }}
+        onInteractOutside={(e) => {
+          // Prevent closing during file selection
+          e.preventDefault();
+        }}
+      >
         <DialogHeader>
           <DialogTitle className="text-xl font-bold">
             {resource ? 'Editar Recurso' : 'Nuevo Recurso'}

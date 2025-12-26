@@ -165,9 +165,18 @@ export function ResourceFileManager({
             className="hidden"
           />
           <Button
+            type="button"
             variant="outline"
             size="sm"
-            onClick={() => fileInputRef.current?.click()}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              fileInputRef.current?.click();
+            }}
+            onPointerDown={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+            }}
             disabled={uploading}
             className="w-full"
           >

@@ -16,6 +16,7 @@ const ALL_TABS = [
   { id: 'timeline', label: 'Cuándo?', description: 'Línea de tiempo del proyecto' },
   { id: 'mediciones', label: 'Mediciones', description: 'Mediciones del presupuesto' },
   { id: 'espacios', label: 'Espacios', description: 'Espacios del proyecto' },
+  { id: 'documentos', label: 'Documentos', description: 'Documentos del proyecto vinculados al presupuesto' },
   { id: 'resumen', label: 'Resumen', description: 'Resumen visual del presupuesto' },
   { id: 'contactos', label: 'Quién?', description: 'Contactos asociados al presupuesto' },
   { id: 'config', label: 'Config', description: 'Configuración del presupuesto' },

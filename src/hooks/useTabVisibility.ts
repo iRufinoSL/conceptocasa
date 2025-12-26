@@ -26,9 +26,9 @@ export interface AdvancedSettingsByRole {
 }
 
 const DEFAULT_SETTINGS: TabVisibilitySettings = {
-  administrador: ['anteproyecto', 'cuanto-cuesta', 'actividades', 'zonas', 'fases', 'timeline', 'mediciones', 'espacios', 'resumen', 'contactos', 'config', 'recursos'],
-  colaborador: ['anteproyecto', 'cuanto-cuesta', 'actividades', 'zonas', 'fases', 'timeline', 'mediciones', 'espacios', 'contactos', 'config'],
-  cliente: ['anteproyecto', 'cuanto-cuesta', 'actividades', 'fases', 'timeline', 'contactos']
+  administrador: ['anteproyecto', 'cuanto-cuesta', 'actividades', 'zonas', 'fases', 'timeline', 'mediciones', 'espacios', 'documentos', 'resumen', 'contactos', 'config', 'recursos'],
+  colaborador: ['anteproyecto', 'cuanto-cuesta', 'actividades', 'zonas', 'fases', 'timeline', 'mediciones', 'espacios', 'documentos', 'contactos', 'config'],
+  cliente: ['anteproyecto', 'cuanto-cuesta', 'actividades', 'fases', 'timeline', 'documentos', 'contactos']
 };
 
 const DEFAULT_ADVANCED_SETTINGS: AdvancedSettingsByRole = {

@@ -2,10 +2,11 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Wallet, ArrowLeft, BookOpen, Calculator, BarChart3 } from 'lucide-react';
+import { Wallet, ArrowLeft, BookOpen, Calculator, BarChart3, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { AppNavDropdown } from '@/components/AppNavDropdown';
 import { AccountingEntriesTab } from '@/components/administracion/AccountingEntriesTab';
+import { AccountingEntryLinesTab } from '@/components/administracion/AccountingEntryLinesTab';
 import { AccountingAccountsTab } from '@/components/administracion/AccountingAccountsTab';
 import { AccountingBalanceReport } from '@/components/administracion/AccountingBalanceReport';
 
@@ -89,6 +90,10 @@ export default function Administracion() {
               <BookOpen className="h-4 w-4" />
               Asientos
             </TabsTrigger>
+            <TabsTrigger value="lines" className="gap-2">
+              <FileText className="h-4 w-4" />
+              Apuntes
+            </TabsTrigger>
             <TabsTrigger value="accounts" className="gap-2">
               <Calculator className="h-4 w-4" />
               Cuentas Contables
@@ -101,6 +106,10 @@ export default function Administracion() {
 
           <TabsContent value="entries">
             <AccountingEntriesTab />
+          </TabsContent>
+
+          <TabsContent value="lines">
+            <AccountingEntryLinesTab />
           </TabsContent>
 
           <TabsContent value="accounts">

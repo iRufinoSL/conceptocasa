@@ -4,9 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Plus, Trash2, AlertTriangle, CheckCircle } from 'lucide-react';
+import { Plus, Trash2, AlertTriangle, CheckCircle, Pencil, X, Check } from 'lucide-react';
 import { toast } from 'sonner';
-import { format } from 'date-fns';
 
 interface AccountingEntry {
   id: string;
@@ -42,8 +41,14 @@ export function AccountingEntryLinesEditor({ entry, onUpdate }: Props) {
   const [accounts, setAccounts] = useState<AccountingAccount[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [editingLineId, setEditingLineId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState({
+    account_id: '',
+    description: '',
+    debit_amount: '',
+    credit_amount: ''
+  });
 
-  // New line form
   const [newLine, setNewLine] = useState({
     account_id: '',
     line_date: entry.entry_date,
@@ -58,7 +63,6 @@ export function AccountingEntryLinesEditor({ entry, onUpdate }: Props) {
 
   const fetchData = async () => {
     try {
-      // Fetch accounts
       const { data: accountsData, error: accountsError } = await supabase
         .from('accounting_accounts')
         .select('*')
@@ -68,7 +72,6 @@ export function AccountingEntryLinesEditor({ entry, onUpdate }: Props) {
       if (accountsError) throw accountsError;
       setAccounts(accountsData || []);
 
-      // Fetch lines for this entry
       const { data: linesData, error: linesError } = await supabase
         .from('accounting_entry_lines')
         .select(`
@@ -140,6 +143,71 @@ export function AccountingEntryLinesEditor({ entry, onUpdate }: Props) {
     }
   };
 
+  const handleStartEdit = (line: EntryLine) => {
+    setEditingLineId(line.id);
+    setEditForm({
+      account_id: line.account_id,
+      description: line.description || '',
+      debit_amount: Number(line.debit_amount) > 0 ? line.debit_amount.toString() : '',
+      credit_amount: Number(line.credit_amount) > 0 ? line.credit_amount.toString() : ''
+    });
+  };
+
+  const handleCancelEdit = () => {
+    setEditingLineId(null);
+    setEditForm({
+      account_id: '',
+      description: '',
+      debit_amount: '',
+      credit_amount: ''
+    });
+  };
+
+  const handleSaveEdit = async (lineId: string) => {
+    if (!editForm.account_id) {
+      toast.error('Selecciona una cuenta contable');
+      return;
+    }
+
+    const debit = parseFloat(editForm.debit_amount) || 0;
+    const credit = parseFloat(editForm.credit_amount) || 0;
+
+    if (debit === 0 && credit === 0) {
+      toast.error('Introduce un importe en Debe o Haber');
+      return;
+    }
+
+    if (debit > 0 && credit > 0) {
+      toast.error('Un apunte solo puede tener importe en Debe o en Haber, no en ambos');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from('accounting_entry_lines')
+        .update({
+          account_id: editForm.account_id,
+          description: editForm.description.trim() || null,
+          debit_amount: debit,
+          credit_amount: credit
+        })
+        .eq('id', lineId);
+
+      if (error) throw error;
+
+      toast.success('Apunte actualizado');
+      setEditingLineId(null);
+      fetchData();
+      onUpdate();
+    } catch (error) {
+      console.error('Error updating line:', error);
+      toast.error('Error al actualizar el apunte');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleDeleteLine = async (lineId: string) => {
     try {
       const { error } = await supabase
@@ -206,35 +274,124 @@ export function AccountingEntryLinesEditor({ entry, onUpdate }: Props) {
             <TableHead>Descripción</TableHead>
             <TableHead className="text-right w-[120px]">Debe (€)</TableHead>
             <TableHead className="text-right w-[120px]">Haber (€)</TableHead>
-            <TableHead className="w-[50px]"></TableHead>
+            <TableHead className="w-[80px]"></TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {lines.map((line) => (
             <TableRow key={line.id}>
               <TableCell className="font-mono text-muted-foreground">{line.code}</TableCell>
-              <TableCell>
-                <div>
-                  <div className="font-medium">{line.account?.name}</div>
-                  <div className="text-xs text-muted-foreground">{line.account?.account_type}</div>
-                </div>
-              </TableCell>
-              <TableCell className="text-muted-foreground">{line.description || '-'}</TableCell>
-              <TableCell className="text-right font-mono">
-                {Number(line.debit_amount) > 0 ? formatCurrency(Number(line.debit_amount)) : '-'}
-              </TableCell>
-              <TableCell className="text-right font-mono">
-                {Number(line.credit_amount) > 0 ? formatCurrency(Number(line.credit_amount)) : '-'}
-              </TableCell>
-              <TableCell>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => handleDeleteLine(line.id)}
-                >
-                  <Trash2 className="h-4 w-4 text-destructive" />
-                </Button>
-              </TableCell>
+              {editingLineId === line.id ? (
+                <>
+                  <TableCell>
+                    <Select
+                      value={editForm.account_id}
+                      onValueChange={(value) => setEditForm({ ...editForm, account_id: value })}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Cuenta..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {accounts.map((account) => (
+                          <SelectItem key={account.id} value={account.id}>
+                            {account.name} ({account.account_type})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </TableCell>
+                  <TableCell>
+                    <Input
+                      placeholder="Descripción (opcional)"
+                      value={editForm.description}
+                      onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      placeholder="0.00"
+                      value={editForm.debit_amount}
+                      onChange={(e) => setEditForm({ 
+                        ...editForm, 
+                        debit_amount: e.target.value,
+                        credit_amount: e.target.value ? '' : editForm.credit_amount 
+                      })}
+                      className="text-right font-mono"
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      placeholder="0.00"
+                      value={editForm.credit_amount}
+                      onChange={(e) => setEditForm({ 
+                        ...editForm, 
+                        credit_amount: e.target.value,
+                        debit_amount: e.target.value ? '' : editForm.debit_amount 
+                      })}
+                      className="text-right font-mono"
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleSaveEdit(line.id)}
+                        disabled={saving}
+                      >
+                        <Check className="h-4 w-4 text-green-600" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={handleCancelEdit}
+                      >
+                        <X className="h-4 w-4 text-muted-foreground" />
+                      </Button>
+                    </div>
+                  </TableCell>
+                </>
+              ) : (
+                <>
+                  <TableCell>
+                    <div>
+                      <div className="font-medium">{line.account?.name}</div>
+                      <div className="text-xs text-muted-foreground">{line.account?.account_type}</div>
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">{line.description || '-'}</TableCell>
+                  <TableCell className="text-right font-mono">
+                    {Number(line.debit_amount) > 0 ? formatCurrency(Number(line.debit_amount)) : '-'}
+                  </TableCell>
+                  <TableCell className="text-right font-mono">
+                    {Number(line.credit_amount) > 0 ? formatCurrency(Number(line.credit_amount)) : '-'}
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleStartEdit(line)}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleDeleteLine(line.id)}
+                      >
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </div>
+                  </TableCell>
+                </>
+              )}
             </TableRow>
           ))}
 

@@ -50,7 +50,8 @@ export function AccountSelectWithCreate({
   onChange, 
   accounts, 
   onAccountCreated,
-  placeholder = 'Cuenta...'
+  placeholder = 'Cuenta...',
+  label
 }: Props) {
   const [searchQuery, setSearchQuery] = useState('');
   const [showCreateDialog, setShowCreateDialog] = useState(false);

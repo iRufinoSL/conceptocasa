@@ -247,6 +247,7 @@ export default function Presupuestos() {
   const [recalculatingId, setRecalculatingId] = useState<string | null>(null);
   const [cloneDialogOpen, setCloneDialogOpen] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
+  const [showActive, setShowActive] = useState(false);
 
   const isAdmin = roles.includes('administrador');
 
@@ -554,69 +555,73 @@ export default function Presupuestos() {
 
         {/* Active Presupuestos Section */}
         {activePresupuestos.length > 0 && (
-          <>
-            <div className="flex items-center gap-2 mb-4">
-              <Badge variant="default" className="bg-primary/10 text-primary hover:bg-primary/20">
-                Activos ({activePresupuestos.length})
-              </Badge>
-            </div>
+          <Collapsible open={showActive} onOpenChange={setShowActive} className="mb-6">
+            <CollapsibleTrigger asChild>
+              <Button variant="ghost" className="flex items-center gap-2 mb-4 text-foreground hover:text-primary">
+                {showActive ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                <Badge variant="default" className="bg-primary/10 text-primary hover:bg-primary/20">
+                  Activos ({activePresupuestos.length})
+                </Badge>
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              {/* Cards View - Active */}
+              {viewMode === 'cards' && (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {activePresupuestos.map((p) => (
+                    <PresupuestoCard 
+                      key={p.id} 
+                      p={p} 
+                      isAdmin={isAdmin}
+                      recalculatingId={recalculatingId}
+                      onRecalculate={handleRecalculate}
+                      onEdit={handleEdit}
+                      onDelete={handleDeleteClick}
+                      onArchiveToggle={handleArchiveToggle}
+                      onNavigate={(id) => navigate(`/presupuestos/${id}`)}
+                      generatePresupuestoId={generatePresupuestoId}
+                    />
+                  ))}
+                </div>
+              )}
 
-            {/* Cards View - Active */}
-            {viewMode === 'cards' && (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-                {activePresupuestos.map((p) => (
-                  <PresupuestoCard 
-                    key={p.id} 
-                    p={p} 
-                    isAdmin={isAdmin}
-                    recalculatingId={recalculatingId}
-                    onRecalculate={handleRecalculate}
-                    onEdit={handleEdit}
-                    onDelete={handleDeleteClick}
-                    onArchiveToggle={handleArchiveToggle}
-                    onNavigate={(id) => navigate(`/presupuestos/${id}`)}
-                    generatePresupuestoId={generatePresupuestoId}
-                  />
-                ))}
-              </div>
-            )}
-
-            {/* List View - Active */}
-            {viewMode === 'list' && (
-              <div className="border rounded-lg overflow-hidden mb-6">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>PresupuestoID</TableHead>
-                      <TableHead>Nombre</TableHead>
-                      <TableHead>Código</TableHead>
-                      <TableHead>Versión</TableHead>
-                      <TableHead>Población</TableHead>
-                      <TableHead>Provincia</TableHead>
-                      <TableHead>Creado</TableHead>
-                      <TableHead className="w-40">Acciones</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {activePresupuestos.map((p) => (
-                      <PresupuestoRow
-                        key={p.id}
-                        p={p}
-                        isAdmin={isAdmin}
-                        recalculatingId={recalculatingId}
-                        onRecalculate={handleRecalculate}
-                        onEdit={handleEdit}
-                        onDelete={handleDeleteClick}
-                        onArchiveToggle={handleArchiveToggle}
-                        onNavigate={(id) => navigate(`/presupuestos/${id}`)}
-                        generatePresupuestoId={generatePresupuestoId}
-                      />
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            )}
-          </>
+              {/* List View - Active */}
+              {viewMode === 'list' && (
+                <div className="border rounded-lg overflow-hidden">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>PresupuestoID</TableHead>
+                        <TableHead>Nombre</TableHead>
+                        <TableHead>Código</TableHead>
+                        <TableHead>Versión</TableHead>
+                        <TableHead>Población</TableHead>
+                        <TableHead>Provincia</TableHead>
+                        <TableHead>Creado</TableHead>
+                        <TableHead className="w-40">Acciones</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {activePresupuestos.map((p) => (
+                        <PresupuestoRow
+                          key={p.id}
+                          p={p}
+                          isAdmin={isAdmin}
+                          recalculatingId={recalculatingId}
+                          onRecalculate={handleRecalculate}
+                          onEdit={handleEdit}
+                          onDelete={handleDeleteClick}
+                          onArchiveToggle={handleArchiveToggle}
+                          onNavigate={(id) => navigate(`/presupuestos/${id}`)}
+                          generatePresupuestoId={generatePresupuestoId}
+                        />
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CollapsibleContent>
+          </Collapsible>
         )}
 
         {/* Archived Presupuestos Section */}

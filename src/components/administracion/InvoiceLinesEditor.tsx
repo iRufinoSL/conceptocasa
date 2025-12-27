@@ -25,6 +25,8 @@ interface Activity {
   id: string;
   code: string;
   name: string;
+  phaseCode: string | null;
+  activityId: string; // Formatted: phaseCode + "  " + code + ".-" + name
 }
 
 interface InvoiceLine {
@@ -76,12 +78,28 @@ export function InvoiceLinesEditor({ invoice, onClose }: Props) {
       if (invoice.budget_id) {
         const { data: activitiesData, error: activitiesError } = await supabase
           .from('budget_activities')
-          .select('id, code, name')
+          .select('id, code, name, budget_phases(code)')
           .eq('budget_id', invoice.budget_id)
           .order('code');
 
         if (activitiesError) throw activitiesError;
-        setActivities(activitiesData || []);
+        
+        // Format activities with ActividadID
+        const formattedActivities: Activity[] = (activitiesData || []).map((a: any) => {
+          const phaseCode = a.budget_phases?.code || '';
+          const activityId = phaseCode 
+            ? `${phaseCode}  ${a.code}.-${a.name}`
+            : `${a.code}.-${a.name}`;
+          return {
+            id: a.id,
+            code: a.code,
+            name: a.name,
+            phaseCode,
+            activityId
+          };
+        });
+        
+        setActivities(formattedActivities);
       }
     } catch (error) {
       console.error('Error fetching data:', error);
@@ -307,7 +325,7 @@ export function InvoiceLinesEditor({ invoice, onClose }: Props) {
                                   {line.activity_id
                                     ? (() => {
                                         const activity = activities.find(a => a.id === line.activity_id);
-                                        return activity ? `${activity.code} - ${activity.name}` : 'Seleccionar...';
+                                        return activity ? activity.activityId : 'Seleccionar...';
                                       })()
                                     : 'Sin actividad'}
                                 </span>
@@ -335,7 +353,7 @@ export function InvoiceLinesEditor({ invoice, onClose }: Props) {
                                     {activities.map((activity) => (
                                       <CommandItem
                                         key={activity.id}
-                                        value={`${activity.code} ${activity.name}`}
+                                        value={activity.activityId}
                                         onSelect={() => updateLine(line.id, 'activity_id', activity.id)}
                                       >
                                         <Check
@@ -344,7 +362,7 @@ export function InvoiceLinesEditor({ invoice, onClose }: Props) {
                                             line.activity_id === activity.id ? "opacity-100" : "opacity-0"
                                           )}
                                         />
-                                        <span className="truncate">{activity.code} - {activity.name}</span>
+                                        <span className="truncate">{activity.activityId}</span>
                                       </CommandItem>
                                     ))}
                                   </CommandGroup>

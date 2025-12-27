@@ -17,6 +17,7 @@ import Agenda from "./pages/Agenda";
 import Documentos from "./pages/Documentos";
 import Usuarios from "./pages/Usuarios";
 import Configuracion from "./pages/Configuracion";
+import Administracion from "./pages/Administracion";
 import Setup from "./pages/Setup";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
@@ -50,6 +51,7 @@ const App = () => (
             <Route path="/recursos" element={<ProtectedRoute requireAdmin><Recursos /></ProtectedRoute>} />
             <Route path="/usuarios" element={<ProtectedRoute requireAdmin><Usuarios /></ProtectedRoute>} />
             <Route path="/configuracion" element={<ProtectedRoute requireAdmin><Configuracion /></ProtectedRoute>} />
+            <Route path="/administracion" element={<ProtectedRoute requireAdmin><Administracion /></ProtectedRoute>} />
             
             {/* Catch-all */}
             <Route path="*" element={<NotFound />} />

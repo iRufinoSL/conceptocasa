@@ -18,6 +18,7 @@ import {
   Package,
   Settings,
   ChevronDown,
+  Wallet,
 } from 'lucide-react';
 
 interface NavItem {
@@ -35,6 +36,7 @@ const navItems: NavItem[] = [
   { title: 'Agenda', path: '/agenda', icon: Calendar },
   { title: 'Documentos', path: '/documentos', icon: FileText },
   { title: 'Recursos', path: '/recursos', icon: Package, adminOnly: true },
+  { title: 'Administración', path: '/administracion', icon: Wallet, adminOnly: true },
   { title: 'Usuarios', path: '/usuarios', icon: Users, adminOnly: true },
   { title: 'Configuración', path: '/configuracion', icon: Settings, adminOnly: true },
 ];

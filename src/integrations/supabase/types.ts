@@ -14,6 +14,125 @@ export type Database = {
   }
   public: {
     Tables: {
+      accounting_accounts: {
+        Row: {
+          account_type: string
+          created_at: string
+          id: string
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          account_type: string
+          created_at?: string
+          id?: string
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          account_type?: string
+          created_at?: string
+          id?: string
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      accounting_entries: {
+        Row: {
+          budget_id: string
+          code: number
+          created_at: string
+          description: string
+          entry_date: string
+          id: string
+          total_amount: number
+          updated_at: string
+        }
+        Insert: {
+          budget_id: string
+          code?: number
+          created_at?: string
+          description: string
+          entry_date?: string
+          id?: string
+          total_amount?: number
+          updated_at?: string
+        }
+        Update: {
+          budget_id?: string
+          code?: number
+          created_at?: string
+          description?: string
+          entry_date?: string
+          id?: string
+          total_amount?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "accounting_entries_budget_id_fkey"
+            columns: ["budget_id"]
+            isOneToOne: false
+            referencedRelation: "presupuestos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      accounting_entry_lines: {
+        Row: {
+          account_id: string
+          code: number
+          created_at: string
+          credit_amount: number
+          debit_amount: number
+          description: string | null
+          entry_id: string
+          id: string
+          line_date: string
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          code?: number
+          created_at?: string
+          credit_amount?: number
+          debit_amount?: number
+          description?: string | null
+          entry_id: string
+          id?: string
+          line_date: string
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          code?: number
+          created_at?: string
+          credit_amount?: number
+          debit_amount?: number
+          description?: string | null
+          entry_id?: string
+          id?: string
+          line_date?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "accounting_entry_lines_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounting_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "accounting_entry_lines_entry_id_fkey"
+            columns: ["entry_id"]
+            isOneToOne: false
+            referencedRelation: "accounting_entries"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       budget_activities: {
         Row: {
           budget_id: string

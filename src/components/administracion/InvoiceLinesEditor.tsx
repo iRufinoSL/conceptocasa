@@ -272,9 +272,7 @@ export function InvoiceLinesEditor({ invoice, onClose }: Props) {
                   <TableRow>
                     <TableHead className="w-16">Cód.</TableHead>
                     <TableHead>Descripción</TableHead>
-                    {activities.length > 0 && (
-                      <TableHead className="w-48">Actividad</TableHead>
-                    )}
+                    <TableHead className="w-52">Actividad</TableHead>
                     <TableHead className="w-24 text-right">Uds.</TableHead>
                     <TableHead className="w-32 text-right">€/Ud.</TableHead>
                     <TableHead className="w-32 text-right">SubTotal</TableHead>
@@ -295,8 +293,8 @@ export function InvoiceLinesEditor({ invoice, onClose }: Props) {
                           className="h-8"
                         />
                       </TableCell>
-                      {activities.length > 0 && (
-                        <TableCell>
+                      <TableCell>
+                        {activities.length > 0 ? (
                           <Select
                             value={line.activity_id || 'none'}
                             onValueChange={(value) => updateLine(line.id, 'activity_id', value === 'none' ? null : value)}
@@ -313,8 +311,12 @@ export function InvoiceLinesEditor({ invoice, onClose }: Props) {
                               ))}
                             </SelectContent>
                           </Select>
-                        </TableCell>
-                      )}
+                        ) : (
+                          <span className="text-xs text-muted-foreground italic">
+                            {invoice.budget_id ? 'Sin actividades' : 'Sin presupuesto'}
+                          </span>
+                        )}
+                      </TableCell>
                       <TableCell>
                         <Input
                           type="number"

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Plus, Pencil, Trash2, ChevronDown, ChevronRight, AlertTriangle, CheckCircle } from 'lucide-react';
+import { Plus, Pencil, Trash2, ChevronDown, ChevronRight, AlertTriangle, CheckCircle, Filter, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import { AccountingEntryLinesEditor } from './AccountingEntryLinesEditor';
@@ -45,6 +45,12 @@ interface EntryForm {
   total_amount: string;
 }
 
+interface Filters {
+  budgetId: string;
+  dateFrom: string;
+  dateTo: string;
+}
+
 const emptyForm: EntryForm = {
   description: '',
   entry_date: format(new Date(), 'yyyy-MM-dd'),
@@ -52,9 +58,16 @@ const emptyForm: EntryForm = {
   total_amount: '0'
 };
 
+const emptyFilters: Filters = {
+  budgetId: '',
+  dateFrom: '',
+  dateTo: ''
+};
+
 export function AccountingEntriesTab() {
   const [entries, setEntries] = useState<AccountingEntry[]>([]);
   const [presupuestos, setPresupuestos] = useState<Presupuesto[]>([]);
+  const [allPresupuestos, setAllPresupuestos] = useState<Presupuesto[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -64,6 +77,8 @@ export function AccountingEntriesTab() {
   const [saving, setSaving] = useState(false);
   const [expandedEntries, setExpandedEntries] = useState<Set<string>>(new Set());
   const [selectedEntryForLines, setSelectedEntryForLines] = useState<AccountingEntry | null>(null);
+  const [filters, setFilters] = useState<Filters>(emptyFilters);
+  const [showFilters, setShowFilters] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -80,6 +95,15 @@ export function AccountingEntriesTab() {
 
       if (presError) throw presError;
       setPresupuestos(presupuestosData || []);
+
+      // Fetch ALL presupuestos for filter (including archived)
+      const { data: allPresData, error: allPresError } = await supabase
+        .from('presupuestos')
+        .select('id, nombre, codigo_correlativo, version')
+        .order('codigo_correlativo', { ascending: false });
+
+      if (allPresError) throw allPresError;
+      setAllPresupuestos(allPresData || []);
 
       // Fetch entries with presupuesto info
       const { data: entriesData, error: entriesError } = await supabase
@@ -245,6 +269,31 @@ export function AccountingEntriesTab() {
     return format(new Date(dateStr), 'dd/MM/yyyy', { locale: es });
   };
 
+  // Filter entries based on current filters
+  const filteredEntries = useMemo(() => {
+    return entries.filter(entry => {
+      // Budget filter
+      if (filters.budgetId && entry.budget_id !== filters.budgetId) {
+        return false;
+      }
+      // Date from filter
+      if (filters.dateFrom && entry.entry_date < filters.dateFrom) {
+        return false;
+      }
+      // Date to filter
+      if (filters.dateTo && entry.entry_date > filters.dateTo) {
+        return false;
+      }
+      return true;
+    });
+  }, [entries, filters]);
+
+  const hasActiveFilters = filters.budgetId || filters.dateFrom || filters.dateTo;
+
+  const clearFilters = () => {
+    setFilters(emptyFilters);
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -258,23 +307,98 @@ export function AccountingEntriesTab() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-lg font-semibold">Asientos Contables</h2>
-          <p className="text-sm text-muted-foreground">Registro de movimientos contables</p>
+          <p className="text-sm text-muted-foreground">
+            Registro de movimientos contables
+            {hasActiveFilters && ` • Mostrando ${filteredEntries.length} de ${entries.length}`}
+          </p>
         </div>
-        <Button onClick={handleOpenCreate} className="gap-2">
-          <Plus className="h-4 w-4" />
-          Nuevo Asiento
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button 
+            variant={showFilters ? "secondary" : "outline"} 
+            onClick={() => setShowFilters(!showFilters)}
+            className="gap-2"
+          >
+            <Filter className="h-4 w-4" />
+            Filtros
+            {hasActiveFilters && (
+              <Badge variant="secondary" className="ml-1 h-5 w-5 p-0 flex items-center justify-center">
+                {[filters.budgetId, filters.dateFrom, filters.dateTo].filter(Boolean).length}
+              </Badge>
+            )}
+          </Button>
+          <Button onClick={handleOpenCreate} className="gap-2">
+            <Plus className="h-4 w-4" />
+            Nuevo Asiento
+          </Button>
+        </div>
       </div>
 
-      {entries.length === 0 ? (
+      {/* Filters Panel */}
+      {showFilters && (
+        <Card>
+          <CardContent className="py-4">
+            <div className="flex flex-wrap items-end gap-4">
+              <div className="space-y-2 min-w-[200px]">
+                <Label htmlFor="filter-budget">Presupuesto</Label>
+                <Select
+                  value={filters.budgetId}
+                  onValueChange={(value) => setFilters({ ...filters, budgetId: value === 'all' ? '' : value })}
+                >
+                  <SelectTrigger id="filter-budget">
+                    <SelectValue placeholder="Todos los presupuestos" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos los presupuestos</SelectItem>
+                    {allPresupuestos.map((p) => (
+                      <SelectItem key={p.id} value={p.id}>
+                        {p.codigo_correlativo} - {p.nombre}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="filter-date-from">Fecha desde</Label>
+                <Input
+                  id="filter-date-from"
+                  type="date"
+                  value={filters.dateFrom}
+                  onChange={(e) => setFilters({ ...filters, dateFrom: e.target.value })}
+                  className="w-[160px]"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="filter-date-to">Fecha hasta</Label>
+                <Input
+                  id="filter-date-to"
+                  type="date"
+                  value={filters.dateTo}
+                  onChange={(e) => setFilters({ ...filters, dateTo: e.target.value })}
+                  className="w-[160px]"
+                />
+              </div>
+              {hasActiveFilters && (
+                <Button variant="ghost" onClick={clearFilters} className="gap-2">
+                  <X className="h-4 w-4" />
+                  Limpiar filtros
+                </Button>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {filteredEntries.length === 0 ? (
         <Card>
           <CardContent className="py-12 text-center text-muted-foreground">
-            No hay asientos contables. Crea el primer asiento.
+            {hasActiveFilters 
+              ? 'No hay asientos que coincidan con los filtros seleccionados.'
+              : 'No hay asientos contables. Crea el primer asiento.'}
           </CardContent>
         </Card>
       ) : (
         <div className="space-y-3">
-          {entries.map((entry) => (
+          {filteredEntries.map((entry) => (
             <Card key={entry.id} className={!entry.is_balanced ? 'border-destructive/50' : ''}>
               <Collapsible
                 open={expandedEntries.has(entry.id)}

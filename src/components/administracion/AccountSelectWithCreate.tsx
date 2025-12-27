@@ -33,6 +33,7 @@ interface Props {
   accounts: AccountingAccount[];
   onAccountCreated?: () => void;
   placeholder?: string;
+  label?: string;
 }
 
 const ACCOUNT_TYPES = [

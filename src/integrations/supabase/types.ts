@@ -1345,6 +1345,130 @@ export type Database = {
           },
         ]
       }
+      invoice_lines: {
+        Row: {
+          activity_id: string | null
+          code: number
+          created_at: string
+          description: string | null
+          id: string
+          invoice_id: string
+          subtotal: number
+          unit_price: number
+          units: number
+          updated_at: string
+        }
+        Insert: {
+          activity_id?: string | null
+          code?: number
+          created_at?: string
+          description?: string | null
+          id?: string
+          invoice_id: string
+          subtotal?: number
+          unit_price?: number
+          units?: number
+          updated_at?: string
+        }
+        Update: {
+          activity_id?: string | null
+          code?: number
+          created_at?: string
+          description?: string | null
+          id?: string
+          invoice_id?: string
+          subtotal?: number
+          unit_price?: number
+          units?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invoice_lines_activity_id_fkey"
+            columns: ["activity_id"]
+            isOneToOne: false
+            referencedRelation: "budget_activities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoice_lines_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      invoices: {
+        Row: {
+          budget_id: string | null
+          created_at: string
+          description: string | null
+          id: string
+          invoice_date: string
+          invoice_number: number
+          issuer_account_id: string | null
+          receiver_account_id: string | null
+          subtotal: number
+          total: number
+          updated_at: string
+          vat_amount: number
+          vat_rate: number
+        }
+        Insert: {
+          budget_id?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          invoice_date?: string
+          invoice_number: number
+          issuer_account_id?: string | null
+          receiver_account_id?: string | null
+          subtotal?: number
+          total?: number
+          updated_at?: string
+          vat_amount?: number
+          vat_rate?: number
+        }
+        Update: {
+          budget_id?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          invoice_date?: string
+          invoice_number?: number
+          issuer_account_id?: string | null
+          receiver_account_id?: string | null
+          subtotal?: number
+          total?: number
+          updated_at?: string
+          vat_amount?: number
+          vat_rate?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invoices_budget_id_fkey"
+            columns: ["budget_id"]
+            isOneToOne: false
+            referencedRelation: "presupuestos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoices_issuer_account_id_fkey"
+            columns: ["issuer_account_id"]
+            isOneToOne: false
+            referencedRelation: "accounting_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoices_receiver_account_id_fkey"
+            columns: ["receiver_account_id"]
+            isOneToOne: false
+            referencedRelation: "accounting_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       presupuestos: {
         Row: {
           archived: boolean

@@ -2,19 +2,20 @@ import { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Wallet, ArrowLeft, BookOpen, Calculator, BarChart3, FileText } from 'lucide-react';
+import { Wallet, ArrowLeft, BookOpen, Calculator, BarChart3, FileText, Receipt } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { AppNavDropdown } from '@/components/AppNavDropdown';
 import { AccountingEntriesTab } from '@/components/administracion/AccountingEntriesTab';
 import { AccountingEntryLinesTab } from '@/components/administracion/AccountingEntryLinesTab';
 import { AccountingAccountsTab } from '@/components/administracion/AccountingAccountsTab';
 import { AccountingBalanceReport } from '@/components/administracion/AccountingBalanceReport';
+import { InvoicesTab } from '@/components/administracion/InvoicesTab';
 
 export default function Administracion() {
   const navigate = useNavigate();
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('entries');
+  const [activeTab, setActiveTab] = useState('invoices');
   const [highlightEntryCode, setHighlightEntryCode] = useState<number | null>(null);
   const [highlightAccountId, setHighlightAccountId] = useState<string | null>(null);
 
@@ -99,6 +100,10 @@ export default function Administracion() {
       <main className="container mx-auto px-4 py-6">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           <TabsList>
+            <TabsTrigger value="invoices" className="gap-2">
+              <Receipt className="h-4 w-4" />
+              Facturas
+            </TabsTrigger>
             <TabsTrigger value="entries" className="gap-2">
               <BookOpen className="h-4 w-4" />
               Asientos
@@ -116,6 +121,10 @@ export default function Administracion() {
               Informe Balance
             </TabsTrigger>
           </TabsList>
+
+          <TabsContent value="invoices">
+            <InvoicesTab />
+          </TabsContent>
 
           <TabsContent value="entries">
             <AccountingEntriesTab 

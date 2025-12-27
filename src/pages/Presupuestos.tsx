@@ -20,6 +20,7 @@ import { searchMatch } from '@/lib/search-utils';
 import { CloneBudgetDialog } from '@/components/presupuestos/CloneBudgetDialog';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
 
 interface Presupuesto {
   id: string;
@@ -43,6 +44,7 @@ interface PresupuestoForm {
   provincia: string;
   coordenadas_lat: string;
   coordenadas_lng: string;
+  archived: boolean;
 }
 
 const emptyForm: PresupuestoForm = {
@@ -52,7 +54,8 @@ const emptyForm: PresupuestoForm = {
   poblacion: '',
   provincia: '',
   coordenadas_lat: '',
-  coordenadas_lng: ''
+  coordenadas_lng: '',
+  archived: false
 };
 
 // Subcomponent for Card view
@@ -349,7 +352,8 @@ export default function Presupuestos() {
       poblacion: p.poblacion,
       provincia: p.provincia || '',
       coordenadas_lat: p.coordenadas_lat?.toString() || '',
-      coordenadas_lng: p.coordenadas_lng?.toString() || ''
+      coordenadas_lng: p.coordenadas_lng?.toString() || '',
+      archived: p.archived
     });
     setFormDialogOpen(true);
   };
@@ -381,7 +385,8 @@ export default function Presupuestos() {
         poblacion: form.poblacion.trim(),
         provincia: form.provincia.trim() || null,
         coordenadas_lat: form.coordenadas_lat ? parseFloat(form.coordenadas_lat) : null,
-        coordenadas_lng: form.coordenadas_lng ? parseFloat(form.coordenadas_lng) : null
+        coordenadas_lng: form.coordenadas_lng ? parseFloat(form.coordenadas_lng) : null,
+        archived: form.archived
       };
 
       if (editingPresupuesto) {
@@ -804,6 +809,27 @@ export default function Presupuestos() {
               <Label className="text-xs text-muted-foreground">PresupuestoID (calculado)</Label>
               <p className="text-sm font-medium mt-1">{generatePresupuestoId(form)}</p>
             </div>
+
+            {/* Archive toggle - only show when editing */}
+            {editingPresupuesto && (
+              <div className="flex items-center justify-between p-3 border rounded-lg">
+                <div className="space-y-0.5">
+                  <Label htmlFor="archived" className="text-sm font-medium">Estado del presupuesto</Label>
+                  <p className="text-xs text-muted-foreground">
+                    {form.archived ? 'Este presupuesto está archivado' : 'Este presupuesto está activo'}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className={`text-xs ${!form.archived ? 'text-primary font-medium' : 'text-muted-foreground'}`}>Activo</span>
+                  <Switch
+                    id="archived"
+                    checked={form.archived}
+                    onCheckedChange={(checked) => setForm({ ...form, archived: checked })}
+                  />
+                  <span className={`text-xs ${form.archived ? 'text-primary font-medium' : 'text-muted-foreground'}`}>Archivado</span>
+                </div>
+              </div>
+            )}
           </div>
 
           <DialogFooter>

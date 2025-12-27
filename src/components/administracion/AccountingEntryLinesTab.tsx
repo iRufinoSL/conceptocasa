@@ -2,12 +2,9 @@ import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ArrowUpDown, List, Layers } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
@@ -38,7 +35,12 @@ interface EntryLine {
 type SortField = 'code' | 'line_date';
 type SortDirection = 'asc' | 'desc';
 
-export function AccountingEntryLinesTab() {
+interface Props {
+  onNavigateToEntry?: (entryCode: number) => void;
+  onNavigateToAccount?: (accountId: string) => void;
+}
+
+export function AccountingEntryLinesTab({ onNavigateToEntry, onNavigateToAccount }: Props) {
   const [lines, setLines] = useState<EntryLine[]>([]);
   const [accounts, setAccounts] = useState<AccountingAccount[]>([]);
   const [loading, setLoading] = useState(true);
@@ -136,6 +138,18 @@ export function AccountingEntryLinesTab() {
   const totalDebit = lines.reduce((sum, line) => sum + (Number(line.debit_amount) || 0), 0);
   const totalCredit = lines.reduce((sum, line) => sum + (Number(line.credit_amount) || 0), 0);
 
+  const handleEntryClick = (entryCode: number) => {
+    if (onNavigateToEntry) {
+      onNavigateToEntry(entryCode);
+    }
+  };
+
+  const handleAccountClick = (accountId: string) => {
+    if (onNavigateToAccount) {
+      onNavigateToAccount(accountId);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -215,12 +229,19 @@ export function AccountingEntryLinesTab() {
                       <TableCell className="font-mono text-muted-foreground">{line.code}</TableCell>
                       <TableCell>{formatDate(line.line_date)}</TableCell>
                       <TableCell>
-                        <Badge variant="outline" className="font-mono">
+                        <Badge 
+                          variant="outline" 
+                          className="font-mono cursor-pointer hover:bg-primary/10 transition-colors"
+                          onClick={() => line.entry?.code && handleEntryClick(line.entry.code)}
+                        >
                           #{line.entry?.code}
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        <div>
+                        <div 
+                          className="cursor-pointer hover:text-primary transition-colors"
+                          onClick={() => handleAccountClick(line.account_id)}
+                        >
                           <div className="font-medium">{line.account?.name}</div>
                           <div className="text-xs text-muted-foreground">{line.account?.account_type}</div>
                         </div>
@@ -261,7 +282,10 @@ export function AccountingEntryLinesTab() {
               <Card key={group.account.id}>
                 <div className="p-4 border-b bg-muted/30">
                   <div className="flex items-center justify-between">
-                    <div>
+                    <div 
+                      className="cursor-pointer hover:text-primary transition-colors"
+                      onClick={() => handleAccountClick(group.account.id)}
+                    >
                       <h3 className="font-semibold">{group.account.name}</h3>
                       <Badge variant="outline" className="mt-1">{group.account.account_type}</Badge>
                     </div>
@@ -293,7 +317,11 @@ export function AccountingEntryLinesTab() {
                           <TableCell className="font-mono text-muted-foreground">{line.code}</TableCell>
                           <TableCell>{formatDate(line.line_date)}</TableCell>
                           <TableCell>
-                            <Badge variant="outline" className="font-mono">
+                            <Badge 
+                              variant="outline" 
+                              className="font-mono cursor-pointer hover:bg-primary/10 transition-colors"
+                              onClick={() => line.entry?.code && handleEntryClick(line.entry.code)}
+                            >
                               #{line.entry?.code}
                             </Badge>
                           </TableCell>

@@ -42,7 +42,12 @@ const emptyForm: AccountForm = {
   account_type: ''
 };
 
-export function AccountingAccountsTab() {
+interface Props {
+  highlightAccountId?: string | null;
+  onHighlightHandled?: () => void;
+}
+
+export function AccountingAccountsTab({ highlightAccountId, onHighlightHandled }: Props) {
   const [accounts, setAccounts] = useState<AccountingAccount[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -57,6 +62,21 @@ export function AccountingAccountsTab() {
   useEffect(() => {
     fetchAccounts();
   }, []);
+
+  // Handle highlight from navigation
+  useEffect(() => {
+    if (highlightAccountId && accounts.length > 0) {
+      const accountToHighlight = accounts.find(a => a.id === highlightAccountId);
+      if (accountToHighlight) {
+        setSearchQuery(accountToHighlight.name);
+        setTimeout(() => {
+          const element = document.getElementById(`account-${highlightAccountId}`);
+          element?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 100);
+      }
+      onHighlightHandled?.();
+    }
+  }, [highlightAccountId, accounts, onHighlightHandled]);
 
   const fetchAccounts = async () => {
     try {
@@ -230,7 +250,7 @@ export function AccountingAccountsTab() {
   };
 
   const renderAccountRow = (account: AccountingAccount) => (
-    <TableRow key={account.id}>
+    <TableRow key={account.id} id={`account-${account.id}`} className={highlightAccountId === account.id ? 'bg-primary/10' : ''}>
       <TableCell className="font-medium">{account.name}</TableCell>
       <TableCell>
         <Badge variant={getTypeBadgeColor(account.account_type) as any}>

@@ -89,7 +89,7 @@ const apps: AppCard[] = [
     description: 'Contabilidad y facturación',
     icon: Wallet,
     route: '/administracion',
-    available: false,
+    available: true,
     adminOnly: true,
   },
   {

@@ -36,11 +36,12 @@ interface Props {
 }
 
 const ACCOUNT_TYPES = [
-  'Activo',
-  'Pasivo',
-  'Patrimonio',
-  'Ingresos',
-  'Gastos',
+  'Compras y gastos',
+  'Ventas e ingresos',
+  'Clientes',
+  'Proveedores',
+  'Impuestos',
+  'Tesorería'
 ];
 
 export function AccountSelectWithCreate({ 
@@ -55,7 +56,7 @@ export function AccountSelectWithCreate({
   const [saving, setSaving] = useState(false);
   const [newAccount, setNewAccount] = useState({
     name: '',
-    account_type: 'Gastos'
+    account_type: 'Compras y gastos'
   });
 
   const filteredAccounts = useMemo(() => {
@@ -88,7 +89,7 @@ export function AccountSelectWithCreate({
 
       toast.success('Cuenta contable creada');
       setShowCreateDialog(false);
-      setNewAccount({ name: '', account_type: 'Gastos' });
+      setNewAccount({ name: '', account_type: 'Compras y gastos' });
       
       // Select the new account
       if (data) {
@@ -107,7 +108,7 @@ export function AccountSelectWithCreate({
   const handleOpenCreateWithSearch = () => {
     setNewAccount({
       name: searchQuery,
-      account_type: 'Gastos'
+      account_type: 'Compras y gastos'
     });
     setShowCreateDialog(true);
   };

@@ -2,11 +2,12 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Wallet, ArrowLeft, BookOpen, FileSpreadsheet, Calculator } from 'lucide-react';
+import { Wallet, ArrowLeft, BookOpen, Calculator, BarChart3 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { AppNavDropdown } from '@/components/AppNavDropdown';
 import { AccountingEntriesTab } from '@/components/administracion/AccountingEntriesTab';
 import { AccountingAccountsTab } from '@/components/administracion/AccountingAccountsTab';
+import { AccountingBalanceReport } from '@/components/administracion/AccountingBalanceReport';
 
 export default function Administracion() {
   const navigate = useNavigate();
@@ -92,6 +93,10 @@ export default function Administracion() {
               <Calculator className="h-4 w-4" />
               Cuentas Contables
             </TabsTrigger>
+            <TabsTrigger value="balance" className="gap-2">
+              <BarChart3 className="h-4 w-4" />
+              Informe Balance
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="entries">
@@ -100,6 +105,10 @@ export default function Administracion() {
 
           <TabsContent value="accounts">
             <AccountingAccountsTab />
+          </TabsContent>
+
+          <TabsContent value="balance">
+            <AccountingBalanceReport />
           </TabsContent>
         </Tabs>
       </main>

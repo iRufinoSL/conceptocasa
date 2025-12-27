@@ -144,6 +144,7 @@ export default function Administracion() {
             <AccountingAccountsTab 
               highlightAccountId={highlightAccountId}
               onHighlightHandled={() => setHighlightAccountId(null)}
+              onNavigateToEntry={handleNavigateToEntry}
             />
           </TabsContent>
 

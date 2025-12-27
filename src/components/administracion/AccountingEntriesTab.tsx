@@ -64,7 +64,12 @@ const emptyFilters: Filters = {
   dateTo: ''
 };
 
-export function AccountingEntriesTab() {
+interface Props {
+  highlightCode?: number | null;
+  onHighlightHandled?: () => void;
+}
+
+export function AccountingEntriesTab({ highlightCode, onHighlightHandled }: Props) {
   const [entries, setEntries] = useState<AccountingEntry[]>([]);
   const [presupuestos, setPresupuestos] = useState<Presupuesto[]>([]);
   const [allPresupuestos, setAllPresupuestos] = useState<Presupuesto[]>([]);
@@ -83,6 +88,22 @@ export function AccountingEntriesTab() {
   useEffect(() => {
     fetchData();
   }, []);
+
+  // Handle highlight from navigation
+  useEffect(() => {
+    if (highlightCode && entries.length > 0) {
+      const entryToHighlight = entries.find(e => e.code === highlightCode);
+      if (entryToHighlight) {
+        setExpandedEntries(prev => new Set([...prev, entryToHighlight.id]));
+        // Scroll to the entry after a short delay
+        setTimeout(() => {
+          const element = document.getElementById(`entry-${entryToHighlight.id}`);
+          element?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 100);
+      }
+      onHighlightHandled?.();
+    }
+  }, [highlightCode, entries, onHighlightHandled]);
 
   const fetchData = async () => {
     try {
@@ -399,7 +420,11 @@ export function AccountingEntriesTab() {
       ) : (
         <div className="space-y-3">
           {filteredEntries.map((entry) => (
-            <Card key={entry.id} className={!entry.is_balanced ? 'border-destructive/50' : ''}>
+            <Card 
+              key={entry.id} 
+              id={`entry-${entry.id}`}
+              className={`${!entry.is_balanced ? 'border-destructive/50' : ''} ${highlightCode === entry.code ? 'ring-2 ring-primary' : ''}`}
+            >
               <Collapsible
                 open={expandedEntries.has(entry.id)}
                 onOpenChange={() => toggleExpanded(entry.id)}

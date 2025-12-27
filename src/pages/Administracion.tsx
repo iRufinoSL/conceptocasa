@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -14,6 +14,9 @@ export default function Administracion() {
   const navigate = useNavigate();
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState('entries');
+  const [highlightEntryCode, setHighlightEntryCode] = useState<number | null>(null);
+  const [highlightAccountId, setHighlightAccountId] = useState<string | null>(null);
 
   useEffect(() => {
     checkAuth();
@@ -50,6 +53,16 @@ export default function Administracion() {
     }
   };
 
+  const handleNavigateToEntry = (entryCode: number) => {
+    setHighlightEntryCode(entryCode);
+    setActiveTab('entries');
+  };
+
+  const handleNavigateToAccount = (accountId: string) => {
+    setHighlightAccountId(accountId);
+    setActiveTab('accounts');
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -84,7 +97,7 @@ export default function Administracion() {
         </div>
       </header>
       <main className="container mx-auto px-4 py-6">
-        <Tabs defaultValue="entries" className="space-y-6">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           <TabsList>
             <TabsTrigger value="entries" className="gap-2">
               <BookOpen className="h-4 w-4" />
@@ -105,15 +118,24 @@ export default function Administracion() {
           </TabsList>
 
           <TabsContent value="entries">
-            <AccountingEntriesTab />
+            <AccountingEntriesTab 
+              highlightCode={highlightEntryCode}
+              onHighlightHandled={() => setHighlightEntryCode(null)}
+            />
           </TabsContent>
 
           <TabsContent value="lines">
-            <AccountingEntryLinesTab />
+            <AccountingEntryLinesTab 
+              onNavigateToEntry={handleNavigateToEntry}
+              onNavigateToAccount={handleNavigateToAccount}
+            />
           </TabsContent>
 
           <TabsContent value="accounts">
-            <AccountingAccountsTab />
+            <AccountingAccountsTab 
+              highlightAccountId={highlightAccountId}
+              onHighlightHandled={() => setHighlightAccountId(null)}
+            />
           </TabsContent>
 
           <TabsContent value="balance">

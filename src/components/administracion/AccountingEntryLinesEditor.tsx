@@ -2,10 +2,10 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Plus, Trash2, AlertTriangle, CheckCircle, Pencil, X, Check } from 'lucide-react';
 import { toast } from 'sonner';
+import { AccountSelectWithCreate } from './AccountSelectWithCreate';
 
 interface AccountingEntry {
   id: string;
@@ -284,21 +284,12 @@ export function AccountingEntryLinesEditor({ entry, onUpdate }: Props) {
               {editingLineId === line.id ? (
                 <>
                   <TableCell>
-                    <Select
+                    <AccountSelectWithCreate
                       value={editForm.account_id}
-                      onValueChange={(value) => setEditForm({ ...editForm, account_id: value })}
-                    >
-                      <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Cuenta..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {accounts.map((account) => (
-                          <SelectItem key={account.id} value={account.id}>
-                            {account.name} ({account.account_type})
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                      onChange={(value) => setEditForm({ ...editForm, account_id: value })}
+                      accounts={accounts}
+                      onAccountCreated={fetchData}
+                    />
                   </TableCell>
                   <TableCell>
                     <Input
@@ -409,21 +400,12 @@ export function AccountingEntryLinesEditor({ entry, onUpdate }: Props) {
               <span className="text-muted-foreground">Nuevo</span>
             </TableCell>
             <TableCell>
-              <Select
+              <AccountSelectWithCreate
                 value={newLine.account_id}
-                onValueChange={(value) => setNewLine({ ...newLine, account_id: value })}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Cuenta..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {accounts.map((account) => (
-                    <SelectItem key={account.id} value={account.id}>
-                      {account.name} ({account.account_type})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                onChange={(value) => setNewLine({ ...newLine, account_id: value })}
+                accounts={accounts}
+                onAccountCreated={fetchData}
+              />
             </TableCell>
             <TableCell>
               <Input

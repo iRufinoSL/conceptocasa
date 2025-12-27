@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Plus, Pencil, Trash2, List, Layers } from 'lucide-react';
+import { Plus, Pencil, Trash2, List, Layers, Search, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 
@@ -52,6 +52,7 @@ export function AccountingAccountsTab() {
   const [form, setForm] = useState<AccountForm>(emptyForm);
   const [saving, setSaving] = useState(false);
   const [viewMode, setViewMode] = useState<'alphabetic' | 'grouped'>('alphabetic');
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     fetchAccounts();
@@ -99,10 +100,19 @@ export function AccountingAccountsTab() {
     }
   };
 
+  const filteredAccounts = useMemo(() => {
+    if (!searchQuery.trim()) return accounts;
+    const query = searchQuery.toLowerCase();
+    return accounts.filter(account => 
+      account.name.toLowerCase().includes(query) ||
+      account.account_type.toLowerCase().includes(query)
+    );
+  }, [accounts, searchQuery]);
+
   const accountsGroupedByType = useMemo(() => {
     const grouped = new Map<string, AccountingAccount[]>();
     
-    accounts.forEach(account => {
+    filteredAccounts.forEach(account => {
       const list = grouped.get(account.account_type) || [];
       list.push(account);
       grouped.set(account.account_type, list);
@@ -117,7 +127,7 @@ export function AccountingAccountsTab() {
         totalCredit: (grouped.get(type) || []).reduce((sum, a) => sum + (a.total_credit || 0), 0),
         totalBalance: (grouped.get(type) || []).reduce((sum, a) => sum + (a.balance || 0), 0)
       }));
-  }, [accounts]);
+  }, [filteredAccounts]);
 
   const handleOpenCreate = () => {
     setEditingAccount(null);
@@ -270,12 +280,34 @@ export function AccountingAccountsTab() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
           <h2 className="text-lg font-semibold">Cuentas Contables</h2>
-          <p className="text-sm text-muted-foreground">Plan de cuentas con saldos actuales</p>
+          <p className="text-sm text-muted-foreground">
+            Plan de cuentas con saldos actuales
+            {searchQuery && ` • ${filteredAccounts.length} de ${accounts.length} cuentas`}
+          </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Buscar cuenta..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9 w-[200px]"
+            />
+            {searchQuery && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="absolute right-1 top-1/2 -translate-y-1/2 h-6 w-6"
+                onClick={() => setSearchQuery('')}
+              >
+                <X className="h-3 w-3" />
+              </Button>
+            )}
+          </div>
           <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as 'alphabetic' | 'grouped')}>
             <TabsList>
               <TabsTrigger value="alphabetic" className="gap-2">
@@ -310,14 +342,14 @@ export function AccountingAccountsTab() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {accounts.length === 0 ? (
+                {filteredAccounts.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                      No hay cuentas contables. Crea la primera cuenta.
+                      {searchQuery ? 'No hay cuentas que coincidan con la búsqueda.' : 'No hay cuentas contables. Crea la primera cuenta.'}
                     </TableCell>
                   </TableRow>
                 ) : (
-                  accounts.map(renderAccountRow)
+                  filteredAccounts.map(renderAccountRow)
                 )}
               </TableBody>
             </Table>

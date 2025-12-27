@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -8,7 +8,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Pencil, Trash2, Calculator } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Plus, Pencil, Trash2, List, Layers } from 'lucide-react';
 import { toast } from 'sonner';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 
@@ -50,6 +51,7 @@ export function AccountingAccountsTab() {
   const [accountToDelete, setAccountToDelete] = useState<AccountingAccount | null>(null);
   const [form, setForm] = useState<AccountForm>(emptyForm);
   const [saving, setSaving] = useState(false);
+  const [viewMode, setViewMode] = useState<'alphabetic' | 'grouped'>('alphabetic');
 
   useEffect(() => {
     fetchAccounts();
@@ -57,23 +59,19 @@ export function AccountingAccountsTab() {
 
   const fetchAccounts = async () => {
     try {
-      // Fetch accounts
       const { data: accountsData, error: accountsError } = await supabase
         .from('accounting_accounts')
         .select('*')
-        .order('account_type', { ascending: true })
         .order('name', { ascending: true });
 
       if (accountsError) throw accountsError;
 
-      // Fetch entry lines to calculate balances
       const { data: linesData, error: linesError } = await supabase
         .from('accounting_entry_lines')
         .select('account_id, debit_amount, credit_amount');
 
       if (linesError) throw linesError;
 
-      // Calculate totals per account
       const accountTotals = new Map<string, { debit: number; credit: number }>();
       linesData?.forEach(line => {
         const current = accountTotals.get(line.account_id) || { debit: 0, credit: 0 };
@@ -82,7 +80,6 @@ export function AccountingAccountsTab() {
         accountTotals.set(line.account_id, current);
       });
 
-      // Merge with accounts
       const enrichedAccounts = accountsData?.map(account => {
         const totals = accountTotals.get(account.id) || { debit: 0, credit: 0 };
         return {
@@ -101,6 +98,26 @@ export function AccountingAccountsTab() {
       setLoading(false);
     }
   };
+
+  const accountsGroupedByType = useMemo(() => {
+    const grouped = new Map<string, AccountingAccount[]>();
+    
+    accounts.forEach(account => {
+      const list = grouped.get(account.account_type) || [];
+      list.push(account);
+      grouped.set(account.account_type, list);
+    });
+
+    return ACCOUNT_TYPES
+      .filter(type => grouped.has(type))
+      .map(type => ({
+        type,
+        accounts: grouped.get(type) || [],
+        totalDebit: (grouped.get(type) || []).reduce((sum, a) => sum + (a.total_debit || 0), 0),
+        totalCredit: (grouped.get(type) || []).reduce((sum, a) => sum + (a.total_credit || 0), 0),
+        totalBalance: (grouped.get(type) || []).reduce((sum, a) => sum + (a.balance || 0), 0)
+      }));
+  }, [accounts]);
 
   const handleOpenCreate = () => {
     setEditingAccount(null);
@@ -202,6 +219,47 @@ export function AccountingAccountsTab() {
     return new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(amount);
   };
 
+  const renderAccountRow = (account: AccountingAccount) => (
+    <TableRow key={account.id}>
+      <TableCell className="font-medium">{account.name}</TableCell>
+      <TableCell>
+        <Badge variant={getTypeBadgeColor(account.account_type) as any}>
+          {account.account_type}
+        </Badge>
+      </TableCell>
+      <TableCell className="text-right font-mono">
+        {formatCurrency(account.total_debit || 0)}
+      </TableCell>
+      <TableCell className="text-right font-mono">
+        {formatCurrency(account.total_credit || 0)}
+      </TableCell>
+      <TableCell className={`text-right font-mono font-semibold ${(account.balance || 0) < 0 ? 'text-destructive' : ''}`}>
+        {formatCurrency(account.balance || 0)}
+      </TableCell>
+      <TableCell>
+        <div className="flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => handleOpenEdit(account)}
+          >
+            <Pencil className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => {
+              setAccountToDelete(account);
+              setDeleteDialogOpen(true);
+            }}
+          >
+            <Trash2 className="h-4 w-4 text-destructive" />
+          </Button>
+        </div>
+      </TableCell>
+    </TableRow>
+  );
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -217,78 +275,107 @@ export function AccountingAccountsTab() {
           <h2 className="text-lg font-semibold">Cuentas Contables</h2>
           <p className="text-sm text-muted-foreground">Plan de cuentas con saldos actuales</p>
         </div>
-        <Button onClick={handleOpenCreate} className="gap-2">
-          <Plus className="h-4 w-4" />
-          Nueva Cuenta
-        </Button>
+        <div className="flex items-center gap-2">
+          <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as 'alphabetic' | 'grouped')}>
+            <TabsList>
+              <TabsTrigger value="alphabetic" className="gap-2">
+                <List className="h-4 w-4" />
+                Alfabético
+              </TabsTrigger>
+              <TabsTrigger value="grouped" className="gap-2">
+                <Layers className="h-4 w-4" />
+                Por Tipo
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+          <Button onClick={handleOpenCreate} className="gap-2">
+            <Plus className="h-4 w-4" />
+            Nueva Cuenta
+          </Button>
+        </div>
       </div>
 
-      <Card>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Nombre</TableHead>
-                <TableHead>Tipo</TableHead>
-                <TableHead className="text-right">Debe (€)</TableHead>
-                <TableHead className="text-right">Haber (€)</TableHead>
-                <TableHead className="text-right">Saldo (€)</TableHead>
-                <TableHead className="w-[100px]">Acciones</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {accounts.length === 0 ? (
+      {viewMode === 'alphabetic' ? (
+        <Card>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                    No hay cuentas contables. Crea la primera cuenta.
-                  </TableCell>
+                  <TableHead>Nombre</TableHead>
+                  <TableHead>Tipo</TableHead>
+                  <TableHead className="text-right">Debe (€)</TableHead>
+                  <TableHead className="text-right">Haber (€)</TableHead>
+                  <TableHead className="text-right">Saldo (€)</TableHead>
+                  <TableHead className="w-[100px]">Acciones</TableHead>
                 </TableRow>
-              ) : (
-                accounts.map((account) => (
-                  <TableRow key={account.id}>
-                    <TableCell className="font-medium">{account.name}</TableCell>
-                    <TableCell>
-                      <Badge variant={getTypeBadgeColor(account.account_type) as any}>
-                        {account.account_type}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right font-mono">
-                      {formatCurrency(account.total_debit || 0)}
-                    </TableCell>
-                    <TableCell className="text-right font-mono">
-                      {formatCurrency(account.total_credit || 0)}
-                    </TableCell>
-                    <TableCell className={`text-right font-mono font-semibold ${(account.balance || 0) < 0 ? 'text-destructive' : ''}`}>
-                      {formatCurrency(account.balance || 0)}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleOpenEdit(account)}
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => {
-                            setAccountToDelete(account);
-                            setDeleteDialogOpen(true);
-                          }}
-                        >
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
-                      </div>
+              </TableHeader>
+              <TableBody>
+                {accounts.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                      No hay cuentas contables. Crea la primera cuenta.
                     </TableCell>
                   </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+                ) : (
+                  accounts.map(renderAccountRow)
+                )}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="space-y-4">
+          {accountsGroupedByType.length === 0 ? (
+            <Card>
+              <CardContent className="py-12 text-center text-muted-foreground">
+                No hay cuentas contables. Crea la primera cuenta.
+              </CardContent>
+            </Card>
+          ) : (
+            accountsGroupedByType.map((group) => (
+              <Card key={group.type}>
+                <CardHeader className="py-3 bg-muted/30">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Badge variant={getTypeBadgeColor(group.type) as any}>
+                        {group.type}
+                      </Badge>
+                      <span className="text-sm text-muted-foreground">
+                        ({group.accounts.length} cuentas)
+                      </span>
+                    </div>
+                    <div className="text-right text-sm">
+                      <span className="text-muted-foreground mr-4">
+                        Debe: {formatCurrency(group.totalDebit)} | Haber: {formatCurrency(group.totalCredit)}
+                      </span>
+                      <span className={`font-semibold ${group.totalBalance < 0 ? 'text-destructive' : ''}`}>
+                        Saldo: {formatCurrency(group.totalBalance)}
+                      </span>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Nombre</TableHead>
+                        <TableHead>Tipo</TableHead>
+                        <TableHead className="text-right">Debe (€)</TableHead>
+                        <TableHead className="text-right">Haber (€)</TableHead>
+                        <TableHead className="text-right">Saldo (€)</TableHead>
+                        <TableHead className="w-[100px]">Acciones</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {group.accounts.map(renderAccountRow)}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            ))
+          )}
+        </div>
+      )}
 
       {/* Create/Edit Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>

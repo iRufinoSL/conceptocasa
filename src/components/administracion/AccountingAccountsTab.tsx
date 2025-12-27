@@ -9,9 +9,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Plus, Pencil, Trash2, List, Layers, Search, X } from 'lucide-react';
+import { Plus, Pencil, Trash2, List, Layers, Search, X, Eye } from 'lucide-react';
 import { toast } from 'sonner';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
+import { AccountDetailView } from './AccountDetailView';
 
 interface AccountingAccount {
   id: string;
@@ -45,9 +46,10 @@ const emptyForm: AccountForm = {
 interface Props {
   highlightAccountId?: string | null;
   onHighlightHandled?: () => void;
+  onNavigateToEntry?: (entryCode: number) => void;
 }
 
-export function AccountingAccountsTab({ highlightAccountId, onHighlightHandled }: Props) {
+export function AccountingAccountsTab({ highlightAccountId, onHighlightHandled, onNavigateToEntry }: Props) {
   const [accounts, setAccounts] = useState<AccountingAccount[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -58,6 +60,7 @@ export function AccountingAccountsTab({ highlightAccountId, onHighlightHandled }
   const [saving, setSaving] = useState(false);
   const [viewMode, setViewMode] = useState<'alphabetic' | 'grouped'>('alphabetic');
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedAccount, setSelectedAccount] = useState<AccountingAccount | null>(null);
 
   useEffect(() => {
     fetchAccounts();
@@ -249,6 +252,23 @@ export function AccountingAccountsTab({ highlightAccountId, onHighlightHandled }
     return new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', useGrouping: true }).format(amount);
   };
 
+  const handleViewAccount = (account: AccountingAccount) => {
+    setSelectedAccount(account);
+  };
+
+  const handleBackFromDetail = () => {
+    setSelectedAccount(null);
+  };
+
+  const handleAccountUpdated = () => {
+    fetchAccounts();
+  };
+
+  const handleNavigateToEntryFromDetail = (entryCode: number) => {
+    setSelectedAccount(null);
+    onNavigateToEntry?.(entryCode);
+  };
+
   const renderAccountRow = (account: AccountingAccount) => (
     <TableRow key={account.id} id={`account-${account.id}`} className={highlightAccountId === account.id ? 'bg-primary/10' : ''}>
       <TableCell className="font-medium">{account.name}</TableCell>
@@ -271,7 +291,16 @@ export function AccountingAccountsTab({ highlightAccountId, onHighlightHandled }
           <Button
             variant="ghost"
             size="icon"
+            onClick={() => handleViewAccount(account)}
+            title="Ver detalle"
+          >
+            <Eye className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
             onClick={() => handleOpenEdit(account)}
+            title="Editar"
           >
             <Pencil className="h-4 w-4" />
           </Button>
@@ -282,6 +311,7 @@ export function AccountingAccountsTab({ highlightAccountId, onHighlightHandled }
               setAccountToDelete(account);
               setDeleteDialogOpen(true);
             }}
+            title="Eliminar"
           >
             <Trash2 className="h-4 w-4 text-destructive" />
           </Button>
@@ -295,6 +325,18 @@ export function AccountingAccountsTab({ highlightAccountId, onHighlightHandled }
       <div className="flex items-center justify-center h-64">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
       </div>
+    );
+  }
+
+  // Show detail view if an account is selected
+  if (selectedAccount) {
+    return (
+      <AccountDetailView
+        account={selectedAccount}
+        onBack={handleBackFromDetail}
+        onNavigateToEntry={handleNavigateToEntryFromDetail}
+        onAccountUpdated={handleAccountUpdated}
+      />
     );
   }
 

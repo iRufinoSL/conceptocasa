@@ -12,6 +12,7 @@ export const formatNumber = (value: number | null | undefined, decimals: number 
   return new Intl.NumberFormat('es-ES', {
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,
+    useGrouping: true,
   }).format(value);
 };
 
@@ -26,6 +27,7 @@ export const formatCurrency = (value: number | null | undefined, decimals: numbe
     currency: 'EUR',
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,
+    useGrouping: true,
   }).format(value);
 };
 
@@ -40,6 +42,7 @@ export const formatCurrencyNoDecimals = (value: number | null | undefined): stri
     currency: 'EUR',
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
+    useGrouping: true,
   }).format(value);
 };
 
@@ -56,6 +59,7 @@ export const formatPercent = (value: number | null | undefined, decimals: number
     style: 'percent',
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,
+    useGrouping: true,
   }).format(value);
 };
 

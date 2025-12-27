@@ -227,7 +227,7 @@ export function AccountingEntryLinesEditor({ entry, onUpdate }: Props) {
   };
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(amount);
+    return new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', useGrouping: true }).format(amount);
   };
 
   const totalDebit = lines.reduce((sum, line) => sum + (Number(line.debit_amount) || 0), 0);

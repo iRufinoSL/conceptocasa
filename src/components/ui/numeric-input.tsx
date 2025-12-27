@@ -146,6 +146,7 @@ const formatForDisplay = (value: number, decimals: number): string => {
   const formatted = new Intl.NumberFormat('es-ES', {
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,
+    useGrouping: true,
   }).format(value);
   
   return formatted;

@@ -74,6 +74,7 @@ const formatPdfCurrency = (value: number): string => {
   return new Intl.NumberFormat('es-ES', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
+    useGrouping: true,
   }).format(value) + ' €';
 };
 

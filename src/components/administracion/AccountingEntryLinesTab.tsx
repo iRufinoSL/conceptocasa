@@ -128,7 +128,7 @@ export function AccountingEntryLinesTab({ onNavigateToEntry, onNavigateToAccount
   };
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(amount);
+    return new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', useGrouping: true }).format(amount);
   };
 
   const formatDate = (dateStr: string) => {

@@ -398,7 +398,7 @@ export function BudgetResourceForm({
             <div className="space-y-2">
               <Label>Uds calculadas</Label>
               <Input
-                value={calculatedUnits.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                value={calculatedUnits.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: true })}
                 disabled
                 className="bg-muted font-semibold"
               />

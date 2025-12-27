@@ -246,7 +246,7 @@ export function AccountingAccountsTab({ highlightAccountId, onHighlightHandled }
   };
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(amount);
+    return new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', useGrouping: true }).format(amount);
   };
 
   const renderAccountRow = (account: AccountingAccount) => (

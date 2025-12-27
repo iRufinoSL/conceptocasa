@@ -3,12 +3,13 @@ import { supabase } from '@/integrations/supabase/client';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Trash2, Save } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { Plus, Trash2, Save, Check, ChevronsUpDown } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatCurrency } from '@/lib/format-utils';
+import { cn } from '@/lib/utils';
 
 interface Invoice {
   id: string;
@@ -295,22 +296,62 @@ export function InvoiceLinesEditor({ invoice, onClose }: Props) {
                       </TableCell>
                       <TableCell>
                         {activities.length > 0 ? (
-                          <Select
-                            value={line.activity_id || 'none'}
-                            onValueChange={(value) => updateLine(line.id, 'activity_id', value === 'none' ? null : value)}
-                          >
-                            <SelectTrigger className="h-8">
-                              <SelectValue placeholder="Seleccionar..." />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="none">Sin actividad</SelectItem>
-                              {activities.map((activity) => (
-                                <SelectItem key={activity.id} value={activity.id}>
-                                  {activity.code} - {activity.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <Button
+                                variant="outline"
+                                role="combobox"
+                                className="h-8 w-full justify-between text-xs font-normal"
+                              >
+                                <span className="truncate">
+                                  {line.activity_id
+                                    ? (() => {
+                                        const activity = activities.find(a => a.id === line.activity_id);
+                                        return activity ? `${activity.code} - ${activity.name}` : 'Seleccionar...';
+                                      })()
+                                    : 'Sin actividad'}
+                                </span>
+                                <ChevronsUpDown className="ml-1 h-3 w-3 shrink-0 opacity-50" />
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-[300px] p-0" align="start">
+                              <Command>
+                                <CommandInput placeholder="Buscar actividad..." className="h-9" />
+                                <CommandList>
+                                  <CommandEmpty>No se encontraron actividades.</CommandEmpty>
+                                  <CommandGroup>
+                                    <CommandItem
+                                      value="sin-actividad"
+                                      onSelect={() => updateLine(line.id, 'activity_id', null)}
+                                    >
+                                      <Check
+                                        className={cn(
+                                          "mr-2 h-4 w-4",
+                                          !line.activity_id ? "opacity-100" : "opacity-0"
+                                        )}
+                                      />
+                                      Sin actividad
+                                    </CommandItem>
+                                    {activities.map((activity) => (
+                                      <CommandItem
+                                        key={activity.id}
+                                        value={`${activity.code} ${activity.name}`}
+                                        onSelect={() => updateLine(line.id, 'activity_id', activity.id)}
+                                      >
+                                        <Check
+                                          className={cn(
+                                            "mr-2 h-4 w-4",
+                                            line.activity_id === activity.id ? "opacity-100" : "opacity-0"
+                                          )}
+                                        />
+                                        <span className="truncate">{activity.code} - {activity.name}</span>
+                                      </CommandItem>
+                                    ))}
+                                  </CommandGroup>
+                                </CommandList>
+                              </Command>
+                            </PopoverContent>
+                          </Popover>
                         ) : (
                           <span className="text-xs text-muted-foreground italic">
                             {invoice.budget_id ? 'Sin actividades' : 'Sin presupuesto'}

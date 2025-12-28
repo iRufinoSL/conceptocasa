@@ -24,6 +24,7 @@ import { BulkEditBar } from './BulkEditBar';
 import { ResourcesGroupedView } from './ResourcesGroupedView';
 import { ResourcesActivityGroupedView } from './ResourcesActivityGroupedView';
 import { ResourcesTypeGroupedView } from './ResourcesTypeGroupedView';
+import { UnassignedResourcesSection } from './UnassignedResourcesSection';
 import { useCompanySettings } from '@/hooks/useCompanySettings';
 import { usePermissions, canAccessResource, canAccessActivity } from '@/hooks/usePermissions';
 import { useTabVisibility } from '@/hooks/useTabVisibility';
@@ -1439,6 +1440,18 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
               isAdmin={isAdmin}
             />
           )}
+
+          {/* Unassigned Resources Section */}
+          <UnassignedResourcesSection
+            resources={resources}
+            activities={activities}
+            phases={phases}
+            isAdmin={isAdmin}
+            onEdit={handleEdit}
+            onDelete={handleDelete}
+            onRefresh={fetchData}
+            calculateFields={calculateFields}
+          />
 
           {/* Resources View */}
           {viewMode === 'grouped' ? (

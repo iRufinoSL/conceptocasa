@@ -8,6 +8,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Checkbox } from '@/components/ui/checkbox';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { Plus, Trash2, Edit2, MapPin, List, Layers, ChevronDown, ChevronRight, LayoutGrid } from 'lucide-react';
@@ -736,6 +738,48 @@ export function BudgetWorkAreasTab({ budgetId, isAdmin }: BudgetWorkAreasTabProp
                     {formData.work_area}/{formData.level}
                   </code>
                 </p>
+              </div>
+              {/* Activities multi-select */}
+              <div className="space-y-2">
+                <Label>Actividades relacionadas</Label>
+                <ScrollArea className="h-48 border rounded-md p-2">
+                  {activities.length === 0 ? (
+                    <p className="text-sm text-muted-foreground py-2">No hay actividades disponibles</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {activities
+                        .sort((a, b) => a.code.localeCompare(b.code))
+                        .map((activity) => (
+                          <div key={activity.id} className="flex items-center space-x-2">
+                            <Checkbox
+                              id={`activity-${activity.id}`}
+                              checked={formData.activity_ids.includes(activity.id)}
+                              onCheckedChange={(checked) => {
+                                setFormData(prev => ({
+                                  ...prev,
+                                  activity_ids: checked
+                                    ? [...prev.activity_ids, activity.id]
+                                    : prev.activity_ids.filter(id => id !== activity.id)
+                                }));
+                              }}
+                            />
+                            <label
+                              htmlFor={`activity-${activity.id}`}
+                              className="text-sm flex-1 cursor-pointer"
+                            >
+                              <span className="font-mono text-xs text-muted-foreground mr-2">{activity.code}</span>
+                              {activity.name}
+                            </label>
+                          </div>
+                        ))}
+                    </div>
+                  )}
+                </ScrollArea>
+                {formData.activity_ids.length > 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    {formData.activity_ids.length} actividades seleccionadas
+                  </p>
+                )}
               </div>
             </div>
             <DialogFooter>

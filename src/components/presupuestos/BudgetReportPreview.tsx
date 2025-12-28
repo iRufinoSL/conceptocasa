@@ -335,10 +335,10 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
     return `${activity.code}.-${activity.name}`;
   };
 
-  // Calculate totals
+  // Calculate totals (unfiltered - for reference)
   const totalResourcesSubtotal = resources.reduce((sum, r) => sum + calculateFields(r).subtotalSales, 0);
 
-  // Group resources by type (filter to valid types only)
+  // Group resources by type (filter to valid types only) - UNFILTERED
   const byType = resources.reduce((acc, r) => {
     const type = r.resource_type || 'Sin tipo';
     // Skip invalid types like "Herramienta"
@@ -349,6 +349,27 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
     acc[type].total += fields.subtotalSales;
     return acc;
   }, {} as Record<string, { count: number; total: number }>);
+
+  // Calculate totals FILTERED by selected option
+  const getFilteredTotalResourcesSubtotal = () => {
+    const filteredResources = getFilteredResources();
+    return filteredResources.reduce((sum, r) => sum + calculateFields(r).subtotalSales, 0);
+  };
+
+  // Group resources by type FILTERED by selected option
+  const getFilteredByType = () => {
+    const filteredResources = getFilteredResources();
+    return filteredResources.reduce((acc, r) => {
+      const type = r.resource_type || 'Sin tipo';
+      // Skip invalid types like "Herramienta"
+      if (type !== 'Sin tipo' && !VALID_RESOURCE_TYPES.includes(type)) return acc;
+      const fields = calculateFields(r);
+      if (!acc[type]) acc[type] = { count: 0, total: 0 };
+      acc[type].count++;
+      acc[type].total += fields.subtotalSales;
+      return acc;
+    }, {} as Record<string, { count: number; total: number }>);
+  };
 
   const presupuestoId = `${presupuesto.nombre} (${presupuesto.codigo_correlativo}/${presupuesto.version}): ${presupuesto.poblacion}`;
 
@@ -980,24 +1001,28 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
       
       // Only show Total Presupuesto and Desglose if NOT only Ante-proyecto
       if (!isOnlyAnteproyecto) {
+        // Get filtered values for selected option
+        const filteredTotal = getFilteredTotalResourcesSubtotal();
+        const filteredTypeData = getFilteredByType();
+        
         yPos += 4;
         doc.setFillColor(34, 197, 94);
         doc.roundedRect(14, yPos - 4, pageWidth - 28, 10, 2, 2, 'F');
         doc.setTextColor(255);
         doc.setFont('helvetica', 'bold');
-        doc.text('TOTAL PRESUPUESTO:', 18, yPos + 3);
-        doc.text(formatPdfCurrency(totalResourcesSubtotal), pageWidth - 18, yPos + 3, { align: 'right' });
+        doc.text(`TOTAL PRESUPUESTO (Opción ${selectedOption}):`, 18, yPos + 3);
+        doc.text(formatPdfCurrency(filteredTotal), pageWidth - 18, yPos + 3, { align: 'right' });
         doc.setTextColor(0);
         doc.setFont('helvetica', 'normal');
 
         yPos += 20;
         doc.setFontSize(11);
         doc.setFont('helvetica', 'bold');
-        doc.text('1.3. Desglose por Tipo de Recurso', 14, yPos);
+        doc.text(`1.3. Desglose por Tipo de Recurso (Opción ${selectedOption})`, 14, yPos);
         doc.setFont('helvetica', 'normal');
 
         yPos += 8;
-        const typeData = Object.entries(byType).map(([type, data]) => [
+        const typeData = Object.entries(filteredTypeData).map(([type, data]) => [
           type,
           data.count.toString(),
           formatPdfCurrency(data.total)
@@ -1095,18 +1120,19 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
 
         yPos += 8;
 
-        // Cost summary
+        // Cost summary - use filtered values for selected option
         doc.setFontSize(10);
         doc.setFont('helvetica', 'bold');
-        doc.text('Resumen de Costes', 14, yPos);
+        doc.text(`Resumen de Costes (Opción ${selectedOption})`, 14, yPos);
         yPos += 8;
 
-        // Calculate values
-        const costPerM2Built = spacesTotals.m2_built > 0 ? totalResourcesSubtotal / spacesTotals.m2_built : 0;
-        const costPerM2Livable = spacesTotals.m2_livable > 0 ? totalResourcesSubtotal / spacesTotals.m2_livable : 0;
+        // Calculate values using filtered total
+        const filteredTotalForCuanto = getFilteredTotalResourcesSubtotal();
+        const costPerM2Built = spacesTotals.m2_built > 0 ? filteredTotalForCuanto / spacesTotals.m2_built : 0;
+        const costPerM2Livable = spacesTotals.m2_livable > 0 ? filteredTotalForCuanto / spacesTotals.m2_livable : 0;
 
         const costSummaryData = [
-          ['Subtotal Recursos (PVP):', formatPdfCurrency(totalResourcesSubtotal)],
+          ['Subtotal Recursos (PVP):', formatPdfCurrency(filteredTotalForCuanto)],
           ['m² Construidos:', `${formatNumber(spacesTotals.m2_built)} m²`],
           ['m² Habitables:', `${formatNumber(spacesTotals.m2_livable)} m²`],
           ['€ Coste por m² Construido:', formatPdfCurrency(costPerM2Built)],
@@ -1138,11 +1164,15 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
         // Phases table sorted by code alphabetically
         const sortedPhasesForPdf = [...phases].sort((a, b) => (a.code || '').localeCompare(b.code || ''));
         
-        // Helper to calculate subtotal for a phase
+        // Get filtered activities for the selected option
+        const filteredActivitiesForPhases = getFilteredActivities();
+        const filteredResourcesForPhases = getFilteredResources();
+        
+        // Helper to calculate subtotal for a phase (filtered by option)
         const getPhaseSubtotal = (phaseId: string): number => {
-          const phaseActivities = activities.filter(a => a.phase_id === phaseId);
+          const phaseActivities = filteredActivitiesForPhases.filter(a => a.phase_id === phaseId);
           const activityIds = phaseActivities.map(a => a.id);
-          const phaseResources = resources.filter(r => r.activity_id && activityIds.includes(r.activity_id));
+          const phaseResources = filteredResourcesForPhases.filter(r => r.activity_id && activityIds.includes(r.activity_id));
           return phaseResources.reduce((sum, r) => {
             return sum + calcResourceSubtotal({
               externalUnitCost: r.external_unit_cost,

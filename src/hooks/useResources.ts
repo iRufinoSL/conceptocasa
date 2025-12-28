@@ -351,9 +351,17 @@ export function useResources() {
     }
   };
 
-  const getFileUrl = (filePath: string) => {
-    const { data } = supabase.storage.from('resource-files').getPublicUrl(filePath);
-    return data.publicUrl;
+  const getFileUrl = async (filePath: string): Promise<string | null> => {
+    const { data, error } = await supabase.storage
+      .from('resource-files')
+      .createSignedUrl(filePath, 3600); // 1 hour expiry
+    
+    if (error) {
+      console.error('Error creating signed URL:', error);
+      return null;
+    }
+    
+    return data.signedUrl;
   };
 
   return {

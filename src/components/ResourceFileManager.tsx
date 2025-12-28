@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { ResourceFile } from '@/types/resource';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
@@ -10,7 +10,6 @@ import {
   File, 
   Download,
   Eye,
-  X,
   Loader2
 } from 'lucide-react';
 import {
@@ -26,7 +25,7 @@ interface ResourceFileManagerProps {
   files: ResourceFile[];
   onUpload: (resourceId: string, file: File) => Promise<boolean>;
   onDelete: (fileId: string, filePath: string) => Promise<boolean>;
-  getFileUrl: (filePath: string) => string;
+  getFileUrl: (filePath: string) => Promise<string | null>;
   readOnly?: boolean;
 }
 
@@ -47,7 +46,41 @@ export function ResourceFileManager({
   const [uploading, setUploading] = useState(false);
   const [uploadingFiles, setUploadingFiles] = useState<UploadingFile[]>([]);
   const [previewFile, setPreviewFile] = useState<ResourceFile | null>(null);
+  const [fileUrls, setFileUrls] = useState<Record<string, string>>({});
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Generate signed URLs for all files
+  useEffect(() => {
+    const generateSignedUrls = async () => {
+      const urlMap: Record<string, string> = {};
+      for (const file of files) {
+        const url = await getFileUrl(file.file_path);
+        if (url) {
+          urlMap[file.file_path] = url;
+        }
+      }
+      setFileUrls(urlMap);
+    };
+
+    if (files.length > 0) {
+      generateSignedUrls();
+    }
+  }, [files, getFileUrl]);
+
+  // Generate signed URL for preview
+  useEffect(() => {
+    const generatePreviewUrl = async () => {
+      if (previewFile) {
+        const url = await getFileUrl(previewFile.file_path);
+        setPreviewUrl(url);
+      } else {
+        setPreviewUrl(null);
+      }
+    };
+
+    generatePreviewUrl();
+  }, [previewFile, getFileUrl]);
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFiles = e.target.files;
@@ -123,7 +156,17 @@ export function ResourceFileManager({
       setPreviewFile(file);
     } else {
       // Download if not previewable
-      window.open(getFileUrl(file.file_path), '_blank');
+      const url = fileUrls[file.file_path];
+      if (url) {
+        window.open(url, '_blank');
+      }
+    }
+  };
+
+  const handleDownload = (file: ResourceFile) => {
+    const url = fileUrls[file.file_path];
+    if (url) {
+      window.open(url, '_blank');
     }
   };
 
@@ -162,9 +205,9 @@ export function ResourceFileManager({
               className="flex items-center gap-3 p-2 rounded-md bg-muted/50 hover:bg-muted transition-colors"
             >
               {/* Thumbnail for images */}
-              {file.file_type?.startsWith('image/') ? (
+              {file.file_type?.startsWith('image/') && fileUrls[file.file_path] ? (
                 <img
-                  src={getFileUrl(file.file_path)}
+                  src={fileUrls[file.file_path]}
                   alt={file.file_name}
                   className="h-10 w-10 rounded object-cover cursor-pointer"
                   onClick={() => handlePreview(file)}
@@ -200,7 +243,7 @@ export function ResourceFileManager({
                   variant="ghost"
                   size="icon"
                   className="h-8 w-8"
-                  onClick={() => window.open(getFileUrl(file.file_path), '_blank')}
+                  onClick={() => handleDownload(file)}
                   title="Descargar"
                 >
                   <Download className="h-4 w-4" />
@@ -269,21 +312,26 @@ export function ResourceFileManager({
               <span className="truncate pr-4">{previewFile?.file_name}</span>
             </DialogTitle>
           </DialogHeader>
-          {previewFile && (
+          {previewFile && previewUrl && (
             <div className="flex items-center justify-center overflow-auto max-h-[calc(90vh-100px)]">
               {previewFile.file_type?.startsWith('image/') ? (
                 <img
-                  src={getFileUrl(previewFile.file_path)}
+                  src={previewUrl}
                   alt={previewFile.file_name}
                   className="max-w-full max-h-full object-contain"
                 />
               ) : previewFile.file_type === 'application/pdf' ? (
                 <iframe
-                  src={getFileUrl(previewFile.file_path)}
+                  src={previewUrl}
                   className="w-full h-[70vh]"
                   title={previewFile.file_name}
                 />
               ) : null}
+            </div>
+          )}
+          {previewFile && !previewUrl && (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
             </div>
           )}
         </DialogContent>

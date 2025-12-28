@@ -408,8 +408,8 @@ export function ActivitiesWorkAreaGroupedView({
                                         {activity.files_count || 0}
                                       </Button>
                                     </TableCell>
-                                    {canEditActivity(activity.id) && (
-                                      <TableCell>
+                                    <TableCell>
+                                      {canEditActivity(activity.id) && (
                                         <DropdownMenu>
                                           <DropdownMenuTrigger asChild>
                                             <Button variant="ghost" size="icon">
@@ -442,8 +442,8 @@ export function ActivitiesWorkAreaGroupedView({
                                             )}
                                           </DropdownMenuContent>
                                         </DropdownMenu>
-                                      </TableCell>
-                                    )}
+                                      )}
+                                    </TableCell>
                                   </TableRow>
                                 );
                               })}

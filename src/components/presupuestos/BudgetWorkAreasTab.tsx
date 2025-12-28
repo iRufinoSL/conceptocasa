@@ -287,22 +287,23 @@ export function BudgetWorkAreasTab({ budgetId, isAdmin }: BudgetWorkAreasTabProp
   // Sort alphabetically
   const sortedAlphabetically = [...workAreas].sort((a, b) => a.name.localeCompare(b.name));
 
-  const totalSubtotal = workAreas.reduce((sum, wa) => sum + (wa.resources_subtotal || 0), 0);
-
   // Find activities without work areas
   const activityIdsWithWorkArea = new Set(activityLinks.map(link => link.activity_id));
   const activitiesWithoutWorkArea = activities.filter(a => !activityIdsWithWorkArea.has(a.id));
 
-  // Calculate option subtotals based on activities linked to work areas
+  // Calculate subtotal for activities WITHOUT work area
+  const unassignedSubtotal = activitiesWithoutWorkArea.reduce((sum, a) => sum + (a.resources_subtotal || 0), 0);
+
+  // Total includes work areas + activities without work area
+  const totalSubtotal = workAreas.reduce((sum, wa) => sum + (wa.resources_subtotal || 0), 0) + unassignedSubtotal;
+
+  // Calculate option subtotals based on ALL activities (including those without work area)
   const optionSubtotals = { A: 0, B: 0, C: 0 };
-  activityLinks.forEach(link => {
-    const activity = activities.find(a => a.id === link.activity_id);
-    if (activity) {
-      const subtotal = activity.resources_subtotal || 0;
-      if (activity.opciones?.includes('A')) optionSubtotals.A += subtotal;
-      if (activity.opciones?.includes('B')) optionSubtotals.B += subtotal;
-      if (activity.opciones?.includes('C')) optionSubtotals.C += subtotal;
-    }
+  activities.forEach(activity => {
+    const subtotal = activity.resources_subtotal || 0;
+    if (activity.opciones?.includes('A')) optionSubtotals.A += subtotal;
+    if (activity.opciones?.includes('B')) optionSubtotals.B += subtotal;
+    if (activity.opciones?.includes('C')) optionSubtotals.C += subtotal;
   });
 
   if (isLoading) {
@@ -417,6 +418,7 @@ export function BudgetWorkAreasTab({ budgetId, isAdmin }: BudgetWorkAreasTabProp
                 workAreas={workAreas}
                 activities={activities}
                 activityLinks={activityLinks}
+                activitiesWithoutWorkArea={activitiesWithoutWorkArea}
                 isAdmin={isAdmin}
                 expandedOptions={expandedOptions}
                 onToggleExpanded={(opt) => {

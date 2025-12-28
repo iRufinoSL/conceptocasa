@@ -22,12 +22,14 @@ interface WorkArea {
 interface Activity {
   id: string;
   opciones: string[];
+  resources_subtotal?: number;
 }
 
 interface WorkAreasOptionsGroupedViewProps {
   workAreas: WorkArea[];
   activities: Activity[];
   activityLinks: { work_area_id: string; activity_id: string }[];
+  activitiesWithoutWorkArea?: Activity[];
   isAdmin: boolean;
   expandedOptions: Set<string>;
   onToggleExpanded: (option: string) => void;
@@ -41,6 +43,7 @@ export function WorkAreasOptionsGroupedView({
   workAreas,
   activities,
   activityLinks,
+  activitiesWithoutWorkArea = [],
   isAdmin,
   expandedOptions,
   onToggleExpanded,
@@ -89,7 +92,7 @@ export function WorkAreasOptionsGroupedView({
     return groups;
   }, [workAreas, activities, activityLinks]);
 
-  // Calculate subtotals per option
+  // Calculate subtotals per option (including activities without work area)
   const optionSubtotals = useMemo(() => {
     const result: Record<string, number> = {};
     OPCIONES.forEach(opcion => {
@@ -102,10 +105,16 @@ export function WorkAreasOptionsGroupedView({
           total += area.resources_subtotal || 0;
         }
       });
+      // Add subtotals from activities without work area that belong to this option
+      activitiesWithoutWorkArea.forEach(activity => {
+        if (activity.opciones?.includes(opcion)) {
+          total += activity.resources_subtotal || 0;
+        }
+      });
       result[opcion] = total;
     });
     return result;
-  }, [workAreasByOption]);
+  }, [workAreasByOption, activitiesWithoutWorkArea]);
 
   return (
     <div className="space-y-2">

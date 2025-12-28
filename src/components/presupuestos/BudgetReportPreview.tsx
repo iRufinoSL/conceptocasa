@@ -52,6 +52,7 @@ interface Activity {
   duration_days: number | null;
   tolerance_days: number | null;
   end_date: string | null;
+  opciones: string[];
 }
 
 interface Phase {
@@ -152,6 +153,7 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
   const [customNotes, setCustomNotes] = useState<string>('');
   const [onlyWithCost, setOnlyWithCost] = useState(false);
   const [portadaSignedUrl, setPortadaSignedUrl] = useState<string | null>(null);
+  const [selectedOption, setSelectedOption] = useState<'A' | 'B' | 'C'>('A');
   const printRef = useRef<HTMLDivElement>(null);
 
   // Derived data for clients and providers
@@ -170,7 +172,7 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
       const [activitiesRes, phasesRes, resourcesRes, filesCountRes, predesignsRes, budgetContactsRes, measurementsRes, measurementRelationsRes, spacesRes] = await Promise.all([
         supabase
           .from('budget_activities')
-          .select('id, name, code, description, measurement_unit, phase_id, measurement_id, start_date, duration_days, tolerance_days, end_date')
+          .select('id, name, code, description, measurement_unit, phase_id, measurement_id, start_date, duration_days, tolerance_days, end_date, opciones')
           .eq('budget_id', presupuesto.id)
           .order('name'),
         supabase
@@ -362,7 +364,8 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
     if (selectedSections.includes('measurements')) names.push('Mediciones');
     if (selectedSections.includes('spaces-alphabetical')) names.push('Espacios Alfabético');
     if (selectedSections.includes('spaces-grouped')) names.push('Espacios por Nivel/Tipo');
-    return names.length > 0 ? names.join(' + ') : 'Resumen General';
+    const baseName = names.length > 0 ? names.join(' + ') : 'Resumen General';
+    return `${baseName} - Opción ${selectedOption}`;
   };
 
   // Group predesigns by content type
@@ -489,22 +492,32 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
     );
   };
 
-  // Filter functions for onlyWithCost
+  // Filter functions for onlyWithCost and selectedOption
   const getFilteredActivities = () => {
-    if (!onlyWithCost) return activities;
-    return activities.filter(a => (activityResourcesMap.get(a.id) || 0) > 0);
+    let filtered = activities.filter(a => (a.opciones || ['A', 'B', 'C']).includes(selectedOption));
+    if (onlyWithCost) {
+      filtered = filtered.filter(a => (activityResourcesMap.get(a.id) || 0) > 0);
+    }
+    return filtered;
   };
 
   const getFilteredResources = () => {
-    if (!onlyWithCost) return resources;
-    return resources.filter(r => calculateFields(r).subtotalSales > 0);
+    const filteredActivityIds = new Set(getFilteredActivities().map(a => a.id));
+    let filtered = resources.filter(r => !r.activity_id || filteredActivityIds.has(r.activity_id));
+    if (onlyWithCost) {
+      filtered = filtered.filter(r => calculateFields(r).subtotalSales > 0);
+    }
+    return filtered;
   };
 
   const getFilteredPhases = () => {
-    if (!onlyWithCost) return phases;
     const filteredActivities = getFilteredActivities();
-    const phaseIdsWithCost = new Set(filteredActivities.map(a => a.phase_id).filter(Boolean));
-    return phases.filter(p => phaseIdsWithCost.has(p.id));
+    const phaseIdsWithActivities = new Set(filteredActivities.map(a => a.phase_id).filter(Boolean));
+    let filtered = phases.filter(p => phaseIdsWithActivities.has(p.id));
+    if (onlyWithCost && filtered.length === 0) {
+      return phases; // Show all phases if none have activities with cost
+    }
+    return filtered.length > 0 ? filtered : phases;
   };
 
   const handlePrint = async () => {
@@ -2022,6 +2035,27 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
               </div>
             </div>
             
+            {/* Option selector A, B, C */}
+            <div className="flex items-center space-x-3 p-3 bg-primary/5 rounded-lg border border-primary/20">
+              <Label className="text-sm font-medium">Exportar Opción:</Label>
+              <div className="flex items-center gap-2">
+                {(['A', 'B', 'C'] as const).map((option) => (
+                  <Button
+                    key={option}
+                    variant={selectedOption === option ? 'default' : 'outline'}
+                    size="sm"
+                    className="w-10 h-8"
+                    onClick={() => setSelectedOption(option)}
+                  >
+                    {option}
+                  </Button>
+                ))}
+              </div>
+              <span className="text-xs text-muted-foreground ml-2">
+                Solo se incluirán actividades de la opción seleccionada
+              </span>
+            </div>
+            
             {/* Filter option for SubTotal > 0 */}
             <div className="flex items-center space-x-3 p-3 bg-amber-50 dark:bg-amber-950/30 rounded-lg border border-amber-200 dark:border-amber-800">
               <Switch 
@@ -2414,9 +2448,14 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
               {selectedSections.includes('cuanto-cuando') && <Separator className="print:hidden" />}
 
               {/* Section 2: Activities Summary - only if selected */}
-              {selectedSections.includes('activities') && (
+              {selectedSections.includes('activities') && (() => {
+                const filteredActivitiesForView = getFilteredActivities();
+                const filteredPhasesForView = getFilteredPhases();
+                const filteredTotal = filteredActivitiesForView.reduce((sum, a) => sum + (activityResourcesMap.get(a.id) || 0), 0);
+                
+                return (
               <div className="print-section">
-                <h3 className="text-lg font-bold text-primary mb-4">2. RESUMEN DE ACTIVIDADES POR FASE</h3>
+                <h3 className="text-lg font-bold text-primary mb-4">2. RESUMEN DE ACTIVIDADES POR FASE - OPCIÓN {selectedOption}</h3>
                 
                 <div className="border rounded-lg overflow-hidden">
                   <Table>
@@ -2430,15 +2469,15 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
                     </TableHeader>
                     <TableBody>
                       {/* Unassigned activities */}
-                      {activities.filter(a => !a.phase_id).length > 0 && (
+                      {filteredActivitiesForView.filter(a => !a.phase_id).length > 0 && (
                         <>
                           <TableRow className="bg-muted/50">
                             <TableCell colSpan={3} className="font-semibold">Sin fase asignada</TableCell>
                             <TableCell className="font-semibold text-right">
-                              {formatCurrency(activities.filter(a => !a.phase_id).reduce((sum, a) => sum + (activityResourcesMap.get(a.id) || 0), 0))}
+                              {formatCurrency(filteredActivitiesForView.filter(a => !a.phase_id).reduce((sum, a) => sum + (activityResourcesMap.get(a.id) || 0), 0))}
                             </TableCell>
                           </TableRow>
-                          {activities.filter(a => !a.phase_id).map(activity => (
+                          {filteredActivitiesForView.filter(a => !a.phase_id).map(activity => (
                             <TableRow key={activity.id}>
                               <TableCell className="pl-6">{generateActivityId(activity)}</TableCell>
                               <TableCell>{activity.measurement_unit}</TableCell>
@@ -2450,8 +2489,9 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
                       )}
 
                       {/* Phases with activities */}
-                      {phases.map(phase => {
-                        const phaseActivities = activities.filter(a => a.phase_id === phase.id);
+                      {filteredPhasesForView.map(phase => {
+                        const phaseActivities = filteredActivitiesForView.filter(a => a.phase_id === phase.id);
+                        if (phaseActivities.length === 0) return null;
                         
                         const phaseSubtotal = phaseActivities.reduce((sum, a) => sum + (activityResourcesMap.get(a.id) || 0), 0);
                         
@@ -2475,21 +2515,28 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
 
                       {/* Total row */}
                       <TableRow className="bg-green-500 text-white">
-                        <TableCell colSpan={3} className="font-bold text-right">TOTAL ACTIVIDADES</TableCell>
-                        <TableCell className="font-bold text-right">{formatCurrency(totalResourcesSubtotal)}</TableCell>
+                        <TableCell colSpan={3} className="font-bold text-right">TOTAL ACTIVIDADES (OPCIÓN {selectedOption})</TableCell>
+                        <TableCell className="font-bold text-right">{formatCurrency(filteredTotal)}</TableCell>
                       </TableRow>
                     </TableBody>
                   </Table>
                 </div>
               </div>
-              )}
+              );
+              })()}
 
               {selectedSections.includes('activities') && <Separator className="print:hidden" />}
 
               {/* Section 3: Resources Detail - only if selected */}
-              {selectedSections.includes('resources') && (
+              {selectedSections.includes('resources') && (() => {
+                const filteredActivitiesForResources = getFilteredActivities();
+                const filteredResourcesForView = getFilteredResources();
+                const filteredPhasesForResources = getFilteredPhases();
+                const filteredResourcesTotal = filteredResourcesForView.reduce((sum, r) => sum + calculateFields(r).subtotalSales, 0);
+                
+                return (
               <div className="print-section">
-                <h3 className="text-lg font-bold text-primary mb-4">2. DESGLOSE DE RECURSOS POR FASE Y ACTIVIDAD</h3>
+                <h3 className="text-lg font-bold text-primary mb-4">2. DESGLOSE DE RECURSOS POR FASE Y ACTIVIDAD - OPCIÓN {selectedOption}</h3>
                 
                 <div className="border rounded-lg overflow-hidden">
                   <Table>
@@ -2505,15 +2552,15 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
                     </TableHeader>
                     <TableBody>
                       {/* Resources without activity */}
-                      {resources.filter(r => !r.activity_id).length > 0 && (
+                      {filteredResourcesForView.filter(r => !r.activity_id).length > 0 && (
                         <>
                           <TableRow className="bg-muted/50">
                             <TableCell colSpan={5} className="font-semibold">Sin actividad asignada</TableCell>
                             <TableCell className="font-semibold text-right">
-                              {formatCurrency(resources.filter(r => !r.activity_id).reduce((sum, r) => sum + calculateFields(r).subtotalSales, 0))}
+                              {formatCurrency(filteredResourcesForView.filter(r => !r.activity_id).reduce((sum, r) => sum + calculateFields(r).subtotalSales, 0))}
                             </TableCell>
                           </TableRow>
-                          {resources.filter(r => !r.activity_id).map(resource => {
+                          {filteredResourcesForView.filter(r => !r.activity_id).map(resource => {
                             const fields = calculateFields(resource);
                             return (
                               <TableRow key={resource.id}>
@@ -2530,10 +2577,10 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
                       )}
 
                       {/* Phases with resources */}
-                      {phases.map(phase => {
-                        const phaseActivities = activities.filter(a => a.phase_id === phase.id);
-                        const phaseResources = resources.filter(r => {
-                          const activity = activities.find(a => a.id === r.activity_id);
+                      {filteredPhasesForResources.map(phase => {
+                        const phaseActivities = filteredActivitiesForResources.filter(a => a.phase_id === phase.id);
+                        const phaseResources = filteredResourcesForView.filter(r => {
+                          const activity = filteredActivitiesForResources.find(a => a.id === r.activity_id);
                           return activity?.phase_id === phase.id;
                         });
                         
@@ -2548,7 +2595,7 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
                               <TableCell className="font-bold text-right">{formatCurrency(phaseTotal)}</TableCell>
                             </TableRow>
                             {phaseActivities.map(activity => {
-                              const activityResources = resources.filter(r => r.activity_id === activity.id);
+                              const activityResources = filteredResourcesForView.filter(r => r.activity_id === activity.id);
                               if (activityResources.length === 0) return null;
                               
                               const activityTotal = activityResources.reduce((sum, r) => sum + calculateFields(r).subtotalSales, 0);
@@ -2581,14 +2628,15 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
 
                       {/* Total row */}
                       <TableRow className="bg-green-500 text-white">
-                        <TableCell colSpan={5} className="font-bold text-right">TOTAL PRESUPUESTO</TableCell>
-                        <TableCell className="font-bold text-right">{formatCurrency(totalResourcesSubtotal)}</TableCell>
+                        <TableCell colSpan={5} className="font-bold text-right">TOTAL PRESUPUESTO (OPCIÓN {selectedOption})</TableCell>
+                        <TableCell className="font-bold text-right">{formatCurrency(filteredResourcesTotal)}</TableCell>
                       </TableRow>
                     </TableBody>
                   </Table>
                 </div>
               </div>
-              )}
+              );
+              })()}
 
               {/* Section: Time Management by Phases - only if selected */}
               {selectedSections.includes('time-phases') && (

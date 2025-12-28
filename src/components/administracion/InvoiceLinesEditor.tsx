@@ -84,7 +84,7 @@ export function InvoiceLinesEditor({ invoice, onClose }: Props) {
 
         if (activitiesError) throw activitiesError;
         
-        // Format activities with ActividadID
+        // Format activities with ActividadID and sort alphabetically
         const formattedActivities: Activity[] = (activitiesData || []).map((a: any) => {
           const phaseCode = a.budget_phases?.code || '';
           const activityId = phaseCode 
@@ -97,7 +97,7 @@ export function InvoiceLinesEditor({ invoice, onClose }: Props) {
             phaseCode,
             activityId
           };
-        });
+        }).sort((a, b) => a.activityId.localeCompare(b.activityId, 'es', { sensitivity: 'base' }));
         
         setActivities(formattedActivities);
       }

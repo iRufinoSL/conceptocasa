@@ -2699,7 +2699,7 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {[...phases]
+                      {[...getFilteredPhases()]
                         .sort((a, b) => {
                           if (!a.start_date && !b.start_date) return 0;
                           if (!a.start_date) return 1;
@@ -2748,7 +2748,7 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {[...activities]
+                      {[...getFilteredActivities()]
                         .sort((a, b) => {
                           if (!a.start_date && !b.start_date) return 0;
                           if (!a.start_date) return 1;

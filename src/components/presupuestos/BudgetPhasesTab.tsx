@@ -183,10 +183,15 @@ export function BudgetPhasesTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
     return subtotals;
   }, [phases, activities, resources]);
 
-  // Calculate total
+  // Calculate total (include activities without phase to match other totals)
   const totalSubtotal = useMemo(() => {
-    return Array.from(phaseSubtotals.values()).reduce((sum, val) => sum + val, 0);
-  }, [phaseSubtotals]);
+    const phasesTotal = Array.from(phaseSubtotals.values()).reduce((sum, val) => sum + val, 0);
+    const unphasedTotal = activities
+      .filter(a => !a.phase_id)
+      .reduce((sum, a) => sum + (activitySubtotals.get(a.id) || 0), 0);
+
+    return phasesTotal + unphasedTotal;
+  }, [phaseSubtotals, activities, activitySubtotals]);
 
   // Calculate subtotals per option (A, B, C)
   const optionSubtotals = useMemo(() => {

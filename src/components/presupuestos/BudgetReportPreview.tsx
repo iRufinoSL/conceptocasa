@@ -2290,15 +2290,15 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
 
                 <Card className="bg-green-500/10 border-green-500/30">
                   <CardContent className="py-4 flex items-center justify-between">
-                    <span className="font-semibold text-lg">TOTAL PRESUPUESTO</span>
-                    <span className="text-2xl font-bold text-green-600">{formatCurrency(totalResourcesSubtotal)}</span>
+                    <span className="font-semibold text-lg">TOTAL PRESUPUESTO (Opción {selectedOption})</span>
+                    <span className="text-2xl font-bold text-green-600">{formatCurrency(getFilteredTotalResourcesSubtotal())}</span>
                   </CardContent>
                 </Card>
 
                 <div className="mt-4">
-                  <h4 className="font-semibold mb-2">Desglose por Tipo de Recurso</h4>
+                  <h4 className="font-semibold mb-2">Desglose por Tipo de Recurso (Opción {selectedOption})</h4>
                   <div className="space-y-1">
-                    {Object.entries(byType).map(([type, data]) => (
+                    {Object.entries(getFilteredByType()).map(([type, data]) => (
                       <div key={type} className="flex justify-between items-center text-sm border-b pb-1">
                         <span>{type}: {data.count}</span>
                         <span className="font-mono text-right">{formatCurrency(data.total)}</span>
@@ -2359,12 +2359,16 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
                 </div>
 
                 {/* Cost Summary Cards */}
+                {(() => {
+                  const filteredTotalPreview = getFilteredTotalResourcesSubtotal();
+                  const filteredResourcesPreview = getFilteredResources();
+                  return (
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                   <Card className="bg-primary/5 border-primary/20">
                     <CardContent className="pt-4">
-                      <p className="text-sm text-muted-foreground">Subtotal Recursos</p>
-                      <p className="text-2xl font-bold text-primary">{formatCurrency(totalResourcesSubtotal)}</p>
-                      <p className="text-xs text-muted-foreground">Total PVP de {resources.length} recursos</p>
+                      <p className="text-sm text-muted-foreground">Subtotal Recursos (Opción {selectedOption})</p>
+                      <p className="text-2xl font-bold text-primary">{formatCurrency(filteredTotalPreview)}</p>
+                      <p className="text-xs text-muted-foreground">Total PVP de {filteredResourcesPreview.length} recursos</p>
                     </CardContent>
                   </Card>
                   <Card>
@@ -2382,32 +2386,39 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
                     </CardContent>
                   </Card>
                 </div>
+                  );
+                })()}
 
                 {/* Cost per m2 */}
+                {(() => {
+                  const filteredTotalM2 = getFilteredTotalResourcesSubtotal();
+                  return (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
                   <Card className="bg-amber-500/10 border-amber-500/20">
                     <CardContent className="pt-4">
-                      <p className="text-sm font-medium text-amber-600">€ Coste por m² Construido</p>
+                      <p className="text-sm font-medium text-amber-600">€ Coste por m² Construido (Opción {selectedOption})</p>
                       <p className="text-3xl font-bold text-amber-600">
-                        {formatCurrency(spacesTotals.m2_built > 0 ? totalResourcesSubtotal / spacesTotals.m2_built : 0)}
+                        {formatCurrency(spacesTotals.m2_built > 0 ? filteredTotalM2 / spacesTotals.m2_built : 0)}
                       </p>
                       <p className="text-xs text-muted-foreground mt-1">
-                        {formatCurrency(totalResourcesSubtotal)} ÷ {formatNumber(spacesTotals.m2_built)} m²
+                        {formatCurrency(filteredTotalM2)} ÷ {formatNumber(spacesTotals.m2_built)} m²
                       </p>
                     </CardContent>
                   </Card>
                   <Card className="bg-emerald-500/10 border-emerald-500/20">
                     <CardContent className="pt-4">
-                      <p className="text-sm font-medium text-emerald-600">€ Coste por m² Habitable</p>
+                      <p className="text-sm font-medium text-emerald-600">€ Coste por m² Habitable (Opción {selectedOption})</p>
                       <p className="text-3xl font-bold text-emerald-600">
-                        {formatCurrency(spacesTotals.m2_livable > 0 ? totalResourcesSubtotal / spacesTotals.m2_livable : 0)}
+                        {formatCurrency(spacesTotals.m2_livable > 0 ? filteredTotalM2 / spacesTotals.m2_livable : 0)}
                       </p>
                       <p className="text-xs text-muted-foreground mt-1">
-                        {formatCurrency(totalResourcesSubtotal)} ÷ {formatNumber(spacesTotals.m2_livable)} m²
+                        {formatCurrency(filteredTotalM2)} ÷ {formatNumber(spacesTotals.m2_livable)} m²
                       </p>
                     </CardContent>
                   </Card>
                 </div>
+                  );
+                })()}
 
                 <Separator className="my-6" />
 
@@ -2434,40 +2445,44 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
                           </TableCell>
                         </TableRow>
                       ) : (
-                        [...phases].sort((a, b) => (a.code || '').localeCompare(b.code || '')).map(phase => {
-                          // Calculate subtotal for this phase
-                          const phaseActivities = activities.filter(a => a.phase_id === phase.id);
-                          const activityIds = phaseActivities.map(a => a.id);
-                          const phaseResources = resources.filter(r => r.activity_id && activityIds.includes(r.activity_id));
-                          const phaseSubtotal = phaseResources.reduce((sum, r) => {
-                            return sum + calcResourceSubtotal({
-                              externalUnitCost: r.external_unit_cost,
-                              safetyPercent: r.safety_margin_percent,
-                              salesPercent: r.sales_margin_percent,
-                              manualUnits: r.manual_units,
-                              relatedUnits: r.related_units,
-                            });
-                          }, 0);
-                          
-                          return (
-                            <TableRow key={phase.id}>
-                              <TableCell className="font-mono font-medium">{phase.code || '-'}</TableCell>
-                              <TableCell className="font-medium">{phase.name}</TableCell>
-                              <TableCell className="text-center">
-                                {phase.start_date ? format(new Date(phase.start_date), 'dd/MM/yyyy') : '-'}
-                              </TableCell>
-                              <TableCell className="text-center">
-                                {phase.duration_days ? `${phase.duration_days} días` : '-'}
-                              </TableCell>
-                              <TableCell className="text-center">
-                                {phase.estimated_end_date ? format(new Date(phase.estimated_end_date), 'dd/MM/yyyy') : '-'}
-                              </TableCell>
-                              <TableCell className="text-right font-medium">
-                                {formatCurrency(phaseSubtotal)}
-                              </TableCell>
-                            </TableRow>
-                          );
-                        })
+                        (() => {
+                          const filteredActivitiesPhases = getFilteredActivities();
+                          const filteredResourcesPhases = getFilteredResources();
+                          return [...phases].sort((a, b) => (a.code || '').localeCompare(b.code || '')).map(phase => {
+                            // Calculate subtotal for this phase using filtered activities/resources
+                            const phaseActivities = filteredActivitiesPhases.filter(a => a.phase_id === phase.id);
+                            const activityIds = phaseActivities.map(a => a.id);
+                            const phaseResources = filteredResourcesPhases.filter(r => r.activity_id && activityIds.includes(r.activity_id));
+                            const phaseSubtotal = phaseResources.reduce((sum, r) => {
+                              return sum + calcResourceSubtotal({
+                                externalUnitCost: r.external_unit_cost,
+                                safetyPercent: r.safety_margin_percent,
+                                salesPercent: r.sales_margin_percent,
+                                manualUnits: r.manual_units,
+                                relatedUnits: r.related_units,
+                              });
+                            }, 0);
+                            
+                            return (
+                              <TableRow key={phase.id}>
+                                <TableCell className="font-mono font-medium">{phase.code || '-'}</TableCell>
+                                <TableCell className="font-medium">{phase.name}</TableCell>
+                                <TableCell className="text-center">
+                                  {phase.start_date ? format(new Date(phase.start_date), 'dd/MM/yyyy') : '-'}
+                                </TableCell>
+                                <TableCell className="text-center">
+                                  {phase.duration_days ? `${phase.duration_days} días` : '-'}
+                                </TableCell>
+                                <TableCell className="text-center">
+                                  {phase.estimated_end_date ? format(new Date(phase.estimated_end_date), 'dd/MM/yyyy') : '-'}
+                                </TableCell>
+                                <TableCell className="text-right font-medium">
+                                  {formatCurrency(phaseSubtotal)}
+                                </TableCell>
+                              </TableRow>
+                            );
+                          });
+                        })()
                       )}
                     </TableBody>
                   </Table>

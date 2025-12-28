@@ -332,19 +332,20 @@ export function InvoiceLinesEditor({ invoice, onClose }: Props) {
                                 <ChevronsUpDown className="ml-1 h-3 w-3 shrink-0 opacity-50" />
                               </Button>
                             </PopoverTrigger>
-                            <PopoverContent className="w-[300px] p-0" align="start">
+                            <PopoverContent className="w-[500px] p-0" align="start" side="bottom" sideOffset={4}>
                               <Command>
-                                <CommandInput placeholder="Buscar actividad..." className="h-9" />
-                                <CommandList>
+                                <CommandInput placeholder="Buscar actividad..." className="h-10" />
+                                <CommandList className="max-h-[300px] overflow-y-auto">
                                   <CommandEmpty>No se encontraron actividades.</CommandEmpty>
                                   <CommandGroup>
                                     <CommandItem
                                       value="sin-actividad"
                                       onSelect={() => updateLine(line.id, 'activity_id', null)}
+                                      className="cursor-pointer"
                                     >
                                       <Check
                                         className={cn(
-                                          "mr-2 h-4 w-4",
+                                          "mr-2 h-4 w-4 shrink-0",
                                           !line.activity_id ? "opacity-100" : "opacity-0"
                                         )}
                                       />
@@ -355,14 +356,15 @@ export function InvoiceLinesEditor({ invoice, onClose }: Props) {
                                         key={activity.id}
                                         value={activity.activityId}
                                         onSelect={() => updateLine(line.id, 'activity_id', activity.id)}
+                                        className="cursor-pointer"
                                       >
                                         <Check
                                           className={cn(
-                                            "mr-2 h-4 w-4",
+                                            "mr-2 h-4 w-4 shrink-0",
                                             line.activity_id === activity.id ? "opacity-100" : "opacity-0"
                                           )}
                                         />
-                                        <span className="truncate">{activity.activityId}</span>
+                                        <span className="text-sm">{activity.activityId}</span>
                                       </CommandItem>
                                     ))}
                                   </CommandGroup>

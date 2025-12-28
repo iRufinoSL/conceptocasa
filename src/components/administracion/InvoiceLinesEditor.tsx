@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Plus, Trash2, Save, Check, ChevronsUpDown } from 'lucide-react';
 import { toast } from 'sonner';
@@ -314,24 +315,36 @@ export function InvoiceLinesEditor({ invoice, onClose }: Props) {
                       </TableCell>
                       <TableCell>
                         {activities.length > 0 ? (
-                          <Popover>
-                            <PopoverTrigger asChild>
-                              <Button
-                                variant="outline"
-                                role="combobox"
-                                className="h-8 w-full justify-between text-xs font-normal"
-                              >
-                                <span className="truncate">
-                                  {line.activity_id
-                                    ? (() => {
-                                        const activity = activities.find(a => a.id === line.activity_id);
-                                        return activity ? activity.activityId : 'Seleccionar...';
-                                      })()
-                                    : 'Sin actividad'}
-                                </span>
-                                <ChevronsUpDown className="ml-1 h-3 w-3 shrink-0 opacity-50" />
-                              </Button>
-                            </PopoverTrigger>
+                          <TooltipProvider>
+                            <Popover>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <PopoverTrigger asChild>
+                                    <Button
+                                      variant="outline"
+                                      role="combobox"
+                                      className="h-8 w-full justify-between text-xs font-normal"
+                                    >
+                                      <span className="truncate">
+                                        {line.activity_id
+                                          ? (() => {
+                                              const activity = activities.find(a => a.id === line.activity_id);
+                                              return activity ? activity.activityId : 'Seleccionar...';
+                                            })()
+                                          : 'Sin actividad'}
+                                      </span>
+                                      <ChevronsUpDown className="ml-1 h-3 w-3 shrink-0 opacity-50" />
+                                    </Button>
+                                  </PopoverTrigger>
+                                </TooltipTrigger>
+                                {line.activity_id && (
+                                  <TooltipContent side="top" className="max-w-md">
+                                    <p className="text-sm">
+                                      {activities.find(a => a.id === line.activity_id)?.activityId || ''}
+                                    </p>
+                                  </TooltipContent>
+                                )}
+                              </Tooltip>
                             <PopoverContent className="w-[500px] p-0" align="start" side="bottom" sideOffset={4}>
                               <Command>
                                 <CommandInput placeholder="Buscar actividad..." className="h-10" />
@@ -371,7 +384,8 @@ export function InvoiceLinesEditor({ invoice, onClose }: Props) {
                                 </CommandList>
                               </Command>
                             </PopoverContent>
-                          </Popover>
+                            </Popover>
+                          </TooltipProvider>
                         ) : (
                           <span className="text-xs text-muted-foreground italic">
                             {invoice.budget_id ? 'Sin actividades' : 'Sin presupuesto'}

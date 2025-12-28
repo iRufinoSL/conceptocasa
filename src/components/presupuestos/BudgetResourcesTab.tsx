@@ -491,8 +491,8 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
     return false;
   }, [permissions]);
 
-  // Calculate totals
-  const totals = useMemo(() => {
+  // Calculate totals for filtered resources (display purposes when searching)
+  const filteredTotals = useMemo(() => {
     return filteredResources.reduce((acc, resource) => {
       const fields = calculateFields(resource);
       return {
@@ -502,12 +502,24 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
     }, { subtotal: 0, count: 0 });
   }, [filteredResources]);
 
-  // Calculate subtotals per option (A, B, C)
+  // Calculate GLOBAL total (all resources, no filters) for consistency with other tabs
+  const allTotals = useMemo(() => {
+    return resources.reduce((acc, resource) => {
+      const fields = calculateFields(resource);
+      return {
+        subtotal: acc.subtotal + fields.subtotalSales,
+        count: acc.count + 1,
+      };
+    }, { subtotal: 0, count: 0 });
+  }, [resources, calculateFields]);
+
+  // Calculate subtotals per option (A, B, C) - using ALL resources
+  // IMPORTANT: if opciones is empty/undefined, treat as "A+B+C" to keep totals consistent across views.
   const optionSubtotals = useMemo(() => {
     const result: Record<string, number> = { A: 0, B: 0, C: 0 };
     resources.forEach(resource => {
       const activity = activities.find(a => a.id === resource.activity_id);
-      const activityOpciones = activity?.opciones || ['A', 'B', 'C'];
+      const activityOpciones = activity?.opciones?.length ? activity.opciones : ['A', 'B', 'C'];
       const fields = calculateFields(resource);
       activityOpciones.forEach(opcion => {
         if (result[opcion] !== undefined) result[opcion] += fields.subtotalSales;
@@ -621,7 +633,7 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
     doc.setTextColor(255);
     doc.setFont('helvetica', 'bold');
     doc.text('TOTAL €SubTotal Recursos:', 18, yPos + 3);
-    doc.text(formatPdfCurrency(totals.subtotal), pageWidth - 18, yPos + 3, { align: 'right' });
+    doc.text(formatPdfCurrency(allTotals.subtotal), pageWidth - 18, yPos + 3, { align: 'right' });
     doc.setTextColor(0);
     doc.setFont('helvetica', 'normal');
 
@@ -759,7 +771,7 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
     // Total row
     tableData.push([
       { content: 'TOTAL PRESUPUESTO', colSpan: 5, styles: { fillColor: [34, 197, 94], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'right' } },
-      { content: formatPdfCurrency(totals.subtotal), styles: { fillColor: [34, 197, 94], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'right' } }
+      { content: formatPdfCurrency(allTotals.subtotal), styles: { fillColor: [34, 197, 94], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'right' } }
     ]);
 
     autoTable(doc, {
@@ -1405,7 +1417,7 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
                 {filteredResources.length} recursos
               </Badge>
               <Badge variant="default" className="text-sm">
-                Total: {formatCurrency(totals.subtotal)}
+                Total: {formatCurrency(allTotals.subtotal)}
               </Badge>
             </div>
           </div>

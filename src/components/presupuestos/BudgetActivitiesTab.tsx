@@ -125,6 +125,7 @@ interface ActivityForm {
   start_date: string;
   duration_days: string;
   tolerance_days: string;
+  work_area_ids: string[];
 }
 
 interface BudgetActivitiesTabProps {
@@ -159,7 +160,8 @@ const emptyForm: ActivityForm = {
   opciones: ['A', 'B', 'C'],
   start_date: '',
   duration_days: '',
-  tolerance_days: ''
+  tolerance_days: '',
+  work_area_ids: []
 };
 
 export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStartDate, budgetEndDate }: BudgetActivitiesTabProps) {
@@ -420,7 +422,7 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
 
   // Listen for edit-activity events from BudgetPhasesTab
   useEffect(() => {
-    const handleEditActivity = (e: Event) => {
+    const handleEditActivity = async (e: Event) => {
       const customEvent = e as CustomEvent;
       const activityData = customEvent.detail;
       if (activityData && activityData.id) {
@@ -430,30 +432,37 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
           handleEdit(fullActivity);
         } else {
           // Activity might not be loaded yet, fetch and edit
-          supabase
-            .from('budget_activities')
-            .select('*')
-            .eq('id', activityData.id)
-            .single()
-            .then(({ data }) => {
-              if (data) {
-                setEditingActivity(data);
-                setForm({
-                  name: data.name,
-                  code: data.code,
-                  description: data.description || '',
-                  measurement_unit: data.measurement_unit,
-                  phase_id: data.phase_id || '',
-                  measurement_id: data.measurement_id || '',
-                  uses_measurement: data.uses_measurement ?? true,
-                  opciones: data.opciones || ['A', 'B', 'C'],
-                  start_date: data.start_date || '',
-                  duration_days: data.duration_days?.toString() || '',
-                  tolerance_days: data.tolerance_days?.toString() || ''
-                });
-                setFormDialogOpen(true);
-              }
+          const [activityRes, workAreaLinksRes] = await Promise.all([
+            supabase
+              .from('budget_activities')
+              .select('*')
+              .eq('id', activityData.id)
+              .single(),
+            supabase
+              .from('budget_work_area_activities')
+              .select('work_area_id')
+              .eq('activity_id', activityData.id)
+          ]);
+          
+          const data = activityRes.data;
+          if (data) {
+            setEditingActivity(data);
+            setForm({
+              name: data.name,
+              code: data.code,
+              description: data.description || '',
+              measurement_unit: data.measurement_unit,
+              phase_id: data.phase_id || '',
+              measurement_id: data.measurement_id || '',
+              uses_measurement: data.uses_measurement ?? true,
+              opciones: data.opciones || ['A', 'B', 'C'],
+              start_date: data.start_date || '',
+              duration_days: data.duration_days?.toString() || '',
+              tolerance_days: data.tolerance_days?.toString() || '',
+              work_area_ids: (workAreaLinksRes.data || []).map(r => r.work_area_id)
             });
+            setFormDialogOpen(true);
+          }
         }
       }
     };
@@ -508,7 +517,8 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
       opciones: activity.opciones || ['A', 'B', 'C'],
       start_date: activity.start_date || '',
       duration_days: activity.duration_days?.toString() || '',
-      tolerance_days: activity.tolerance_days?.toString() || ''
+      tolerance_days: activity.tolerance_days?.toString() || '',
+      work_area_ids: workAreaRelations.filter(r => r.activity_id === activity.id).map(r => r.work_area_id)
     });
     
     // Fetch resources for this activity
@@ -736,6 +746,29 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
       // Sync related_units for the activity's resources
       if (savedActivityId) {
         await syncActivityResourcesRelatedUnits(savedActivityId);
+        
+        // Update work area relations
+        // First, delete existing relations for this activity
+        await supabase
+          .from('budget_work_area_activities')
+          .delete()
+          .eq('activity_id', savedActivityId);
+        
+        // Insert new relations
+        if (form.work_area_ids.length > 0) {
+          const relationsToInsert = form.work_area_ids.map(workAreaId => ({
+            activity_id: savedActivityId,
+            work_area_id: workAreaId
+          }));
+          
+          const { error: relError } = await supabase
+            .from('budget_work_area_activities')
+            .insert(relationsToInsert);
+          
+          if (relError) {
+            console.error('Error updating work area relations:', relError);
+          }
+        }
       }
 
       setFormDialogOpen(false);
@@ -2603,6 +2636,40 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
                     }`}>{opcion}</span>
                   </label>
                 ))}
+              </div>
+            </div>
+
+            {/* Work Areas Field */}
+            <div className="space-y-2 py-2 px-3 border rounded-lg bg-muted/30">
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label className="text-sm font-medium flex items-center gap-2">
+                    <MapPin className="h-4 w-4" />
+                    Áreas de Trabajo
+                  </Label>
+                  <p className="text-xs text-muted-foreground">Selecciona las áreas donde aplica esta actividad</p>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2 mt-2">
+                {workAreas.map(wa => (
+                  <label key={wa.id} className="flex items-center gap-1.5 cursor-pointer border rounded-md px-2 py-1 hover:bg-muted/50 transition-colors">
+                    <Checkbox
+                      checked={form.work_area_ids.includes(wa.id)}
+                      onCheckedChange={(checked) => {
+                        if (checked) {
+                          setForm({ ...form, work_area_ids: [...form.work_area_ids, wa.id] });
+                        } else {
+                          setForm({ ...form, work_area_ids: form.work_area_ids.filter(id => id !== wa.id) });
+                        }
+                      }}
+                    />
+                    <span className="text-sm">{wa.name}</span>
+                    <code className="text-xs text-muted-foreground">({wa.level}/{wa.work_area})</code>
+                  </label>
+                ))}
+                {workAreas.length === 0 && (
+                  <p className="text-sm text-muted-foreground">No hay áreas de trabajo definidas</p>
+                )}
               </div>
             </div>
 

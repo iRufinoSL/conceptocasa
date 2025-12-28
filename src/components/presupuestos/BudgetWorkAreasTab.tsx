@@ -76,7 +76,8 @@ export function BudgetWorkAreasTab({ budgetId, isAdmin }: BudgetWorkAreasTabProp
   const [formData, setFormData] = useState({
     name: '',
     level: 'Nivel 1',
-    work_area: 'Espacios'
+    work_area: 'Espacios',
+    activity_ids: [] as string[]
   });
 
   const toggleLevel = (level: string) => {
@@ -191,17 +192,22 @@ export function BudgetWorkAreasTab({ budgetId, isAdmin }: BudgetWorkAreasTabProp
   const handleOpenDialog = (area?: WorkArea) => {
     if (area) {
       setEditingArea(area);
+      const linkedActivityIds = activityLinks
+        .filter(l => l.work_area_id === area.id)
+        .map(l => l.activity_id);
       setFormData({
         name: area.name,
         level: area.level,
-        work_area: area.work_area
+        work_area: area.work_area,
+        activity_ids: linkedActivityIds
       });
     } else {
       setEditingArea(null);
       setFormData({
         name: '',
         level: 'Nivel 1',
-        work_area: 'Espacios'
+        work_area: 'Espacios',
+        activity_ids: []
       });
     }
     setDialogOpen(true);
@@ -225,6 +231,8 @@ export function BudgetWorkAreasTab({ budgetId, isAdmin }: BudgetWorkAreasTabProp
     }
 
     try {
+      let savedAreaId: string | null = null;
+      
       if (editingArea) {
         const { error } = await supabase
           .from('budget_work_areas')
@@ -236,19 +244,40 @@ export function BudgetWorkAreasTab({ budgetId, isAdmin }: BudgetWorkAreasTabProp
           .eq('id', editingArea.id);
 
         if (error) throw error;
+        savedAreaId = editingArea.id;
         toast.success('Área de trabajo actualizada');
       } else {
-        const { error } = await supabase
+        const { data: newArea, error } = await supabase
           .from('budget_work_areas')
           .insert({
             budget_id: budgetId,
             name: formData.name,
             level: formData.level,
             work_area: formData.work_area
-          });
+          })
+          .select('id')
+          .single();
 
         if (error) throw error;
+        savedAreaId = newArea?.id || null;
         toast.success('Área de trabajo creada');
+      }
+
+      // Update activity links
+      if (savedAreaId) {
+        await supabase
+          .from('budget_work_area_activities')
+          .delete()
+          .eq('work_area_id', savedAreaId);
+        
+        if (formData.activity_ids.length > 0) {
+          await supabase
+            .from('budget_work_area_activities')
+            .insert(formData.activity_ids.map(activityId => ({
+              work_area_id: savedAreaId,
+              activity_id: activityId
+            })));
+        }
       }
 
       setDialogOpen(false);

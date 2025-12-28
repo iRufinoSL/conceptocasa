@@ -180,6 +180,7 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
   const [expandedPhases, setExpandedPhases] = useState<Set<string>>(new Set());
   const [workAreas, setWorkAreas] = useState<WorkArea[]>([]);
   const [workAreaRelations, setWorkAreaRelations] = useState<WorkAreaRelation[]>([]);
+  const [unassignedResourcesSubtotal, setUnassignedResourcesSubtotal] = useState(0);
   
   // Dialog states
   const [formDialogOpen, setFormDialogOpen] = useState(false);
@@ -362,13 +363,23 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
       if (workAreaRelationsRes.error) throw workAreaRelationsRes.error;
 
       const allResources = resourcesRes.data || [];
-      
+
       // Prepare measurements data FIRST so we can use it in subtotal calculations
       const measurementsList = measurementsRes.data || [];
       const measurementIds = measurementsList.map(m => m.id);
       const filteredRelations = (measurementRelationsRes.data || []).filter(
         r => measurementIds.includes(r.measurement_id)
       );
+
+      // Resources without activity_id are real budget resources; treat them as "A+B+C".
+      const resourcesWithoutActivity = allResources.filter(r => !r.activity_id);
+      const resourcesWithoutActivitySubtotal = calculateResourceSubtotal(
+        resourcesWithoutActivity,
+        null,
+        measurementsList,
+        filteredRelations
+      );
+      setUnassignedResourcesSubtotal(resourcesWithoutActivitySubtotal);
 
       // Filter work area relations to only those for activities in this budget
       const activityIds = (activitiesRes.data || []).map(a => a.id);
@@ -384,7 +395,7 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
             .from('budget_activity_files')
             .select('*', { count: 'exact', head: true })
             .eq('activity_id', activity.id);
-          
+
           // Calculate resources subtotal using fresh measurement data
           const activityResources = allResources.filter(r => r.activity_id === activity.id);
           const resourcesSubtotal = calculateResourceSubtotal(
@@ -393,9 +404,9 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
             measurementsList,
             filteredRelations
           );
-          
-          return { 
-            ...activity, 
+
+          return {
+            ...activity,
             files_count: count || 0,
             resources_subtotal: resourcesSubtotal
           };
@@ -1566,14 +1577,19 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
       {(() => {
         const OPCIONES = ['A', 'B', 'C'];
         const subtotalsByOption: Record<string, number> = { A: 0, B: 0, C: 0 };
-        
+
         activities.forEach(activity => {
-          const opciones = activity.opciones || ['A', 'B', 'C'];
+          const opciones = activity.opciones?.length ? activity.opciones : ['A', 'B', 'C'];
           opciones.forEach(op => {
             if (subtotalsByOption[op] !== undefined) {
               subtotalsByOption[op] += (activity.resources_subtotal || 0);
             }
           });
+        });
+
+        // Resources without activity apply to all options
+        (['A', 'B', 'C'] as const).forEach(op => {
+          subtotalsByOption[op] += unassignedResourcesSubtotal;
         });
 
         return (
@@ -1590,8 +1606,8 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
                 return (
                   <div key={op} className={`rounded-lg p-3 border ${colors?.bgLight || ''} ${colors?.bgLightDark || ''} ${colors?.border || ''}`}>
                     <div className="flex items-center justify-between">
-                      <Badge 
-                        variant="default" 
+                      <Badge
+                        variant="default"
                         className={`text-sm px-2 ${colors?.bg || ''} ${colors?.hover || ''}`}
                       >
                         Opción {op}
@@ -1604,6 +1620,12 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
                 );
               })}
             </div>
+
+            {unassignedResourcesSubtotal > 0 && (
+              <div className="mt-3 text-xs text-amber-600 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-md px-3 py-2">
+                Incluye <strong>{formatCurrency(unassignedResourcesSubtotal)}</strong> en recursos sin actividad asignada.
+              </div>
+            )}
           </div>
         );
       })()}
@@ -1921,6 +1943,7 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
           canEdit={permissions.canEdit}
           selectedIds={selectedActivityIds}
           expandedOptions={expandedOptions}
+          extraSubtotalAllOptions={unassignedResourcesSubtotal}
           onToggleExpanded={(option) => {
             setExpandedOptions(prev => {
               const newSet = new Set(prev);

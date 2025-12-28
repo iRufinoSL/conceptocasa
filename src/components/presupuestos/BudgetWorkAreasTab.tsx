@@ -69,6 +69,7 @@ export function BudgetWorkAreasTab({ budgetId, isAdmin }: BudgetWorkAreasTabProp
   const [workAreas, setWorkAreas] = useState<WorkArea[]>([]);
   const [activities, setActivities] = useState<ActivityWithOpciones[]>([]);
   const [activityLinks, setActivityLinks] = useState<{ work_area_id: string; activity_id: string }[]>([]);
+  const [unassignedResourcesSubtotal, setUnassignedResourcesSubtotal] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'alphabetic' | 'grouped' | 'options'>('grouped');
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -100,8 +101,8 @@ export function BudgetWorkAreasTab({ budgetId, isAdmin }: BudgetWorkAreasTabProp
   const fetchWorkAreas = async () => {
     setIsLoading(true);
     try {
-      // Fetch work areas and activities in parallel
-      const [workAreasRes, activitiesRes, allActivityLinksRes] = await Promise.all([
+      // Fetch work areas, activities, links and ALL resources in parallel (avoid N+1 queries)
+      const [workAreasRes, activitiesRes, allActivityLinksRes, resourcesRes] = await Promise.all([
         supabase
           .from('budget_work_areas')
           .select('*')
@@ -114,67 +115,59 @@ export function BudgetWorkAreasTab({ budgetId, isAdmin }: BudgetWorkAreasTabProp
           .eq('budget_id', budgetId),
         supabase
           .from('budget_work_area_activities')
-          .select('work_area_id, activity_id')
+          .select('work_area_id, activity_id'),
+        supabase
+          .from('budget_activity_resources')
+          .select('activity_id, external_unit_cost, manual_units, related_units, safety_margin_percent, sales_margin_percent')
+          .eq('budget_id', budgetId)
       ]);
 
       if (workAreasRes.error) throw workAreasRes.error;
       if (activitiesRes.error) throw activitiesRes.error;
+      if (allActivityLinksRes.error) throw allActivityLinksRes.error;
+      if (resourcesRes.error) throw resourcesRes.error;
 
-      // Calculate subtotal for each activity
-      const activitiesWithSubtotals = await Promise.all((activitiesRes.data || []).map(async (act) => {
-        const { data: resources } = await supabase
-          .from('budget_activity_resources')
-          .select('external_unit_cost, manual_units, related_units, safety_margin_percent, sales_margin_percent')
-          .eq('activity_id', act.id);
-        
-        const subtotal = (resources || []).reduce((sum, r) => {
-          return sum + calcResourceSubtotal({
-            externalUnitCost: r.external_unit_cost,
-            safetyPercent: r.safety_margin_percent,
-            salesPercent: r.sales_margin_percent,
-            manualUnits: r.manual_units,
-            relatedUnits: r.related_units
-          });
-        }, 0);
-        
-        return { ...act, resources_subtotal: subtotal };
+      const links = allActivityLinksRes.data || [];
+      const allResources = resourcesRes.data || [];
+
+      // Subtotal by activity
+      const subtotalByActivity = new Map<string, number>();
+      let resourcesWithoutActivity = 0;
+
+      allResources.forEach((r: any) => {
+        const rowSubtotal = calcResourceSubtotal({
+          externalUnitCost: r.external_unit_cost,
+          safetyPercent: r.safety_margin_percent,
+          salesPercent: r.sales_margin_percent,
+          manualUnits: r.manual_units,
+          relatedUnits: r.related_units,
+        });
+
+        if (!r.activity_id) {
+          resourcesWithoutActivity += rowSubtotal;
+          return;
+        }
+
+        subtotalByActivity.set(r.activity_id, (subtotalByActivity.get(r.activity_id) || 0) + rowSubtotal);
+      });
+
+      setUnassignedResourcesSubtotal(resourcesWithoutActivity);
+
+      // Activities with subtotal
+      const activitiesWithSubtotals = (activitiesRes.data || []).map((act) => ({
+        ...act,
+        resources_subtotal: subtotalByActivity.get(act.id) || 0,
       }));
 
       setActivities(activitiesWithSubtotals);
-      setActivityLinks(allActivityLinksRes.data || []);
+      setActivityLinks(links);
 
-      // Calculate resources subtotal for each work area
-      const enrichedData = await Promise.all((workAreasRes.data || []).map(async (area) => {
-        // Get linked activities
-        const { data: activityLinks } = await supabase
-          .from('budget_work_area_activities')
-          .select('activity_id')
-          .eq('work_area_id', area.id);
-
-        if (!activityLinks || activityLinks.length === 0) {
-          return { ...area, resources_subtotal: 0 };
-        }
-
-        const activityIds = activityLinks.map(al => al.activity_id);
-
-        // Get resources for those activities
-        const { data: resources } = await supabase
-          .from('budget_activity_resources')
-          .select('external_unit_cost, manual_units, related_units, safety_margin_percent, sales_margin_percent')
-          .in('activity_id', activityIds);
-
-        const subtotal = (resources || []).reduce((sum, r) => {
-          return sum + calcResourceSubtotal({
-            externalUnitCost: r.external_unit_cost,
-            safetyPercent: r.safety_margin_percent,
-            salesPercent: r.sales_margin_percent,
-            manualUnits: r.manual_units,
-            relatedUnits: r.related_units
-          });
-        }, 0);
-
+      // Work areas enriched with subtotal (sum subtotals of linked activities)
+      const enrichedData = (workAreasRes.data || []).map((area) => {
+        const activityIds = links.filter(l => l.work_area_id === area.id).map(l => l.activity_id);
+        const subtotal = activityIds.reduce((sum, id) => sum + (subtotalByActivity.get(id) || 0), 0);
         return { ...area, resources_subtotal: subtotal };
-      }));
+      });
 
       setWorkAreas(enrichedData);
     } catch (error) {
@@ -325,8 +318,8 @@ export function BudgetWorkAreasTab({ budgetId, isAdmin }: BudgetWorkAreasTabProp
   // Calculate subtotal for activities WITHOUT work area
   const unassignedSubtotal = activitiesWithoutWorkArea.reduce((sum, a) => sum + (a.resources_subtotal || 0), 0);
 
-  // Total includes work areas + activities without work area
-  const totalSubtotal = workAreas.reduce((sum, wa) => sum + (wa.resources_subtotal || 0), 0) + unassignedSubtotal;
+  // Total includes work areas + activities without work area + resources without activity
+  const totalSubtotal = workAreas.reduce((sum, wa) => sum + (wa.resources_subtotal || 0), 0) + unassignedSubtotal + unassignedResourcesSubtotal;
 
   // Calculate option subtotals based on ALL activities (including those without work area)
   // IMPORTANT: if opciones is empty/undefined, treat as "A+B+C" to keep totals consistent across views.
@@ -338,6 +331,11 @@ export function BudgetWorkAreasTab({ budgetId, isAdmin }: BudgetWorkAreasTabProp
     if (activityOpciones.includes('B')) optionSubtotals.B += subtotal;
     if (activityOpciones.includes('C')) optionSubtotals.C += subtotal;
   });
+
+  // Resources without activity apply to all options
+  optionSubtotals.A += unassignedResourcesSubtotal;
+  optionSubtotals.B += unassignedResourcesSubtotal;
+  optionSubtotals.C += unassignedResourcesSubtotal;
 
   if (isLoading) {
     return (
@@ -397,10 +395,19 @@ export function BudgetWorkAreasTab({ budgetId, isAdmin }: BudgetWorkAreasTabProp
               );
             })}
           </div>
-          {/* Warning for activities without work area */}
-          {activitiesWithoutWorkArea.length > 0 && (
+          {/* Warning for activities/resources without assignment */}
+          {(activitiesWithoutWorkArea.length > 0 || unassignedResourcesSubtotal > 0) && (
             <div className="mt-2 text-sm text-amber-600 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-md px-3 py-2">
-              <strong>{activitiesWithoutWorkArea.length} actividades</strong> sin área de trabajo asignada
+              {activitiesWithoutWorkArea.length > 0 && (
+                <div>
+                  <strong>{activitiesWithoutWorkArea.length} actividades</strong> sin área de trabajo asignada
+                </div>
+              )}
+              {unassignedResourcesSubtotal > 0 && (
+                <div>
+                  <strong>{formatCurrency(unassignedResourcesSubtotal)}</strong> en recursos sin actividad asignada
+                </div>
+              )}
             </div>
           )}
         </div>

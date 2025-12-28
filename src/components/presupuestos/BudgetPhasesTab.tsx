@@ -153,6 +153,13 @@ export function BudgetPhasesTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
     return () => window.removeEventListener('budget-recalculated', handleRecalculated);
   }, []);
 
+  // Resources without activity_id are real budget resources but are not counted in activity-based views.
+  // Treat them as "A+B+C" to keep totals consistent with CÓMO? (Recursos).
+  const unassignedResourcesSubtotal = useMemo(() => {
+    const unassigned = resources.filter(r => !r.activity_id);
+    return unassigned.reduce((sum, r) => sum + calculateResourceSubtotal(r), 0);
+  }, [resources]);
+
   // Calculate subtotals per activity
   const activitySubtotals = useMemo(() => {
     const subtotals = new Map<string, number>();
@@ -167,45 +174,52 @@ export function BudgetPhasesTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
   // Calculate subtotals per phase
   const phaseSubtotals = useMemo(() => {
     const subtotals = new Map<string, number>();
-    
+
     for (const phase of phases) {
       // Get activities in this phase
       const phaseActivities = activities.filter(a => a.phase_id === phase.id);
       const activityIds = phaseActivities.map(a => a.id);
-      
+
       // Get resources for these activities and calculate subtotal
       const phaseResources = resources.filter(r => r.activity_id && activityIds.includes(r.activity_id));
       const subtotal = phaseResources.reduce((sum, r) => sum + calculateResourceSubtotal(r), 0);
-      
+
       subtotals.set(phase.id, subtotal);
     }
-    
+
     return subtotals;
   }, [phases, activities, resources]);
 
-  // Calculate total (include activities without phase to match other totals)
+  // Calculate total (include activities without phase + resources without activity)
   const totalSubtotal = useMemo(() => {
     const phasesTotal = Array.from(phaseSubtotals.values()).reduce((sum, val) => sum + val, 0);
     const unphasedTotal = activities
       .filter(a => !a.phase_id)
       .reduce((sum, a) => sum + (activitySubtotals.get(a.id) || 0), 0);
 
-    return phasesTotal + unphasedTotal;
-  }, [phaseSubtotals, activities, activitySubtotals]);
+    return phasesTotal + unphasedTotal + unassignedResourcesSubtotal;
+  }, [phaseSubtotals, activities, activitySubtotals, unassignedResourcesSubtotal]);
 
   // Calculate subtotals per option (A, B, C)
   const optionSubtotals = useMemo(() => {
     const result: Record<string, number> = { A: 0, B: 0, C: 0 };
+
     activities.forEach(activity => {
-      const activityOpciones = activity.opciones || ['A', 'B', 'C'];
+      const activityOpciones = activity.opciones?.length ? activity.opciones : ['A', 'B', 'C'];
       const activityResources = resources.filter(r => r.activity_id === activity.id);
       const activitySubtotal = activityResources.reduce((sum, r) => sum + calculateResourceSubtotal(r), 0);
       activityOpciones.forEach(opcion => {
         if (result[opcion] !== undefined) result[opcion] += activitySubtotal;
       });
     });
+
+    // Resources without activity apply to all options
+    (['A', 'B', 'C'] as const).forEach(op => {
+      result[op] += unassignedResourcesSubtotal;
+    });
+
     return result;
-  }, [activities, resources]);
+  }, [activities, resources, unassignedResourcesSubtotal]);
 
   const toggleOptionExpanded = (option: string) => {
     setExpandedOptions(prev => {

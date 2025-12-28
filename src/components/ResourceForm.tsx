@@ -22,7 +22,7 @@ interface ResourceFormProps {
   allResources: ExternalResource[];
   onUploadFile?: (resourceId: string, file: File) => Promise<boolean>;
   onDeleteFile?: (fileId: string, filePath: string) => Promise<boolean>;
-  getFileUrl?: (filePath: string) => string;
+  getFileUrl?: (filePath: string) => Promise<string | null>;
 }
 
 const initialFormState = {

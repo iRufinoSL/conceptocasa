@@ -43,6 +43,8 @@ interface ActivitiesOptionsGroupedViewProps {
   onManageFiles: (activity: BudgetActivity) => void;
   canEditActivity: (activityId: string) => boolean;
   onUpdateOpciones?: (activityId: string, opciones: string[]) => void;
+  /** Subtotal de recursos sin actividad (se añade a A, B y C para mantener coherencia con Recursos) */
+  extraSubtotalAllOptions?: number;
 }
 
 const OPCIONES = ['A', 'B', 'C'];
@@ -63,6 +65,7 @@ export function ActivitiesOptionsGroupedView({
   onManageFiles,
   canEditActivity,
   onUpdateOpciones,
+  extraSubtotalAllOptions = 0,
 }: ActivitiesOptionsGroupedViewProps) {
   // Group activities by option
   const groupedByOption = useMemo(() => {
@@ -93,13 +96,15 @@ export function ActivitiesOptionsGroupedView({
   const subtotals = useMemo(() => {
     const result: Record<string, number> = {};
     OPCIONES.forEach(opcion => {
-      result[opcion] = groupedByOption[opcion]?.reduce(
+      const subtotalFromActivities = groupedByOption[opcion]?.reduce(
         (sum, activity) => sum + (activity.resources_subtotal || 0),
         0
       ) || 0;
+      // Add resources without activity as "A+B+C"
+      result[opcion] = subtotalFromActivities + extraSubtotalAllOptions;
     });
     return result;
-  }, [groupedByOption]);
+  }, [groupedByOption, extraSubtotalAllOptions]);
 
   const getPhaseById = (phaseId: string | null) => {
     if (!phaseId) return null;

@@ -88,6 +88,7 @@ export function BudgetCostSummary({
         if (spacesRes.error) throw spacesRes.error;
 
         // Map resources with their activity opciones
+        // IMPORTANT: if opciones is empty/undefined, treat as "A+B+C" to keep totals consistent across views.
         const mappedResources: Resource[] = (resourcesRes.data || []).map((r: any) => ({
           id: r.id,
           external_unit_cost: r.external_unit_cost,
@@ -96,7 +97,7 @@ export function BudgetCostSummary({
           safety_margin_percent: r.safety_margin_percent,
           sales_margin_percent: r.sales_margin_percent,
           resource_type: r.resource_type,
-          activity_opciones: r.budget_activities?.opciones || ['A', 'B', 'C'],
+          activity_opciones: r.budget_activities?.opciones?.length ? r.budget_activities.opciones : ['A', 'B', 'C'],
         }));
 
         // Map spaces with their opciones
@@ -104,7 +105,7 @@ export function BudgetCostSummary({
           id: s.id,
           m2_built: s.m2_built,
           m2_livable: s.m2_livable,
-          opciones: s.opciones || ['A', 'B', 'C'],
+          opciones: s.opciones?.length ? s.opciones : ['A', 'B', 'C'],
         }));
 
         setResources(mappedResources);
@@ -138,10 +139,12 @@ export function BudgetCostSummary({
     // Collect all unique options from spaces and resources
     const allOptions = new Set<string>();
     spaces.forEach(s => {
-      (s.opciones || ['A']).forEach(opt => allOptions.add(opt));
+      const opts = s.opciones?.length ? s.opciones : ['A', 'B', 'C'];
+      opts.forEach(opt => allOptions.add(opt));
     });
     resources.forEach(r => {
-      (r.activity_opciones || ['A']).forEach(opt => allOptions.add(opt));
+      const opts = r.activity_opciones?.length ? r.activity_opciones : ['A', 'B', 'C'];
+      opts.forEach(opt => allOptions.add(opt));
     });
     
     // If no options found, default to A

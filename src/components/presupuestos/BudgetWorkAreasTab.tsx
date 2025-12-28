@@ -298,12 +298,14 @@ export function BudgetWorkAreasTab({ budgetId, isAdmin }: BudgetWorkAreasTabProp
   const totalSubtotal = workAreas.reduce((sum, wa) => sum + (wa.resources_subtotal || 0), 0) + unassignedSubtotal;
 
   // Calculate option subtotals based on ALL activities (including those without work area)
+  // IMPORTANT: if opciones is empty/undefined, treat as "A+B+C" to keep totals consistent across views.
   const optionSubtotals = { A: 0, B: 0, C: 0 };
   activities.forEach(activity => {
     const subtotal = activity.resources_subtotal || 0;
-    if (activity.opciones?.includes('A')) optionSubtotals.A += subtotal;
-    if (activity.opciones?.includes('B')) optionSubtotals.B += subtotal;
-    if (activity.opciones?.includes('C')) optionSubtotals.C += subtotal;
+    const activityOpciones = activity.opciones?.length ? activity.opciones : ['A', 'B', 'C'];
+    if (activityOpciones.includes('A')) optionSubtotals.A += subtotal;
+    if (activityOpciones.includes('B')) optionSubtotals.B += subtotal;
+    if (activityOpciones.includes('C')) optionSubtotals.C += subtotal;
   });
 
   if (isLoading) {

@@ -236,19 +236,25 @@ export function canAccessActivity(
 ): boolean {
   // Admins always have access
   if (permissions.isAdmin) return true;
-  
+
   // If no granular access defined, use base permissions
   if (!permissions.hasGranularAccess) {
     return requiredLevel === 'view' || permissions.canEdit;
   }
-  
+
+  // If granular is enabled but there are NO activity rules, fall back to base permissions.
+  // This avoids blocking all activities when only resource-level granular access exists.
+  if (permissions.granularAccess.activityAccess.size === 0) {
+    return requiredLevel === 'view' || permissions.canEdit;
+  }
+
   // Check granular access
   const level = permissions.granularAccess.activityAccess.get(activityId);
   if (!level) return false;
-  
+
   if (requiredLevel === 'view') return true;
   if (requiredLevel === 'edit') return level === 'edit';
-  
+
   return false;
 }
 
@@ -262,18 +268,23 @@ export function canAccessResource(
 ): boolean {
   // Admins always have access
   if (permissions.isAdmin) return true;
-  
+
   // If no granular access defined, use base permissions
   if (!permissions.hasGranularAccess) {
     return requiredLevel === 'view' || permissions.canEdit;
   }
-  
+
+  // If granular is enabled but there are NO resource rules, fall back to base permissions.
+  if (permissions.granularAccess.resourceAccess.size === 0) {
+    return requiredLevel === 'view' || permissions.canEdit;
+  }
+
   // Check granular access
   const level = permissions.granularAccess.resourceAccess.get(resourceId);
   if (!level) return false;
-  
+
   if (requiredLevel === 'view') return true;
   if (requiredLevel === 'edit') return level === 'edit';
-  
+
   return false;
 }

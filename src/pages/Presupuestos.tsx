@@ -8,7 +8,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { ArrowLeft, Calculator, Search, LayoutGrid, List, Plus, Pencil, Trash2, ExternalLink, RefreshCw, Copy, Archive, ChevronDown, ChevronRight } from 'lucide-react';
+import { ArrowLeft, Calculator, Search, LayoutGrid, List, Plus, Pencil, Trash2, ExternalLink, RefreshCw, Copy, Archive, ChevronDown, ChevronRight, Play } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { AppNavDropdown } from '@/components/AppNavDropdown';
@@ -20,7 +21,8 @@ import { searchMatch } from '@/lib/search-utils';
 import { CloneBudgetDialog } from '@/components/presupuestos/CloneBudgetDialog';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Badge } from '@/components/ui/badge';
-import { Switch } from '@/components/ui/switch';
+
+type PresupuestoStatus = 'activo' | 'en_ejecucion' | 'archivado';
 
 interface Presupuesto {
   id: string;
@@ -34,6 +36,7 @@ interface Presupuesto {
   created_at: string;
   project_id: string | null;
   archived: boolean;
+  status: PresupuestoStatus;
 }
 
 interface PresupuestoForm {
@@ -44,7 +47,7 @@ interface PresupuestoForm {
   provincia: string;
   coordenadas_lat: string;
   coordenadas_lng: string;
-  archived: boolean;
+  status: PresupuestoStatus;
 }
 
 const emptyForm: PresupuestoForm = {
@@ -55,7 +58,19 @@ const emptyForm: PresupuestoForm = {
   provincia: '',
   coordenadas_lat: '',
   coordenadas_lng: '',
-  archived: false
+  status: 'activo'
+};
+
+const STATUS_LABELS: Record<PresupuestoStatus, string> = {
+  activo: 'Activo',
+  en_ejecucion: 'En Ejecución',
+  archivado: 'Archivado'
+};
+
+const STATUS_COLORS: Record<PresupuestoStatus, string> = {
+  activo: 'bg-primary/10 text-primary',
+  en_ejecucion: 'bg-amber-500/10 text-amber-600',
+  archivado: 'bg-muted text-muted-foreground'
 };
 
 // Subcomponent for Card view
@@ -66,20 +81,26 @@ interface PresupuestoCardProps {
   onRecalculate: (e: React.MouseEvent, id: string) => void;
   onEdit: (p: Presupuesto) => void;
   onDelete: (p: Presupuesto) => void;
-  onArchiveToggle: (e: React.MouseEvent, p: Presupuesto) => void;
+  onStatusChange: (e: React.MouseEvent, p: Presupuesto, status: PresupuestoStatus) => void;
   onNavigate: (id: string) => void;
   generatePresupuestoId: (p: Presupuesto) => string;
-  isArchived?: boolean;
 }
 
-const PresupuestoCard = ({ p, isAdmin, recalculatingId, onRecalculate, onEdit, onDelete, onArchiveToggle, onNavigate, generatePresupuestoId, isArchived }: PresupuestoCardProps) => (
+const PresupuestoCard = ({ p, isAdmin, recalculatingId, onRecalculate, onEdit, onDelete, onStatusChange, onNavigate, generatePresupuestoId }: PresupuestoCardProps) => (
   <Card 
-    className={`hover:shadow-md transition-shadow cursor-pointer group ${isArchived ? 'border-dashed' : ''}`}
+    className={`hover:shadow-md transition-shadow cursor-pointer group ${p.status === 'archivado' ? 'border-dashed opacity-75' : ''}`}
     onClick={() => onNavigate(p.id)}
   >
     <CardHeader className="pb-2">
       <div className="flex items-start justify-between">
         <div className="flex-1">
+          <div className="flex items-center gap-2 mb-1">
+            <Badge className={STATUS_COLORS[p.status]}>
+              {p.status === 'en_ejecucion' && <Play className="h-3 w-3 mr-1" />}
+              {p.status === 'archivado' && <Archive className="h-3 w-3 mr-1" />}
+              {STATUS_LABELS[p.status]}
+            </Badge>
+          </div>
           <CardTitle className="text-lg group-hover:text-primary transition-colors">
             {p.nombre}
           </CardTitle>
@@ -98,14 +119,6 @@ const PresupuestoCard = ({ p, isAdmin, recalculatingId, onRecalculate, onEdit, o
                 disabled={recalculatingId === p.id}
               >
                 <RefreshCw className={`h-4 w-4 ${recalculatingId === p.id ? 'animate-spin' : ''}`} />
-              </Button>
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                title={isArchived ? "Desarchivar" : "Archivar"}
-                onClick={(e) => onArchiveToggle(e, p)}
-              >
-                <Archive className={`h-4 w-4 ${isArchived ? 'text-primary' : ''}`} />
               </Button>
               <Button 
                 variant="ghost" 
@@ -159,15 +172,14 @@ interface PresupuestoRowProps {
   onRecalculate: (e: React.MouseEvent, id: string) => void;
   onEdit: (p: Presupuesto) => void;
   onDelete: (p: Presupuesto) => void;
-  onArchiveToggle: (e: React.MouseEvent, p: Presupuesto) => void;
+  onStatusChange: (e: React.MouseEvent, p: Presupuesto, status: PresupuestoStatus) => void;
   onNavigate: (id: string) => void;
   generatePresupuestoId: (p: Presupuesto) => string;
-  isArchived?: boolean;
 }
 
-const PresupuestoRow = ({ p, isAdmin, recalculatingId, onRecalculate, onEdit, onDelete, onArchiveToggle, onNavigate, generatePresupuestoId, isArchived }: PresupuestoRowProps) => (
+const PresupuestoRow = ({ p, isAdmin, recalculatingId, onRecalculate, onEdit, onDelete, onStatusChange, onNavigate, generatePresupuestoId }: PresupuestoRowProps) => (
   <TableRow 
-    className={`hover:bg-muted/50 cursor-pointer ${isArchived ? 'opacity-75' : ''}`}
+    className={`hover:bg-muted/50 cursor-pointer ${p.status === 'archivado' ? 'opacity-75' : ''}`}
     onClick={() => onNavigate(p.id)}
   >
     <TableCell className="text-xs text-muted-foreground max-w-xs truncate">
@@ -175,6 +187,11 @@ const PresupuestoRow = ({ p, isAdmin, recalculatingId, onRecalculate, onEdit, on
     </TableCell>
     <TableCell className="font-medium hover:text-primary transition-colors">
       {p.nombre}
+    </TableCell>
+    <TableCell>
+      <Badge className={STATUS_COLORS[p.status]}>
+        {STATUS_LABELS[p.status]}
+      </Badge>
     </TableCell>
     <TableCell>{p.codigo_correlativo}</TableCell>
     <TableCell>{p.version}</TableCell>
@@ -193,14 +210,6 @@ const PresupuestoRow = ({ p, isAdmin, recalculatingId, onRecalculate, onEdit, on
               disabled={recalculatingId === p.id}
             >
               <RefreshCw className={`h-4 w-4 ${recalculatingId === p.id ? 'animate-spin' : ''}`} />
-            </Button>
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              title={isArchived ? "Desarchivar" : "Archivar"}
-              onClick={(e) => onArchiveToggle(e, p)}
-            >
-              <Archive className={`h-4 w-4 ${isArchived ? 'text-primary' : ''}`} />
             </Button>
             <Button 
               variant="ghost" 
@@ -249,8 +258,9 @@ export default function Presupuestos() {
   const [isSaving, setIsSaving] = useState(false);
   const [recalculatingId, setRecalculatingId] = useState<string | null>(null);
   const [cloneDialogOpen, setCloneDialogOpen] = useState(false);
+  const [showActive, setShowActive] = useState(true);
+  const [showEnEjecucion, setShowEnEjecucion] = useState(true);
   const [showArchived, setShowArchived] = useState(false);
-  const [showActive, setShowActive] = useState(false);
 
   const isAdmin = roles.includes('administrador');
 
@@ -301,7 +311,10 @@ export default function Presupuestos() {
         console.error('Error fetching presupuestos:', error);
         toast.error('Error al cargar presupuestos');
       } else {
-        setPresupuestos(data || []);
+        setPresupuestos((data || []).map(p => ({
+          ...p,
+          status: (p.status as PresupuestoStatus) || (p.archived ? 'archivado' : 'activo')
+        })));
       }
     } catch (err) {
       console.error('Error:', err);
@@ -353,7 +366,7 @@ export default function Presupuestos() {
       provincia: p.provincia || '',
       coordenadas_lat: p.coordenadas_lat?.toString() || '',
       coordenadas_lng: p.coordenadas_lng?.toString() || '',
-      archived: p.archived
+      status: p.status || 'activo'
     });
     setFormDialogOpen(true);
   };
@@ -386,7 +399,8 @@ export default function Presupuestos() {
         provincia: form.provincia.trim() || null,
         coordenadas_lat: form.coordenadas_lat ? parseFloat(form.coordenadas_lat) : null,
         coordenadas_lng: form.coordenadas_lng ? parseFloat(form.coordenadas_lng) : null,
-        archived: form.archived
+        status: form.status,
+        archived: form.status === 'archivado'
       };
 
       if (editingPresupuesto) {
@@ -439,20 +453,23 @@ export default function Presupuestos() {
     }
   };
 
-  // Handle archive toggle
-  const handleArchiveToggle = async (e: React.MouseEvent, p: Presupuesto) => {
+  // Handle status change
+  const handleStatusChange = async (e: React.MouseEvent, p: Presupuesto, newStatus: PresupuestoStatus) => {
     e.stopPropagation();
     try {
       const { error } = await supabase
         .from('presupuestos')
-        .update({ archived: !p.archived })
+        .update({ 
+          status: newStatus,
+          archived: newStatus === 'archivado'
+        })
         .eq('id', p.id);
 
       if (error) throw error;
-      toast.success(p.archived ? 'Presupuesto desarchivado' : 'Presupuesto archivado');
+      toast.success(`Estado cambiado a: ${STATUS_LABELS[newStatus]}`);
       fetchPresupuestos();
     } catch (err: any) {
-      console.error('Error toggling archive:', err);
+      console.error('Error changing status:', err);
       toast.error(err.message || 'Error al cambiar estado');
     }
   };
@@ -470,8 +487,9 @@ export default function Presupuestos() {
     );
   });
 
-  const activePresupuestos = filteredPresupuestos.filter(p => !p.archived);
-  const archivedPresupuestos = filteredPresupuestos.filter(p => p.archived);
+  const activePresupuestos = filteredPresupuestos.filter(p => p.status === 'activo');
+  const enEjecucionPresupuestos = filteredPresupuestos.filter(p => p.status === 'en_ejecucion');
+  const archivedPresupuestos = filteredPresupuestos.filter(p => p.status === 'archivado');
 
   if (loading || isLoading) {
     return (
@@ -555,7 +573,7 @@ export default function Presupuestos() {
 
         {/* Results count */}
         <p className="text-sm text-muted-foreground mb-4">
-          {activePresupuestos.length} activo(s){archivedPresupuestos.length > 0 && `, ${archivedPresupuestos.length} archivado(s)`}
+          {activePresupuestos.length} activo(s), {enEjecucionPresupuestos.length} en ejecución{archivedPresupuestos.length > 0 && `, ${archivedPresupuestos.length} archivado(s)`}
         </p>
 
         {/* Active Presupuestos Section */}
@@ -582,7 +600,7 @@ export default function Presupuestos() {
                       onRecalculate={handleRecalculate}
                       onEdit={handleEdit}
                       onDelete={handleDeleteClick}
-                      onArchiveToggle={handleArchiveToggle}
+                      onStatusChange={handleStatusChange}
                       onNavigate={(id) => navigate(`/presupuestos/${id}`)}
                       generatePresupuestoId={generatePresupuestoId}
                     />
@@ -598,6 +616,7 @@ export default function Presupuestos() {
                       <TableRow>
                         <TableHead>PresupuestoID</TableHead>
                         <TableHead>Nombre</TableHead>
+                        <TableHead>Estado</TableHead>
                         <TableHead>Código</TableHead>
                         <TableHead>Versión</TableHead>
                         <TableHead>Población</TableHead>
@@ -616,7 +635,80 @@ export default function Presupuestos() {
                           onRecalculate={handleRecalculate}
                           onEdit={handleEdit}
                           onDelete={handleDeleteClick}
-                          onArchiveToggle={handleArchiveToggle}
+                          onStatusChange={handleStatusChange}
+                          onNavigate={(id) => navigate(`/presupuestos/${id}`)}
+                          generatePresupuestoId={generatePresupuestoId}
+                        />
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CollapsibleContent>
+          </Collapsible>
+        )}
+
+        {/* En Ejecución Presupuestos Section */}
+        {enEjecucionPresupuestos.length > 0 && (
+          <Collapsible open={showEnEjecucion} onOpenChange={setShowEnEjecucion} className="mb-6">
+            <CollapsibleTrigger asChild>
+              <Button variant="ghost" className="flex items-center gap-2 mb-4 text-amber-600 hover:text-amber-700">
+                {showEnEjecucion ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                <Play className="h-4 w-4" />
+                <Badge className="bg-amber-500/10 text-amber-600 hover:bg-amber-500/20">
+                  En Ejecución ({enEjecucionPresupuestos.length})
+                </Badge>
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              {/* Cards View - En Ejecución */}
+              {viewMode === 'cards' && (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {enEjecucionPresupuestos.map((p) => (
+                    <PresupuestoCard 
+                      key={p.id} 
+                      p={p} 
+                      isAdmin={isAdmin}
+                      recalculatingId={recalculatingId}
+                      onRecalculate={handleRecalculate}
+                      onEdit={handleEdit}
+                      onDelete={handleDeleteClick}
+                      onStatusChange={handleStatusChange}
+                      onNavigate={(id) => navigate(`/presupuestos/${id}`)}
+                      generatePresupuestoId={generatePresupuestoId}
+                    />
+                  ))}
+                </div>
+              )}
+
+              {/* List View - En Ejecución */}
+              {viewMode === 'list' && (
+                <div className="border rounded-lg overflow-hidden">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>PresupuestoID</TableHead>
+                        <TableHead>Nombre</TableHead>
+                        <TableHead>Estado</TableHead>
+                        <TableHead>Código</TableHead>
+                        <TableHead>Versión</TableHead>
+                        <TableHead>Población</TableHead>
+                        <TableHead>Provincia</TableHead>
+                        <TableHead>Creado</TableHead>
+                        <TableHead className="w-40">Acciones</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {enEjecucionPresupuestos.map((p) => (
+                        <PresupuestoRow
+                          key={p.id}
+                          p={p}
+                          isAdmin={isAdmin}
+                          recalculatingId={recalculatingId}
+                          onRecalculate={handleRecalculate}
+                          onEdit={handleEdit}
+                          onDelete={handleDeleteClick}
+                          onStatusChange={handleStatusChange}
                           onNavigate={(id) => navigate(`/presupuestos/${id}`)}
                           generatePresupuestoId={generatePresupuestoId}
                         />
@@ -652,10 +744,9 @@ export default function Presupuestos() {
                       onRecalculate={handleRecalculate}
                       onEdit={handleEdit}
                       onDelete={handleDeleteClick}
-                      onArchiveToggle={handleArchiveToggle}
+                      onStatusChange={handleStatusChange}
                       onNavigate={(id) => navigate(`/presupuestos/${id}`)}
                       generatePresupuestoId={generatePresupuestoId}
-                      isArchived
                     />
                   ))}
                 </div>
@@ -669,6 +760,7 @@ export default function Presupuestos() {
                       <TableRow>
                         <TableHead>PresupuestoID</TableHead>
                         <TableHead>Nombre</TableHead>
+                        <TableHead>Estado</TableHead>
                         <TableHead>Código</TableHead>
                         <TableHead>Versión</TableHead>
                         <TableHead>Población</TableHead>
@@ -687,10 +779,9 @@ export default function Presupuestos() {
                           onRecalculate={handleRecalculate}
                           onEdit={handleEdit}
                           onDelete={handleDeleteClick}
-                          onArchiveToggle={handleArchiveToggle}
+                          onStatusChange={handleStatusChange}
                           onNavigate={(id) => navigate(`/presupuestos/${id}`)}
                           generatePresupuestoId={generatePresupuestoId}
-                          isArchived
                         />
                       ))}
                     </TableBody>
@@ -810,24 +901,23 @@ export default function Presupuestos() {
               <p className="text-sm font-medium mt-1">{generatePresupuestoId(form)}</p>
             </div>
 
-            {/* Archive toggle - only show when editing */}
+            {/* Status selector - only show when editing */}
             {editingPresupuesto && (
-              <div className="flex items-center justify-between p-3 border rounded-lg">
-                <div className="space-y-0.5">
-                  <Label htmlFor="archived" className="text-sm font-medium">Estado del presupuesto</Label>
-                  <p className="text-xs text-muted-foreground">
-                    {form.archived ? 'Este presupuesto está archivado' : 'Este presupuesto está activo'}
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className={`text-xs ${!form.archived ? 'text-primary font-medium' : 'text-muted-foreground'}`}>Activo</span>
-                  <Switch
-                    id="archived"
-                    checked={form.archived}
-                    onCheckedChange={(checked) => setForm({ ...form, archived: checked })}
-                  />
-                  <span className={`text-xs ${form.archived ? 'text-primary font-medium' : 'text-muted-foreground'}`}>Archivado</span>
-                </div>
+              <div className="space-y-2">
+                <Label htmlFor="status">Estado del presupuesto</Label>
+                <Select
+                  value={form.status}
+                  onValueChange={(value: PresupuestoStatus) => setForm({ ...form, status: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccionar estado" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="activo">Activo</SelectItem>
+                    <SelectItem value="en_ejecucion">En Ejecución</SelectItem>
+                    <SelectItem value="archivado">Archivado</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             )}
           </div>

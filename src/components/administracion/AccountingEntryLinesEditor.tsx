@@ -3,9 +3,11 @@ import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Separator } from '@/components/ui/separator';
 import { Plus, Trash2, AlertTriangle, CheckCircle, Pencil, X, Check } from 'lucide-react';
 import { toast } from 'sonner';
 import { AccountSelectWithCreate } from './AccountSelectWithCreate';
+import { EntryDocumentsManager } from './EntryDocumentsManager';
 
 interface AccountingEntry {
   id: string;
@@ -463,6 +465,10 @@ export function AccountingEntryLinesEditor({ entry, onUpdate }: Props) {
           No hay cuentas contables. Crea primero las cuentas en la pestaña "Cuentas Contables".
         </p>
       )}
+
+      {/* Documents Section */}
+      <Separator className="my-4" />
+      <EntryDocumentsManager entryId={entry.id} onUpdate={onUpdate} />
     </div>
   );
 }

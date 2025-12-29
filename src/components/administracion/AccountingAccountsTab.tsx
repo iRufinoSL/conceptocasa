@@ -35,7 +35,8 @@ const ACCOUNT_TYPES = [
   'Clientes',
   'Proveedores',
   'Impuestos',
-  'Tesorería'
+  'Tesorería',
+  'Partidas pendientes de aplicación'
 ];
 
 const emptyForm: AccountForm = {
@@ -244,6 +245,7 @@ export function AccountingAccountsTab({ highlightAccountId, onHighlightHandled, 
       case 'Proveedores': return 'outline';
       case 'Impuestos': return 'destructive';
       case 'Tesorería': return 'default';
+      case 'Partidas pendientes de aplicación': return 'secondary';
       default: return 'secondary';
     }
   };

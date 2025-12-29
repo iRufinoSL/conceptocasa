@@ -79,6 +79,14 @@ interface ProjectDocument {
     id: string;
     name: string;
   } | null;
+  // For accounting documents
+  source?: 'project' | 'accounting';
+  entry_info?: {
+    entry_id: string;
+    entry_code: number;
+    entry_description: string;
+    budget_name: string;
+  } | null;
 }
 
 const DEFAULT_DOCUMENT_TYPES = [
@@ -198,21 +206,70 @@ export default function Documentos() {
   const fetchDocuments = async () => {
     setLoadingDocs(true);
     try {
-      const { data, error } = await supabase
+      // Fetch project documents
+      const { data: projectDocs, error: projectError } = await supabase
         .from('project_documents')
         .select(`
           *,
           project:projects(id, name)
-        `)
-        .order('created_at', { ascending: false });
+        `);
 
-      if (error) throw error;
-      setDocuments(data || []);
+      if (projectError) throw projectError;
+
+      // Fetch accounting documents with entry and budget info
+      const { data: accountingDocs, error: accountingError } = await supabase
+        .from('accounting_documents')
+        .select(`
+          *,
+          entry:accounting_entries(
+            id,
+            code,
+            description,
+            budget:presupuestos(id, nombre)
+          )
+        `);
+
+      if (accountingError) throw accountingError;
+
+      // Transform project documents
+      const transformedProjectDocs: ProjectDocument[] = (projectDocs || []).map(doc => ({
+        ...doc,
+        source: 'project' as const,
+        entry_info: null
+      }));
+
+      // Transform accounting documents to match ProjectDocument interface
+      const transformedAccountingDocs: ProjectDocument[] = (accountingDocs || []).map(doc => ({
+        id: doc.id,
+        name: doc.name,
+        description: doc.description,
+        file_path: doc.file_path,
+        file_type: doc.file_type,
+        file_size: doc.file_size,
+        document_type: 'Asiento contable',
+        document_url: doc.document_url,
+        created_at: doc.created_at,
+        project_id: null,
+        project: null,
+        source: 'accounting' as const,
+        entry_info: doc.entry ? {
+          entry_id: doc.entry.id,
+          entry_code: doc.entry.code,
+          entry_description: doc.entry.description,
+          budget_name: doc.entry.budget?.nombre || 'Sin presupuesto'
+        } : null
+      }));
+
+      // Combine and sort alphabetically by name
+      const allDocs = [...transformedProjectDocs, ...transformedAccountingDocs]
+        .sort((a, b) => a.name.localeCompare(b.name, 'es', { sensitivity: 'base' }));
+
+      setDocuments(allDocs);
       
       // Extract custom types from existing documents
-      const existingTypes = (data || [])
+      const existingTypes = allDocs
         .map(d => d.document_type)
-        .filter((t): t is string => !!t && !DEFAULT_DOCUMENT_TYPES.includes(t));
+        .filter((t): t is string => !!t && !DEFAULT_DOCUMENT_TYPES.includes(t) && t !== 'Asiento contable');
       setCustomTypes([...new Set(existingTypes)]);
     } catch (error) {
       console.error('Error fetching documents:', error);
@@ -243,8 +300,11 @@ export default function Documentos() {
     }
 
     try {
+      // Use the correct bucket based on document source
+      const bucketName = doc.source === 'accounting' ? 'accounting-documents' : 'project-documents';
+      
       const { data, error } = await supabase.storage
-        .from('project-documents')
+        .from(bucketName)
         .download(doc.file_path);
 
       if (error) throw error;
@@ -424,8 +484,11 @@ export default function Documentos() {
     }
 
     try {
+      // Use the correct bucket based on document source
+      const bucketName = doc.source === 'accounting' ? 'accounting-documents' : 'project-documents';
+      
       const { data, error } = await supabase.storage
-        .from('project-documents')
+        .from(bucketName)
         .createSignedUrl(doc.file_path, 300);
 
       if (error) throw error;
@@ -591,11 +654,13 @@ export default function Documentos() {
     const matchesSearch =
       searchMatch(doc.name, searchTerm) ||
       searchMatch(doc.description, searchTerm) ||
-      searchMatch(doc.project?.name, searchTerm);
+      searchMatch(doc.project?.name, searchTerm) ||
+      searchMatch(doc.entry_info?.budget_name, searchTerm) ||
+      searchMatch(doc.entry_info?.entry_description, searchTerm);
 
     const matchesType = filterType === 'all' || doc.document_type === filterType;
     const matchesProject = filterProject === 'all' || 
-      (filterProject === 'none' ? !doc.project_id : doc.project_id === filterProject);
+      (filterProject === 'none' ? !doc.project_id && !doc.entry_info : doc.project_id === filterProject);
 
     return matchesSearch && matchesType && matchesProject;
   });
@@ -750,6 +815,15 @@ export default function Documentos() {
                         <TableCell>
                           {doc.project ? (
                             <Badge variant="outline">{doc.project.name}</Badge>
+                          ) : doc.entry_info ? (
+                            <div className="space-y-1">
+                              <Badge variant="outline" className="text-xs">
+                                {doc.entry_info.budget_name}
+                              </Badge>
+                              <p className="text-xs text-muted-foreground">
+                                Asiento #{doc.entry_info.entry_code}
+                              </p>
+                            </div>
                           ) : (
                             <span className="text-muted-foreground">-</span>
                           )}
@@ -801,7 +875,7 @@ export default function Documentos() {
                                 <Download className="h-4 w-4" />
                               </Button>
                             )}
-                            {isAdmin() && (
+                            {isAdmin() && doc.source !== 'accounting' && (
                               <>
                                 <Button
                                   variant="ghost"

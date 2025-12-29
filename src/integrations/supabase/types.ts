@@ -1488,6 +1488,7 @@ export type Database = {
           project_id: string | null
           provincia: string | null
           start_date: string | null
+          status: string
           updated_at: string | null
           version: string
         }
@@ -1509,6 +1510,7 @@ export type Database = {
           project_id?: string | null
           provincia?: string | null
           start_date?: string | null
+          status?: string
           updated_at?: string | null
           version: string
         }
@@ -1530,6 +1532,7 @@ export type Database = {
           project_id?: string | null
           provincia?: string | null
           start_date?: string | null
+          status?: string
           updated_at?: string | null
           version?: string
         }

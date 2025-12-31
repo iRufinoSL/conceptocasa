@@ -7,9 +7,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { Plus, Trash2, Users, Building2, UserPlus, ChevronDown, List, FolderOpen } from 'lucide-react';
+import { Plus, Trash2, Users, Building2, UserPlus, ChevronDown, List, FolderOpen, Search, X } from 'lucide-react';
 import { ContactForm } from '@/components/crm/ContactForm';
 
 interface ProfessionalActivity {
@@ -54,6 +55,7 @@ export function BudgetContactsManager({ budgetId, isAdmin }: BudgetContactsManag
   const [isAddingOther, setIsAddingOther] = useState(false);
   const [showNewContactDialog, setShowNewContactDialog] = useState(false);
   const [expandedActivities, setExpandedActivities] = useState<Set<string>>(new Set());
+  const [othersSearchTerm, setOthersSearchTerm] = useState('');
 
   const fetchData = async () => {
     setIsLoading(true);
@@ -216,8 +218,17 @@ export function BudgetContactsManager({ budgetId, isAdmin }: BudgetContactsManag
   const providers = budgetContacts.filter(bc => bc.contact_role === 'proveedor');
   const others = budgetContacts.filter(bc => bc.contact_role === 'otros');
 
-  // Sort others alphabetically by name
-  const sortedOthers = [...others].sort((a, b) => {
+  // Filter others by search term
+  const filteredOthers = others.filter(bc => {
+    if (!othersSearchTerm.trim()) return true;
+    const searchLower = othersSearchTerm.toLowerCase().trim();
+    const fullName = bc.contact ? `${bc.contact.name} ${bc.contact.surname || ''}`.toLowerCase() : '';
+    const activities = bc.contact?.professional_activities?.map(a => a.name.toLowerCase()).join(' ') || '';
+    return fullName.includes(searchLower) || activities.includes(searchLower);
+  });
+
+  // Sort filtered others alphabetically by name
+  const sortedOthers = [...filteredOthers].sort((a, b) => {
     const nameA = a.contact ? `${a.contact.name} ${a.contact.surname || ''}`.toLowerCase() : '';
     const nameB = b.contact ? `${b.contact.name} ${b.contact.surname || ''}`.toLowerCase() : '';
     return nameA.localeCompare(nameB);
@@ -508,49 +519,74 @@ export function BudgetContactsManager({ budgetId, isAdmin }: BudgetContactsManag
             )}
             
             {others.length > 0 && (
-              <Tabs defaultValue="alphabetical" className="w-full">
-                <TabsList className="grid w-full grid-cols-2 h-8">
-                  <TabsTrigger value="alphabetical" className="text-xs flex items-center gap-1">
-                    <List className="h-3 w-3" />
-                    Alfabético
-                  </TabsTrigger>
-                  <TabsTrigger value="grouped" className="text-xs flex items-center gap-1">
-                    <FolderOpen className="h-3 w-3" />
-                    Por Actividad
-                  </TabsTrigger>
-                </TabsList>
-                
-                <TabsContent value="alphabetical" className="mt-3">
-                  <ContactList contacts={sortedOthers} role="otros" />
-                </TabsContent>
-                
-                <TabsContent value="grouped" className="mt-3 space-y-2">
-                  {othersGroupedByActivity().map((group, index) => (
-                    <Collapsible 
-                      key={group.activity?.id || 'no-activity'}
-                      open={expandedActivities.has(group.activity?.id || 'no-activity')}
-                      onOpenChange={() => toggleActivityExpanded(group.activity?.id || 'no-activity')}
+              <div className="space-y-3">
+                {/* Search filter */}
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Buscar por nombre o actividad..."
+                    value={othersSearchTerm}
+                    onChange={(e) => setOthersSearchTerm(e.target.value)}
+                    className="pl-9 pr-9"
+                  />
+                  {othersSearchTerm && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7"
+                      onClick={() => setOthersSearchTerm('')}
                     >
-                      <CollapsibleTrigger className="flex items-center justify-between w-full p-2 bg-muted/50 rounded-lg hover:bg-muted transition-colors">
-                        <div className="flex items-center gap-2">
-                          <Badge variant="secondary" className="text-xs">
-                            {group.contacts.length}
-                          </Badge>
-                          <span className="font-medium text-sm">
-                            {group.activity?.name || 'Sin actividad profesional'}
-                          </span>
-                        </div>
-                        <ChevronDown className={`h-4 w-4 transition-transform ${
-                          expandedActivities.has(group.activity?.id || 'no-activity') ? 'rotate-180' : ''
-                        }`} />
-                      </CollapsibleTrigger>
-                      <CollapsibleContent className="mt-2 pl-2">
-                        <ContactList contacts={group.contacts} role="otros" />
-                      </CollapsibleContent>
-                    </Collapsible>
-                  ))}
-                </TabsContent>
-              </Tabs>
+                      <X className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
+
+                {filteredOthers.length === 0 ? (
+                  <p className="text-sm text-muted-foreground py-2 text-center">
+                    No se encontraron contactos con "{othersSearchTerm}"
+                  </p>
+                ) : (
+                  <Tabs defaultValue="alphabetical" className="w-full">
+                    <TabsList className="grid w-full grid-cols-2 h-8">
+                      <TabsTrigger value="alphabetical" className="text-xs flex items-center gap-1">
+                        <List className="h-3 w-3" />
+                        Alfabético ({sortedOthers.length})
+                      </TabsTrigger>
+                      <TabsTrigger value="grouped" className="text-xs flex items-center gap-1">
+                        <FolderOpen className="h-3 w-3" />
+                        Por Actividad
+                      </TabsTrigger>
+                    </TabsList>
+                    
+                    <TabsContent value="grouped" className="mt-3 space-y-2">
+                      {othersGroupedByActivity().map((group) => (
+                        <Collapsible 
+                          key={group.activity?.id || 'no-activity'}
+                          open={expandedActivities.has(group.activity?.id || 'no-activity')}
+                          onOpenChange={() => toggleActivityExpanded(group.activity?.id || 'no-activity')}
+                        >
+                          <CollapsibleTrigger className="flex items-center justify-between w-full p-2 bg-muted/50 rounded-lg hover:bg-muted transition-colors">
+                            <div className="flex items-center gap-2">
+                              <Badge variant="secondary" className="text-xs">
+                                {group.contacts.length}
+                              </Badge>
+                              <span className="font-medium text-sm">
+                                {group.activity?.name || 'Sin actividad profesional'}
+                              </span>
+                            </div>
+                            <ChevronDown className={`h-4 w-4 transition-transform ${
+                              expandedActivities.has(group.activity?.id || 'no-activity') ? 'rotate-180' : ''
+                            }`} />
+                          </CollapsibleTrigger>
+                          <CollapsibleContent className="mt-2 pl-2">
+                            <ContactList contacts={group.contacts} role="otros" />
+                          </CollapsibleContent>
+                        </Collapsible>
+                      ))}
+                    </TabsContent>
+                  </Tabs>
+                )}
+              </div>
             )}
             
             {others.length === 0 && (

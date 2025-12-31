@@ -10,7 +10,8 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { X, Plus, Briefcase, Users } from 'lucide-react';
+import { X, Plus, Briefcase, Users, FileText } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import type { Contact } from '@/pages/CRM';
 
 interface ProfessionalActivity {
@@ -25,6 +26,23 @@ interface RelatedContact {
   contact_type: string;
 }
 
+interface RelatedBudget {
+  id: string;
+  nombre: string;
+  codigo_correlativo: number;
+  version: string;
+  poblacion: string;
+  contact_role: string;
+}
+
+interface AvailableBudget {
+  id: string;
+  nombre: string;
+  codigo_correlativo: number;
+  version: string;
+  poblacion: string;
+}
+
 interface ContactFormProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -34,6 +52,7 @@ interface ContactFormProps {
 
 export function ContactForm({ open, onOpenChange, contact, onSuccess }: ContactFormProps) {
   const { toast } = useToast();
+  const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
   const [activities, setActivities] = useState<ProfessionalActivity[]>([]);
   const [selectedActivityIds, setSelectedActivityIds] = useState<string[]>([]);
@@ -42,6 +61,12 @@ export function ContactForm({ open, onOpenChange, contact, onSuccess }: ContactF
   const [newTag, setNewTag] = useState('');
   const [newActivityName, setNewActivityName] = useState('');
   const [showNewActivity, setShowNewActivity] = useState(false);
+  
+  // Budgets
+  const [relatedBudgets, setRelatedBudgets] = useState<RelatedBudget[]>([]);
+  const [availableBudgets, setAvailableBudgets] = useState<AvailableBudget[]>([]);
+  const [selectedBudgetIds, setSelectedBudgetIds] = useState<string[]>([]);
+  const [budgetSearchTerm, setBudgetSearchTerm] = useState('');
   
   const [formData, setFormData] = useState({
     name: '',
@@ -76,6 +101,14 @@ export function ContactForm({ open, onOpenChange, contact, onSuccess }: ContactF
         .select('id, name, surname, contact_type')
         .order('name');
       if (contactsData) setAllContacts(contactsData);
+
+      // Fetch all budgets for selection
+      const { data: budgetsData } = await supabase
+        .from('presupuestos')
+        .select('id, nombre, codigo_correlativo, version, poblacion')
+        .eq('archived', false)
+        .order('codigo_correlativo', { ascending: false });
+      if (budgetsData) setAvailableBudgets(budgetsData);
     };
     if (open) fetchData();
   }, [open]);
@@ -136,6 +169,36 @@ export function ContactForm({ open, onOpenChange, contact, onSuccess }: ContactF
           ...(relationsB?.map(r => r.contact_id_a) || [])
         ];
         setSelectedRelatedContactIds([...new Set(relatedIds)]);
+
+        // Fetch related budgets
+        const { data: budgetContacts } = await supabase
+          .from('budget_contacts')
+          .select(`
+            contact_role,
+            presupuestos:budget_id (
+              id,
+              nombre,
+              codigo_correlativo,
+              version,
+              poblacion
+            )
+          `)
+          .eq('contact_id', contact.id);
+
+        if (budgetContacts) {
+          const budgets: RelatedBudget[] = budgetContacts
+            .filter(bc => bc.presupuestos)
+            .map(bc => ({
+              id: (bc.presupuestos as any).id,
+              nombre: (bc.presupuestos as any).nombre,
+              codigo_correlativo: (bc.presupuestos as any).codigo_correlativo,
+              version: (bc.presupuestos as any).version,
+              poblacion: (bc.presupuestos as any).poblacion,
+              contact_role: bc.contact_role
+            }));
+          setRelatedBudgets(budgets);
+          setSelectedBudgetIds(budgets.map(b => b.id));
+        }
       };
       fetchContactData();
     } else if (!contact && open) {
@@ -158,6 +221,9 @@ export function ContactForm({ open, onOpenChange, contact, onSuccess }: ContactF
       });
       setSelectedActivityIds([]);
       setSelectedRelatedContactIds([]);
+      setRelatedBudgets([]);
+      setSelectedBudgetIds([]);
+      setBudgetSearchTerm('');
     }
   }, [contact, open]);
 
@@ -177,8 +243,26 @@ export function ContactForm({ open, onOpenChange, contact, onSuccess }: ContactF
     );
   };
 
+  const toggleBudget = (budgetId: string) => {
+    setSelectedBudgetIds(prev =>
+      prev.includes(budgetId)
+        ? prev.filter(id => id !== budgetId)
+        : [...prev, budgetId]
+    );
+  };
+
   // Filter out current contact from available contacts
   const availableRelatedContacts = allContacts.filter(c => c.id !== contact?.id);
+  
+  // Filter budgets by search term
+  const filteredBudgets = availableBudgets.filter(b => {
+    const searchLower = budgetSearchTerm.toLowerCase();
+    return (
+      b.nombre.toLowerCase().includes(searchLower) ||
+      b.poblacion.toLowerCase().includes(searchLower) ||
+      `${b.codigo_correlativo}`.includes(searchLower)
+    );
+  });
 
   const handleAddTag = () => {
     const tag = newTag.trim();
@@ -310,6 +394,29 @@ export function ContactForm({ open, onOpenChange, contact, onSuccess }: ContactF
             .insert(relationLinks);
 
           if (relationError) throw relationError;
+        }
+
+        // Update budget relations
+        // Delete existing budget_contacts for this contact with 'otros' role
+        await supabase
+          .from('budget_contacts')
+          .delete()
+          .eq('contact_id', contactId)
+          .eq('contact_role', 'otros');
+
+        // Insert new budget relations with 'otros' role
+        if (selectedBudgetIds.length > 0) {
+          const budgetLinks = selectedBudgetIds.map(budgetId => ({
+            budget_id: budgetId,
+            contact_id: contactId!,
+            contact_role: 'otros'
+          }));
+
+          const { error: budgetError } = await supabase
+            .from('budget_contacts')
+            .insert(budgetLinks);
+
+          if (budgetError) throw budgetError;
         }
       }
 
@@ -487,7 +594,7 @@ export function ContactForm({ open, onOpenChange, contact, onSuccess }: ContactF
                 </div>
               )}
             </ScrollArea>
-            {selectedRelatedContactIds.length > 0 && (
+          {selectedRelatedContactIds.length > 0 && (
               <div className="flex flex-wrap gap-1">
                 {selectedRelatedContactIds.map(id => {
                   const relContact = allContacts.find(c => c.id === id);
@@ -497,6 +604,79 @@ export function ContactForm({ open, onOpenChange, contact, onSuccess }: ContactF
                       <button
                         type="button"
                         onClick={() => toggleRelatedContact(id)}
+                        className="ml-1 hover:text-destructive"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </Badge>
+                  ) : null;
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Related Budgets */}
+          <div className="space-y-2">
+            <Label className="flex items-center gap-2">
+              <FileText className="h-4 w-4" />
+              Presupuestos Relacionados
+            </Label>
+            <Input
+              placeholder="Buscar presupuesto por nombre, población o código..."
+              value={budgetSearchTerm}
+              onChange={(e) => setBudgetSearchTerm(e.target.value)}
+              className="mb-2"
+            />
+            <ScrollArea className="h-32 rounded-md border p-2">
+              {filteredBudgets.length === 0 ? (
+                <p className="text-sm text-muted-foreground p-2">
+                  {budgetSearchTerm ? 'No se encontraron presupuestos' : 'No hay presupuestos disponibles'}
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {filteredBudgets.map(budget => (
+                    <div key={budget.id} className="flex items-center space-x-2">
+                      <Checkbox
+                        id={`budget-${budget.id}`}
+                        checked={selectedBudgetIds.includes(budget.id)}
+                        onCheckedChange={() => toggleBudget(budget.id)}
+                      />
+                      <label
+                        htmlFor={`budget-${budget.id}`}
+                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer flex items-center gap-2"
+                      >
+                        <span className="text-muted-foreground">{budget.codigo_correlativo}</span>
+                        {budget.nombre}
+                        <Badge variant="outline" className="text-xs">
+                          {budget.poblacion}
+                        </Badge>
+                      </label>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </ScrollArea>
+            {selectedBudgetIds.length > 0 && (
+              <div className="flex flex-wrap gap-1">
+                {selectedBudgetIds.map(id => {
+                  const budget = availableBudgets.find(b => b.id === id);
+                  return budget ? (
+                    <Badge 
+                      key={id} 
+                      variant="secondary" 
+                      className="gap-1 cursor-pointer hover:bg-secondary/80"
+                      onClick={() => {
+                        onOpenChange(false);
+                        navigate(`/presupuestos/${budget.id}`);
+                      }}
+                    >
+                      {budget.codigo_correlativo} - {budget.nombre}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleBudget(id);
+                        }}
                         className="ml-1 hover:text-destructive"
                       >
                         <X className="h-3 w-3" />

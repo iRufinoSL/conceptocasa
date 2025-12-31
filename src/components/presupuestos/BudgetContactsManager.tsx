@@ -558,6 +558,10 @@ export function BudgetContactsManager({ budgetId, isAdmin }: BudgetContactsManag
                       </TabsTrigger>
                     </TabsList>
                     
+                    <TabsContent value="alphabetical" className="mt-3">
+                      <ContactList contacts={sortedOthers} role="otros" />
+                    </TabsContent>
+                    
                     <TabsContent value="grouped" className="mt-3 space-y-2">
                       {othersGroupedByActivity().map((group) => (
                         <Collapsible 

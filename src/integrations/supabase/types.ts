@@ -99,9 +99,13 @@ export type Database = {
           created_at: string
           description: string
           entry_date: string
+          entry_type: string | null
+          expense_account_id: string | null
           id: string
+          supplier_id: string | null
           total_amount: number
           updated_at: string
+          vat_rate: number | null
         }
         Insert: {
           budget_id: string
@@ -109,9 +113,13 @@ export type Database = {
           created_at?: string
           description: string
           entry_date?: string
+          entry_type?: string | null
+          expense_account_id?: string | null
           id?: string
+          supplier_id?: string | null
           total_amount?: number
           updated_at?: string
+          vat_rate?: number | null
         }
         Update: {
           budget_id?: string
@@ -119,9 +127,13 @@ export type Database = {
           created_at?: string
           description?: string
           entry_date?: string
+          entry_type?: string | null
+          expense_account_id?: string | null
           id?: string
+          supplier_id?: string | null
           total_amount?: number
           updated_at?: string
+          vat_rate?: number | null
         }
         Relationships: [
           {
@@ -129,6 +141,20 @@ export type Database = {
             columns: ["budget_id"]
             isOneToOne: false
             referencedRelation: "presupuestos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "accounting_entries_expense_account_id_fkey"
+            columns: ["expense_account_id"]
+            isOneToOne: false
+            referencedRelation: "accounting_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "accounting_entries_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contacts"
             referencedColumns: ["id"]
           },
         ]

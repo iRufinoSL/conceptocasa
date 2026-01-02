@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -9,11 +9,20 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { ArrowLeft, ArrowRight, Check, ShoppingCart, Receipt, CreditCard, Wallet, Search, X, AlertTriangle, CheckCircle } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, ShoppingCart, Receipt, CreditCard, Wallet, Search, X, AlertTriangle, CheckCircle, Plus } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { ScrollArea } from '@/components/ui/scroll-area';
+
+const ACCOUNT_TYPES = [
+  'Compras y gastos',
+  'Ventas e ingresos',
+  'Clientes',
+  'Proveedores',
+  'Impuestos',
+  'Tesorería'
+];
 
 const ENTRY_TYPES = [
   { value: 'compra', label: 'Compra / Gasto', icon: ShoppingCart, description: 'Registro de compras y gastos realizados' },
@@ -75,6 +84,12 @@ export function AccountingEntryWizard({ open, onOpenChange, onEntryCreated }: Pr
   const [budgetSearch, setBudgetSearch] = useState('');
   const [contactSearch, setContactSearch] = useState('');
   const [accountSearch, setAccountSearch] = useState('');
+  const [showCreateAccountDialog, setShowCreateAccountDialog] = useState(false);
+  const [savingAccount, setSavingAccount] = useState(false);
+  const [newAccount, setNewAccount] = useState({
+    name: '',
+    account_type: 'Compras y gastos'
+  });
 
   const [formData, setFormData] = useState<WizardFormData>({
     entry_type: 'compra',
@@ -164,6 +179,61 @@ export function AccountingEntryWizard({ open, onOpenChange, onEntryCreated }: Pr
       return a.name.toLowerCase().includes(accountSearch.toLowerCase()) ||
              a.account_type.toLowerCase().includes(accountSearch.toLowerCase());
     });
+  };
+
+  const getDefaultAccountType = () => {
+    switch (formData.entry_type) {
+      case 'compra': return 'Compras y gastos';
+      case 'venta': return 'Ventas e ingresos';
+      case 'cobro': return 'Tesorería';
+      case 'pago': return 'Tesorería';
+      default: return 'Compras y gastos';
+    }
+  };
+
+  const handleOpenCreateAccount = () => {
+    setNewAccount({
+      name: accountSearch,
+      account_type: getDefaultAccountType()
+    });
+    setShowCreateAccountDialog(true);
+  };
+
+  const handleCreateAccount = async () => {
+    if (!newAccount.name.trim()) {
+      toast.error('El nombre de la cuenta es obligatorio');
+      return;
+    }
+
+    setSavingAccount(true);
+    try {
+      const { data, error } = await supabase
+        .from('accounting_accounts')
+        .insert({
+          name: newAccount.name.trim(),
+          account_type: newAccount.account_type
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      toast.success('Cuenta contable creada');
+      setShowCreateAccountDialog(false);
+      setNewAccount({ name: '', account_type: 'Compras y gastos' });
+      setAccountSearch('');
+      
+      // Add to accounts list and select it
+      if (data) {
+        setAccounts(prev => [...prev, data]);
+        setFormData(prev => ({ ...prev, expense_account_id: data.id }));
+      }
+    } catch (error) {
+      console.error('Error creating account:', error);
+      toast.error('Error al crear la cuenta contable');
+    } finally {
+      setSavingAccount(false);
+    }
   };
 
   const getContactLabel = () => {
@@ -791,13 +861,23 @@ export function AccountingEntryWizard({ open, onOpenChange, onEntryCreated }: Pr
         )}
       </div>
 
-      <ScrollArea className="h-[250px] border rounded-lg">
+      <ScrollArea className="h-[200px] border rounded-lg">
         <div className="p-2 space-y-1">
           {getFilteredAccounts().length === 0 ? (
-            <p className="p-4 text-center text-muted-foreground">
-              No hay cuentas de tipo "{formData.entry_type === 'compra' ? 'Compras y gastos' : 'Ventas e ingresos'}". 
-              Crea una cuenta primero.
-            </p>
+            <div className="p-4 text-center">
+              <p className="text-muted-foreground mb-3">
+                No se encontraron cuentas{accountSearch && ` para "${accountSearch}"`}
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleOpenCreateAccount}
+                className="gap-2"
+              >
+                <Plus className="h-4 w-4" />
+                Crear nueva cuenta
+              </Button>
+            </div>
           ) : (
             getFilteredAccounts().map((a) => (
               <div
@@ -816,6 +896,19 @@ export function AccountingEntryWizard({ open, onOpenChange, onEntryCreated }: Pr
           )}
         </div>
       </ScrollArea>
+      
+      {/* Button to create account even when there are results */}
+      {getFilteredAccounts().length > 0 && (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={handleOpenCreateAccount}
+          className="w-full gap-2"
+        >
+          <Plus className="h-4 w-4" />
+          Crear nueva cuenta
+        </Button>
+      )}
     </div>
   );
 
@@ -1000,6 +1093,55 @@ export function AccountingEntryWizard({ open, onOpenChange, onEntryCreated }: Pr
           </div>
         </DialogFooter>
       </DialogContent>
+
+      {/* Dialog for creating new account */}
+      <Dialog open={showCreateAccountDialog} onOpenChange={setShowCreateAccountDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Nueva Cuenta Contable</DialogTitle>
+            <DialogDescription>
+              Crear una nueva cuenta contable para usar en los asientos.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="new-account-name">Nombre de la cuenta *</Label>
+              <Input
+                id="new-account-name"
+                value={newAccount.name}
+                onChange={(e) => setNewAccount({ ...newAccount, name: e.target.value })}
+                placeholder="Ej: Gastos de oficina"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="new-account-type">Tipo de cuenta</Label>
+              <Select
+                value={newAccount.account_type}
+                onValueChange={(value) => setNewAccount({ ...newAccount, account_type: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {ACCOUNT_TYPES.map((type) => (
+                    <SelectItem key={type} value={type}>
+                      {type}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCreateAccountDialog(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={handleCreateAccount} disabled={savingAccount}>
+              {savingAccount ? 'Creando...' : 'Crear cuenta'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Dialog>
   );
 }

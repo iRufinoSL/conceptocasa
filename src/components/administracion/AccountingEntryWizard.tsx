@@ -174,10 +174,12 @@ export function AccountingEntryWizard({ open, onOpenChange, onEntryCreated }: Pr
     
     return accounts.filter(a => {
       if (accountSearch === '') {
+        // When no search, show default type accounts
         return a.account_type === typeFilter;
       }
-      return a.name.toLowerCase().includes(accountSearch.toLowerCase()) ||
-             a.account_type.toLowerCase().includes(accountSearch.toLowerCase());
+      // When searching, search across ALL accounts (any type)
+      const searchLower = accountSearch.toLowerCase();
+      return a.name.toLowerCase().includes(searchLower);
     });
   };
 

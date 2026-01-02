@@ -50,6 +50,7 @@ interface Contact {
   name: string;
   surname: string | null;
   contact_type: string;
+  status: string;
 }
 
 interface AccountingAccount {
@@ -85,6 +86,10 @@ export function AccountingEntryWizard({ open, onOpenChange, onEntryCreated }: Pr
   const [contactSearch, setContactSearch] = useState('');
   const [accountSearch, setAccountSearch] = useState('');
   const [showCreateAccountDialog, setShowCreateAccountDialog] = useState(false);
+  const [createAccountContext, setCreateAccountContext] = useState<
+    | { kind: 'expense' }
+    | { kind: 'contact'; contactStatus: 'Proveedor' | 'Cliente' }
+  >({ kind: 'expense' });
   const [savingAccount, setSavingAccount] = useState(false);
   const [newAccount, setNewAccount] = useState({
     name: '',
@@ -136,7 +141,7 @@ export function AccountingEntryWizard({ open, onOpenChange, onEntryCreated }: Pr
           .order('codigo_correlativo', { ascending: false }),
         supabase
           .from('crm_contacts')
-          .select('id, name, surname, contact_type')
+          .select('id, name, surname, contact_type, status')
           .order('name'),
         supabase
           .from('accounting_accounts')
@@ -160,7 +165,13 @@ export function AccountingEntryWizard({ open, onOpenChange, onEntryCreated }: Pr
     p.codigo_correlativo.toString().includes(budgetSearch)
   );
 
-  const filteredContacts = contacts.filter(c => {
+  const filteredContacts = contacts.filter((c) => {
+    // For entry types that require a contact, filter by the expected status
+    const expectedStatus: 'Proveedor' | 'Cliente' = ['compra', 'pago'].includes(formData.entry_type)
+      ? 'Proveedor'
+      : 'Cliente';
+    if (c.status !== expectedStatus) return false;
+
     if (contactSearch === '') return true;
     const fullName = `${c.name} ${c.surname || ''}`.toLowerCase();
     return fullName.includes(contactSearch.toLowerCase());
@@ -185,19 +196,71 @@ export function AccountingEntryWizard({ open, onOpenChange, onEntryCreated }: Pr
 
   const getDefaultAccountType = () => {
     switch (formData.entry_type) {
-      case 'compra': return 'Compras y gastos';
-      case 'venta': return 'Ventas e ingresos';
-      case 'cobro': return 'Tesorería';
-      case 'pago': return 'Tesorería';
-      default: return 'Compras y gastos';
+      case 'compra':
+        return 'Compras y gastos';
+      case 'venta':
+        return 'Ventas e ingresos';
+      case 'cobro':
+        return 'Tesorería';
+      case 'pago':
+        return 'Tesorería';
+      default:
+        return 'Compras y gastos';
     }
   };
 
-  const handleOpenCreateAccount = () => {
+  const getContactStatus = (): 'Proveedor' | 'Cliente' => {
+    return ['compra', 'pago'].includes(formData.entry_type) ? 'Proveedor' : 'Cliente';
+  };
+
+  const getContactAccountType = () => {
+    return getContactStatus() === 'Proveedor' ? 'Proveedores' : 'Clientes';
+  };
+
+  const ensureContactForAccountName = async (accountName: string) => {
+    const desiredStatus = getContactStatus();
+
+    // Try to reuse an existing contact with the same name + status
+    const existing = contacts.find(
+      (c) =>
+        c.name.trim().toLowerCase() === accountName.trim().toLowerCase() &&
+        c.status === desiredStatus
+    );
+
+    if (existing) return existing;
+
+    const { data, error } = await supabase
+      .from('crm_contacts')
+      .insert({
+        name: accountName.trim(),
+        contact_type: 'Empresa',
+        status: desiredStatus,
+      })
+      .select('id, name, surname, contact_type, status')
+      .single();
+
+    if (error) throw error;
+
+    if (data) {
+      setContacts((prev) => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)));
+    }
+
+    return data as Contact;
+  };
+
+  const handleOpenCreateAccount = (opts?: { kind: 'expense' } | { kind: 'contact' }) => {
+    const kind = opts?.kind ?? 'expense';
+    const context = kind === 'contact'
+      ? ({ kind: 'contact', contactStatus: getContactStatus() } as const)
+      : ({ kind: 'expense' } as const);
+
+    setCreateAccountContext(context);
+
     setNewAccount({
-      name: accountSearch,
-      account_type: getDefaultAccountType()
+      name: kind === 'contact' ? contactSearch : accountSearch,
+      account_type: kind === 'contact' ? getContactAccountType() : getDefaultAccountType(),
     });
+
     setShowCreateAccountDialog(true);
   };
 
@@ -223,12 +286,24 @@ export function AccountingEntryWizard({ open, onOpenChange, onEntryCreated }: Pr
       toast.success('Cuenta contable creada');
       setShowCreateAccountDialog(false);
       setNewAccount({ name: '', account_type: 'Compras y gastos' });
-      setAccountSearch('');
-      
-      // Add to accounts list and select it
+
+      // Add to accounts list
       if (data) {
-        setAccounts(prev => [...prev, data]);
-        setFormData(prev => ({ ...prev, expense_account_id: data.id }));
+        setAccounts((prev) => [...prev, data]);
+
+        if (createAccountContext.kind === 'contact') {
+          setContactSearch('');
+          try {
+            const contact = await ensureContactForAccountName(data.name);
+            setFormData((prev) => ({ ...prev, supplier_id: contact.id }));
+          } catch (e) {
+            console.error('Error creating contact from account:', e);
+            toast.error('La cuenta se creó, pero no se pudo crear el contacto');
+          }
+        } else {
+          setAccountSearch('');
+          setFormData((prev) => ({ ...prev, expense_account_id: data.id }));
+        }
       }
     } catch (error) {
       console.error('Error creating account:', error);
@@ -812,25 +887,108 @@ export function AccountingEntryWizard({ open, onOpenChange, onEntryCreated }: Pr
       </div>
 
       <ScrollArea className="h-[250px] border rounded-lg">
-        <div className="p-2 space-y-1">
-          {filteredContacts.length === 0 ? (
-            <p className="p-4 text-center text-muted-foreground">No hay contactos disponibles</p>
-          ) : (
-            filteredContacts.map((c) => (
-              <div
-                key={c.id}
-                className={`p-3 rounded-md cursor-pointer transition-colors ${
-                  formData.supplier_id === c.id ? 'bg-primary/10 border border-primary' : 'hover:bg-muted'
-                }`}
-                onClick={() => setFormData({ ...formData, supplier_id: c.id })}
-              >
-                <div className="flex items-center gap-2">
-                  <span className="font-medium">{c.name} {c.surname}</span>
-                  <Badge variant="outline" className="text-xs">{c.contact_type}</Badge>
+        <div className="p-2 space-y-3">
+          {(() => {
+            const query = contactSearch.trim().toLowerCase();
+            const matchingAccounts = query
+              ? accounts.filter(
+                  (a) =>
+                    a.account_type === getContactAccountType() &&
+                    a.name.toLowerCase().includes(query)
+                )
+              : accounts.filter((a) => a.account_type === getContactAccountType());
+
+            const showEmpty = filteredContacts.length === 0 && matchingAccounts.length === 0;
+
+            if (showEmpty) {
+              return (
+                <div className="p-4 text-center">
+                  <p className="text-muted-foreground mb-3">
+                    No se encontraron {getContactLabel().toLowerCase()}s{contactSearch && ` para "${contactSearch}"`}
+                  </p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleOpenCreateAccount({ kind: 'contact' })}
+                    className="gap-2"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Registrar nueva cuenta contable
+                  </Button>
                 </div>
-              </div>
-            ))
-          )}
+              );
+            }
+
+            return (
+              <>
+                {filteredContacts.length > 0 && (
+                  <div className="space-y-1">
+                    {filteredContacts.map((c) => (
+                      <div
+                        key={c.id}
+                        className={`p-3 rounded-md cursor-pointer transition-colors ${
+                          formData.supplier_id === c.id
+                            ? 'bg-primary/10 border border-primary'
+                            : 'hover:bg-muted'
+                        }`}
+                        onClick={() => setFormData({ ...formData, supplier_id: c.id })}
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium">
+                            {c.name} {c.surname}
+                          </span>
+                          <Badge variant="outline" className="text-xs">
+                            {c.status}
+                          </Badge>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {matchingAccounts.length > 0 && (
+                  <div className="space-y-1">
+                    <div className="px-2 pt-2 text-xs font-medium text-muted-foreground">
+                      Cuentas contables ({getContactAccountType()})
+                    </div>
+                    {matchingAccounts.map((a) => (
+                      <div
+                        key={a.id}
+                        className="p-3 rounded-md cursor-pointer transition-colors hover:bg-muted"
+                        onClick={async () => {
+                          try {
+                            const contact = await ensureContactForAccountName(a.name);
+                            setFormData((prev) => ({ ...prev, supplier_id: contact.id }));
+                            toast.success(`${getContactLabel()} seleccionado desde cuenta contable`);
+                          } catch (e) {
+                            console.error('Error selecting contact from account:', e);
+                            toast.error('No se pudo seleccionar el contacto desde la cuenta contable');
+                          }
+                        }}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-medium">{a.name}</span>
+                          <Badge variant="outline" className="text-xs">
+                            {a.account_type}
+                          </Badge>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => handleOpenCreateAccount({ kind: 'contact' })}
+                  className="w-full gap-2"
+                >
+                  <Plus className="h-4 w-4" />
+                  Registrar nueva cuenta contable
+                </Button>
+              </>
+            );
+          })()}
         </div>
       </ScrollArea>
     </div>
@@ -873,7 +1031,7 @@ export function AccountingEntryWizard({ open, onOpenChange, onEntryCreated }: Pr
               <Button
                 variant="outline"
                 size="sm"
-                onClick={handleOpenCreateAccount}
+                onClick={() => handleOpenCreateAccount({ kind: 'expense' })}
                 className="gap-2"
               >
                 <Plus className="h-4 w-4" />
@@ -904,7 +1062,7 @@ export function AccountingEntryWizard({ open, onOpenChange, onEntryCreated }: Pr
         <Button
           variant="ghost"
           size="sm"
-          onClick={handleOpenCreateAccount}
+          onClick={() => handleOpenCreateAccount({ kind: 'expense' })}
           className="w-full gap-2"
         >
           <Plus className="h-4 w-4" />

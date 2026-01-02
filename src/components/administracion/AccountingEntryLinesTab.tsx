@@ -18,7 +18,7 @@ interface AccountingAccount {
 
 interface EntryLine {
   id: string;
-  code: number;
+  code: string;
   entry_id: string;
   account_id: string;
   line_date: string;
@@ -27,7 +27,7 @@ interface EntryLine {
   credit_amount: number;
   account?: AccountingAccount;
   entry?: {
-    code: number;
+    code: string;
     description: string;
   };
 }
@@ -36,7 +36,7 @@ type SortField = 'code' | 'line_date';
 type SortDirection = 'asc' | 'desc';
 
 interface Props {
-  onNavigateToEntry?: (entryCode: number) => void;
+  onNavigateToEntry?: (entryCode: string) => void;
   onNavigateToAccount?: (accountId: string) => void;
 }
 
@@ -86,7 +86,7 @@ export function AccountingEntryLinesTab({ onNavigateToEntry, onNavigateToAccount
     return [...lines].sort((a, b) => {
       let comparison = 0;
       if (sortField === 'code') {
-        comparison = a.code - b.code;
+        comparison = a.code.localeCompare(b.code);
       } else if (sortField === 'line_date') {
         comparison = new Date(a.line_date).getTime() - new Date(b.line_date).getTime();
       }
@@ -138,7 +138,7 @@ export function AccountingEntryLinesTab({ onNavigateToEntry, onNavigateToAccount
   const totalDebit = lines.reduce((sum, line) => sum + (Number(line.debit_amount) || 0), 0);
   const totalCredit = lines.reduce((sum, line) => sum + (Number(line.credit_amount) || 0), 0);
 
-  const handleEntryClick = (entryCode: number) => {
+  const handleEntryClick = (entryCode: string) => {
     if (onNavigateToEntry) {
       onNavigateToEntry(entryCode);
     }

@@ -95,7 +95,7 @@ export type Database = {
       accounting_entries: {
         Row: {
           budget_id: string
-          code: number
+          code: string
           created_at: string
           description: string
           entry_date: string
@@ -109,7 +109,7 @@ export type Database = {
         }
         Insert: {
           budget_id: string
-          code?: number
+          code?: string
           created_at?: string
           description: string
           entry_date?: string
@@ -123,7 +123,7 @@ export type Database = {
         }
         Update: {
           budget_id?: string
-          code?: number
+          code?: string
           created_at?: string
           description?: string
           entry_date?: string
@@ -162,7 +162,7 @@ export type Database = {
       accounting_entry_lines: {
         Row: {
           account_id: string
-          code: number
+          code: string
           created_at: string
           credit_amount: number
           debit_amount: number
@@ -174,7 +174,7 @@ export type Database = {
         }
         Insert: {
           account_id: string
-          code?: number
+          code?: string
           created_at?: string
           credit_amount?: number
           debit_amount?: number
@@ -186,7 +186,7 @@ export type Database = {
         }
         Update: {
           account_id?: string
-          code?: number
+          code?: string
           created_at?: string
           credit_amount?: number
           debit_amount?: number
@@ -2021,6 +2021,7 @@ export type Database = {
         Returns: boolean
       }
       can_access_storage_file: { Args: { file_path: string }; Returns: boolean }
+      generate_entry_code: { Args: { entry_year: number }; Returns: string }
       has_presupuesto_access: {
         Args: { _presupuesto_id: string; _user_id: string }
         Returns: boolean

@@ -20,14 +20,14 @@ interface AccountingAccount {
 
 interface EntryLine {
   id: string;
-  code: number;
+  code: string;
   entry_id: string;
   line_date: string;
   description: string | null;
   debit_amount: number;
   credit_amount: number;
   entry?: {
-    code: number;
+    code: string;
     description: string;
   };
 }
@@ -44,7 +44,7 @@ const ACCOUNT_TYPES = [
 interface Props {
   account: AccountingAccount;
   onBack: () => void;
-  onNavigateToEntry: (entryCode: number) => void;
+  onNavigateToEntry: (entryCode: string) => void;
   onAccountUpdated: () => void;
 }
 

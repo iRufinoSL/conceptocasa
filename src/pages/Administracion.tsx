@@ -16,7 +16,7 @@ export default function Administracion() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('invoices');
-  const [highlightEntryCode, setHighlightEntryCode] = useState<number | null>(null);
+  const [highlightEntryCode, setHighlightEntryCode] = useState<string | null>(null);
   const [highlightAccountId, setHighlightAccountId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -54,7 +54,7 @@ export default function Administracion() {
     }
   };
 
-  const handleNavigateToEntry = (entryCode: number) => {
+  const handleNavigateToEntry = (entryCode: string) => {
     setHighlightEntryCode(entryCode);
     setActiveTab('entries');
   };

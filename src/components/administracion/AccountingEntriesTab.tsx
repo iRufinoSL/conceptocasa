@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Plus, Pencil, Trash2, ChevronDown, ChevronRight, AlertTriangle, CheckCircle, Filter, X, ShoppingCart, Receipt, CreditCard, Wallet, Copy } from 'lucide-react';
+import { Plus, Pencil, Trash2, ChevronDown, ChevronRight, AlertTriangle, CheckCircle, Filter, X, ShoppingCart, Receipt, CreditCard, Wallet, Copy, ArrowUpDown, Calendar, Hash } from 'lucide-react';
 import { toast } from 'sonner';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import { AccountingEntryLinesEditor } from './AccountingEntryLinesEditor';
@@ -59,6 +59,9 @@ interface Filters {
   dateTo: string;
 }
 
+type SortField = 'code' | 'date';
+type SortOrder = 'asc' | 'desc';
+
 const emptyForm: EntryForm = {
   description: '',
   entry_date: format(new Date(), 'yyyy-MM-dd'),
@@ -93,6 +96,10 @@ export function AccountingEntriesTab({ highlightCode, onHighlightHandled }: Prop
   const [selectedEntryForLines, setSelectedEntryForLines] = useState<AccountingEntry | null>(null);
   const [filters, setFilters] = useState<Filters>(emptyFilters);
   const [showFilters, setShowFilters] = useState(false);
+  const [sortField, setSortField] = useState<SortField>('date');
+  const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
+  const [groupByYear, setGroupByYear] = useState(true);
+  const [expandedYears, setExpandedYears] = useState<Set<number>>(new Set());
 
   useEffect(() => {
     fetchData();
@@ -370,24 +377,69 @@ export function AccountingEntriesTab({ highlightCode, onHighlightHandled }: Prop
     return format(new Date(dateStr), 'dd/MM/yyyy', { locale: es });
   };
 
-  // Filter entries based on current filters
-  const filteredEntries = useMemo(() => {
-    return entries.filter(entry => {
-      // Budget filter
+  // Filter and sort entries
+  const sortedAndFilteredEntries = useMemo(() => {
+    // First filter
+    const filtered = entries.filter(entry => {
       if (filters.budgetId && entry.budget_id !== filters.budgetId) {
         return false;
       }
-      // Date from filter
       if (filters.dateFrom && entry.entry_date < filters.dateFrom) {
         return false;
       }
-      // Date to filter
       if (filters.dateTo && entry.entry_date > filters.dateTo) {
         return false;
       }
       return true;
     });
-  }, [entries, filters]);
+
+    // Then sort
+    return filtered.sort((a, b) => {
+      let comparison = 0;
+      if (sortField === 'code') {
+        // Parse code like "2025-001" to compare
+        comparison = a.code.localeCompare(b.code);
+      } else {
+        // Sort by date
+        comparison = a.entry_date.localeCompare(b.entry_date);
+      }
+      return sortOrder === 'asc' ? comparison : -comparison;
+    });
+  }, [entries, filters, sortField, sortOrder]);
+
+  // Group by year
+  const entriesByYear = useMemo(() => {
+    const groups = new Map<number, AccountingEntry[]>();
+    sortedAndFilteredEntries.forEach(entry => {
+      const year = new Date(entry.entry_date).getFullYear();
+      const existing = groups.get(year) || [];
+      groups.set(year, [...existing, entry]);
+    });
+    // Sort years descending
+    return Array.from(groups.entries()).sort((a, b) => b[0] - a[0]);
+  }, [sortedAndFilteredEntries]);
+
+  // Initialize expanded years with the current year
+  useEffect(() => {
+    if (entriesByYear.length > 0 && expandedYears.size === 0) {
+      const currentYear = new Date().getFullYear();
+      const yearsToExpand = entriesByYear.map(([year]) => year).filter(y => y === currentYear);
+      if (yearsToExpand.length === 0 && entriesByYear.length > 0) {
+        yearsToExpand.push(entriesByYear[0][0]); // Expand first year if current year not found
+      }
+      setExpandedYears(new Set(yearsToExpand));
+    }
+  }, [entriesByYear]);
+
+  const toggleYear = (year: number) => {
+    const newExpanded = new Set(expandedYears);
+    if (newExpanded.has(year)) {
+      newExpanded.delete(year);
+    } else {
+      newExpanded.add(year);
+    }
+    setExpandedYears(newExpanded);
+  };
 
   const hasActiveFilters = filters.budgetId || filters.dateFrom || filters.dateTo;
 
@@ -403,6 +455,111 @@ export function AccountingEntriesTab({ highlightCode, onHighlightHandled }: Prop
     );
   }
 
+  const renderEntryCard = (entry: AccountingEntry) => (
+    <Card 
+      key={entry.id} 
+      id={`entry-${entry.id}`}
+      className={`${!entry.is_balanced ? 'border-destructive/50' : ''} ${highlightCode === entry.code ? 'ring-2 ring-primary' : ''}`}
+    >
+      <Collapsible
+        open={expandedEntries.has(entry.id)}
+        onOpenChange={() => toggleExpanded(entry.id)}
+      >
+        <CollapsibleTrigger asChild>
+          <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors py-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                {expandedEntries.has(entry.id) ? (
+                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                ) : (
+                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                )}
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-sm text-muted-foreground">
+                      #{entry.code}
+                    </span>
+                    <CardTitle className="text-base">{entry.description}</CardTitle>
+                    {!entry.is_balanced ? (
+                      <Badge variant="destructive" className="gap-1">
+                        <AlertTriangle className="h-3 w-3" />
+                        Descuadrado
+                      </Badge>
+                    ) : entry.lines_count && entry.lines_count > 0 ? (
+                      <Badge variant="outline" className="gap-1 text-green-600 border-green-600">
+                        <CheckCircle className="h-3 w-3" />
+                        Cuadrado
+                      </Badge>
+                    ) : null}
+                  </div>
+                  <div className="flex items-center gap-4 text-sm text-muted-foreground mt-1">
+                    <span>{formatDate(entry.entry_date)}</span>
+                    <span>|</span>
+                    <span>{entry.presupuesto?.nombre || 'Sin presupuesto'}</span>
+                    <span>|</span>
+                    <span>{entry.lines_count || 0} apuntes</span>
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center gap-4">
+                <div className="text-right">
+                  <div className="text-sm text-muted-foreground">Debe / Haber</div>
+                  <div className="font-mono text-sm">
+                    {formatCurrency(entry.total_debit || 0)} / {formatCurrency(entry.total_credit || 0)}
+                  </div>
+                </div>
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    title="Duplicar asiento"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDuplicate(entry);
+                    }}
+                  >
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    title="Editar asiento"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleOpenEdit(entry);
+                    }}
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    title="Eliminar asiento"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setEntryToDelete(entry);
+                      setDeleteDialogOpen(true);
+                    }}
+                  >
+                    <Trash2 className="h-4 w-4 text-destructive" />
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </CardHeader>
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          <CardContent className="pt-0">
+            <AccountingEntryLinesEditor
+              entry={entry}
+              onUpdate={fetchData}
+            />
+          </CardContent>
+        </CollapsibleContent>
+      </Collapsible>
+    </Card>
+  );
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -410,7 +567,7 @@ export function AccountingEntriesTab({ highlightCode, onHighlightHandled }: Prop
           <h2 className="text-lg font-semibold">Asientos Contables</h2>
           <p className="text-sm text-muted-foreground">
             Registro de movimientos contables
-            {hasActiveFilters && ` • Mostrando ${filteredEntries.length} de ${entries.length}`}
+            {hasActiveFilters && ` • Mostrando ${sortedAndFilteredEntries.length} de ${entries.length}`}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -489,7 +646,64 @@ export function AccountingEntriesTab({ highlightCode, onHighlightHandled }: Prop
         </Card>
       )}
 
-      {filteredEntries.length === 0 ? (
+      {/* Sorting and Grouping Controls */}
+      <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-muted-foreground">Ordenar por:</span>
+          <Button
+            variant={sortField === 'code' ? 'secondary' : 'outline'}
+            size="sm"
+            onClick={() => {
+              if (sortField === 'code') {
+                setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+              } else {
+                setSortField('code');
+                setSortOrder('desc');
+              }
+            }}
+            className="gap-1"
+          >
+            <Hash className="h-3 w-3" />
+            Nº Asiento
+            {sortField === 'code' && (
+              <ArrowUpDown className={`h-3 w-3 ${sortOrder === 'asc' ? 'rotate-180' : ''}`} />
+            )}
+          </Button>
+          <Button
+            variant={sortField === 'date' ? 'secondary' : 'outline'}
+            size="sm"
+            onClick={() => {
+              if (sortField === 'date') {
+                setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+              } else {
+                setSortField('date');
+                setSortOrder('desc');
+              }
+            }}
+            className="gap-1"
+          >
+            <Calendar className="h-3 w-3" />
+            Fecha
+            {sortField === 'date' && (
+              <ArrowUpDown className={`h-3 w-3 ${sortOrder === 'asc' ? 'rotate-180' : ''}`} />
+            )}
+          </Button>
+        </div>
+        <div className="flex items-center gap-2">
+          <Label htmlFor="group-by-year" className="text-sm text-muted-foreground cursor-pointer">
+            Agrupar por año
+          </Label>
+          <input
+            id="group-by-year"
+            type="checkbox"
+            checked={groupByYear}
+            onChange={(e) => setGroupByYear(e.target.checked)}
+            className="h-4 w-4 rounded border-input"
+          />
+        </div>
+      </div>
+
+      {sortedAndFilteredEntries.length === 0 ? (
         <Card>
           <CardContent className="py-12 text-center text-muted-foreground">
             {hasActiveFilters 
@@ -497,112 +711,45 @@ export function AccountingEntriesTab({ highlightCode, onHighlightHandled }: Prop
               : 'No hay asientos contables. Crea el primer asiento.'}
           </CardContent>
         </Card>
-      ) : (
-        <div className="space-y-3">
-          {filteredEntries.map((entry) => (
-            <Card 
-              key={entry.id} 
-              id={`entry-${entry.id}`}
-              className={`${!entry.is_balanced ? 'border-destructive/50' : ''} ${highlightCode === entry.code ? 'ring-2 ring-primary' : ''}`}
+      ) : groupByYear ? (
+        <div className="space-y-4">
+          {entriesByYear.map(([year, yearEntries]) => (
+            <Collapsible
+              key={year}
+              open={expandedYears.has(year)}
+              onOpenChange={() => toggleYear(year)}
             >
-              <Collapsible
-                open={expandedEntries.has(entry.id)}
-                onOpenChange={() => toggleExpanded(entry.id)}
-              >
-                <CollapsibleTrigger asChild>
-                  <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors py-3">
+              <CollapsibleTrigger asChild>
+                <Card className="cursor-pointer hover:bg-muted/30 transition-colors">
+                  <CardHeader className="py-3">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
-                        {expandedEntries.has(entry.id) ? (
-                          <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                        {expandedYears.has(year) ? (
+                          <ChevronDown className="h-5 w-5 text-muted-foreground" />
                         ) : (
-                          <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                          <ChevronRight className="h-5 w-5 text-muted-foreground" />
                         )}
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="font-mono text-sm text-muted-foreground">
-                              #{entry.code}
-                            </span>
-                            <CardTitle className="text-base">{entry.description}</CardTitle>
-                            {!entry.is_balanced ? (
-                              <Badge variant="destructive" className="gap-1">
-                                <AlertTriangle className="h-3 w-3" />
-                                Descuadrado
-                              </Badge>
-                            ) : entry.lines_count && entry.lines_count > 0 ? (
-                              <Badge variant="outline" className="gap-1 text-green-600 border-green-600">
-                                <CheckCircle className="h-3 w-3" />
-                                Cuadrado
-                              </Badge>
-                            ) : null}
-                          </div>
-                          <div className="flex items-center gap-4 text-sm text-muted-foreground mt-1">
-                            <span>{formatDate(entry.entry_date)}</span>
-                            <span>|</span>
-                            <span>{entry.presupuesto?.nombre || 'Sin presupuesto'}</span>
-                            <span>|</span>
-                            <span>{entry.lines_count || 0} apuntes</span>
-                          </div>
-                        </div>
+                        <CardTitle className="text-lg">{year}</CardTitle>
+                        <Badge variant="secondary">{yearEntries.length} asientos</Badge>
                       </div>
-                      <div className="flex items-center gap-4">
-                        <div className="text-right">
-                          <div className="text-sm text-muted-foreground">Debe / Haber</div>
-                          <div className="font-mono text-sm">
-                            {formatCurrency(entry.total_debit || 0)} / {formatCurrency(entry.total_credit || 0)}
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            title="Duplicar asiento"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDuplicate(entry);
-                            }}
-                          >
-                            <Copy className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            title="Editar asiento"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleOpenEdit(entry);
-                            }}
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            title="Eliminar asiento"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setEntryToDelete(entry);
-                              setDeleteDialogOpen(true);
-                            }}
-                          >
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
-                        </div>
+                      <div className="text-sm text-muted-foreground">
+                        Total: {formatCurrency(yearEntries.reduce((sum, e) => sum + (e.total_debit || 0), 0))}
                       </div>
                     </div>
                   </CardHeader>
-                </CollapsibleTrigger>
-                <CollapsibleContent>
-                  <CardContent className="pt-0">
-                    <AccountingEntryLinesEditor
-                      entry={entry}
-                      onUpdate={fetchData}
-                    />
-                  </CardContent>
-                </CollapsibleContent>
-              </Collapsible>
-            </Card>
+                </Card>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <div className="space-y-3 mt-3 ml-4 border-l-2 border-muted pl-4">
+                  {yearEntries.map(renderEntryCard)}
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
           ))}
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {sortedAndFilteredEntries.map(renderEntryCard)}
         </div>
       )}
 

@@ -5,3 +5,6 @@ verify_jwt = false
 
 [functions.send-user-credentials]
 verify_jwt = true
+
+[functions.send-crm-email]
+verify_jwt = true

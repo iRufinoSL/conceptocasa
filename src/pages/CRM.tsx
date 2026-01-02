@@ -5,10 +5,12 @@ import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowLeft, Search, Users, ClipboardList, Target, Plus } from 'lucide-react';
+import { ArrowLeft, Search, Users, ClipboardList, Target, Plus, Mail, FileText } from 'lucide-react';
 import { ContactsTab } from '@/components/crm/ContactsTab';
 import { ManagementsTab } from '@/components/crm/ManagementsTab';
 import { OpportunitiesTab } from '@/components/crm/OpportunitiesTab';
+import { CommunicationsTab } from '@/components/crm/CommunicationsTab';
+import { EmailTemplatesTab } from '@/components/crm/EmailTemplatesTab';
 import { ContactForm } from '@/components/crm/ContactForm';
 import { ManagementForm } from '@/components/crm/ManagementForm';
 import { OpportunityForm } from '@/components/crm/OpportunityForm';
@@ -247,7 +249,7 @@ export default function CRM() {
 
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full max-w-md grid-cols-3">
+          <TabsList className="grid w-full max-w-2xl grid-cols-5">
             <TabsTrigger value="contacts" className="gap-2">
               <Users className="h-4 w-4" />
               <span className="hidden sm:inline">Contactos</span>
@@ -262,6 +264,14 @@ export default function CRM() {
               <Target className="h-4 w-4" />
               <span className="hidden sm:inline">Oportunidades</span>
               <span className="text-xs text-muted-foreground">({opportunities.length})</span>
+            </TabsTrigger>
+            <TabsTrigger value="communications" className="gap-2">
+              <Mail className="h-4 w-4" />
+              <span className="hidden sm:inline">Comunicaciones</span>
+            </TabsTrigger>
+            <TabsTrigger value="templates" className="gap-2">
+              <FileText className="h-4 w-4" />
+              <span className="hidden sm:inline">Plantillas</span>
             </TabsTrigger>
           </TabsList>
 
@@ -281,6 +291,14 @@ export default function CRM() {
               onEdit={handleEditManagement}
               onDelete={handleDeleteManagement}
             />
+          </TabsContent>
+
+          <TabsContent value="communications">
+            <CommunicationsTab />
+          </TabsContent>
+
+          <TabsContent value="templates">
+            <EmailTemplatesTab />
           </TabsContent>
 
           <TabsContent value="opportunities">

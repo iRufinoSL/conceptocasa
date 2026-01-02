@@ -3,12 +3,13 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Mail, Phone, MapPin, Users, MoreVertical, Pencil, Trash2, LayoutGrid, List, FolderOpen, ChevronRight } from 'lucide-react';
+import { Mail, Phone, MapPin, Users, MoreVertical, Pencil, Trash2, LayoutGrid, List, FolderOpen, ChevronRight, Send } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { ContactDetailDialog } from './ContactDetailDialog';
+import { SendEmailDialog } from './SendEmailDialog';
 import { searchMatch } from '@/lib/search-utils';
 import type { Contact } from '@/pages/CRM';
 
@@ -29,6 +30,8 @@ interface ContactsTabProps {
 export function ContactsTab({ contacts, searchTerm, onEdit, onDelete }: ContactsTabProps) {
   const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
+  const [emailDialogOpen, setEmailDialogOpen] = useState(false);
+  const [emailContact, setEmailContact] = useState<Contact | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
     return (localStorage.getItem('crm-contacts-view') as ViewMode) || 'cards';
   });
@@ -168,6 +171,11 @@ export function ContactsTab({ contacts, searchTerm, onEdit, onDelete }: Contacts
       .filter(Boolean) as string[];
   };
 
+  const handleSendEmail = (contact: Contact) => {
+    setEmailContact(contact);
+    setEmailDialogOpen(true);
+  };
+
   if (filteredContacts.length === 0) {
     return (
       <Card className="py-16">
@@ -221,6 +229,13 @@ export function ContactsTab({ contacts, searchTerm, onEdit, onDelete }: Contacts
         onOpenChange={setDetailOpen}
       />
 
+      {/* Send Email Dialog */}
+      <SendEmailDialog
+        open={emailDialogOpen}
+        onOpenChange={setEmailDialogOpen}
+        contact={emailContact || undefined}
+      />
+
       {/* Cards View */}
       {viewMode === 'cards' && (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -230,6 +245,7 @@ export function ContactsTab({ contacts, searchTerm, onEdit, onDelete }: Contacts
               contact={contact}
               onEdit={onEdit}
               onDelete={onDelete}
+              onSendEmail={handleSendEmail}
               onViewDetail={(c) => {
                 setSelectedContact(c);
                 setDetailOpen(true);
@@ -324,6 +340,15 @@ export function ContactsTab({ contacts, searchTerm, onEdit, onDelete }: Contacts
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
+                        {contact.email && (
+                          <>
+                            <DropdownMenuItem onClick={() => handleSendEmail(contact)}>
+                              <Send className="h-4 w-4 mr-2" />
+                              Enviar Email
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                          </>
+                        )}
                         <DropdownMenuItem onClick={() => onEdit(contact)}>
                           <Pencil className="h-4 w-4 mr-2" />
                           Editar
@@ -417,6 +442,15 @@ export function ContactsTab({ contacts, searchTerm, onEdit, onDelete }: Contacts
                                   </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end">
+                                  {contact.email && (
+                                    <>
+                                      <DropdownMenuItem onClick={() => handleSendEmail(contact)}>
+                                        <Send className="h-4 w-4 mr-2" />
+                                        Enviar Email
+                                      </DropdownMenuItem>
+                                      <DropdownMenuSeparator />
+                                    </>
+                                  )}
                                   <DropdownMenuItem onClick={() => onEdit(contact)}>
                                     <Pencil className="h-4 w-4 mr-2" />
                                     Editar
@@ -448,6 +482,7 @@ function ContactCard({
   contact,
   onEdit,
   onDelete,
+  onSendEmail,
   onViewDetail,
   getInitials,
   getTypeVariant,
@@ -457,6 +492,7 @@ function ContactCard({
   contact: Contact;
   onEdit: (contact: Contact) => void;
   onDelete: (contact: Contact) => void;
+  onSendEmail: (contact: Contact) => void;
   onViewDetail: (contact: Contact) => void;
   getInitials: (name: string, surname?: string | null) => string;
   getTypeVariant: (type: string) => "default" | "outline";
@@ -494,6 +530,15 @@ function ContactCard({
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
+                  {contact.email && (
+                    <>
+                      <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onSendEmail(contact); }}>
+                        <Send className="h-4 w-4 mr-2" />
+                        Enviar Email
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                    </>
+                  )}
                   <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onEdit(contact); }}>
                     <Pencil className="h-4 w-4 mr-2" />
                     Editar

@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Wallet, ArrowLeft, BookOpen, Calculator, BarChart3, FileText, Receipt } from 'lucide-react';
+import { Wallet, ArrowLeft, BookOpen, Calculator, BarChart3, FileText, Receipt, Percent } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { AppNavDropdown } from '@/components/AppNavDropdown';
 import { AccountingEntriesTab } from '@/components/administracion/AccountingEntriesTab';
@@ -10,6 +10,7 @@ import { AccountingEntryLinesTab } from '@/components/administracion/AccountingE
 import { AccountingAccountsTab } from '@/components/administracion/AccountingAccountsTab';
 import { AccountingBalanceReport } from '@/components/administracion/AccountingBalanceReport';
 import { InvoicesTab } from '@/components/administracion/InvoicesTab';
+import { VATReportTab } from '@/components/administracion/VATReportTab';
 
 export default function Administracion() {
   const navigate = useNavigate();
@@ -120,6 +121,10 @@ export default function Administracion() {
               <BarChart3 className="h-4 w-4" />
               Informe Balance
             </TabsTrigger>
+            <TabsTrigger value="vat" className="gap-2">
+              <Percent className="h-4 w-4" />
+              Informe IVA
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="invoices">
@@ -150,6 +155,10 @@ export default function Administracion() {
 
           <TabsContent value="balance">
             <AccountingBalanceReport />
+          </TabsContent>
+
+          <TabsContent value="vat">
+            <VATReportTab />
           </TabsContent>
         </Tabs>
       </main>

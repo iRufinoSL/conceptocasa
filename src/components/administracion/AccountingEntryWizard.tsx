@@ -68,6 +68,9 @@ interface WizardFormData {
   vat_rate: number;
   supplier_id: string;
   expense_account_id: string;
+  // For pago/cobro: specific accounts
+  debit_account_id: string;  // Al Debe
+  credit_account_id: string; // Al Haber
 }
 
 interface Props {
@@ -85,6 +88,8 @@ export function AccountingEntryWizard({ open, onOpenChange, onEntryCreated }: Pr
   const [budgetSearch, setBudgetSearch] = useState('');
   const [contactSearch, setContactSearch] = useState('');
   const [accountSearch, setAccountSearch] = useState('');
+  const [debitAccountSearch, setDebitAccountSearch] = useState('');
+  const [creditAccountSearch, setCreditAccountSearch] = useState('');
   const [showCreateAccountDialog, setShowCreateAccountDialog] = useState(false);
   const [createAccountContext, setCreateAccountContext] = useState<
     | { kind: 'expense' }
@@ -105,6 +110,8 @@ export function AccountingEntryWizard({ open, onOpenChange, onEntryCreated }: Pr
     vat_rate: 21,
     supplier_id: '',
     expense_account_id: '',
+    debit_account_id: '',
+    credit_account_id: '',
   });
 
   useEffect(() => {
@@ -125,10 +132,14 @@ export function AccountingEntryWizard({ open, onOpenChange, onEntryCreated }: Pr
       vat_rate: 21,
       supplier_id: '',
       expense_account_id: '',
+      debit_account_id: '',
+      credit_account_id: '',
     });
     setBudgetSearch('');
     setContactSearch('');
     setAccountSearch('');
+    setDebitAccountSearch('');
+    setCreditAccountSearch('');
   };
 
   const fetchData = async () => {
@@ -335,8 +346,11 @@ export function AccountingEntryWizard({ open, onOpenChange, onEntryCreated }: Pr
 
   const getTotalSteps = () => {
     // compra/venta: 7 steps (type, budget, description, date/amount, vat, contact, account)
-    // cobro/pago: 5 steps (type, budget, description, date/amount, contact) - no VAT, no expense account
-    return ['cobro', 'pago'].includes(formData.entry_type) ? 5 : 7;
+    // cobro: 5 steps (type, budget, description, date/amount, contact)
+    // pago: 7 steps (type, budget, description, date/amount, contact, debit_account, credit_account)
+    if (formData.entry_type === 'pago') return 7;
+    if (formData.entry_type === 'cobro') return 5;
+    return 7; // compra/venta
   };
 
   const canProceed = () => {
@@ -346,12 +360,23 @@ export function AccountingEntryWizard({ open, onOpenChange, onEntryCreated }: Pr
       case 3: return formData.description.trim() !== '';
       case 4: return formData.total_amount !== '' && parseFloat(formData.total_amount) > 0;
       case 5:
-        if (['cobro', 'pago'].includes(formData.entry_type)) {
-          return formData.supplier_id !== '';
+        if (formData.entry_type === 'pago') {
+          return formData.supplier_id !== ''; // Proveedor al que se paga
+        }
+        if (formData.entry_type === 'cobro') {
+          return formData.supplier_id !== ''; // Cliente del que se cobra
         }
         return true; // VAT step for compra/venta
-      case 6: return formData.supplier_id !== '';
-      case 7: return formData.expense_account_id !== '';
+      case 6:
+        if (formData.entry_type === 'pago') {
+          return formData.debit_account_id !== ''; // Cuenta al Debe (proveedor)
+        }
+        return formData.supplier_id !== ''; // Contact for compra/venta
+      case 7:
+        if (formData.entry_type === 'pago') {
+          return formData.credit_account_id !== ''; // Cuenta al Haber (tesorería origen)
+        }
+        return formData.expense_account_id !== ''; // Account for compra/venta
       default: return false;
     }
   };
@@ -596,39 +621,54 @@ export function AccountingEntryWizard({ open, onOpenChange, onEntryCreated }: Pr
           });
         }
       } else if (formData.entry_type === 'pago') {
-        // Debit: Supplier account (total)
-        const supplierAccountId = await getContactAccountId();
-        if (supplierAccountId) {
+        // Debit: Account to which payment is made (selected debit_account_id or supplier)
+        const debitAccountId = formData.debit_account_id || await getContactAccountId();
+        if (debitAccountId) {
+          const debitAccount = accounts.find(a => a.id === debitAccountId);
           lines.push({
             entry_id: entry.id,
-            account_id: supplierAccountId,
+            account_id: debitAccountId,
             line_date: formData.entry_date,
-            description: 'Pago a proveedor',
+            description: `Pago a ${debitAccount?.name || 'proveedor'}`,
             debit_amount: total,
             credit_amount: 0,
           });
         }
         
-        // Credit: Treasury account (total)
-        let treasuryAccount = accounts.find(a => a.account_type === 'Tesorería');
-        if (!treasuryAccount) {
-          const { data } = await supabase
-            .from('accounting_accounts')
-            .insert({ name: 'Caja', account_type: 'Tesorería' })
-            .select()
-            .single();
-          treasuryAccount = data;
-        }
-        
-        if (treasuryAccount) {
+        // Credit: Treasury account from which payment is made (selected credit_account_id)
+        const creditAccountId = formData.credit_account_id;
+        if (creditAccountId) {
+          const creditAccount = accounts.find(a => a.id === creditAccountId);
           lines.push({
             entry_id: entry.id,
-            account_id: treasuryAccount.id,
+            account_id: creditAccountId,
             line_date: formData.entry_date,
-            description: 'Salida de caja',
+            description: `Salida de ${creditAccount?.name || 'tesorería'}`,
             debit_amount: 0,
             credit_amount: total,
           });
+        } else {
+          // Fallback to default treasury account
+          let treasuryAccount = accounts.find(a => a.account_type === 'Tesorería');
+          if (!treasuryAccount) {
+            const { data } = await supabase
+              .from('accounting_accounts')
+              .insert({ name: 'Caja', account_type: 'Tesorería' })
+              .select()
+              .single();
+            treasuryAccount = data;
+          }
+          
+          if (treasuryAccount) {
+            lines.push({
+              entry_id: entry.id,
+              account_id: treasuryAccount.id,
+              line_date: formData.entry_date,
+              description: 'Salida de caja',
+              debit_amount: 0,
+              credit_amount: total,
+            });
+          }
         }
       }
 
@@ -847,9 +887,15 @@ export function AccountingEntryWizard({ open, onOpenChange, onEntryCreated }: Pr
         );
 
       case 6:
+        if (formData.entry_type === 'pago') {
+          return renderPaymentDebitAccountStep();
+        }
         return renderContactStep();
 
       case 7:
+        if (formData.entry_type === 'pago') {
+          return renderPaymentCreditAccountStep();
+        }
         return renderAccountStep();
 
       default:
@@ -991,6 +1037,193 @@ export function AccountingEntryWizard({ open, onOpenChange, onEntryCreated }: Pr
           })()}
         </div>
       </ScrollArea>
+    </div>
+  );
+
+  // Get filtered accounts for payment steps
+  const getFilteredDebitAccounts = () => {
+    // For pago: Al Debe = cuenta de Proveedor
+    return accounts.filter(a => {
+      if (debitAccountSearch === '') {
+        return a.account_type === 'Proveedores';
+      }
+      return a.name.toLowerCase().includes(debitAccountSearch.toLowerCase());
+    });
+  };
+
+  const getFilteredCreditAccounts = () => {
+    // For pago: Al Haber = cuenta de Tesorería (origen del pago)
+    return accounts.filter(a => {
+      if (creditAccountSearch === '') {
+        return a.account_type === 'Tesorería';
+      }
+      return a.name.toLowerCase().includes(creditAccountSearch.toLowerCase());
+    });
+  };
+
+  const renderPaymentDebitAccountStep = () => (
+    <div className="space-y-4">
+      <h3 className="font-medium text-lg">6. Cuenta al Debe (Proveedor)</h3>
+      <p className="text-sm text-muted-foreground">
+        Selecciona la cuenta contable del proveedor a quien se realiza el pago
+      </p>
+      
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input
+          placeholder="Buscar cuenta de proveedor..."
+          value={debitAccountSearch}
+          onChange={(e) => setDebitAccountSearch(e.target.value)}
+          className="pl-9"
+        />
+        {debitAccountSearch && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="absolute right-1 top-1/2 -translate-y-1/2 h-6 w-6"
+            onClick={() => setDebitAccountSearch('')}
+          >
+            <X className="h-3 w-3" />
+          </Button>
+        )}
+      </div>
+
+      <ScrollArea className="h-[200px] border rounded-lg">
+        <div className="p-2 space-y-1">
+          {getFilteredDebitAccounts().length === 0 ? (
+            <div className="p-4 text-center">
+              <p className="text-muted-foreground mb-3">
+                No se encontraron cuentas de proveedor{debitAccountSearch && ` para "${debitAccountSearch}"`}
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setNewAccount({ name: debitAccountSearch, account_type: 'Proveedores' });
+                  setShowCreateAccountDialog(true);
+                }}
+                className="gap-2"
+              >
+                <Plus className="h-4 w-4" />
+                Crear cuenta de proveedor
+              </Button>
+            </div>
+          ) : (
+            getFilteredDebitAccounts().map((a) => (
+              <div
+                key={a.id}
+                className={`p-3 rounded-md cursor-pointer transition-colors ${
+                  formData.debit_account_id === a.id ? 'bg-primary/10 border border-primary' : 'hover:bg-muted'
+                }`}
+                onClick={() => setFormData({ ...formData, debit_account_id: a.id })}
+              >
+                <div className="flex items-center gap-2">
+                  <span className="font-medium">{a.name}</span>
+                  <Badge variant="outline" className="text-xs">{a.account_type}</Badge>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </ScrollArea>
+      
+      {getFilteredDebitAccounts().length > 0 && (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => {
+            setNewAccount({ name: debitAccountSearch, account_type: 'Proveedores' });
+            setShowCreateAccountDialog(true);
+          }}
+          className="w-full gap-2"
+        >
+          <Plus className="h-4 w-4" />
+          Crear nueva cuenta de proveedor
+        </Button>
+      )}
+    </div>
+  );
+
+  const renderPaymentCreditAccountStep = () => (
+    <div className="space-y-4">
+      <h3 className="font-medium text-lg">7. Cuenta al Haber (Tesorería)</h3>
+      <p className="text-sm text-muted-foreground">
+        Selecciona la cuenta de tesorería desde la que se realiza el pago (caja, banco, etc.)
+      </p>
+      
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input
+          placeholder="Buscar cuenta de tesorería..."
+          value={creditAccountSearch}
+          onChange={(e) => setCreditAccountSearch(e.target.value)}
+          className="pl-9"
+        />
+        {creditAccountSearch && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="absolute right-1 top-1/2 -translate-y-1/2 h-6 w-6"
+            onClick={() => setCreditAccountSearch('')}
+          >
+            <X className="h-3 w-3" />
+          </Button>
+        )}
+      </div>
+
+      <ScrollArea className="h-[200px] border rounded-lg">
+        <div className="p-2 space-y-1">
+          {getFilteredCreditAccounts().length === 0 ? (
+            <div className="p-4 text-center">
+              <p className="text-muted-foreground mb-3">
+                No se encontraron cuentas de tesorería{creditAccountSearch && ` para "${creditAccountSearch}"`}
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setNewAccount({ name: creditAccountSearch || 'Caja', account_type: 'Tesorería' });
+                  setShowCreateAccountDialog(true);
+                }}
+                className="gap-2"
+              >
+                <Plus className="h-4 w-4" />
+                Crear cuenta de tesorería
+              </Button>
+            </div>
+          ) : (
+            getFilteredCreditAccounts().map((a) => (
+              <div
+                key={a.id}
+                className={`p-3 rounded-md cursor-pointer transition-colors ${
+                  formData.credit_account_id === a.id ? 'bg-primary/10 border border-primary' : 'hover:bg-muted'
+                }`}
+                onClick={() => setFormData({ ...formData, credit_account_id: a.id })}
+              >
+                <div className="flex items-center gap-2">
+                  <span className="font-medium">{a.name}</span>
+                  <Badge variant="outline" className="text-xs">{a.account_type}</Badge>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </ScrollArea>
+      
+      {getFilteredCreditAccounts().length > 0 && (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => {
+            setNewAccount({ name: creditAccountSearch, account_type: 'Tesorería' });
+            setShowCreateAccountDialog(true);
+          }}
+          className="w-full gap-2"
+        >
+          <Plus className="h-4 w-4" />
+          Crear nueva cuenta de tesorería
+        </Button>
+      )}
     </div>
   );
 
@@ -1169,18 +1402,22 @@ export function AccountingEntryWizard({ open, onOpenChange, onEntryCreated }: Pr
                 </>
               )}
               
-              {formData.entry_type === 'pago' && (
-                <>
-                  <div className="flex justify-between">
-                    <span>{selectedContact?.name || 'Proveedor'}</span>
-                    <span className="font-mono text-green-600">{formatCurrency(total)} (D)</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Tesorería</span>
-                    <span className="font-mono text-red-600">{formatCurrency(total)} (H)</span>
-                  </div>
-                </>
-              )}
+              {formData.entry_type === 'pago' && (() => {
+                const debitAccount = accounts.find(a => a.id === formData.debit_account_id);
+                const creditAccount = accounts.find(a => a.id === formData.credit_account_id);
+                return (
+                  <>
+                    <div className="flex justify-between">
+                      <span>{debitAccount?.name || selectedContact?.name || 'Proveedor'}</span>
+                      <span className="font-mono text-green-600">{formatCurrency(total)} (D)</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>{creditAccount?.name || 'Tesorería'}</span>
+                      <span className="font-mono text-red-600">{formatCurrency(total)} (H)</span>
+                    </div>
+                  </>
+                );
+              })()}
             </div>
             
             <div className="flex items-center gap-2 text-green-600">

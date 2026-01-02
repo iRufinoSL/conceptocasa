@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Plus, Pencil, Trash2, ChevronDown, ChevronRight, AlertTriangle, CheckCircle, Filter, X, ShoppingCart, Receipt, CreditCard, Wallet } from 'lucide-react';
+import { Plus, Pencil, Trash2, ChevronDown, ChevronRight, AlertTriangle, CheckCircle, Filter, X, ShoppingCart, Receipt, CreditCard, Wallet, Copy } from 'lucide-react';
 import { toast } from 'sonner';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import { AccountingEntryLinesEditor } from './AccountingEntryLinesEditor';
@@ -265,6 +265,72 @@ export function AccountingEntriesTab({ highlightCode, onHighlightHandled }: Prop
     }
   };
 
+  const handleDuplicate = async (entry: AccountingEntry) => {
+    try {
+      // Get the year from today for the new entry
+      const today = new Date();
+      const entryYear = today.getFullYear();
+      
+      // Generate a new code for the current year
+      const { data: newCode, error: codeError } = await supabase
+        .rpc('generate_entry_code', { entry_year: entryYear });
+      
+      if (codeError) throw codeError;
+
+      // Create the duplicated entry
+      const { data: newEntry, error: insertError } = await supabase
+        .from('accounting_entries')
+        .insert({
+          code: newCode,
+          description: entry.description,
+          entry_date: format(today, 'yyyy-MM-dd'),
+          budget_id: entry.budget_id,
+          total_amount: entry.total_amount,
+          entry_type: (entry as any).entry_type || null,
+          vat_rate: (entry as any).vat_rate || null,
+          supplier_id: (entry as any).supplier_id || null,
+          expense_account_id: (entry as any).expense_account_id || null
+        })
+        .select()
+        .single();
+
+      if (insertError) throw insertError;
+
+      // Fetch existing lines for the original entry
+      const { data: originalLines, error: linesError } = await supabase
+        .from('accounting_entry_lines')
+        .select('*')
+        .eq('entry_id', entry.id);
+
+      if (linesError) throw linesError;
+
+      // Duplicate lines if they exist
+      if (originalLines && originalLines.length > 0) {
+        const newLines = originalLines.map((line, index) => ({
+          entry_id: newEntry.id,
+          account_id: line.account_id,
+          description: line.description,
+          debit_amount: line.debit_amount,
+          credit_amount: line.credit_amount,
+          line_date: format(today, 'yyyy-MM-dd'),
+          code: `${newCode}-${String(index + 1).padStart(3, '0')}`
+        }));
+
+        const { error: insertLinesError } = await supabase
+          .from('accounting_entry_lines')
+          .insert(newLines);
+
+        if (insertLinesError) throw insertLinesError;
+      }
+
+      toast.success(`Asiento duplicado como #${newCode}`);
+      fetchData();
+    } catch (error) {
+      console.error('Error duplicating entry:', error);
+      toast.error('Error al duplicar el asiento');
+    }
+  };
+
   const handleDelete = async () => {
     if (!entryToDelete) return;
 
@@ -490,6 +556,18 @@ export function AccountingEntriesTab({ highlightCode, onHighlightHandled }: Prop
                           <Button
                             variant="ghost"
                             size="icon"
+                            title="Duplicar asiento"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDuplicate(entry);
+                            }}
+                          >
+                            <Copy className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            title="Editar asiento"
                             onClick={(e) => {
                               e.stopPropagation();
                               handleOpenEdit(entry);
@@ -500,6 +578,7 @@ export function AccountingEntriesTab({ highlightCode, onHighlightHandled }: Prop
                           <Button
                             variant="ghost"
                             size="icon"
+                            title="Eliminar asiento"
                             onClick={(e) => {
                               e.stopPropagation();
                               setEntryToDelete(entry);

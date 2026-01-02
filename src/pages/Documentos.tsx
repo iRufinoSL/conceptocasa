@@ -83,7 +83,7 @@ interface ProjectDocument {
   source?: 'project' | 'accounting';
   entry_info?: {
     entry_id: string;
-    entry_code: number;
+    entry_code: string;
     entry_description: string;
     budget_name: string;
   } | null;

@@ -305,10 +305,20 @@ export function AccountingEntryWizard({ open, onOpenChange, onEntryCreated }: Pr
     try {
       const { total, base, vat } = calculateAmounts();
       
-      // Create the entry
+      // Get the year from the entry date
+      const entryYear = new Date(formData.entry_date).getFullYear();
+      
+      // Generate the entry code using the SQL function
+      const { data: codeData, error: codeError } = await supabase
+        .rpc('generate_entry_code', { entry_year: entryYear });
+      
+      if (codeError) throw codeError;
+      
+      // Create the entry with the generated code
       const { data: entry, error: entryError } = await supabase
         .from('accounting_entries')
         .insert({
+          code: codeData,
           description: formData.description.trim(),
           entry_date: formData.entry_date,
           budget_id: formData.budget_id || presupuestos[0]?.id, // Fallback to first budget if none selected

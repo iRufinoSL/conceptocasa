@@ -33,7 +33,7 @@ interface Presupuesto {
 
 interface AccountingEntry {
   id: string;
-  code: number;
+  code: string;
   description: string;
   entry_date: string;
   budget_id: string;
@@ -73,7 +73,7 @@ const emptyFilters: Filters = {
 };
 
 interface Props {
-  highlightCode?: number | null;
+  highlightCode?: string | null;
   onHighlightHandled?: () => void;
 }
 

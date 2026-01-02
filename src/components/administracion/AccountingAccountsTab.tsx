@@ -47,7 +47,7 @@ const emptyForm: AccountForm = {
 interface Props {
   highlightAccountId?: string | null;
   onHighlightHandled?: () => void;
-  onNavigateToEntry?: (entryCode: number) => void;
+  onNavigateToEntry?: (entryCode: string) => void;
 }
 
 export function AccountingAccountsTab({ highlightAccountId, onHighlightHandled, onNavigateToEntry }: Props) {
@@ -266,7 +266,7 @@ export function AccountingAccountsTab({ highlightAccountId, onHighlightHandled, 
     fetchAccounts();
   };
 
-  const handleNavigateToEntryFromDetail = (entryCode: number) => {
+  const handleNavigateToEntryFromDetail = (entryCode: string) => {
     setSelectedAccount(null);
     onNavigateToEntry?.(entryCode);
   };

@@ -11,7 +11,7 @@ import { EntryDocumentsManager } from './EntryDocumentsManager';
 
 interface AccountingEntry {
   id: string;
-  code: number;
+  code: string;
   entry_date: string;
 }
 
@@ -23,7 +23,7 @@ interface AccountingAccount {
 
 interface EntryLine {
   id: string;
-  code: number;
+  code: string;
   entry_id: string;
   account_id: string;
   line_date: string;

@@ -1,14 +1,17 @@
 import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { TrendingUp, TrendingDown, Scale, ArrowRight } from 'lucide-react';
+import { TrendingUp, TrendingDown, Scale, FileDown } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { toast } from 'sonner';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 interface AccountingEntry {
   id: string;
@@ -177,6 +180,165 @@ export function VATReportTab() {
     }
   };
 
+  const exportToPDF = () => {
+    try {
+      const doc = new jsPDF();
+      const pageWidth = doc.internal.pageSize.getWidth();
+      
+      // Title
+      doc.setFontSize(18);
+      doc.setFont('helvetica', 'bold');
+      doc.text('INFORME DE IVA', pageWidth / 2, 20, { align: 'center' });
+      
+      // Period info
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`Período: ${getPeriodLabel()} ${year}`, pageWidth / 2, 30, { align: 'center' });
+      doc.text(`Fecha de generación: ${format(new Date(), 'dd/MM/yyyy HH:mm', { locale: es })}`, pageWidth / 2, 37, { align: 'center' });
+      
+      let yPos = 50;
+
+      // Summary section
+      doc.setFontSize(14);
+      doc.setFont('helvetica', 'bold');
+      doc.text('RESUMEN', 14, yPos);
+      yPos += 8;
+
+      const summaryData = [
+        ['IVA Repercutido (Ventas)', formatCurrency(filteredData.ivaRepercutido.baseImponible), formatCurrency(filteredData.ivaRepercutido.cuotaIVA)],
+        ['IVA Soportado (Compras)', formatCurrency(filteredData.ivaSoportado.baseImponible), formatCurrency(filteredData.ivaSoportado.cuotaIVA)],
+        ['RESULTADO A LIQUIDAR', '', formatCurrency(filteredData.resultado)],
+      ];
+
+      autoTable(doc, {
+        startY: yPos,
+        head: [['Concepto', 'Base Imponible', 'Cuota IVA']],
+        body: summaryData,
+        theme: 'striped',
+        headStyles: { fillColor: [59, 130, 246] },
+        styles: { fontSize: 10 },
+        columnStyles: {
+          1: { halign: 'right' },
+          2: { halign: 'right' }
+        }
+      });
+
+      yPos = (doc as any).lastAutoTable.finalY + 15;
+
+      // IVA Soportado detail
+      if (filteredData.ivaSoportado.entries.length > 0) {
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'bold');
+        doc.text('DETALLE IVA SOPORTADO (COMPRAS)', 14, yPos);
+        yPos += 6;
+
+        const comprasData = filteredData.ivaSoportado.entries.map(entry => {
+          const vatRate = entry.vat_rate || 21;
+          const base = entry.total_amount / (1 + vatRate / 100);
+          const iva = entry.total_amount - base;
+          return [
+            formatDate(entry.entry_date),
+            entry.code,
+            entry.description.substring(0, 40) + (entry.description.length > 40 ? '...' : ''),
+            `${vatRate}%`,
+            formatCurrency(base),
+            formatCurrency(iva)
+          ];
+        });
+
+        // Add totals row
+        comprasData.push([
+          '', '', 'TOTAL', '',
+          formatCurrency(filteredData.ivaSoportado.baseImponible),
+          formatCurrency(filteredData.ivaSoportado.cuotaIVA)
+        ]);
+
+        autoTable(doc, {
+          startY: yPos,
+          head: [['Fecha', 'Código', 'Descripción', 'Tipo', 'Base', 'IVA']],
+          body: comprasData,
+          theme: 'striped',
+          headStyles: { fillColor: [239, 68, 68] },
+          styles: { fontSize: 8 },
+          columnStyles: {
+            4: { halign: 'right' },
+            5: { halign: 'right' }
+          }
+        });
+
+        yPos = (doc as any).lastAutoTable.finalY + 15;
+      }
+
+      // Check if we need a new page
+      if (yPos > 250) {
+        doc.addPage();
+        yPos = 20;
+      }
+
+      // IVA Repercutido detail
+      if (filteredData.ivaRepercutido.entries.length > 0) {
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'bold');
+        doc.text('DETALLE IVA REPERCUTIDO (VENTAS)', 14, yPos);
+        yPos += 6;
+
+        const ventasData = filteredData.ivaRepercutido.entries.map(entry => {
+          const vatRate = entry.vat_rate || 21;
+          const base = entry.total_amount / (1 + vatRate / 100);
+          const iva = entry.total_amount - base;
+          return [
+            formatDate(entry.entry_date),
+            entry.code,
+            entry.description.substring(0, 40) + (entry.description.length > 40 ? '...' : ''),
+            `${vatRate}%`,
+            formatCurrency(base),
+            formatCurrency(iva)
+          ];
+        });
+
+        // Add totals row
+        ventasData.push([
+          '', '', 'TOTAL', '',
+          formatCurrency(filteredData.ivaRepercutido.baseImponible),
+          formatCurrency(filteredData.ivaRepercutido.cuotaIVA)
+        ]);
+
+        autoTable(doc, {
+          startY: yPos,
+          head: [['Fecha', 'Código', 'Descripción', 'Tipo', 'Base', 'IVA']],
+          body: ventasData,
+          theme: 'striped',
+          headStyles: { fillColor: [34, 197, 94] },
+          styles: { fontSize: 8 },
+          columnStyles: {
+            4: { halign: 'right' },
+            5: { halign: 'right' }
+          }
+        });
+      }
+
+      // Footer with result
+      const finalY = (doc as any).lastAutoTable?.finalY || yPos;
+      doc.setFontSize(11);
+      doc.setFont('helvetica', 'bold');
+      
+      const resultText = filteredData.resultado >= 0 
+        ? `RESULTADO: ${formatCurrency(filteredData.resultado)} A INGRESAR`
+        : `RESULTADO: ${formatCurrency(Math.abs(filteredData.resultado))} A COMPENSAR/DEVOLVER`;
+      
+      doc.text(resultText, pageWidth / 2, finalY + 15, { align: 'center' });
+
+      // Save the PDF
+      const fileName = `Informe_IVA_${getPeriodLabel().replace(/[^a-zA-Z0-9]/g, '_')}_${year}.pdf`;
+      doc.save(fileName);
+      
+      toast.success('PDF generado correctamente');
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      toast.error('Error al generar el PDF');
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -194,6 +356,10 @@ export function VATReportTab() {
             IVA soportado y repercutido por período
           </p>
         </div>
+        <Button onClick={exportToPDF} className="gap-2">
+          <FileDown className="h-4 w-4" />
+          Exportar PDF
+        </Button>
       </div>
 
       {/* Period Selector */}

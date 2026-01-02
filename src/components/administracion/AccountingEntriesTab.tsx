@@ -9,12 +9,20 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Plus, Pencil, Trash2, ChevronDown, ChevronRight, AlertTriangle, CheckCircle, Filter, X } from 'lucide-react';
+import { Plus, Pencil, Trash2, ChevronDown, ChevronRight, AlertTriangle, CheckCircle, Filter, X, ShoppingCart, Receipt, CreditCard, Wallet } from 'lucide-react';
 import { toast } from 'sonner';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import { AccountingEntryLinesEditor } from './AccountingEntryLinesEditor';
+import { AccountingEntryWizard } from './AccountingEntryWizard';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+
+const ENTRY_TYPE_LABELS: Record<string, { label: string; icon: typeof ShoppingCart }> = {
+  compra: { label: 'Compra', icon: ShoppingCart },
+  venta: { label: 'Venta', icon: Receipt },
+  cobro: { label: 'Cobro', icon: CreditCard },
+  pago: { label: 'Pago', icon: Wallet },
+};
 
 interface Presupuesto {
   id: string;
@@ -75,6 +83,7 @@ export function AccountingEntriesTab({ highlightCode, onHighlightHandled }: Prop
   const [allPresupuestos, setAllPresupuestos] = useState<Presupuesto[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [wizardOpen, setWizardOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [editingEntry, setEditingEntry] = useState<AccountingEntry | null>(null);
   const [entryToDelete, setEntryToDelete] = useState<AccountingEntry | null>(null);
@@ -177,12 +186,7 @@ export function AccountingEntriesTab({ highlightCode, onHighlightHandled }: Prop
   };
 
   const handleOpenCreate = () => {
-    setEditingEntry(null);
-    setForm({
-      ...emptyForm,
-      entry_date: format(new Date(), 'yyyy-MM-dd')
-    });
-    setDialogOpen(true);
+    setWizardOpen(true);
   };
 
   const handleOpenEdit = (entry: AccountingEntry) => {
@@ -195,6 +199,16 @@ export function AccountingEntriesTab({ highlightCode, onHighlightHandled }: Prop
     });
     setDialogOpen(true);
   };
+
+  const handleOpenManualCreate = () => {
+    setEditingEntry(null);
+    setForm({
+      ...emptyForm,
+      entry_date: format(new Date(), 'yyyy-MM-dd')
+    });
+    setDialogOpen(true);
+  };
+
 
   const handleSave = async () => {
     if (!form.description.trim() || !form.budget_id || !form.entry_date) {
@@ -611,6 +625,13 @@ export function AccountingEntriesTab({ highlightCode, onHighlightHandled }: Prop
           </DialogContent>
         </Dialog>
       )}
+
+      {/* Wizard for new entries */}
+      <AccountingEntryWizard
+        open={wizardOpen}
+        onOpenChange={setWizardOpen}
+        onEntryCreated={fetchData}
+      />
     </div>
   );
 }

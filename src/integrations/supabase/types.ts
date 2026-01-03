@@ -1722,6 +1722,7 @@ export type Database = {
           invoice_date: string
           invoice_number: number
           issuer_account_id: string | null
+          observations: string | null
           receiver_account_id: string | null
           subtotal: number
           total: number
@@ -1738,6 +1739,7 @@ export type Database = {
           invoice_date?: string
           invoice_number: number
           issuer_account_id?: string | null
+          observations?: string | null
           receiver_account_id?: string | null
           subtotal?: number
           total?: number
@@ -1754,6 +1756,7 @@ export type Database = {
           invoice_date?: string
           invoice_number?: number
           issuer_account_id?: string | null
+          observations?: string | null
           receiver_account_id?: string | null
           subtotal?: number
           total?: number

@@ -4,11 +4,32 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 
 const resend = new Resend(Deno.env.get("RESEND_API_KEY"));
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
+// Allowed origins for CORS - restrict to specific domains
+const ALLOWED_ORIGINS = [
+  "https://concepto.casa",
+  "https://www.concepto.casa",
+  "https://build-buddy-resources.lovable.app"
+];
+
+// Check if origin is allowed, also allow lovable preview domains
+function isOriginAllowed(origin: string | null): boolean {
+  if (!origin) return false;
+  if (ALLOWED_ORIGINS.includes(origin)) return true;
+  // Allow Lovable preview domains
+  if (origin.match(/^https:\/\/[a-z0-9-]+\.lovableproject\.com$/)) return true;
+  if (origin.match(/^https:\/\/[a-z0-9-]+\.lovable\.app$/)) return true;
+  return false;
+}
+
+function getCorsHeaders(origin: string | null): Record<string, string> {
+  const allowedOrigin = isOriginAllowed(origin) ? origin! : ALLOWED_ORIGINS[0];
+  return {
+    "Access-Control-Allow-Origin": allowedOrigin,
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Vary": "Origin",
+  };
+}
 
 interface SendEmailRequest {
   contactId?: string;
@@ -44,6 +65,9 @@ function replaceVariables(content: string, variables: Record<string, string>): s
 }
 
 const handler = async (req: Request): Promise<Response> => {
+  const origin = req.headers.get("origin");
+  const corsHeaders = getCorsHeaders(origin);
+
   // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -53,6 +77,15 @@ const handler = async (req: Request): Promise<Response> => {
     return new Response(
       JSON.stringify({ error: "Método no permitido" }),
       { status: 405, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+
+  // Validate origin - reject requests from unauthorized origins
+  if (!isOriginAllowed(origin)) {
+    console.warn(`Rejected request from unauthorized origin: ${origin}`);
+    return new Response(
+      JSON.stringify({ error: "Origen no autorizado" }),
+      { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 

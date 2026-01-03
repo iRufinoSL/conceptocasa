@@ -17,23 +17,38 @@ export type Database = {
       accounting_accounts: {
         Row: {
           account_type: string
+          address: string | null
+          city: string | null
           created_at: string
           id: string
           name: string
+          nif_cif: string | null
+          postal_code: string | null
+          province: string | null
           updated_at: string
         }
         Insert: {
           account_type: string
+          address?: string | null
+          city?: string | null
           created_at?: string
           id?: string
           name: string
+          nif_cif?: string | null
+          postal_code?: string | null
+          province?: string | null
           updated_at?: string
         }
         Update: {
           account_type?: string
+          address?: string | null
+          city?: string | null
           created_at?: string
           id?: string
           name?: string
+          nif_cif?: string | null
+          postal_code?: string | null
+          province?: string | null
           updated_at?: string
         }
         Relationships: []

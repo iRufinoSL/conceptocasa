@@ -18,6 +18,11 @@ interface AccountingAccount {
   id: string;
   name: string;
   account_type: string;
+  address?: string | null;
+  city?: string | null;
+  postal_code?: string | null;
+  province?: string | null;
+  nif_cif?: string | null;
   created_at: string;
   total_debit?: number;
   total_credit?: number;
@@ -27,6 +32,11 @@ interface AccountingAccount {
 interface AccountForm {
   name: string;
   account_type: string;
+  address: string;
+  city: string;
+  postal_code: string;
+  province: string;
+  nif_cif: string;
 }
 
 const ACCOUNT_TYPES = [
@@ -41,7 +51,12 @@ const ACCOUNT_TYPES = [
 
 const emptyForm: AccountForm = {
   name: '',
-  account_type: ''
+  account_type: '',
+  address: '',
+  city: '',
+  postal_code: '',
+  province: '',
+  nif_cif: ''
 };
 
 interface Props {
@@ -163,7 +178,12 @@ export function AccountingAccountsTab({ highlightAccountId, onHighlightHandled, 
     setEditingAccount(account);
     setForm({
       name: account.name,
-      account_type: account.account_type
+      account_type: account.account_type,
+      address: account.address || '',
+      city: account.city || '',
+      postal_code: account.postal_code || '',
+      province: account.province || '',
+      nif_cif: account.nif_cif || ''
     });
     setDialogOpen(true);
   };
@@ -176,13 +196,20 @@ export function AccountingAccountsTab({ highlightAccountId, onHighlightHandled, 
 
     setSaving(true);
     try {
+      const accountData = {
+        name: form.name.trim(),
+        account_type: form.account_type,
+        address: form.address.trim() || null,
+        city: form.city.trim() || null,
+        postal_code: form.postal_code.trim() || null,
+        province: form.province.trim() || null,
+        nif_cif: form.nif_cif.trim() || null
+      };
+
       if (editingAccount) {
         const { error } = await supabase
           .from('accounting_accounts')
-          .update({
-            name: form.name.trim(),
-            account_type: form.account_type
-          })
+          .update(accountData)
           .eq('id', editingAccount.id);
 
         if (error) throw error;
@@ -190,10 +217,7 @@ export function AccountingAccountsTab({ highlightAccountId, onHighlightHandled, 
       } else {
         const { error } = await supabase
           .from('accounting_accounts')
-          .insert({
-            name: form.name.trim(),
-            account_type: form.account_type
-          });
+          .insert(accountData);
 
         if (error) throw error;
         toast.success('Cuenta creada');
@@ -475,39 +499,91 @@ export function AccountingAccountsTab({ highlightAccountId, onHighlightHandled, 
 
       {/* Create/Edit Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>
               {editingAccount ? 'Editar Cuenta Contable' : 'Nueva Cuenta Contable'}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="name">Nombre de la cuenta *</Label>
+                <Input
+                  id="name"
+                  value={form.name}
+                  onChange={(e) => setForm({ ...form, name: e.target.value })}
+                  placeholder="Ej: Banco BBVA, IVA Soportado..."
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="account_type">Tipo de cuenta *</Label>
+                <Select
+                  value={form.account_type}
+                  onValueChange={(value) => setForm({ ...form, account_type: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecciona un tipo" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ACCOUNT_TYPES.map((type) => (
+                      <SelectItem key={type} value={type}>
+                        {type}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
             <div className="space-y-2">
-              <Label htmlFor="name">Nombre de la cuenta *</Label>
+              <Label htmlFor="nif_cif">NIF/CIF</Label>
               <Input
-                id="name"
-                value={form.name}
-                onChange={(e) => setForm({ ...form, name: e.target.value })}
-                placeholder="Ej: Banco BBVA, IVA Soportado..."
+                id="nif_cif"
+                value={form.nif_cif}
+                onChange={(e) => setForm({ ...form, nif_cif: e.target.value })}
+                placeholder="Ej: B12345678"
               />
             </div>
+
             <div className="space-y-2">
-              <Label htmlFor="account_type">Tipo de cuenta *</Label>
-              <Select
-                value={form.account_type}
-                onValueChange={(value) => setForm({ ...form, account_type: value })}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecciona un tipo" />
-                </SelectTrigger>
-                <SelectContent>
-                  {ACCOUNT_TYPES.map((type) => (
-                    <SelectItem key={type} value={type}>
-                      {type}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label htmlFor="address">Dirección</Label>
+              <Input
+                id="address"
+                value={form.address}
+                onChange={(e) => setForm({ ...form, address: e.target.value })}
+                placeholder="Ej: Calle Mayor, 10"
+              />
+            </div>
+
+            <div className="grid grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="postal_code">Código Postal</Label>
+                <Input
+                  id="postal_code"
+                  value={form.postal_code}
+                  onChange={(e) => setForm({ ...form, postal_code: e.target.value })}
+                  placeholder="Ej: 28001"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="city">Población</Label>
+                <Input
+                  id="city"
+                  value={form.city}
+                  onChange={(e) => setForm({ ...form, city: e.target.value })}
+                  placeholder="Ej: Madrid"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="province">Provincia</Label>
+                <Input
+                  id="province"
+                  value={form.province}
+                  onChange={(e) => setForm({ ...form, province: e.target.value })}
+                  placeholder="Ej: Madrid"
+                />
+              </div>
             </div>
           </div>
           <DialogFooter>

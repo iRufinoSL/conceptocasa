@@ -235,6 +235,18 @@ export function InvoiceLinesEditor({ invoice, onClose }: Props) {
         if (updateError) throw updateError;
       }
 
+      // Update invoice totals
+      const { error: invoiceUpdateError } = await supabase
+        .from('invoices')
+        .update({
+          subtotal: invoiceTotals.subtotal,
+          vat_amount: invoiceTotals.vat_amount,
+          total: invoiceTotals.total
+        })
+        .eq('id', invoice.id);
+
+      if (invoiceUpdateError) throw invoiceUpdateError;
+
       toast.success('Líneas guardadas correctamente');
       onClose();
     } catch (error) {

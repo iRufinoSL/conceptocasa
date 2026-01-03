@@ -20,8 +20,22 @@ interface Invoice {
   vat_amount: number;
   total: number;
   document_type?: DocumentType;
-  issuer_account?: { name: string } | null;
-  receiver_account?: { name: string } | null;
+  issuer_account?: { 
+    name: string; 
+    address?: string | null;
+    city?: string | null;
+    postal_code?: string | null;
+    province?: string | null;
+    nif_cif?: string | null;
+  } | null;
+  receiver_account?: { 
+    name: string; 
+    address?: string | null;
+    city?: string | null;
+    postal_code?: string | null;
+    province?: string | null;
+    nif_cif?: string | null;
+  } | null;
 }
 
 const DOCUMENT_TYPE_LABELS: Record<DocumentType, string> = {
@@ -170,6 +184,17 @@ export function InvoicePrintView({ invoice, onClose }: Props) {
               font-size: 16px;
               font-weight: 600;
               color: #1a1a1a;
+              margin-bottom: 4px;
+            }
+            .party-address {
+              font-size: 13px;
+              color: #444;
+              line-height: 1.4;
+            }
+            .party-nif {
+              font-size: 13px;
+              color: #666;
+              margin-top: 4px;
             }
             .invoice-info {
               display: flex;
@@ -328,15 +353,47 @@ export function InvoicePrintView({ invoice, onClose }: Props) {
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '40px' }}>
             <div style={{ width: '45%' }}>
               <div style={{ fontSize: '12px', textTransform: 'uppercase', color: '#666', marginBottom: '8px', letterSpacing: '0.5px' }}>Emisor</div>
-              <div style={{ fontSize: '16px', fontWeight: '600', color: '#1a1a1a' }}>
+              <div style={{ fontSize: '16px', fontWeight: '600', color: '#1a1a1a', marginBottom: '4px' }}>
                 {invoice.issuer_account?.name || 'No definido'}
               </div>
+              {invoice.issuer_account?.address && (
+                <div style={{ fontSize: '13px', color: '#444', lineHeight: '1.4' }}>
+                  {invoice.issuer_account.address}
+                  {(invoice.issuer_account.postal_code || invoice.issuer_account.city) && (
+                    <><br />{[invoice.issuer_account.postal_code, invoice.issuer_account.city].filter(Boolean).join(' - ')}</>
+                  )}
+                  {invoice.issuer_account.province && (
+                    <><br />{invoice.issuer_account.province}</>
+                  )}
+                </div>
+              )}
+              {invoice.issuer_account?.nif_cif && (
+                <div style={{ fontSize: '13px', color: '#666', marginTop: '4px' }}>
+                  NIF/CIF: {invoice.issuer_account.nif_cif}
+                </div>
+              )}
             </div>
             <div style={{ width: '45%' }}>
               <div style={{ fontSize: '12px', textTransform: 'uppercase', color: '#666', marginBottom: '8px', letterSpacing: '0.5px' }}>Receptor</div>
-              <div style={{ fontSize: '16px', fontWeight: '600', color: '#1a1a1a' }}>
+              <div style={{ fontSize: '16px', fontWeight: '600', color: '#1a1a1a', marginBottom: '4px' }}>
                 {invoice.receiver_account?.name || 'No definido'}
               </div>
+              {invoice.receiver_account?.address && (
+                <div style={{ fontSize: '13px', color: '#444', lineHeight: '1.4' }}>
+                  {invoice.receiver_account.address}
+                  {(invoice.receiver_account.postal_code || invoice.receiver_account.city) && (
+                    <><br />{[invoice.receiver_account.postal_code, invoice.receiver_account.city].filter(Boolean).join(' - ')}</>
+                  )}
+                  {invoice.receiver_account.province && (
+                    <><br />{invoice.receiver_account.province}</>
+                  )}
+                </div>
+              )}
+              {invoice.receiver_account?.nif_cif && (
+                <div style={{ fontSize: '13px', color: '#666', marginTop: '4px' }}>
+                  NIF/CIF: {invoice.receiver_account.nif_cif}
+                </div>
+              )}
             </div>
           </div>
 

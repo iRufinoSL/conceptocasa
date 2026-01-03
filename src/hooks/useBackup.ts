@@ -271,7 +271,8 @@ export function useBackup() {
 
   const importBackup = async (
     backupData: BackupData, 
-    mode: 'merge' | 'replace' = 'merge'
+    mode: 'merge' | 'replace' = 'merge',
+    skipAutoBackup: boolean = false
   ): Promise<ImportResult> => {
     setIsImporting(true);
     const result: ImportResult = {
@@ -282,6 +283,19 @@ export function useBackup() {
     };
 
     try {
+      // Create automatic backup before destructive 'replace' operation
+      if (mode === 'replace' && !skipAutoBackup) {
+        setImportProgress('Creando backup automático antes de reemplazar...');
+        try {
+          await exportBackup(backupData.module);
+          console.log('Auto-backup created successfully before replace operation');
+        } catch (backupError) {
+          console.error('Failed to create auto-backup:', backupError);
+          result.errors.push('Advertencia: No se pudo crear el backup automático previo');
+          // Continue with restore - this is a warning, not a blocking error
+        }
+      }
+
       const importOrder = TABLE_IMPORT_ORDER[backupData.module] || Object.keys(backupData.tables);
       
       for (const tableName of importOrder) {

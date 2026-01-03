@@ -14,6 +14,7 @@ interface Invoice {
   invoice_number: number;
   invoice_date: string;
   description: string | null;
+  observations: string | null;
   subtotal: number;
   vat_rate: number;
   vat_amount: number;
@@ -232,6 +233,24 @@ export function InvoicePrintView({ invoice, onClose }: Props) {
               font-weight: 700;
               color: #3b82f6;
             }
+            .observations {
+              margin-bottom: 40px;
+              padding: 16px;
+              background: #f8fafc;
+              border-radius: 8px;
+              border-left: 4px solid ${docColor};
+            }
+            .observations-label {
+              font-size: 12px;
+              text-transform: uppercase;
+              color: #666;
+              margin-bottom: 8px;
+              letter-spacing: 0.5px;
+            }
+            .observations-content {
+              color: #1a1a1a;
+              white-space: pre-wrap;
+            }
             .footer {
               position: fixed;
               bottom: 40px;
@@ -390,6 +409,14 @@ export function InvoicePrintView({ invoice, onClose }: Props) {
               </div>
             </div>
           </div>
+
+          {/* Observations */}
+          {invoice.observations && (
+            <div style={{ marginBottom: '40px', padding: '16px', background: '#f8fafc', borderRadius: '8px', borderLeft: `4px solid ${DOCUMENT_TYPE_COLORS[invoice.document_type || 'factura']}` }}>
+              <div style={{ fontSize: '12px', textTransform: 'uppercase', color: '#666', marginBottom: '8px', letterSpacing: '0.5px' }}>Observaciones</div>
+              <div style={{ color: '#1a1a1a', whiteSpace: 'pre-wrap' }}>{invoice.observations}</div>
+            </div>
+          )}
 
           {/* Footer */}
           <div style={{ textAlign: 'center', paddingTop: '20px', borderTop: '1px solid #e5e5e5', fontSize: '12px', color: '#666' }}>

@@ -39,6 +39,7 @@ interface Invoice {
   invoice_number: number;
   invoice_date: string;
   description: string | null;
+  observations: string | null;
   budget_id: string | null;
   issuer_account_id: string | null;
   receiver_account_id: string | null;
@@ -58,6 +59,7 @@ interface InvoiceForm {
   invoice_number: string;
   invoice_date: string;
   description: string;
+  observations: string;
   budget_id: string;
   issuer_account_id: string;
   receiver_account_id: string;
@@ -76,6 +78,7 @@ const emptyForm: InvoiceForm = {
   invoice_number: '',
   invoice_date: format(new Date(), 'yyyy-MM-dd'),
   description: '',
+  observations: '',
   budget_id: '',
   issuer_account_id: '',
   receiver_account_id: '',
@@ -246,6 +249,7 @@ export function InvoicesTab() {
       invoice_number: invoice.invoice_number.toString(),
       invoice_date: invoice.invoice_date,
       description: invoice.description || '',
+      observations: invoice.observations || '',
       budget_id: invoice.budget_id || '',
       issuer_account_id: invoice.issuer_account_id || '',
       receiver_account_id: invoice.receiver_account_id || '',
@@ -275,6 +279,7 @@ export function InvoicesTab() {
         invoice_number: parseInt(form.invoice_number),
         invoice_date: form.invoice_date,
         description: form.description.trim() || null,
+        observations: form.observations.trim() || null,
         budget_id: form.budget_id || null,
         issuer_account_id: form.issuer_account_id || null,
         receiver_account_id: form.receiver_account_id || null,
@@ -867,6 +872,17 @@ export function InvoicesTab() {
                   Las facturas requieren un tipo de IVA válido
                 </p>
               )}
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="observations">Observaciones</Label>
+              <Textarea
+                id="observations"
+                value={form.observations}
+                onChange={(e) => setForm({ ...form, observations: e.target.value })}
+                placeholder="Observaciones al pie del documento..."
+                rows={3}
+              />
             </div>
           </div>
           <DialogFooter>

@@ -1717,6 +1717,7 @@ export type Database = {
           budget_id: string | null
           created_at: string
           description: string | null
+          document_type: string
           id: string
           invoice_date: string
           invoice_number: number
@@ -1732,6 +1733,7 @@ export type Database = {
           budget_id?: string | null
           created_at?: string
           description?: string | null
+          document_type?: string
           id?: string
           invoice_date?: string
           invoice_number: number
@@ -1747,6 +1749,7 @@ export type Database = {
           budget_id?: string | null
           created_at?: string
           description?: string | null
+          document_type?: string
           id?: string
           invoice_date?: string
           invoice_number?: number

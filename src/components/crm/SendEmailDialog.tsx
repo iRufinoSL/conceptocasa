@@ -37,6 +37,8 @@ export function SendEmailDialog({ open, onOpenChange, contact, contacts }: SendE
   const recipients = contacts || (contact ? [contact] : []);
   const recipientCount = recipients.filter(c => c.email).length;
 
+  console.log('SendEmailDialog render - open:', open, 'contact:', contact?.name, 'recipients:', recipientCount);
+
   const { data: templates = [] } = useQuery({
     queryKey: ['email-templates'],
     queryFn: async () => {

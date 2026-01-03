@@ -153,7 +153,9 @@ export function InvoiceLinesEditor({ invoice, onClose }: Props) {
         return sum + line.subtotal;
       }, 0);
       
-      const vatAmount = newSubtotal * invoice.vat_rate / 100;
+      // VAT rate of -1 means "not included", so calculate as 0%
+      const effectiveVatRate = invoice.vat_rate === -1 ? 0 : invoice.vat_rate;
+      const vatAmount = newSubtotal * effectiveVatRate / 100;
       setInvoiceTotals({
         subtotal: newSubtotal,
         vat_amount: vatAmount,
@@ -169,7 +171,9 @@ export function InvoiceLinesEditor({ invoice, onClose }: Props) {
 
     // Recalculate totals
     const newSubtotal = newLines.reduce((sum, line) => sum + line.subtotal, 0);
-    const vatAmount = newSubtotal * invoice.vat_rate / 100;
+    // VAT rate of -1 means "not included", so calculate as 0%
+    const effectiveVatRate = invoice.vat_rate === -1 ? 0 : invoice.vat_rate;
+    const vatAmount = newSubtotal * effectiveVatRate / 100;
     setInvoiceTotals({
       subtotal: newSubtotal,
       vat_amount: vatAmount,
@@ -244,7 +248,9 @@ export function InvoiceLinesEditor({ invoice, onClose }: Props) {
   // Recalculate totals when lines change
   useEffect(() => {
     const newSubtotal = lines.reduce((sum, line) => sum + line.subtotal, 0);
-    const vatAmount = newSubtotal * invoice.vat_rate / 100;
+    // VAT rate of -1 means "not included", so calculate as 0%
+    const effectiveVatRate = invoice.vat_rate === -1 ? 0 : invoice.vat_rate;
+    const vatAmount = newSubtotal * effectiveVatRate / 100;
     setInvoiceTotals({
       subtotal: newSubtotal,
       vat_amount: vatAmount,
@@ -438,7 +444,9 @@ export function InvoiceLinesEditor({ invoice, onClose }: Props) {
                 <span className="font-medium">{formatCurrency(invoiceTotals.subtotal)}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-muted-foreground">IVA ({invoice.vat_rate}%):</span>
+                <span className="text-muted-foreground">
+                  {invoice.vat_rate === -1 ? 'IVA no incluido:' : `IVA (${invoice.vat_rate}%):`}
+                </span>
                 <span className="font-medium">{formatCurrency(invoiceTotals.vat_amount)}</span>
               </div>
               <div className="flex justify-between border-t pt-2">

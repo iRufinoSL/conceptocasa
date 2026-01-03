@@ -202,12 +202,15 @@ export function ImportBackupDialog({ open, onOpenChange, onSuccess }: ImportBack
               </Select>
               
               {importMode === 'replace' && (
-                <div className="flex items-center gap-2 p-3 bg-amber-500/10 text-amber-700 dark:text-amber-400 rounded-lg text-sm">
-                  <AlertTriangle className="h-4 w-4 shrink-0" />
-                  <span>
-                    El modo "Reemplazar" eliminará los datos actuales antes de importar. 
-                    Asegúrate de tener un backup actual.
-                  </span>
+                <div className="flex items-start gap-2 p-3 bg-amber-500/10 text-amber-700 dark:text-amber-400 rounded-lg text-sm">
+                  <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+                  <div className="space-y-1">
+                    <span className="font-medium">⚠️ Operación destructiva</span>
+                    <p>
+                      El modo "Reemplazar" eliminará los datos actuales antes de importar.
+                      Se creará un backup automático de los datos actuales antes de proceder.
+                    </p>
+                  </div>
                 </div>
               )}
             </div>

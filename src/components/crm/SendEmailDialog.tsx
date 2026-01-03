@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -95,6 +95,13 @@ export function SendEmailDialog({ open, onOpenChange, contact, contacts }: SendE
   };
 
   const handleTemplateChange = (templateId: string) => {
+    if (templateId === 'none') {
+      setSelectedTemplate('');
+      setSubject('');
+      setContent('');
+      setVariables({});
+      return;
+    }
     setSelectedTemplate(templateId);
     const template = templates.find(t => t.id === templateId);
     if (template) {
@@ -132,6 +139,9 @@ export function SendEmailDialog({ open, onOpenChange, contact, contacts }: SendE
             <Mail className="h-5 w-5" />
             Enviar Email
           </DialogTitle>
+          <DialogDescription>
+            Envía un email a los contactos seleccionados.
+          </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
@@ -162,7 +172,7 @@ export function SendEmailDialog({ open, onOpenChange, contact, contacts }: SendE
                 <SelectValue placeholder="Seleccionar plantilla..." />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Sin plantilla</SelectItem>
+                <SelectItem value="none">Sin plantilla</SelectItem>
                 {templates.map(template => (
                   <SelectItem key={template.id} value={template.id}>
                     {template.name} ({template.category})

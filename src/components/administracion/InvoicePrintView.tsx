@@ -7,6 +7,8 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { formatCurrency } from '@/lib/format-utils';
 
+type DocumentType = 'factura' | 'presupuesto' | 'proforma';
+
 interface Invoice {
   id: string;
   invoice_number: number;
@@ -16,9 +18,29 @@ interface Invoice {
   vat_rate: number;
   vat_amount: number;
   total: number;
+  document_type?: DocumentType;
   issuer_account?: { name: string } | null;
   receiver_account?: { name: string } | null;
 }
+
+const DOCUMENT_TYPE_LABELS: Record<DocumentType, string> = {
+  factura: 'FACTURA',
+  presupuesto: 'PRESUPUESTO',
+  proforma: 'PROFORMA'
+};
+
+const DOCUMENT_TYPE_COLORS: Record<DocumentType, string> = {
+  factura: '#3b82f6',
+  presupuesto: '#f59e0b',
+  proforma: '#8b5cf6'
+};
+
+// Format invoice number with year: #0010/25
+const formatInvoiceNumber = (number: number, date: string): string => {
+  const year = new Date(date).getFullYear().toString().slice(-2);
+  const paddedNumber = String(number).padStart(4, '0');
+  return `#${paddedNumber}/${year}`;
+};
 
 interface InvoiceLine {
   id: string;
@@ -67,11 +89,15 @@ export function InvoicePrintView({ invoice, onClose }: Props) {
     const printWindow = window.open('', '_blank');
     if (!printWindow) return;
 
+    const docType = invoice.document_type || 'factura';
+    const docColor = DOCUMENT_TYPE_COLORS[docType];
+    const docLabel = DOCUMENT_TYPE_LABELS[docType];
+
     printWindow.document.write(`
       <!DOCTYPE html>
       <html>
         <head>
-          <title>Factura #${invoice.invoice_number}</title>
+          <title>${docLabel} ${formatInvoiceNumber(invoice.invoice_number, invoice.invoice_date)}</title>
           <style>
             * { margin: 0; padding: 0; box-sizing: border-box; }
             body { 
@@ -117,7 +143,7 @@ export function InvoicePrintView({ invoice, onClose }: Props) {
             }
             .invoice-title h1 {
               font-size: 28px;
-              color: #3b82f6;
+              color: ${docColor};
               margin-bottom: 4px;
             }
             .invoice-number {
@@ -256,7 +282,7 @@ export function InvoicePrintView({ invoice, onClose }: Props) {
     <Dialog open onOpenChange={onClose}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Vista Previa de Factura</DialogTitle>
+          <DialogTitle>Vista Previa de {DOCUMENT_TYPE_LABELS[invoice.document_type || 'factura']}</DialogTitle>
         </DialogHeader>
 
         <div ref={printRef} className="bg-white p-8 rounded-lg">
@@ -272,8 +298,10 @@ export function InvoicePrintView({ invoice, onClose }: Props) {
               <div style={{ fontSize: '24px', fontWeight: '700', color: '#1a1a1a' }}>ConceptoCasa</div>
             </div>
             <div style={{ textAlign: 'right' }}>
-              <h1 style={{ fontSize: '28px', color: '#3b82f6', marginBottom: '4px' }}>FACTURA</h1>
-              <div style={{ fontSize: '18px', color: '#666' }}>#{String(invoice.invoice_number).padStart(4, '0')}</div>
+              <h1 style={{ fontSize: '28px', color: DOCUMENT_TYPE_COLORS[invoice.document_type || 'factura'], marginBottom: '4px' }}>
+                {DOCUMENT_TYPE_LABELS[invoice.document_type || 'factura']}
+              </h1>
+              <div style={{ fontSize: '18px', color: '#666' }}>{formatInvoiceNumber(invoice.invoice_number, invoice.invoice_date)}</div>
             </div>
           </div>
 
@@ -296,7 +324,7 @@ export function InvoicePrintView({ invoice, onClose }: Props) {
           {/* Invoice Info */}
           <div style={{ display: 'flex', gap: '40px', marginBottom: '40px', padding: '16px', background: '#f8fafc', borderRadius: '8px' }}>
             <div>
-              <label style={{ fontSize: '12px', color: '#666', display: 'block', marginBottom: '4px' }}>Fecha de Factura</label>
+              <label style={{ fontSize: '12px', color: '#666', display: 'block', marginBottom: '4px' }}>Fecha</label>
               <span style={{ fontWeight: '600', color: '#1a1a1a' }}>{formatDate(invoice.invoice_date)}</span>
             </div>
             {invoice.description && (
@@ -331,7 +359,7 @@ export function InvoicePrintView({ invoice, onClose }: Props) {
               {lines.length === 0 && (
                 <tr>
                   <td colSpan={5} style={{ padding: '24px', textAlign: 'center', color: '#666' }}>
-                    No hay líneas en esta factura
+                    No hay líneas en este documento
                   </td>
                 </tr>
               )}
@@ -345,11 +373,18 @@ export function InvoicePrintView({ invoice, onClose }: Props) {
                 <span>Subtotal:</span>
                 <span>{formatCurrency(invoice.subtotal)}</span>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0' }}>
-                <span>IVA ({invoice.vat_rate}%):</span>
-                <span>{formatCurrency(invoice.vat_amount)}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '2px solid #e5e5e5', marginTop: '8px', paddingTop: '16px', fontSize: '18px', fontWeight: '700', color: '#3b82f6' }}>
+              {invoice.vat_rate === -1 ? (
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', color: '#666' }}>
+                  <span>IVA no incluido</span>
+                  <span>-</span>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0' }}>
+                  <span>IVA ({invoice.vat_rate}%):</span>
+                  <span>{formatCurrency(invoice.vat_amount)}</span>
+                </div>
+              )}
+              <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '2px solid #e5e5e5', marginTop: '8px', paddingTop: '16px', fontSize: '18px', fontWeight: '700', color: DOCUMENT_TYPE_COLORS[invoice.document_type || 'factura'] }}>
                 <span>Total:</span>
                 <span>{formatCurrency(invoice.total)}</span>
               </div>

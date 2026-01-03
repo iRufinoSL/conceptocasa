@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import DOMPurify from 'dompurify';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -318,7 +319,7 @@ export function EmailTemplatesTab() {
               <Label className="text-sm text-muted-foreground">Contenido</Label>
               <div 
                 className="mt-2 p-4 border rounded-lg bg-white prose prose-sm max-w-none"
-                dangerouslySetInnerHTML={{ __html: selectedTemplate?.content || '' }}
+                dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(selectedTemplate?.content || '') }}
               />
             </div>
             {selectedTemplate?.variables && (

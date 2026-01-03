@@ -172,8 +172,14 @@ export function ContactsTab({ contacts, searchTerm, onEdit, onDelete }: Contacts
   };
 
   const handleSendEmail = (contact: Contact) => {
+    console.log('handleSendEmail called for contact:', contact.name, contact.email);
+    if (!contact.email) {
+      console.error('Contact has no email');
+      return;
+    }
     setEmailContact(contact);
     setEmailDialogOpen(true);
+    console.log('Email dialog should now be open');
   };
 
   if (filteredContacts.length === 0) {

@@ -941,7 +941,7 @@ export default function Documentos() {
 
       {/* Upload Dialog */}
       <Dialog open={uploadDialogOpen} onOpenChange={setUploadDialogOpen}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Plus className="h-5 w-5" />
@@ -1048,15 +1048,17 @@ export default function Documentos() {
             </div>
 
             {/* Description */}
-            <div className="space-y-2">
+            <div className="space-y-2 flex-1 min-h-0">
               <Label>Descripción (opcional)</Label>
-              <RichTextEditor
-                value={uploadDescription}
-                onChange={setUploadDescription}
-                placeholder="Descripción del documento..."
-                minHeight="200px"
-                fullScreen
-              />
+              <div className="h-[300px] overflow-hidden">
+                <RichTextEditor
+                  value={uploadDescription}
+                  onChange={setUploadDescription}
+                  placeholder="Descripción del documento..."
+                  minHeight="280px"
+                  className="h-full"
+                />
+              </div>
             </div>
 
             {/* File Upload */}
@@ -1183,7 +1185,7 @@ export default function Documentos() {
 
       {/* Edit Dialog */}
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Pencil className="h-5 w-5" />
@@ -1290,15 +1292,17 @@ export default function Documentos() {
             </div>
 
             {/* Edit Description */}
-            <div className="space-y-2">
+            <div className="space-y-2 flex-1 min-h-0">
               <Label>Descripción</Label>
-              <RichTextEditor
-                value={editDescription}
-                onChange={setEditDescription}
-                placeholder="Descripción del documento..."
-                minHeight="200px"
-                fullScreen
-              />
+              <div className="h-[300px] overflow-hidden">
+                <RichTextEditor
+                  value={editDescription}
+                  onChange={setEditDescription}
+                  placeholder="Descripción del documento..."
+                  minHeight="280px"
+                  className="h-full"
+                />
+              </div>
             </div>
 
             {/* File Upload/Replace */}

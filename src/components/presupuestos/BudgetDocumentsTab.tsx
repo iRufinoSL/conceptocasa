@@ -686,7 +686,7 @@ export function BudgetDocumentsTab({ budgetId, projectId, projectName, isAdmin }
 
       {/* Upload Dialog */}
       <Dialog open={uploadDialogOpen} onOpenChange={setUploadDialogOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Upload className="h-5 w-5" />
@@ -765,15 +765,17 @@ export function BudgetDocumentsTab({ budgetId, projectId, projectName, isAdmin }
               </div>
             </div>
 
-            <div className="space-y-2">
+            <div className="space-y-2 flex-1 min-h-0">
               <Label htmlFor="upload-description">Descripción</Label>
-              <RichTextEditor
-                value={uploadDescription}
-                onChange={setUploadDescription}
-                placeholder="Descripción opcional..."
-                minHeight="200px"
-                fullScreen
-              />
+              <div className="h-[300px] overflow-hidden">
+                <RichTextEditor
+                  value={uploadDescription}
+                  onChange={setUploadDescription}
+                  placeholder="Descripción opcional..."
+                  minHeight="280px"
+                  className="h-full"
+                />
+              </div>
             </div>
 
             <div className="space-y-2">
@@ -825,7 +827,7 @@ export function BudgetDocumentsTab({ budgetId, projectId, projectName, isAdmin }
 
       {/* Edit Dialog */}
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Pencil className="h-5 w-5" />
@@ -871,15 +873,17 @@ export function BudgetDocumentsTab({ budgetId, projectId, projectName, isAdmin }
               </div>
             </div>
 
-            <div className="space-y-2">
+            <div className="space-y-2 flex-1 min-h-0">
               <Label htmlFor="edit-description">Descripción</Label>
-              <RichTextEditor
-                value={editDescription}
-                onChange={setEditDescription}
-                placeholder="Descripción del documento..."
-                minHeight="200px"
-                fullScreen
-              />
+              <div className="h-[300px] overflow-hidden">
+                <RichTextEditor
+                  value={editDescription}
+                  onChange={setEditDescription}
+                  placeholder="Descripción del documento..."
+                  minHeight="280px"
+                  className="h-full"
+                />
+              </div>
             </div>
 
             <div className="space-y-2">

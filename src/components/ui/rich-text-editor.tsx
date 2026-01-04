@@ -579,12 +579,12 @@ export function RichTextEditor({
           />
         </ScrollArea>
       ) : (
-        <div className="overflow-auto" style={{ maxHeight: '500px' }}>
+        <ScrollArea className="flex-1" style={{ maxHeight: minHeight === '280px' ? '260px' : '400px' }}>
           <EditorContent 
             editor={editor} 
             className="[&_.ProseMirror]:outline-none"
           />
-        </div>
+        </ScrollArea>
       )}
 
       {/* Status bar */}

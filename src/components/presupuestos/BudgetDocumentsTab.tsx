@@ -771,7 +771,8 @@ export function BudgetDocumentsTab({ budgetId, projectId, projectName, isAdmin }
                 value={uploadDescription}
                 onChange={setUploadDescription}
                 placeholder="Descripción opcional..."
-                minHeight="100px"
+                minHeight="200px"
+                fullScreen
               />
             </div>
 
@@ -876,7 +877,8 @@ export function BudgetDocumentsTab({ budgetId, projectId, projectName, isAdmin }
                 value={editDescription}
                 onChange={setEditDescription}
                 placeholder="Descripción del documento..."
-                minHeight="100px"
+                minHeight="200px"
+                fullScreen
               />
             </div>
 

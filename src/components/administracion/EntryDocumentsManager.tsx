@@ -457,7 +457,8 @@ export function EntryDocumentsManager({ entryId, onUpdate }: Props) {
                 value={form.description}
                 onChange={(value) => setForm({ ...form, description: value })}
                 placeholder="Descripción opcional del documento (puedes usar formato enriquecido)"
-                minHeight="100px"
+                minHeight="200px"
+                fullScreen
               />
             </div>
 

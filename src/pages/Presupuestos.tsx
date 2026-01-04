@@ -141,7 +141,7 @@ const PresupuestoCard = ({ p, isAdmin, recalculatingId, onRecalculate, onEdit, o
           <Button 
             variant="ghost" 
             size="icon"
-            title="Ir al Dashboard"
+            title="Ir al Panel de control"
             onClick={(e) => { e.stopPropagation(); onNavigate(p.id); }}
           >
             <ExternalLink className="h-4 w-4" />

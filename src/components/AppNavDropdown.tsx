@@ -29,7 +29,7 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  { title: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
+  { title: 'Panel de control', path: '/dashboard', icon: LayoutDashboard },
   { title: 'Proyectos', path: '/proyectos', icon: Building2 },
   { title: 'Presupuestos', path: '/presupuestos', icon: Calculator },
   { title: 'CRM', path: '/crm', icon: Users },

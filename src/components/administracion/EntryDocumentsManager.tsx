@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { FileText, Plus, Trash2, ExternalLink, Upload, Download, File, Eye, X, Image as ImageIcon } from 'lucide-react';
+import { FileText, Plus, Trash2, ExternalLink, Upload, Download, File, Eye, X, Image as ImageIcon, Maximize2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import { RichTextEditor } from '@/components/ui/rich-text-editor';
@@ -82,6 +82,18 @@ export function EntryDocumentsManager({ entryId, onUpdate }: Props) {
   const [previewDoc, setPreviewDoc] = useState<AccountingDocument | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
+
+  // Description preview state
+  const [descriptionPreviewOpen, setDescriptionPreviewOpen] = useState(false);
+  const [descriptionPreviewDoc, setDescriptionPreviewDoc] = useState<AccountingDocument | null>(null);
+
+  // Helper to truncate and strip HTML from description
+  const truncateDescription = (html: string | null, maxLength: number = 50): string => {
+    if (!html) return '';
+    const text = html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+    if (text.length <= maxLength) return text;
+    return text.substring(0, maxLength) + '...';
+  };
 
   useEffect(() => {
     fetchDocuments();
@@ -338,24 +350,37 @@ export function EntryDocumentsManager({ entryId, onUpdate }: Props) {
                 {getPreviewIcon(doc)}
                 <div className="min-w-0 flex-1">
                   <p className="font-medium text-sm truncate">{doc.name}</p>
-                  <div className="flex items-center gap-2">
-                    {doc.description && (
-                      <p 
-                        className="text-xs text-muted-foreground truncate max-w-[200px]"
-                        dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(doc.description.replace(/<[^>]*>/g, ' ').substring(0, 100)) }}
-                      />
-                    )}
-                    {doc.file_size && (
-                      <Badge variant="outline" className="text-[10px] py-0">
-                        {formatFileSize(doc.file_size)}
-                      </Badge>
-                    )}
-                    {canPreview(doc) && (
-                      <Badge variant="secondary" className="text-[10px] py-0">
-                        Vista previa
-                      </Badge>
-                    )}
-                  </div>
+                    <div className="flex items-center gap-2">
+                      {doc.description && (
+                        <div className="flex items-center gap-1">
+                          <p className="text-xs text-muted-foreground">
+                            {truncateDescription(doc.description, 50)}
+                          </p>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-5 w-5 shrink-0"
+                            onClick={() => {
+                              setDescriptionPreviewDoc(doc);
+                              setDescriptionPreviewOpen(true);
+                            }}
+                            title="Ver descripción completa"
+                          >
+                            <Maximize2 className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      )}
+                      {doc.file_size && (
+                        <Badge variant="outline" className="text-[10px] py-0">
+                          {formatFileSize(doc.file_size)}
+                        </Badge>
+                      )}
+                      {canPreview(doc) && (
+                        <Badge variant="secondary" className="text-[10px] py-0">
+                          Vista previa
+                        </Badge>
+                      )}
+                    </div>
                 </div>
               </div>
               <div className="flex items-center gap-1 shrink-0">
@@ -553,6 +578,28 @@ export function EntryDocumentsManager({ entryId, onUpdate }: Props) {
               </Button>
             )}
             <Button onClick={handleClosePreview}>Cerrar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Description Preview Dialog */}
+      <Dialog open={descriptionPreviewOpen} onOpenChange={setDescriptionPreviewOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
+          <DialogHeader className="flex-shrink-0">
+            <DialogTitle>Descripción: {descriptionPreviewDoc?.name}</DialogTitle>
+          </DialogHeader>
+          <div className="flex-1 overflow-auto min-h-0 p-4 bg-muted/30 rounded-md border">
+            {descriptionPreviewDoc?.description ? (
+              <div 
+                className="prose prose-sm max-w-none dark:prose-invert"
+                dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(descriptionPreviewDoc.description) }}
+              />
+            ) : (
+              <p className="text-muted-foreground text-sm">Sin descripción</p>
+            )}
+          </div>
+          <DialogFooter className="flex-shrink-0">
+            <Button onClick={() => setDescriptionPreviewOpen(false)}>Cerrar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

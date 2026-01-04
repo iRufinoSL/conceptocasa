@@ -24,8 +24,11 @@ const ACCOUNT_TYPES = [
   'Tesorería'
 ];
 
+import { ShoppingBag } from 'lucide-react';
+
 const ENTRY_TYPES = [
   { value: 'compra', label: 'Compra / Gasto', icon: ShoppingCart, description: 'Registro de compras y gastos realizados' },
+  { value: 'compra_pago', label: 'Compra + Pago', icon: ShoppingBag, description: 'Compra/gasto con pago inmediato' },
   { value: 'venta', label: 'Venta / Ingreso', icon: Receipt, description: 'Registro de ventas e ingresos obtenidos' },
   { value: 'cobro', label: 'Cobro', icon: CreditCard, description: 'Registro de cobros recibidos de clientes' },
   { value: 'pago', label: 'Pago', icon: Wallet, description: 'Registro de pagos realizados a proveedores' },
@@ -71,6 +74,9 @@ interface WizardFormData {
   // For pago/cobro: specific accounts
   debit_account_id: string;  // Al Debe
   credit_account_id: string; // Al Haber
+  // For compra_pago: treasury account for payment
+  treasury_account_id: string;
+  include_payment: boolean; // Whether to include payment in compra_pago
 }
 
 interface Props {
@@ -90,6 +96,7 @@ export function AccountingEntryWizard({ open, onOpenChange, onEntryCreated }: Pr
   const [accountSearch, setAccountSearch] = useState('');
   const [debitAccountSearch, setDebitAccountSearch] = useState('');
   const [creditAccountSearch, setCreditAccountSearch] = useState('');
+  const [treasuryAccountSearch, setTreasuryAccountSearch] = useState('');
   const [showCreateAccountDialog, setShowCreateAccountDialog] = useState(false);
   const [createAccountContext, setCreateAccountContext] = useState<
     | { kind: 'expense' }
@@ -112,6 +119,8 @@ export function AccountingEntryWizard({ open, onOpenChange, onEntryCreated }: Pr
     expense_account_id: '',
     debit_account_id: '',
     credit_account_id: '',
+    treasury_account_id: '',
+    include_payment: true,
   });
 
   useEffect(() => {
@@ -134,12 +143,15 @@ export function AccountingEntryWizard({ open, onOpenChange, onEntryCreated }: Pr
       expense_account_id: '',
       debit_account_id: '',
       credit_account_id: '',
+      treasury_account_id: '',
+      include_payment: true,
     });
     setBudgetSearch('');
     setContactSearch('');
     setAccountSearch('');
     setDebitAccountSearch('');
     setCreditAccountSearch('');
+    setTreasuryAccountSearch('');
   };
 
   const fetchData = async () => {
@@ -208,6 +220,7 @@ export function AccountingEntryWizard({ open, onOpenChange, onEntryCreated }: Pr
   const getDefaultAccountType = () => {
     switch (formData.entry_type) {
       case 'compra':
+      case 'compra_pago':
         return 'Compras y gastos';
       case 'venta':
         return 'Ventas e ingresos';
@@ -221,7 +234,7 @@ export function AccountingEntryWizard({ open, onOpenChange, onEntryCreated }: Pr
   };
 
   const getContactStatus = (): 'Proveedor' | 'Cliente' => {
-    return ['compra', 'pago'].includes(formData.entry_type) ? 'Proveedor' : 'Cliente';
+    return ['compra', 'compra_pago', 'pago'].includes(formData.entry_type) ? 'Proveedor' : 'Cliente';
   };
 
   const getContactAccountType = () => {
@@ -326,7 +339,9 @@ export function AccountingEntryWizard({ open, onOpenChange, onEntryCreated }: Pr
 
   const getContactLabel = () => {
     switch (formData.entry_type) {
-      case 'compra': return 'Proveedor';
+      case 'compra': 
+      case 'compra_pago':
+        return 'Proveedor';
       case 'venta': return 'Cliente';
       case 'cobro': return 'Cliente';
       case 'pago': return 'Proveedor';
@@ -336,7 +351,9 @@ export function AccountingEntryWizard({ open, onOpenChange, onEntryCreated }: Pr
 
   const getAccountLabel = () => {
     switch (formData.entry_type) {
-      case 'compra': return 'Cuenta de Gasto';
+      case 'compra': 
+      case 'compra_pago':
+        return 'Cuenta de Gasto';
       case 'venta': return 'Cuenta de Ingreso';
       case 'cobro': return 'Cuenta de Tesorería';
       case 'pago': return 'Cuenta de Tesorería';
@@ -346,8 +363,10 @@ export function AccountingEntryWizard({ open, onOpenChange, onEntryCreated }: Pr
 
   const getTotalSteps = () => {
     // compra/venta: 7 steps (type, budget, description, date/amount, vat, contact, account)
+    // compra_pago: 8 steps (type, budget, description, date/amount, vat, contact, account, treasury)
     // cobro: 7 steps (type, budget, description, date/amount, contact, debit_account (tesorería), credit_account (cliente))
     // pago: 7 steps (type, budget, description, date/amount, contact, debit_account (proveedor), credit_account (tesorería))
+    if (formData.entry_type === 'compra_pago') return 8;
     if (formData.entry_type === 'pago') return 7;
     if (formData.entry_type === 'cobro') return 7;
     return 7; // compra/venta
@@ -366,7 +385,7 @@ export function AccountingEntryWizard({ open, onOpenChange, onEntryCreated }: Pr
         if (formData.entry_type === 'cobro') {
           return formData.supplier_id !== ''; // Cliente del que se cobra
         }
-        return true; // VAT step for compra/venta
+        return true; // VAT step for compra/venta/compra_pago
       case 6:
         if (formData.entry_type === 'pago') {
           return formData.debit_account_id !== ''; // Cuenta al Debe (proveedor)
@@ -374,7 +393,7 @@ export function AccountingEntryWizard({ open, onOpenChange, onEntryCreated }: Pr
         if (formData.entry_type === 'cobro') {
           return formData.debit_account_id !== ''; // Cuenta al Debe (tesorería destino)
         }
-        return formData.supplier_id !== ''; // Contact for compra/venta
+        return formData.supplier_id !== ''; // Contact for compra/venta/compra_pago
       case 7:
         if (formData.entry_type === 'pago') {
           return formData.credit_account_id !== ''; // Cuenta al Haber (tesorería origen)
@@ -382,7 +401,13 @@ export function AccountingEntryWizard({ open, onOpenChange, onEntryCreated }: Pr
         if (formData.entry_type === 'cobro') {
           return formData.credit_account_id !== ''; // Cuenta al Haber (cliente)
         }
-        return formData.expense_account_id !== ''; // Account for compra/venta
+        return formData.expense_account_id !== ''; // Account for compra/venta/compra_pago
+      case 8:
+        // Step 8 is only for compra_pago - treasury account selection
+        if (formData.entry_type === 'compra_pago') {
+          return formData.treasury_account_id !== '' || !formData.include_payment;
+        }
+        return true;
       default: return false;
     }
   };
@@ -454,7 +479,7 @@ export function AccountingEntryWizard({ open, onOpenChange, onEntryCreated }: Pr
     if (!contact) return null;
     
     const contactFullName = `${contact.name}${contact.surname ? ' ' + contact.surname : ''}`;
-    const accountType = ['compra', 'pago'].includes(formData.entry_type) ? 'Proveedores' : 'Clientes';
+    const accountType = ['compra', 'compra_pago', 'pago'].includes(formData.entry_type) ? 'Proveedores' : 'Clientes';
     
     let contactAccount = accounts.find(a => 
       a.name === contactFullName && a.account_type === accountType
@@ -514,7 +539,7 @@ export function AccountingEntryWizard({ open, onOpenChange, onEntryCreated }: Pr
       // Create entry lines based on entry type
       const lines = [];
       
-      if (formData.entry_type === 'compra') {
+      if (formData.entry_type === 'compra' || formData.entry_type === 'compra_pago') {
         // Debit: Expense account (base amount)
         lines.push({
           entry_id: entry.id,
@@ -551,6 +576,29 @@ export function AccountingEntryWizard({ open, onOpenChange, onEntryCreated }: Pr
             debit_amount: 0,
             credit_amount: total,
           });
+          
+          // For compra_pago: Add payment lines if include_payment is true
+          if (formData.entry_type === 'compra_pago' && formData.include_payment && formData.treasury_account_id) {
+            // Debit: Supplier account (pay off the debt)
+            lines.push({
+              entry_id: entry.id,
+              account_id: supplierAccountId,
+              line_date: formData.entry_date,
+              description: 'Pago a proveedor',
+              debit_amount: total,
+              credit_amount: 0,
+            });
+            
+            // Credit: Treasury account (money goes out)
+            lines.push({
+              entry_id: entry.id,
+              account_id: formData.treasury_account_id,
+              line_date: formData.entry_date,
+              description: 'Salida de tesorería',
+              debit_amount: 0,
+              credit_amount: total,
+            });
+          }
         }
       } else if (formData.entry_type === 'venta') {
         // Debit: Customer account (total)
@@ -936,6 +984,13 @@ export function AccountingEntryWizard({ open, onOpenChange, onEntryCreated }: Pr
           return renderCobroCreditAccountStep();
         }
         return renderAccountStep();
+
+      case 8:
+        // Step 8 is only for compra_pago - treasury account for payment
+        if (formData.entry_type === 'compra_pago') {
+          return renderTreasuryAccountStep();
+        }
+        return null;
 
       default:
         return null;
@@ -1438,11 +1493,129 @@ export function AccountingEntryWizard({ open, onOpenChange, onEntryCreated }: Pr
     </div>
   );
 
+  // Get filtered treasury accounts for compra_pago
+  const getFilteredTreasuryAccounts = () => {
+    return accounts.filter(a => {
+      if (treasuryAccountSearch === '') {
+        return a.account_type === 'Tesorería';
+      }
+      return a.name.toLowerCase().includes(treasuryAccountSearch.toLowerCase());
+    });
+  };
+
+  // Compra + Pago: Step 8 - Treasury account for payment
+  const renderTreasuryAccountStep = () => (
+    <div className="space-y-4">
+      <h3 className="font-medium text-lg">8. Cuenta de Pago (Tesorería)</h3>
+      <p className="text-sm text-muted-foreground">
+        Selecciona la cuenta de tesorería desde la que se realiza el pago
+      </p>
+      
+      {/* Toggle to include/exclude payment */}
+      <div className="flex items-center gap-3 p-3 border rounded-lg bg-muted/50">
+        <input
+          type="checkbox"
+          id="include_payment"
+          checked={formData.include_payment}
+          onChange={(e) => setFormData({ ...formData, include_payment: e.target.checked })}
+          className="h-4 w-4"
+        />
+        <Label htmlFor="include_payment" className="cursor-pointer">
+          Incluir pago en este asiento
+        </Label>
+      </div>
+
+      {formData.include_payment && (
+        <>
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Buscar cuenta de tesorería..."
+              value={treasuryAccountSearch}
+              onChange={(e) => setTreasuryAccountSearch(e.target.value)}
+              className="pl-9"
+            />
+            {treasuryAccountSearch && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="absolute right-1 top-1/2 -translate-y-1/2 h-6 w-6"
+                onClick={() => setTreasuryAccountSearch('')}
+              >
+                <X className="h-3 w-3" />
+              </Button>
+            )}
+          </div>
+
+          <ScrollArea className="h-[180px] border rounded-lg">
+            <div className="p-2 space-y-1">
+              {getFilteredTreasuryAccounts().length === 0 ? (
+                <div className="p-4 text-center">
+                  <p className="text-muted-foreground mb-3">
+                    No se encontraron cuentas de tesorería{treasuryAccountSearch && ` para "${treasuryAccountSearch}"`}
+                  </p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setNewAccount({ name: treasuryAccountSearch || 'Caja', account_type: 'Tesorería' });
+                      setShowCreateAccountDialog(true);
+                    }}
+                    className="gap-2"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Crear cuenta de tesorería
+                  </Button>
+                </div>
+              ) : (
+                getFilteredTreasuryAccounts().map((a) => (
+                  <div
+                    key={a.id}
+                    className={`p-3 rounded-md cursor-pointer transition-colors ${
+                      formData.treasury_account_id === a.id ? 'bg-primary/10 border border-primary' : 'hover:bg-muted'
+                    }`}
+                    onClick={() => setFormData({ ...formData, treasury_account_id: a.id })}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium">{a.name}</span>
+                      <Badge variant="outline" className="text-xs">{a.account_type}</Badge>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </ScrollArea>
+          
+          {getFilteredTreasuryAccounts().length > 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setNewAccount({ name: treasuryAccountSearch, account_type: 'Tesorería' });
+                setShowCreateAccountDialog(true);
+              }}
+              className="w-full gap-2"
+            >
+              <Plus className="h-4 w-4" />
+              Crear nueva cuenta de tesorería
+            </Button>
+          )}
+        </>
+      )}
+
+      {!formData.include_payment && (
+        <div className="p-4 bg-muted/30 rounded-lg text-sm text-muted-foreground">
+          El asiento solo registrará la compra/gasto. El pago se podrá registrar posteriormente.
+        </div>
+      )}
+    </div>
+  );
+
   const renderAccountStep = () => (
     <div className="space-y-4">
       <h3 className="font-medium text-lg">7. {getAccountLabel()}</h3>
       <p className="text-sm text-muted-foreground">
-        Selecciona la cuenta de {formData.entry_type === 'compra' ? 'gasto' : 'ingreso'} correspondiente
+        Selecciona la cuenta de {['compra', 'compra_pago'].includes(formData.entry_type) ? 'gasto' : 'ingreso'} correspondiente
       </p>
       
       <div className="relative">

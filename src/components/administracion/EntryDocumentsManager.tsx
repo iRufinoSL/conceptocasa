@@ -3,13 +3,14 @@ import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { FileText, Plus, Trash2, ExternalLink, Upload, Download, File, Eye, X, Image as ImageIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
+import { RichTextEditor } from '@/components/ui/rich-text-editor';
+import DOMPurify from 'dompurify';
 
 interface AccountingDocument {
   id: string;
@@ -339,7 +340,10 @@ export function EntryDocumentsManager({ entryId, onUpdate }: Props) {
                   <p className="font-medium text-sm truncate">{doc.name}</p>
                   <div className="flex items-center gap-2">
                     {doc.description && (
-                      <p className="text-xs text-muted-foreground truncate">{doc.description}</p>
+                      <p 
+                        className="text-xs text-muted-foreground truncate max-w-[200px]"
+                        dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(doc.description.replace(/<[^>]*>/g, ' ').substring(0, 100)) }}
+                      />
                     )}
                     {doc.file_size && (
                       <Badge variant="outline" className="text-[10px] py-0">
@@ -424,12 +428,11 @@ export function EntryDocumentsManager({ entryId, onUpdate }: Props) {
             </div>
             <div className="space-y-2">
               <Label htmlFor="doc-description">Descripción</Label>
-              <Textarea
-                id="doc-description"
+              <RichTextEditor
                 value={form.description}
-                onChange={(e) => setForm({ ...form, description: e.target.value })}
-                placeholder="Descripción opcional del documento"
-                rows={2}
+                onChange={(value) => setForm({ ...form, description: value })}
+                placeholder="Descripción opcional del documento (puedes usar formato enriquecido)"
+                minHeight="100px"
               />
             </div>
 

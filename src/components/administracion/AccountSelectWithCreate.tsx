@@ -58,7 +58,12 @@ export function AccountSelectWithCreate({
   const [saving, setSaving] = useState(false);
   const [newAccount, setNewAccount] = useState({
     name: '',
-    account_type: 'Compras y gastos'
+    account_type: 'Compras y gastos',
+    nif_cif: '',
+    address: '',
+    city: '',
+    postal_code: '',
+    province: ''
   });
 
   const filteredAccounts = useMemo(() => {
@@ -82,7 +87,12 @@ export function AccountSelectWithCreate({
         .from('accounting_accounts')
         .insert({
           name: newAccount.name.trim(),
-          account_type: newAccount.account_type
+          account_type: newAccount.account_type,
+          nif_cif: newAccount.nif_cif.trim() || null,
+          address: newAccount.address.trim() || null,
+          city: newAccount.city.trim() || null,
+          postal_code: newAccount.postal_code.trim() || null,
+          province: newAccount.province.trim() || null
         })
         .select()
         .single();
@@ -91,7 +101,7 @@ export function AccountSelectWithCreate({
 
       toast.success('Cuenta contable creada');
       setShowCreateDialog(false);
-      setNewAccount({ name: '', account_type: 'Compras y gastos' });
+      setNewAccount({ name: '', account_type: 'Compras y gastos', nif_cif: '', address: '', city: '', postal_code: '', province: '' });
       
       // Select the new account
       if (data) {
@@ -110,7 +120,12 @@ export function AccountSelectWithCreate({
   const handleOpenCreateWithSearch = () => {
     setNewAccount({
       name: searchQuery,
-      account_type: 'Compras y gastos'
+      account_type: 'Compras y gastos',
+      nif_cif: '',
+      address: '',
+      city: '',
+      postal_code: '',
+      province: ''
     });
     setShowCreateDialog(true);
   };
@@ -175,7 +190,7 @@ export function AccountSelectWithCreate({
       </Select>
 
       <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
-        <DialogContent>
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Nueva Cuenta Contable</DialogTitle>
             <DialogDescription>
@@ -183,32 +198,84 @@ export function AccountSelectWithCreate({
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="new-account-name">Nombre de la cuenta *</Label>
+                <Input
+                  id="new-account-name"
+                  value={newAccount.name}
+                  onChange={(e) => setNewAccount({ ...newAccount, name: e.target.value })}
+                  placeholder="Ej: Gastos de oficina"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="new-account-type">Tipo de cuenta</Label>
+                <Select
+                  value={newAccount.account_type}
+                  onValueChange={(value) => setNewAccount({ ...newAccount, account_type: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ACCOUNT_TYPES.map((type) => (
+                      <SelectItem key={type} value={type}>
+                        {type}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
             <div className="space-y-2">
-              <Label htmlFor="new-account-name">Nombre de la cuenta *</Label>
+              <Label htmlFor="new-account-nif">NIF/CIF</Label>
               <Input
-                id="new-account-name"
-                value={newAccount.name}
-                onChange={(e) => setNewAccount({ ...newAccount, name: e.target.value })}
-                placeholder="Ej: Gastos de oficina"
+                id="new-account-nif"
+                value={newAccount.nif_cif}
+                onChange={(e) => setNewAccount({ ...newAccount, nif_cif: e.target.value })}
+                placeholder="Ej: B12345678"
               />
             </div>
+
             <div className="space-y-2">
-              <Label htmlFor="new-account-type">Tipo de cuenta</Label>
-              <Select
-                value={newAccount.account_type}
-                onValueChange={(value) => setNewAccount({ ...newAccount, account_type: value })}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {ACCOUNT_TYPES.map((type) => (
-                    <SelectItem key={type} value={type}>
-                      {type}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label htmlFor="new-account-address">Dirección</Label>
+              <Input
+                id="new-account-address"
+                value={newAccount.address}
+                onChange={(e) => setNewAccount({ ...newAccount, address: e.target.value })}
+                placeholder="Ej: Calle Mayor, 10"
+              />
+            </div>
+
+            <div className="grid grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="new-account-postal">Código Postal</Label>
+                <Input
+                  id="new-account-postal"
+                  value={newAccount.postal_code}
+                  onChange={(e) => setNewAccount({ ...newAccount, postal_code: e.target.value })}
+                  placeholder="Ej: 28001"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="new-account-city">Población</Label>
+                <Input
+                  id="new-account-city"
+                  value={newAccount.city}
+                  onChange={(e) => setNewAccount({ ...newAccount, city: e.target.value })}
+                  placeholder="Ej: Madrid"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="new-account-province">Provincia</Label>
+                <Input
+                  id="new-account-province"
+                  value={newAccount.province}
+                  onChange={(e) => setNewAccount({ ...newAccount, province: e.target.value })}
+                  placeholder="Ej: Madrid"
+                />
+              </div>
             </div>
           </div>
           <DialogFooter>

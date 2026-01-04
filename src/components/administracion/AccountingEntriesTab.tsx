@@ -233,9 +233,24 @@ export function AccountingEntriesTab({ highlightCode, onHighlightHandled }: Prop
       };
 
       if (editingEntry) {
+        // Check if the year has changed - if so, we need to regenerate the code
+        const oldYear = editingEntry.code ? parseInt(editingEntry.code.split('/')[1]) + 2000 : null;
+        const newYear = new Date(form.entry_date).getFullYear();
+        
+        let updateData: typeof entryData & { code?: string } = entryData;
+        
+        // If year changed, generate a new code for the new year
+        if (oldYear && oldYear !== newYear) {
+          const { data: newCode, error: codeError } = await supabase
+            .rpc('generate_entry_code', { entry_year: newYear });
+          
+          if (codeError) throw codeError;
+          updateData = { ...entryData, code: newCode };
+        }
+        
         const { error } = await supabase
           .from('accounting_entries')
-          .update(entryData)
+          .update(updateData)
           .eq('id', editingEntry.id);
 
         if (error) throw error;

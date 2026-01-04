@@ -37,7 +37,7 @@ import {
 } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -78,6 +78,10 @@ export function RichTextEditor({
 }: RichTextEditorProps) {
   const [linkUrl, setLinkUrl] = useState('');
   const [isLinkPopoverOpen, setIsLinkPopoverOpen] = useState(false);
+
+
+  // Prevent "setContent" loops that block typing (e.g. cursor resets on every keypress)
+  const isApplyingExternalValueRef = useRef(false);
 
   const editor = useEditor({
     extensions: [
@@ -134,6 +138,8 @@ export function RichTextEditor({
     ],
     content: value || '',
     onUpdate: ({ editor }) => {
+      // If update came from applying external value, don't immediately emit back.
+      if (isApplyingExternalValueRef.current) return;
       onChange(editor.getHTML());
     },
     editorProps: {
@@ -161,9 +167,19 @@ export function RichTextEditor({
   });
 
   useEffect(() => {
-    if (editor && value !== editor.getHTML()) {
-      editor.commands.setContent(value || '');
-    }
+    if (!editor) return;
+
+    // Only apply external changes (e.g. switching docs, loading from DB), not each keystroke.
+    const incoming = value || '';
+    const current = editor.getHTML();
+    if (incoming === current) return;
+
+    isApplyingExternalValueRef.current = true;
+    editor.commands.setContent(incoming);
+    // Let Tiptap settle before re-enabling onUpdate -> onChange.
+    queueMicrotask(() => {
+      isApplyingExternalValueRef.current = false;
+    });
   }, [value, editor]);
 
   const setLink = useCallback(() => {

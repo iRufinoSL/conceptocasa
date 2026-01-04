@@ -2,7 +2,6 @@ import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
@@ -44,8 +43,12 @@ import {
   File,
   Image,
   FileSpreadsheet,
-  FileArchive
+  FileArchive,
+  Maximize2
 } from 'lucide-react';
+import { RichTextEditor } from '@/components/ui/rich-text-editor';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import DOMPurify from 'dompurify';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -169,6 +172,19 @@ export function BudgetDocumentsTab({ budgetId, projectId, projectName, isAdmin }
   const [editFile, setEditFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
   const editFileInputRef = useRef<HTMLInputElement>(null);
+
+  // Description preview state
+  const [descriptionPreviewOpen, setDescriptionPreviewOpen] = useState(false);
+  const [descriptionPreviewContent, setDescriptionPreviewContent] = useState('');
+  const [descriptionPreviewTitle, setDescriptionPreviewTitle] = useState('');
+
+  // Helper to truncate description
+  const truncateDescription = (text: string | null, maxLength = 50) => {
+    if (!text) return '';
+    const plainText = text.replace(/<[^>]*>/g, '').trim();
+    if (plainText.length <= maxLength) return plainText;
+    return plainText.substring(0, maxLength) + '...';
+  };
 
   const fetchDocuments = async () => {
     if (!projectId) {
@@ -572,7 +588,24 @@ export function BudgetDocumentsTab({ budgetId, projectId, projectName, isAdmin }
                         <div className="min-w-0">
                           <p className="font-medium truncate">{doc.name}</p>
                           {doc.description && (
-                            <p className="text-xs text-muted-foreground truncate">{doc.description}</p>
+                            <div className="flex items-center gap-1">
+                              <p className="text-xs text-muted-foreground truncate">
+                                {truncateDescription(doc.description)}
+                              </p>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-5 w-5 shrink-0"
+                                onClick={() => {
+                                  setDescriptionPreviewTitle(doc.name);
+                                  setDescriptionPreviewContent(doc.description || '');
+                                  setDescriptionPreviewOpen(true);
+                                }}
+                                title="Ver descripción completa"
+                              >
+                                <Maximize2 className="h-3 w-3" />
+                              </Button>
+                            </div>
                           )}
                         </div>
                       </div>
@@ -734,12 +767,11 @@ export function BudgetDocumentsTab({ budgetId, projectId, projectName, isAdmin }
 
             <div className="space-y-2">
               <Label htmlFor="upload-description">Descripción</Label>
-              <Textarea
-                id="upload-description"
+              <RichTextEditor
                 value={uploadDescription}
-                onChange={(e) => setUploadDescription(e.target.value)}
+                onChange={setUploadDescription}
                 placeholder="Descripción opcional..."
-                rows={2}
+                minHeight="100px"
               />
             </div>
 
@@ -840,11 +872,11 @@ export function BudgetDocumentsTab({ budgetId, projectId, projectName, isAdmin }
 
             <div className="space-y-2">
               <Label htmlFor="edit-description">Descripción</Label>
-              <Textarea
-                id="edit-description"
+              <RichTextEditor
                 value={editDescription}
-                onChange={(e) => setEditDescription(e.target.value)}
-                rows={2}
+                onChange={setEditDescription}
+                placeholder="Descripción del documento..."
+                minHeight="100px"
               />
             </div>
 
@@ -950,6 +982,24 @@ export function BudgetDocumentsTab({ budgetId, projectId, projectName, isAdmin }
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Description Preview Dialog */}
+      <Dialog open={descriptionPreviewOpen} onOpenChange={setDescriptionPreviewOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileText className="h-5 w-5" />
+              Descripción: {descriptionPreviewTitle}
+            </DialogTitle>
+          </DialogHeader>
+          <ScrollArea className="max-h-[70vh]">
+            <div 
+              className="prose prose-sm dark:prose-invert max-w-none p-4"
+              dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(descriptionPreviewContent) }}
+            />
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

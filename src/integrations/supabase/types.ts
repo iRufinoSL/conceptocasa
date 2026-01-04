@@ -1673,6 +1673,153 @@ export type Database = {
           },
         ]
       }
+      gmail_connections: {
+        Row: {
+          access_token: string
+          created_at: string
+          email: string
+          history_id: string | null
+          id: string
+          is_active: boolean | null
+          last_sync_at: string | null
+          refresh_token: string
+          token_expires_at: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          access_token: string
+          created_at?: string
+          email: string
+          history_id?: string | null
+          id?: string
+          is_active?: boolean | null
+          last_sync_at?: string | null
+          refresh_token: string
+          token_expires_at: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          access_token?: string
+          created_at?: string
+          email?: string
+          history_id?: string | null
+          id?: string
+          is_active?: boolean | null
+          last_sync_at?: string | null
+          refresh_token?: string
+          token_expires_at?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      gmail_sync_rules: {
+        Row: {
+          config: Json | null
+          connection_id: string
+          created_at: string
+          id: string
+          is_enabled: boolean | null
+          rule_type: string
+          updated_at: string
+        }
+        Insert: {
+          config?: Json | null
+          connection_id: string
+          created_at?: string
+          id?: string
+          is_enabled?: boolean | null
+          rule_type: string
+          updated_at?: string
+        }
+        Update: {
+          config?: Json | null
+          connection_id?: string
+          created_at?: string
+          id?: string
+          is_enabled?: boolean | null
+          rule_type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gmail_sync_rules_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: false
+            referencedRelation: "gmail_connections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      gmail_synced_messages: {
+        Row: {
+          communication_id: string | null
+          connection_id: string
+          contact_id: string | null
+          direction: string
+          from_email: string | null
+          gmail_message_id: string
+          gmail_thread_id: string | null
+          id: string
+          received_at: string | null
+          subject: string | null
+          synced_at: string
+          to_emails: string[] | null
+        }
+        Insert: {
+          communication_id?: string | null
+          connection_id: string
+          contact_id?: string | null
+          direction: string
+          from_email?: string | null
+          gmail_message_id: string
+          gmail_thread_id?: string | null
+          id?: string
+          received_at?: string | null
+          subject?: string | null
+          synced_at?: string
+          to_emails?: string[] | null
+        }
+        Update: {
+          communication_id?: string | null
+          connection_id?: string
+          contact_id?: string | null
+          direction?: string
+          from_email?: string | null
+          gmail_message_id?: string
+          gmail_thread_id?: string | null
+          id?: string
+          received_at?: string | null
+          subject?: string | null
+          synced_at?: string
+          to_emails?: string[] | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gmail_synced_messages_communication_id_fkey"
+            columns: ["communication_id"]
+            isOneToOne: false
+            referencedRelation: "crm_communications"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gmail_synced_messages_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: false
+            referencedRelation: "gmail_connections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gmail_synced_messages_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contacts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       invoice_lines: {
         Row: {
           activity_id: string | null

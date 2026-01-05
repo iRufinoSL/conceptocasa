@@ -9,7 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { formatCurrency, formatNumber } from '@/lib/format-utils';
 import { percentToRatio } from '@/lib/budget-pricing';
-import { Calculator, TrendingUp, Percent, Euro, Package, FileDown, ChevronDown, List, Layers, MapPin } from 'lucide-react';
+import { Calculator, TrendingUp, Percent, Euro, Package, FileDown, ChevronDown, List, Layers, MapPin, LayoutGrid } from 'lucide-react';
 import { useCompanySettings } from '@/hooks/useCompanySettings';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -1024,6 +1024,255 @@ export function BudgetSummary({ budgetId, budgetName, open, onOpenChange }: Budg
     doc.save(fileName);
   };
 
+  const exportDondeAreasPDF = () => {
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.getWidth();
+    
+    // Company info from settings
+    const companyName = companySettings.name || 'Mi Empresa';
+    const companyEmail = companySettings.email || '';
+    const companyPhone = companySettings.phone || '';
+    const companyAddress = companySettings.address || '';
+    const companyWeb = companySettings.website || '';
+    const companyInitials = companyName.substring(0, 2).toUpperCase();
+    
+    // Header with company branding
+    doc.setFillColor(37, 99, 235);
+    doc.roundedRect(14, 10, 25, 25, 3, 3, 'F');
+    doc.setTextColor(255);
+    doc.setFontSize(16);
+    doc.setFont('helvetica', 'bold');
+    doc.text(companyInitials, 26.5, 26, { align: 'center' });
+    doc.setTextColor(0);
+    
+    doc.setFontSize(16);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(37, 99, 235);
+    doc.text(companyName, 45, 18);
+    doc.setTextColor(0);
+    
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(100);
+    const contactLine = [companyEmail, companyPhone].filter(Boolean).join('  |  ');
+    const addressLine = [companyAddress, companyWeb].filter(Boolean).join('  |  ');
+    if (contactLine) doc.text(contactLine, 45, 24);
+    if (addressLine) doc.text(addressLine, 45, 30);
+    doc.setTextColor(0);
+    
+    doc.setDrawColor(200);
+    doc.line(14, 40, pageWidth - 14, 40);
+    
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.text('DÓNDE? - LISTADO POR ÁREAS DE TRABAJO', pageWidth / 2, 50, { align: 'center' });
+    
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'normal');
+    doc.text(budgetName, pageWidth / 2, 58, { align: 'center' });
+    
+    doc.setFontSize(9);
+    doc.setTextColor(100);
+    doc.text(`Fecha de generación: ${format(new Date(), "d 'de' MMMM 'de' yyyy", { locale: es })}`, pageWidth / 2, 65, { align: 'center' });
+    doc.setTextColor(0);
+
+    // Summary section
+    let yPos = 80;
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(37, 99, 235);
+    doc.text('Resumen General', 14, yPos);
+    doc.setTextColor(0);
+    
+    yPos += 8;
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    
+    const summaryData = [
+      ['Total de recursos:', calculations.resourceCount.toString()],
+      ['Coste base:', formatPdfCurrency(calculations.totalBaseCost)],
+      ['Margen de seguridad:', formatPdfCurrency(calculations.totalSafetyMargin)],
+      ['Margen comercial:', formatPdfCurrency(calculations.totalSalesMargin)],
+    ];
+    
+    summaryData.forEach(([label, value]) => {
+      doc.text(label, 14, yPos);
+      doc.text(value, 80, yPos);
+      yPos += 6;
+    });
+    
+    // Total PVP highlighted
+    yPos += 4;
+    doc.setFillColor(34, 197, 94);
+    doc.roundedRect(14, yPos - 4, pageWidth - 28, 10, 2, 2, 'F');
+    doc.setTextColor(255);
+    doc.setFont('helvetica', 'bold');
+    doc.text('TOTAL PVP:', 18, yPos + 3);
+    doc.text(formatPdfCurrency(calculations.totalWithMargins), pageWidth - 18, yPos + 3, { align: 'right' });
+    doc.setTextColor(0);
+    doc.setFont('helvetica', 'normal');
+
+    yPos += 20;
+
+    // Option colors for PDF
+    const optionColors: Record<string, [number, number, number]> = {
+      'A': [59, 130, 246], // blue
+      'B': [168, 85, 247], // purple
+      'C': [34, 197, 94],  // green
+    };
+
+    // Build data structure: Option > Level > Work Area > Activities
+    OPCIONES.forEach(option => {
+      const optionData = hierarchicalData[option];
+      if (optionData.subtotal === 0) return; // Skip empty options
+
+      // Check if we need a new page
+      if (yPos > 250) {
+        doc.addPage();
+        yPos = 20;
+      }
+
+      // Option header
+      doc.setFillColor(...optionColors[option]);
+      doc.roundedRect(14, yPos - 4, pageWidth - 28, 10, 2, 2, 'F');
+      doc.setTextColor(255);
+      doc.setFontSize(11);
+      doc.setFont('helvetica', 'bold');
+      doc.text(`OPCIÓN ${option}`, 18, yPos + 3);
+      doc.text(formatPdfCurrency(optionData.subtotal), pageWidth - 18, yPos + 3, { align: 'right' });
+      doc.setTextColor(0);
+      doc.setFont('helvetica', 'normal');
+
+      yPos += 15;
+
+      // Build table data grouped by Work Area: Opción | Nivel | Área de Trabajo | Actividad | SubTotal
+      const tableData: (string | { content: string; styles?: object })[][] = [];
+
+      const levelKeys = LEVEL_ORDER.filter(l => optionData.levels[l]);
+      levelKeys.forEach((level, levelIndex) => {
+        const levelData = optionData.levels[level];
+        
+        // Level header row
+        if (levelIndex > 0 || tableData.length > 0) {
+          tableData.push([
+            { content: `NIVEL: ${level}`, styles: { fontStyle: 'bold', fillColor: [220, 220, 220], colSpan: 3 } },
+            { content: '', styles: { fillColor: [220, 220, 220] } },
+            { content: formatPdfCurrency(levelData.subtotal), styles: { fontStyle: 'bold', fillColor: [220, 220, 220], halign: 'right' } }
+          ]);
+        } else {
+          tableData.push([
+            { content: `NIVEL: ${level}`, styles: { fontStyle: 'bold', fillColor: [220, 220, 220] } },
+            { content: '', styles: { fillColor: [220, 220, 220] } },
+            { content: '', styles: { fillColor: [220, 220, 220] } },
+            { content: formatPdfCurrency(levelData.subtotal), styles: { fontStyle: 'bold', fillColor: [220, 220, 220], halign: 'right' } }
+          ]);
+        }
+
+        // Sort activities within each work area by their label
+        levelData.workAreas.forEach(({ workArea, activities: waActivities, subtotal: waSubtotal }) => {
+          // Work area header
+          tableData.push([
+            '',
+            { content: `${workArea.name} (${workArea.work_area})`, styles: { fontStyle: 'bold', fillColor: [240, 240, 240] } },
+            { content: '', styles: { fillColor: [240, 240, 240] } },
+            { content: formatPdfCurrency(waSubtotal), styles: { fontStyle: 'bold', fillColor: [240, 240, 240], halign: 'right' } }
+          ]);
+
+          const sortedActivities = [...waActivities].sort((a, b) => {
+            const labelA = getActivityLabel(a.activity);
+            const labelB = getActivityLabel(b.activity);
+            return labelA.localeCompare(labelB, 'es', { numeric: true });
+          });
+
+          sortedActivities.forEach(({ activity, subtotal }) => {
+            tableData.push([
+              '',
+              '',
+              getActivityLabel(activity),
+              formatPdfCurrency(subtotal)
+            ]);
+          });
+        });
+      });
+
+      // Activities without work area
+      if (optionData.activitiesWithoutWorkArea.length > 0) {
+        const unassignedSubtotal = optionData.activitiesWithoutWorkArea.reduce((sum, a) => sum + a.subtotal, 0);
+        
+        tableData.push([
+          { content: 'SIN ÁREA DE TRABAJO', styles: { fontStyle: 'bold', fillColor: [254, 243, 199] } },
+          { content: '', styles: { fillColor: [254, 243, 199] } },
+          { content: '', styles: { fillColor: [254, 243, 199] } },
+          { content: formatPdfCurrency(unassignedSubtotal), styles: { fontStyle: 'bold', fillColor: [254, 243, 199], halign: 'right' } }
+        ]);
+
+        const sortedUnassigned = [...optionData.activitiesWithoutWorkArea].sort((a, b) => {
+          const labelA = getActivityLabel(a.activity);
+          const labelB = getActivityLabel(b.activity);
+          return labelA.localeCompare(labelB, 'es', { numeric: true });
+        });
+
+        sortedUnassigned.forEach(({ activity, subtotal }) => {
+          tableData.push([
+            '',
+            '',
+            getActivityLabel(activity),
+            formatPdfCurrency(subtotal)
+          ]);
+        });
+      }
+
+      if (tableData.length > 0) {
+        autoTable(doc, {
+          startY: yPos,
+          head: [['Nivel', 'Área de Trabajo', 'Actividad', 'SubTotal']],
+          body: tableData,
+          theme: 'striped',
+          headStyles: { 
+            fillColor: optionColors[option],
+            fontSize: 8,
+            fontStyle: 'bold'
+          },
+          bodyStyles: { fontSize: 7 },
+          margin: { left: 14, right: 14 },
+          columnStyles: {
+            0: { cellWidth: 30 },
+            1: { cellWidth: 45 },
+            2: { cellWidth: 'auto' },
+            3: { cellWidth: 25, halign: 'right' },
+          },
+        });
+
+        yPos = (doc as any).lastAutoTable.finalY + 15;
+      }
+    });
+
+    // Footer with company info
+    const pageCount = doc.getNumberOfPages();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i);
+      
+      doc.setDrawColor(200);
+      doc.line(14, pageHeight - 20, pageWidth - 14, pageHeight - 20);
+      
+      doc.setFontSize(7);
+      doc.setTextColor(120);
+      const footerInfo = [companyName, companyEmail, companyPhone].filter(Boolean).join(' | ');
+      doc.text(footerInfo, 14, pageHeight - 14);
+      
+      doc.text(
+        `Página ${i} de ${pageCount}`,
+        pageWidth - 14,
+        pageHeight - 14,
+        { align: 'right' }
+      );
+    }
+
+    const fileName = `presupuesto_${budgetName.replace(/[^a-zA-Z0-9]/g, '_')}_donde_areas_${format(new Date(), 'yyyyMMdd')}.pdf`;
+    doc.save(fileName);
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
@@ -1054,6 +1303,10 @@ export function BudgetSummary({ budgetId, budgetName, open, onOpenChange }: Budg
                   <DropdownMenuItem onClick={exportDondePDF} className="gap-2">
                     <MapPin className="h-4 w-4" />
                     DÓNDE? por Opciones
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={exportDondeAreasPDF} className="gap-2">
+                    <LayoutGrid className="h-4 w-4" />
+                    DÓNDE? por Áreas de Trabajo
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>

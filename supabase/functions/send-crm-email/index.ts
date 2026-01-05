@@ -1,8 +1,16 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { Resend } from "https://esm.sh/resend@2.0.0";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import DOMPurify from "https://esm.sh/isomorphic-dompurify@2.0.0";
 
 const resend = new Resend(Deno.env.get("RESEND_API_KEY"));
+
+// Rate limiting configuration
+const RATE_LIMITS = {
+  user: { hourly: 100, daily: 500 },
+  admin: { hourly: 500, daily: 2000 },
+  perContactCooldownMinutes: 5,
+};
 
 // Allowed origins for CORS - restrict to specific domains
 const ALLOWED_ORIGINS = [
@@ -42,7 +50,7 @@ interface SendEmailRequest {
   variables?: Record<string, string>;
 }
 
-// HTML entity encoding to prevent XSS
+// HTML entity encoding to prevent XSS in template variables
 function escapeHtml(text: string): string {
   const map: { [key: string]: string } = {
     '&': '&amp;',
@@ -54,6 +62,18 @@ function escapeHtml(text: string): string {
   return text.replace(/[&<>"']/g, (m) => map[m]);
 }
 
+// Sanitize HTML content for email - only allow safe tags
+function sanitizeHtmlForEmail(html: string): string {
+  return DOMPurify.sanitize(html, {
+    ALLOWED_TAGS: ['p', 'br', 'strong', 'b', 'em', 'i', 'u', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 
+                   'a', 'ul', 'ol', 'li', 'img', 'table', 'thead', 'tbody', 'tr', 'td', 'th',
+                   'div', 'span', 'blockquote', 'hr'],
+    ALLOWED_ATTR: ['href', 'src', 'alt', 'style', 'class', 'width', 'height', 'align', 'valign',
+                   'border', 'cellpadding', 'cellspacing', 'bgcolor', 'color'],
+    ALLOW_DATA_ATTR: false,
+  });
+}
+
 // Replace template variables
 function replaceVariables(content: string, variables: Record<string, string>): string {
   let result = content;
@@ -62,6 +82,113 @@ function replaceVariables(content: string, variables: Record<string, string>): s
     result = result.replace(regex, escapeHtml(value));
   }
   return result;
+}
+
+// Check rate limits for user
+async function checkRateLimits(
+  supabase: any, 
+  userId: string, 
+  isAdmin: boolean,
+  recipientCount: number
+): Promise<{ allowed: boolean; error?: string; remaining?: number; resetTime?: string }> {
+  const limits = isAdmin ? RATE_LIMITS.admin : RATE_LIMITS.user;
+  const now = new Date();
+  const hourAgo = new Date(now.getTime() - 60 * 60 * 1000);
+  const dayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+
+  // Check hourly limit
+  const { count: hourlyCount, error: hourlyError } = await supabase
+    .from('crm_communications')
+    .select('id', { count: 'exact', head: true })
+    .eq('created_by', userId)
+    .eq('communication_type', 'email')
+    .gte('created_at', hourAgo.toISOString());
+
+  if (hourlyError) {
+    console.error("Error checking hourly rate limit:", hourlyError);
+    // Allow on error to not block legitimate requests
+    return { allowed: true };
+  }
+
+  const currentHourly = hourlyCount || 0;
+  if (currentHourly + recipientCount > limits.hourly) {
+    const nextHour = new Date(Math.ceil(now.getTime() / (60 * 60 * 1000)) * (60 * 60 * 1000));
+    return {
+      allowed: false,
+      error: `Límite de emails por hora alcanzado (${limits.hourly}). Inténtalo más tarde.`,
+      remaining: Math.max(0, limits.hourly - currentHourly),
+      resetTime: nextHour.toISOString()
+    };
+  }
+
+  // Check daily limit
+  const { count: dailyCount, error: dailyError } = await supabase
+    .from('crm_communications')
+    .select('id', { count: 'exact', head: true })
+    .eq('created_by', userId)
+    .eq('communication_type', 'email')
+    .gte('created_at', dayAgo.toISOString());
+
+  if (dailyError) {
+    console.error("Error checking daily rate limit:", dailyError);
+    return { allowed: true };
+  }
+
+  const currentDaily = dailyCount || 0;
+  if (currentDaily + recipientCount > limits.daily) {
+    const tomorrow = new Date(now);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setHours(0, 0, 0, 0);
+    return {
+      allowed: false,
+      error: `Límite de emails diario alcanzado (${limits.daily}). Inténtalo mañana.`,
+      remaining: Math.max(0, limits.daily - currentDaily),
+      resetTime: tomorrow.toISOString()
+    };
+  }
+
+  return { 
+    allowed: true, 
+    remaining: Math.min(limits.hourly - currentHourly, limits.daily - currentDaily) 
+  };
+}
+
+// Check per-contact cooldown
+async function checkContactCooldown(
+  supabase: any,
+  contactId: string
+): Promise<{ allowed: boolean; minutesRemaining?: number }> {
+  const cooldownMs = RATE_LIMITS.perContactCooldownMinutes * 60 * 1000;
+  const cooldownStart = new Date(Date.now() - cooldownMs);
+
+  const { data: recentEmail, error } = await supabase
+    .from('crm_communications')
+    .select('sent_at')
+    .eq('contact_id', contactId)
+    .eq('communication_type', 'email')
+    .eq('status', 'sent')
+    .gte('sent_at', cooldownStart.toISOString())
+    .order('sent_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    console.error("Error checking contact cooldown:", error);
+    return { allowed: true };
+  }
+
+  if (recentEmail && recentEmail.sent_at) {
+    const lastSent = new Date(recentEmail.sent_at).getTime();
+    const now = Date.now();
+    const timeSince = now - lastSent;
+    
+    if (timeSince < cooldownMs) {
+      const minutesRemaining = Math.ceil((cooldownMs - timeSince) / 60000);
+      return { allowed: false, minutesRemaining };
+    }
+  }
+
+  return { allowed: true };
 }
 
 const handler = async (req: Request): Promise<Response> => {
@@ -115,6 +242,13 @@ const handler = async (req: Request): Promise<Response> => {
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+
+    // Check if user is admin (for rate limit tiers)
+    const { data: isAdminData } = await supabase.rpc('has_role', { 
+      _role: 'administrador', 
+      _user_id: user.id 
+    });
+    const isAdmin = isAdminData === true;
 
     const body: SendEmailRequest = await req.json();
     const { contactId, contactIds, email, subject, content, templateId, campaignId, variables = {} } = body;
@@ -197,12 +331,48 @@ const handler = async (req: Request): Promise<Response> => {
       );
     }
 
-    console.log(`Sending email to ${recipients.length} recipient(s)`);
+    // Check rate limits before sending
+    const rateLimitCheck = await checkRateLimits(supabase, user.id, isAdmin, recipients.length);
+    if (!rateLimitCheck.allowed) {
+      console.warn(`Rate limit exceeded for user ${user.id}: ${rateLimitCheck.error}`);
+      return new Response(
+        JSON.stringify({ 
+          error: rateLimitCheck.error,
+          remaining: rateLimitCheck.remaining,
+          resetTime: rateLimitCheck.resetTime
+        }),
+        { 
+          status: 429, 
+          headers: { 
+            ...corsHeaders, 
+            "Content-Type": "application/json",
+            "Retry-After": "3600"
+          } 
+        }
+      );
+    }
+
+    console.log(`Sending email to ${recipients.length} recipient(s) [User: ${user.id}, Admin: ${isAdmin}]`);
 
     const results: { contactId: string; email: string; success: boolean; error?: string }[] = [];
 
     for (const recipient of recipients) {
       try {
+        // Check per-contact cooldown for contacts (not direct emails)
+        if (recipient.id) {
+          const cooldownCheck = await checkContactCooldown(supabase, recipient.id);
+          if (!cooldownCheck.allowed) {
+            console.log(`Cooldown active for contact ${recipient.id}: ${cooldownCheck.minutesRemaining} min remaining`);
+            results.push({ 
+              contactId: recipient.id, 
+              email: recipient.email, 
+              success: false, 
+              error: `Cooldown: último email hace menos de ${RATE_LIMITS.perContactCooldownMinutes} minutos` 
+            });
+            continue;
+          }
+        }
+
         // Prepare variables for this recipient
         const recipientVariables = {
           ...variables,
@@ -212,7 +382,14 @@ const handler = async (req: Request): Promise<Response> => {
         };
 
         const finalSubject = replaceVariables(subject, recipientVariables);
-        const finalContent = replaceVariables(content, recipientVariables);
+        // Replace variables first, then sanitize HTML content
+        const contentWithVars = replaceVariables(content, recipientVariables);
+        const finalContent = sanitizeHtmlForEmail(contentWithVars);
+
+        // Add delay between sends for bulk campaigns to prevent rate limiting at Resend
+        if (recipients.length > 10 && results.length > 0) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
 
         // Send email
         const emailResponse = await resend.emails.send({
@@ -315,7 +492,10 @@ const handler = async (req: Request): Promise<Response> => {
       JSON.stringify({
         success: true,
         message: `Enviados: ${successCount}, Fallidos: ${failedCount}`,
-        results
+        results,
+        rateLimit: {
+          remaining: rateLimitCheck.remaining
+        }
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

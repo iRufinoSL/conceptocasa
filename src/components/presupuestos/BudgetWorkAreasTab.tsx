@@ -12,7 +12,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { Plus, Trash2, Edit2, MapPin, List, Layers, ChevronDown, ChevronRight, LayoutGrid } from 'lucide-react';
+import { Plus, Trash2, Edit2, MapPin, List, Layers, ChevronDown, ChevronRight, LayoutGrid, Pencil } from 'lucide-react';
 import { WorkAreasOptionsGroupedView } from './WorkAreasOptionsGroupedView';
 import { OPTION_COLORS } from '@/lib/options-utils';
 import { formatCurrency } from '@/lib/format-utils';
@@ -647,6 +647,7 @@ export function BudgetWorkAreasTab({ budgetId, isAdmin }: BudgetWorkAreasTabProp
                       <TableHead>Nombre Actividad</TableHead>
                       <TableHead>Opciones</TableHead>
                       <TableHead className="text-right">€ SubTotal</TableHead>
+                      {isAdmin && <TableHead className="w-20">Acciones</TableHead>}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -672,6 +673,23 @@ export function BudgetWorkAreasTab({ budgetId, isAdmin }: BudgetWorkAreasTabProp
                         <TableCell className="text-right font-medium">
                           {formatCurrency(activity.resources_subtotal || 0)}
                         </TableCell>
+                        {isAdmin && (
+                          <TableCell>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => {
+                                // Dispatch custom event to open activity edit dialog in BudgetActivitiesTab
+                                window.dispatchEvent(new CustomEvent('edit-activity', { 
+                                  detail: { id: activity.id, name: activity.name, code: activity.code }
+                                }));
+                              }}
+                              title="Editar actividad"
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                          </TableCell>
+                        )}
                       </TableRow>
                     ))}
                   </TableBody>

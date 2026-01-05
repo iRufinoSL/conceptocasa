@@ -6,9 +6,10 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { formatCurrency, formatNumber } from '@/lib/format-utils';
 import { percentToRatio } from '@/lib/budget-pricing';
-import { Calculator, TrendingUp, Percent, Euro, Package, FileDown } from 'lucide-react';
+import { Calculator, TrendingUp, Percent, Euro, Package, FileDown, ChevronDown, List, Layers } from 'lucide-react';
 import { useCompanySettings } from '@/hooks/useCompanySettings';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -25,6 +26,26 @@ interface BudgetResource {
   external_unit_cost: number | null;
   safety_margin_percent: number | null;
   sales_margin_percent: number | null;
+  activity_id: string | null;
+}
+
+interface WorkArea {
+  id: string;
+  name: string;
+  level: string;
+  work_area: string;
+}
+
+interface Activity {
+  id: string;
+  name: string;
+  code: string;
+  opciones: string[];
+}
+
+interface ActivityLink {
+  work_area_id: string;
+  activity_id: string;
 }
 
 interface BudgetSummaryProps {
@@ -43,30 +64,67 @@ const formatPdfCurrency = (value: number): string => {
   }).format(value) + ' €';
 };
 
+const OPCIONES = ['A', 'B', 'C'];
+const LEVEL_ORDER = [
+  'Cota 0 terreno',
+  'Nivel 1',
+  'Nivel 2',
+  'Nivel 3',
+  'Terrazas',
+  'Cubiertas',
+  'Vivienda'
+];
+
 export function BudgetSummary({ budgetId, budgetName, open, onOpenChange }: BudgetSummaryProps) {
   const [resources, setResources] = useState<BudgetResource[]>([]);
+  const [workAreas, setWorkAreas] = useState<WorkArea[]>([]);
+  const [activities, setActivities] = useState<Activity[]>([]);
+  const [activityLinks, setActivityLinks] = useState<ActivityLink[]>([]);
   const [loading, setLoading] = useState(true);
   const { settings: companySettings } = useCompanySettings();
 
   useEffect(() => {
     if (open && budgetId) {
-      fetchResources();
+      fetchData();
     }
   }, [open, budgetId]);
 
-  const fetchResources = async () => {
+  const fetchData = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('budget_activity_resources')
-        .select('*')
-        .eq('budget_id', budgetId)
-        .order('name');
+      const [resourcesRes, workAreasRes, activitiesRes, linksRes] = await Promise.all([
+        supabase
+          .from('budget_activity_resources')
+          .select('*')
+          .eq('budget_id', budgetId)
+          .order('name'),
+        supabase
+          .from('budget_work_areas')
+          .select('id, name, level, work_area')
+          .eq('budget_id', budgetId),
+        supabase
+          .from('budget_activities')
+          .select('id, name, code, opciones')
+          .eq('budget_id', budgetId),
+        supabase
+          .from('budget_work_area_activities')
+          .select('work_area_id, activity_id')
+      ]);
 
-      if (error) throw error;
-      setResources(data || []);
+      if (resourcesRes.error) throw resourcesRes.error;
+      if (workAreasRes.error) throw workAreasRes.error;
+      if (activitiesRes.error) throw activitiesRes.error;
+      if (linksRes.error) throw linksRes.error;
+
+      setResources(resourcesRes.data || []);
+      setWorkAreas(workAreasRes.data || []);
+      setActivities(activitiesRes.data || []);
+      
+      // Filter links to only include work areas from this budget
+      const workAreaIds = new Set((workAreasRes.data || []).map(wa => wa.id));
+      setActivityLinks((linksRes.data || []).filter(l => workAreaIds.has(l.work_area_id)));
     } catch (error) {
-      console.error('Error fetching budget resources:', error);
+      console.error('Error fetching budget data:', error);
     } finally {
       setLoading(false);
     }
@@ -127,6 +185,116 @@ export function BudgetSummary({ budgetId, budgetName, open, onOpenChange }: Budg
       resourceCount: resources.length
     };
   }, [resources]);
+
+  // Calculate activity subtotals from resources
+  const activitySubtotals = useMemo(() => {
+    const subtotals = new Map<string, number>();
+    resources.forEach(resource => {
+      if (!resource.activity_id) return;
+      const units = resource.manual_units || 0;
+      const unitCost = resource.external_unit_cost || 0;
+      const safetyRatio = percentToRatio(resource.safety_margin_percent, 0.15);
+      const salesRatio = percentToRatio(resource.sales_margin_percent, 0.25);
+      const total = units * unitCost * (1 + safetyRatio) * (1 + salesRatio);
+      subtotals.set(resource.activity_id, (subtotals.get(resource.activity_id) || 0) + total);
+    });
+    return subtotals;
+  }, [resources]);
+
+  // Calculate hierarchical data by option
+  const hierarchicalData = useMemo(() => {
+    const result: Record<string, {
+      levels: Record<string, {
+        workAreas: {
+          workArea: WorkArea;
+          activities: { activity: Activity; subtotal: number }[];
+          subtotal: number;
+        }[];
+        subtotal: number;
+      }>;
+      activitiesWithoutWorkArea: { activity: Activity; subtotal: number }[];
+      subtotal: number;
+    }> = {};
+
+    const activityMap = new Map(activities.map(a => [a.id, a]));
+    const activityWorkAreaMap = new Map<string, string[]>();
+    activityLinks.forEach(link => {
+      if (!activityWorkAreaMap.has(link.activity_id)) {
+        activityWorkAreaMap.set(link.activity_id, []);
+      }
+      activityWorkAreaMap.get(link.activity_id)!.push(link.work_area_id);
+    });
+
+    // Find activities without work areas
+    const allLinkedActivityIds = new Set(activityLinks.map(l => l.activity_id));
+    const activitiesWithoutWorkArea = activities.filter(a => !allLinkedActivityIds.has(a.id));
+
+    OPCIONES.forEach(option => {
+      const levels: Record<string, {
+        workAreas: {
+          workArea: WorkArea;
+          activities: { activity: Activity; subtotal: number }[];
+          subtotal: number;
+        }[];
+        subtotal: number;
+      }> = {};
+
+      let totalOptionSubtotal = 0;
+
+      workAreas.forEach(area => {
+        const linkedActivityIds = activityLinks
+          .filter(l => l.work_area_id === area.id)
+          .map(l => l.activity_id);
+        
+        const activitiesForOption = linkedActivityIds
+          .map(id => activityMap.get(id))
+          .filter((a): a is Activity => a !== undefined && (a.opciones || []).includes(option));
+
+        if (activitiesForOption.length === 0) return;
+
+        const activitiesWithSubtotals = activitiesForOption.map(a => ({
+          activity: a,
+          subtotal: activitySubtotals.get(a.id) || 0
+        }));
+        const areaSubtotal = activitiesWithSubtotals.reduce((sum, a) => sum + a.subtotal, 0);
+        totalOptionSubtotal += areaSubtotal;
+
+        if (!levels[area.level]) {
+          levels[area.level] = { workAreas: [], subtotal: 0 };
+        }
+
+        levels[area.level].workAreas.push({
+          workArea: area,
+          activities: activitiesWithSubtotals,
+          subtotal: areaSubtotal,
+        });
+        levels[area.level].subtotal += areaSubtotal;
+      });
+
+      // Sort work areas alphabetically
+      Object.values(levels).forEach(level => {
+        level.workAreas.sort((a, b) => a.workArea.name.localeCompare(b.workArea.name));
+      });
+
+      // Activities without work area for this option
+      const unassignedForOption = activitiesWithoutWorkArea
+        .filter(a => (a.opciones || []).includes(option))
+        .map(a => ({
+          activity: a,
+          subtotal: activitySubtotals.get(a.id) || 0
+        }));
+      const unassignedSubtotal = unassignedForOption.reduce((sum, a) => sum + a.subtotal, 0);
+      totalOptionSubtotal += unassignedSubtotal;
+
+      result[option] = {
+        levels,
+        activitiesWithoutWorkArea: unassignedForOption,
+        subtotal: totalOptionSubtotal,
+      };
+    });
+
+    return result;
+  }, [workAreas, activities, activityLinks, activitySubtotals]);
 
   const exportToPDF = () => {
     const doc = new jsPDF();
@@ -318,7 +486,279 @@ export function BudgetSummary({ budgetId, budgetName, open, onOpenChange }: Budg
     }
 
     // Save
-    const fileName = `presupuesto_${budgetName.replace(/[^a-zA-Z0-9]/g, '_')}_${format(new Date(), 'yyyyMMdd')}.pdf`;
+    const fileName = `presupuesto_${budgetName.replace(/[^a-zA-Z0-9]/g, '_')}_recursos_${format(new Date(), 'yyyyMMdd')}.pdf`;
+    doc.save(fileName);
+  };
+
+  const exportHierarchicalPDF = () => {
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.getWidth();
+    
+    // Company info from settings
+    const companyName = companySettings.name || 'Mi Empresa';
+    const companyEmail = companySettings.email || '';
+    const companyPhone = companySettings.phone || '';
+    const companyAddress = companySettings.address || '';
+    const companyWeb = companySettings.website || '';
+    const companyInitials = companyName.substring(0, 2).toUpperCase();
+    
+    // Header with company branding
+    doc.setFillColor(37, 99, 235);
+    doc.roundedRect(14, 10, 25, 25, 3, 3, 'F');
+    doc.setTextColor(255);
+    doc.setFontSize(16);
+    doc.setFont('helvetica', 'bold');
+    doc.text(companyInitials, 26.5, 26, { align: 'center' });
+    doc.setTextColor(0);
+    
+    doc.setFontSize(16);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(37, 99, 235);
+    doc.text(companyName, 45, 18);
+    doc.setTextColor(0);
+    
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(100);
+    const contactLine = [companyEmail, companyPhone].filter(Boolean).join('  |  ');
+    const addressLine = [companyAddress, companyWeb].filter(Boolean).join('  |  ');
+    if (contactLine) doc.text(contactLine, 45, 24);
+    if (addressLine) doc.text(addressLine, 45, 30);
+    doc.setTextColor(0);
+    
+    doc.setDrawColor(200);
+    doc.line(14, 40, pageWidth - 14, 40);
+    
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.text('RESUMEN DE PRESUPUESTO - JERARQUÍA POR OPCIONES', pageWidth / 2, 50, { align: 'center' });
+    
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'normal');
+    doc.text(budgetName, pageWidth / 2, 58, { align: 'center' });
+    
+    doc.setFontSize(9);
+    doc.setTextColor(100);
+    doc.text(`Fecha de generación: ${format(new Date(), "d 'de' MMMM 'de' yyyy", { locale: es })}`, pageWidth / 2, 65, { align: 'center' });
+    doc.setTextColor(0);
+
+    // Summary section
+    let yPos = 80;
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(37, 99, 235);
+    doc.text('Resumen General', 14, yPos);
+    doc.setTextColor(0);
+    
+    yPos += 8;
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    
+    const summaryData = [
+      ['Total de recursos:', calculations.resourceCount.toString()],
+      ['Coste base:', formatPdfCurrency(calculations.totalBaseCost)],
+      ['Margen de seguridad:', formatPdfCurrency(calculations.totalSafetyMargin)],
+      ['Margen comercial:', formatPdfCurrency(calculations.totalSalesMargin)],
+    ];
+    
+    summaryData.forEach(([label, value]) => {
+      doc.text(label, 14, yPos);
+      doc.text(value, 80, yPos);
+      yPos += 6;
+    });
+    
+    // Total PVP highlighted
+    yPos += 4;
+    doc.setFillColor(34, 197, 94);
+    doc.roundedRect(14, yPos - 4, pageWidth - 28, 10, 2, 2, 'F');
+    doc.setTextColor(255);
+    doc.setFont('helvetica', 'bold');
+    doc.text('TOTAL PVP:', 18, yPos + 3);
+    doc.text(formatPdfCurrency(calculations.totalWithMargins), pageWidth - 18, yPos + 3, { align: 'right' });
+    doc.setTextColor(0);
+    doc.setFont('helvetica', 'normal');
+
+    yPos += 20;
+
+    // Option colors for PDF
+    const optionColors: Record<string, [number, number, number]> = {
+      'A': [59, 130, 246], // blue
+      'B': [168, 85, 247], // purple
+      'C': [34, 197, 94],  // green
+    };
+
+    // Iterate through each option
+    OPCIONES.forEach(option => {
+      const optionData = hierarchicalData[option];
+      if (optionData.subtotal === 0) return; // Skip empty options
+
+      // Check if we need a new page
+      if (yPos > 250) {
+        doc.addPage();
+        yPos = 20;
+      }
+
+      // Option header
+      doc.setFillColor(...optionColors[option]);
+      doc.roundedRect(14, yPos - 4, pageWidth - 28, 10, 2, 2, 'F');
+      doc.setTextColor(255);
+      doc.setFontSize(11);
+      doc.setFont('helvetica', 'bold');
+      doc.text(`OPCIÓN ${option}`, 18, yPos + 3);
+      doc.text(formatPdfCurrency(optionData.subtotal), pageWidth - 18, yPos + 3, { align: 'right' });
+      doc.setTextColor(0);
+      doc.setFont('helvetica', 'normal');
+
+      yPos += 15;
+
+      // Levels within option
+      const levelKeys = LEVEL_ORDER.filter(l => optionData.levels[l]);
+      levelKeys.forEach(level => {
+        const levelData = optionData.levels[level];
+        
+        if (yPos > 270) {
+          doc.addPage();
+          yPos = 20;
+        }
+
+        // Level header
+        doc.setFillColor(241, 245, 249);
+        doc.rect(14, yPos - 4, pageWidth - 28, 8, 'F');
+        doc.setTextColor(30, 41, 59);
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'bold');
+        doc.text(`${level}`, 18, yPos + 2);
+        doc.text(formatPdfCurrency(levelData.subtotal), pageWidth - 18, yPos + 2, { align: 'right' });
+        doc.setTextColor(0);
+        doc.setFont('helvetica', 'normal');
+        
+        yPos += 10;
+
+        // Work areas within level
+        levelData.workAreas.forEach(({ workArea, activities: waActivities, subtotal: waSubtotal }) => {
+          if (yPos > 270) {
+            doc.addPage();
+            yPos = 20;
+          }
+
+          // Work area header
+          doc.setFontSize(9);
+          doc.setFont('helvetica', 'bold');
+          doc.text(`  ${workArea.name} (${workArea.work_area})`, 18, yPos);
+          doc.text(formatPdfCurrency(waSubtotal), pageWidth - 18, yPos, { align: 'right' });
+          doc.setFont('helvetica', 'normal');
+          
+          yPos += 6;
+
+          // Activities table for this work area
+          if (waActivities.length > 0) {
+            const activityData = waActivities.map(({ activity, subtotal }) => [
+              `    ${activity.code}`,
+              activity.name,
+              formatPdfCurrency(subtotal)
+            ]);
+
+            autoTable(doc, {
+              startY: yPos,
+              head: [['Código', 'Actividad', 'SubTotal']],
+              body: activityData,
+              theme: 'plain',
+              headStyles: { 
+                fillColor: [255, 255, 255], 
+                textColor: [100, 100, 100],
+                fontSize: 7,
+                fontStyle: 'bold'
+              },
+              bodyStyles: { fontSize: 7 },
+              margin: { left: 24, right: 14 },
+              columnStyles: {
+                0: { cellWidth: 25 },
+                1: { cellWidth: 'auto' },
+                2: { cellWidth: 30, halign: 'right' },
+              },
+            });
+
+            yPos = (doc as any).lastAutoTable.finalY + 5;
+          }
+        });
+      });
+
+      // Activities without work area
+      if (optionData.activitiesWithoutWorkArea.length > 0) {
+        if (yPos > 260) {
+          doc.addPage();
+          yPos = 20;
+        }
+
+        const unassignedSubtotal = optionData.activitiesWithoutWorkArea.reduce((sum, a) => sum + a.subtotal, 0);
+        
+        doc.setFillColor(254, 243, 199);
+        doc.rect(14, yPos - 4, pageWidth - 28, 8, 'F');
+        doc.setTextColor(146, 64, 14);
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'bold');
+        doc.text('Sin Área de Trabajo', 18, yPos + 2);
+        doc.text(formatPdfCurrency(unassignedSubtotal), pageWidth - 18, yPos + 2, { align: 'right' });
+        doc.setTextColor(0);
+        doc.setFont('helvetica', 'normal');
+        
+        yPos += 10;
+
+        const activityData = optionData.activitiesWithoutWorkArea.map(({ activity, subtotal }) => [
+          activity.code,
+          activity.name,
+          formatPdfCurrency(subtotal)
+        ]);
+
+        autoTable(doc, {
+          startY: yPos,
+          head: [['Código', 'Actividad', 'SubTotal']],
+          body: activityData,
+          theme: 'plain',
+          headStyles: { 
+            fillColor: [255, 255, 255], 
+            textColor: [100, 100, 100],
+            fontSize: 7,
+            fontStyle: 'bold'
+          },
+          bodyStyles: { fontSize: 7 },
+          margin: { left: 24, right: 14 },
+          columnStyles: {
+            0: { cellWidth: 25 },
+            1: { cellWidth: 'auto' },
+            2: { cellWidth: 30, halign: 'right' },
+          },
+        });
+
+        yPos = (doc as any).lastAutoTable.finalY + 10;
+      }
+
+      yPos += 10;
+    });
+
+    // Footer with company info
+    const pageCount = doc.getNumberOfPages();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i);
+      
+      doc.setDrawColor(200);
+      doc.line(14, pageHeight - 20, pageWidth - 14, pageHeight - 20);
+      
+      doc.setFontSize(7);
+      doc.setTextColor(120);
+      const footerInfo = [companyName, companyEmail, companyPhone].filter(Boolean).join(' | ');
+      doc.text(footerInfo, 14, pageHeight - 14);
+      
+      doc.text(
+        `Página ${i} de ${pageCount}`,
+        pageWidth - 14,
+        pageHeight - 14,
+        { align: 'right' }
+      );
+    }
+
+    const fileName = `presupuesto_${budgetName.replace(/[^a-zA-Z0-9]/g, '_')}_jerarquia_${format(new Date(), 'yyyyMMdd')}.pdf`;
     doc.save(fileName);
   };
 
@@ -332,10 +772,25 @@ export function BudgetSummary({ budgetId, budgetName, open, onOpenChange }: Budg
               Resumen de Presupuesto: {budgetName}
             </DialogTitle>
             {!loading && calculations.resourceCount > 0 && (
-              <Button variant="outline" size="sm" onClick={exportToPDF} className="gap-2">
-                <FileDown className="h-4 w-4" />
-                Exportar PDF
-              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="gap-2">
+                    <FileDown className="h-4 w-4" />
+                    Exportar PDF
+                    <ChevronDown className="h-3 w-3" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={exportToPDF} className="gap-2">
+                    <List className="h-4 w-4" />
+                    Detalle por Recursos
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={exportHierarchicalPDF} className="gap-2">
+                    <Layers className="h-4 w-4" />
+                    Jerarquía por Opciones
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             )}
           </div>
         </DialogHeader>

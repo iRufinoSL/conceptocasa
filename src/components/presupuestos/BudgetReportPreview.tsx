@@ -1909,36 +1909,32 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
         doc.setFontSize(12);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(37, 99, 235);
-        doc.text(`DÓNDE? JERARQUÍA (Opción ${selectedOption})`, 14, yPos);
+        doc.text('DÓNDE? JERARQUÍA (Opción/Nivel/Área/Actividades)', 14, yPos);
         doc.setTextColor(0);
 
         yPos += 10;
 
-        const filteredActivitiesForDonde = getFilteredActivities();
-        const filteredResourcesForDonde = getFilteredResources();
+        const buildActivitiesForOption = (option: 'A' | 'B' | 'C') => {
+          // IMPORTANT: empty opciones[] means "aplica a todas" (otherwise the filter would yield nothing)
+          let filtered = activities.filter(a => {
+            const opts = a.opciones || [];
+            return opts.length === 0 || opts.includes(option);
+          });
 
-        // Build activity subtotals only with filtered resources (selected option + onlyWithCost)
-        const activitySubtotalMap = new Map<string, number>();
-        filteredResourcesForDonde.forEach(r => {
-          if (!r.activity_id) return;
-          const fields = calculateFields(r);
-          activitySubtotalMap.set(r.activity_id, (activitySubtotalMap.get(r.activity_id) || 0) + fields.subtotalSales);
-        });
+          if (onlyWithCost) {
+            filtered = filtered.filter(a => (activityResourcesMap.get(a.id) || 0) > 0);
+          }
 
-        const activityMap = new Map(filteredActivitiesForDonde.map(a => [a.id, a]));
+          return filtered;
+        };
 
-        // Map work_area_id -> activities
-        const workAreaToActivities = new Map<string, Activity[]>();
-        activityLinks.forEach(link => {
-          const a = activityMap.get(link.activity_id);
-          if (!a) return;
-          if (!workAreaToActivities.has(link.work_area_id)) workAreaToActivities.set(link.work_area_id, []);
-          workAreaToActivities.get(link.work_area_id)!.push(a);
-        });
-
-        // Activities without work area
-        const linkedActivityIds = new Set(activityLinks.map(l => l.activity_id));
-        const unassignedActivities = filteredActivitiesForDonde.filter(a => !linkedActivityIds.has(a.id));
+        const buildResourcesForActivities = (activityIds: Set<string>) => {
+          let filtered = resources.filter(r => !r.activity_id || activityIds.has(r.activity_id));
+          if (onlyWithCost) {
+            filtered = filtered.filter(r => calculateFields(r).subtotalSales > 0);
+          }
+          return filtered;
+        };
 
         const levelOrder = [
           'Cota 0 terreno',
@@ -1954,90 +1950,133 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
           return idx === -1 ? 999 : idx;
         };
 
-        const workAreasForDonde = workAreas
-          .filter(wa => workAreaToActivities.has(wa.id))
-          .sort((a, b) => {
-            const r = levelRank(a.level) - levelRank(b.level);
-            if (r !== 0) return r;
-            return a.name.localeCompare(b.name);
-          });
-
         const tableData: any[] = [];
 
-        // Group by level
-        const byLevel = new Map<string, WorkArea[]>();
-        workAreasForDonde.forEach(wa => {
-          if (!byLevel.has(wa.level)) byLevel.set(wa.level, []);
-          byLevel.get(wa.level)!.push(wa);
-        });
+        (['A', 'B', 'C'] as const).forEach(option => {
+          const filteredActivitiesForDonde = buildActivitiesForOption(option);
+          const activityIdSet = new Set(filteredActivitiesForDonde.map(a => a.id));
+          const filteredResourcesForDonde = buildResourcesForActivities(activityIdSet);
 
-        const sortedLevels = Array.from(byLevel.keys()).sort((a, b) => {
-          const r = levelRank(a) - levelRank(b);
-          if (r !== 0) return r;
-          return a.localeCompare(b);
-        });
+          // Build activity subtotals only with filtered resources (per option + onlyWithCost)
+          const activitySubtotalMap = new Map<string, number>();
+          filteredResourcesForDonde.forEach(r => {
+            if (!r.activity_id) return;
+            const fields = calculateFields(r);
+            activitySubtotalMap.set(r.activity_id, (activitySubtotalMap.get(r.activity_id) || 0) + fields.subtotalSales);
+          });
 
-        const sumActivitiesSubtotal = (acts: Activity[]) =>
-          acts.reduce((sum, a) => sum + (activitySubtotalMap.get(a.id) || 0), 0);
+          const activityMap = new Map(filteredActivitiesForDonde.map(a => [a.id, a]));
 
-        sortedLevels.forEach(level => {
-          const levelWorkAreas = byLevel.get(level) || [];
+          // Map work_area_id -> activities (only for this option)
+          const workAreaToActivities = new Map<string, Activity[]>();
+          activityLinks.forEach(link => {
+            const a = activityMap.get(link.activity_id);
+            if (!a) return;
+            if (!workAreaToActivities.has(link.work_area_id)) workAreaToActivities.set(link.work_area_id, []);
+            workAreaToActivities.get(link.work_area_id)!.push(a);
+          });
 
-          const levelSubtotal = levelWorkAreas.reduce((sum, wa) => {
-            const acts = (workAreaToActivities.get(wa.id) || []).slice();
-            return sum + sumActivitiesSubtotal(acts);
-          }, 0);
+          // Activities without work area (only for this option)
+          const linkedActivityIds = new Set<string>();
+          workAreaToActivities.forEach(acts => acts.forEach(a => linkedActivityIds.add(a.id)));
+          const unassignedActivities = filteredActivitiesForDonde.filter(a => !linkedActivityIds.has(a.id));
 
+          const workAreasForDonde = workAreas
+            .filter(wa => workAreaToActivities.has(wa.id))
+            .sort((a, b) => {
+              const r = levelRank(a.level) - levelRank(b.level);
+              if (r !== 0) return r;
+              return a.name.localeCompare(b.name);
+            });
+
+          const sumActivitiesSubtotal = (acts: Activity[]) =>
+            acts.reduce((sum, a) => sum + (activitySubtotalMap.get(a.id) || 0), 0);
+
+          const totalOption = Array.from(activitySubtotalMap.values()).reduce((s, v) => s + v, 0);
+
+          // Option header
           tableData.push([
-            { content: level, colSpan: 3, styles: { fillColor: [59, 130, 246], textColor: [255, 255, 255], fontStyle: 'bold' } },
-            { content: formatPdfCurrency(levelSubtotal), styles: { fillColor: [59, 130, 246], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'right' } },
+            { content: `OPCIÓN ${option}`, colSpan: 3, styles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold' } },
+            { content: formatPdfCurrency(totalOption), styles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'right' } },
           ]);
 
-          levelWorkAreas.forEach(wa => {
-            const acts = (workAreaToActivities.get(wa.id) || []).slice().sort((a, b) => a.name.localeCompare(b.name));
-            if (acts.length === 0) return;
+          if (filteredActivitiesForDonde.length === 0) {
+            tableData.push([{ content: 'Sin actividades para esta opción', colSpan: 4, styles: { fontStyle: 'italic', textColor: [120, 120, 120] } }]);
+            return;
+          }
 
-            const waSubtotal = sumActivitiesSubtotal(acts);
-            const waTitle = `${wa.name}${wa.work_area ? ` (${wa.work_area})` : ''}`;
+          // Group by level
+          const byLevel = new Map<string, WorkArea[]>();
+          workAreasForDonde.forEach(wa => {
+            if (!byLevel.has(wa.level)) byLevel.set(wa.level, []);
+            byLevel.get(wa.level)!.push(wa);
+          });
+
+          const sortedLevels = Array.from(byLevel.keys()).sort((a, b) => {
+            const r = levelRank(a) - levelRank(b);
+            if (r !== 0) return r;
+            return a.localeCompare(b);
+          });
+
+          sortedLevels.forEach(level => {
+            const levelWorkAreas = byLevel.get(level) || [];
+
+            const levelSubtotal = levelWorkAreas.reduce((sum, wa) => {
+              const acts = (workAreaToActivities.get(wa.id) || []).slice();
+              return sum + sumActivitiesSubtotal(acts);
+            }, 0);
 
             tableData.push([
-              { content: `  ${waTitle}`, colSpan: 3, styles: { fillColor: [240, 240, 240], fontStyle: 'bold' } },
-              { content: formatPdfCurrency(waSubtotal), styles: { fillColor: [240, 240, 240], fontStyle: 'bold', halign: 'right' } },
+              { content: level, colSpan: 3, styles: { fillColor: [59, 130, 246], textColor: [255, 255, 255], fontStyle: 'bold' } },
+              { content: formatPdfCurrency(levelSubtotal), styles: { fillColor: [59, 130, 246], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'right' } },
             ]);
 
-            acts.forEach(a => {
+            levelWorkAreas.forEach(wa => {
+              const acts = (workAreaToActivities.get(wa.id) || []).slice().sort((a, b) => a.name.localeCompare(b.name));
+              if (acts.length === 0) return;
+
+              const waSubtotal = sumActivitiesSubtotal(acts);
+              const waTitle = `${wa.name}${wa.work_area ? ` (${wa.work_area})` : ''}`;
+
               tableData.push([
-                `    ${generateActivityId(a)}`,
-                '',
-                '',
-                formatPdfCurrency(activitySubtotalMap.get(a.id) || 0),
+                { content: `  ${waTitle}`, colSpan: 3, styles: { fillColor: [240, 240, 240], fontStyle: 'bold' } },
+                { content: formatPdfCurrency(waSubtotal), styles: { fillColor: [240, 240, 240], fontStyle: 'bold', halign: 'right' } },
               ]);
+
+              acts.forEach(a => {
+                tableData.push([
+                  `    ${generateActivityId(a)}`,
+                  '',
+                  '',
+                  formatPdfCurrency(activitySubtotalMap.get(a.id) || 0),
+                ]);
+              });
             });
           });
-        });
 
-        if (unassignedActivities.length > 0) {
-          const unassignedSubtotal = sumActivitiesSubtotal(unassignedActivities);
-          tableData.push([
-            { content: 'Sin área de trabajo', colSpan: 3, styles: { fillColor: [240, 240, 240], fontStyle: 'bold' } },
-            { content: formatPdfCurrency(unassignedSubtotal), styles: { fillColor: [240, 240, 240], fontStyle: 'bold', halign: 'right' } },
-          ]);
-
-          unassignedActivities.sort((a, b) => a.name.localeCompare(b.name)).forEach(a => {
+          if (unassignedActivities.length > 0) {
+            const unassignedSubtotal = sumActivitiesSubtotal(unassignedActivities);
             tableData.push([
-              `  ${generateActivityId(a)}`,
-              '',
-              '',
-              formatPdfCurrency(activitySubtotalMap.get(a.id) || 0),
+              { content: 'Sin área de trabajo', colSpan: 3, styles: { fillColor: [240, 240, 240], fontStyle: 'bold' } },
+              { content: formatPdfCurrency(unassignedSubtotal), styles: { fillColor: [240, 240, 240], fontStyle: 'bold', halign: 'right' } },
             ]);
-          });
-        }
 
-        const totalDonde = Array.from(activitySubtotalMap.values()).reduce((s, v) => s + v, 0);
-        tableData.push([
-          { content: 'TOTAL DÓNDE?', colSpan: 3, styles: { fillColor: [34, 197, 94], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'right' } },
-          { content: formatPdfCurrency(totalDonde), styles: { fillColor: [34, 197, 94], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'right' } },
-        ]);
+            unassignedActivities
+              .slice()
+              .sort((a, b) => a.name.localeCompare(b.name))
+              .forEach(a => {
+                tableData.push([
+                  `  ${generateActivityId(a)}`,
+                  '',
+                  '',
+                  formatPdfCurrency(activitySubtotalMap.get(a.id) || 0),
+                ]);
+              });
+          }
+
+          // Spacer row between options
+          tableData.push([{ content: '', colSpan: 4, styles: { fillColor: [255, 255, 255] } }]);
+        });
 
         autoTable(doc, {
           startY: yPos,

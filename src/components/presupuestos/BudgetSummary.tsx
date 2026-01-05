@@ -9,7 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { formatCurrency, formatNumber } from '@/lib/format-utils';
 import { percentToRatio } from '@/lib/budget-pricing';
-import { Calculator, TrendingUp, Percent, Euro, Package, FileDown, ChevronDown, List, Layers } from 'lucide-react';
+import { Calculator, TrendingUp, Percent, Euro, Package, FileDown, ChevronDown, List, Layers, MapPin } from 'lucide-react';
 import { useCompanySettings } from '@/hooks/useCompanySettings';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -41,6 +41,13 @@ interface Activity {
   name: string;
   code: string;
   opciones: string[];
+  phase_id: string | null;
+}
+
+interface Phase {
+  id: string;
+  code: string | null;
+  name: string;
 }
 
 interface ActivityLink {
@@ -79,6 +86,7 @@ export function BudgetSummary({ budgetId, budgetName, open, onOpenChange }: Budg
   const [resources, setResources] = useState<BudgetResource[]>([]);
   const [workAreas, setWorkAreas] = useState<WorkArea[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
+  const [phases, setPhases] = useState<Phase[]>([]);
   const [activityLinks, setActivityLinks] = useState<ActivityLink[]>([]);
   const [loading, setLoading] = useState(true);
   const { settings: companySettings } = useCompanySettings();
@@ -92,7 +100,7 @@ export function BudgetSummary({ budgetId, budgetName, open, onOpenChange }: Budg
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [resourcesRes, workAreasRes, activitiesRes, linksRes] = await Promise.all([
+      const [resourcesRes, workAreasRes, activitiesRes, phasesRes, linksRes] = await Promise.all([
         supabase
           .from('budget_activity_resources')
           .select('*')
@@ -104,7 +112,11 @@ export function BudgetSummary({ budgetId, budgetName, open, onOpenChange }: Budg
           .eq('budget_id', budgetId),
         supabase
           .from('budget_activities')
-          .select('id, name, code, opciones')
+          .select('id, name, code, opciones, phase_id')
+          .eq('budget_id', budgetId),
+        supabase
+          .from('budget_phases')
+          .select('id, code, name')
           .eq('budget_id', budgetId),
         supabase
           .from('budget_work_area_activities')
@@ -114,11 +126,13 @@ export function BudgetSummary({ budgetId, budgetName, open, onOpenChange }: Budg
       if (resourcesRes.error) throw resourcesRes.error;
       if (workAreasRes.error) throw workAreasRes.error;
       if (activitiesRes.error) throw activitiesRes.error;
+      if (phasesRes.error) throw phasesRes.error;
       if (linksRes.error) throw linksRes.error;
 
       setResources(resourcesRes.data || []);
       setWorkAreas(workAreasRes.data || []);
       setActivities(activitiesRes.data || []);
+      setPhases(phasesRes.data || []);
       
       // Filter links to only include work areas from this budget
       const workAreaIds = new Set((workAreasRes.data || []).map(wa => wa.id));
@@ -762,6 +776,254 @@ export function BudgetSummary({ budgetId, budgetName, open, onOpenChange }: Budg
     doc.save(fileName);
   };
 
+  // Helper function to generate activity label with format: PhaseCode ActivityCode.- ActivityName
+  const getActivityLabel = (activity: Activity): string => {
+    const phase = activity.phase_id ? phases.find(p => p.id === activity.phase_id) : null;
+    const phaseCode = phase?.code || '';
+    return `${phaseCode} ${activity.code || ''}.- ${activity.name || ''}`.trim();
+  };
+
+  const exportDondePDF = () => {
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.getWidth();
+    
+    // Company info from settings
+    const companyName = companySettings.name || 'Mi Empresa';
+    const companyEmail = companySettings.email || '';
+    const companyPhone = companySettings.phone || '';
+    const companyAddress = companySettings.address || '';
+    const companyWeb = companySettings.website || '';
+    const companyInitials = companyName.substring(0, 2).toUpperCase();
+    
+    // Header with company branding
+    doc.setFillColor(37, 99, 235);
+    doc.roundedRect(14, 10, 25, 25, 3, 3, 'F');
+    doc.setTextColor(255);
+    doc.setFontSize(16);
+    doc.setFont('helvetica', 'bold');
+    doc.text(companyInitials, 26.5, 26, { align: 'center' });
+    doc.setTextColor(0);
+    
+    doc.setFontSize(16);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(37, 99, 235);
+    doc.text(companyName, 45, 18);
+    doc.setTextColor(0);
+    
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(100);
+    const contactLine = [companyEmail, companyPhone].filter(Boolean).join('  |  ');
+    const addressLine = [companyAddress, companyWeb].filter(Boolean).join('  |  ');
+    if (contactLine) doc.text(contactLine, 45, 24);
+    if (addressLine) doc.text(addressLine, 45, 30);
+    doc.setTextColor(0);
+    
+    doc.setDrawColor(200);
+    doc.line(14, 40, pageWidth - 14, 40);
+    
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.text('DÓNDE? - LISTADO POR OPCIONES', pageWidth / 2, 50, { align: 'center' });
+    
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'normal');
+    doc.text(budgetName, pageWidth / 2, 58, { align: 'center' });
+    
+    doc.setFontSize(9);
+    doc.setTextColor(100);
+    doc.text(`Fecha de generación: ${format(new Date(), "d 'de' MMMM 'de' yyyy", { locale: es })}`, pageWidth / 2, 65, { align: 'center' });
+    doc.setTextColor(0);
+
+    // Summary section
+    let yPos = 80;
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(37, 99, 235);
+    doc.text('Resumen General', 14, yPos);
+    doc.setTextColor(0);
+    
+    yPos += 8;
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    
+    const summaryData = [
+      ['Total de recursos:', calculations.resourceCount.toString()],
+      ['Coste base:', formatPdfCurrency(calculations.totalBaseCost)],
+      ['Margen de seguridad:', formatPdfCurrency(calculations.totalSafetyMargin)],
+      ['Margen comercial:', formatPdfCurrency(calculations.totalSalesMargin)],
+    ];
+    
+    summaryData.forEach(([label, value]) => {
+      doc.text(label, 14, yPos);
+      doc.text(value, 80, yPos);
+      yPos += 6;
+    });
+    
+    // Total PVP highlighted
+    yPos += 4;
+    doc.setFillColor(34, 197, 94);
+    doc.roundedRect(14, yPos - 4, pageWidth - 28, 10, 2, 2, 'F');
+    doc.setTextColor(255);
+    doc.setFont('helvetica', 'bold');
+    doc.text('TOTAL PVP:', 18, yPos + 3);
+    doc.text(formatPdfCurrency(calculations.totalWithMargins), pageWidth - 18, yPos + 3, { align: 'right' });
+    doc.setTextColor(0);
+    doc.setFont('helvetica', 'normal');
+
+    yPos += 20;
+
+    // Option colors for PDF
+    const optionColors: Record<string, [number, number, number]> = {
+      'A': [59, 130, 246], // blue
+      'B': [168, 85, 247], // purple
+      'C': [34, 197, 94],  // green
+    };
+
+    // Build table data for each option with expanded hierarchy
+    OPCIONES.forEach(option => {
+      const optionData = hierarchicalData[option];
+      if (optionData.subtotal === 0) return; // Skip empty options
+
+      // Check if we need a new page
+      if (yPos > 250) {
+        doc.addPage();
+        yPos = 20;
+      }
+
+      // Option header
+      doc.setFillColor(...optionColors[option]);
+      doc.roundedRect(14, yPos - 4, pageWidth - 28, 10, 2, 2, 'F');
+      doc.setTextColor(255);
+      doc.setFontSize(11);
+      doc.setFont('helvetica', 'bold');
+      doc.text(`OPCIÓN ${option}`, 18, yPos + 3);
+      doc.text(formatPdfCurrency(optionData.subtotal), pageWidth - 18, yPos + 3, { align: 'right' });
+      doc.setTextColor(0);
+      doc.setFont('helvetica', 'normal');
+
+      yPos += 15;
+
+      // Build table data: Opción | Nivel | Área de Trabajo | Actividad | SubTotal
+      const tableData: (string | { content: string; styles?: object })[][] = [];
+
+      const levelKeys = LEVEL_ORDER.filter(l => optionData.levels[l]);
+      levelKeys.forEach(level => {
+        const levelData = optionData.levels[level];
+        
+        // Sort activities within each work area by their label
+        levelData.workAreas.forEach(({ workArea, activities: waActivities, subtotal: waSubtotal }) => {
+          const sortedActivities = [...waActivities].sort((a, b) => {
+            const labelA = getActivityLabel(a.activity);
+            const labelB = getActivityLabel(b.activity);
+            return labelA.localeCompare(labelB, 'es', { numeric: true });
+          });
+
+          sortedActivities.forEach(({ activity, subtotal }, index) => {
+            tableData.push([
+              index === 0 ? level : '',
+              index === 0 ? `${workArea.name} (${workArea.work_area})` : '',
+              getActivityLabel(activity),
+              formatPdfCurrency(subtotal)
+            ]);
+          });
+
+          // Add work area subtotal row
+          tableData.push([
+            { content: '', styles: {} },
+            { content: `SubTotal ${workArea.name}`, styles: { fontStyle: 'bold', fillColor: [245, 245, 245] } },
+            { content: '', styles: { fillColor: [245, 245, 245] } },
+            { content: formatPdfCurrency(waSubtotal), styles: { fontStyle: 'bold', fillColor: [245, 245, 245] } }
+          ]);
+        });
+
+        // Add level subtotal row
+        tableData.push([
+          { content: `SubTotal ${level}`, styles: { fontStyle: 'bold', fillColor: [230, 230, 230] } },
+          { content: '', styles: { fillColor: [230, 230, 230] } },
+          { content: '', styles: { fillColor: [230, 230, 230] } },
+          { content: formatPdfCurrency(levelData.subtotal), styles: { fontStyle: 'bold', fillColor: [230, 230, 230] } }
+        ]);
+      });
+
+      // Activities without work area
+      if (optionData.activitiesWithoutWorkArea.length > 0) {
+        const unassignedSubtotal = optionData.activitiesWithoutWorkArea.reduce((sum, a) => sum + a.subtotal, 0);
+        
+        const sortedUnassigned = [...optionData.activitiesWithoutWorkArea].sort((a, b) => {
+          const labelA = getActivityLabel(a.activity);
+          const labelB = getActivityLabel(b.activity);
+          return labelA.localeCompare(labelB, 'es', { numeric: true });
+        });
+
+        sortedUnassigned.forEach(({ activity, subtotal }, index) => {
+          tableData.push([
+            index === 0 ? 'Sin Área' : '',
+            index === 0 ? 'Sin Área de Trabajo' : '',
+            getActivityLabel(activity),
+            formatPdfCurrency(subtotal)
+          ]);
+        });
+
+        tableData.push([
+          { content: 'SubTotal Sin Área', styles: { fontStyle: 'bold', fillColor: [254, 243, 199] } },
+          { content: '', styles: { fillColor: [254, 243, 199] } },
+          { content: '', styles: { fillColor: [254, 243, 199] } },
+          { content: formatPdfCurrency(unassignedSubtotal), styles: { fontStyle: 'bold', fillColor: [254, 243, 199] } }
+        ]);
+      }
+
+      if (tableData.length > 0) {
+        autoTable(doc, {
+          startY: yPos,
+          head: [['Nivel', 'Área de Trabajo', 'Actividad', 'SubTotal']],
+          body: tableData,
+          theme: 'striped',
+          headStyles: { 
+            fillColor: optionColors[option],
+            fontSize: 8,
+            fontStyle: 'bold'
+          },
+          bodyStyles: { fontSize: 7 },
+          margin: { left: 14, right: 14 },
+          columnStyles: {
+            0: { cellWidth: 25 },
+            1: { cellWidth: 45 },
+            2: { cellWidth: 'auto' },
+            3: { cellWidth: 25, halign: 'right' },
+          },
+        });
+
+        yPos = (doc as any).lastAutoTable.finalY + 15;
+      }
+    });
+
+    // Footer with company info
+    const pageCount = doc.getNumberOfPages();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i);
+      
+      doc.setDrawColor(200);
+      doc.line(14, pageHeight - 20, pageWidth - 14, pageHeight - 20);
+      
+      doc.setFontSize(7);
+      doc.setTextColor(120);
+      const footerInfo = [companyName, companyEmail, companyPhone].filter(Boolean).join(' | ');
+      doc.text(footerInfo, 14, pageHeight - 14);
+      
+      doc.text(
+        `Página ${i} de ${pageCount}`,
+        pageWidth - 14,
+        pageHeight - 14,
+        { align: 'right' }
+      );
+    }
+
+    const fileName = `presupuesto_${budgetName.replace(/[^a-zA-Z0-9]/g, '_')}_donde_${format(new Date(), 'yyyyMMdd')}.pdf`;
+    doc.save(fileName);
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
@@ -788,6 +1050,10 @@ export function BudgetSummary({ budgetId, budgetName, open, onOpenChange }: Budg
                   <DropdownMenuItem onClick={exportHierarchicalPDF} className="gap-2">
                     <Layers className="h-4 w-4" />
                     Jerarquía por Opciones
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={exportDondePDF} className="gap-2">
+                    <MapPin className="h-4 w-4" />
+                    DÓNDE? por Opciones
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>

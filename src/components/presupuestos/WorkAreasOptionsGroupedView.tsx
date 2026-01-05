@@ -21,12 +21,20 @@ interface Activity {
   name?: string;
   code?: string;
   opciones: string[];
+  phase_id?: string | null;
   resources_subtotal?: number;
+}
+
+interface Phase {
+  id: string;
+  code: string | null;
+  name: string;
 }
 
 interface WorkAreasOptionsGroupedViewProps {
   workAreas: WorkArea[];
   activities: Activity[];
+  phases: Phase[];
   activityLinks: { work_area_id: string; activity_id: string }[];
   activitiesWithoutWorkArea?: Activity[];
   isAdmin: boolean;
@@ -41,6 +49,7 @@ const OPCIONES = ['A', 'B', 'C'];
 export function WorkAreasOptionsGroupedView({
   workAreas,
   activities,
+  phases,
   activityLinks,
   activitiesWithoutWorkArea = [],
   isAdmin,
@@ -175,6 +184,13 @@ export function WorkAreasOptionsGroupedView({
     'Cubiertas',
     'Vivienda'
   ];
+
+  // Generate ActividadID with format: PhaseCode ActivityCode.- ActivityName
+  const getActivityLabel = (activity: Activity): string => {
+    const phase = activity.phase_id ? phases.find(p => p.id === activity.phase_id) : null;
+    const phaseCode = phase?.code || '';
+    return `${phaseCode} ${activity.code || ''}.- ${activity.name || ''}`.trim();
+  };
 
   const handleEditActivity = (activity: Activity) => {
     window.dispatchEvent(new CustomEvent('edit-activity', { 
@@ -343,10 +359,7 @@ export function WorkAreasOptionsGroupedView({
                                                   className="flex items-center justify-between py-1.5 px-3 bg-muted/20 rounded text-sm ml-4"
                                                 >
                                                   <div className="flex items-center gap-2">
-                                                    <code className="text-xs bg-muted px-1 rounded">
-                                                      {activity.code}
-                                                    </code>
-                                                    <span>{activity.name}</span>
+                                                    <span className="text-sm">{getActivityLabel(activity)}</span>
                                                   </div>
                                                   <div className="flex items-center gap-2">
                                                     <span className="font-mono text-muted-foreground">
@@ -416,10 +429,7 @@ export function WorkAreasOptionsGroupedView({
                                     className="flex items-center justify-between py-1.5 px-3 bg-amber-500/10 rounded text-sm ml-4"
                                   >
                                     <div className="flex items-center gap-2">
-                                      <code className="text-xs bg-amber-500/20 px-1 rounded text-amber-700">
-                                        {activity.code}
-                                      </code>
-                                      <span>{activity.name}</span>
+                                      <span className="text-sm">{getActivityLabel(activity)}</span>
                                     </div>
                                     <div className="flex items-center gap-2">
                                       <span className="font-mono text-muted-foreground">

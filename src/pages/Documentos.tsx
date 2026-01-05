@@ -1185,188 +1185,190 @@ export default function Documentos() {
 
       {/* Edit Dialog */}
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-        <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
-          <DialogHeader>
+        <DialogContent className="sm:max-w-4xl max-h-[90vh] flex flex-col">
+          <DialogHeader className="flex-shrink-0">
             <DialogTitle className="flex items-center gap-2">
               <Pencil className="h-5 w-5" />
               Editar documento
             </DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 py-4">
-            {/* Edit Name */}
-            <div className="space-y-2">
-              <Label>Nombre *</Label>
-              <Input
-                value={editName}
-                onChange={(e) => setEditName(e.target.value)}
-                placeholder="Nombre del documento"
-                maxLength={200}
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              {/* Edit Type with custom option */}
+          <ScrollArea className="flex-1 min-h-0 max-h-[calc(90vh-140px)]">
+            <div className="space-y-4 py-4 pr-4">
+              {/* Edit Name */}
               <div className="space-y-2">
-                <Label>Tipo de documento</Label>
-                {isAddingEditCustomType ? (
-                  <div className="flex gap-2">
-                    <Input
-                      value={newEditCustomType}
-                      onChange={(e) => setNewEditCustomType(e.target.value)}
-                      placeholder="Nuevo tipo..."
-                      maxLength={50}
-                      autoFocus
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') handleAddEditCustomType();
-                        if (e.key === 'Escape') {
-                          setIsAddingEditCustomType(false);
-                          setNewEditCustomType('');
-                        }
+                <Label>Nombre *</Label>
+                <Input
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  placeholder="Nombre del documento"
+                  maxLength={200}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                {/* Edit Type with custom option */}
+                <div className="space-y-2">
+                  <Label>Tipo de documento</Label>
+                  {isAddingEditCustomType ? (
+                    <div className="flex gap-2">
+                      <Input
+                        value={newEditCustomType}
+                        onChange={(e) => setNewEditCustomType(e.target.value)}
+                        placeholder="Nuevo tipo..."
+                        maxLength={50}
+                        autoFocus
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') handleAddEditCustomType();
+                          if (e.key === 'Escape') {
+                            setIsAddingEditCustomType(false);
+                            setNewEditCustomType('');
+                          }
+                        }}
+                      />
+                      <Button size="icon" variant="ghost" onClick={handleAddEditCustomType}>
+                        <Plus className="h-4 w-4" />
+                      </Button>
+                      <Button size="icon" variant="ghost" onClick={() => {
+                        setIsAddingEditCustomType(false);
+                        setNewEditCustomType('');
+                      }}>
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="flex gap-2">
+                      <Select value={editDocType} onValueChange={setEditDocType}>
+                        <SelectTrigger className="flex-1">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {allDocumentTypes.map((type) => (
+                            <SelectItem key={type} value={type}>{type}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Button 
+                        size="icon" 
+                        variant="outline" 
+                        onClick={() => setIsAddingEditCustomType(true)}
+                        title="Añadir tipo personalizado"
+                      >
+                        <Plus className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Edit Project */}
+                <div className="space-y-2">
+                  <Label>Proyecto (opcional)</Label>
+                  <Select 
+                    value={editProjectId || '__none__'} 
+                    onValueChange={(val) => setEditProjectId(val === '__none__' ? '' : val)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Sin proyecto" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">Sin proyecto</SelectItem>
+                      {projects.map((project) => (
+                        <SelectItem key={project.id} value={project.id}>
+                          {project.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {/* Edit URL */}
+              <div className="space-y-2">
+                <Label>URL</Label>
+                <Input
+                  value={editUrl}
+                  onChange={(e) => setEditUrl(e.target.value)}
+                  placeholder="https://ejemplo.com/documento"
+                  type="url"
+                />
+              </div>
+
+              {/* Edit Description */}
+              <div className="space-y-2">
+                <Label>Descripción</Label>
+                <div className="h-[300px] overflow-hidden">
+                  <RichTextEditor
+                    value={editDescription}
+                    onChange={setEditDescription}
+                    placeholder="Descripción del documento..."
+                    minHeight="280px"
+                    className="h-full"
+                  />
+                </div>
+              </div>
+
+              {/* File Upload/Replace */}
+              <div className="space-y-2">
+                <Label>Archivo {documentToEdit?.file_path ? '(reemplazar)' : '(añadir)'}</Label>
+                
+                {/* Current file info */}
+                {documentToEdit?.file_path && !editFile && (
+                  <div className="p-2 bg-muted rounded text-sm flex items-center justify-between">
+                    <div>
+                      <span className="text-muted-foreground">Actual: </span>
+                      <span className="font-medium">{documentToEdit.file_path.split('/').pop()}</span>
+                      <span className="text-muted-foreground ml-2">({formatFileSize(documentToEdit.file_size)})</span>
+                    </div>
+                  </div>
+                )}
+                
+                {/* New file selected */}
+                {editFile && (
+                  <div className="p-2 bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded text-sm flex items-center justify-between">
+                    <div>
+                      <span className="text-green-700 dark:text-green-300">Nuevo: </span>
+                      <span className="font-medium">{editFile.name}</span>
+                      <span className="text-muted-foreground ml-2">({formatFileSize(editFile.size)})</span>
+                    </div>
+                    <Button 
+                      variant="ghost" 
+                      size="icon"
+                      className="h-6 w-6"
+                      onClick={() => {
+                        setEditFile(null);
+                        if (editFileInputRef.current) editFileInputRef.current.value = '';
                       }}
-                    />
-                    <Button size="icon" variant="ghost" onClick={handleAddEditCustomType}>
-                      <Plus className="h-4 w-4" />
-                    </Button>
-                    <Button size="icon" variant="ghost" onClick={() => {
-                      setIsAddingEditCustomType(false);
-                      setNewEditCustomType('');
-                    }}>
+                    >
                       <X className="h-4 w-4" />
                     </Button>
                   </div>
-                ) : (
-                  <div className="flex gap-2">
-                    <Select value={editDocType} onValueChange={setEditDocType}>
-                      <SelectTrigger className="flex-1">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {allDocumentTypes.map((type) => (
-                          <SelectItem key={type} value={type}>{type}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <Button 
-                      size="icon" 
-                      variant="outline" 
-                      onClick={() => setIsAddingEditCustomType(true)}
-                      title="Añadir tipo personalizado"
-                    >
-                      <Plus className="h-4 w-4" />
-                    </Button>
-                  </div>
                 )}
-              </div>
-
-              {/* Edit Project */}
-              <div className="space-y-2">
-                <Label>Proyecto (opcional)</Label>
-                <Select 
-                  value={editProjectId || '__none__'} 
-                  onValueChange={(val) => setEditProjectId(val === '__none__' ? '' : val)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Sin proyecto" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none__">Sin proyecto</SelectItem>
-                    {projects.map((project) => (
-                      <SelectItem key={project.id} value={project.id}>
-                        {project.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            {/* Edit URL */}
-            <div className="space-y-2">
-              <Label>URL</Label>
-              <Input
-                value={editUrl}
-                onChange={(e) => setEditUrl(e.target.value)}
-                placeholder="https://ejemplo.com/documento"
-                type="url"
-              />
-            </div>
-
-            {/* Edit Description */}
-            <div className="space-y-2 flex-1 min-h-0">
-              <Label>Descripción</Label>
-              <div className="h-[300px] overflow-hidden">
-                <RichTextEditor
-                  value={editDescription}
-                  onChange={setEditDescription}
-                  placeholder="Descripción del documento..."
-                  minHeight="280px"
-                  className="h-full"
-                />
-              </div>
-            </div>
-
-            {/* File Upload/Replace */}
-            <div className="space-y-2">
-              <Label>Archivo {documentToEdit?.file_path ? '(reemplazar)' : '(añadir)'}</Label>
-              
-              {/* Current file info */}
-              {documentToEdit?.file_path && !editFile && (
-                <div className="p-2 bg-muted rounded text-sm flex items-center justify-between">
-                  <div>
-                    <span className="text-muted-foreground">Actual: </span>
-                    <span className="font-medium">{documentToEdit.file_path.split('/').pop()}</span>
-                    <span className="text-muted-foreground ml-2">({formatFileSize(documentToEdit.file_size)})</span>
-                  </div>
-                </div>
-              )}
-              
-              {/* New file selected */}
-              {editFile && (
-                <div className="p-2 bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded text-sm flex items-center justify-between">
-                  <div>
-                    <span className="text-green-700 dark:text-green-300">Nuevo: </span>
-                    <span className="font-medium">{editFile.name}</span>
-                    <span className="text-muted-foreground ml-2">({formatFileSize(editFile.size)})</span>
-                  </div>
-                  <Button 
-                    variant="ghost" 
-                    size="icon"
-                    className="h-6 w-6"
-                    onClick={() => {
-                      setEditFile(null);
-                      if (editFileInputRef.current) editFileInputRef.current.value = '';
-                    }}
+                
+                {/* File input */}
+                <div className="flex gap-2">
+                  <input
+                    ref={editFileInputRef}
+                    type="file"
+                    className="hidden"
+                    onChange={handleEditFileSelect}
+                    accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx,.zip,.txt"
+                  />
+                  <Button
+                    variant="outline"
+                    onClick={() => editFileInputRef.current?.click()}
+                    disabled={saving}
+                    className="w-full"
                   >
-                    <X className="h-4 w-4" />
+                    <Upload className="h-4 w-4 mr-2" />
+                    {editFile ? 'Cambiar archivo' : documentToEdit?.file_path ? 'Reemplazar archivo' : 'Añadir archivo'}
                   </Button>
                 </div>
-              )}
-              
-              {/* File input */}
-              <div className="flex gap-2">
-                <input
-                  ref={editFileInputRef}
-                  type="file"
-                  className="hidden"
-                  onChange={handleEditFileSelect}
-                  accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx,.zip,.txt"
-                />
-                <Button
-                  variant="outline"
-                  onClick={() => editFileInputRef.current?.click()}
-                  disabled={saving}
-                  className="w-full"
-                >
-                  <Upload className="h-4 w-4 mr-2" />
-                  {editFile ? 'Cambiar archivo' : documentToEdit?.file_path ? 'Reemplazar archivo' : 'Añadir archivo'}
-                </Button>
+                <p className="text-xs text-muted-foreground">
+                  Formatos: PDF, imágenes, Word, Excel, ZIP. Máximo 50MB.
+                </p>
               </div>
-              <p className="text-xs text-muted-foreground">
-                Formatos: PDF, imágenes, Word, Excel, ZIP. Máximo 50MB.
-              </p>
             </div>
-          </div>
-          <DialogFooter>
+          </ScrollArea>
+          <DialogFooter className="flex-shrink-0 border-t pt-4">
             <Button
               variant="outline"
               onClick={() => {

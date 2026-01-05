@@ -62,12 +62,20 @@ interface ActivityWithOpciones {
   name: string;
   code: string;
   opciones: string[];
+  phase_id: string | null;
   resources_subtotal?: number;
+}
+
+interface Phase {
+  id: string;
+  code: string | null;
+  name: string;
 }
 
 export function BudgetWorkAreasTab({ budgetId, isAdmin }: BudgetWorkAreasTabProps) {
   const [workAreas, setWorkAreas] = useState<WorkArea[]>([]);
   const [activities, setActivities] = useState<ActivityWithOpciones[]>([]);
+  const [phases, setPhases] = useState<Phase[]>([]);
   const [activityLinks, setActivityLinks] = useState<{ work_area_id: string; activity_id: string }[]>([]);
   const [unassignedResourcesSubtotal, setUnassignedResourcesSubtotal] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
@@ -101,8 +109,8 @@ export function BudgetWorkAreasTab({ budgetId, isAdmin }: BudgetWorkAreasTabProp
   const fetchWorkAreas = async () => {
     setIsLoading(true);
     try {
-      // Fetch work areas, activities, links and ALL resources in parallel (avoid N+1 queries)
-      const [workAreasRes, activitiesRes, allActivityLinksRes, resourcesRes] = await Promise.all([
+      // Fetch work areas, activities, phases, links and ALL resources in parallel (avoid N+1 queries)
+      const [workAreasRes, activitiesRes, phasesRes, allActivityLinksRes, resourcesRes] = await Promise.all([
         supabase
           .from('budget_work_areas')
           .select('*')
@@ -111,7 +119,11 @@ export function BudgetWorkAreasTab({ budgetId, isAdmin }: BudgetWorkAreasTabProp
           .order('work_area', { ascending: true }),
         supabase
           .from('budget_activities')
-          .select('id, name, code, opciones')
+          .select('id, name, code, opciones, phase_id')
+          .eq('budget_id', budgetId),
+        supabase
+          .from('budget_phases')
+          .select('id, code, name')
           .eq('budget_id', budgetId),
         supabase
           .from('budget_work_area_activities')
@@ -124,8 +136,11 @@ export function BudgetWorkAreasTab({ budgetId, isAdmin }: BudgetWorkAreasTabProp
 
       if (workAreasRes.error) throw workAreasRes.error;
       if (activitiesRes.error) throw activitiesRes.error;
+      if (phasesRes.error) throw phasesRes.error;
       if (allActivityLinksRes.error) throw allActivityLinksRes.error;
       if (resourcesRes.error) throw resourcesRes.error;
+
+      setPhases(phasesRes.data || []);
 
       const links = allActivityLinksRes.data || [];
       const allResources = resourcesRes.data || [];
@@ -457,6 +472,7 @@ export function BudgetWorkAreasTab({ budgetId, isAdmin }: BudgetWorkAreasTabProp
               <WorkAreasOptionsGroupedView
                 workAreas={workAreas}
                 activities={activities}
+                phases={phases}
                 activityLinks={activityLinks}
                 activitiesWithoutWorkArea={activitiesWithoutWorkArea}
                 isAdmin={isAdmin}

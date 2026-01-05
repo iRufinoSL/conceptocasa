@@ -1306,7 +1306,7 @@ export function BudgetSummary({ budgetId, budgetName, open, onOpenChange }: Budg
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={exportDondeAreasPDF} className="gap-2">
                     <LayoutGrid className="h-4 w-4" />
-                    DÓNDE? por Áreas de Trabajo
+                    DÓNDE? Jerarquía (Opción/Nivel/Área/Actividad)
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>

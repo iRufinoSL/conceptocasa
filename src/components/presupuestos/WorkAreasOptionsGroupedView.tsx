@@ -144,9 +144,18 @@ export function WorkAreasOptionsGroupedView({
           levels[area.level] = { workAreas: [], subtotal: 0 };
         }
         
+        // Sort activities alphabetically by their label
+        const sortedActivities = [...activitiesForOption].sort((a, b) => {
+          const phaseA = a.phase_id ? phases.find(p => p.id === a.phase_id) : null;
+          const phaseB = b.phase_id ? phases.find(p => p.id === b.phase_id) : null;
+          const labelA = `${phaseA?.code || ''} ${a.code || ''}.- ${a.name || ''}`.trim();
+          const labelB = `${phaseB?.code || ''} ${b.code || ''}.- ${b.name || ''}`.trim();
+          return labelA.localeCompare(labelB, 'es', { numeric: true });
+        });
+
         levels[area.level].workAreas.push({
           workArea: area,
-          activities: activitiesForOption,
+          activities: sortedActivities,
           subtotal: areaSubtotal,
         });
         levels[area.level].subtotal += areaSubtotal;

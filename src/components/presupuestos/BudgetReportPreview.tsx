@@ -110,6 +110,18 @@ interface BudgetSpace {
   observations: string | null;
 }
 
+interface WorkArea {
+  id: string;
+  name: string;
+  level: string;
+  work_area: string;
+}
+
+interface ActivityLink {
+  work_area_id: string;
+  activity_id: string;
+}
+
 interface BudgetContactWithDetails {
   id: string;
   contact_id: string;
@@ -149,6 +161,8 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
   const [measurements, setMeasurements] = useState<Measurement[]>([]);
   const [measurementRelations, setMeasurementRelations] = useState<MeasurementRelation[]>([]);
   const [spaces, setSpaces] = useState<BudgetSpace[]>([]);
+  const [workAreas, setWorkAreas] = useState<WorkArea[]>([]);
+  const [activityLinks, setActivityLinks] = useState<ActivityLink[]>([]);
   const [selectedSections, setSelectedSections] = useState<string[]>(['activities']);
   const [customNotes, setCustomNotes] = useState<string>('');
   const [onlyWithCost, setOnlyWithCost] = useState(false);
@@ -169,7 +183,19 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [activitiesRes, phasesRes, resourcesRes, filesCountRes, predesignsRes, budgetContactsRes, measurementsRes, measurementRelationsRes, spacesRes] = await Promise.all([
+      const [
+        activitiesRes,
+        phasesRes,
+        resourcesRes,
+        filesCountRes,
+        predesignsRes,
+        budgetContactsRes,
+        measurementsRes,
+        measurementRelationsRes,
+        spacesRes,
+        workAreasRes,
+        workAreaActivitiesRes,
+      ] = await Promise.all([
         supabase
           .from('budget_activities')
           .select('id, name, code, description, measurement_unit, phase_id, measurement_id, start_date, duration_days, tolerance_days, end_date, opciones')
@@ -210,11 +236,21 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
           .select('id, name, space_type, level, m2_built, m2_livable, observations')
           .eq('budget_id', presupuesto.id)
           .order('name'),
+        supabase
+          .from('budget_work_areas')
+          .select('id, name, level, work_area')
+          .eq('budget_id', presupuesto.id),
+        supabase
+          .from('budget_work_area_activities')
+          .select('work_area_id, activity_id'),
       ]);
 
       if (activitiesRes.error) throw activitiesRes.error;
       if (phasesRes.error) throw phasesRes.error;
       if (resourcesRes.error) throw resourcesRes.error;
+      if (spacesRes.error) throw spacesRes.error;
+      if (workAreasRes.error) throw workAreasRes.error;
+      if (workAreaActivitiesRes.error) throw workAreaActivitiesRes.error;
 
       setActivities(activitiesRes.data || []);
       setPhases(phasesRes.data || []);
@@ -232,6 +268,12 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
       
       // Set spaces
       setSpaces(spacesRes.data || []);
+
+      // Set work areas and links (for DÓNDE?)
+      const workAreasData = (workAreasRes.data || []) as WorkArea[];
+      setWorkAreas(workAreasData);
+      const workAreaIds = new Set(workAreasData.map(wa => wa.id));
+      setActivityLinks(((workAreaActivitiesRes.data || []) as ActivityLink[]).filter(l => workAreaIds.has(l.work_area_id)));
 
       // Load budget contacts with contact details
       if (budgetContactsRes.data && budgetContactsRes.data.length > 0) {
@@ -1859,6 +1901,161 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
         });
       }
 
+      // Section: DÓNDE? Jerarquía (only if selected)
+      if (selectedSections.includes('donde-hierarchy')) {
+        doc.addPage();
+        yPos = 20;
+
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(37, 99, 235);
+        doc.text(`DÓNDE? JERARQUÍA (Opción ${selectedOption})`, 14, yPos);
+        doc.setTextColor(0);
+
+        yPos += 10;
+
+        const filteredActivitiesForDonde = getFilteredActivities();
+        const filteredResourcesForDonde = getFilteredResources();
+
+        // Build activity subtotals only with filtered resources (selected option + onlyWithCost)
+        const activitySubtotalMap = new Map<string, number>();
+        filteredResourcesForDonde.forEach(r => {
+          if (!r.activity_id) return;
+          const fields = calculateFields(r);
+          activitySubtotalMap.set(r.activity_id, (activitySubtotalMap.get(r.activity_id) || 0) + fields.subtotalSales);
+        });
+
+        const activityMap = new Map(filteredActivitiesForDonde.map(a => [a.id, a]));
+
+        // Map work_area_id -> activities
+        const workAreaToActivities = new Map<string, Activity[]>();
+        activityLinks.forEach(link => {
+          const a = activityMap.get(link.activity_id);
+          if (!a) return;
+          if (!workAreaToActivities.has(link.work_area_id)) workAreaToActivities.set(link.work_area_id, []);
+          workAreaToActivities.get(link.work_area_id)!.push(a);
+        });
+
+        // Activities without work area
+        const linkedActivityIds = new Set(activityLinks.map(l => l.activity_id));
+        const unassignedActivities = filteredActivitiesForDonde.filter(a => !linkedActivityIds.has(a.id));
+
+        const levelOrder = [
+          'Cota 0 terreno',
+          'Nivel 1',
+          'Nivel 2',
+          'Nivel 3',
+          'Terrazas',
+          'Cubiertas',
+          'Vivienda',
+        ];
+        const levelRank = (level: string) => {
+          const idx = levelOrder.indexOf(level);
+          return idx === -1 ? 999 : idx;
+        };
+
+        const workAreasForDonde = workAreas
+          .filter(wa => workAreaToActivities.has(wa.id))
+          .sort((a, b) => {
+            const r = levelRank(a.level) - levelRank(b.level);
+            if (r !== 0) return r;
+            return a.name.localeCompare(b.name);
+          });
+
+        const tableData: any[] = [];
+
+        // Group by level
+        const byLevel = new Map<string, WorkArea[]>();
+        workAreasForDonde.forEach(wa => {
+          if (!byLevel.has(wa.level)) byLevel.set(wa.level, []);
+          byLevel.get(wa.level)!.push(wa);
+        });
+
+        const sortedLevels = Array.from(byLevel.keys()).sort((a, b) => {
+          const r = levelRank(a) - levelRank(b);
+          if (r !== 0) return r;
+          return a.localeCompare(b);
+        });
+
+        const sumActivitiesSubtotal = (acts: Activity[]) =>
+          acts.reduce((sum, a) => sum + (activitySubtotalMap.get(a.id) || 0), 0);
+
+        sortedLevels.forEach(level => {
+          const levelWorkAreas = byLevel.get(level) || [];
+
+          const levelSubtotal = levelWorkAreas.reduce((sum, wa) => {
+            const acts = (workAreaToActivities.get(wa.id) || []).slice();
+            return sum + sumActivitiesSubtotal(acts);
+          }, 0);
+
+          tableData.push([
+            { content: level, colSpan: 3, styles: { fillColor: [59, 130, 246], textColor: [255, 255, 255], fontStyle: 'bold' } },
+            { content: formatPdfCurrency(levelSubtotal), styles: { fillColor: [59, 130, 246], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'right' } },
+          ]);
+
+          levelWorkAreas.forEach(wa => {
+            const acts = (workAreaToActivities.get(wa.id) || []).slice().sort((a, b) => a.name.localeCompare(b.name));
+            if (acts.length === 0) return;
+
+            const waSubtotal = sumActivitiesSubtotal(acts);
+            const waTitle = `${wa.name}${wa.work_area ? ` (${wa.work_area})` : ''}`;
+
+            tableData.push([
+              { content: `  ${waTitle}`, colSpan: 3, styles: { fillColor: [240, 240, 240], fontStyle: 'bold' } },
+              { content: formatPdfCurrency(waSubtotal), styles: { fillColor: [240, 240, 240], fontStyle: 'bold', halign: 'right' } },
+            ]);
+
+            acts.forEach(a => {
+              tableData.push([
+                `    ${generateActivityId(a)}`,
+                '',
+                '',
+                formatPdfCurrency(activitySubtotalMap.get(a.id) || 0),
+              ]);
+            });
+          });
+        });
+
+        if (unassignedActivities.length > 0) {
+          const unassignedSubtotal = sumActivitiesSubtotal(unassignedActivities);
+          tableData.push([
+            { content: 'Sin área de trabajo', colSpan: 3, styles: { fillColor: [240, 240, 240], fontStyle: 'bold' } },
+            { content: formatPdfCurrency(unassignedSubtotal), styles: { fillColor: [240, 240, 240], fontStyle: 'bold', halign: 'right' } },
+          ]);
+
+          unassignedActivities.sort((a, b) => a.name.localeCompare(b.name)).forEach(a => {
+            tableData.push([
+              `  ${generateActivityId(a)}`,
+              '',
+              '',
+              formatPdfCurrency(activitySubtotalMap.get(a.id) || 0),
+            ]);
+          });
+        }
+
+        const totalDonde = Array.from(activitySubtotalMap.values()).reduce((s, v) => s + v, 0);
+        tableData.push([
+          { content: 'TOTAL DÓNDE?', colSpan: 3, styles: { fillColor: [34, 197, 94], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'right' } },
+          { content: formatPdfCurrency(totalDonde), styles: { fillColor: [34, 197, 94], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'right' } },
+        ]);
+
+        autoTable(doc, {
+          startY: yPos,
+          head: [['Actividad / Jerarquía', 'Nivel', 'Área', '€SubTotal']],
+          body: tableData,
+          theme: 'striped',
+          headStyles: { fillColor: [59, 130, 246] },
+          margin: { left: 14, right: 14 },
+          styles: { fontSize: 8 },
+          columnStyles: {
+            0: { cellWidth: 95 },
+            1: { cellWidth: 45 },
+            2: { cellWidth: 40 },
+            3: { cellWidth: 30, halign: 'right' },
+          },
+        });
+      }
+
       // Footer
       const pageCount = doc.getNumberOfPages();
       const footerTextHeight = 3; // Height of footer text in mm (font size 7 ≈ 2.5-3mm)
@@ -1896,6 +2093,7 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
       if (selectedSections.includes('predesigns')) sectionSuffixes.push('anteproyecto');
       if (selectedSections.includes('activities')) sectionSuffixes.push('actividades');
       if (selectedSections.includes('resources')) sectionSuffixes.push('recursos');
+      if (selectedSections.includes('donde-hierarchy')) sectionSuffixes.push('donde_jerarquia');
       if (selectedSections.includes('time-phases')) sectionSuffixes.push('tiempo_fases');
       if (selectedSections.includes('time-activities')) sectionSuffixes.push('tiempo_actividades');
       if (selectedSections.includes('measurements')) sectionSuffixes.push('mediciones');
@@ -1992,6 +2190,21 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
                   }}
                 />
                 <Label htmlFor="resources" className="cursor-pointer text-sm">Recursos por Fase/Actividad</Label>
+              </div>
+
+              <div className="flex items-center space-x-2">
+                <Checkbox 
+                  id="donde-hierarchy" 
+                  checked={selectedSections.includes('donde-hierarchy')}
+                  onCheckedChange={(checked) => {
+                    if (checked) {
+                      setSelectedSections(prev => [...prev, 'donde-hierarchy']);
+                    } else {
+                      setSelectedSections(prev => prev.filter(s => s !== 'donde-hierarchy'));
+                    }
+                  }}
+                />
+                <Label htmlFor="donde-hierarchy" className="cursor-pointer text-sm">DÓNDE? Jerarquía (Opción/Nivel/Área/Actividades)</Label>
               </div>
               <div className="flex items-center space-x-2">
                 <Checkbox 

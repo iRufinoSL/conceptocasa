@@ -9,13 +9,14 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Plus, Pencil, Trash2, ChevronDown, ChevronRight, AlertTriangle, CheckCircle, Filter, X, ShoppingCart, Receipt, CreditCard, Wallet, Copy, ArrowUpDown, Calendar, Hash } from 'lucide-react';
+import { Plus, Pencil, Trash2, ChevronDown, ChevronRight, AlertTriangle, CheckCircle, Filter, X, ShoppingCart, Receipt, CreditCard, Wallet, Copy, ArrowUpDown, Calendar, Hash, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import { AccountingEntryLinesEditor } from './AccountingEntryLinesEditor';
 import { AccountingEntryWizard } from './AccountingEntryWizard';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { searchMatch } from '@/lib/search-utils';
 
 const ENTRY_TYPE_LABELS: Record<string, { label: string; icon: typeof ShoppingCart }> = {
   compra: { label: 'Compra', icon: ShoppingCart },
@@ -57,6 +58,7 @@ interface Filters {
   budgetId: string;
   dateFrom: string;
   dateTo: string;
+  searchQuery: string;
 }
 
 type SortField = 'code' | 'date';
@@ -72,7 +74,8 @@ const emptyForm: EntryForm = {
 const emptyFilters: Filters = {
   budgetId: '',
   dateFrom: '',
-  dateTo: ''
+  dateTo: '',
+  searchQuery: ''
 };
 
 interface Props {
@@ -405,6 +408,17 @@ export function AccountingEntriesTab({ highlightCode, onHighlightHandled }: Prop
       if (filters.dateTo && entry.entry_date > filters.dateTo) {
         return false;
       }
+      // Search in any field
+      if (filters.searchQuery) {
+        const query = filters.searchQuery;
+        const matchesSearch = 
+          searchMatch(entry.code, query) ||
+          searchMatch(entry.description, query) ||
+          searchMatch(entry.presupuesto?.nombre, query) ||
+          searchMatch(entry.total_amount?.toString(), query) ||
+          searchMatch(formatDate(entry.entry_date), query);
+        if (!matchesSearch) return false;
+      }
       return true;
     });
 
@@ -456,7 +470,7 @@ export function AccountingEntriesTab({ highlightCode, onHighlightHandled }: Prop
     setExpandedYears(newExpanded);
   };
 
-  const hasActiveFilters = filters.budgetId || filters.dateFrom || filters.dateTo;
+  const hasActiveFilters = filters.budgetId || filters.dateFrom || filters.dateTo || filters.searchQuery;
 
   const clearFilters = () => {
     setFilters(emptyFilters);
@@ -586,6 +600,25 @@ export function AccountingEntriesTab({ highlightCode, onHighlightHandled }: Prop
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Buscar..."
+              value={filters.searchQuery}
+              onChange={(e) => setFilters({ ...filters, searchQuery: e.target.value })}
+              className="pl-9 w-[200px]"
+            />
+            {filters.searchQuery && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="absolute right-1 top-1/2 -translate-y-1/2 h-6 w-6"
+                onClick={() => setFilters({ ...filters, searchQuery: '' })}
+              >
+                <X className="h-3 w-3" />
+              </Button>
+            )}
+          </div>
           <Button 
             variant={showFilters ? "secondary" : "outline"} 
             onClick={() => setShowFilters(!showFilters)}

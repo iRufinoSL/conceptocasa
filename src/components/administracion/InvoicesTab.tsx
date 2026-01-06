@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Plus, Pencil, Trash2, ChevronDown, ChevronRight, Filter, X, FileText, Printer } from 'lucide-react';
+import { Plus, Pencil, Trash2, ChevronDown, ChevronRight, Filter, X, FileText, Printer, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import { InvoiceLinesEditor } from './InvoiceLinesEditor';
@@ -18,6 +18,7 @@ import { AccountSelectWithCreate } from './AccountSelectWithCreate';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { formatCurrency } from '@/lib/format-utils';
+import { searchMatch } from '@/lib/search-utils';
 
 interface Presupuesto {
   id: string;
@@ -77,6 +78,7 @@ interface Filters {
   dateFrom: string;
   dateTo: string;
   documentType: string;
+  searchQuery: string;
 }
 
 const emptyForm: InvoiceForm = {
@@ -95,7 +97,8 @@ const emptyFilters: Filters = {
   budgetId: '',
   dateFrom: '',
   dateTo: '',
-  documentType: ''
+  documentType: '',
+  searchQuery: ''
 };
 
 const VAT_RATES = ['21.00', '10.00', '0.00'];
@@ -401,6 +404,23 @@ export function InvoicesTab() {
       if (filters.dateTo && invoice.invoice_date > filters.dateTo) {
         return false;
       }
+      // Search in any field
+      if (filters.searchQuery) {
+        const query = filters.searchQuery;
+        const invoiceNumberStr = formatInvoiceNumber(invoice.invoice_number, invoice.invoice_date, invoice.document_type);
+        const matchesSearch = 
+          searchMatch(invoiceNumberStr, query) ||
+          searchMatch(invoice.description, query) ||
+          searchMatch(invoice.observations, query) ||
+          searchMatch(invoice.presupuesto?.nombre, query) ||
+          searchMatch(invoice.issuer_account?.name, query) ||
+          searchMatch(invoice.receiver_account?.name, query) ||
+          searchMatch(invoice.issuer_account?.nif_cif, query) ||
+          searchMatch(invoice.receiver_account?.nif_cif, query) ||
+          searchMatch(invoice.total.toString(), query) ||
+          searchMatch(formatDate(invoice.invoice_date), query);
+        if (!matchesSearch) return false;
+      }
       return true;
     });
   }, [invoices, filters, activeDocumentType]);
@@ -426,7 +446,7 @@ export function InvoicesTab() {
     return Array.from(grouped.entries()).sort((a, b) => b[0] - a[0]);
   }, [filteredInvoices]);
 
-  const hasActiveFilters = filters.budgetId || filters.dateFrom || filters.dateTo;
+  const hasActiveFilters = filters.budgetId || filters.dateFrom || filters.dateTo || filters.searchQuery;
 
   const clearFilters = () => {
     setFilters(emptyFilters);
@@ -484,6 +504,25 @@ export function InvoicesTab() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Buscar..."
+              value={filters.searchQuery}
+              onChange={(e) => setFilters({ ...filters, searchQuery: e.target.value })}
+              className="pl-9 w-[200px]"
+            />
+            {filters.searchQuery && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="absolute right-1 top-1/2 -translate-y-1/2 h-6 w-6"
+                onClick={() => setFilters({ ...filters, searchQuery: '' })}
+              >
+                <X className="h-3 w-3" />
+              </Button>
+            )}
+          </div>
           <Button 
             variant={showFilters ? "secondary" : "outline"} 
             onClick={() => setShowFilters(!showFilters)}

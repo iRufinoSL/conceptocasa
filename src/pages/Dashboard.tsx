@@ -104,10 +104,10 @@ const apps: AppCard[] = [
   {
     id: 'comunicaciones',
     title: 'Comunicaciones',
-    description: 'Mensajería y notificaciones',
+    description: 'Historial de emails y mensajería',
     icon: MessageSquare,
-    route: '/comunicaciones',
-    available: false,
+    route: '/crm?tab=communications',
+    available: true,
     adminOnly: false,
   },
   {

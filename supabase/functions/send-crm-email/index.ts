@@ -305,14 +305,15 @@ const handler = async (req: Request): Promise<Response> => {
       );
     }
 
-    // Get company settings for sender info
+    // Get company settings for sender info and email signature
     const { data: companySettings } = await supabase
       .from('company_settings')
-      .select('name, email')
+      .select('name, email, email_signature')
       .single();
 
     const senderName = companySettings?.name || 'Concepto.Casa';
     const senderEmail = companySettings?.email || 'organiza@concepto.casa';
+    const emailSignature = (companySettings as any)?.email_signature || '';
 
     // Determine recipients
     let recipients: { id: string; email: string; name: string }[] = [];
@@ -429,7 +430,15 @@ const handler = async (req: Request): Promise<Response> => {
         const finalSubject = replaceVariables(subject, recipientVariables);
         // Replace variables first, then sanitize HTML content
         const contentWithVars = replaceVariables(content, recipientVariables);
-        const finalContent = sanitizeHtmlForEmail(contentWithVars);
+        
+        // Append email signature if configured
+        let fullContent = contentWithVars;
+        if (emailSignature) {
+          const signatureHtml = `<br><br><div style="border-top: 1px solid #ccc; padding-top: 12px; margin-top: 20px; color: #666; font-size: 14px;">${emailSignature.replace(/\n/g, '<br>')}</div>`;
+          fullContent += signatureHtml;
+        }
+        
+        const finalContent = sanitizeHtmlForEmail(fullContent);
 
         // Add delay between sends for bulk campaigns to prevent rate limiting at Resend
         if (recipients.length > 10 && results.length > 0) {

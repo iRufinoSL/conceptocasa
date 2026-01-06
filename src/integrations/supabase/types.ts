@@ -907,6 +907,7 @@ export type Database = {
           address: string | null
           created_at: string
           email: string | null
+          email_signature: string | null
           id: string
           logo_url: string | null
           name: string
@@ -918,6 +919,7 @@ export type Database = {
           address?: string | null
           created_at?: string
           email?: string | null
+          email_signature?: string | null
           id?: string
           logo_url?: string | null
           name?: string
@@ -929,6 +931,7 @@ export type Database = {
           address?: string | null
           created_at?: string
           email?: string | null
+          email_signature?: string | null
           id?: string
           logo_url?: string | null
           name?: string

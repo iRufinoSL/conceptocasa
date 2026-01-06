@@ -38,14 +38,51 @@ const handler = async (req: Request): Promise<Response> => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const emailData: InboundEmail = await req.json();
-    console.log("Received inbound email from:", emailData.from);
-    console.log("Subject:", emailData.subject);
+    const rawBody = await req.text();
+    console.log("Raw request body:", rawBody.substring(0, 500));
+    
+    let emailData: InboundEmail;
+    try {
+      emailData = JSON.parse(rawBody);
+    } catch (parseError) {
+      console.error("Failed to parse JSON:", parseError);
+      return new Response(
+        JSON.stringify({ error: "Invalid JSON body" }),
+        { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
 
-    // Extract sender email
-    const fromEmail = emailData.from.includes("<") 
-      ? emailData.from.match(/<(.+)>/)?.[1] || emailData.from
-      : emailData.from;
+    // Validate required fields with safe defaults
+    const fromField = emailData.from || emailData.from_name || "";
+    const subjectField = emailData.subject || "(Sin asunto)";
+    const toField = emailData.to || [];
+    
+    console.log("Received inbound email from:", fromField);
+    console.log("Subject:", subjectField);
+
+    if (!fromField) {
+      console.error("No 'from' field in email data");
+      return new Response(
+        JSON.stringify({ error: "Missing 'from' field" }),
+        { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
+
+    // Extract sender email safely
+    let fromEmail = fromField;
+    if (typeof fromField === 'string' && fromField.includes("<")) {
+      const match = fromField.match(/<(.+)>/);
+      fromEmail = match?.[1] || fromField;
+    }
+    
+    // Extract sender name
+    let fromName = emailData.from_name || "";
+    if (!fromName && typeof fromField === 'string' && fromField.includes("<")) {
+      fromName = fromField.split("<")[0].trim().replace(/"/g, "");
+    }
+
+    console.log("Parsed from email:", fromEmail);
+    console.log("Parsed from name:", fromName);
 
     // Try to find existing contact by email
     const { data: existingContact } = await supabase
@@ -55,10 +92,10 @@ const handler = async (req: Request): Promise<Response> => {
       .maybeSingle();
 
     let contactId = existingContact?.id;
-    console.log("Contact ID:", contactId || "not found");
+    console.log("Contact ID:", contactId || "not found (unknown sender)");
 
     // Check if this is a reply to an existing ticket (check subject for ticket number)
-    const ticketMatch = emailData.subject.match(/\[Ticket #(\d+)\]/);
+    const ticketMatch = subjectField.match(/\[Ticket #(\d+)\]/);
     let ticketId: string | null = null;
 
     if (ticketMatch) {
@@ -78,7 +115,7 @@ const handler = async (req: Request): Promise<Response> => {
     }
 
     // Determine if we should create a new ticket
-    const shouldCreateTicket = !ticketId && emailData.subject;
+    const shouldCreateTicket = !ticketId && subjectField;
     
     if (shouldCreateTicket) {
       console.log("Creating new ticket from inbound email...");
@@ -86,7 +123,7 @@ const handler = async (req: Request): Promise<Response> => {
       const { data: newTicket, error: ticketError } = await supabase
         .from("tickets")
         .insert({
-          subject: emailData.subject,
+          subject: subjectField,
           description: emailData.text || "Email received",
           status: "open",
           priority: "medium",
@@ -110,20 +147,21 @@ const handler = async (req: Request): Promise<Response> => {
       .insert({
         direction: "inbound",
         from_email: fromEmail,
-        from_name: emailData.from_name,
-        to_emails: emailData.to,
-        cc_emails: emailData.cc,
-        subject: emailData.subject,
-        body_text: emailData.text,
-        body_html: emailData.html,
+        from_name: fromName || null,
+        to_emails: toField.length > 0 ? toField : ["organiza@concepto.casa"],
+        cc_emails: emailData.cc || null,
+        subject: subjectField,
+        body_text: emailData.text || null,
+        body_html: emailData.html || null,
         status: "received",
-        external_id: emailData.message_id,
+        external_id: emailData.message_id || null,
         contact_id: contactId,
         ticket_id: ticketId,
         received_at: new Date().toISOString(),
         metadata: {
-          headers: emailData.headers,
-          has_attachments: (emailData.attachments?.length || 0) > 0
+          headers: emailData.headers || {},
+          has_attachments: (emailData.attachments?.length || 0) > 0,
+          unknown_sender: !contactId // Flag to indicate sender is not a contact
         }
       })
       .select()

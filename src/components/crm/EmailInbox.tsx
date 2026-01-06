@@ -1,27 +1,35 @@
 import { useState, useMemo } from 'react';
 import DOMPurify from 'dompurify';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Label } from '@/components/ui/label';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { 
   Mail, Search, ArrowUpRight, ArrowDownLeft, 
   CheckCircle, XCircle, Clock, Eye, Inbox,
-  Trash2, Reply, Forward, MailOpen, Paperclip
+  Trash2, Reply, Forward, MailOpen, Paperclip, UserPlus, AlertCircle
 } from 'lucide-react';
-import type { Tables } from '@/integrations/supabase/types';
+import { useToast } from '@/hooks/use-toast';
+import type { Tables, Json } from '@/integrations/supabase/types';
 
 type EmailMessage = Tables<'email_messages'> & {
   crm_contacts?: { id: string; name: string; surname: string | null; email: string | null } | null;
   tickets?: { id: string; subject: string; ticket_number: number } | null;
 };
+
+interface EmailMetadata {
+  unknown_sender?: boolean;
+  headers?: Record<string, string>;
+  has_attachments?: boolean;
+}
 
 const statusConfig = {
   pending: { label: 'Pendiente', icon: Clock, color: 'bg-yellow-500/10 text-yellow-600 border-yellow-500/20' },
@@ -29,6 +37,7 @@ const statusConfig = {
   delivered: { label: 'Entregado', icon: CheckCircle, color: 'bg-green-500/10 text-green-600 border-green-500/20' },
   failed: { label: 'Fallido', icon: XCircle, color: 'bg-red-500/10 text-red-600 border-red-500/20' },
   read: { label: 'Leído', icon: Eye, color: 'bg-purple-500/10 text-purple-600 border-purple-500/20' },
+  received: { label: 'Recibido', icon: Inbox, color: 'bg-green-500/10 text-green-600 border-green-500/20' },
 };
 
 interface EmailInboxProps {
@@ -36,10 +45,21 @@ interface EmailInboxProps {
 }
 
 export function EmailInbox({ onComposeReply }: EmailInboxProps) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
   const [directionFilter, setDirectionFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [selectedEmail, setSelectedEmail] = useState<EmailMessage | null>(null);
+  const [showCreateContact, setShowCreateContact] = useState(false);
+  const [creatingContact, setCreatingContact] = useState(false);
+  const [contactFormData, setContactFormData] = useState({
+    name: '',
+    surname: '',
+    email: '',
+    phone: '',
+    contact_type: 'Persona',
+  });
 
   const { data: emails = [], isLoading, refetch } = useQuery({
     queryKey: ['email-messages', directionFilter, statusFilter],
@@ -105,6 +125,88 @@ export function EmailInbox({ onComposeReply }: EmailInboxProps) {
 
   const handleEmailClick = (email: EmailMessage) => {
     setSelectedEmail(email);
+  };
+
+  const isUnknownSender = (email: EmailMessage): boolean => {
+    if (email.crm_contacts) return false;
+    if (email.direction !== 'inbound') return false;
+    const metadata = email.metadata as EmailMetadata | null;
+    return metadata?.unknown_sender === true || !email.contact_id;
+  };
+
+  const openCreateContactDialog = (email: EmailMessage) => {
+    // Pre-fill form with email data
+    const nameParts = (email.from_name || '').split(' ');
+    setContactFormData({
+      name: nameParts[0] || '',
+      surname: nameParts.slice(1).join(' ') || '',
+      email: email.from_email,
+      phone: '',
+      contact_type: 'Persona',
+    });
+    setShowCreateContact(true);
+  };
+
+  const handleCreateContact = async () => {
+    if (!contactFormData.name || !contactFormData.email) {
+      toast({ 
+        title: 'Error', 
+        description: 'Nombre y email son obligatorios',
+        variant: 'destructive' 
+      });
+      return;
+    }
+
+    setCreatingContact(true);
+    try {
+      // Create the contact
+      const { data: newContact, error: contactError } = await supabase
+        .from('crm_contacts')
+        .insert({
+          name: contactFormData.name,
+          surname: contactFormData.surname || null,
+          email: contactFormData.email,
+          phone: contactFormData.phone || null,
+          contact_type: contactFormData.contact_type,
+          status: 'Prospecto',
+        })
+        .select()
+        .single();
+
+      if (contactError) throw contactError;
+
+      // Update the email to link it to the new contact
+      if (selectedEmail) {
+        await supabase
+          .from('email_messages')
+          .update({ contact_id: newContact.id })
+          .eq('id', selectedEmail.id);
+
+        // Also update any tickets created from this email
+        if (selectedEmail.ticket_id) {
+          await supabase
+            .from('tickets')
+            .update({ contact_id: newContact.id })
+            .eq('id', selectedEmail.ticket_id);
+        }
+      }
+
+      toast({ title: 'Contacto creado correctamente' });
+      setShowCreateContact(false);
+      setSelectedEmail(null);
+      queryClient.invalidateQueries({ queryKey: ['email-messages'] });
+      queryClient.invalidateQueries({ queryKey: ['crm-contacts'] });
+      refetch();
+    } catch (error: any) {
+      console.error('Error creating contact:', error);
+      toast({ 
+        title: 'Error al crear contacto', 
+        description: error.message,
+        variant: 'destructive' 
+      });
+    } finally {
+      setCreatingContact(false);
+    }
   };
 
   return (
@@ -240,11 +342,16 @@ export function EmailInbox({ onComposeReply }: EmailInboxProps) {
                           <span>
                             {format(new Date(email.created_at), "d MMM, HH:mm", { locale: es })}
                           </span>
-                          {email.crm_contacts && (
+                          {email.crm_contacts ? (
                             <span className="text-primary">
                               {email.crm_contacts.name}
                             </span>
-                          )}
+                          ) : isUnknownSender(email) ? (
+                            <span className="flex items-center gap-1 text-amber-600">
+                              <AlertCircle className="h-3 w-3" />
+                              Remitente desconocido
+                            </span>
+                          ) : null}
                         </div>
                       </div>
                     </div>
@@ -298,14 +405,30 @@ export function EmailInbox({ onComposeReply }: EmailInboxProps) {
                     <Badge variant="outline">#{selectedEmail.tickets.ticket_number} - {selectedEmail.tickets.subject}</Badge>
                   </div>
                 )}
-                {selectedEmail.crm_contacts && (
+                {selectedEmail.crm_contacts ? (
                   <div className="text-sm">
                     <span className="text-muted-foreground">Contacto CRM: </span>
                     <span className="text-primary font-medium">
                       {selectedEmail.crm_contacts.name} {selectedEmail.crm_contacts.surname}
                     </span>
                   </div>
-                )}
+                ) : isUnknownSender(selectedEmail) ? (
+                  <div className="flex items-center gap-2 p-2 bg-amber-500/10 border border-amber-500/20 rounded-lg">
+                    <AlertCircle className="h-4 w-4 text-amber-600" />
+                    <span className="text-sm text-amber-700 dark:text-amber-400">
+                      Remitente no registrado como contacto
+                    </span>
+                    <Button 
+                      size="sm" 
+                      variant="outline"
+                      className="ml-auto gap-1"
+                      onClick={() => openCreateContactDialog(selectedEmail)}
+                    >
+                      <UserPlus className="h-4 w-4" />
+                      Registrar como contacto
+                    </Button>
+                  </div>
+                ) : null}
               </div>
 
               {/* Email body */}
@@ -342,6 +465,87 @@ export function EmailInbox({ onComposeReply }: EmailInboxProps) {
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Create Contact Dialog */}
+      <Dialog open={showCreateContact} onOpenChange={setShowCreateContact}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <UserPlus className="h-5 w-5" />
+              Registrar como Contacto
+            </DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="name">Nombre *</Label>
+                <Input
+                  id="name"
+                  value={contactFormData.name}
+                  onChange={(e) => setContactFormData({ ...contactFormData, name: e.target.value })}
+                  placeholder="Nombre"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="surname">Apellidos</Label>
+                <Input
+                  id="surname"
+                  value={contactFormData.surname}
+                  onChange={(e) => setContactFormData({ ...contactFormData, surname: e.target.value })}
+                  placeholder="Apellidos"
+                />
+              </div>
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="email">Email *</Label>
+              <Input
+                id="email"
+                type="email"
+                value={contactFormData.email}
+                onChange={(e) => setContactFormData({ ...contactFormData, email: e.target.value })}
+                placeholder="email@ejemplo.com"
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="phone">Teléfono</Label>
+              <Input
+                id="phone"
+                value={contactFormData.phone}
+                onChange={(e) => setContactFormData({ ...contactFormData, phone: e.target.value })}
+                placeholder="+34 600 000 000"
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label>Tipo de contacto</Label>
+              <Select 
+                value={contactFormData.contact_type} 
+                onValueChange={(v) => setContactFormData({ ...contactFormData, contact_type: v })}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Persona">Persona</SelectItem>
+                  <SelectItem value="Empresa">Empresa</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCreateContact(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={handleCreateContact} disabled={creatingContact}>
+              {creatingContact ? 'Creando...' : 'Crear Contacto'}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

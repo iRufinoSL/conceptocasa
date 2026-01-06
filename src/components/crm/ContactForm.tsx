@@ -761,7 +761,7 @@ export function ContactForm({ open, onOpenChange, contact, onSuccess }: ContactF
             />
           </div>
 
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-4 gap-4">
             <div className="space-y-2">
               <Label htmlFor="city">Ciudad</Label>
               <Input
@@ -790,6 +790,16 @@ export function ContactForm({ open, onOpenChange, contact, onSuccess }: ContactF
                 onChange={(e) => setFormData({ ...formData, postal_code: e.target.value })}
                 placeholder="28001"
                 maxLength={10}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="country">País</Label>
+              <Input
+                id="country"
+                value={formData.country}
+                onChange={(e) => setFormData({ ...formData, country: e.target.value })}
+                placeholder="España"
+                maxLength={100}
               />
             </div>
           </div>

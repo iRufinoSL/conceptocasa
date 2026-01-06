@@ -91,9 +91,17 @@ const handler = async (req: Request): Promise<Response> => {
     }
 
     const toEmails = Array.isArray(to) ? to : [to];
-    const fromEmail = from_name 
-      ? `${from_name} <onboarding@resend.dev>` 
-      : "Lovable App <onboarding@resend.dev>";
+    
+    // Get company settings for sender name and signature
+    const { data: companySettings } = await supabase
+      .from('company_settings')
+      .select('name, email_signature')
+      .single();
+    
+    const senderName = from_name || (companySettings as any)?.name || 'Lovable App';
+    const emailSignature = (companySettings as any)?.email_signature || '';
+    
+    const fromEmail = `${senderName} <onboarding@resend.dev>`;
 
     console.log("Sending email to:", toEmails);
 
@@ -131,10 +139,21 @@ const handler = async (req: Request): Promise<Response> => {
     
     if (cc && cc.length > 0) emailPayload.cc = cc;
     if (bcc && bcc.length > 0) emailPayload.bcc = bcc;
+    
+    // Append signature to HTML body if configured
     if (body_html) {
-      emailPayload.html = body_html;
+      let finalHtml = body_html;
+      if (emailSignature) {
+        const signatureHtml = `<br><br><div style="border-top: 1px solid #ccc; padding-top: 12px; margin-top: 20px; color: #666; font-size: 14px;">${emailSignature.replace(/\n/g, '<br>')}</div>`;
+        finalHtml += signatureHtml;
+      }
+      emailPayload.html = finalHtml;
     } else if (body_text) {
-      emailPayload.text = body_text;
+      let finalText = body_text;
+      if (emailSignature) {
+        finalText += `\n\n--\n${emailSignature}`;
+      }
+      emailPayload.text = finalText;
     }
 
     const emailResponse = await resend.emails.send(emailPayload);

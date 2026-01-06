@@ -5,7 +5,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { toast } from 'sonner';
-import { Building2, Mail, Phone, MapPin, Globe, Save, Loader2, Upload, X, Image } from 'lucide-react';
+import { Building2, Mail, Phone, MapPin, Globe, Save, Loader2, Upload, X, Image, Signature } from 'lucide-react';
+import { Textarea } from '@/components/ui/textarea';
 import { useSignedUrl, extractFilePath } from '@/hooks/useSignedUrl';
 
 interface CompanySettings {
@@ -16,6 +17,7 @@ interface CompanySettings {
   address: string | null;
   website: string | null;
   logo_url: string | null;
+  email_signature: string | null;
 }
 
 export function CompanySettingsForm() {
@@ -31,6 +33,7 @@ export function CompanySettingsForm() {
   const [address, setAddress] = useState('');
   const [website, setWebsite] = useState('');
   const [logoPath, setLogoPath] = useState<string | null>(null);
+  const [emailSignature, setEmailSignature] = useState('');
   
   // Get signed URL for logo display
   const { signedUrl: logoDisplayUrl } = useSignedUrl(logoPath, { bucket: 'company-logos' });
@@ -60,6 +63,7 @@ export function CompanySettingsForm() {
         setWebsite(data.website || '');
         // Extract file path from stored URL or use as-is if already a path
         setLogoPath(extractFilePath(data.logo_url));
+        setEmailSignature((data as any).email_signature || '');
       }
     } catch (error) {
       console.error('Error fetching company settings:', error);
@@ -141,6 +145,7 @@ export function CompanySettingsForm() {
         address: address.trim() || null,
         website: website.trim() || null,
         logo_url: logoPath || null, // Store file path, not URL
+        email_signature: emailSignature.trim() || null,
       };
 
       if (settings?.id) {
@@ -317,6 +322,24 @@ export function CompanySettingsForm() {
                 className="pl-10"
               />
             </div>
+          </div>
+
+          <div className="space-y-2 md:col-span-2">
+            <Label htmlFor="email-signature" className="flex items-center gap-2">
+              <Signature className="h-4 w-4 text-muted-foreground" />
+              Firma de Email
+            </Label>
+            <Textarea
+              id="email-signature"
+              value={emailSignature}
+              onChange={(e) => setEmailSignature(e.target.value)}
+              placeholder="Atentamente,&#10;Nombre Apellido&#10;Mi Empresa S.L.&#10;Tel: +34 600 000 000"
+              rows={4}
+              className="resize-none"
+            />
+            <p className="text-xs text-muted-foreground">
+              Esta firma se añadirá automáticamente a todos los emails enviados.
+            </p>
           </div>
         </div>
 

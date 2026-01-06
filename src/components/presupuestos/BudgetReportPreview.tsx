@@ -1909,7 +1909,7 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
         doc.setFontSize(12);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(37, 99, 235);
-        doc.text('DÓNDE? JERARQUÍA (Opción/Nivel/Área/Actividades)', 14, yPos);
+        doc.text('ÁREAS DE TRABAJO / ACTIVIDADES', 14, yPos);
         doc.setTextColor(0);
 
         yPos += 10;
@@ -1996,12 +1996,15 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
 
           // Option header
           tableData.push([
-            { content: `OPCIÓN ${option}`, colSpan: 3, styles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold' } },
+            { content: `OPCIÓN ${option}`, styles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold' } },
+            { content: '', styles: { fillColor: [15, 23, 42] } },
+            { content: '', styles: { fillColor: [15, 23, 42] } },
+            { content: '', styles: { fillColor: [15, 23, 42] } },
             { content: formatPdfCurrency(totalOption), styles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'right' } },
           ]);
 
           if (filteredActivitiesForDonde.length === 0) {
-            tableData.push([{ content: 'Sin actividades para esta opción', colSpan: 4, styles: { fontStyle: 'italic', textColor: [120, 120, 120] } }]);
+            tableData.push([{ content: 'Sin actividades para esta opción', colSpan: 5, styles: { fontStyle: 'italic', textColor: [120, 120, 120] } }]);
             return;
           }
 
@@ -2026,8 +2029,12 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
               return sum + sumActivitiesSubtotal(acts);
             }, 0);
 
+            // Level header row
             tableData.push([
-              { content: level, colSpan: 3, styles: { fillColor: [59, 130, 246], textColor: [255, 255, 255], fontStyle: 'bold' } },
+              '',
+              { content: level, styles: { fillColor: [59, 130, 246], textColor: [255, 255, 255], fontStyle: 'bold' } },
+              { content: '', styles: { fillColor: [59, 130, 246] } },
+              { content: '', styles: { fillColor: [59, 130, 246] } },
               { content: formatPdfCurrency(levelSubtotal), styles: { fillColor: [59, 130, 246], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'right' } },
             ]);
 
@@ -2038,16 +2045,21 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
               const waSubtotal = sumActivitiesSubtotal(acts);
               const waTitle = `${wa.name}${wa.work_area ? ` (${wa.work_area})` : ''}`;
 
+              // Work area header row
               tableData.push([
-                { content: `  ${waTitle}`, colSpan: 3, styles: { fillColor: [240, 240, 240], fontStyle: 'bold' } },
+                '',
+                level,
+                { content: waTitle, styles: { fillColor: [240, 240, 240], fontStyle: 'bold' } },
+                { content: '', styles: { fillColor: [240, 240, 240] } },
                 { content: formatPdfCurrency(waSubtotal), styles: { fillColor: [240, 240, 240], fontStyle: 'bold', halign: 'right' } },
               ]);
 
               acts.forEach(a => {
                 tableData.push([
-                  `    ${generateActivityId(a)}`,
-                  '',
-                  '',
+                  `OPCIÓN ${option}`,
+                  level,
+                  waTitle,
+                  generateActivityId(a),
                   formatPdfCurrency(activitySubtotalMap.get(a.id) || 0),
                 ]);
               });
@@ -2057,7 +2069,10 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
           if (unassignedActivities.length > 0) {
             const unassignedSubtotal = sumActivitiesSubtotal(unassignedActivities);
             tableData.push([
-              { content: 'Sin área de trabajo', colSpan: 3, styles: { fillColor: [240, 240, 240], fontStyle: 'bold' } },
+              '',
+              '',
+              { content: 'Sin área de trabajo', styles: { fillColor: [240, 240, 240], fontStyle: 'bold' } },
+              { content: '', styles: { fillColor: [240, 240, 240] } },
               { content: formatPdfCurrency(unassignedSubtotal), styles: { fillColor: [240, 240, 240], fontStyle: 'bold', halign: 'right' } },
             ]);
 
@@ -2066,31 +2081,33 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
               .sort((a, b) => a.name.localeCompare(b.name))
               .forEach(a => {
                 tableData.push([
-                  `  ${generateActivityId(a)}`,
+                  `OPCIÓN ${option}`,
                   '',
-                  '',
+                  'Sin área de trabajo',
+                  generateActivityId(a),
                   formatPdfCurrency(activitySubtotalMap.get(a.id) || 0),
                 ]);
               });
           }
 
           // Spacer row between options
-          tableData.push([{ content: '', colSpan: 4, styles: { fillColor: [255, 255, 255] } }]);
+          tableData.push([{ content: '', colSpan: 5, styles: { fillColor: [255, 255, 255] } }]);
         });
 
         autoTable(doc, {
           startY: yPos,
-          head: [['Actividad / Jerarquía', 'Nivel', 'Área', '€SubTotal']],
+          head: [['Opción', 'Nivel', 'Área trabajo', 'ActividadID', '€ Subtotal']],
           body: tableData,
           theme: 'striped',
           headStyles: { fillColor: [59, 130, 246] },
           margin: { left: 14, right: 14 },
           styles: { fontSize: 8 },
           columnStyles: {
-            0: { cellWidth: 95 },
-            1: { cellWidth: 45 },
-            2: { cellWidth: 40 },
-            3: { cellWidth: 30, halign: 'right' },
+            0: { cellWidth: 28 },
+            1: { cellWidth: 30 },
+            2: { cellWidth: 55 },
+            3: { cellWidth: 60 },
+            4: { cellWidth: 25, halign: 'right' },
           },
         });
       }

@@ -532,9 +532,9 @@ export function AccountingEntriesTab({ highlightCode, onHighlightHandled }: Prop
               </div>
               <div className="flex items-center gap-4">
                 <div className="text-right">
-                  <div className="text-sm text-muted-foreground">Debe / Haber</div>
+                  <div className="text-sm text-muted-foreground">Importe global / Debe / Haber</div>
                   <div className="font-mono text-sm">
-                    {formatCurrency(entry.total_debit || 0)} / {formatCurrency(entry.total_credit || 0)}
+                    {formatCurrency(entry.total_amount || 0)} / {formatCurrency(entry.total_debit || 0)} / {formatCurrency(entry.total_credit || 0)}
                   </div>
                 </div>
                 <div className="flex items-center gap-1">

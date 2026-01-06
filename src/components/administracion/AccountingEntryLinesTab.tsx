@@ -85,6 +85,14 @@ export function AccountingEntryLinesTab({ onNavigateToEntry, onNavigateToAccount
     }
   };
 
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', useGrouping: true }).format(amount);
+  };
+
+  const formatDate = (dateStr: string) => {
+    return format(new Date(dateStr), 'dd/MM/yyyy', { locale: es });
+  };
+
   // Filter lines by search query
   const filteredLines = useMemo(() => {
     if (!searchQuery.trim()) return lines;
@@ -146,14 +154,6 @@ export function AccountingEntryLinesTab({ onNavigateToEntry, onNavigateToAccount
       setSortField(field);
       setSortDirection('desc');
     }
-  };
-
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', useGrouping: true }).format(amount);
-  };
-
-  const formatDate = (dateStr: string) => {
-    return format(new Date(dateStr), 'dd/MM/yyyy', { locale: es });
   };
 
   const totalDebit = filteredLines.reduce((sum, line) => sum + (Number(line.debit_amount) || 0), 0);

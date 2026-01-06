@@ -1909,7 +1909,7 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
         doc.setFontSize(12);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(37, 99, 235);
-        doc.text('ÁREAS DE TRABAJO / ACTIVIDADES', 14, yPos);
+        doc.text('Areas trabajo/Actividades', 14, yPos);
         doc.setTextColor(0);
 
         yPos += 10;
@@ -2260,7 +2260,7 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
                     }
                   }}
                 />
-                <Label htmlFor="donde-hierarchy" className="cursor-pointer text-sm">DÓNDE? Jerarquía (Opción/Nivel/Área/Actividades)</Label>
+                <Label htmlFor="donde-hierarchy" className="cursor-pointer text-sm">Areas trabajo/Actividades</Label>
               </div>
               <div className="flex items-center space-x-2">
                 <Checkbox 

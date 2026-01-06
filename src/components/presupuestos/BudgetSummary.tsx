@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -1402,7 +1402,115 @@ export function BudgetSummary({ budgetId, budgetName, open, onOpenChange }: Budg
               </Card>
             )}
 
+            {/* Areas trabajo/Actividades (por opción) */}
+            {Object.values(hierarchicalData).some(d => d.subtotal > 0) && (
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm font-medium">Areas trabajo/Actividades</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  {OPCIONES.map(option => {
+                    const optionData = hierarchicalData[option];
+                    if (!optionData || optionData.subtotal === 0) return null;
+
+                    return (
+                      <section key={option} className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <Badge variant="secondary" className="font-semibold">
+                            OPCIÓN {option}
+                          </Badge>
+                          <div className="text-sm font-medium">{formatCurrency(optionData.subtotal)}</div>
+                        </div>
+
+                        <div className="overflow-x-auto rounded-md border">
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead className="w-[120px]">Nivel</TableHead>
+                                <TableHead className="w-[220px]">Área de trabajo</TableHead>
+                                <TableHead>Actividad</TableHead>
+                                <TableHead className="w-[140px] text-right">Subtotal</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {LEVEL_ORDER.filter(l => optionData.levels[l]).map(level => {
+                                const levelData = optionData.levels[level];
+
+                                return (
+                                  <Fragment key={`level-${option}-${level}`}>
+                                    <TableRow className="bg-muted/30">
+                                      <TableCell colSpan={3} className="font-semibold">
+                                        {level}
+                                      </TableCell>
+                                      <TableCell className="text-right font-semibold">
+                                        {formatCurrency(levelData.subtotal)}
+                                      </TableCell>
+                                    </TableRow>
+
+                                    {levelData.workAreas.map(({ workArea, activities: waActivities, subtotal: waSubtotal }) => (
+                                      <Fragment key={`wa-${option}-${workArea.id}`}>
+                                        <TableRow className="bg-muted/15">
+                                          <TableCell />
+                                          <TableCell className="font-medium">
+                                            {workArea.name}{workArea.work_area ? ` (${workArea.work_area})` : ''}
+                                          </TableCell>
+                                          <TableCell />
+                                          <TableCell className="text-right font-medium">{formatCurrency(waSubtotal)}</TableCell>
+                                        </TableRow>
+
+                                        {[...waActivities]
+                                          .sort((a, b) => getActivityLabel(a.activity).localeCompare(getActivityLabel(b.activity), 'es', { numeric: true }))
+                                          .map(({ activity, subtotal }) => (
+                                            <TableRow key={`act-${option}-${activity.id}`}>
+                                              <TableCell />
+                                              <TableCell />
+                                              <TableCell>{getActivityLabel(activity)}</TableCell>
+                                              <TableCell className="text-right">{formatCurrency(subtotal)}</TableCell>
+                                            </TableRow>
+                                          ))}
+                                      </Fragment>
+                                    ))}
+                                  </Fragment>
+                                );
+                              })}
+
+                              {optionData.activitiesWithoutWorkArea.length > 0 && (
+                                <Fragment key={`unassigned-${option}`}>
+                                  <TableRow className="bg-muted/30">
+                                    <TableCell colSpan={3} className="font-semibold">
+                                      Sin área de trabajo
+                                    </TableCell>
+                                    <TableCell className="text-right font-semibold">
+                                      {formatCurrency(
+                                        optionData.activitiesWithoutWorkArea.reduce((sum, a) => sum + a.subtotal, 0)
+                                      )}
+                                    </TableCell>
+                                  </TableRow>
+
+                                  {[...optionData.activitiesWithoutWorkArea]
+                                    .sort((a, b) => getActivityLabel(a.activity).localeCompare(getActivityLabel(b.activity), 'es', { numeric: true }))
+                                    .map(({ activity, subtotal }) => (
+                                      <TableRow key={`unassigned-${option}-${activity.id}`}>
+                                        <TableCell />
+                                        <TableCell />
+                                        <TableCell>{getActivityLabel(activity)}</TableCell>
+                                        <TableCell className="text-right">{formatCurrency(subtotal)}</TableCell>
+                                      </TableRow>
+                                    ))}
+                                </Fragment>
+                              )}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      </section>
+                    );
+                  })}
+                </CardContent>
+              </Card>
+            )}
+
             {/* Resource Details Table */}
+
             {calculations.resources.length > 0 ? (
               <Card>
                 <CardHeader className="pb-3">

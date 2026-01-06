@@ -312,7 +312,8 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
         const portadaPath = extractFilePath(presupuesto.portada_url);
         if (portadaPath) {
           const signedUrl = await getSignedUrl('budget-covers', portadaPath);
-          setPortadaSignedUrl(signedUrl);
+          // If signing fails (bucket mismatch/path mismatch), fallback to the original URL
+          setPortadaSignedUrl(signedUrl || presupuesto.portada_url);
         } else {
           // If we can't extract a storage path (e.g. already a full URL), use it directly
           setPortadaSignedUrl(presupuesto.portada_url);
@@ -560,7 +561,11 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
 
   // Filter functions for onlyWithCost and selectedOption
   const getFilteredActivities = () => {
-    let filtered = activities.filter(a => (a.opciones || ['A', 'B', 'C']).includes(selectedOption));
+    // IMPORTANT: empty opciones[] means "aplica a todas"
+    let filtered = activities.filter(a => {
+      const opts = a.opciones || [];
+      return opts.length === 0 || opts.includes(selectedOption);
+    });
     if (onlyWithCost) {
       filtered = filtered.filter(a => (activityResourcesMap.get(a.id) || 0) > 0);
     }
@@ -585,6 +590,98 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
     }
     return filtered.length > 0 ? filtered : phases;
   };
+
+  const dondePreviewData = React.useMemo(() => {
+    const filteredActs = getFilteredActivities();
+    const actIdSet = new Set(filteredActs.map(a => a.id));
+    const filteredRes = getFilteredResources();
+
+    const activitySubtotalMap = new Map<string, number>();
+    filteredRes.forEach(r => {
+      if (!r.activity_id) return;
+      const fields = calculateFields(r);
+      activitySubtotalMap.set(r.activity_id, (activitySubtotalMap.get(r.activity_id) || 0) + fields.subtotalSales);
+    });
+
+    // workAreaId -> activities
+    const workAreaToActivities = new Map<string, Activity[]>();
+    activityLinks.forEach(link => {
+      if (!actIdSet.has(link.activity_id)) return;
+      const a = filteredActs.find(x => x.id === link.activity_id);
+      if (!a) return;
+      if (!workAreaToActivities.has(link.work_area_id)) workAreaToActivities.set(link.work_area_id, []);
+      workAreaToActivities.get(link.work_area_id)!.push(a);
+    });
+
+    const levelOrder = [
+      'Cota 0 terreno',
+      'Nivel 1',
+      'Nivel 2',
+      'Nivel 3',
+      'Terrazas',
+      'Cubiertas',
+      'Vivienda',
+    ];
+    const levelRank = (level: string) => {
+      const idx = levelOrder.indexOf(level);
+      return idx === -1 ? 999 : idx;
+    };
+
+    const sumActivitiesSubtotal = (acts: Activity[]) =>
+      acts.reduce((sum, a) => sum + (activitySubtotalMap.get(a.id) || 0), 0);
+
+    const workAreasForOption = workAreas
+      .filter(wa => workAreaToActivities.has(wa.id))
+      .sort((a, b) => {
+        const r = levelRank(a.level) - levelRank(b.level);
+        if (r !== 0) return r;
+        return a.name.localeCompare(b.name);
+      });
+
+    const byLevel = new Map<string, WorkArea[]>();
+    workAreasForOption.forEach(wa => {
+      if (!byLevel.has(wa.level)) byLevel.set(wa.level, []);
+      byLevel.get(wa.level)!.push(wa);
+    });
+
+    const levels = Array.from(byLevel.keys())
+      .sort((a, b) => {
+        const r = levelRank(a) - levelRank(b);
+        if (r !== 0) return r;
+        return a.localeCompare(b);
+      })
+      .map(level => {
+        const levelWorkAreas = (byLevel.get(level) || []).slice();
+        const workAreasDetailed = levelWorkAreas
+          .map(wa => {
+            const acts = (workAreaToActivities.get(wa.id) || []).slice().sort((a, b) => a.name.localeCompare(b.name));
+            const subtotal = sumActivitiesSubtotal(acts);
+            return {
+              workArea: wa,
+              subtotal,
+              activities: acts.map(a => ({ activity: a, subtotal: activitySubtotalMap.get(a.id) || 0 })),
+            };
+          })
+          .filter(x => x.activities.length > 0);
+
+        const subtotal = workAreasDetailed.reduce((sum, wa) => sum + wa.subtotal, 0);
+        return { level, subtotal, workAreas: workAreasDetailed };
+      })
+      .filter(l => l.workAreas.length > 0);
+
+    // Unassigned activities (not linked to any work area)
+    const linkedActivityIds = new Set<string>();
+    workAreaToActivities.forEach(acts => acts.forEach(a => linkedActivityIds.add(a.id)));
+    const unassigned = filteredActs
+      .filter(a => !linkedActivityIds.has(a.id))
+      .slice()
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map(a => ({ activity: a, subtotal: activitySubtotalMap.get(a.id) || 0 }));
+
+    const total = levels.reduce((sum, l) => sum + l.subtotal, 0) + unassigned.reduce((sum, a) => sum + a.subtotal, 0);
+
+    return { levels, unassigned, total };
+  }, [selectedOption, onlyWithCost, activities, resources, workAreas, activityLinks]);
 
   const handlePrint = async () => {
     try {
@@ -2013,62 +2110,62 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
 
         const tableData: any[] = [];
 
-        (['A', 'B', 'C'] as const).forEach(option => {
-          const filteredActivitiesForDonde = buildActivitiesForOption(option);
-          const activityIdSet = new Set(filteredActivitiesForDonde.map(a => a.id));
-          const filteredResourcesForDonde = buildResourcesForActivities(activityIdSet);
+        // This report must respect the option selected in the UI
+        const option = selectedOption;
 
-          // Build activity subtotals only with filtered resources (per option + onlyWithCost)
-          const activitySubtotalMap = new Map<string, number>();
-          filteredResourcesForDonde.forEach(r => {
-            if (!r.activity_id) return;
-            const fields = calculateFields(r);
-            activitySubtotalMap.set(r.activity_id, (activitySubtotalMap.get(r.activity_id) || 0) + fields.subtotalSales);
+        const filteredActivitiesForDonde = buildActivitiesForOption(option);
+        const activityIdSet = new Set(filteredActivitiesForDonde.map(a => a.id));
+        const filteredResourcesForDonde = buildResourcesForActivities(activityIdSet);
+
+        // Build activity subtotals only with filtered resources (per option + onlyWithCost)
+        const activitySubtotalMap = new Map<string, number>();
+        filteredResourcesForDonde.forEach(r => {
+          if (!r.activity_id) return;
+          const fields = calculateFields(r);
+          activitySubtotalMap.set(r.activity_id, (activitySubtotalMap.get(r.activity_id) || 0) + fields.subtotalSales);
+        });
+
+        const activityMap = new Map(filteredActivitiesForDonde.map(a => [a.id, a]));
+
+        // Map work_area_id -> activities (only for this option)
+        const workAreaToActivities = new Map<string, Activity[]>();
+        activityLinks.forEach(link => {
+          const a = activityMap.get(link.activity_id);
+          if (!a) return;
+          if (!workAreaToActivities.has(link.work_area_id)) workAreaToActivities.set(link.work_area_id, []);
+          workAreaToActivities.get(link.work_area_id)!.push(a);
+        });
+
+        // Activities without work area (only for this option)
+        const linkedActivityIds = new Set<string>();
+        workAreaToActivities.forEach(acts => acts.forEach(a => linkedActivityIds.add(a.id)));
+        const unassignedActivities = filteredActivitiesForDonde.filter(a => !linkedActivityIds.has(a.id));
+
+        const workAreasForDonde = workAreas
+          .filter(wa => workAreaToActivities.has(wa.id))
+          .sort((a, b) => {
+            const r = levelRank(a.level) - levelRank(b.level);
+            if (r !== 0) return r;
+            return a.name.localeCompare(b.name);
           });
 
-          const activityMap = new Map(filteredActivitiesForDonde.map(a => [a.id, a]));
+        const sumActivitiesSubtotal = (acts: Activity[]) =>
+          acts.reduce((sum, a) => sum + (activitySubtotalMap.get(a.id) || 0), 0);
 
-          // Map work_area_id -> activities (only for this option)
-          const workAreaToActivities = new Map<string, Activity[]>();
-          activityLinks.forEach(link => {
-            const a = activityMap.get(link.activity_id);
-            if (!a) return;
-            if (!workAreaToActivities.has(link.work_area_id)) workAreaToActivities.set(link.work_area_id, []);
-            workAreaToActivities.get(link.work_area_id)!.push(a);
-          });
+        const totalOption = Array.from(activitySubtotalMap.values()).reduce((s, v) => s + v, 0);
 
-          // Activities without work area (only for this option)
-          const linkedActivityIds = new Set<string>();
-          workAreaToActivities.forEach(acts => acts.forEach(a => linkedActivityIds.add(a.id)));
-          const unassignedActivities = filteredActivitiesForDonde.filter(a => !linkedActivityIds.has(a.id));
+        // Option header
+        tableData.push([
+          { content: `OPCIÓN ${option}`, styles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold' } },
+          { content: '', styles: { fillColor: [15, 23, 42] } },
+          { content: '', styles: { fillColor: [15, 23, 42] } },
+          { content: '', styles: { fillColor: [15, 23, 42] } },
+          { content: formatPdfCurrency(totalOption), styles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'right' } },
+        ]);
 
-          const workAreasForDonde = workAreas
-            .filter(wa => workAreaToActivities.has(wa.id))
-            .sort((a, b) => {
-              const r = levelRank(a.level) - levelRank(b.level);
-              if (r !== 0) return r;
-              return a.name.localeCompare(b.name);
-            });
-
-          const sumActivitiesSubtotal = (acts: Activity[]) =>
-            acts.reduce((sum, a) => sum + (activitySubtotalMap.get(a.id) || 0), 0);
-
-          const totalOption = Array.from(activitySubtotalMap.values()).reduce((s, v) => s + v, 0);
-
-          // Option header
-          tableData.push([
-            { content: `OPCIÓN ${option}`, styles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold' } },
-            { content: '', styles: { fillColor: [15, 23, 42] } },
-            { content: '', styles: { fillColor: [15, 23, 42] } },
-            { content: '', styles: { fillColor: [15, 23, 42] } },
-            { content: formatPdfCurrency(totalOption), styles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'right' } },
-          ]);
-
-          if (filteredActivitiesForDonde.length === 0) {
-            tableData.push([{ content: 'Sin actividades para esta opción', colSpan: 5, styles: { fontStyle: 'italic', textColor: [120, 120, 120] } }]);
-            return;
-          }
-
+        if (filteredActivitiesForDonde.length === 0) {
+          tableData.push([{ content: 'Sin actividades para esta opción', colSpan: 5, styles: { fontStyle: 'italic', textColor: [120, 120, 120] } }]);
+        } else {
           // Group by level
           const byLevel = new Map<string, WorkArea[]>();
           workAreasForDonde.forEach(wa => {
@@ -2090,7 +2187,7 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
               return sum + sumActivitiesSubtotal(acts);
             }, 0);
 
-            // Level header row
+            // Level header row (only once)
             tableData.push([
               '',
               { content: level, styles: { fillColor: [59, 130, 246], textColor: [255, 255, 255], fontStyle: 'bold' } },
@@ -2106,20 +2203,21 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
               const waSubtotal = sumActivitiesSubtotal(acts);
               const waTitle = `${wa.name}${wa.work_area ? ` (${wa.work_area})` : ''}`;
 
-              // Work area header row
+              // Work area header row (do NOT repeat level)
               tableData.push([
                 '',
-                level,
+                '',
                 { content: waTitle, styles: { fillColor: [240, 240, 240], fontStyle: 'bold' } },
                 { content: '', styles: { fillColor: [240, 240, 240] } },
                 { content: formatPdfCurrency(waSubtotal), styles: { fillColor: [240, 240, 240], fontStyle: 'bold', halign: 'right' } },
               ]);
 
+              // Activities rows (do NOT repeat option / level / area)
               acts.forEach(a => {
                 tableData.push([
-                  `OPCIÓN ${option}`,
-                  level,
-                  waTitle,
+                  '',
+                  '',
+                  '',
                   generateActivityId(a),
                   formatPdfCurrency(activitySubtotalMap.get(a.id) || 0),
                 ]);
@@ -2142,18 +2240,18 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
               .sort((a, b) => a.name.localeCompare(b.name))
               .forEach(a => {
                 tableData.push([
-                  `OPCIÓN ${option}`,
                   '',
-                  'Sin área de trabajo',
+                  '',
+                  '',
                   generateActivityId(a),
                   formatPdfCurrency(activitySubtotalMap.get(a.id) || 0),
                 ]);
               });
           }
+        }
 
-          // Spacer row between options
-          tableData.push([{ content: '', colSpan: 5, styles: { fillColor: [255, 255, 255] } }]);
-        });
+        // Spacer row
+        tableData.push([{ content: '', colSpan: 5, styles: { fillColor: [255, 255, 255] } }]);
 
         autoTable(doc, {
           startY: yPos,
@@ -2637,6 +2735,100 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
                   </div>
                 </div>
               </div>
+
+              <Separator className="print:hidden" />
+
+              {/* Section: Areas trabajo/Actividades (DÓNDE?) - only if selected */}
+              {selectedSections.includes('donde-hierarchy') && (
+                <div className="print-section">
+                  <h3 className="text-lg font-bold text-primary mb-4">
+                    2. ÁREAS DE TRABAJO / ACTIVIDADES (Opción {selectedOption})
+                  </h3>
+
+                  <Card className="bg-muted/30">
+                    <CardContent className="pt-4">
+                      <div className="flex items-center justify-between gap-4 flex-wrap">
+                        <div className="text-sm">
+                          <p className="font-semibold">OPCIÓN {selectedOption}</p>
+                          <p className="text-muted-foreground">Jerarquía por Nivel → Área de trabajo → Actividad</p>
+                        </div>
+                        <div className="text-sm font-semibold">
+                          Total: <span className="font-mono">{formatCurrency(dondePreviewData.total)}</span>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <div className="mt-4 space-y-4">
+                    {dondePreviewData.levels.map((level) => (
+                      <Card key={level.level} className="overflow-hidden">
+                        <CardHeader className="py-3 bg-primary/5">
+                          <CardTitle className="text-sm flex items-center justify-between">
+                            <span>{level.level}</span>
+                            <span className="font-mono">{formatCurrency(level.subtotal)}</span>
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent className="pt-3 space-y-4">
+                          {level.workAreas.map((wa) => (
+                            <div key={wa.workArea.id} className="border rounded-md">
+                              <div className="flex items-center justify-between px-3 py-2 bg-muted/40">
+                                <div className="text-sm font-semibold">
+                                  {wa.workArea.name}
+                                  {wa.workArea.work_area ? (
+                                    <span className="text-muted-foreground font-normal"> ({wa.workArea.work_area})</span>
+                                  ) : null}
+                                </div>
+                                <div className="text-sm font-mono">{formatCurrency(wa.subtotal)}</div>
+                              </div>
+
+                              <div className="p-3">
+                                <div className="space-y-1">
+                                  {wa.activities.map(({ activity, subtotal }) => (
+                                    <div key={activity.id} className="flex items-start justify-between gap-3 text-sm">
+                                      <div className="min-w-0 flex-1">
+                                        <span className="break-words">{generateActivityId(activity)}</span>
+                                      </div>
+                                      <div className="font-mono whitespace-nowrap">{formatCurrency(subtotal)}</div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </CardContent>
+                      </Card>
+                    ))}
+
+                    {dondePreviewData.unassigned.length > 0 && (
+                      <Card className="overflow-hidden">
+                        <CardHeader className="py-3 bg-muted/40">
+                          <CardTitle className="text-sm">Sin área de trabajo</CardTitle>
+                        </CardHeader>
+                        <CardContent className="pt-3">
+                          <div className="space-y-1">
+                            {dondePreviewData.unassigned.map(({ activity, subtotal }) => (
+                              <div key={activity.id} className="flex items-start justify-between gap-3 text-sm">
+                                <div className="min-w-0 flex-1">
+                                  <span className="break-words">{generateActivityId(activity)}</span>
+                                </div>
+                                <div className="font-mono whitespace-nowrap">{formatCurrency(subtotal)}</div>
+                              </div>
+                            ))}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
+
+                    {dondePreviewData.levels.length === 0 && dondePreviewData.unassigned.length === 0 && (
+                      <Card>
+                        <CardContent className="py-6 text-sm text-muted-foreground">
+                          No hay actividades asignadas a Áreas de trabajo para la opción {selectedOption}.
+                        </CardContent>
+                      </Card>
+                    )}
+                  </div>
+                </div>
+              )}
 
               <Separator className="print:hidden" />
 

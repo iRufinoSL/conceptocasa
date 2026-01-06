@@ -1,7 +1,6 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { Resend } from "https://esm.sh/resend@2.0.0";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
-import DOMPurify from "https://esm.sh/isomorphic-dompurify@2.0.0";
 
 const resend = new Resend(Deno.env.get("RESEND_API_KEY"));
 
@@ -62,16 +61,62 @@ function escapeHtml(text: string): string {
   return text.replace(/[&<>"']/g, (m) => map[m]);
 }
 
-// Sanitize HTML content for email - only allow safe tags
+// Allowed HTML tags and attributes for email sanitization
+const ALLOWED_TAGS = new Set([
+  'p', 'br', 'strong', 'b', 'em', 'i', 'u', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+  'a', 'ul', 'ol', 'li', 'img', 'table', 'thead', 'tbody', 'tr', 'td', 'th',
+  'div', 'span', 'blockquote', 'hr'
+]);
+
+const ALLOWED_ATTRS: Record<string, Set<string>> = {
+  'a': new Set(['href', 'style', 'class']),
+  'img': new Set(['src', 'alt', 'style', 'class', 'width', 'height']),
+  'table': new Set(['style', 'class', 'width', 'height', 'border', 'cellpadding', 'cellspacing', 'bgcolor', 'align']),
+  'td': new Set(['style', 'class', 'width', 'height', 'align', 'valign', 'bgcolor', 'colspan', 'rowspan']),
+  'th': new Set(['style', 'class', 'width', 'height', 'align', 'valign', 'bgcolor', 'colspan', 'rowspan']),
+  'tr': new Set(['style', 'class', 'bgcolor', 'align', 'valign']),
+  'div': new Set(['style', 'class', 'align']),
+  'span': new Set(['style', 'class']),
+  'p': new Set(['style', 'class', 'align']),
+  'h1': new Set(['style', 'class', 'align']),
+  'h2': new Set(['style', 'class', 'align']),
+  'h3': new Set(['style', 'class', 'align']),
+  'h4': new Set(['style', 'class', 'align']),
+  'h5': new Set(['style', 'class', 'align']),
+  'h6': new Set(['style', 'class', 'align']),
+  'ul': new Set(['style', 'class']),
+  'ol': new Set(['style', 'class']),
+  'li': new Set(['style', 'class']),
+  'blockquote': new Set(['style', 'class']),
+};
+
+// Sanitize HTML content for email - manually implemented for Deno compatibility
 function sanitizeHtmlForEmail(html: string): string {
-  return DOMPurify.sanitize(html, {
-    ALLOWED_TAGS: ['p', 'br', 'strong', 'b', 'em', 'i', 'u', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 
-                   'a', 'ul', 'ol', 'li', 'img', 'table', 'thead', 'tbody', 'tr', 'td', 'th',
-                   'div', 'span', 'blockquote', 'hr'],
-    ALLOWED_ATTR: ['href', 'src', 'alt', 'style', 'class', 'width', 'height', 'align', 'valign',
-                   'border', 'cellpadding', 'cellspacing', 'bgcolor', 'color'],
-    ALLOW_DATA_ATTR: false,
-  });
+  if (!html) return '';
+  
+  // Remove script tags and their content
+  let sanitized = html.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+  
+  // Remove event handlers (onclick, onerror, etc.)
+  sanitized = sanitized.replace(/\s*on\w+\s*=\s*["'][^"']*["']/gi, '');
+  sanitized = sanitized.replace(/\s*on\w+\s*=\s*[^\s>]*/gi, '');
+  
+  // Remove javascript: and data: URLs from href and src
+  sanitized = sanitized.replace(/href\s*=\s*["']?\s*javascript:[^"'>\s]*/gi, 'href="#"');
+  sanitized = sanitized.replace(/src\s*=\s*["']?\s*javascript:[^"'>\s]*/gi, 'src=""');
+  sanitized = sanitized.replace(/href\s*=\s*["']?\s*data:[^"'>\s]*/gi, 'href="#"');
+  
+  // Remove style tags and their content
+  sanitized = sanitized.replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '');
+  
+  // Remove iframe, object, embed tags
+  sanitized = sanitized.replace(/<(iframe|object|embed|form|input|button)[^>]*>.*?<\/\1>/gi, '');
+  sanitized = sanitized.replace(/<(iframe|object|embed|form|input|button)[^>]*\/?>/gi, '');
+  
+  // Remove meta and link tags
+  sanitized = sanitized.replace(/<(meta|link)[^>]*\/?>/gi, '');
+  
+  return sanitized;
 }
 
 // Replace template variables

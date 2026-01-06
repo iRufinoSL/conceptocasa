@@ -313,6 +313,9 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
         if (portadaPath) {
           const signedUrl = await getSignedUrl('budget-covers', portadaPath);
           setPortadaSignedUrl(signedUrl);
+        } else {
+          // If we can't extract a storage path (e.g. already a full URL), use it directly
+          setPortadaSignedUrl(presupuesto.portada_url);
         }
       } else {
         setPortadaSignedUrl(null);
@@ -623,33 +626,63 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
       // Budget cover image - use signed URL
       const portadaUrl = portadaSignedUrl || '';
 
+      const normalizeImageForJsPDF = async (dataUrl: string): Promise<{ dataUrl: string; format: 'PNG' | 'JPEG' }> => {
+        const mime = (dataUrl.match(/^data:(image\/[a-zA-Z0-9+.-]+);/) || [])[1] || '';
+
+        if (mime.includes('png')) return { dataUrl, format: 'PNG' };
+        if (mime.includes('jpeg') || mime.includes('jpg')) return { dataUrl, format: 'JPEG' };
+
+        // Fallback: convert to JPEG (covers e.g. webp)
+        try {
+          const img = new Image();
+          img.crossOrigin = 'anonymous';
+          await new Promise<void>((resolve, reject) => {
+            img.onload = () => resolve();
+            img.onerror = () => reject(new Error('image load failed'));
+            img.src = dataUrl;
+          });
+          const canvas = document.createElement('canvas');
+          canvas.width = img.naturalWidth || 1200;
+          canvas.height = img.naturalHeight || 800;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) return { dataUrl, format: 'JPEG' };
+          ctx.drawImage(img, 0, 0);
+          const jpeg = canvas.toDataURL('image/jpeg', 0.9);
+          return { dataUrl: jpeg, format: 'JPEG' };
+        } catch {
+          return { dataUrl, format: 'JPEG' };
+        }
+      };
+
       // Load company logo if available
-      let logoImgData: string | null = null;
+      let logoImg: { dataUrl: string; format: 'PNG' | 'JPEG' } | null = null;
       if (companyLogo) {
         try {
           const response = await fetch(companyLogo);
           const blob = await response.blob();
-          logoImgData = await new Promise((resolve) => {
+          const rawDataUrl = await new Promise<string>((resolve) => {
             const reader = new FileReader();
             reader.onloadend = () => resolve(reader.result as string);
             reader.readAsDataURL(blob);
           });
+          logoImg = await normalizeImageForJsPDF(rawDataUrl);
         } catch (err) {
           console.error('Error loading company logo:', err);
         }
       }
 
       // Load portada image if available
-      let portadaImgData: string | null = null;
+      let portadaImg: { dataUrl: string; format: 'PNG' | 'JPEG' } | null = null;
       if (portadaUrl) {
         try {
           const response = await fetch(portadaUrl);
           const blob = await response.blob();
-          portadaImgData = await new Promise((resolve) => {
+          const rawDataUrl = await new Promise<string>((resolve) => {
             const reader = new FileReader();
             reader.onloadend = () => resolve(reader.result as string);
             reader.readAsDataURL(blob);
           });
+          portadaImg = await normalizeImageForJsPDF(rawDataUrl);
         } catch (err) {
           console.error('Error loading portada:', err);
         }
@@ -669,7 +702,7 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
         const headerHeight = headerY + logoSize + 6; // covers logo + bottom separator
 
         // Optional portada as a subtle background for the header (all pages)
-        if (portadaImgData) {
+        if (portadaImg?.dataUrl) {
           try {
             doc.saveGraphicsState();
             doc.rect(0, 0, pageWidth, headerHeight);
@@ -677,7 +710,7 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
 
             // Draw image faint
             doc.setGState(new (doc as any).GState({ opacity: 0.28 }));
-            doc.addImage(portadaImgData, 'JPEG', 0, 0, pageWidth, headerHeight, undefined, 'FAST');
+            doc.addImage(portadaImg.dataUrl, portadaImg.format, 0, 0, pageWidth, headerHeight, undefined, 'FAST');
 
             // Add a white veil so text stays readable but image remains visible
             doc.setGState(new (doc as any).GState({ opacity: 0.78 }));
@@ -693,9 +726,9 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
         }
         
         // Draw logo or initials
-        if (logoImgData) {
+        if (logoImg?.dataUrl) {
           try {
-            doc.addImage(logoImgData, 'JPEG', 14, headerY, logoSize, logoSize);
+            doc.addImage(logoImg.dataUrl, logoImg.format, 14, headerY, logoSize, logoSize);
           } catch (e) {
             console.error('Error drawing logo:', e);
             // Fallback to initials
@@ -747,7 +780,7 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
       // Start content after header (header ends at y=28)
       let yPos = 30;
       
-      if (portadaImgData) {
+      if (portadaImg?.dataUrl) {
         // Get style settings
         const textColor = presupuesto.portada_text_color || '#FFFFFF';
         const overlayOpacity = presupuesto.portada_overlay_opacity ?? 0.4;
@@ -773,7 +806,7 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
           });
         };
         
-        const imgDimensions = await getImageDimensions(portadaImgData);
+        const imgDimensions = await getImageDimensions(portadaImg.dataUrl);
         const imgAspectRatio = imgDimensions.width / imgDimensions.height;
         
         // Cover image area (smaller - about 1/3 of page height)
@@ -799,7 +832,7 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
         // Clip to cover area
         doc.saveGraphicsState();
         doc.rect(coverX, coverY, coverWidth, coverHeight, 'S');
-        doc.addImage(portadaImgData, 'JPEG', imgX, imgY, imgWidth, imgHeight, undefined, 'FAST');
+        doc.addImage(portadaImg.dataUrl, portadaImg.format, imgX, imgY, imgWidth, imgHeight, undefined, 'FAST');
         
         // Semi-transparent overlay
         doc.setFillColor(0, 0, 0);
@@ -890,6 +923,9 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
       }
       if (selectedSections.includes('time-activities')) {
         indexItems.push({ title: 'Gestión del Tiempo por Actividades', page: 3 });
+      }
+      if (selectedSections.includes('donde-hierarchy')) {
+        indexItems.push({ title: 'Areas trabajo/Actividades', page: 3 });
       }
 
       indexItems.forEach((item, idx) => {
@@ -1123,14 +1159,14 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
         yPos += 10;
 
         // Draw portada image if available
-        if (portadaImgData) {
+        if (portadaImg?.dataUrl) {
           const coverHeight = 50;
           const coverWidth = pageWidth - 28;
           const coverX = 14;
           const coverY = yPos;
           
           try {
-            doc.addImage(portadaImgData, 'JPEG', coverX, coverY, coverWidth, coverHeight, undefined, 'FAST');
+            doc.addImage(portadaImg.dataUrl, portadaImg.format, coverX, coverY, coverWidth, coverHeight, undefined, 'FAST');
             
             // Semi-transparent overlay
             doc.setFillColor(0, 0, 0);
@@ -2155,10 +2191,10 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
         let footerTextX = 14;
         
         // Add logo before company name if available
-        if (logoImgData) {
+        if (logoImg?.dataUrl) {
           try {
             const logoY = currentPageHeight - 14 - footerLogoHeight + 1; // Align with text baseline
-            doc.addImage(logoImgData, 'JPEG', 14, logoY, footerLogoWidth, footerLogoHeight);
+            doc.addImage(logoImg.dataUrl, logoImg.format, 14, logoY, footerLogoWidth, footerLogoHeight);
             footerTextX = 14 + footerLogoWidth + 2; // Position text after logo with small gap
           } catch (e) {
             console.error('Error drawing footer logo:', e);

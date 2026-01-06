@@ -1,5 +1,6 @@
 import { HardHat } from 'lucide-react';
 import { UserMenu } from './UserMenu';
+import { NotificationsDropdown } from './NotificationsDropdown';
 
 export function Header() {
   return (
@@ -15,7 +16,10 @@ export function Header() {
               <p className="text-sm text-muted-foreground">Gestión de Proyectos de Construcción</p>
             </div>
           </div>
-          <UserMenu />
+          <div className="flex items-center gap-2">
+            <NotificationsDropdown />
+            <UserMenu />
+          </div>
         </div>
       </div>
     </header>

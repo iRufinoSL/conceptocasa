@@ -2255,18 +2255,19 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
 
         autoTable(doc, {
           startY: yPos,
-          head: [['Opción', 'Nivel', 'Área trabajo', 'ActividadID', '€ Subtotal']],
+          head: [['', 'Nivel', 'Área trabajo', 'ActividadID', '€ Subtotal']],
           body: tableData,
-          theme: 'striped',
+          theme: 'plain',
+          showHead: 'never',
           headStyles: { fillColor: [59, 130, 246] },
           margin: { left: 14, right: 14 },
-          styles: { fontSize: 8 },
+          styles: { fontSize: 9, cellPadding: 2 },
           columnStyles: {
-            0: { cellWidth: 28 },
-            1: { cellWidth: 30 },
-            2: { cellWidth: 55 },
-            3: { cellWidth: 60 },
-            4: { cellWidth: 25, halign: 'right' },
+            0: { cellWidth: 10 },
+            1: { cellWidth: 35 },
+            2: { cellWidth: 50 },
+            3: { cellWidth: 65 },
+            4: { cellWidth: 28, halign: 'right' },
           },
         });
       }
@@ -2633,6 +2634,12 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
                     {selectedSections.includes('resources') && (
                       <div className="flex justify-between">
                         <span>2. Desglose de Recursos por Fase y Actividad</span>
+                        <span className="text-muted-foreground text-xs">Pág. 3</span>
+                      </div>
+                    )}
+                    {selectedSections.includes('donde-hierarchy') && (
+                      <div className="flex justify-between">
+                        <span>2. Áreas de trabajo / Actividades</span>
                         <span className="text-muted-foreground text-xs">Pág. 3</span>
                       </div>
                     )}

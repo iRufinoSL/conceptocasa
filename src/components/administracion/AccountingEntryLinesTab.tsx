@@ -2,13 +2,15 @@ import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowUpDown, List, Layers } from 'lucide-react';
+import { ArrowUpDown, List, Layers, Search, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { searchMatch } from '@/lib/search-utils';
 
 interface AccountingAccount {
   id: string;
@@ -47,6 +49,7 @@ export function AccountingEntryLinesTab({ onNavigateToEntry, onNavigateToAccount
   const [sortField, setSortField] = useState<SortField>('code');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [viewMode, setViewMode] = useState<'list' | 'grouped'>('list');
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     fetchData();
@@ -82,8 +85,26 @@ export function AccountingEntryLinesTab({ onNavigateToEntry, onNavigateToAccount
     }
   };
 
+  // Filter lines by search query
+  const filteredLines = useMemo(() => {
+    if (!searchQuery.trim()) return lines;
+    return lines.filter(line => {
+      const matchesSearch = 
+        searchMatch(line.code, searchQuery) ||
+        searchMatch(line.description, searchQuery) ||
+        searchMatch(line.account?.name, searchQuery) ||
+        searchMatch(line.account?.account_type, searchQuery) ||
+        searchMatch(line.entry?.code, searchQuery) ||
+        searchMatch(line.entry?.description, searchQuery) ||
+        searchMatch(line.debit_amount?.toString(), searchQuery) ||
+        searchMatch(line.credit_amount?.toString(), searchQuery) ||
+        searchMatch(formatDate(line.line_date), searchQuery);
+      return matchesSearch;
+    });
+  }, [lines, searchQuery]);
+
   const sortedLines = useMemo(() => {
-    return [...lines].sort((a, b) => {
+    return [...filteredLines].sort((a, b) => {
       let comparison = 0;
       if (sortField === 'code') {
         comparison = a.code.localeCompare(b.code);
@@ -92,12 +113,12 @@ export function AccountingEntryLinesTab({ onNavigateToEntry, onNavigateToAccount
       }
       return sortDirection === 'asc' ? comparison : -comparison;
     });
-  }, [lines, sortField, sortDirection]);
+  }, [filteredLines, sortField, sortDirection]);
 
   const linesGroupedByAccount = useMemo(() => {
     const grouped = new Map<string, { account: AccountingAccount; lines: EntryLine[]; totalDebit: number; totalCredit: number }>();
     
-    lines.forEach(line => {
+    filteredLines.forEach(line => {
       if (!line.account) return;
       
       const existing = grouped.get(line.account_id) || {
@@ -116,7 +137,7 @@ export function AccountingEntryLinesTab({ onNavigateToEntry, onNavigateToAccount
     return Array.from(grouped.values()).sort((a, b) => 
       a.account.name.localeCompare(b.account.name)
     );
-  }, [lines]);
+  }, [filteredLines]);
 
   const toggleSort = (field: SortField) => {
     if (sortField === field) {
@@ -135,8 +156,8 @@ export function AccountingEntryLinesTab({ onNavigateToEntry, onNavigateToAccount
     return format(new Date(dateStr), 'dd/MM/yyyy', { locale: es });
   };
 
-  const totalDebit = lines.reduce((sum, line) => sum + (Number(line.debit_amount) || 0), 0);
-  const totalCredit = lines.reduce((sum, line) => sum + (Number(line.credit_amount) || 0), 0);
+  const totalDebit = filteredLines.reduce((sum, line) => sum + (Number(line.debit_amount) || 0), 0);
+  const totalCredit = filteredLines.reduce((sum, line) => sum + (Number(line.credit_amount) || 0), 0);
 
   const handleEntryClick = (entryCode: string) => {
     if (onNavigateToEntry) {
@@ -160,25 +181,46 @@ export function AccountingEntryLinesTab({ onNavigateToEntry, onNavigateToAccount
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
           <h2 className="text-lg font-semibold">Listado de Apuntes</h2>
           <p className="text-sm text-muted-foreground">
-            {lines.length} apuntes • Debe: {formatCurrency(totalDebit)} • Haber: {formatCurrency(totalCredit)}
+            {searchQuery ? `${filteredLines.length} de ${lines.length}` : lines.length} apuntes • Debe: {formatCurrency(totalDebit)} • Haber: {formatCurrency(totalCredit)}
           </p>
         </div>
-        <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as 'list' | 'grouped')}>
-          <TabsList>
-            <TabsTrigger value="list" className="gap-2">
-              <List className="h-4 w-4" />
-              Lista
-            </TabsTrigger>
-            <TabsTrigger value="grouped" className="gap-2">
-              <Layers className="h-4 w-4" />
-              Por Cuenta
-            </TabsTrigger>
-          </TabsList>
-        </Tabs>
+        <div className="flex items-center gap-2">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Buscar..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9 w-[200px]"
+            />
+            {searchQuery && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="absolute right-1 top-1/2 -translate-y-1/2 h-6 w-6"
+                onClick={() => setSearchQuery('')}
+              >
+                <X className="h-3 w-3" />
+              </Button>
+            )}
+          </div>
+          <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as 'list' | 'grouped')}>
+            <TabsList>
+              <TabsTrigger value="list" className="gap-2">
+                <List className="h-4 w-4" />
+                Lista
+              </TabsTrigger>
+              <TabsTrigger value="grouped" className="gap-2">
+                <Layers className="h-4 w-4" />
+                Por Cuenta
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+        </div>
       </div>
 
       {viewMode === 'list' ? (

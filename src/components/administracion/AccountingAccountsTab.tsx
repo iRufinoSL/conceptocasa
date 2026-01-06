@@ -13,6 +13,7 @@ import { Plus, Pencil, Trash2, List, Layers, Search, X, Eye } from 'lucide-react
 import { toast } from 'sonner';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import { AccountDetailView } from './AccountDetailView';
+import { searchMatch } from '@/lib/search-utils';
 
 interface AccountingAccount {
   id: string;
@@ -141,10 +142,14 @@ export function AccountingAccountsTab({ highlightAccountId, onHighlightHandled, 
 
   const filteredAccounts = useMemo(() => {
     if (!searchQuery.trim()) return accounts;
-    const query = searchQuery.toLowerCase();
     return accounts.filter(account => 
-      account.name.toLowerCase().includes(query) ||
-      account.account_type.toLowerCase().includes(query)
+      searchMatch(account.name, searchQuery) ||
+      searchMatch(account.account_type, searchQuery) ||
+      searchMatch(account.address, searchQuery) ||
+      searchMatch(account.city, searchQuery) ||
+      searchMatch(account.province, searchQuery) ||
+      searchMatch(account.postal_code, searchQuery) ||
+      searchMatch(account.nif_cif, searchQuery)
     );
   }, [accounts, searchQuery]);
 

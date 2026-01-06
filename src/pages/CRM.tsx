@@ -69,7 +69,7 @@ export default function CRM() {
   const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [isLoading, setIsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('contacts');
+  const [activeTab, setActiveTab] = useState('communications');
 
   // Form states
   const [contactFormOpen, setContactFormOpen] = useState(false);

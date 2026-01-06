@@ -1,0 +1,328 @@
+import { useState, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
+import { Badge } from '@/components/ui/badge';
+import { supabase } from '@/integrations/supabase/client';
+import { useEmailService } from '@/hooks/useEmailService';
+import { useToast } from '@/hooks/use-toast';
+import { 
+  Send, Mail, User, Paperclip, X, Plus, 
+  FileText, ChevronDown, Ticket as TicketIcon
+} from 'lucide-react';
+import type { Tables } from '@/integrations/supabase/types';
+
+type Contact = Tables<'crm_contacts'>;
+type EmailTemplate = Tables<'email_templates'>;
+
+interface ComposeEmailProps {
+  replyTo?: {
+    email: string;
+    subject?: string;
+    contactId?: string;
+    ticketId?: string;
+  };
+  onSent?: () => void;
+}
+
+export function ComposeEmail({ replyTo, onSent }: ComposeEmailProps) {
+  const { toast } = useToast();
+  const { sendEmail, sending } = useEmailService();
+  
+  const [formData, setFormData] = useState({
+    to: replyTo?.email || '',
+    cc: '',
+    bcc: '',
+    subject: replyTo?.subject ? `Re: ${replyTo.subject}` : '',
+    body: '',
+    contactId: replyTo?.contactId || '',
+    ticketId: replyTo?.ticketId || '',
+    createTicket: false,
+    ticketSubject: '',
+    ticketPriority: 'medium',
+  });
+
+  const [showCcBcc, setShowCcBcc] = useState(false);
+  const [selectedTemplate, setSelectedTemplate] = useState<string>('');
+
+  // Fetch contacts for autocomplete
+  const { data: contacts = [] } = useQuery({
+    queryKey: ['contacts-for-email'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('crm_contacts')
+        .select('id, name, surname, email')
+        .not('email', 'is', null)
+        .order('name');
+      return data || [];
+    },
+  });
+
+  // Fetch email templates
+  const { data: templates = [] } = useQuery({
+    queryKey: ['email-templates-active'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('email_templates')
+        .select('*')
+        .eq('is_active', true)
+        .order('name');
+      return data || [];
+    },
+  });
+
+  // Apply template
+  useEffect(() => {
+    if (selectedTemplate) {
+      const template = templates.find(t => t.id === selectedTemplate);
+      if (template) {
+        setFormData(prev => ({
+          ...prev,
+          subject: template.subject,
+          body: template.content,
+        }));
+      }
+    }
+  }, [selectedTemplate, templates]);
+
+  // Find contact by email
+  const matchedContact = contacts.find(c => c.email === formData.to);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!formData.to || !formData.subject) {
+      toast({ 
+        title: 'Error', 
+        description: 'El destinatario y asunto son obligatorios',
+        variant: 'destructive' 
+      });
+      return;
+    }
+
+    try {
+      await sendEmail({
+        to: formData.to,
+        subject: formData.subject,
+        body_html: formData.body.replace(/\n/g, '<br>'),
+        body_text: formData.body,
+        cc: formData.cc ? formData.cc.split(',').map(e => e.trim()) : undefined,
+        bcc: formData.bcc ? formData.bcc.split(',').map(e => e.trim()) : undefined,
+        contact_id: formData.contactId || matchedContact?.id,
+        ticket_id: formData.ticketId || undefined,
+        create_ticket: formData.createTicket,
+        ticket_subject: formData.createTicket ? formData.ticketSubject || formData.subject : undefined,
+        ticket_priority: formData.createTicket ? formData.ticketPriority : undefined,
+      });
+
+      toast({ title: 'Email enviado correctamente' });
+      
+      // Reset form
+      setFormData({
+        to: '',
+        cc: '',
+        bcc: '',
+        subject: '',
+        body: '',
+        contactId: '',
+        ticketId: '',
+        createTicket: false,
+        ticketSubject: '',
+        ticketPriority: 'medium',
+      });
+      setSelectedTemplate('');
+      
+      if (onSent) onSent();
+    } catch (error: any) {
+      toast({ 
+        title: 'Error al enviar', 
+        description: error.message,
+        variant: 'destructive' 
+      });
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Mail className="h-5 w-5" />
+          Redactar Email
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Template selector */}
+          <div className="flex items-center gap-3">
+            <Label className="whitespace-nowrap">Plantilla:</Label>
+            <Select value={selectedTemplate} onValueChange={setSelectedTemplate}>
+              <SelectTrigger className="flex-1">
+                <SelectValue placeholder="Seleccionar plantilla..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">Sin plantilla</SelectItem>
+                {templates.map((template) => (
+                  <SelectItem key={template.id} value={template.id}>
+                    <div className="flex items-center gap-2">
+                      <FileText className="h-4 w-4" />
+                      {template.name}
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* To field with contact autocomplete */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label>Para *</Label>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowCcBcc(!showCcBcc)}
+                className="text-xs"
+              >
+                {showCcBcc ? 'Ocultar' : 'Mostrar'} CC/BCC
+                <ChevronDown className={`h-3 w-3 ml-1 transition-transform ${showCcBcc ? 'rotate-180' : ''}`} />
+              </Button>
+            </div>
+            <div className="relative">
+              <Input
+                type="email"
+                value={formData.to}
+                onChange={(e) => setFormData({ ...formData, to: e.target.value })}
+                placeholder="email@ejemplo.com"
+                list="contacts-list"
+              />
+              <datalist id="contacts-list">
+                {contacts.map((contact) => (
+                  <option key={contact.id} value={contact.email || ''}>
+                    {contact.name} {contact.surname}
+                  </option>
+                ))}
+              </datalist>
+              {matchedContact && (
+                <Badge className="absolute right-2 top-1/2 -translate-y-1/2 gap-1" variant="secondary">
+                  <User className="h-3 w-3" />
+                  {matchedContact.name}
+                </Badge>
+              )}
+            </div>
+          </div>
+
+          {/* CC/BCC fields */}
+          {showCcBcc && (
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>CC</Label>
+                <Input
+                  value={formData.cc}
+                  onChange={(e) => setFormData({ ...formData, cc: e.target.value })}
+                  placeholder="emails separados por coma"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>BCC</Label>
+                <Input
+                  value={formData.bcc}
+                  onChange={(e) => setFormData({ ...formData, bcc: e.target.value })}
+                  placeholder="emails separados por coma"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Subject */}
+          <div className="space-y-2">
+            <Label>Asunto *</Label>
+            <Input
+              value={formData.subject}
+              onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
+              placeholder="Asunto del email"
+            />
+          </div>
+
+          {/* Body */}
+          <div className="space-y-2">
+            <Label>Mensaje</Label>
+            <Textarea
+              value={formData.body}
+              onChange={(e) => setFormData({ ...formData, body: e.target.value })}
+              placeholder="Escribe tu mensaje aquí..."
+              rows={10}
+              className="min-h-[200px]"
+            />
+          </div>
+
+          {/* Create ticket option */}
+          <div className="border rounded-lg p-4 space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <TicketIcon className="h-4 w-4 text-muted-foreground" />
+                <Label>Crear ticket de soporte</Label>
+              </div>
+              <Switch
+                checked={formData.createTicket}
+                onCheckedChange={(checked) => setFormData({ ...formData, createTicket: checked })}
+              />
+            </div>
+            
+            {formData.createTicket && (
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label className="text-sm">Asunto del ticket</Label>
+                  <Input
+                    value={formData.ticketSubject}
+                    onChange={(e) => setFormData({ ...formData, ticketSubject: e.target.value })}
+                    placeholder="Usar asunto del email si vacío"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-sm">Prioridad</Label>
+                  <Select 
+                    value={formData.ticketPriority} 
+                    onValueChange={(v) => setFormData({ ...formData, ticketPriority: v })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="low">Baja</SelectItem>
+                      <SelectItem value="medium">Media</SelectItem>
+                      <SelectItem value="high">Alta</SelectItem>
+                      <SelectItem value="urgent">Urgente</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Submit button */}
+          <div className="flex justify-end gap-3">
+            <Button type="submit" disabled={sending} className="gap-2">
+              {sending ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                  Enviando...
+                </>
+              ) : (
+                <>
+                  <Send className="h-4 w-4" />
+                  Enviar Email
+                </>
+              )}
+            </Button>
+          </div>
+        </form>
+      </CardContent>
+    </Card>
+  );
+}

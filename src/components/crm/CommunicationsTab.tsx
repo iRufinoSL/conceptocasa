@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { supabase } from '@/integrations/supabase/client';
@@ -12,9 +13,12 @@ import { es } from 'date-fns/locale';
 import { 
   Mail, Phone, MessageSquare, Calendar, Search, Filter, 
   ArrowUpRight, ArrowDownLeft, CheckCircle, XCircle, Clock, Eye,
-  List, Users, ChevronRight, LayoutGrid
+  List, Users, ChevronRight, Inbox, Ticket, Send, History
 } from 'lucide-react';
 import type { Tables } from '@/integrations/supabase/types';
+import { EmailInbox } from './EmailInbox';
+import { TicketsList } from './TicketsList';
+import { ComposeEmail } from './ComposeEmail';
 
 type Communication = Tables<'crm_communications'> & {
   crm_contacts?: { name: string; surname: string | null; email: string | null } | null;
@@ -50,6 +54,7 @@ const directionConfig = {
 };
 
 export function CommunicationsTab() {
+  const [activeSubTab, setActiveSubTab] = useState('inbox');
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -57,6 +62,7 @@ export function CommunicationsTab() {
   const [dateFilter, setDateFilter] = useState<string>('all');
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  const [replyToEmail, setReplyToEmail] = useState<any>(null);
 
   const { data: communications = [], isLoading } = useQuery({
     queryKey: ['crm-communications', typeFilter, statusFilter, directionFilter],
@@ -211,6 +217,16 @@ export function CommunicationsTab() {
     });
   };
 
+  const handleComposeReply = (email: any) => {
+    setReplyToEmail({
+      email: email.direction === 'inbound' ? email.from_email : email.to_emails?.[0],
+      subject: email.subject,
+      contactId: email.contact_id,
+      ticketId: email.ticket_id,
+    });
+    setActiveSubTab('compose');
+  };
+
   const CommunicationItem = ({ comm }: { comm: Communication }) => {
     const TypeIcon = typeIcons[comm.communication_type as keyof typeof typeIcons] || Mail;
     const status = statusConfig[comm.status as keyof typeof statusConfig] || statusConfig.pending;
@@ -267,217 +283,258 @@ export function CommunicationsTab() {
 
   return (
     <div className="space-y-4">
-      {/* Stats Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
-        <Card className="p-3">
-          <div className="text-2xl font-bold text-primary">{stats.total}</div>
-          <div className="text-xs text-muted-foreground">Total</div>
-        </Card>
-        <Card className="p-3">
-          <div className="text-2xl font-bold text-blue-600">{stats.sent}</div>
-          <div className="text-xs text-muted-foreground">Enviados</div>
-        </Card>
-        <Card className="p-3">
-          <div className="text-2xl font-bold text-green-600">{stats.received}</div>
-          <div className="text-xs text-muted-foreground">Recibidos</div>
-        </Card>
-        <Card className="p-3">
-          <div className="text-2xl font-bold text-purple-600">{stats.opened}</div>
-          <div className="text-xs text-muted-foreground">Abiertos</div>
-        </Card>
-        <Card className="p-3">
-          <div className="text-2xl font-bold text-red-600">{stats.failed}</div>
-          <div className="text-xs text-muted-foreground">Fallidos</div>
-        </Card>
-        <Card className="p-3">
-          <div className="text-2xl font-bold text-amber-600">{stats.contacts}</div>
-          <div className="text-xs text-muted-foreground">Contactos</div>
-        </Card>
-      </div>
+      {/* Sub-tabs navigation */}
+      <Tabs value={activeSubTab} onValueChange={setActiveSubTab}>
+        <TabsList className="grid w-full max-w-xl grid-cols-4">
+          <TabsTrigger value="inbox" className="gap-2">
+            <Inbox className="h-4 w-4" />
+            <span className="hidden sm:inline">Bandeja</span>
+          </TabsTrigger>
+          <TabsTrigger value="tickets" className="gap-2">
+            <Ticket className="h-4 w-4" />
+            <span className="hidden sm:inline">Tickets</span>
+          </TabsTrigger>
+          <TabsTrigger value="compose" className="gap-2">
+            <Send className="h-4 w-4" />
+            <span className="hidden sm:inline">Redactar</span>
+          </TabsTrigger>
+          <TabsTrigger value="history" className="gap-2">
+            <History className="h-4 w-4" />
+            <span className="hidden sm:inline">Historial</span>
+          </TabsTrigger>
+        </TabsList>
 
-      {/* Filters */}
-      <Card>
-        <CardContent className="pt-4">
-          <div className="flex flex-wrap gap-3 items-center">
-            <div className="relative flex-1 min-w-[200px]">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Buscar por contacto, email, asunto o contenido..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="pl-10"
-              />
+        {/* Inbox Tab */}
+        <TabsContent value="inbox" className="mt-4">
+          <EmailInbox onComposeReply={handleComposeReply} />
+        </TabsContent>
+
+        {/* Tickets Tab */}
+        <TabsContent value="tickets" className="mt-4">
+          <TicketsList />
+        </TabsContent>
+
+        {/* Compose Tab */}
+        <TabsContent value="compose" className="mt-4">
+          <ComposeEmail 
+            replyTo={replyToEmail} 
+            onSent={() => {
+              setReplyToEmail(null);
+              setActiveSubTab('inbox');
+            }} 
+          />
+        </TabsContent>
+
+        {/* History Tab - Original CRM Communications */}
+        <TabsContent value="history" className="mt-4">
+          <div className="space-y-4">
+            {/* Stats Cards */}
+            <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+              <Card className="p-3">
+                <div className="text-2xl font-bold text-primary">{stats.total}</div>
+                <div className="text-xs text-muted-foreground">Total</div>
+              </Card>
+              <Card className="p-3">
+                <div className="text-2xl font-bold text-blue-600">{stats.sent}</div>
+                <div className="text-xs text-muted-foreground">Enviados</div>
+              </Card>
+              <Card className="p-3">
+                <div className="text-2xl font-bold text-green-600">{stats.received}</div>
+                <div className="text-xs text-muted-foreground">Recibidos</div>
+              </Card>
+              <Card className="p-3">
+                <div className="text-2xl font-bold text-purple-600">{stats.opened}</div>
+                <div className="text-xs text-muted-foreground">Abiertos</div>
+              </Card>
+              <Card className="p-3">
+                <div className="text-2xl font-bold text-red-600">{stats.failed}</div>
+                <div className="text-xs text-muted-foreground">Fallidos</div>
+              </Card>
+              <Card className="p-3">
+                <div className="text-2xl font-bold text-amber-600">{stats.contacts}</div>
+                <div className="text-xs text-muted-foreground">Contactos</div>
+              </Card>
             </div>
-            <Select value={typeFilter} onValueChange={setTypeFilter}>
-              <SelectTrigger className="w-[130px]">
-                <Filter className="h-4 w-4 mr-2" />
-                <SelectValue placeholder="Tipo" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos</SelectItem>
-                <SelectItem value="email">Email</SelectItem>
-                <SelectItem value="whatsapp">WhatsApp</SelectItem>
-                <SelectItem value="call">Llamada</SelectItem>
-                <SelectItem value="meeting">Reunión</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={directionFilter} onValueChange={setDirectionFilter}>
-              <SelectTrigger className="w-[130px]">
-                <SelectValue placeholder="Dirección" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todas</SelectItem>
-                <SelectItem value="outbound">Enviados</SelectItem>
-                <SelectItem value="inbound">Recibidos</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-[130px]">
-                <SelectValue placeholder="Estado" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos</SelectItem>
-                <SelectItem value="pending">Pendiente</SelectItem>
-                <SelectItem value="sent">Enviado</SelectItem>
-                <SelectItem value="delivered">Entregado</SelectItem>
-                <SelectItem value="failed">Fallido</SelectItem>
-                <SelectItem value="opened">Abierto</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={dateFilter} onValueChange={setDateFilter}>
-              <SelectTrigger className="w-[130px]">
-                <Calendar className="h-4 w-4 mr-2" />
-                <SelectValue placeholder="Fecha" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todo el tiempo</SelectItem>
-                <SelectItem value="today">Hoy</SelectItem>
-                <SelectItem value="week">Última semana</SelectItem>
-                <SelectItem value="month">Último mes</SelectItem>
-                <SelectItem value="quarter">Último trimestre</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </CardContent>
-      </Card>
 
-      {/* View Mode Toggle */}
-      <div className="flex justify-end gap-1">
-        <Button
-          variant={viewMode === 'list' ? 'default' : 'outline'}
-          size="sm"
-          onClick={() => setViewMode('list')}
-          className="gap-2"
-        >
-          <List className="h-4 w-4" />
-          <span className="hidden sm:inline">Lista</span>
-        </Button>
-        <Button
-          variant={viewMode === 'grouped' ? 'default' : 'outline'}
-          size="sm"
-          onClick={() => setViewMode('grouped')}
-          className="gap-2"
-        >
-          <Users className="h-4 w-4" />
-          <span className="hidden sm:inline">Por Contacto</span>
-        </Button>
-      </div>
-
-      {/* List View */}
-      {viewMode === 'list' && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Mail className="h-5 w-5" />
-              Historial de Comunicaciones
-              <Badge variant="secondary" className="ml-2">
-                {filteredCommunications.length}
-              </Badge>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {isLoading ? (
-              <div className="text-center py-8 text-muted-foreground">Cargando...</div>
-            ) : filteredCommunications.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                No hay comunicaciones registradas
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {filteredCommunications.map((comm) => (
-                  <CommunicationItem key={comm.id} comm={comm} />
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Grouped by Contact View */}
-      {viewMode === 'grouped' && (
-        <div className="space-y-2">
-          {isLoading ? (
-            <Card className="p-8 text-center text-muted-foreground">Cargando...</Card>
-          ) : groupedByContact.length === 0 ? (
-            <Card className="p-8 text-center text-muted-foreground">
-              No hay comunicaciones registradas
+            {/* Filters */}
+            <Card>
+              <CardContent className="pt-4">
+                <div className="flex flex-wrap gap-3 items-center">
+                  <div className="relative flex-1 min-w-[200px]">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Buscar por contacto, email, asunto o contenido..."
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                      className="pl-10"
+                    />
+                  </div>
+                  <Select value={typeFilter} onValueChange={setTypeFilter}>
+                    <SelectTrigger className="w-[130px]">
+                      <Filter className="h-4 w-4 mr-2" />
+                      <SelectValue placeholder="Tipo" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos</SelectItem>
+                      <SelectItem value="email">Email</SelectItem>
+                      <SelectItem value="whatsapp">WhatsApp</SelectItem>
+                      <SelectItem value="call">Llamada</SelectItem>
+                      <SelectItem value="meeting">Reunión</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Select value={directionFilter} onValueChange={setDirectionFilter}>
+                    <SelectTrigger className="w-[130px]">
+                      <SelectValue placeholder="Dirección" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todas</SelectItem>
+                      <SelectItem value="outbound">Enviados</SelectItem>
+                      <SelectItem value="inbound">Recibidos</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Select value={statusFilter} onValueChange={setStatusFilter}>
+                    <SelectTrigger className="w-[130px]">
+                      <SelectValue placeholder="Estado" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos</SelectItem>
+                      <SelectItem value="pending">Pendiente</SelectItem>
+                      <SelectItem value="sent">Enviado</SelectItem>
+                      <SelectItem value="delivered">Entregado</SelectItem>
+                      <SelectItem value="failed">Fallido</SelectItem>
+                      <SelectItem value="opened">Abierto</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Select value={dateFilter} onValueChange={setDateFilter}>
+                    <SelectTrigger className="w-[130px]">
+                      <Calendar className="h-4 w-4 mr-2" />
+                      <SelectValue placeholder="Fecha" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todo el tiempo</SelectItem>
+                      <SelectItem value="today">Hoy</SelectItem>
+                      <SelectItem value="week">Última semana</SelectItem>
+                      <SelectItem value="month">Último mes</SelectItem>
+                      <SelectItem value="quarter">Último trimestre</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </CardContent>
             </Card>
-          ) : (
-            groupedByContact.map(([contactId, group]) => (
-              <Collapsible
-                key={contactId}
-                open={expandedGroups.has(contactId)}
-                onOpenChange={() => toggleGroup(contactId)}
+
+            {/* View Mode Toggle */}
+            <div className="flex justify-end gap-1">
+              <Button
+                variant={viewMode === 'list' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setViewMode('list')}
+                className="gap-2"
               >
-                <Card>
-                  <CollapsibleTrigger asChild>
-                    <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors py-3">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <ChevronRight 
-                            className={`h-5 w-5 transition-transform ${
-                              expandedGroups.has(contactId) ? 'rotate-90' : ''
-                            }`}
-                          />
-                          <div className="flex flex-col">
-                            <CardTitle className="text-base">{group.contactName}</CardTitle>
-                            {group.contactEmail && (
-                              <span className="text-xs text-muted-foreground">{group.contactEmail}</span>
-                            )}
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Badge variant="outline" className="gap-1 text-blue-600">
-                            <ArrowUpRight className="h-3 w-3" />
-                            {group.sentCount}
-                          </Badge>
-                          <Badge variant="outline" className="gap-1 text-green-600">
-                            <ArrowDownLeft className="h-3 w-3" />
-                            {group.receivedCount}
-                          </Badge>
-                          <Badge variant="secondary">
-                            {group.communications.length} total
-                          </Badge>
-                          <span className="text-xs text-muted-foreground hidden sm:inline">
-                            Último: {format(group.lastCommunication, "d MMM", { locale: es })}
-                          </span>
-                        </div>
-                      </div>
-                    </CardHeader>
-                  </CollapsibleTrigger>
-                  <CollapsibleContent>
-                    <CardContent className="pt-0 space-y-3">
-                      {group.communications.map((comm) => (
+                <List className="h-4 w-4" />
+                <span className="hidden sm:inline">Lista</span>
+              </Button>
+              <Button
+                variant={viewMode === 'grouped' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setViewMode('grouped')}
+                className="gap-2"
+              >
+                <Users className="h-4 w-4" />
+                <span className="hidden sm:inline">Por Contacto</span>
+              </Button>
+            </div>
+
+            {/* List View */}
+            {viewMode === 'list' && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Mail className="h-5 w-5" />
+                    Historial de Comunicaciones
+                    <Badge variant="secondary" className="ml-2">
+                      {filteredCommunications.length}
+                    </Badge>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {isLoading ? (
+                    <div className="text-center py-8 text-muted-foreground">Cargando...</div>
+                  ) : filteredCommunications.length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground">
+                      No hay comunicaciones registradas
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {filteredCommunications.map((comm) => (
                         <CommunicationItem key={comm.id} comm={comm} />
                       ))}
-                    </CardContent>
-                  </CollapsibleContent>
-                </Card>
-              </Collapsible>
-            ))
-          )}
-        </div>
-      )}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Grouped by Contact View */}
+            {viewMode === 'grouped' && (
+              <div className="space-y-2">
+                {isLoading ? (
+                  <Card className="p-8 text-center text-muted-foreground">Cargando...</Card>
+                ) : groupedByContact.length === 0 ? (
+                  <Card className="p-8 text-center text-muted-foreground">
+                    No hay comunicaciones registradas
+                  </Card>
+                ) : (
+                  groupedByContact.map(([contactId, group]) => (
+                    <Collapsible
+                      key={contactId}
+                      open={expandedGroups.has(contactId)}
+                      onOpenChange={() => toggleGroup(contactId)}
+                    >
+                      <Card>
+                        <CollapsibleTrigger asChild>
+                          <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors py-3">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-3">
+                                <ChevronRight 
+                                  className={`h-5 w-5 transition-transform ${
+                                    expandedGroups.has(contactId) ? 'rotate-90' : ''
+                                  }`}
+                                />
+                                <div className="flex flex-col">
+                                  <CardTitle className="text-base">{group.contactName}</CardTitle>
+                                  {group.contactEmail && (
+                                    <span className="text-xs text-muted-foreground">{group.contactEmail}</span>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-4">
+                                <div className="flex items-center gap-2 text-xs">
+                                  <span className="text-blue-600">↑{group.sentCount}</span>
+                                  <span className="text-green-600">↓{group.receivedCount}</span>
+                                </div>
+                                <Badge variant="secondary">
+                                  {group.communications.length}
+                                </Badge>
+                              </div>
+                            </div>
+                          </CardHeader>
+                        </CollapsibleTrigger>
+                        <CollapsibleContent>
+                          <CardContent className="pt-0 space-y-3">
+                            {group.communications.map((comm) => (
+                              <CommunicationItem key={comm.id} comm={comm} />
+                            ))}
+                          </CardContent>
+                        </CollapsibleContent>
+                      </Card>
+                    </Collapsible>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

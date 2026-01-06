@@ -262,7 +262,12 @@ export function BudgetSummary({ budgetId, budgetName, open, onOpenChange }: Budg
         
         const activitiesForOption = linkedActivityIds
           .map(id => activityMap.get(id))
-          .filter((a): a is Activity => a !== undefined && (a.opciones || []).includes(option));
+          .filter((a): a is Activity => {
+            if (!a) return false;
+            const opts = a.opciones || [];
+            // IMPORTANT: empty opciones[] means "aplica a todas"
+            return opts.length === 0 || opts.includes(option);
+          });
 
         if (activitiesForOption.length === 0) return;
 
@@ -292,7 +297,10 @@ export function BudgetSummary({ budgetId, budgetName, open, onOpenChange }: Budg
 
       // Activities without work area for this option
       const unassignedForOption = activitiesWithoutWorkArea
-        .filter(a => (a.opciones || []).includes(option))
+        .filter(a => {
+          const opts = a.opciones || [];
+          return opts.length === 0 || opts.includes(option);
+        })
         .map(a => ({
           activity: a,
           subtotal: activitySubtotals.get(a.id) || 0

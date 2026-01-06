@@ -662,10 +662,35 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
         doc.setFontSize(10);
         doc.setTextColor(0, 0, 0);
         doc.setDrawColor(0, 0, 0);
-        
+
         // Header starts at y=12 with proper margins to prevent cutting
         const headerY = 12;
         const logoSize = 12; // Slightly smaller logo to fit better
+        const headerHeight = headerY + logoSize + 6; // covers logo + bottom separator
+
+        // Optional portada as a subtle background for the header (all pages)
+        if (portadaImgData) {
+          try {
+            doc.saveGraphicsState();
+            doc.rect(0, 0, pageWidth, headerHeight);
+            (doc as any).clip();
+
+            // Draw image faint
+            doc.setGState(new (doc as any).GState({ opacity: 0.28 }));
+            doc.addImage(portadaImgData, 'JPEG', 0, 0, pageWidth, headerHeight, undefined, 'FAST');
+
+            // Add a white veil so text stays readable but image remains visible
+            doc.setGState(new (doc as any).GState({ opacity: 0.78 }));
+            doc.setFillColor(255, 255, 255);
+            doc.rect(0, 0, pageWidth, headerHeight, 'F');
+
+            doc.setGState(new (doc as any).GState({ opacity: 1 }));
+            doc.restoreGraphicsState();
+          } catch (e) {
+            console.error('Error drawing header portada background:', e);
+            // Continue without background
+          }
+        }
         
         // Draw logo or initials
         if (logoImgData) {

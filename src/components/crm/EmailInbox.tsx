@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import DOMPurify from 'dompurify';
 import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -312,7 +313,9 @@ export function EmailInbox({ onComposeReply }: EmailInboxProps) {
                 <div 
                   className="prose prose-sm max-w-none dark:prose-invert"
                   dangerouslySetInnerHTML={{ 
-                    __html: selectedEmail.body_html || selectedEmail.body_text?.replace(/\n/g, '<br>') || 'Sin contenido' 
+                    __html: DOMPurify.sanitize(
+                      selectedEmail.body_html || selectedEmail.body_text?.replace(/\n/g, '<br>') || 'Sin contenido'
+                    )
                   }}
                 />
               </ScrollArea>

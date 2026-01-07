@@ -41,9 +41,9 @@ const handler = async (req: Request): Promise<Response> => {
     const rawBody = await req.text();
     console.log("Raw request body:", rawBody.substring(0, 500));
     
-    let emailData: InboundEmail;
+    let payload: any;
     try {
-      emailData = JSON.parse(rawBody);
+      payload = JSON.parse(rawBody);
     } catch (parseError) {
       console.error("Failed to parse JSON:", parseError);
       return new Response(
@@ -51,6 +51,28 @@ const handler = async (req: Request): Promise<Response> => {
         { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
       );
     }
+
+    // Check if this is a Resend webhook event (not a real inbound email)
+    // Resend sends events like domain.updated, email.sent, email.delivered, email.opened, etc.
+    if (payload.type && typeof payload.type === 'string') {
+      const eventType = payload.type;
+      console.log("Received Resend webhook event:", eventType);
+      
+      // Only process email.received events, ignore all others
+      if (eventType !== 'email.received') {
+        console.log("Ignoring non-inbound event:", eventType);
+        return new Response(
+          JSON.stringify({ success: true, message: `Ignored event: ${eventType}` }),
+          { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
+        );
+      }
+      
+      // For email.received, the actual email data is in payload.data
+      payload = payload.data;
+    }
+
+    // Now treat payload as InboundEmail
+    const emailData: InboundEmail = payload;
 
     // Validate required fields with safe defaults
     const fromField = emailData.from || emailData.from_name || "";
@@ -63,7 +85,7 @@ const handler = async (req: Request): Promise<Response> => {
     if (!fromField) {
       console.error("No 'from' field in email data");
       return new Response(
-        JSON.stringify({ error: "Missing 'from' field" }),
+        JSON.stringify({ error: "Missing 'from' field in email data" }),
         { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
       );
     }

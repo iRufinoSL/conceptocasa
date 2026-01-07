@@ -77,6 +77,11 @@ export default function Proyectos() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [isLoading, setIsLoading] = useState(true);
 
+  // Collapsible states for categories - Prospectos open by default
+  const [prospectosOpen, setProspectosOpen] = useState(true);
+  const [activosOpen, setActivosOpen] = useState(false);
+  const [archivadosOpen, setArchivadosOpen] = useState(false);
+
   // Form states
   const [formOpen, setFormOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
@@ -97,7 +102,6 @@ export default function Proyectos() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [projectToDelete, setProjectToDelete] = useState<Project | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [showArchived, setShowArchived] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -171,6 +175,13 @@ export default function Proyectos() {
     }
   }, [user]);
 
+  // Normalize status for legacy values
+  const normalizeStatus = (status: string): string => {
+    if (status === 'active') return 'activo';
+    if (status === 'completed' || status === 'on_hold' || status === 'cancelled') return 'archivado';
+    return status;
+  };
+
   useEffect(() => {
     let filtered = projects.filter(project => {
       const matchesSearch = 
@@ -178,7 +189,9 @@ export default function Proyectos() {
         searchMatch(project.location, searchTerm) ||
         searchMatch(project.project_type, searchTerm);
       
-      const matchesStatus = statusFilter === 'all' || project.status === statusFilter;
+      // Use normalized status for filtering
+      const normalizedStatus = normalizeStatus(project.status);
+      const matchesStatus = statusFilter === 'all' || normalizedStatus === statusFilter;
       
       return matchesSearch && matchesStatus;
     });
@@ -189,9 +202,10 @@ export default function Proyectos() {
     setFilteredProjects(filtered);
   }, [searchTerm, statusFilter, projects]);
 
-  // Separate active and archived projects
-  const activeProjects = filteredProjects.filter(p => !p.archived);
-  const archivedProjects = filteredProjects.filter(p => p.archived);
+  // Group projects by category
+  const prospectosProjects = filteredProjects.filter(p => normalizeStatus(p.status) === 'prospecto');
+  const activosProjects = filteredProjects.filter(p => normalizeStatus(p.status) === 'activo');
+  const archivadosProjects = filteredProjects.filter(p => normalizeStatus(p.status) === 'archivado');
 
   // Handle archive toggle
   const handleArchiveToggle = async (project: Project) => {
@@ -293,6 +307,132 @@ export default function Proyectos() {
 
   const canEdit = isAdmin();
 
+  // Render project card
+  const renderProjectCard = (project: Project) => {
+    const contacts = projectContacts[project.id] || [];
+    const budgetCount = projectBudgetCounts[project.id] || 0;
+    
+    return (
+      <Card
+        key={project.id}
+        className="group hover:shadow-lg hover:border-primary/50 transition-all duration-200"
+      >
+        <CardHeader className="pb-3">
+          <div className="flex items-start justify-between">
+            <CardTitle className="text-lg line-clamp-1 flex-1">{project.name}</CardTitle>
+            <div className="flex items-center gap-1">
+              {canEdit && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <MoreVertical className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => handleManageContacts(project)}>
+                      <Users className="h-4 w-4 mr-2" />
+                      Gestionar contactos
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleManageDocuments(project)}>
+                      <FileText className="h-4 w-4 mr-2" />
+                      Documentos
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleManageBudgets(project)}>
+                      <Calculator className="h-4 w-4 mr-2" />
+                      Presupuestos
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleEdit(project)}>
+                      <Pencil className="h-4 w-4 mr-2" />
+                      Editar
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleDeleteClick(project)} className="text-destructive">
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Eliminar
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
+            </div>
+          </div>
+          {project.description && (
+            <CardDescription className="line-clamp-2">
+              {project.description}
+            </CardDescription>
+          )}
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {project.location && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <MapPin className="h-4 w-4" />
+              <span>{project.location}</span>
+            </div>
+          )}
+          {project.project_type && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Building2 className="h-4 w-4" />
+              <span>{project.project_type}</span>
+            </div>
+          )}
+          {project.budget && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <DollarSign className="h-4 w-4" />
+              <span>{formatCurrencyNoDecimals(project.budget)}</span>
+            </div>
+          )}
+          {project.start_date && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Calendar className="h-4 w-4" />
+              <span>
+                {format(new Date(project.start_date), 'dd MMM yyyy', { locale: es })}
+                {project.end_date && ` - ${format(new Date(project.end_date), 'dd MMM yyyy', { locale: es })}`}
+              </span>
+            </div>
+          )}
+          
+          {/* Project Stats: Contacts & Budgets */}
+          {(contacts.length > 0 || budgetCount > 0) && (
+            <div className="pt-2 border-t flex items-center justify-between gap-4">
+              {/* Contacts */}
+              {contacts.length > 0 && (
+                <div className="flex items-center gap-2">
+                  <div className="flex -space-x-2">
+                    {contacts.slice(0, 3).map((pc, idx) => (
+                      <Avatar key={idx} className="h-6 w-6 border-2 border-background">
+                        <AvatarFallback className="text-xs bg-primary/10 text-primary">
+                          {pc.contact ? getInitials(pc.contact.name, pc.contact.surname) : '?'}
+                        </AvatarFallback>
+                      </Avatar>
+                    ))}
+                    {contacts.length > 3 && (
+                      <div className="h-6 w-6 rounded-full bg-muted flex items-center justify-center text-xs border-2 border-background">
+                        +{contacts.length - 3}
+                      </div>
+                    )}
+                  </div>
+                  <span className="text-xs text-muted-foreground">
+                    {contacts.length}
+                  </span>
+                </div>
+              )}
+
+              {/* Budgets */}
+              {budgetCount > 0 && (
+                <div className="flex items-center gap-1.5">
+                  <div className="p-1.5 rounded bg-primary/10">
+                    <Calculator className="h-3.5 w-3.5 text-primary" />
+                  </div>
+                  <span className="text-xs text-muted-foreground">
+                    {budgetCount} presupuesto{budgetCount !== 1 ? 's' : ''}
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    );
+  };
+
   if (loading || rolesLoading || isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -359,12 +499,12 @@ export default function Proyectos() {
           </Select>
           <div className="flex items-center gap-2 text-sm text-muted-foreground whitespace-nowrap">
             <Building2 className="h-4 w-4" />
-            <span>{activeProjects.length} activos{archivedProjects.length > 0 && `, ${archivedProjects.length} archivados`}</span>
+            <span>{filteredProjects.length} proyecto{filteredProjects.length !== 1 ? 's' : ''}</span>
           </div>
         </div>
 
         {/* Projects Grid */}
-        {activeProjects.length === 0 && archivedProjects.length === 0 ? (
+        {filteredProjects.length === 0 ? (
           <Card className="py-16">
             <CardContent className="text-center">
               <FolderOpen className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
@@ -380,143 +520,67 @@ export default function Proyectos() {
             </CardContent>
           </Card>
         ) : (
-          <>
-            {/* Active Projects */}
-            {activeProjects.length > 0 && (
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 mb-6">
-                {activeProjects.map((project) => {
-                  const contacts = projectContacts[project.id] || [];
-                  const budgetCount = projectBudgetCounts[project.id] || 0;
-                  return (
-                    <Card
-                      key={project.id}
-                      className="group hover:shadow-lg hover:border-primary/50 transition-all duration-200"
-                    >
-                      <CardHeader className="pb-3">
-                        <div className="flex items-start justify-between">
-                          <CardTitle className="text-lg line-clamp-1 flex-1">{project.name}</CardTitle>
-                          <div className="flex items-center gap-1">
-                            <Badge variant={getStatusVariant(project.status)}>
-                              {getStatusLabel(project.status)}
-                        </Badge>
-                        {canEdit && (
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <MoreVertical className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem onClick={() => handleManageContacts(project)}>
-                                <Users className="h-4 w-4 mr-2" />
-                                Gestionar contactos
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => handleManageDocuments(project)}>
-                                <FileText className="h-4 w-4 mr-2" />
-                                Documentos
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => handleManageBudgets(project)}>
-                                <Calculator className="h-4 w-4 mr-2" />
-                                Presupuestos
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => handleEdit(project)}>
-                                <Pencil className="h-4 w-4 mr-2" />
-                                Editar
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => handleArchiveToggle(project)}>
-                                <Archive className="h-4 w-4 mr-2" />
-                                {project.archived ? 'Desarchivar' : 'Archivar'}
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => handleDeleteClick(project)} className="text-destructive">
-                                <Trash2 className="h-4 w-4 mr-2" />
-                                Eliminar
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        )}
-                      </div>
+          <div className="space-y-4">
+            {/* Prospectos Section */}
+            {prospectosProjects.length > 0 && (
+              <Collapsible open={prospectosOpen} onOpenChange={setProspectosOpen}>
+                <CollapsibleTrigger asChild>
+                  <Button variant="ghost" className="w-full justify-between px-4 py-3 h-auto bg-muted/50 hover:bg-muted">
+                    <div className="flex items-center gap-2">
+                      {prospectosOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                      <span className="font-semibold">Prospectos</span>
+                      <Badge variant="secondary" className="ml-2">{prospectosProjects.length}</Badge>
                     </div>
-                    {project.description && (
-                      <CardDescription className="line-clamp-2">
-                        {project.description}
-                      </CardDescription>
-                    )}
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    {project.location && (
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <MapPin className="h-4 w-4" />
-                        <span>{project.location}</span>
-                      </div>
-                    )}
-                    {project.project_type && (
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <Building2 className="h-4 w-4" />
-                        <span>{project.project_type}</span>
-                      </div>
-                    )}
-                    {project.budget && (
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <DollarSign className="h-4 w-4" />
-                        <span>{formatCurrencyNoDecimals(project.budget)}</span>
-                      </div>
-                    )}
-                    {project.start_date && (
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <Calendar className="h-4 w-4" />
-                        <span>
-                          {format(new Date(project.start_date), 'dd MMM yyyy', { locale: es })}
-                          {project.end_date && ` - ${format(new Date(project.end_date), 'dd MMM yyyy', { locale: es })}`}
-                        </span>
-                      </div>
-                    )}
-                    
-                    {/* Project Stats: Contacts & Budgets */}
-                    {(contacts.length > 0 || budgetCount > 0) && (
-                      <div className="pt-2 border-t flex items-center justify-between gap-4">
-                        {/* Contacts */}
-                        {contacts.length > 0 && (
-                          <div className="flex items-center gap-2">
-                            <div className="flex -space-x-2">
-                              {contacts.slice(0, 3).map((pc, idx) => (
-                                <Avatar key={idx} className="h-6 w-6 border-2 border-background">
-                                  <AvatarFallback className="text-xs bg-primary/10 text-primary">
-                                    {pc.contact ? getInitials(pc.contact.name, pc.contact.surname) : '?'}
-                                  </AvatarFallback>
-                                </Avatar>
-                              ))}
-                              {contacts.length > 3 && (
-                                <div className="h-6 w-6 rounded-full bg-muted flex items-center justify-center text-xs border-2 border-background">
-                                  +{contacts.length - 3}
-                                </div>
-                              )}
-                            </div>
-                            <span className="text-xs text-muted-foreground">
-                              {contacts.length}
-                            </span>
-                          </div>
-                        )}
-
-                        {/* Budgets */}
-                        {budgetCount > 0 && (
-                          <div className="flex items-center gap-1.5">
-                            <div className="p-1.5 rounded bg-primary/10">
-                              <Calculator className="h-3.5 w-3.5 text-primary" />
-                            </div>
-                            <span className="text-xs text-muted-foreground">
-                              {budgetCount} presupuesto{budgetCount !== 1 ? 's' : ''}
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              );
-            })}
-              </div>
+                  </Button>
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 mt-4">
+                    {prospectosProjects.map((project) => renderProjectCard(project))}
+                  </div>
+                </CollapsibleContent>
+              </Collapsible>
             )}
-          </>
+
+            {/* Activos Section */}
+            {activosProjects.length > 0 && (
+              <Collapsible open={activosOpen} onOpenChange={setActivosOpen}>
+                <CollapsibleTrigger asChild>
+                  <Button variant="ghost" className="w-full justify-between px-4 py-3 h-auto bg-muted/50 hover:bg-muted">
+                    <div className="flex items-center gap-2">
+                      {activosOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                      <span className="font-semibold">Activos</span>
+                      <Badge variant="default" className="ml-2">{activosProjects.length}</Badge>
+                    </div>
+                  </Button>
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 mt-4">
+                    {activosProjects.map((project) => renderProjectCard(project))}
+                  </div>
+                </CollapsibleContent>
+              </Collapsible>
+            )}
+
+            {/* Archivados Section */}
+            {archivadosProjects.length > 0 && (
+              <Collapsible open={archivadosOpen} onOpenChange={setArchivadosOpen}>
+                <CollapsibleTrigger asChild>
+                  <Button variant="ghost" className="w-full justify-between px-4 py-3 h-auto bg-muted/50 hover:bg-muted">
+                    <div className="flex items-center gap-2">
+                      {archivadosOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                      <span className="font-semibold">Archivados</span>
+                      <Badge variant="outline" className="ml-2">{archivadosProjects.length}</Badge>
+                    </div>
+                  </Button>
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 mt-4">
+                    {archivadosProjects.map((project) => renderProjectCard(project))}
+                  </div>
+                </CollapsibleContent>
+              </Collapsible>
+            )}
+          </div>
         )}
       </main>
 

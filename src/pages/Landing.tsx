@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import HousingProfileForm from "@/components/landing/HousingProfileForm";
 import { 
   Mail, 
   Phone, 
@@ -22,7 +23,8 @@ import {
   Zap,
   MapPin,
   Clock,
-  Play
+  Play,
+  FileText
 } from "lucide-react";
 import homeModern from "@/assets/home-modern.jpg";
 import homeClassic from "@/assets/home-classic.jpg";
@@ -38,6 +40,7 @@ const Landing = () => {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showHousingForm, setShowHousingForm] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -607,11 +610,35 @@ const Landing = () => {
                 >
                   {isSubmitting ? "Enviando..." : "Enviar Mensaje"}
                 </Button>
+
+                <div className="relative my-4">
+                  <div className="absolute inset-0 flex items-center">
+                    <span className="w-full border-t border-border" />
+                  </div>
+                  <div className="relative flex justify-center text-xs uppercase">
+                    <span className="bg-card px-2 text-muted-foreground">o bien</span>
+                  </div>
+                </div>
+
+                <Button 
+                  type="button"
+                  className="w-full bg-primary hover:bg-primary/90 text-sm py-6 h-auto"
+                  onClick={() => setShowHousingForm(true)}
+                >
+                  <FileText className="w-5 h-5 mr-2 flex-shrink-0" />
+                  <span className="text-left">Si tienes definido el perfil de tu vivienda, envía esta información y te lo preparamos</span>
+                </Button>
               </form>
             </Card>
           </div>
         </div>
       </section>
+
+      {/* Housing Profile Form Dialog */}
+      <HousingProfileForm 
+        open={showHousingForm} 
+        onOpenChange={setShowHousingForm} 
+      />
 
       {/* Footer */}
       <footer className="bg-foreground text-background py-12">

@@ -26,7 +26,8 @@ import {
   Calculator,
   Archive,
   ChevronDown,
-  ChevronRight
+  ChevronRight,
+  Home
 } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { format } from 'date-fns';
@@ -37,6 +38,7 @@ import { ProjectForm } from '@/components/projects/ProjectForm';
 import { ProjectContactsManager } from '@/components/projects/ProjectContactsManager';
 import { ProjectDocumentsManager } from '@/components/projects/ProjectDocumentsManager';
 import { ProjectBudgetsManager } from '@/components/projects/ProjectBudgetsManager';
+import { ProjectProfileViewer } from '@/components/projects/ProjectProfileViewer';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import { useToast } from '@/hooks/use-toast';
 import { AppNavDropdown } from '@/components/AppNavDropdown';
@@ -97,6 +99,10 @@ export default function Proyectos() {
   // Budgets manager state
   const [budgetsManagerOpen, setBudgetsManagerOpen] = useState(false);
   const [selectedProjectForBudgets, setSelectedProjectForBudgets] = useState<Project | null>(null);
+
+  // Profile viewer state
+  const [profileViewerOpen, setProfileViewerOpen] = useState(false);
+  const [selectedProjectForProfile, setSelectedProjectForProfile] = useState<Project | null>(null);
 
   // Delete states
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -248,6 +254,11 @@ export default function Proyectos() {
     setBudgetsManagerOpen(true);
   };
 
+  const handleViewProfile = (project: Project) => {
+    setSelectedProjectForProfile(project);
+    setProfileViewerOpen(true);
+  };
+
   const handleDeleteClick = (project: Project) => {
     setProjectToDelete(project);
     setDeleteDialogOpen(true);
@@ -329,6 +340,10 @@ export default function Proyectos() {
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => handleViewProfile(project)}>
+                      <Home className="h-4 w-4 mr-2" />
+                      Ver Perfil
+                    </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => handleManageContacts(project)}>
                       <Users className="h-4 w-4 mr-2" />
                       Gestionar contactos
@@ -625,6 +640,16 @@ export default function Proyectos() {
           onOpenChange={setBudgetsManagerOpen}
           projectId={selectedProjectForBudgets.id}
           projectName={selectedProjectForBudgets.name}
+        />
+      )}
+
+      {/* Profile Viewer */}
+      {selectedProjectForProfile && (
+        <ProjectProfileViewer
+          open={profileViewerOpen}
+          onOpenChange={setProfileViewerOpen}
+          projectId={selectedProjectForProfile.id}
+          projectName={selectedProjectForProfile.name}
         />
       )}
 

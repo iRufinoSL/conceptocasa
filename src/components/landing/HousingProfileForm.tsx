@@ -60,6 +60,7 @@ const HousingProfileForm = ({ open, onOpenChange }: HousingProfileFormProps) => 
     poblacionProvincia: "",
     presupuestoGlobal: "",
     estiloConstructivo: [] as string[],
+    fechaIdealFinalizacion: "",
   });
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -122,6 +123,7 @@ ESPACIOS EXTERIORES:
 UBICACIÓN Y PRESUPUESTO:
 - Población/Provincia: ${formData.poblacionProvincia || "No especificado"}
 - Presupuesto global (incl. impuestos, licencias y proyecto): ${formData.presupuestoGlobal || "No especificado"}
+- Fecha ideal de finalización: ${formData.fechaIdealFinalizacion || "No especificado"}
 
 ESTILO CONSTRUCTIVO PREFERIDO:
 ${estilosSeleccionados || "No especificado"}
@@ -159,7 +161,8 @@ ${formData.message || "Sin mensaje adicional"}
           tieneTerreno: formData.tieneTerreno,
           poblacionProvincia: formData.poblacionProvincia,
           presupuestoGlobal: formData.presupuestoGlobal,
-          estiloConstructivo: formData.estiloConstructivo
+          estiloConstructivo: formData.estiloConstructivo,
+          fechaIdealFinalizacion: formData.fechaIdealFinalizacion
         }
       });
 
@@ -195,6 +198,7 @@ ${formData.message || "Sin mensaje adicional"}
         poblacionProvincia: "",
         presupuestoGlobal: "",
         estiloConstructivo: [],
+        fechaIdealFinalizacion: "",
       });
       onOpenChange(false);
     } catch (error: any) {
@@ -481,8 +485,8 @@ ${formData.message || "Sin mensaje adicional"}
 
             {/* Ubicación y presupuesto */}
             <div className="space-y-4">
-              <h3 className="text-lg font-semibold text-foreground border-b pb-2">Ubicación y Presupuesto</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <h3 className="text-lg font-semibold text-foreground border-b pb-2">Ubicación, Presupuesto y Plazo</h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                   <label className="text-sm font-medium text-foreground">¿En qué población o provincia?</label>
                   <Input 
@@ -503,6 +507,16 @@ ${formData.message || "Sin mensaje adicional"}
                     className="mt-1" 
                     placeholder="Ej: 250.000€" 
                     maxLength={100}
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-foreground">Fecha ideal de finalización</label>
+                  <Input 
+                    type="date"
+                    name="fechaIdealFinalizacion"
+                    value={formData.fechaIdealFinalizacion}
+                    onChange={handleInputChange}
+                    className="mt-1" 
                   />
                 </div>
               </div>

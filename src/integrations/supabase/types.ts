@@ -2300,6 +2300,7 @@ export type Database = {
           created_at: string
           despensa: string | null
           estilo_constructivo: string[] | null
+          fecha_ideal_finalizacion: string | null
           forma_geometrica: string | null
           garaje: string | null
           id: string
@@ -2331,6 +2332,7 @@ export type Database = {
           created_at?: string
           despensa?: string | null
           estilo_constructivo?: string[] | null
+          fecha_ideal_finalizacion?: string | null
           forma_geometrica?: string | null
           garaje?: string | null
           id?: string
@@ -2362,6 +2364,7 @@ export type Database = {
           created_at?: string
           despensa?: string | null
           estilo_constructivo?: string[] | null
+          fecha_ideal_finalizacion?: string | null
           forma_geometrica?: string | null
           garaje?: string | null
           id?: string

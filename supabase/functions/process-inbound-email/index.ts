@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { decode as base64Decode } from "https://deno.land/std@0.190.0/encoding/base64.ts";
 
 // No CORS headers - this is a server-to-server webhook endpoint
 const jsonHeaders = {
@@ -23,8 +24,9 @@ interface InboundEmail {
   // Attachments
   attachments?: Array<{
     filename: string;
-    content: string;
+    content: string; // base64 encoded
     content_type: string;
+    size?: number;
   }>;
   headers?: Record<string, string>;
   message_id?: string;
@@ -56,7 +58,7 @@ const handler = async (req: Request): Promise<Response> => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const rawBody = await req.text();
-    console.log("Raw request body (first 2000 chars):", rawBody.substring(0, 2000));
+    console.log("Raw request body (first 3000 chars):", rawBody.substring(0, 3000));
     console.log("Raw body length:", rawBody.length);
     
     let payload: any;
@@ -96,8 +98,8 @@ const handler = async (req: Request): Promise<Response> => {
     // Now treat payload as InboundEmail
     const emailData: InboundEmail = payload;
     
-    // Log all available fields for debugging
-    console.log("Email data fields:", JSON.stringify({
+    // Log all available fields for debugging - including full content for troubleshooting
+    console.log("Email data detailed debug:", JSON.stringify({
       from: emailData.from,
       from_name: emailData.from_name,
       to: emailData.to,
@@ -107,8 +109,15 @@ const handler = async (req: Request): Promise<Response> => {
       has_body: !!emailData.body,
       has_html: !!emailData.html,
       has_html_body: !!emailData.html_body,
-      text_preview: (emailData.text || emailData.plain_body || emailData.body || "").substring(0, 200),
-      html_preview: (emailData.html || emailData.html_body || "").substring(0, 200),
+      text_length: (emailData.text || "").length,
+      plain_body_length: (emailData.plain_body || "").length,
+      body_length: (emailData.body || "").length,
+      html_length: (emailData.html || "").length,
+      html_body_length: (emailData.html_body || "").length,
+      text_preview: (emailData.text || emailData.plain_body || emailData.body || "").substring(0, 500),
+      html_preview: (emailData.html || emailData.html_body || "").substring(0, 500),
+      attachments_count: emailData.attachments?.length || 0,
+      all_keys: Object.keys(payload),
     }));
 
     // Validate required fields with safe defaults
@@ -117,14 +126,38 @@ const handler = async (req: Request): Promise<Response> => {
     // Handle 'to' field which can be string or array
     const toField = Array.isArray(emailData.to) ? emailData.to : (emailData.to ? [emailData.to] : []);
     
-    // Extract text content from various possible fields
-    const textContent = emailData.text || emailData.plain_body || emailData.body || null;
-    const htmlContent = emailData.html || emailData.html_body || null;
+    // Extract text content from various possible fields - try all known field names
+    let textContent = emailData.text || emailData.plain_body || emailData.body || null;
+    let htmlContent = emailData.html || emailData.html_body || null;
+    
+    // If still no content, check if there's nested content in other fields
+    if (!textContent && !htmlContent) {
+      // Check for common alternative field names
+      const altTextFields = ['plain', 'text_body', 'plain_text', 'content', 'text_content'];
+      const altHtmlFields = ['html_content', 'body_html'];
+      
+      for (const field of altTextFields) {
+        if (payload[field] && typeof payload[field] === 'string') {
+          textContent = payload[field];
+          console.log(`Found text content in alternative field: ${field}`);
+          break;
+        }
+      }
+      
+      for (const field of altHtmlFields) {
+        if (payload[field] && typeof payload[field] === 'string') {
+          htmlContent = payload[field];
+          console.log(`Found HTML content in alternative field: ${field}`);
+          break;
+        }
+      }
+    }
     
     console.log("Received inbound email from:", fromField);
     console.log("Subject:", subjectField);
     console.log("Text content length:", textContent?.length || 0);
     console.log("HTML content length:", htmlContent?.length || 0);
+    console.log("Attachments count:", emailData.attachments?.length || 0);
 
     if (!fromField) {
       console.error("No 'from' field in email data");
@@ -190,7 +223,7 @@ const handler = async (req: Request): Promise<Response> => {
         .from("tickets")
         .insert({
           subject: subjectField,
-          description: textContent || "Email received",
+          description: textContent || htmlContent || "Email received",
           status: "open",
           priority: "medium",
           category: "Email",
@@ -269,6 +302,80 @@ const handler = async (req: Request): Promise<Response> => {
 
     console.log("Email stored:", emailRecord.id);
 
+    // Process attachments if any
+    const attachmentRecords: Array<{ id: string; file_name: string; file_path: string }> = [];
+    
+    if (emailData.attachments && emailData.attachments.length > 0) {
+      console.log("Processing", emailData.attachments.length, "attachments...");
+      
+      // Ensure bucket exists
+      const bucketName = "email-attachments";
+      const { data: existingBucket } = await supabase.storage.getBucket(bucketName);
+      
+      if (!existingBucket) {
+        console.log("Creating email-attachments bucket...");
+        const { error: bucketError } = await supabase.storage.createBucket(bucketName, {
+          public: false,
+          fileSizeLimit: 25 * 1024 * 1024, // 25MB limit
+        });
+        if (bucketError) {
+          console.error("Error creating bucket:", bucketError);
+        }
+      }
+      
+      for (const attachment of emailData.attachments) {
+        try {
+          const sanitizedFilename = attachment.filename.replace(/[^a-zA-Z0-9._-]/g, '_');
+          const filePath = `${emailRecord.id}/${Date.now()}_${sanitizedFilename}`;
+          
+          // Decode base64 content
+          const fileContent = base64Decode(attachment.content);
+          
+          // Upload to storage
+          const { data: uploadData, error: uploadError } = await supabase.storage
+            .from(bucketName)
+            .upload(filePath, fileContent, {
+              contentType: attachment.content_type || 'application/octet-stream',
+              upsert: false,
+            });
+          
+          if (uploadError) {
+            console.error("Error uploading attachment:", attachment.filename, uploadError);
+            continue;
+          }
+          
+          console.log("Uploaded attachment:", filePath);
+          
+          // Store attachment metadata
+          const { data: attachmentRecord, error: attachmentError } = await supabase
+            .from("email_attachments")
+            .insert({
+              email_id: emailRecord.id,
+              file_name: attachment.filename,
+              file_path: filePath,
+              file_type: attachment.content_type,
+              file_size: attachment.size || fileContent.length,
+            })
+            .select()
+            .single();
+          
+          if (attachmentError) {
+            console.error("Error storing attachment metadata:", attachmentError);
+          } else {
+            attachmentRecords.push({
+              id: attachmentRecord.id,
+              file_name: attachment.filename,
+              file_path: filePath,
+            });
+          }
+        } catch (attachError) {
+          console.error("Error processing attachment:", attachment.filename, attachError);
+        }
+      }
+      
+      console.log("Processed", attachmentRecords.length, "attachments successfully");
+    }
+
     // Create notifications for all admins
     const { data: admins } = await supabase
       .from("user_roles")
@@ -302,7 +409,8 @@ const handler = async (req: Request): Promise<Response> => {
         success: true, 
         email_id: emailRecord.id,
         ticket_id: ticketId,
-        contact_id: contactId
+        contact_id: contactId,
+        attachments_saved: attachmentRecords.length
       }),
       { status: 200, headers: jsonHeaders }
     );

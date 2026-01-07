@@ -20,15 +20,19 @@ import {
   CheckCircle, XCircle, Clock, Eye, Inbox,
   Reply, Forward, UserPlus, AlertCircle,
   ChevronDown, ChevronRight, User, Calendar, FolderOpen,
-  Ticket, AlarmClock, MailOpen, Maximize2, Minimize2, X
+  Ticket, AlarmClock, MailOpen, Maximize2, Minimize2, X,
+  RefreshCw, Trash2, Paperclip, Download, Undo2
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import type { Tables, Json } from '@/integrations/supabase/types';
+
+type EmailAttachment = Tables<'email_attachments'>;
 
 type EmailMessage = Tables<'email_messages'> & {
   crm_contacts?: { id: string; name: string; surname: string | null; email: string | null } | null;
   tickets?: { id: string; subject: string; ticket_number: number } | null;
   presupuestos?: { id: string; nombre: string; codigo_correlativo: number } | null;
+  email_attachments?: EmailAttachment[];
 };
 
 interface EmailMetadata {
@@ -58,6 +62,7 @@ export function EmailInbox({ onComposeReply }: EmailInboxProps) {
   const [search, setSearch] = useState('');
   const [directionFilter, setDirectionFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [showDeleted, setShowDeleted] = useState(false);
   const [groupMode, setGroupMode] = useState<GroupMode>('date');
   const [selectedEmail, setSelectedEmail] = useState<EmailMessage | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -98,8 +103,8 @@ export function EmailInbox({ onComposeReply }: EmailInboxProps) {
     },
   });
 
-  const { data: emails = [], isLoading, refetch } = useQuery({
-    queryKey: ['email-messages', directionFilter, statusFilter],
+  const { data: emails = [], isLoading, refetch, isFetching } = useQuery({
+    queryKey: ['email-messages', directionFilter, statusFilter, showDeleted],
     queryFn: async () => {
       let query = supabase
         .from('email_messages')
@@ -120,6 +125,13 @@ export function EmailInbox({ onComposeReply }: EmailInboxProps) {
             id,
             nombre,
             codigo_correlativo
+          ),
+          email_attachments (
+            id,
+            file_name,
+            file_path,
+            file_type,
+            file_size
           )
         `)
         .order('created_at', { ascending: false });
@@ -129,6 +141,13 @@ export function EmailInbox({ onComposeReply }: EmailInboxProps) {
       }
       if (statusFilter !== 'all') {
         query = query.eq('status', statusFilter);
+      }
+      
+      // Filter by deleted_at
+      if (showDeleted) {
+        query = query.not('deleted_at', 'is', null);
+      } else {
+        query = query.is('deleted_at', null);
       }
 
       const { data, error } = await query.limit(500);
@@ -196,6 +215,65 @@ export function EmailInbox({ onComposeReply }: EmailInboxProps) {
       queryClient.invalidateQueries({ queryKey: ['email-messages'] });
     },
   });
+
+  // Soft delete email mutation (move to trash)
+  const deleteEmailMutation = useMutation({
+    mutationFn: async (emailId: string) => {
+      const { error } = await supabase
+        .from('email_messages')
+        .update({ deleted_at: new Date().toISOString() })
+        .eq('id', emailId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast({ title: 'Email movido a papelera' });
+      setSelectedEmail(null);
+      queryClient.invalidateQueries({ queryKey: ['email-messages'] });
+    },
+  });
+
+  // Restore email mutation
+  const restoreEmailMutation = useMutation({
+    mutationFn: async (emailId: string) => {
+      const { error } = await supabase
+        .from('email_messages')
+        .update({ deleted_at: null })
+        .eq('id', emailId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast({ title: 'Email restaurado correctamente' });
+      setSelectedEmail(null);
+      queryClient.invalidateQueries({ queryKey: ['email-messages'] });
+    },
+  });
+
+  // Download attachment function
+  const downloadAttachment = async (attachment: EmailAttachment) => {
+    try {
+      const { data, error } = await supabase.storage
+        .from('email-attachments')
+        .download(attachment.file_path);
+      
+      if (error) throw error;
+      
+      const url = URL.createObjectURL(data);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = attachment.file_name;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (error: any) {
+      console.error('Error downloading attachment:', error);
+      toast({
+        title: 'Error al descargar adjunto',
+        description: error.message,
+        variant: 'destructive',
+      });
+    }
+  };
 
   // Create ticket mutation
   const createTicketMutation = useMutation({
@@ -644,6 +722,25 @@ export function EmailInbox({ onComposeReply }: EmailInboxProps) {
                 <SelectItem value="folder">Por carpeta</SelectItem>
               </SelectContent>
             </Select>
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => refetch()}
+              disabled={isFetching}
+              className="gap-2"
+            >
+              <RefreshCw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
+              Refrescar
+            </Button>
+            <Button 
+              variant={showDeleted ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setShowDeleted(!showDeleted)}
+              className="gap-2"
+            >
+              <Trash2 className="h-4 w-4" />
+              {showDeleted ? 'Bandeja' : 'Papelera'}
+            </Button>
           </div>
         </CardContent>
       </Card>
@@ -652,12 +749,12 @@ export function EmailInbox({ onComposeReply }: EmailInboxProps) {
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2">
-            <Inbox className="h-5 w-5" />
-            Bandeja de Entrada
+            {showDeleted ? <Trash2 className="h-5 w-5" /> : <Inbox className="h-5 w-5" />}
+            {showDeleted ? 'Papelera' : 'Bandeja de Entrada'}
             <Badge variant="secondary" className="ml-2">
               {filteredEmails.length}
             </Badge>
-            {stats.unread > 0 && (
+            {!showDeleted && stats.unread > 0 && (
               <Badge className="ml-1 bg-primary">
                 {stats.unread} sin leer
               </Badge>
@@ -817,11 +914,40 @@ export function EmailInbox({ onComposeReply }: EmailInboxProps) {
                       <Mail className="h-12 w-12 mx-auto mb-3 opacity-30" />
                       <p className="font-medium">Sin contenido de texto</p>
                       <p className="text-sm mt-1">El email puede contener solo adjuntos.</p>
-                      {(selectedEmail.metadata as EmailMetadata)?.has_attachments && (
-                        <Badge variant="outline" className="mt-2">
-                          Tiene adjuntos
-                        </Badge>
-                      )}
+                    </div>
+                  )}
+                  
+                  {/* Attachments Section - Dialog */}
+                  {selectedEmail.email_attachments && selectedEmail.email_attachments.length > 0 && (
+                    <div className="mt-6 border-t pt-4">
+                      <div className="flex items-center gap-2 mb-3">
+                        <Paperclip className="h-4 w-4" />
+                        <span className="font-medium text-sm">Adjuntos ({selectedEmail.email_attachments.length})</span>
+                      </div>
+                      <div className="grid gap-2">
+                        {selectedEmail.email_attachments.map((attachment) => (
+                          <div
+                            key={attachment.id}
+                            className="flex items-center justify-between p-2 bg-muted/50 rounded-lg"
+                          >
+                            <div className="flex items-center gap-2 min-w-0">
+                              <Paperclip className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                              <span className="text-sm truncate">{attachment.file_name}</span>
+                              <span className="text-xs text-muted-foreground flex-shrink-0">
+                                ({(attachment.file_size ? (attachment.file_size / 1024).toFixed(1) : '?')} KB)
+                              </span>
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                              onClick={() => downloadAttachment(attachment)}
+                            >
+                              <Download className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </ScrollArea>
@@ -845,7 +971,7 @@ export function EmailInbox({ onComposeReply }: EmailInboxProps) {
                     <Forward className="h-4 w-4 mr-2" />
                     Reenviar
                   </Button>
-                  {!selectedEmail.ticket_id && (
+                  {!selectedEmail.ticket_id && !selectedEmail.deleted_at && (
                     <Button 
                       variant="outline" 
                       size="sm"
@@ -855,22 +981,45 @@ export function EmailInbox({ onComposeReply }: EmailInboxProps) {
                       Crear Ticket
                     </Button>
                   )}
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={openSnoozeDialog}
-                  >
-                    <AlarmClock className="h-4 w-4 mr-2" />
-                    Posponer
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => openFolderDialog(selectedEmail)}
-                  >
-                    <FolderOpen className="h-4 w-4 mr-2" />
-                    Asignar carpeta
-                  </Button>
+                  {!selectedEmail.deleted_at && (
+                    <>
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={openSnoozeDialog}
+                      >
+                        <AlarmClock className="h-4 w-4 mr-2" />
+                        Posponer
+                      </Button>
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => openFolderDialog(selectedEmail)}
+                      >
+                        <FolderOpen className="h-4 w-4 mr-2" />
+                        Asignar carpeta
+                      </Button>
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => deleteEmailMutation.mutate(selectedEmail.id)}
+                        className="text-destructive hover:text-destructive"
+                      >
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        Borrar
+                      </Button>
+                    </>
+                  )}
+                  {selectedEmail.deleted_at && (
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => restoreEmailMutation.mutate(selectedEmail.id)}
+                    >
+                      <Undo2 className="h-4 w-4 mr-2" />
+                      Restaurar
+                    </Button>
+                  )}
                 </div>
               </div>
             )}
@@ -996,11 +1145,43 @@ export function EmailInbox({ onComposeReply }: EmailInboxProps) {
                       <Mail className="h-16 w-16 mx-auto mb-4 opacity-30" />
                       <p className="text-lg font-medium">Sin contenido de texto</p>
                       <p className="mt-2">El email puede contener solo archivos adjuntos.</p>
-                      {(selectedEmail.metadata as EmailMetadata)?.has_attachments && (
-                        <Badge variant="outline" className="mt-4 text-base px-4 py-2">
-                          Este email contiene adjuntos
-                        </Badge>
-                      )}
+                    </div>
+                  )}
+                  
+                  {/* Attachments Section - Fullscreen */}
+                  {selectedEmail.email_attachments && selectedEmail.email_attachments.length > 0 && (
+                    <div className="mt-8 max-w-4xl mx-auto border-t pt-6">
+                      <div className="flex items-center gap-2 mb-4">
+                        <Paperclip className="h-5 w-5" />
+                        <span className="font-medium">Adjuntos ({selectedEmail.email_attachments.length})</span>
+                      </div>
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        {selectedEmail.email_attachments.map((attachment) => (
+                          <div
+                            key={attachment.id}
+                            className="flex items-center justify-between p-3 bg-muted/50 rounded-lg"
+                          >
+                            <div className="flex items-center gap-3 min-w-0">
+                              <Paperclip className="h-5 w-5 text-muted-foreground flex-shrink-0" />
+                              <div className="min-w-0">
+                                <p className="text-sm font-medium truncate">{attachment.file_name}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  {attachment.file_size ? (attachment.file_size / 1024).toFixed(1) : '?'} KB
+                                </p>
+                              </div>
+                            </div>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="gap-2"
+                              onClick={() => downloadAttachment(attachment)}
+                            >
+                              <Download className="h-4 w-4" />
+                              Descargar
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </ScrollArea>
@@ -1023,7 +1204,7 @@ export function EmailInbox({ onComposeReply }: EmailInboxProps) {
                     <Forward className="h-4 w-4 mr-2" />
                     Reenviar
                   </Button>
-                  {!selectedEmail.ticket_id && (
+                  {!selectedEmail.ticket_id && !selectedEmail.deleted_at && (
                     <Button 
                       variant="outline"
                       onClick={() => openCreateTicketDialog(selectedEmail)}
@@ -1032,20 +1213,41 @@ export function EmailInbox({ onComposeReply }: EmailInboxProps) {
                       Crear Ticket
                     </Button>
                   )}
-                  <Button 
-                    variant="outline"
-                    onClick={openSnoozeDialog}
-                  >
-                    <AlarmClock className="h-4 w-4 mr-2" />
-                    Posponer
-                  </Button>
-                  <Button 
-                    variant="outline"
-                    onClick={() => openFolderDialog(selectedEmail)}
-                  >
-                    <FolderOpen className="h-4 w-4 mr-2" />
-                    Asignar carpeta
-                  </Button>
+                  {!selectedEmail.deleted_at && (
+                    <>
+                      <Button 
+                        variant="outline"
+                        onClick={openSnoozeDialog}
+                      >
+                        <AlarmClock className="h-4 w-4 mr-2" />
+                        Posponer
+                      </Button>
+                      <Button 
+                        variant="outline"
+                        onClick={() => openFolderDialog(selectedEmail)}
+                      >
+                        <FolderOpen className="h-4 w-4 mr-2" />
+                        Asignar carpeta
+                      </Button>
+                      <Button 
+                        variant="outline"
+                        onClick={() => deleteEmailMutation.mutate(selectedEmail.id)}
+                        className="text-destructive hover:text-destructive"
+                      >
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        Borrar
+                      </Button>
+                    </>
+                  )}
+                  {selectedEmail.deleted_at && (
+                    <Button 
+                      variant="outline"
+                      onClick={() => restoreEmailMutation.mutate(selectedEmail.id)}
+                    >
+                      <Undo2 className="h-4 w-4 mr-2" />
+                      Restaurar
+                    </Button>
+                  )}
                 </div>
               </div>
             )}

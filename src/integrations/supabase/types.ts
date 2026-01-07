@@ -1369,6 +1369,44 @@ export type Database = {
         }
         Relationships: []
       }
+      email_attachments: {
+        Row: {
+          created_at: string
+          email_id: string
+          file_name: string
+          file_path: string
+          file_size: number | null
+          file_type: string | null
+          id: string
+        }
+        Insert: {
+          created_at?: string
+          email_id: string
+          file_name: string
+          file_path: string
+          file_size?: number | null
+          file_type?: string | null
+          id?: string
+        }
+        Update: {
+          created_at?: string
+          email_id?: string
+          file_name?: string
+          file_path?: string
+          file_size?: number | null
+          file_type?: string | null
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_attachments_email_id_fkey"
+            columns: ["email_id"]
+            isOneToOne: false
+            referencedRelation: "email_messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       email_campaign_recipients: {
         Row: {
           campaign_id: string
@@ -1499,6 +1537,7 @@ export type Database = {
           contact_id: string | null
           created_at: string
           created_by: string | null
+          deleted_at: string | null
           direction: string
           error_message: string | null
           external_id: string | null
@@ -1526,6 +1565,7 @@ export type Database = {
           contact_id?: string | null
           created_at?: string
           created_by?: string | null
+          deleted_at?: string | null
           direction: string
           error_message?: string | null
           external_id?: string | null
@@ -1553,6 +1593,7 @@ export type Database = {
           contact_id?: string | null
           created_at?: string
           created_by?: string | null
+          deleted_at?: string | null
           direction?: string
           error_message?: string | null
           external_id?: string | null

@@ -264,16 +264,19 @@ export default function Proyectos() {
 
   const getStatusVariant = (status: string) => {
     switch (status) {
-      case 'active': return 'default';
-      case 'completed': return 'secondary';
-      case 'on_hold': return 'outline';
-      case 'cancelled': return 'destructive';
+      case 'prospecto': return 'secondary';
+      case 'activo': return 'default';
+      case 'archivado': return 'outline';
       default: return 'default';
     }
   };
 
   const getStatusLabel = (status: string) => {
     switch (status) {
+      case 'prospecto': return 'Prospecto';
+      case 'activo': return 'Activo';
+      case 'archivado': return 'Archivado';
+      // Legacy support
       case 'active': return 'Activo';
       case 'completed': return 'Completado';
       case 'on_hold': return 'En pausa';
@@ -345,14 +348,13 @@ export default function Proyectos() {
           </div>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
             <SelectTrigger className="w-full sm:w-48">
-              <SelectValue placeholder="Filtrar por estado" />
+              <SelectValue placeholder="Filtrar por categoría" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Todos los estados</SelectItem>
-              <SelectItem value="active">Activo</SelectItem>
-              <SelectItem value="completed">Completado</SelectItem>
-              <SelectItem value="on_hold">En pausa</SelectItem>
-              <SelectItem value="cancelled">Cancelado</SelectItem>
+              <SelectItem value="all">Todas las categorías</SelectItem>
+              <SelectItem value="prospecto">Prospecto</SelectItem>
+              <SelectItem value="activo">Activo</SelectItem>
+              <SelectItem value="archivado">Archivado</SelectItem>
             </SelectContent>
           </Select>
           <div className="flex items-center gap-2 text-sm text-muted-foreground whitespace-nowrap">

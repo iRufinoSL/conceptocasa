@@ -2231,6 +2231,110 @@ export type Database = {
           },
         ]
       }
+      project_profiles: {
+        Row: {
+          contact_email: string
+          contact_name: string
+          contact_phone: string | null
+          contact_surname: string | null
+          created_at: string
+          despensa: string | null
+          estilo_constructivo: string[] | null
+          forma_geometrica: string | null
+          garaje: string | null
+          id: string
+          lavanderia: string | null
+          m2_por_planta: string | null
+          mensaje_adicional: string | null
+          num_banos_total: string | null
+          num_habitaciones_con_bano: string | null
+          num_habitaciones_con_vestidor: string | null
+          num_habitaciones_total: string | null
+          num_plantas: string | null
+          patio_descubierto: string | null
+          poblacion: string | null
+          porche_cubierto: string | null
+          presupuesto_global: string | null
+          project_id: string | null
+          provincia: string | null
+          tiene_terreno: string | null
+          tipo_cocina: string | null
+          tipo_salon: string | null
+          tipo_tejado: string | null
+          updated_at: string
+        }
+        Insert: {
+          contact_email: string
+          contact_name: string
+          contact_phone?: string | null
+          contact_surname?: string | null
+          created_at?: string
+          despensa?: string | null
+          estilo_constructivo?: string[] | null
+          forma_geometrica?: string | null
+          garaje?: string | null
+          id?: string
+          lavanderia?: string | null
+          m2_por_planta?: string | null
+          mensaje_adicional?: string | null
+          num_banos_total?: string | null
+          num_habitaciones_con_bano?: string | null
+          num_habitaciones_con_vestidor?: string | null
+          num_habitaciones_total?: string | null
+          num_plantas?: string | null
+          patio_descubierto?: string | null
+          poblacion?: string | null
+          porche_cubierto?: string | null
+          presupuesto_global?: string | null
+          project_id?: string | null
+          provincia?: string | null
+          tiene_terreno?: string | null
+          tipo_cocina?: string | null
+          tipo_salon?: string | null
+          tipo_tejado?: string | null
+          updated_at?: string
+        }
+        Update: {
+          contact_email?: string
+          contact_name?: string
+          contact_phone?: string | null
+          contact_surname?: string | null
+          created_at?: string
+          despensa?: string | null
+          estilo_constructivo?: string[] | null
+          forma_geometrica?: string | null
+          garaje?: string | null
+          id?: string
+          lavanderia?: string | null
+          m2_por_planta?: string | null
+          mensaje_adicional?: string | null
+          num_banos_total?: string | null
+          num_habitaciones_con_bano?: string | null
+          num_habitaciones_con_vestidor?: string | null
+          num_habitaciones_total?: string | null
+          num_plantas?: string | null
+          patio_descubierto?: string | null
+          poblacion?: string | null
+          porche_cubierto?: string | null
+          presupuesto_global?: string | null
+          project_id?: string | null
+          provincia?: string | null
+          tiene_terreno?: string | null
+          tipo_cocina?: string | null
+          tipo_salon?: string | null
+          tipo_tejado?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_profiles_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       projects: {
         Row: {
           archived: boolean
@@ -2242,7 +2346,9 @@ export type Database = {
           id: string
           location: string | null
           name: string
+          project_number: number
           project_type: string | null
+          source: string | null
           start_date: string | null
           status: string
           updated_at: string | null
@@ -2257,7 +2363,9 @@ export type Database = {
           id?: string
           location?: string | null
           name: string
+          project_number?: number
           project_type?: string | null
+          source?: string | null
           start_date?: string | null
           status?: string
           updated_at?: string | null
@@ -2272,7 +2380,9 @@ export type Database = {
           id?: string
           location?: string | null
           name?: string
+          project_number?: number
           project_type?: string | null
+          source?: string | null
           start_date?: string | null
           status?: string
           updated_at?: string | null
@@ -2286,6 +2396,45 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      system_alerts: {
+        Row: {
+          action_url: string | null
+          alert_type: string
+          created_at: string
+          id: string
+          is_read: boolean
+          message: string | null
+          read_at: string | null
+          related_id: string | null
+          related_type: string | null
+          title: string
+        }
+        Insert: {
+          action_url?: string | null
+          alert_type: string
+          created_at?: string
+          id?: string
+          is_read?: boolean
+          message?: string | null
+          read_at?: string | null
+          related_id?: string | null
+          related_type?: string | null
+          title: string
+        }
+        Update: {
+          action_url?: string | null
+          alert_type?: string
+          created_at?: string
+          id?: string
+          is_read?: boolean
+          message?: string | null
+          read_at?: string | null
+          related_id?: string | null
+          related_type?: string | null
+          title?: string
+        }
+        Relationships: []
       }
       tab_visibility_settings: {
         Row: {

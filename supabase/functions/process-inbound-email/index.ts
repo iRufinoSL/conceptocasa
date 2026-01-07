@@ -1,10 +1,9 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-webhook-signature",
+// No CORS headers - this is a server-to-server webhook endpoint
+const jsonHeaders = {
+  "Content-Type": "application/json",
 };
 
 interface InboundEmail {
@@ -27,9 +26,17 @@ interface InboundEmail {
 const handler = async (req: Request): Promise<Response> => {
   console.log("process-inbound-email function called");
   
-  // Handle CORS preflight requests
+  // Reject browser preflight requests - this is a server-to-server webhook
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+    return new Response(null, { status: 405 });
+  }
+  
+  // Only accept POST requests
+  if (req.method !== "POST") {
+    return new Response(
+      JSON.stringify({ error: "Method not allowed" }),
+      { status: 405, headers: jsonHeaders }
+    );
   }
 
   try {
@@ -48,7 +55,7 @@ const handler = async (req: Request): Promise<Response> => {
       console.error("Failed to parse JSON:", parseError);
       return new Response(
         JSON.stringify({ error: "Invalid JSON body" }),
-        { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
+        { status: 400, headers: jsonHeaders }
       );
     }
 
@@ -63,7 +70,7 @@ const handler = async (req: Request): Promise<Response> => {
         console.log("Ignoring non-inbound event:", eventType);
         return new Response(
           JSON.stringify({ success: true, message: `Ignored event: ${eventType}` }),
-          { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
+          { status: 200, headers: jsonHeaders }
         );
       }
       
@@ -86,7 +93,7 @@ const handler = async (req: Request): Promise<Response> => {
       console.error("No 'from' field in email data");
       return new Response(
         JSON.stringify({ error: "Missing 'from' field in email data" }),
-        { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
+        { status: 400, headers: jsonHeaders }
       );
     }
 
@@ -193,7 +200,7 @@ const handler = async (req: Request): Promise<Response> => {
       console.error("Error storing email:", emailError);
       return new Response(
         JSON.stringify({ error: "Failed to store email" }),
-        { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
+        { status: 500, headers: jsonHeaders }
       );
     }
 
@@ -234,14 +241,14 @@ const handler = async (req: Request): Promise<Response> => {
         ticket_id: ticketId,
         contact_id: contactId
       }),
-      { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      { status: 200, headers: jsonHeaders }
     );
 
   } catch (error: any) {
     console.error("Error in process-inbound-email function:", error);
     return new Response(
       JSON.stringify({ error: error.message }),
-      { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      { status: 500, headers: jsonHeaders }
     );
   }
 };

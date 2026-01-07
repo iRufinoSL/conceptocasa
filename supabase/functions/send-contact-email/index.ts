@@ -57,6 +57,7 @@ interface ContactEmailRequest {
   poblacionProvincia?: string;
   presupuestoGlobal?: string;
   estiloConstructivo?: string[];
+  fechaIdealFinalizacion?: string;
 }
 
 // In-memory rate limiting store
@@ -332,7 +333,8 @@ const handler = async (req: Request): Promise<Response> => {
           provincia: provincia || null,
           presupuesto_global: requestData.presupuestoGlobal || null,
           estilo_constructivo: requestData.estiloConstructivo || [],
-          mensaje_adicional: requestData.message || null
+          mensaje_adicional: requestData.message || null,
+          fecha_ideal_finalizacion: requestData.fechaIdealFinalizacion || null
         });
       
       if (profileError) {

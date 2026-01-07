@@ -45,10 +45,17 @@ export function ProjectForm({ open, onOpenChange, project, onSuccess }: ProjectF
 
   useEffect(() => {
     if (project) {
+      // Normalize legacy status values
+      let normalizedStatus = project.status || 'prospecto';
+      if (normalizedStatus === 'active') normalizedStatus = 'activo';
+      if (normalizedStatus === 'completed' || normalizedStatus === 'on_hold' || normalizedStatus === 'cancelled') {
+        normalizedStatus = 'archivado';
+      }
+      
       setFormData({
         name: project.name || '',
         description: project.description || '',
-        status: project.status || 'active',
+        status: normalizedStatus,
         location: project.location || '',
         project_type: project.project_type || '',
         budget: project.budget || 0,

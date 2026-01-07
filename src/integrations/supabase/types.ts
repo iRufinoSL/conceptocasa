@@ -2724,6 +2724,10 @@ export type Database = {
         Returns: boolean
       }
       can_access_storage_file: { Args: { file_path: string }; Returns: boolean }
+      can_create_notification: {
+        Args: { target_user_id: string }
+        Returns: boolean
+      }
       generate_entry_code: { Args: { entry_year: number }; Returns: string }
       has_presupuesto_access: {
         Args: { _presupuesto_id: string; _user_id: string }

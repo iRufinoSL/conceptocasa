@@ -170,6 +170,27 @@ const handler = async (req: Request): Promise<Response> => {
       }
     }
 
+    // Check for duplicate emails by external_id (message_id)
+    if (emailData.message_id) {
+      const { data: existingEmail } = await supabase
+        .from("email_messages")
+        .select("id")
+        .eq("external_id", emailData.message_id)
+        .maybeSingle();
+      
+      if (existingEmail) {
+        console.log("Duplicate email detected, skipping. Message ID:", emailData.message_id);
+        return new Response(
+          JSON.stringify({ 
+            success: true, 
+            message: "Duplicate email, skipped",
+            email_id: existingEmail.id
+          }),
+          { status: 200, headers: jsonHeaders }
+        );
+      }
+    }
+
     // Store the inbound email
     const { data: emailRecord, error: emailError } = await supabase
       .from("email_messages")
@@ -187,6 +208,7 @@ const handler = async (req: Request): Promise<Response> => {
         contact_id: contactId,
         ticket_id: ticketId,
         received_at: new Date().toISOString(),
+        is_read: false,
         metadata: {
           headers: emailData.headers || {},
           has_attachments: (emailData.attachments?.length || 0) > 0,

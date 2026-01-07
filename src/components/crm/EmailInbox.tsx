@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import DOMPurify from 'dompurify';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,13 +9,17 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Label } from '@/components/ui/label';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Textarea } from '@/components/ui/textarea';
 import { supabase } from '@/integrations/supabase/client';
-import { format } from 'date-fns';
+import { format, isToday, isYesterday, isThisWeek, startOfDay, addDays, addHours } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { 
   Mail, Search, ArrowUpRight, ArrowDownLeft, 
   CheckCircle, XCircle, Clock, Eye, Inbox,
-  Trash2, Reply, Forward, MailOpen, Paperclip, UserPlus, AlertCircle
+  Reply, Forward, UserPlus, AlertCircle,
+  ChevronDown, ChevronRight, User, Calendar, FolderOpen,
+  Ticket, AlarmClock, MailOpen
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import type { Tables, Json } from '@/integrations/supabase/types';
@@ -23,6 +27,7 @@ import type { Tables, Json } from '@/integrations/supabase/types';
 type EmailMessage = Tables<'email_messages'> & {
   crm_contacts?: { id: string; name: string; surname: string | null; email: string | null } | null;
   tickets?: { id: string; subject: string; ticket_number: number } | null;
+  presupuestos?: { id: string; nombre: string; codigo_correlativo: number } | null;
 };
 
 interface EmailMetadata {
@@ -40,6 +45,8 @@ const statusConfig = {
   received: { label: 'Recibido', icon: Inbox, color: 'bg-green-500/10 text-green-600 border-green-500/20' },
 };
 
+type GroupMode = 'date' | 'sender' | 'folder';
+
 interface EmailInboxProps {
   onComposeReply?: (email: EmailMessage) => void;
 }
@@ -50,8 +57,13 @@ export function EmailInbox({ onComposeReply }: EmailInboxProps) {
   const [search, setSearch] = useState('');
   const [directionFilter, setDirectionFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [groupMode, setGroupMode] = useState<GroupMode>('date');
   const [selectedEmail, setSelectedEmail] = useState<EmailMessage | null>(null);
   const [showCreateContact, setShowCreateContact] = useState(false);
+  const [showCreateTicket, setShowCreateTicket] = useState(false);
+  const [showSnoozeDialog, setShowSnoozeDialog] = useState(false);
+  const [showFolderDialog, setShowFolderDialog] = useState(false);
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set(['Hoy', 'Sin clasificar']));
   const [creatingContact, setCreatingContact] = useState(false);
   const [contactFormData, setContactFormData] = useState({
     name: '',
@@ -59,6 +71,29 @@ export function EmailInbox({ onComposeReply }: EmailInboxProps) {
     email: '',
     phone: '',
     contact_type: 'Persona',
+  });
+  const [ticketFormData, setTicketFormData] = useState({
+    subject: '',
+    description: '',
+    priority: 'medium',
+    dueDate: '',
+  });
+  const [snoozeDate, setSnoozeDate] = useState('');
+  const [snoozeTime, setSnoozeTime] = useState('09:00');
+  const [selectedBudgetId, setSelectedBudgetId] = useState<string>('');
+
+  // Fetch budgets for folder assignment
+  const { data: budgets = [] } = useQuery({
+    queryKey: ['budgets-for-email'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('presupuestos')
+        .select('id, nombre, codigo_correlativo')
+        .eq('archived', false)
+        .order('codigo_correlativo', { ascending: false });
+      if (error) throw error;
+      return data;
+    },
   });
 
   const { data: emails = [], isLoading, refetch } = useQuery({
@@ -78,6 +113,11 @@ export function EmailInbox({ onComposeReply }: EmailInboxProps) {
             id,
             subject,
             ticket_number
+          ),
+          presupuestos (
+            id,
+            nombre,
+            codigo_correlativo
           )
         `)
         .order('created_at', { ascending: false });
@@ -89,17 +129,121 @@ export function EmailInbox({ onComposeReply }: EmailInboxProps) {
         query = query.eq('status', statusFilter);
       }
 
-      const { data, error } = await query.limit(200);
+      const { data, error } = await query.limit(500);
       if (error) throw error;
-      return data as EmailMessage[];
+      
+      // Filter out duplicates based on external_id (keeping only the first occurrence)
+      const seen = new Set<string>();
+      const uniqueEmails = (data as EmailMessage[]).filter(email => {
+        if (!email.external_id) return true;
+        if (seen.has(email.external_id)) return false;
+        seen.add(email.external_id);
+        return true;
+      });
+      
+      return uniqueEmails;
+    },
+  });
+
+  // Mark email as read mutation
+  const markAsReadMutation = useMutation({
+    mutationFn: async (emailId: string) => {
+      const { error } = await supabase
+        .from('email_messages')
+        .update({ 
+          is_read: true, 
+          read_at: new Date().toISOString() 
+        })
+        .eq('id', emailId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['email-messages'] });
+    },
+  });
+
+  // Snooze email mutation
+  const snoozeEmailMutation = useMutation({
+    mutationFn: async ({ emailId, snoozedUntil }: { emailId: string; snoozedUntil: string }) => {
+      const { error } = await supabase
+        .from('email_messages')
+        .update({ snoozed_until: snoozedUntil })
+        .eq('id', emailId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast({ title: 'Email pospuesto correctamente' });
+      setShowSnoozeDialog(false);
+      setSelectedEmail(null);
+      queryClient.invalidateQueries({ queryKey: ['email-messages'] });
+    },
+  });
+
+  // Assign folder mutation
+  const assignFolderMutation = useMutation({
+    mutationFn: async ({ emailId, budgetId }: { emailId: string; budgetId: string | null }) => {
+      const { error } = await supabase
+        .from('email_messages')
+        .update({ budget_id: budgetId })
+        .eq('id', emailId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast({ title: 'Carpeta asignada correctamente' });
+      setShowFolderDialog(false);
+      queryClient.invalidateQueries({ queryKey: ['email-messages'] });
+    },
+  });
+
+  // Create ticket mutation
+  const createTicketMutation = useMutation({
+    mutationFn: async (data: { subject: string; description: string; priority: string; dueDate?: string; emailId: string; contactId?: string }) => {
+      const { data: newTicket, error } = await supabase
+        .from('tickets')
+        .insert({
+          subject: data.subject,
+          description: data.description,
+          priority: data.priority,
+          status: 'open',
+          category: 'Email',
+          contact_id: data.contactId || null,
+        })
+        .select()
+        .single();
+      
+      if (error) throw error;
+      
+      // Link email to ticket
+      await supabase
+        .from('email_messages')
+        .update({ ticket_id: newTicket.id })
+        .eq('id', data.emailId);
+      
+      return newTicket;
+    },
+    onSuccess: (newTicket) => {
+      toast({ title: `Ticket #${newTicket.ticket_number} creado correctamente` });
+      setShowCreateTicket(false);
+      setSelectedEmail(null);
+      queryClient.invalidateQueries({ queryKey: ['email-messages'] });
+      queryClient.invalidateQueries({ queryKey: ['tickets'] });
     },
   });
 
   const filteredEmails = useMemo(() => {
-    if (!search) return emails;
+    let result = emails;
+    
+    // Filter out snoozed emails that haven't reached their snooze time
+    const now = new Date();
+    result = result.filter(email => {
+      if (!email.snoozed_until) return true;
+      return new Date(email.snoozed_until) <= now;
+    });
+    
+    if (!search) return result;
     
     const searchLower = search.toLowerCase();
-    return emails.filter(email => {
+    return result.filter(email => {
       const contactName = email.crm_contacts 
         ? `${email.crm_contacts.name} ${email.crm_contacts.surname || ''}`.toLowerCase()
         : '';
@@ -113,18 +257,104 @@ export function EmailInbox({ onComposeReply }: EmailInboxProps) {
     });
   }, [emails, search]);
 
+  // Group emails based on mode
+  const groupedEmails = useMemo(() => {
+    const groups: Record<string, { emails: EmailMessage[]; label: string; icon: any }> = {};
+    
+    filteredEmails.forEach(email => {
+      let groupKey: string;
+      let groupLabel: string;
+      let groupIcon: any;
+      
+      if (groupMode === 'date') {
+        const emailDate = new Date(email.created_at);
+        if (isToday(emailDate)) {
+          groupKey = 'today';
+          groupLabel = 'Hoy';
+        } else if (isYesterday(emailDate)) {
+          groupKey = 'yesterday';
+          groupLabel = 'Ayer';
+        } else if (isThisWeek(emailDate)) {
+          groupKey = 'thisweek';
+          groupLabel = 'Esta semana';
+        } else {
+          const monthKey = format(emailDate, 'yyyy-MM');
+          groupKey = monthKey;
+          groupLabel = format(emailDate, 'MMMM yyyy', { locale: es });
+        }
+        groupIcon = Calendar;
+      } else if (groupMode === 'sender') {
+        const senderEmail = email.direction === 'inbound' ? email.from_email : email.to_emails?.[0] || 'desconocido';
+        const senderName = email.direction === 'inbound' 
+          ? (email.crm_contacts ? `${email.crm_contacts.name} ${email.crm_contacts.surname || ''}`.trim() : email.from_name || email.from_email)
+          : email.to_emails?.[0] || 'Desconocido';
+        groupKey = senderEmail;
+        groupLabel = senderName;
+        groupIcon = User;
+      } else {
+        // folder mode
+        if (email.budget_id && email.presupuestos) {
+          groupKey = email.budget_id;
+          groupLabel = `${email.presupuestos.codigo_correlativo} - ${email.presupuestos.nombre}`;
+        } else {
+          groupKey = 'unclassified';
+          groupLabel = 'Sin clasificar';
+        }
+        groupIcon = FolderOpen;
+      }
+      
+      if (!groups[groupKey]) {
+        groups[groupKey] = { emails: [], label: groupLabel, icon: groupIcon };
+      }
+      groups[groupKey].emails.push(email);
+    });
+    
+    // Sort groups
+    const sortedEntries = Object.entries(groups).sort(([keyA], [keyB]) => {
+      if (groupMode === 'date') {
+        const order = ['today', 'yesterday', 'thisweek'];
+        const indexA = order.indexOf(keyA);
+        const indexB = order.indexOf(keyB);
+        if (indexA !== -1 && indexB !== -1) return indexA - indexB;
+        if (indexA !== -1) return -1;
+        if (indexB !== -1) return 1;
+        return keyB.localeCompare(keyA);
+      }
+      return keyA.localeCompare(keyB);
+    });
+    
+    return sortedEntries;
+  }, [filteredEmails, groupMode]);
+
   const stats = useMemo(() => {
     const total = emails.length;
     const inbox = emails.filter(e => e.direction === 'inbound').length;
     const sent = emails.filter(e => e.direction === 'outbound').length;
-    const pending = emails.filter(e => e.status === 'pending').length;
-    const failed = emails.filter(e => e.status === 'failed').length;
+    const unread = emails.filter(e => !e.is_read && e.direction === 'inbound').length;
+    const snoozed = emails.filter(e => e.snoozed_until && new Date(e.snoozed_until) > new Date()).length;
     
-    return { total, inbox, sent, pending, failed };
+    return { total, inbox, sent, unread, snoozed };
   }, [emails]);
 
-  const handleEmailClick = (email: EmailMessage) => {
+  const handleEmailClick = async (email: EmailMessage) => {
     setSelectedEmail(email);
+    
+    // Mark as read if not already
+    if (!email.is_read && email.direction === 'inbound') {
+      markAsReadMutation.mutate(email.id);
+    }
+  };
+
+  const toggleGroup = (groupKey: string) => {
+    setExpandedGroups(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(groupKey)) {
+        newSet.delete(groupKey);
+      } else {
+        newSet.add(groupKey);
+      }
+      return newSet;
+    });
   };
 
   const isUnknownSender = (email: EmailMessage): boolean => {
@@ -135,7 +365,6 @@ export function EmailInbox({ onComposeReply }: EmailInboxProps) {
   };
 
   const openCreateContactDialog = (email: EmailMessage) => {
-    // Pre-fill form with email data
     const nameParts = (email.from_name || '').split(' ');
     setContactFormData({
       name: nameParts[0] || '',
@@ -145,6 +374,53 @@ export function EmailInbox({ onComposeReply }: EmailInboxProps) {
       contact_type: 'Persona',
     });
     setShowCreateContact(true);
+  };
+
+  const openCreateTicketDialog = (email: EmailMessage) => {
+    setTicketFormData({
+      subject: email.subject || 'Nuevo ticket desde email',
+      description: email.body_text?.substring(0, 500) || '',
+      priority: 'medium',
+      dueDate: format(addDays(new Date(), 7), 'yyyy-MM-dd'),
+    });
+    setShowCreateTicket(true);
+  };
+
+  const openSnoozeDialog = () => {
+    setSnoozeDate(format(addDays(new Date(), 1), 'yyyy-MM-dd'));
+    setSnoozeTime('09:00');
+    setShowSnoozeDialog(true);
+  };
+
+  const openFolderDialog = (email: EmailMessage) => {
+    setSelectedBudgetId(email.budget_id || '');
+    setShowFolderDialog(true);
+  };
+
+  const handleSnooze = () => {
+    if (!selectedEmail || !snoozeDate) return;
+    const snoozedUntil = new Date(`${snoozeDate}T${snoozeTime}:00`).toISOString();
+    snoozeEmailMutation.mutate({ emailId: selectedEmail.id, snoozedUntil });
+  };
+
+  const handleAssignFolder = () => {
+    if (!selectedEmail) return;
+    assignFolderMutation.mutate({ 
+      emailId: selectedEmail.id, 
+      budgetId: selectedBudgetId || null 
+    });
+  };
+
+  const handleCreateTicket = () => {
+    if (!selectedEmail || !ticketFormData.subject) return;
+    createTicketMutation.mutate({
+      subject: ticketFormData.subject,
+      description: ticketFormData.description,
+      priority: ticketFormData.priority,
+      dueDate: ticketFormData.dueDate,
+      emailId: selectedEmail.id,
+      contactId: selectedEmail.contact_id || undefined,
+    });
   };
 
   const handleCreateContact = async () => {
@@ -159,7 +435,6 @@ export function EmailInbox({ onComposeReply }: EmailInboxProps) {
 
     setCreatingContact(true);
     try {
-      // Create the contact
       const { data: newContact, error: contactError } = await supabase
         .from('crm_contacts')
         .insert({
@@ -175,14 +450,12 @@ export function EmailInbox({ onComposeReply }: EmailInboxProps) {
 
       if (contactError) throw contactError;
 
-      // Update the email to link it to the new contact
       if (selectedEmail) {
         await supabase
           .from('email_messages')
           .update({ contact_id: newContact.id })
           .eq('id', selectedEmail.id);
 
-        // Also update any tickets created from this email
         if (selectedEmail.ticket_id) {
           await supabase
             .from('tickets')
@@ -209,6 +482,94 @@ export function EmailInbox({ onComposeReply }: EmailInboxProps) {
     }
   };
 
+  const renderEmailItem = (email: EmailMessage) => {
+    const status = statusConfig[email.status as keyof typeof statusConfig] || statusConfig.pending;
+    const StatusIcon = status.icon;
+    const isInbound = email.direction === 'inbound';
+    const isRead = email.is_read;
+    
+    return (
+      <div
+        key={email.id}
+        className={`py-3 px-2 cursor-pointer transition-colors rounded-lg -mx-2 ${
+          isRead 
+            ? 'hover:bg-accent/50 bg-transparent' 
+            : 'hover:bg-primary/10 bg-primary/5 font-medium'
+        }`}
+        onClick={() => handleEmailClick(email)}
+      >
+        <div className="flex items-start gap-3">
+          <div className={`flex-shrink-0 p-2 rounded-lg ${
+            isInbound 
+              ? isRead ? 'bg-muted' : 'bg-green-500/20' 
+              : 'bg-blue-500/10'
+          }`}>
+            {isInbound ? (
+              isRead ? (
+                <MailOpen className="h-4 w-4 text-muted-foreground" />
+              ) : (
+                <ArrowDownLeft className="h-4 w-4 text-green-600" />
+              )
+            ) : (
+              <ArrowUpRight className="h-4 w-4 text-blue-600" />
+            )}
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className={`text-sm truncate ${isRead ? 'text-muted-foreground' : 'font-semibold text-foreground'}`}>
+                {isInbound 
+                  ? (email.from_name || email.from_email)
+                  : email.to_emails?.[0]}
+              </span>
+              <Badge variant="outline" className={`${status.color} gap-1 text-xs`}>
+                <StatusIcon className="h-3 w-3" />
+                {status.label}
+              </Badge>
+              {email.tickets && (
+                <Badge variant="secondary" className="text-xs">
+                  Ticket #{email.tickets.ticket_number}
+                </Badge>
+              )}
+              {email.snoozed_until && new Date(email.snoozed_until) > new Date() && (
+                <Badge variant="outline" className="text-xs bg-amber-500/10 text-amber-600 border-amber-500/20">
+                  <AlarmClock className="h-3 w-3 mr-1" />
+                  Pospuesto
+                </Badge>
+              )}
+            </div>
+            <p className={`text-sm mt-0.5 truncate ${isRead ? 'text-muted-foreground' : 'font-medium'}`}>
+              {email.subject || '(Sin asunto)'}
+            </p>
+            <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">
+              {email.body_text?.substring(0, 100) || 'Sin contenido'}
+            </p>
+            <div className="flex items-center gap-3 mt-1.5 text-xs text-muted-foreground">
+              <span>
+                {format(new Date(email.created_at), "d MMM, HH:mm", { locale: es })}
+              </span>
+              {email.presupuestos && (
+                <span className="flex items-center gap-1 text-primary">
+                  <FolderOpen className="h-3 w-3" />
+                  {email.presupuestos.nombre}
+                </span>
+              )}
+              {email.crm_contacts ? (
+                <span className="text-primary">
+                  {email.crm_contacts.name}
+                </span>
+              ) : isUnknownSender(email) ? (
+                <span className="flex items-center gap-1 text-amber-600">
+                  <AlertCircle className="h-3 w-3" />
+                  Remitente desconocido
+                </span>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-4">
       {/* Stats */}
@@ -225,13 +586,13 @@ export function EmailInbox({ onComposeReply }: EmailInboxProps) {
           <div className="text-2xl font-bold text-blue-600">{stats.sent}</div>
           <div className="text-xs text-muted-foreground">Enviados</div>
         </Card>
-        <Card className="p-3">
-          <div className="text-2xl font-bold text-yellow-600">{stats.pending}</div>
-          <div className="text-xs text-muted-foreground">Pendientes</div>
+        <Card className={`p-3 ${stats.unread > 0 ? 'ring-2 ring-primary/50' : ''}`}>
+          <div className="text-2xl font-bold text-primary">{stats.unread}</div>
+          <div className="text-xs text-muted-foreground">Sin leer</div>
         </Card>
         <Card className="p-3">
-          <div className="text-2xl font-bold text-red-600">{stats.failed}</div>
-          <div className="text-xs text-muted-foreground">Fallidos</div>
+          <div className="text-2xl font-bold text-amber-600">{stats.snoozed}</div>
+          <div className="text-xs text-muted-foreground">Pospuestos</div>
         </Card>
       </div>
 
@@ -249,7 +610,7 @@ export function EmailInbox({ onComposeReply }: EmailInboxProps) {
               />
             </div>
             <Select value={directionFilter} onValueChange={setDirectionFilter}>
-              <SelectTrigger className="w-[140px]">
+              <SelectTrigger className="w-[130px]">
                 <SelectValue placeholder="Dirección" />
               </SelectTrigger>
               <SelectContent>
@@ -259,7 +620,7 @@ export function EmailInbox({ onComposeReply }: EmailInboxProps) {
               </SelectContent>
             </Select>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-[140px]">
+              <SelectTrigger className="w-[130px]">
                 <SelectValue placeholder="Estado" />
               </SelectTrigger>
               <SelectContent>
@@ -269,6 +630,16 @@ export function EmailInbox({ onComposeReply }: EmailInboxProps) {
                 <SelectItem value="delivered">Entregado</SelectItem>
                 <SelectItem value="failed">Fallido</SelectItem>
                 <SelectItem value="read">Leído</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={groupMode} onValueChange={(v) => setGroupMode(v as GroupMode)}>
+              <SelectTrigger className="w-[140px]">
+                <SelectValue placeholder="Agrupar por" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="date">Por fecha</SelectItem>
+                <SelectItem value="sender">Por emisor</SelectItem>
+                <SelectItem value="folder">Por carpeta</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -284,6 +655,11 @@ export function EmailInbox({ onComposeReply }: EmailInboxProps) {
             <Badge variant="secondary" className="ml-2">
               {filteredEmails.length}
             </Badge>
+            {stats.unread > 0 && (
+              <Badge className="ml-1 bg-primary">
+                {stats.unread} sin leer
+              </Badge>
+            )}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -295,67 +671,41 @@ export function EmailInbox({ onComposeReply }: EmailInboxProps) {
               <p>No hay emails</p>
             </div>
           ) : (
-            <div className="divide-y">
-              {filteredEmails.map((email) => {
-                const status = statusConfig[email.status as keyof typeof statusConfig] || statusConfig.pending;
-                const StatusIcon = status.icon;
-                const isInbound = email.direction === 'inbound';
+            <div className="space-y-2">
+              {groupedEmails.map(([groupKey, group]) => {
+                const GroupIcon = group.icon;
+                const isExpanded = expandedGroups.has(group.label);
+                const unreadInGroup = group.emails.filter(e => !e.is_read && e.direction === 'inbound').length;
                 
                 return (
-                  <div
-                    key={email.id}
-                    className="py-3 px-2 hover:bg-accent/50 cursor-pointer transition-colors rounded-lg -mx-2"
-                    onClick={() => handleEmailClick(email)}
+                  <Collapsible 
+                    key={groupKey} 
+                    open={isExpanded} 
+                    onOpenChange={() => toggleGroup(group.label)}
                   >
-                    <div className="flex items-start gap-3">
-                      <div className={`flex-shrink-0 p-2 rounded-lg ${isInbound ? 'bg-green-500/10' : 'bg-blue-500/10'}`}>
-                        {isInbound ? (
-                          <ArrowDownLeft className="h-4 w-4 text-green-600" />
-                        ) : (
-                          <ArrowUpRight className="h-4 w-4 text-blue-600" />
-                        )}
+                    <CollapsibleTrigger className="flex items-center gap-2 w-full p-2 hover:bg-accent/50 rounded-lg transition-colors">
+                      {isExpanded ? (
+                        <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                      ) : (
+                        <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                      )}
+                      <GroupIcon className="h-4 w-4 text-muted-foreground" />
+                      <span className="font-medium text-sm">{group.label}</span>
+                      <Badge variant="outline" className="ml-auto text-xs">
+                        {group.emails.length}
+                      </Badge>
+                      {unreadInGroup > 0 && (
+                        <Badge className="bg-primary text-xs">
+                          {unreadInGroup}
+                        </Badge>
+                      )}
+                    </CollapsibleTrigger>
+                    <CollapsibleContent className="ml-6 border-l pl-4 mt-1">
+                      <div className="divide-y">
+                        {group.emails.map(email => renderEmailItem(email))}
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-medium text-sm truncate">
-                            {isInbound 
-                              ? (email.from_name || email.from_email)
-                              : email.to_emails?.[0]}
-                          </span>
-                          <Badge variant="outline" className={`${status.color} gap-1 text-xs`}>
-                            <StatusIcon className="h-3 w-3" />
-                            {status.label}
-                          </Badge>
-                          {email.tickets && (
-                            <Badge variant="secondary" className="text-xs">
-                              Ticket #{email.tickets.ticket_number}
-                            </Badge>
-                          )}
-                        </div>
-                        <p className="text-sm font-medium mt-0.5 truncate">
-                          {email.subject || '(Sin asunto)'}
-                        </p>
-                        <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">
-                          {email.body_text?.substring(0, 100) || 'Sin contenido'}
-                        </p>
-                        <div className="flex items-center gap-3 mt-1.5 text-xs text-muted-foreground">
-                          <span>
-                            {format(new Date(email.created_at), "d MMM, HH:mm", { locale: es })}
-                          </span>
-                          {email.crm_contacts ? (
-                            <span className="text-primary">
-                              {email.crm_contacts.name}
-                            </span>
-                          ) : isUnknownSender(email) ? (
-                            <span className="flex items-center gap-1 text-amber-600">
-                              <AlertCircle className="h-3 w-3" />
-                              Remitente desconocido
-                            </span>
-                          ) : null}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+                    </CollapsibleContent>
+                  </Collapsible>
                 );
               })}
             </div>
@@ -405,6 +755,15 @@ export function EmailInbox({ onComposeReply }: EmailInboxProps) {
                     <Badge variant="outline">#{selectedEmail.tickets.ticket_number} - {selectedEmail.tickets.subject}</Badge>
                   </div>
                 )}
+                {selectedEmail.presupuestos && (
+                  <div className="text-sm">
+                    <span className="text-muted-foreground">Carpeta: </span>
+                    <Badge variant="outline" className="bg-primary/10">
+                      <FolderOpen className="h-3 w-3 mr-1" />
+                      {selectedEmail.presupuestos.codigo_correlativo} - {selectedEmail.presupuestos.nombre}
+                    </Badge>
+                  </div>
+                )}
                 {selectedEmail.crm_contacts ? (
                   <div className="text-sm">
                     <span className="text-muted-foreground">Contacto CRM: </span>
@@ -444,7 +803,7 @@ export function EmailInbox({ onComposeReply }: EmailInboxProps) {
               </ScrollArea>
 
               {/* Actions */}
-              <div className="border-t pt-4 mt-4 flex gap-2">
+              <div className="border-t pt-4 mt-4 flex flex-wrap gap-2">
                 <Button 
                   variant="outline" 
                   size="sm"
@@ -461,6 +820,32 @@ export function EmailInbox({ onComposeReply }: EmailInboxProps) {
                 <Button variant="outline" size="sm">
                   <Forward className="h-4 w-4 mr-2" />
                   Reenviar
+                </Button>
+                {!selectedEmail.ticket_id && (
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => openCreateTicketDialog(selectedEmail)}
+                  >
+                    <Ticket className="h-4 w-4 mr-2" />
+                    Crear Ticket
+                  </Button>
+                )}
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={openSnoozeDialog}
+                >
+                  <AlarmClock className="h-4 w-4 mr-2" />
+                  Posponer
+                </Button>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => openFolderDialog(selectedEmail)}
+                >
+                  <FolderOpen className="h-4 w-4 mr-2" />
+                  Asignar carpeta
                 </Button>
               </div>
             </div>
@@ -544,6 +929,212 @@ export function EmailInbox({ onComposeReply }: EmailInboxProps) {
             </Button>
             <Button onClick={handleCreateContact} disabled={creatingContact}>
               {creatingContact ? 'Creando...' : 'Crear Contacto'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Create Ticket Dialog */}
+      <Dialog open={showCreateTicket} onOpenChange={setShowCreateTicket}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Ticket className="h-5 w-5" />
+              Crear Ticket desde Email
+            </DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="ticket-subject">Asunto del ticket *</Label>
+              <Input
+                id="ticket-subject"
+                value={ticketFormData.subject}
+                onChange={(e) => setTicketFormData({ ...ticketFormData, subject: e.target.value })}
+                placeholder="Asunto del ticket"
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="ticket-description">Descripción</Label>
+              <Textarea
+                id="ticket-description"
+                value={ticketFormData.description}
+                onChange={(e) => setTicketFormData({ ...ticketFormData, description: e.target.value })}
+                placeholder="Descripción del ticket..."
+                rows={4}
+              />
+            </div>
+            
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label>Prioridad</Label>
+                <Select 
+                  value={ticketFormData.priority} 
+                  onValueChange={(v) => setTicketFormData({ ...ticketFormData, priority: v })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="low">Baja</SelectItem>
+                    <SelectItem value="medium">Media</SelectItem>
+                    <SelectItem value="high">Alta</SelectItem>
+                    <SelectItem value="urgent">Urgente</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="ticket-due-date">Fecha vencimiento</Label>
+                <Input
+                  id="ticket-due-date"
+                  type="date"
+                  value={ticketFormData.dueDate}
+                  onChange={(e) => setTicketFormData({ ...ticketFormData, dueDate: e.target.value })}
+                />
+              </div>
+            </div>
+          </div>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCreateTicket(false)}>
+              Cancelar
+            </Button>
+            <Button 
+              onClick={handleCreateTicket} 
+              disabled={createTicketMutation.isPending || !ticketFormData.subject}
+            >
+              {createTicketMutation.isPending ? 'Creando...' : 'Crear Ticket'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Snooze Dialog */}
+      <Dialog open={showSnoozeDialog} onOpenChange={setShowSnoozeDialog}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlarmClock className="h-5 w-5" />
+              Posponer Email
+            </DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            <p className="text-sm text-muted-foreground">
+              El email volverá a aparecer en la bandeja de entrada en la fecha y hora seleccionadas.
+            </p>
+            
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="snooze-date">Fecha</Label>
+                <Input
+                  id="snooze-date"
+                  type="date"
+                  value={snoozeDate}
+                  onChange={(e) => setSnoozeDate(e.target.value)}
+                  min={format(new Date(), 'yyyy-MM-dd')}
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="snooze-time">Hora</Label>
+                <Input
+                  id="snooze-time"
+                  type="time"
+                  value={snoozeTime}
+                  onChange={(e) => setSnoozeTime(e.target.value)}
+                />
+              </div>
+            </div>
+            
+            <div className="flex gap-2">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="flex-1"
+                onClick={() => {
+                  setSnoozeDate(format(addDays(new Date(), 1), 'yyyy-MM-dd'));
+                  setSnoozeTime('09:00');
+                }}
+              >
+                Mañana
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="flex-1"
+                onClick={() => {
+                  const nextWeek = addDays(new Date(), 7);
+                  setSnoozeDate(format(nextWeek, 'yyyy-MM-dd'));
+                  setSnoozeTime('09:00');
+                }}
+              >
+                En 1 semana
+              </Button>
+            </div>
+          </div>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowSnoozeDialog(false)}>
+              Cancelar
+            </Button>
+            <Button 
+              onClick={handleSnooze} 
+              disabled={snoozeEmailMutation.isPending || !snoozeDate}
+            >
+              {snoozeEmailMutation.isPending ? 'Guardando...' : 'Posponer'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Folder Assignment Dialog */}
+      <Dialog open={showFolderDialog} onOpenChange={setShowFolderDialog}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FolderOpen className="h-5 w-5" />
+              Asignar Carpeta
+            </DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            <p className="text-sm text-muted-foreground">
+              Selecciona el presupuesto para clasificar este email.
+            </p>
+            
+            <div className="space-y-2">
+              <Label>Carpeta (Presupuesto)</Label>
+              <Select 
+                value={selectedBudgetId} 
+                onValueChange={setSelectedBudgetId}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Sin clasificar" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">Sin clasificar</SelectItem>
+                  {budgets.map(budget => (
+                    <SelectItem key={budget.id} value={budget.id}>
+                      {budget.codigo_correlativo} - {budget.nombre}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowFolderDialog(false)}>
+              Cancelar
+            </Button>
+            <Button 
+              onClick={handleAssignFolder} 
+              disabled={assignFolderMutation.isPending}
+            >
+              {assignFolderMutation.isPending ? 'Guardando...' : 'Asignar'}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -1494,6 +1494,7 @@ export type Database = {
           bcc_emails: string[] | null
           body_html: string | null
           body_text: string | null
+          budget_id: string | null
           cc_emails: string[] | null
           contact_id: string | null
           created_at: string
@@ -1504,9 +1505,12 @@ export type Database = {
           from_email: string
           from_name: string | null
           id: string
+          is_read: boolean | null
           metadata: Json | null
+          read_at: string | null
           received_at: string | null
           sent_at: string | null
+          snoozed_until: string | null
           status: string
           subject: string | null
           ticket_id: string | null
@@ -1517,6 +1521,7 @@ export type Database = {
           bcc_emails?: string[] | null
           body_html?: string | null
           body_text?: string | null
+          budget_id?: string | null
           cc_emails?: string[] | null
           contact_id?: string | null
           created_at?: string
@@ -1527,9 +1532,12 @@ export type Database = {
           from_email: string
           from_name?: string | null
           id?: string
+          is_read?: boolean | null
           metadata?: Json | null
+          read_at?: string | null
           received_at?: string | null
           sent_at?: string | null
+          snoozed_until?: string | null
           status?: string
           subject?: string | null
           ticket_id?: string | null
@@ -1540,6 +1548,7 @@ export type Database = {
           bcc_emails?: string[] | null
           body_html?: string | null
           body_text?: string | null
+          budget_id?: string | null
           cc_emails?: string[] | null
           contact_id?: string | null
           created_at?: string
@@ -1550,9 +1559,12 @@ export type Database = {
           from_email?: string
           from_name?: string | null
           id?: string
+          is_read?: boolean | null
           metadata?: Json | null
+          read_at?: string | null
           received_at?: string | null
           sent_at?: string | null
+          snoozed_until?: string | null
           status?: string
           subject?: string | null
           ticket_id?: string | null
@@ -1560,6 +1572,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "email_messages_budget_id_fkey"
+            columns: ["budget_id"]
+            isOneToOne: false
+            referencedRelation: "presupuestos"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "email_messages_contact_id_fkey"
             columns: ["contact_id"]

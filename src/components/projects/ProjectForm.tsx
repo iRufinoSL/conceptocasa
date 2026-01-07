@@ -35,7 +35,7 @@ export function ProjectForm({ open, onOpenChange, project, onSuccess }: ProjectF
   const [formData, setFormData] = useState({
     name: '',
     description: '',
-    status: 'active',
+    status: 'prospecto',
     location: '',
     project_type: '',
     budget: 0,
@@ -59,7 +59,7 @@ export function ProjectForm({ open, onOpenChange, project, onSuccess }: ProjectF
       setFormData({
         name: '',
         description: '',
-        status: 'active',
+        status: 'prospecto',
         location: '',
         project_type: '',
         budget: 0,
@@ -143,10 +143,9 @@ export function ProjectForm({ open, onOpenChange, project, onSuccess }: ProjectF
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="active">Activo</SelectItem>
-                  <SelectItem value="completed">Completado</SelectItem>
-                  <SelectItem value="on_hold">En pausa</SelectItem>
-                  <SelectItem value="cancelled">Cancelado</SelectItem>
+                  <SelectItem value="prospecto">Prospecto</SelectItem>
+                  <SelectItem value="activo">Activo</SelectItem>
+                  <SelectItem value="archivado">Archivado</SelectItem>
                 </SelectContent>
               </Select>
             </div>

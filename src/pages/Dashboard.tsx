@@ -3,6 +3,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { BackupButton } from '@/components/BackupButton';
+import { SystemAlertsIndicator } from '@/components/SystemAlertsIndicator';
 import { 
   FolderKanban, 
   Calculator, 
@@ -168,6 +169,7 @@ export default function Dashboard() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {isAdmin() && <SystemAlertsIndicator />}
             {isAdmin() && <BackupButton module="all" variant="outline" />}
             <Button variant="outline" onClick={handleSignOut} className="gap-2">
               <LogOut className="h-4 w-4" />

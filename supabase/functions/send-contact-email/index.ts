@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { Resend } from "https://esm.sh/resend@2.0.0";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 
 const resend = new Resend(Deno.env.get("RESEND_API_KEY"));
 
@@ -35,6 +36,27 @@ interface ContactEmailRequest {
   phone: string;
   subject: string;
   message: string;
+  // Housing profile fields
+  isHousingProfile?: boolean;
+  numPlantas?: string;
+  m2PorPlanta?: string;
+  formaGeometrica?: string;
+  tipoTejado?: string;
+  numHabitacionesTotal?: string;
+  numHabitacionesConBano?: string;
+  numBanosTotal?: string;
+  numHabitacionesConVestidor?: string;
+  tipoSalon?: string;
+  tipoCocina?: string;
+  lavanderia?: string;
+  despensa?: string;
+  porcheCubierto?: string;
+  patioDescubierto?: string;
+  garaje?: string;
+  tieneTerreno?: string;
+  poblacionProvincia?: string;
+  presupuestoGlobal?: string;
+  estiloConstructivo?: string[];
 }
 
 // In-memory rate limiting store
@@ -83,11 +105,33 @@ function escapeHtml(text: string): string {
   return text.replace(/[&<>"']/g, (m) => map[m]);
 }
 
+// Parse poblacion and provincia from combined field
+function parsePoblacionProvincia(value: string): { poblacion: string; provincia: string } {
+  // Expected format: "Poblacion, Provincia" or just "Poblacion"
+  const parts = value.split(',').map(p => p.trim());
+  return {
+    poblacion: parts[0] || '',
+    provincia: parts[1] || ''
+  };
+}
+
+// Extract first name and surname from full name
+function parseFullName(name: string): { firstName: string; surname: string } {
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 1) {
+    return { firstName: parts[0], surname: '' };
+  }
+  return {
+    firstName: parts[0],
+    surname: parts.slice(1).join(' ')
+  };
+}
+
 const handler = async (req: Request): Promise<Response> => {
   const origin = req.headers.get("origin");
   const corsHeaders = {
     ...getCorsHeaders(origin),
-    // Ensure caches don’t mix responses across origins
+    // Ensure caches don't mix responses across origins
     "Vary": "Origin",
     // Basic hardening headers
     "X-Content-Type-Options": "nosniff",
@@ -158,13 +202,16 @@ const handler = async (req: Request): Promise<Response> => {
       );
     }
 
-    const { name, email, phone, subject, message }: ContactEmailRequest = body as ContactEmailRequest;
+    const requestData = body as ContactEmailRequest;
+    const { name, email, phone, subject, message, isHousingProfile } = requestData;
 
     console.log(
       "Received contact form submission from IP:",
       ip,
       "- Origin:",
       origin,
+      "- Is Housing Profile:",
+      isHousingProfile,
       "- Remaining requests:",
       rateLimit.remaining
     );
@@ -180,7 +227,7 @@ const handler = async (req: Request): Promise<Response> => {
 
     // Validate input lengths to prevent abuse
     if (name.length > 100 || email.length > 255 || phone.length > 50 || 
-        (subject && subject.length > 200) || message.length > 5000) {
+        (subject && subject.length > 200) || message.length > 10000) {
       console.error("Input too long");
       return new Response(
         JSON.stringify({ error: "Uno o más campos exceden la longitud máxima permitida" }),
@@ -205,20 +252,208 @@ const handler = async (req: Request): Promise<Response> => {
     const safeSubject = escapeHtml(subject || "Sin asunto");
     const safeMessage = escapeHtml(message).replace(/\n/g, "<br />");
 
+    // If this is a housing profile, create project, contact, and opportunity
+    let projectId: string | null = null;
+    let projectNumber: number | null = null;
+    
+    if (isHousingProfile) {
+      console.log("Processing housing profile submission...");
+      
+      // Initialize Supabase client with service role
+      const supabaseUrl = Deno.env.get("SUPABASE_URL");
+      const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+      
+      if (!supabaseUrl || !supabaseServiceKey) {
+        console.error("Missing Supabase configuration");
+        throw new Error("Configuración de base de datos no disponible");
+      }
+      
+      const supabase = createClient(supabaseUrl, supabaseServiceKey);
+      
+      // Parse name and location
+      const { firstName, surname } = parseFullName(name);
+      const { poblacion, provincia } = parsePoblacionProvincia(requestData.poblacionProvincia || '');
+      
+      // Create project name: "Nombre_Población, Provincia"
+      const projectName = `${firstName}${surname ? ' ' + surname : ''}_${poblacion}${provincia ? ', ' + provincia : ''}`;
+      const projectLocation = poblacion + (provincia ? `, ${provincia}` : '');
+      
+      console.log("Creating project:", projectName);
+      
+      // 1. Create project with status "prospecto"
+      const { data: projectData, error: projectError } = await supabase
+        .from('projects')
+        .insert({
+          name: projectName,
+          status: 'prospecto',
+          location: projectLocation,
+          project_type: 'Vivienda unifamiliar',
+          source: 'housing_profile_form',
+          description: `Proyecto creado automáticamente desde formulario de perfil de vivienda. Presupuesto indicado: ${requestData.presupuestoGlobal || 'No especificado'}`
+        })
+        .select('id, project_number')
+        .single();
+      
+      if (projectError) {
+        console.error("Error creating project:", projectError);
+        throw new Error("Error al crear el proyecto");
+      }
+      
+      projectId = projectData.id;
+      projectNumber = projectData.project_number;
+      console.log("Project created with ID:", projectId, "Number:", projectNumber);
+      
+      // 2. Create project profile with all form data
+      const { error: profileError } = await supabase
+        .from('project_profiles')
+        .insert({
+          project_id: projectId,
+          contact_name: firstName,
+          contact_surname: surname || null,
+          contact_email: email,
+          contact_phone: phone,
+          num_plantas: requestData.numPlantas || null,
+          m2_por_planta: requestData.m2PorPlanta || null,
+          forma_geometrica: requestData.formaGeometrica || null,
+          tipo_tejado: requestData.tipoTejado || null,
+          num_habitaciones_total: requestData.numHabitacionesTotal || null,
+          num_habitaciones_con_bano: requestData.numHabitacionesConBano || null,
+          num_banos_total: requestData.numBanosTotal || null,
+          num_habitaciones_con_vestidor: requestData.numHabitacionesConVestidor || null,
+          tipo_salon: requestData.tipoSalon || null,
+          tipo_cocina: requestData.tipoCocina || null,
+          lavanderia: requestData.lavanderia || null,
+          despensa: requestData.despensa || null,
+          porche_cubierto: requestData.porcheCubierto || null,
+          patio_descubierto: requestData.patioDescubierto || null,
+          garaje: requestData.garaje || null,
+          tiene_terreno: requestData.tieneTerreno || null,
+          poblacion: poblacion || null,
+          provincia: provincia || null,
+          presupuesto_global: requestData.presupuestoGlobal || null,
+          estilo_constructivo: requestData.estiloConstructivo || [],
+          mensaje_adicional: requestData.message || null
+        });
+      
+      if (profileError) {
+        console.error("Error creating project profile:", profileError);
+        // Don't fail the whole request, just log it
+      } else {
+        console.log("Project profile created successfully");
+      }
+      
+      // 3. Create or find CRM contact
+      const { data: existingContact } = await supabase
+        .from('crm_contacts')
+        .select('id')
+        .eq('email', email)
+        .maybeSingle();
+      
+      let contactId: string;
+      
+      if (existingContact) {
+        contactId = existingContact.id;
+        console.log("Found existing contact:", contactId);
+      } else {
+        // Create new contact with status "Prospecto"
+        const { data: newContact, error: contactError } = await supabase
+          .from('crm_contacts')
+          .insert({
+            name: firstName,
+            surname: surname || null,
+            email: email,
+            phone: phone,
+            city: poblacion || null,
+            province: provincia || null,
+            contact_type: 'Particular',
+            status: 'Prospecto'
+          })
+          .select('id')
+          .single();
+        
+        if (contactError) {
+          console.error("Error creating contact:", contactError);
+        } else {
+          contactId = newContact.id;
+          console.log("Created new contact:", contactId);
+        }
+      }
+      
+      // 4. Create opportunity linked to contact
+      if (contactId!) {
+        const opportunityName = `${firstName}_${poblacion}`;
+        const { error: opportunityError } = await supabase
+          .from('crm_opportunities')
+          .insert({
+            name: opportunityName,
+            contact_id: contactId,
+            description: `Oportunidad creada desde perfil de vivienda. Proyecto: ${projectName}`
+          });
+        
+        if (opportunityError) {
+          console.error("Error creating opportunity:", opportunityError);
+        } else {
+          console.log("Opportunity created:", opportunityName);
+        }
+        
+        // 5. Link contact to project
+        const { error: projectContactError } = await supabase
+          .from('project_contacts')
+          .insert({
+            project_id: projectId,
+            contact_id: contactId,
+            contact_role: 'Cliente'
+          });
+        
+        if (projectContactError) {
+          console.error("Error linking contact to project:", projectContactError);
+        }
+      }
+      
+      // 6. Create system alert for dashboard
+      const { error: alertError } = await supabase
+        .from('system_alerts')
+        .insert({
+          alert_type: 'new_project_profile',
+          title: 'Nuevo perfil de vivienda recibido',
+          message: `${name} ha enviado un perfil de vivienda desde ${poblacion}`,
+          related_id: projectId,
+          related_type: 'project',
+          action_url: `/proyectos?highlight=${projectId}`,
+          is_read: false
+        });
+      
+      if (alertError) {
+        console.error("Error creating system alert:", alertError);
+      } else {
+        console.log("System alert created");
+      }
+    }
+
     // Send notification email to the company
     const notificationEmail = await resend.emails.send({
       from: "Concepto.Casa <onboarding@resend.dev>",
       to: ["organiza@concepto.casa"],
-      subject: `Nuevo contacto: ${safeSubject}`,
+      subject: isHousingProfile 
+        ? `🏠 Nuevo Perfil de Vivienda: ${safeName}${projectNumber ? ` (#${projectNumber})` : ''}`
+        : `Nuevo contacto: ${safeSubject}`,
       html: `
-        <h2>Nuevo mensaje de contacto</h2>
+        <h2>${isHousingProfile ? '🏠 Nuevo Perfil de Vivienda Recibido' : 'Nuevo mensaje de contacto'}</h2>
+        ${isHousingProfile && projectNumber ? `<p><strong>Proyecto #${projectNumber}</strong></p>` : ''}
         <p><strong>Nombre:</strong> ${safeName}</p>
         <p><strong>Email:</strong> ${safeEmail}</p>
         <p><strong>Teléfono:</strong> ${safePhone}</p>
-        <p><strong>Asunto:</strong> ${safeSubject}</p>
+        ${!isHousingProfile ? `<p><strong>Asunto:</strong> ${safeSubject}</p>` : ''}
         <hr />
         <p><strong>Mensaje:</strong></p>
         <p>${safeMessage}</p>
+        ${isHousingProfile ? `
+        <hr />
+        <p style="color: #666; font-size: 12px;">
+          Este perfil ha sido registrado automáticamente en el sistema. 
+          Accede al panel de control para ver los detalles completos del proyecto.
+        </p>
+        ` : ''}
       `,
     });
 
@@ -228,10 +463,14 @@ const handler = async (req: Request): Promise<Response> => {
     const confirmationEmail = await resend.emails.send({
       from: "Concepto.Casa <onboarding@resend.dev>",
       to: [email],
-      subject: "Hemos recibido tu mensaje - Concepto.Casa",
+      subject: isHousingProfile 
+        ? "Hemos recibido tu perfil de vivienda - Concepto.Casa"
+        : "Hemos recibido tu mensaje - Concepto.Casa",
       html: `
         <h1>¡Gracias por contactarnos, ${safeName}!</h1>
-        <p>Hemos recibido tu mensaje y nos pondremos en contacto contigo lo antes posible.</p>
+        <p>${isHousingProfile 
+          ? 'Hemos recibido tu perfil de vivienda y lo estamos revisando. Te contactaremos pronto con una propuesta personalizada.'
+          : 'Hemos recibido tu mensaje y nos pondremos en contacto contigo lo antes posible.'}</p>
         <hr />
         <p><strong>Tu mensaje:</strong></p>
         <p>${safeMessage}</p>
@@ -247,7 +486,12 @@ const handler = async (req: Request): Promise<Response> => {
     console.log("Confirmation email sent:", confirmationEmail);
 
     return new Response(
-      JSON.stringify({ success: true, message: "Emails enviados correctamente" }),
+      JSON.stringify({ 
+        success: true, 
+        message: "Emails enviados correctamente",
+        projectId: projectId,
+        projectNumber: projectNumber
+      }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error: any) {

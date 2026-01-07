@@ -137,7 +137,29 @@ ${formData.message || "Sin mensaje adicional"}
           email: formData.email,
           phone: formData.phone,
           subject: "Perfil de Vivienda - Solicitud Detallada",
-          message: messageBody
+          message: messageBody,
+          // Flag to indicate this is a housing profile
+          isHousingProfile: true,
+          // Send all form fields for database storage
+          numPlantas: formData.numPlantas,
+          m2PorPlanta: formData.m2PorPlanta,
+          formaGeometrica: formData.formaGeometrica,
+          tipoTejado: formData.tipoTejado,
+          numHabitacionesTotal: formData.numHabitacionesTotal,
+          numHabitacionesConBano: formData.numHabitacionesConBano,
+          numBanosTotal: formData.numBanosTotal,
+          numHabitacionesConVestidor: formData.numHabitacionesConVestidor,
+          tipoSalon: formData.tipoSalon,
+          tipoCocina: formData.tipoCocina,
+          lavanderia: formData.lavanderia,
+          despensa: formData.despensa,
+          porcheCubierto: formData.porcheCubierto,
+          patioDescubierto: formData.patioDescubierto,
+          garaje: formData.garaje,
+          tieneTerreno: formData.tieneTerreno,
+          poblacionProvincia: formData.poblacionProvincia,
+          presupuestoGlobal: formData.presupuestoGlobal,
+          estiloConstructivo: formData.estiloConstructivo
         }
       });
 

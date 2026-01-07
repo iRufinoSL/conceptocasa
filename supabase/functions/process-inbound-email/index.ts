@@ -7,13 +7,20 @@ const jsonHeaders = {
 };
 
 interface InboundEmail {
+  // Standard fields
   from: string;
   from_name?: string;
-  to: string[];
+  to: string | string[];
   cc?: string[];
   subject: string;
+  // Text content - Resend may use different field names
   text?: string;
+  plain_body?: string;
+  body?: string;
+  // HTML content - Resend may use different field names  
   html?: string;
+  html_body?: string;
+  // Attachments
   attachments?: Array<{
     filename: string;
     content: string;
@@ -21,6 +28,9 @@ interface InboundEmail {
   }>;
   headers?: Record<string, string>;
   message_id?: string;
+  // Additional Resend fields
+  created_at?: string;
+  email_id?: string;
 }
 
 const handler = async (req: Request): Promise<Response> => {
@@ -46,11 +56,16 @@ const handler = async (req: Request): Promise<Response> => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const rawBody = await req.text();
-    console.log("Raw request body:", rawBody.substring(0, 500));
+    console.log("Raw request body (first 2000 chars):", rawBody.substring(0, 2000));
+    console.log("Raw body length:", rawBody.length);
     
     let payload: any;
     try {
       payload = JSON.parse(rawBody);
+      console.log("Parsed payload keys:", Object.keys(payload));
+      if (payload.data) {
+        console.log("Payload.data keys:", Object.keys(payload.data));
+      }
     } catch (parseError) {
       console.error("Failed to parse JSON:", parseError);
       return new Response(
@@ -80,14 +95,36 @@ const handler = async (req: Request): Promise<Response> => {
 
     // Now treat payload as InboundEmail
     const emailData: InboundEmail = payload;
+    
+    // Log all available fields for debugging
+    console.log("Email data fields:", JSON.stringify({
+      from: emailData.from,
+      from_name: emailData.from_name,
+      to: emailData.to,
+      subject: emailData.subject,
+      has_text: !!emailData.text,
+      has_plain_body: !!emailData.plain_body,
+      has_body: !!emailData.body,
+      has_html: !!emailData.html,
+      has_html_body: !!emailData.html_body,
+      text_preview: (emailData.text || emailData.plain_body || emailData.body || "").substring(0, 200),
+      html_preview: (emailData.html || emailData.html_body || "").substring(0, 200),
+    }));
 
     // Validate required fields with safe defaults
     const fromField = emailData.from || emailData.from_name || "";
     const subjectField = emailData.subject || "(Sin asunto)";
-    const toField = emailData.to || [];
+    // Handle 'to' field which can be string or array
+    const toField = Array.isArray(emailData.to) ? emailData.to : (emailData.to ? [emailData.to] : []);
+    
+    // Extract text content from various possible fields
+    const textContent = emailData.text || emailData.plain_body || emailData.body || null;
+    const htmlContent = emailData.html || emailData.html_body || null;
     
     console.log("Received inbound email from:", fromField);
     console.log("Subject:", subjectField);
+    console.log("Text content length:", textContent?.length || 0);
+    console.log("HTML content length:", htmlContent?.length || 0);
 
     if (!fromField) {
       console.error("No 'from' field in email data");
@@ -153,7 +190,7 @@ const handler = async (req: Request): Promise<Response> => {
         .from("tickets")
         .insert({
           subject: subjectField,
-          description: emailData.text || "Email received",
+          description: textContent || "Email received",
           status: "open",
           priority: "medium",
           category: "Email",
@@ -192,6 +229,8 @@ const handler = async (req: Request): Promise<Response> => {
     }
 
     // Store the inbound email
+    console.log("Storing email with content - text:", textContent?.substring(0, 100), "html:", htmlContent?.substring(0, 100));
+    
     const { data: emailRecord, error: emailError } = await supabase
       .from("email_messages")
       .insert({
@@ -201,10 +240,10 @@ const handler = async (req: Request): Promise<Response> => {
         to_emails: toField.length > 0 ? toField : ["organiza@concepto.casa"],
         cc_emails: emailData.cc || null,
         subject: subjectField,
-        body_text: emailData.text || null,
-        body_html: emailData.html || null,
+        body_text: textContent,
+        body_html: htmlContent,
         status: "received",
-        external_id: emailData.message_id || null,
+        external_id: emailData.message_id || emailData.email_id || null,
         contact_id: contactId,
         ticket_id: ticketId,
         received_at: new Date().toISOString(),
@@ -212,7 +251,9 @@ const handler = async (req: Request): Promise<Response> => {
         metadata: {
           headers: emailData.headers || {},
           has_attachments: (emailData.attachments?.length || 0) > 0,
-          unknown_sender: !contactId // Flag to indicate sender is not a contact
+          attachment_count: emailData.attachments?.length || 0,
+          unknown_sender: !contactId,
+          raw_payload_keys: Object.keys(payload)
         }
       })
       .select()

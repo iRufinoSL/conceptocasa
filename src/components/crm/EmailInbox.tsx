@@ -11,15 +11,16 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Label } from '@/components/ui/label';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Textarea } from '@/components/ui/textarea';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { supabase } from '@/integrations/supabase/client';
-import { format, isToday, isYesterday, isThisWeek, startOfDay, addDays, addHours } from 'date-fns';
+import { format, isToday, isYesterday, isThisWeek, addDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { 
   Mail, Search, ArrowUpRight, ArrowDownLeft, 
   CheckCircle, XCircle, Clock, Eye, Inbox,
   Reply, Forward, UserPlus, AlertCircle,
   ChevronDown, ChevronRight, User, Calendar, FolderOpen,
-  Ticket, AlarmClock, MailOpen
+  Ticket, AlarmClock, MailOpen, Maximize2, Minimize2, X
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import type { Tables, Json } from '@/integrations/supabase/types';
@@ -59,6 +60,7 @@ export function EmailInbox({ onComposeReply }: EmailInboxProps) {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [groupMode, setGroupMode] = useState<GroupMode>('date');
   const [selectedEmail, setSelectedEmail] = useState<EmailMessage | null>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const [showCreateContact, setShowCreateContact] = useState(false);
   const [showCreateTicket, setShowCreateTicket] = useState(false);
   const [showSnoozeDialog, setShowSnoozeDialog] = useState(false);
@@ -713,145 +715,343 @@ export function EmailInbox({ onComposeReply }: EmailInboxProps) {
         </CardContent>
       </Card>
 
-      {/* Email Detail Dialog */}
-      <Dialog open={!!selectedEmail} onOpenChange={() => setSelectedEmail(null)}>
-        <DialogContent className="max-w-3xl max-h-[85vh] overflow-hidden flex flex-col">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Mail className="h-5 w-5" />
-              {selectedEmail?.subject || '(Sin asunto)'}
-            </DialogTitle>
-          </DialogHeader>
-          
-          {selectedEmail && (
-            <div className="flex-1 overflow-hidden flex flex-col">
-              {/* Email metadata */}
-              <div className="border-b pb-4 mb-4 space-y-2">
-                <div className="flex items-center justify-between flex-wrap gap-2">
-                  <div className="text-sm">
-                    <span className="text-muted-foreground">De: </span>
-                    <span className="font-medium">{selectedEmail.from_name || selectedEmail.from_email}</span>
-                    {selectedEmail.from_name && (
-                      <span className="text-muted-foreground ml-1">&lt;{selectedEmail.from_email}&gt;</span>
-                    )}
-                  </div>
-                  <span className="text-xs text-muted-foreground">
-                    {format(new Date(selectedEmail.created_at), "d MMMM yyyy 'a las' HH:mm", { locale: es })}
-                  </span>
-                </div>
-                <div className="text-sm">
-                  <span className="text-muted-foreground">Para: </span>
-                  <span>{selectedEmail.to_emails?.join(', ')}</span>
-                </div>
-                {selectedEmail.cc_emails && selectedEmail.cc_emails.length > 0 && (
-                  <div className="text-sm">
-                    <span className="text-muted-foreground">CC: </span>
-                    <span>{selectedEmail.cc_emails.join(', ')}</span>
-                  </div>
-                )}
-                {selectedEmail.tickets && (
-                  <div className="text-sm">
-                    <span className="text-muted-foreground">Ticket: </span>
-                    <Badge variant="outline">#{selectedEmail.tickets.ticket_number} - {selectedEmail.tickets.subject}</Badge>
-                  </div>
-                )}
-                {selectedEmail.presupuestos && (
-                  <div className="text-sm">
-                    <span className="text-muted-foreground">Carpeta: </span>
-                    <Badge variant="outline" className="bg-primary/10">
-                      <FolderOpen className="h-3 w-3 mr-1" />
-                      {selectedEmail.presupuestos.codigo_correlativo} - {selectedEmail.presupuestos.nombre}
-                    </Badge>
-                  </div>
-                )}
-                {selectedEmail.crm_contacts ? (
-                  <div className="text-sm">
-                    <span className="text-muted-foreground">Contacto CRM: </span>
-                    <span className="text-primary font-medium">
-                      {selectedEmail.crm_contacts.name} {selectedEmail.crm_contacts.surname}
-                    </span>
-                  </div>
-                ) : isUnknownSender(selectedEmail) ? (
-                  <div className="flex items-center gap-2 p-2 bg-amber-500/10 border border-amber-500/20 rounded-lg">
-                    <AlertCircle className="h-4 w-4 text-amber-600" />
-                    <span className="text-sm text-amber-700 dark:text-amber-400">
-                      Remitente no registrado como contacto
-                    </span>
-                    <Button 
-                      size="sm" 
-                      variant="outline"
-                      className="ml-auto gap-1"
-                      onClick={() => openCreateContactDialog(selectedEmail)}
-                    >
-                      <UserPlus className="h-4 w-4" />
-                      Registrar como contacto
-                    </Button>
-                  </div>
-                ) : null}
-              </div>
-
-              {/* Email body */}
-              <ScrollArea className="flex-1 -mx-6 px-6">
-                <div 
-                  className="prose prose-sm max-w-none dark:prose-invert"
-                  dangerouslySetInnerHTML={{ 
-                    __html: DOMPurify.sanitize(
-                      selectedEmail.body_html || selectedEmail.body_text?.replace(/\n/g, '<br>') || 'Sin contenido'
-                    )
-                  }}
-                />
-              </ScrollArea>
-
-              {/* Actions */}
-              <div className="border-t pt-4 mt-4 flex flex-wrap gap-2">
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  onClick={() => {
-                    if (onComposeReply) {
-                      onComposeReply(selectedEmail);
-                      setSelectedEmail(null);
-                    }
-                  }}
+      {/* Email Detail Dialog - Normal or Fullscreen */}
+      {!isFullscreen ? (
+        <Dialog open={!!selectedEmail} onOpenChange={() => setSelectedEmail(null)}>
+          <DialogContent className="max-w-3xl max-h-[85vh] overflow-hidden flex flex-col">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 pr-8">
+                <Mail className="h-5 w-5 flex-shrink-0" />
+                <span className="truncate">{selectedEmail?.subject || '(Sin asunto)'}</span>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="ml-auto h-8 w-8 flex-shrink-0"
+                  onClick={() => setIsFullscreen(true)}
                 >
-                  <Reply className="h-4 w-4 mr-2" />
-                  Responder
+                  <Maximize2 className="h-4 w-4" />
                 </Button>
-                <Button variant="outline" size="sm">
-                  <Forward className="h-4 w-4 mr-2" />
-                  Reenviar
-                </Button>
-                {!selectedEmail.ticket_id && (
+              </DialogTitle>
+            </DialogHeader>
+            
+            {selectedEmail && (
+              <div className="flex-1 overflow-hidden flex flex-col">
+                {/* Email metadata */}
+                <div className="border-b pb-4 mb-4 space-y-2">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <div className="text-sm">
+                      <span className="text-muted-foreground">De: </span>
+                      <span className="font-medium">{selectedEmail.from_name || selectedEmail.from_email}</span>
+                      {selectedEmail.from_name && (
+                        <span className="text-muted-foreground ml-1">&lt;{selectedEmail.from_email}&gt;</span>
+                      )}
+                    </div>
+                    <span className="text-xs text-muted-foreground">
+                      {format(new Date(selectedEmail.created_at), "d MMMM yyyy 'a las' HH:mm", { locale: es })}
+                    </span>
+                  </div>
+                  <div className="text-sm">
+                    <span className="text-muted-foreground">Para: </span>
+                    <span>{selectedEmail.to_emails?.join(', ')}</span>
+                  </div>
+                  {selectedEmail.cc_emails && selectedEmail.cc_emails.length > 0 && (
+                    <div className="text-sm">
+                      <span className="text-muted-foreground">CC: </span>
+                      <span>{selectedEmail.cc_emails.join(', ')}</span>
+                    </div>
+                  )}
+                  {selectedEmail.tickets && (
+                    <div className="text-sm">
+                      <span className="text-muted-foreground">Ticket: </span>
+                      <Badge variant="outline">#{selectedEmail.tickets.ticket_number} - {selectedEmail.tickets.subject}</Badge>
+                    </div>
+                  )}
+                  {selectedEmail.presupuestos && (
+                    <div className="text-sm">
+                      <span className="text-muted-foreground">Carpeta: </span>
+                      <Badge variant="outline" className="bg-primary/10">
+                        <FolderOpen className="h-3 w-3 mr-1" />
+                        {selectedEmail.presupuestos.codigo_correlativo} - {selectedEmail.presupuestos.nombre}
+                      </Badge>
+                    </div>
+                  )}
+                  {selectedEmail.crm_contacts ? (
+                    <div className="text-sm">
+                      <span className="text-muted-foreground">Contacto CRM: </span>
+                      <span className="text-primary font-medium">
+                        {selectedEmail.crm_contacts.name} {selectedEmail.crm_contacts.surname}
+                      </span>
+                    </div>
+                  ) : isUnknownSender(selectedEmail) ? (
+                    <div className="flex items-center gap-2 p-2 bg-amber-500/10 border border-amber-500/20 rounded-lg">
+                      <AlertCircle className="h-4 w-4 text-amber-600" />
+                      <span className="text-sm text-amber-700 dark:text-amber-400">
+                        Remitente no registrado como contacto
+                      </span>
+                      <Button 
+                        size="sm" 
+                        variant="outline"
+                        className="ml-auto gap-1"
+                        onClick={() => openCreateContactDialog(selectedEmail)}
+                      >
+                        <UserPlus className="h-4 w-4" />
+                        Registrar como contacto
+                      </Button>
+                    </div>
+                  ) : null}
+                </div>
+
+                {/* Email body - Preview */}
+                <ScrollArea className="flex-1 -mx-6 px-6 min-h-[200px]">
+                  {selectedEmail.body_html || selectedEmail.body_text ? (
+                    <div 
+                      className="prose prose-sm max-w-none dark:prose-invert"
+                      dangerouslySetInnerHTML={{ 
+                        __html: DOMPurify.sanitize(
+                          selectedEmail.body_html || selectedEmail.body_text?.replace(/\n/g, '<br>') || ''
+                        )
+                      }}
+                    />
+                  ) : (
+                    <div className="text-center py-8 text-muted-foreground">
+                      <Mail className="h-12 w-12 mx-auto mb-3 opacity-30" />
+                      <p className="font-medium">Sin contenido de texto</p>
+                      <p className="text-sm mt-1">El email puede contener solo adjuntos.</p>
+                      {(selectedEmail.metadata as EmailMetadata)?.has_attachments && (
+                        <Badge variant="outline" className="mt-2">
+                          Tiene adjuntos
+                        </Badge>
+                      )}
+                    </div>
+                  )}
+                </ScrollArea>
+
+                {/* Actions */}
+                <div className="border-t pt-4 mt-4 flex flex-wrap gap-2">
                   <Button 
                     variant="outline" 
                     size="sm"
-                    onClick={() => openCreateTicketDialog(selectedEmail)}
+                    onClick={() => {
+                      if (onComposeReply) {
+                        onComposeReply(selectedEmail);
+                        setSelectedEmail(null);
+                      }
+                    }}
                   >
-                    <Ticket className="h-4 w-4 mr-2" />
-                    Crear Ticket
+                    <Reply className="h-4 w-4 mr-2" />
+                    Responder
                   </Button>
-                )}
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  onClick={openSnoozeDialog}
-                >
-                  <AlarmClock className="h-4 w-4 mr-2" />
-                  Posponer
-                </Button>
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  onClick={() => openFolderDialog(selectedEmail)}
-                >
-                  <FolderOpen className="h-4 w-4 mr-2" />
-                  Asignar carpeta
-                </Button>
+                  <Button variant="outline" size="sm">
+                    <Forward className="h-4 w-4 mr-2" />
+                    Reenviar
+                  </Button>
+                  {!selectedEmail.ticket_id && (
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => openCreateTicketDialog(selectedEmail)}
+                    >
+                      <Ticket className="h-4 w-4 mr-2" />
+                      Crear Ticket
+                    </Button>
+                  )}
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={openSnoozeDialog}
+                  >
+                    <AlarmClock className="h-4 w-4 mr-2" />
+                    Posponer
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => openFolderDialog(selectedEmail)}
+                  >
+                    <FolderOpen className="h-4 w-4 mr-2" />
+                    Asignar carpeta
+                  </Button>
+                </div>
               </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
+            )}
+          </DialogContent>
+        </Dialog>
+      ) : (
+        /* Fullscreen Email View */
+        <Sheet open={!!selectedEmail && isFullscreen} onOpenChange={(open) => {
+          if (!open) {
+            setIsFullscreen(false);
+          }
+        }}>
+          <SheetContent side="right" className="w-full sm:max-w-full p-0 flex flex-col">
+            <SheetHeader className="p-6 pb-4 border-b flex-shrink-0">
+              <SheetTitle className="flex items-center gap-3">
+                <Mail className="h-6 w-6 flex-shrink-0" />
+                <span className="flex-1 truncate text-left">{selectedEmail?.subject || '(Sin asunto)'}</span>
+                <div className="flex gap-2 flex-shrink-0">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setIsFullscreen(false)}
+                  >
+                    <Minimize2 className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => {
+                      setIsFullscreen(false);
+                      setSelectedEmail(null);
+                    }}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              </SheetTitle>
+            </SheetHeader>
+            
+            {selectedEmail && (
+              <div className="flex-1 overflow-hidden flex flex-col">
+                {/* Email metadata */}
+                <div className="p-6 border-b space-y-3 flex-shrink-0">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <div>
+                      <span className="text-muted-foreground">De: </span>
+                      <span className="font-medium">{selectedEmail.from_name || selectedEmail.from_email}</span>
+                      {selectedEmail.from_name && (
+                        <span className="text-muted-foreground ml-1">&lt;{selectedEmail.from_email}&gt;</span>
+                      )}
+                    </div>
+                    <span className="text-sm text-muted-foreground">
+                      {format(new Date(selectedEmail.created_at), "EEEE, d MMMM yyyy 'a las' HH:mm", { locale: es })}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Para: </span>
+                    <span>{selectedEmail.to_emails?.join(', ')}</span>
+                  </div>
+                  {selectedEmail.cc_emails && selectedEmail.cc_emails.length > 0 && (
+                    <div>
+                      <span className="text-muted-foreground">CC: </span>
+                      <span>{selectedEmail.cc_emails.join(', ')}</span>
+                    </div>
+                  )}
+                  <div className="flex flex-wrap gap-2 pt-2">
+                    {selectedEmail.tickets && (
+                      <Badge variant="outline">
+                        <Ticket className="h-3 w-3 mr-1" />
+                        Ticket #{selectedEmail.tickets.ticket_number}
+                      </Badge>
+                    )}
+                    {selectedEmail.presupuestos && (
+                      <Badge variant="outline" className="bg-primary/10">
+                        <FolderOpen className="h-3 w-3 mr-1" />
+                        {selectedEmail.presupuestos.codigo_correlativo} - {selectedEmail.presupuestos.nombre}
+                      </Badge>
+                    )}
+                    {selectedEmail.crm_contacts && (
+                      <Badge variant="outline" className="bg-green-500/10 text-green-600">
+                        <User className="h-3 w-3 mr-1" />
+                        {selectedEmail.crm_contacts.name} {selectedEmail.crm_contacts.surname}
+                      </Badge>
+                    )}
+                    {(selectedEmail.metadata as EmailMetadata)?.has_attachments && (
+                      <Badge variant="outline" className="bg-amber-500/10 text-amber-600">
+                        Tiene adjuntos
+                      </Badge>
+                    )}
+                  </div>
+                  {isUnknownSender(selectedEmail) && (
+                    <div className="flex items-center gap-2 p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg">
+                      <AlertCircle className="h-5 w-5 text-amber-600" />
+                      <span className="text-amber-700 dark:text-amber-400">
+                        Remitente no registrado como contacto
+                      </span>
+                      <Button 
+                        size="sm" 
+                        variant="outline"
+                        className="ml-auto gap-1"
+                        onClick={() => openCreateContactDialog(selectedEmail)}
+                      >
+                        <UserPlus className="h-4 w-4" />
+                        Registrar
+                      </Button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Email body - Fullscreen */}
+                <ScrollArea className="flex-1 p-6">
+                  {selectedEmail.body_html || selectedEmail.body_text ? (
+                    <div 
+                      className="prose prose-lg max-w-4xl mx-auto dark:prose-invert"
+                      dangerouslySetInnerHTML={{ 
+                        __html: DOMPurify.sanitize(
+                          selectedEmail.body_html || selectedEmail.body_text?.replace(/\n/g, '<br>') || ''
+                        )
+                      }}
+                    />
+                  ) : (
+                    <div className="text-center py-16 text-muted-foreground">
+                      <Mail className="h-16 w-16 mx-auto mb-4 opacity-30" />
+                      <p className="text-lg font-medium">Sin contenido de texto</p>
+                      <p className="mt-2">El email puede contener solo archivos adjuntos.</p>
+                      {(selectedEmail.metadata as EmailMetadata)?.has_attachments && (
+                        <Badge variant="outline" className="mt-4 text-base px-4 py-2">
+                          Este email contiene adjuntos
+                        </Badge>
+                      )}
+                    </div>
+                  )}
+                </ScrollArea>
+
+                {/* Actions - Fullscreen */}
+                <div className="p-6 border-t flex-shrink-0 flex flex-wrap gap-3 bg-muted/30">
+                  <Button 
+                    onClick={() => {
+                      if (onComposeReply) {
+                        onComposeReply(selectedEmail);
+                        setSelectedEmail(null);
+                        setIsFullscreen(false);
+                      }
+                    }}
+                  >
+                    <Reply className="h-4 w-4 mr-2" />
+                    Responder
+                  </Button>
+                  <Button variant="outline">
+                    <Forward className="h-4 w-4 mr-2" />
+                    Reenviar
+                  </Button>
+                  {!selectedEmail.ticket_id && (
+                    <Button 
+                      variant="outline"
+                      onClick={() => openCreateTicketDialog(selectedEmail)}
+                    >
+                      <Ticket className="h-4 w-4 mr-2" />
+                      Crear Ticket
+                    </Button>
+                  )}
+                  <Button 
+                    variant="outline"
+                    onClick={openSnoozeDialog}
+                  >
+                    <AlarmClock className="h-4 w-4 mr-2" />
+                    Posponer
+                  </Button>
+                  <Button 
+                    variant="outline"
+                    onClick={() => openFolderDialog(selectedEmail)}
+                  >
+                    <FolderOpen className="h-4 w-4 mr-2" />
+                    Asignar carpeta
+                  </Button>
+                </div>
+              </div>
+            )}
+          </SheetContent>
+        </Sheet>
+      )}
 
       {/* Create Contact Dialog */}
       <Dialog open={showCreateContact} onOpenChange={setShowCreateContact}>

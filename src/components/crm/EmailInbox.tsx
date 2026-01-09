@@ -92,8 +92,8 @@ export function EmailInbox({ onComposeReply }: EmailInboxProps) {
   });
   const [snoozeDate, setSnoozeDate] = useState('');
   const [snoozeTime, setSnoozeTime] = useState('09:00');
-  const [selectedBudgetId, setSelectedBudgetId] = useState<string>('');
-  const [selectedProjectId, setSelectedProjectId] = useState<string>('');
+  const [selectedBudgetId, setSelectedBudgetId] = useState<string>('__none__');
+  const [selectedProjectId, setSelectedProjectId] = useState<string>('__none__');
   const [reminderFormData, setReminderFormData] = useState({
     title: '',
     description: '',
@@ -292,33 +292,42 @@ export function EmailInbox({ onComposeReply }: EmailInboxProps) {
     },
   });
 
+  const getAttachmentDisplayName = (attachment: EmailAttachment): string => {
+    const name = (attachment.file_name || '').trim();
+    if (name) return name;
+    const fromPath = attachment.file_path?.split('/').pop();
+    return fromPath || 'adjunto';
+  };
+
   // Get file icon based on file type
-  const getFileIcon = (fileType: string | null, fileName: string) => {
+  const getFileIcon = (fileType: string | null, displayName: string) => {
     const type = fileType?.toLowerCase() || '';
-    const name = fileName.toLowerCase();
-    
+    const name = displayName.toLowerCase();
+
     if (type.includes('pdf') || name.endsWith('.pdf')) {
-      return <FileText className="h-5 w-5 text-red-500" />;
+      return <FileText className="h-5 w-5 text-primary" />;
     }
     if (type.includes('image') || name.match(/\.(jpg|jpeg|png|gif|webp|svg)$/)) {
-      return <Image className="h-5 w-5 text-blue-500" />;
+      return <Image className="h-5 w-5 text-primary" />;
     }
     if (type.includes('spreadsheet') || type.includes('excel') || name.match(/\.(xlsx?|csv)$/)) {
-      return <FileSpreadsheet className="h-5 w-5 text-green-500" />;
+      return <FileSpreadsheet className="h-5 w-5 text-primary" />;
     }
     if (type.includes('word') || name.match(/\.(docx?|rtf)$/)) {
-      return <FileText className="h-5 w-5 text-blue-600" />;
+      return <FileText className="h-5 w-5 text-primary" />;
     }
     return <FileIcon className="h-5 w-5 text-muted-foreground" />;
   };
 
   // Check if file is previewable
-  const isPreviewable = (fileType: string | null, fileName: string): boolean => {
+  const isPreviewable = (fileType: string | null, displayName: string): boolean => {
     const type = fileType?.toLowerCase() || '';
-    const name = fileName.toLowerCase();
-    return type.includes('pdf') || 
-           type.includes('image') || 
-           name.match(/\.(jpg|jpeg|png|gif|webp|svg|pdf)$/) !== null;
+    const name = displayName.toLowerCase();
+    return (
+      type.includes('pdf') ||
+      type.includes('image') ||
+      name.match(/\.(jpg|jpeg|png|gif|webp|svg|pdf)$/) !== null
+    );
   };
 
   // Get signed URL for preview
@@ -330,9 +339,9 @@ export function EmailInbox({ onComposeReply }: EmailInboxProps) {
       const { data, error } = await supabase.storage
         .from('email-attachments')
         .createSignedUrl(attachment.file_path, 3600); // 1 hour
-      
+
       if (error) throw error;
-      
+
       setPreviewUrl(data.signedUrl);
       setPreviewingAttachment(attachment);
     } catch (error: any) {
@@ -351,19 +360,19 @@ export function EmailInbox({ onComposeReply }: EmailInboxProps) {
       const { data, error } = await supabase.storage
         .from('email-attachments')
         .download(attachment.file_path);
-      
+
       if (error) throw error;
-      
+
       const url = URL.createObjectURL(data);
       const a = document.createElement('a');
       a.href = url;
-      a.download = attachment.file_name;
+      a.download = getAttachmentDisplayName(attachment);
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-      
-      toast({ title: 'Descarga iniciada', description: attachment.file_name });
+
+      toast({ title: 'Descarga iniciada', description: getAttachmentDisplayName(attachment) });
     } catch (error: any) {
       console.error('Error downloading attachment:', error);
       toast({
@@ -375,51 +384,50 @@ export function EmailInbox({ onComposeReply }: EmailInboxProps) {
   };
 
   // Render attachment item with preview and download
-  const renderAttachmentItem = (attachment: EmailAttachment, isFullscreen: boolean = false) => {
-    const canPreview = isPreviewable(attachment.file_type, attachment.file_name);
-    const fileIcon = getFileIcon(attachment.file_type, attachment.file_name);
-    const fileSize = attachment.file_size 
-      ? attachment.file_size > 1024 * 1024 
+  const renderAttachmentItem = (attachment: EmailAttachment) => {
+    const displayName = getAttachmentDisplayName(attachment);
+    const canPreview = isPreviewable(attachment.file_type, displayName);
+    const fileIcon = getFileIcon(attachment.file_type, displayName);
+    const fileSize = attachment.file_size
+      ? attachment.file_size > 1024 * 1024
         ? `${(attachment.file_size / (1024 * 1024)).toFixed(1)} MB`
         : `${(attachment.file_size / 1024).toFixed(1)} KB`
       : '?';
-    
+
     return (
       <div
         key={attachment.id}
-        className={`flex items-center justify-between p-3 bg-muted/50 rounded-lg border hover:border-primary/30 transition-colors ${isFullscreen ? '' : ''}`}
+        className="flex items-center justify-between p-3 bg-muted/50 rounded-lg border hover:border-primary/30 transition-colors"
       >
         <div className="flex items-center gap-3 min-w-0 flex-1">
-          <div className="flex-shrink-0">
-            {fileIcon}
-          </div>
+          <div className="flex-shrink-0">{fileIcon}</div>
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-medium truncate">{attachment.file_name}</p>
+            <p className="text-sm font-medium truncate">{displayName}</p>
             <p className="text-xs text-muted-foreground">{fileSize}</p>
           </div>
         </div>
-        <div className="flex items-center gap-1 flex-shrink-0">
+        <div className="flex items-center gap-2 flex-shrink-0">
           {canPreview && (
             <Button
-              variant="ghost"
+              variant="outline"
               size="sm"
-              className="gap-1 h-8"
+              className="gap-2 h-8"
               onClick={() => previewAttachment(attachment)}
               title="Previsualizar"
             >
               <ExternalLink className="h-4 w-4" />
-              <span className="hidden sm:inline">Ver</span>
+              Previsualizar
             </Button>
           )}
           <Button
             variant="outline"
             size="sm"
-            className="gap-1 h-8"
+            className="gap-2 h-8"
             onClick={() => downloadAttachment(attachment)}
             title="Descargar"
           >
             <Download className="h-4 w-4" />
-            <span className="hidden sm:inline">Descargar</span>
+            Descargar
           </Button>
         </div>
       </div>
@@ -707,8 +715,8 @@ export function EmailInbox({ onComposeReply }: EmailInboxProps) {
   };
 
   const openFolderDialog = (email: EmailMessage) => {
-    setSelectedBudgetId(email.budget_id || '');
-    setSelectedProjectId(email.project_id || '');
+    setSelectedBudgetId(email.budget_id ?? '__none__');
+    setSelectedProjectId(email.project_id ?? '__none__');
     setShowFolderDialog(true);
   };
 
@@ -731,17 +739,21 @@ export function EmailInbox({ onComposeReply }: EmailInboxProps) {
 
   const handleAssignFolder = () => {
     if (!selectedEmail) return;
+
+    const nextBudgetId = selectedBudgetId === '__none__' ? null : selectedBudgetId;
+    const nextProjectId = selectedProjectId === '__none__' ? null : selectedProjectId;
+
     // Update both budget and project
-    if (selectedBudgetId !== (selectedEmail.budget_id || '')) {
-      assignFolderMutation.mutate({ 
-        emailId: selectedEmail.id, 
-        budgetId: selectedBudgetId || null 
+    if (nextBudgetId !== (selectedEmail.budget_id ?? null)) {
+      assignFolderMutation.mutate({
+        emailId: selectedEmail.id,
+        budgetId: nextBudgetId,
       });
     }
-    if (selectedProjectId !== (selectedEmail.project_id || '')) {
+    if (nextProjectId !== (selectedEmail.project_id ?? null)) {
       assignProjectMutation.mutate({
         emailId: selectedEmail.id,
-        projectId: selectedProjectId || null
+        projectId: nextProjectId,
       });
     }
     setShowFolderDialog(false);
@@ -1249,8 +1261,8 @@ export function EmailInbox({ onComposeReply }: EmailInboxProps) {
                         <span className="font-medium text-sm">Adjuntos ({selectedEmail.email_attachments.length})</span>
                       </div>
                       <div className="grid gap-2">
-                        {selectedEmail.email_attachments.map((attachment) => 
-                          renderAttachmentItem(attachment, false)
+                        {selectedEmail.email_attachments.map((attachment) =>
+                          renderAttachmentItem(attachment)
                         )}
                       </div>
                     </div>
@@ -1471,8 +1483,8 @@ export function EmailInbox({ onComposeReply }: EmailInboxProps) {
                         <span className="font-medium">Adjuntos ({selectedEmail.email_attachments.length})</span>
                       </div>
                       <div className="grid gap-2 sm:grid-cols-2">
-                        {selectedEmail.email_attachments.map((attachment) => 
-                          renderAttachmentItem(attachment, true)
+                        {selectedEmail.email_attachments.map((attachment) =>
+                          renderAttachmentItem(attachment)
                         )}
                       </div>
                     </div>
@@ -1809,14 +1821,14 @@ export function EmailInbox({ onComposeReply }: EmailInboxProps) {
                 <SelectTrigger>
                   <SelectValue placeholder="Sin proyecto" />
                 </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="">Sin proyecto</SelectItem>
-                  {projects.map(project => (
-                    <SelectItem key={project.id} value={project.id}>
-                      {project.project_number ? `#${project.project_number} - ` : ''}{project.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
+                  <SelectContent>
+                    <SelectItem value="__none__">Sin proyecto</SelectItem>
+                    {projects.map(project => (
+                      <SelectItem key={project.id} value={project.id}>
+                        {project.project_number ? `#${project.project_number} - ` : ''}{project.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
               </Select>
             </div>
 
@@ -1829,14 +1841,14 @@ export function EmailInbox({ onComposeReply }: EmailInboxProps) {
                 <SelectTrigger>
                   <SelectValue placeholder="Sin presupuesto" />
                 </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="">Sin presupuesto</SelectItem>
-                  {budgets.map(budget => (
-                    <SelectItem key={budget.id} value={budget.id}>
-                      {budget.codigo_correlativo} - {budget.nombre}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
+                  <SelectContent>
+                    <SelectItem value="__none__">Sin presupuesto</SelectItem>
+                    {budgets.map(budget => (
+                      <SelectItem key={budget.id} value={budget.id}>
+                        {budget.codigo_correlativo} - {budget.nombre}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
               </Select>
             </div>
           </div>

@@ -77,27 +77,41 @@ export function ContactsTab({ contacts, searchTerm, onEdit, onDelete }: Contacts
     fetchContactActivities();
   }, [contacts]);
 
+  const activityNameById = useMemo(() => {
+    const map: Record<string, string> = {};
+    activities.forEach((a) => {
+      map[a.id] = a.name;
+    });
+    return map;
+  }, [activities]);
+
   const filteredContacts = useMemo(() => {
     let result = [...contacts];
-    
+
     if (searchTerm) {
-      result = result.filter(contact =>
-        searchMatch(contact.name, searchTerm) ||
-        searchMatch(contact.surname, searchTerm) ||
-        searchMatch(contact.email, searchTerm) ||
-        searchMatch(contact.city, searchTerm) ||
-        contact.tags?.some(tag => searchMatch(tag, searchTerm))
-      );
+      result = result.filter((contact) => {
+        const activityIds = contactActivitiesMap[contact.id] || [];
+        const activityMatches = activityIds.some((id) => searchMatch(activityNameById[id] || '', searchTerm));
+
+        return (
+          searchMatch(contact.name, searchTerm) ||
+          searchMatch(contact.surname, searchTerm) ||
+          searchMatch(contact.email, searchTerm) ||
+          searchMatch(contact.city, searchTerm) ||
+          contact.tags?.some((tag) => searchMatch(tag, searchTerm)) ||
+          activityMatches
+        );
+      });
     }
-    
+
     result.sort((a, b) => {
       const nameA = `${a.name} ${a.surname || ''}`.toLowerCase().trim();
       const nameB = `${b.name} ${b.surname || ''}`.toLowerCase().trim();
       return nameA.localeCompare(nameB, 'es');
     });
-    
+
     return result;
-  }, [contacts, searchTerm]);
+  }, [contacts, searchTerm, contactActivitiesMap, activityNameById]);
 
   // Group contacts by activity (a contact can appear in multiple groups)
   const groupedContacts = useMemo(() => {
@@ -296,13 +310,17 @@ export function ContactsTab({ contacts, searchTerm, onEdit, onDelete }: Contacts
                   </TableCell>
                   <TableCell className="text-muted-foreground">
                     {contact.email ? (
-                      <a 
-                        href={`mailto:${contact.email}`}
-                        className="hover:underline hover:text-primary transition-colors"
-                        onClick={(e) => e.stopPropagation()}
+                      <Button
+                        type="button"
+                        variant="link"
+                        className="h-auto p-0 text-muted-foreground hover:text-primary"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleSendEmail(contact);
+                        }}
                       >
                         {contact.email}
-                      </a>
+                      </Button>
                     ) : '-'}
                   </TableCell>
                   <TableCell className="text-muted-foreground">
@@ -427,7 +445,21 @@ export function ContactsTab({ contacts, searchTerm, onEdit, onDelete }: Contacts
                                 <span className="font-medium">{contact.name} {contact.surname}</span>
                               </div>
                             </TableCell>
-                            <TableCell className="text-muted-foreground">{contact.email || '-'}</TableCell>
+                            <TableCell className="text-muted-foreground">
+                              {contact.email ? (
+                                <Button
+                                  type="button"
+                                  variant="link"
+                                  className="h-auto p-0 text-muted-foreground hover:text-primary"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleSendEmail(contact);
+                                  }}
+                                >
+                                  {contact.email}
+                                </Button>
+                              ) : '-'}
+                            </TableCell>
                             <TableCell className="text-muted-foreground">{contact.phone || '-'}</TableCell>
                             <TableCell className="text-muted-foreground">{contact.city || '-'}</TableCell>
                             <TableCell>

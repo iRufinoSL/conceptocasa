@@ -227,6 +227,16 @@ export function CommunicationsTab() {
     setActiveSubTab('compose');
   };
 
+  const handleComposeForward = (email: any) => {
+    setReplyToEmail({
+      email: '',
+      subject: email.subject ? `Fwd: ${email.subject}` : 'Fwd:',
+      contactId: email.contact_id,
+      ticketId: email.ticket_id,
+    });
+    setActiveSubTab('compose');
+  };
+
   const CommunicationItem = ({ comm }: { comm: Communication }) => {
     const TypeIcon = typeIcons[comm.communication_type as keyof typeof typeIcons] || Mail;
     const status = statusConfig[comm.status as keyof typeof statusConfig] || statusConfig.pending;
@@ -306,7 +316,7 @@ export function CommunicationsTab() {
 
         {/* Inbox Tab */}
         <TabsContent value="inbox" className="mt-4">
-          <EmailInbox onComposeReply={handleComposeReply} />
+          <EmailInbox onComposeReply={handleComposeReply} onComposeForward={handleComposeForward} />
         </TabsContent>
 
         {/* Tickets Tab */}

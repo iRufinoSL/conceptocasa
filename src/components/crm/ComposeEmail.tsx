@@ -33,7 +33,7 @@ interface ComposeEmailProps {
 export function ComposeEmail({ replyTo, onSent }: ComposeEmailProps) {
   const { toast } = useToast();
   const { sendEmail, sending } = useEmailService();
-  
+
   const [formData, setFormData] = useState({
     to: replyTo?.email || '',
     cc: '',
@@ -48,7 +48,7 @@ export function ComposeEmail({ replyTo, onSent }: ComposeEmailProps) {
   });
 
   const [showCcBcc, setShowCcBcc] = useState(false);
-  const [selectedTemplate, setSelectedTemplate] = useState<string>('');
+  const [selectedTemplate, setSelectedTemplate] = useState<string>('__none__');
 
   // Fetch contacts for autocomplete
   const { data: contacts = [] } = useQuery({
@@ -78,7 +78,7 @@ export function ComposeEmail({ replyTo, onSent }: ComposeEmailProps) {
 
   // Apply template
   useEffect(() => {
-    if (selectedTemplate) {
+    if (selectedTemplate && selectedTemplate !== '__none__') {
       const template = templates.find(t => t.id === selectedTemplate);
       if (template) {
         setFormData(prev => ({
@@ -87,6 +87,10 @@ export function ComposeEmail({ replyTo, onSent }: ComposeEmailProps) {
           body: template.content,
         }));
       }
+    }
+
+    if (selectedTemplate === '__none__') {
+      // keep current content; users can still manually edit
     }
   }, [selectedTemplate, templates]);
 
@@ -165,7 +169,7 @@ export function ComposeEmail({ replyTo, onSent }: ComposeEmailProps) {
                 <SelectValue placeholder="Seleccionar plantilla..." />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Sin plantilla</SelectItem>
+                <SelectItem value="__none__">Sin plantilla</SelectItem>
                 {templates.map((template) => (
                   <SelectItem key={template.id} value={template.id}>
                     <div className="flex items-center gap-2">

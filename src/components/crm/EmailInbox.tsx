@@ -56,9 +56,10 @@ type GroupMode = 'date' | 'sender' | 'folder';
 
 interface EmailInboxProps {
   onComposeReply?: (email: EmailMessage) => void;
+  onComposeForward?: (email: EmailMessage) => void;
 }
 
-export function EmailInbox({ onComposeReply }: EmailInboxProps) {
+export function EmailInbox({ onComposeReply, onComposeForward }: EmailInboxProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
@@ -69,6 +70,7 @@ export function EmailInbox({ onComposeReply }: EmailInboxProps) {
   const [showDeleted, setShowDeleted] = useState(false);
   const [groupMode, setGroupMode] = useState<GroupMode>('date');
   const [selectedEmail, setSelectedEmail] = useState<EmailMessage | null>(null);
+  const [folderTargetEmail, setFolderTargetEmail] = useState<EmailMessage | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showCreateContact, setShowCreateContact] = useState(false);
   const [showCreateTicket, setShowCreateTicket] = useState(false);
@@ -320,14 +322,10 @@ export function EmailInbox({ onComposeReply }: EmailInboxProps) {
   };
 
   // Check if file is previewable
-  const isPreviewable = (fileType: string | null, displayName: string): boolean => {
-    const type = fileType?.toLowerCase() || '';
-    const name = displayName.toLowerCase();
-    return (
-      type.includes('pdf') ||
-      type.includes('image') ||
-      name.match(/\.(jpg|jpeg|png|gif|webp|svg|pdf)$/) !== null
-    );
+  const isPreviewable = (_fileType: string | null, _displayName: string): boolean => {
+    // Always allow opening a preview dialog; if the browser can't render it,
+    // we still provide a download button from the same dialog.
+    return true;
   };
 
   // Get signed URL for preview
@@ -715,6 +713,8 @@ export function EmailInbox({ onComposeReply }: EmailInboxProps) {
   };
 
   const openFolderDialog = (email: EmailMessage) => {
+    // Avoid nested dialogs (email detail dialog + folder dialog) which can blank the UI.
+    setFolderTargetEmail(email);
     setSelectedBudgetId(email.budget_id ?? '__none__');
     setSelectedProjectId(email.project_id ?? '__none__');
     setShowFolderDialog(true);
@@ -738,25 +738,27 @@ export function EmailInbox({ onComposeReply }: EmailInboxProps) {
   };
 
   const handleAssignFolder = () => {
-    if (!selectedEmail) return;
+    if (!folderTargetEmail) return;
 
     const nextBudgetId = selectedBudgetId === '__none__' ? null : selectedBudgetId;
     const nextProjectId = selectedProjectId === '__none__' ? null : selectedProjectId;
 
     // Update both budget and project
-    if (nextBudgetId !== (selectedEmail.budget_id ?? null)) {
+    if (nextBudgetId !== (folderTargetEmail.budget_id ?? null)) {
       assignFolderMutation.mutate({
-        emailId: selectedEmail.id,
+        emailId: folderTargetEmail.id,
         budgetId: nextBudgetId,
       });
     }
-    if (nextProjectId !== (selectedEmail.project_id ?? null)) {
+    if (nextProjectId !== (folderTargetEmail.project_id ?? null)) {
       assignProjectMutation.mutate({
-        emailId: selectedEmail.id,
+        emailId: folderTargetEmail.id,
         projectId: nextProjectId,
       });
     }
+
     setShowFolderDialog(false);
+    setFolderTargetEmail(null);
   };
 
   const handleCreateReminder = () => {
@@ -1284,7 +1286,17 @@ export function EmailInbox({ onComposeReply }: EmailInboxProps) {
                     <Reply className="h-4 w-4 mr-2" />
                     Responder
                   </Button>
-                  <Button variant="outline" size="sm">
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => {
+                      if (onComposeForward) {
+                        onComposeForward(selectedEmail);
+                        setSelectedEmail(null);
+                      }
+                    }}
+                    disabled={!onComposeForward}
+                  >
                     <Forward className="h-4 w-4 mr-2" />
                     Reenviar
                   </Button>
@@ -1321,7 +1333,12 @@ export function EmailInbox({ onComposeReply }: EmailInboxProps) {
                       <Button 
                         variant="outline" 
                         size="sm"
-                        onClick={() => openFolderDialog(selectedEmail)}
+                        onClick={() => {
+                          const email = selectedEmail;
+                          setSelectedEmail(null);
+                          setIsFullscreen(false);
+                          openFolderDialog(email);
+                        }}
                       >
                         <FolderOpen className="h-4 w-4 mr-2" />
                         Asignar carpeta
@@ -1505,7 +1522,17 @@ export function EmailInbox({ onComposeReply }: EmailInboxProps) {
                     <Reply className="h-4 w-4 mr-2" />
                     Responder
                   </Button>
-                  <Button variant="outline">
+                  <Button 
+                    variant="outline"
+                    onClick={() => {
+                      if (onComposeForward) {
+                        onComposeForward(selectedEmail);
+                        setSelectedEmail(null);
+                        setIsFullscreen(false);
+                      }
+                    }}
+                    disabled={!onComposeForward}
+                  >
                     <Forward className="h-4 w-4 mr-2" />
                     Reenviar
                   </Button>
@@ -1529,7 +1556,12 @@ export function EmailInbox({ onComposeReply }: EmailInboxProps) {
                       </Button>
                       <Button 
                         variant="outline"
-                        onClick={() => openFolderDialog(selectedEmail)}
+                        onClick={() => {
+                          const email = selectedEmail;
+                          setSelectedEmail(null);
+                          setIsFullscreen(false);
+                          openFolderDialog(email);
+                        }}
                       >
                         <FolderOpen className="h-4 w-4 mr-2" />
                         Asignar carpeta
@@ -1798,7 +1830,13 @@ export function EmailInbox({ onComposeReply }: EmailInboxProps) {
       </Dialog>
 
       {/* Folder Assignment Dialog */}
-      <Dialog open={showFolderDialog} onOpenChange={setShowFolderDialog}>
+      <Dialog
+        open={showFolderDialog}
+        onOpenChange={(open) => {
+          setShowFolderDialog(open);
+          if (!open) setFolderTargetEmail(null);
+        }}
+      >
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -1986,30 +2024,46 @@ export function EmailInbox({ onComposeReply }: EmailInboxProps) {
       </Dialog>
 
       {/* Attachment Preview Dialog */}
-      <Dialog open={!!previewingAttachment} onOpenChange={() => { setPreviewingAttachment(null); setPreviewUrl(null); }}>
+      <Dialog
+        open={!!previewingAttachment}
+        onOpenChange={() => {
+          setPreviewingAttachment(null);
+          setPreviewUrl(null);
+        }}
+      >
         <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              {previewingAttachment && getFileIcon(previewingAttachment.file_type, previewingAttachment.file_name)}
-              <span className="truncate">{previewingAttachment?.file_name}</span>
+              {previewingAttachment &&
+                getFileIcon(previewingAttachment.file_type, getAttachmentDisplayName(previewingAttachment))}
+              <span className="truncate">
+                {previewingAttachment ? getAttachmentDisplayName(previewingAttachment) : ''}
+              </span>
             </DialogTitle>
           </DialogHeader>
-          
+
           <div className="flex-1 min-h-0 overflow-hidden">
             {previewUrl && previewingAttachment && (
               <>
-                {previewingAttachment.file_type?.includes('pdf') || previewingAttachment.file_name.toLowerCase().endsWith('.pdf') ? (
-                  <iframe 
-                    src={previewUrl} 
+                {(
+                  previewingAttachment.file_type?.toLowerCase().includes('pdf') ||
+                  getAttachmentDisplayName(previewingAttachment).toLowerCase().endsWith('.pdf')
+                ) ? (
+                  <iframe
+                    src={previewUrl}
                     className="w-full h-[70vh] border rounded-lg"
-                    title={previewingAttachment.file_name}
+                    title={getAttachmentDisplayName(previewingAttachment)}
                   />
-                ) : previewingAttachment.file_type?.includes('image') || previewingAttachment.file_name.toLowerCase().match(/\.(jpg|jpeg|png|gif|webp|svg)$/) ? (
+                ) : previewingAttachment.file_type?.toLowerCase().includes('image') ||
+                  getAttachmentDisplayName(previewingAttachment)
+                    .toLowerCase()
+                    .match(/\.(jpg|jpeg|png|gif|webp|svg)$/) ? (
                   <div className="flex items-center justify-center h-[70vh] bg-muted/30 rounded-lg">
-                    <img 
-                      src={previewUrl} 
-                      alt={previewingAttachment.file_name}
+                    <img
+                      src={previewUrl}
+                      alt={getAttachmentDisplayName(previewingAttachment)}
                       className="max-w-full max-h-full object-contain"
+                      loading="lazy"
                     />
                   </div>
                 ) : (
@@ -2020,9 +2074,15 @@ export function EmailInbox({ onComposeReply }: EmailInboxProps) {
               </>
             )}
           </div>
-          
+
           <DialogFooter className="mt-4">
-            <Button variant="outline" onClick={() => { setPreviewingAttachment(null); setPreviewUrl(null); }}>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setPreviewingAttachment(null);
+                setPreviewUrl(null);
+              }}
+            >
               Cerrar
             </Button>
             {previewingAttachment && (

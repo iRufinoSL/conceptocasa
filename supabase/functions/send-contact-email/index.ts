@@ -433,57 +433,80 @@ const handler = async (req: Request): Promise<Response> => {
     }
 
     // Send notification email to the company
-    const notificationEmail = await resend.emails.send({
-      from: "Concepto.Casa <onboarding@resend.dev>",
-      to: ["organiza@concepto.casa"],
-      subject: isHousingProfile 
-        ? `🏠 Nuevo Perfil de Vivienda: ${safeName}${projectNumber ? ` (#${projectNumber})` : ''}`
-        : `Nuevo contacto: ${safeSubject}`,
-      html: `
-        <h2>${isHousingProfile ? '🏠 Nuevo Perfil de Vivienda Recibido' : 'Nuevo mensaje de contacto'}</h2>
-        ${isHousingProfile && projectNumber ? `<p><strong>Proyecto #${projectNumber}</strong></p>` : ''}
-        <p><strong>Nombre:</strong> ${safeName}</p>
-        <p><strong>Email:</strong> ${safeEmail}</p>
-        <p><strong>Teléfono:</strong> ${safePhone}</p>
-        ${!isHousingProfile ? `<p><strong>Asunto:</strong> ${safeSubject}</p>` : ''}
-        <hr />
-        <p><strong>Mensaje:</strong></p>
-        <p>${safeMessage}</p>
-        ${isHousingProfile ? `
-        <hr />
-        <p style="color: #666; font-size: 12px;">
-          Este perfil ha sido registrado automáticamente en el sistema. 
-          Accede al panel de control para ver los detalles completos del proyecto.
-        </p>
-        ` : ''}
-      `,
-    });
+    // Note: Using verified domain sender (noreply@concepto.casa) 
+    // If domain not verified in Resend, use onboarding@resend.dev for testing
+    const senderEmail = "noreply@concepto.casa";
+    const senderName = "Concepto.Casa";
+    
+    console.log("Attempting to send notification email to organiza@concepto.casa");
+    
+    let notificationEmail;
+    try {
+      notificationEmail = await resend.emails.send({
+        from: `${senderName} <${senderEmail}>`,
+        to: ["organiza@concepto.casa"],
+        subject: isHousingProfile 
+          ? `🏠 Nuevo Perfil de Vivienda: ${safeName}${projectNumber ? ` (#${projectNumber})` : ''}`
+          : `Nuevo contacto: ${safeSubject}`,
+        html: `
+          <h2>${isHousingProfile ? '🏠 Nuevo Perfil de Vivienda Recibido' : 'Nuevo mensaje de contacto'}</h2>
+          ${isHousingProfile && projectNumber ? `<p><strong>Proyecto #${projectNumber}</strong></p>` : ''}
+          <p><strong>Nombre:</strong> ${safeName}</p>
+          <p><strong>Email:</strong> ${safeEmail}</p>
+          <p><strong>Teléfono:</strong> ${safePhone}</p>
+          ${!isHousingProfile ? `<p><strong>Asunto:</strong> ${safeSubject}</p>` : ''}
+          <hr />
+          <p><strong>Mensaje:</strong></p>
+          <p>${safeMessage}</p>
+          ${isHousingProfile ? `
+          <hr />
+          <p style="color: #666; font-size: 12px;">
+            Este perfil ha sido registrado automáticamente en el sistema. 
+            Accede al panel de control para ver los detalles completos del proyecto.
+          </p>
+          ` : ''}
+        `,
+      });
+      console.log("Notification email response:", JSON.stringify(notificationEmail));
+    } catch (emailError: any) {
+      console.error("Error sending notification email:", emailError.message || emailError);
+      // Continue - don't fail the whole request if notification fails
+    }
 
     console.log("Notification email sent:", notificationEmail);
 
     // Send confirmation email to the user
-    const confirmationEmail = await resend.emails.send({
-      from: "Concepto.Casa <onboarding@resend.dev>",
-      to: [email],
-      subject: isHousingProfile 
-        ? "Hemos recibido tu perfil de vivienda - Concepto.Casa"
-        : "Hemos recibido tu mensaje - Concepto.Casa",
-      html: `
-        <h1>¡Gracias por contactarnos, ${safeName}!</h1>
-        <p>${isHousingProfile 
-          ? 'Hemos recibido tu perfil de vivienda y lo estamos revisando. Te contactaremos pronto con una propuesta personalizada.'
-          : 'Hemos recibido tu mensaje y nos pondremos en contacto contigo lo antes posible.'}</p>
-        <hr />
-        <p><strong>Tu mensaje:</strong></p>
-        <p>${safeMessage}</p>
-        <hr />
-        <p>Saludos cordiales,<br />El equipo de Concepto.Casa</p>
-        <p style="color: #666; font-size: 12px;">
-          Teléfono: +34 690 123 533<br />
-          Email: organiza@concepto.casa
-        </p>
-      `,
-    });
+    console.log("Attempting to send confirmation email to:", email);
+    
+    let confirmationEmail;
+    try {
+      confirmationEmail = await resend.emails.send({
+        from: `${senderName} <${senderEmail}>`,
+        to: [email],
+        subject: isHousingProfile 
+          ? "Hemos recibido tu perfil de vivienda - Concepto.Casa"
+          : "Hemos recibido tu mensaje - Concepto.Casa",
+        html: `
+          <h1>¡Gracias por contactarnos, ${safeName}!</h1>
+          <p>${isHousingProfile 
+            ? 'Hemos recibido tu perfil de vivienda y lo estamos revisando. Te contactaremos pronto con una propuesta personalizada.'
+            : 'Hemos recibido tu mensaje y nos pondremos en contacto contigo lo antes posible.'}</p>
+          <hr />
+          <p><strong>Tu mensaje:</strong></p>
+          <p>${safeMessage}</p>
+          <hr />
+          <p>Saludos cordiales,<br />El equipo de Concepto.Casa</p>
+          <p style="color: #666; font-size: 12px;">
+            Teléfono: +34 690 123 533<br />
+            Email: organiza@concepto.casa
+          </p>
+        `,
+      });
+      console.log("Confirmation email response:", JSON.stringify(confirmationEmail));
+    } catch (emailError: any) {
+      console.error("Error sending confirmation email:", emailError.message || emailError);
+      // Continue - don't fail the whole request if confirmation fails
+    }
 
     console.log("Confirmation email sent:", confirmationEmail);
 

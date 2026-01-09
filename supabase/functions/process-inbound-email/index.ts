@@ -1,38 +1,41 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { decode as base64Decode } from "https://deno.land/std@0.190.0/encoding/base64.ts";
 
 // No CORS headers - this is a server-to-server webhook endpoint
 const jsonHeaders = {
   "Content-Type": "application/json",
 };
 
-interface InboundEmail {
-  // Standard fields
+interface ResendEmailData {
+  email_id: string;
   from: string;
-  from_name?: string;
-  to: string | string[];
+  to: string[];
   cc?: string[];
+  bcc?: string[];
   subject: string;
-  // Text content - Resend may use different field names
-  text?: string;
-  plain_body?: string;
-  body?: string;
-  // HTML content - Resend may use different field names  
-  html?: string;
-  html_body?: string;
-  // Attachments
+  created_at: string;
   attachments?: Array<{
+    id: string;
     filename: string;
-    content: string; // base64 encoded
     content_type: string;
-    size?: number;
   }>;
-  headers?: Record<string, string>;
-  message_id?: string;
-  // Additional Resend fields
-  created_at?: string;
-  email_id?: string;
+}
+
+interface ResendEmailContent {
+  id: string;
+  from: string;
+  to: string[];
+  subject: string;
+  text?: string;
+  html?: string;
+  created_at: string;
+}
+
+interface ResendAttachment {
+  id: string;
+  filename: string;
+  content_type: string;
+  download_url: string;
 }
 
 const handler = async (req: Request): Promise<Response> => {
@@ -55,19 +58,25 @@ const handler = async (req: Request): Promise<Response> => {
     // Create Supabase client with service role for webhook
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const resendApiKey = Deno.env.get("RESEND_API_KEY");
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+    if (!resendApiKey) {
+      console.error("RESEND_API_KEY not configured");
+      return new Response(
+        JSON.stringify({ error: "RESEND_API_KEY not configured" }),
+        { status: 500, headers: jsonHeaders }
+      );
+    }
+
     const rawBody = await req.text();
-    console.log("Raw request body (first 3000 chars):", rawBody.substring(0, 3000));
-    console.log("Raw body length:", rawBody.length);
+    console.log("Raw request body (first 2000 chars):", rawBody.substring(0, 2000));
     
     let payload: any;
     try {
       payload = JSON.parse(rawBody);
+      console.log("Parsed payload type:", payload.type);
       console.log("Parsed payload keys:", Object.keys(payload));
-      if (payload.data) {
-        console.log("Payload.data keys:", Object.keys(payload.data));
-      }
     } catch (parseError) {
       console.error("Failed to parse JSON:", parseError);
       return new Response(
@@ -76,8 +85,7 @@ const handler = async (req: Request): Promise<Response> => {
       );
     }
 
-    // Check if this is a Resend webhook event (not a real inbound email)
-    // Resend sends events like domain.updated, email.sent, email.delivered, email.opened, etc.
+    // Check if this is a Resend webhook event
     if (payload.type && typeof payload.type === 'string') {
       const eventType = payload.type;
       console.log("Received Resend webhook event:", eventType);
@@ -90,93 +98,80 @@ const handler = async (req: Request): Promise<Response> => {
           { status: 200, headers: jsonHeaders }
         );
       }
-      
-      // For email.received, the actual email data is in payload.data
-      payload = payload.data;
-    }
-
-    // Now treat payload as InboundEmail
-    const emailData: InboundEmail = payload;
-    
-    // Log all available fields for debugging - including full content for troubleshooting
-    console.log("Email data detailed debug:", JSON.stringify({
-      from: emailData.from,
-      from_name: emailData.from_name,
-      to: emailData.to,
-      subject: emailData.subject,
-      has_text: !!emailData.text,
-      has_plain_body: !!emailData.plain_body,
-      has_body: !!emailData.body,
-      has_html: !!emailData.html,
-      has_html_body: !!emailData.html_body,
-      text_length: (emailData.text || "").length,
-      plain_body_length: (emailData.plain_body || "").length,
-      body_length: (emailData.body || "").length,
-      html_length: (emailData.html || "").length,
-      html_body_length: (emailData.html_body || "").length,
-      text_preview: (emailData.text || emailData.plain_body || emailData.body || "").substring(0, 500),
-      html_preview: (emailData.html || emailData.html_body || "").substring(0, 500),
-      attachments_count: emailData.attachments?.length || 0,
-      all_keys: Object.keys(payload),
-    }));
-
-    // Validate required fields with safe defaults
-    const fromField = emailData.from || emailData.from_name || "";
-    const subjectField = emailData.subject || "(Sin asunto)";
-    // Handle 'to' field which can be string or array
-    const toField = Array.isArray(emailData.to) ? emailData.to : (emailData.to ? [emailData.to] : []);
-    
-    // Extract text content from various possible fields - try all known field names
-    let textContent = emailData.text || emailData.plain_body || emailData.body || null;
-    let htmlContent = emailData.html || emailData.html_body || null;
-    
-    // If still no content, check if there's nested content in other fields
-    if (!textContent && !htmlContent) {
-      // Check for common alternative field names
-      const altTextFields = ['plain', 'text_body', 'plain_text', 'content', 'text_content'];
-      const altHtmlFields = ['html_content', 'body_html'];
-      
-      for (const field of altTextFields) {
-        if (payload[field] && typeof payload[field] === 'string') {
-          textContent = payload[field];
-          console.log(`Found text content in alternative field: ${field}`);
-          break;
-        }
-      }
-      
-      for (const field of altHtmlFields) {
-        if (payload[field] && typeof payload[field] === 'string') {
-          htmlContent = payload[field];
-          console.log(`Found HTML content in alternative field: ${field}`);
-          break;
-        }
-      }
-    }
-    
-    console.log("Received inbound email from:", fromField);
-    console.log("Subject:", subjectField);
-    console.log("Text content length:", textContent?.length || 0);
-    console.log("HTML content length:", htmlContent?.length || 0);
-    console.log("Attachments count:", emailData.attachments?.length || 0);
-
-    if (!fromField) {
-      console.error("No 'from' field in email data");
+    } else {
+      console.log("No event type in payload, might be direct call");
       return new Response(
-        JSON.stringify({ error: "Missing 'from' field in email data" }),
+        JSON.stringify({ error: "Invalid webhook format - missing type field" }),
         { status: 400, headers: jsonHeaders }
       );
     }
 
-    // Extract sender email safely
+    // For email.received, get email_id from payload.data
+    const webhookData: ResendEmailData = payload.data;
+    const emailId = webhookData.email_id;
+    
+    if (!emailId) {
+      console.error("No email_id in webhook data");
+      return new Response(
+        JSON.stringify({ error: "Missing email_id in webhook data" }),
+        { status: 400, headers: jsonHeaders }
+      );
+    }
+
+    console.log("Processing email_id:", emailId);
+    console.log("Webhook data - from:", webhookData.from, "subject:", webhookData.subject);
+
+    // Check for duplicate emails by external_id
+    const { data: existingEmail } = await supabase
+      .from("email_messages")
+      .select("id")
+      .eq("external_id", emailId)
+      .maybeSingle();
+    
+    if (existingEmail) {
+      console.log("Duplicate email detected, skipping. Email ID:", emailId);
+      return new Response(
+        JSON.stringify({ 
+          success: true, 
+          message: "Duplicate email, skipped",
+          email_id: existingEmail.id
+        }),
+        { status: 200, headers: jsonHeaders }
+      );
+    }
+
+    // Fetch full email content from Resend API
+    console.log("Fetching email content from Resend API...");
+    const emailContentResponse = await fetch(`https://api.resend.com/emails/${emailId}`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${resendApiKey}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    let textContent: string | null = null;
+    let htmlContent: string | null = null;
+
+    if (emailContentResponse.ok) {
+      const emailContent: ResendEmailContent = await emailContentResponse.json();
+      console.log("Email content fetched - text length:", emailContent.text?.length || 0, "html length:", emailContent.html?.length || 0);
+      textContent = emailContent.text || null;
+      htmlContent = emailContent.html || null;
+    } else {
+      const errorText = await emailContentResponse.text();
+      console.error("Failed to fetch email content:", emailContentResponse.status, errorText);
+      // Continue processing even if we can't get content
+    }
+
+    // Extract sender info
+    const fromField = webhookData.from || "";
     let fromEmail = fromField;
+    let fromName = "";
+    
     if (typeof fromField === 'string' && fromField.includes("<")) {
       const match = fromField.match(/<(.+)>/);
       fromEmail = match?.[1] || fromField;
-    }
-    
-    // Extract sender name
-    let fromName = emailData.from_name || "";
-    if (!fromName && typeof fromField === 'string' && fromField.includes("<")) {
       fromName = fromField.split("<")[0].trim().replace(/"/g, "");
     }
 
@@ -193,7 +188,8 @@ const handler = async (req: Request): Promise<Response> => {
     let contactId = existingContact?.id;
     console.log("Contact ID:", contactId || "not found (unknown sender)");
 
-    // Check if this is a reply to an existing ticket (check subject for ticket number)
+    // Check if this is a reply to an existing ticket
+    const subjectField = webhookData.subject || "(Sin asunto)";
     const ticketMatch = subjectField.match(/\[Ticket #(\d+)\]/);
     let ticketId: string | null = null;
 
@@ -213,10 +209,8 @@ const handler = async (req: Request): Promise<Response> => {
       }
     }
 
-    // Determine if we should create a new ticket
-    const shouldCreateTicket = !ticketId && subjectField;
-    
-    if (shouldCreateTicket) {
+    // Create a new ticket if none exists
+    if (!ticketId) {
       console.log("Creating new ticket from inbound email...");
       
       const { data: newTicket, error: ticketError } = await supabase
@@ -240,29 +234,8 @@ const handler = async (req: Request): Promise<Response> => {
       }
     }
 
-    // Check for duplicate emails by external_id (message_id)
-    if (emailData.message_id) {
-      const { data: existingEmail } = await supabase
-        .from("email_messages")
-        .select("id")
-        .eq("external_id", emailData.message_id)
-        .maybeSingle();
-      
-      if (existingEmail) {
-        console.log("Duplicate email detected, skipping. Message ID:", emailData.message_id);
-        return new Response(
-          JSON.stringify({ 
-            success: true, 
-            message: "Duplicate email, skipped",
-            email_id: existingEmail.id
-          }),
-          { status: 200, headers: jsonHeaders }
-        );
-      }
-    }
-
     // Store the inbound email
-    console.log("Storing email with content - text:", textContent?.substring(0, 100), "html:", htmlContent?.substring(0, 100));
+    console.log("Storing email with content - text length:", textContent?.length || 0, "html length:", htmlContent?.length || 0);
     
     const { data: emailRecord, error: emailError } = await supabase
       .from("email_messages")
@@ -270,23 +243,23 @@ const handler = async (req: Request): Promise<Response> => {
         direction: "inbound",
         from_email: fromEmail,
         from_name: fromName || null,
-        to_emails: toField.length > 0 ? toField : ["organiza@concepto.casa"],
-        cc_emails: emailData.cc || null,
+        to_emails: webhookData.to || ["organiza@concepto.casa"],
+        cc_emails: webhookData.cc || null,
         subject: subjectField,
         body_text: textContent,
         body_html: htmlContent,
         status: "received",
-        external_id: emailData.message_id || emailData.email_id || null,
+        external_id: emailId,
         contact_id: contactId,
         ticket_id: ticketId,
         received_at: new Date().toISOString(),
         is_read: false,
         metadata: {
-          headers: emailData.headers || {},
-          has_attachments: (emailData.attachments?.length || 0) > 0,
-          attachment_count: emailData.attachments?.length || 0,
+          resend_email_id: emailId,
+          has_attachments: (webhookData.attachments?.length || 0) > 0,
+          attachment_count: webhookData.attachments?.length || 0,
           unknown_sender: !contactId,
-          raw_payload_keys: Object.keys(payload)
+          content_fetched: textContent !== null || htmlContent !== null
         }
       })
       .select()
@@ -305,75 +278,104 @@ const handler = async (req: Request): Promise<Response> => {
     // Process attachments if any
     const attachmentRecords: Array<{ id: string; file_name: string; file_path: string }> = [];
     
-    if (emailData.attachments && emailData.attachments.length > 0) {
-      console.log("Processing", emailData.attachments.length, "attachments...");
+    if (webhookData.attachments && webhookData.attachments.length > 0) {
+      console.log("Processing", webhookData.attachments.length, "attachments...");
       
-      // Ensure bucket exists
-      const bucketName = "email-attachments";
-      const { data: existingBucket } = await supabase.storage.getBucket(bucketName);
-      
-      if (!existingBucket) {
-        console.log("Creating email-attachments bucket...");
-        const { error: bucketError } = await supabase.storage.createBucket(bucketName, {
-          public: false,
-          fileSizeLimit: 25 * 1024 * 1024, // 25MB limit
-        });
-        if (bucketError) {
-          console.error("Error creating bucket:", bucketError);
-        }
-      }
-      
-      for (const attachment of emailData.attachments) {
-        try {
-          const sanitizedFilename = attachment.filename.replace(/[^a-zA-Z0-9._-]/g, '_');
-          const filePath = `${emailRecord.id}/${Date.now()}_${sanitizedFilename}`;
-          
-          // Decode base64 content
-          const fileContent = base64Decode(attachment.content);
-          
-          // Upload to storage
-          const { data: uploadData, error: uploadError } = await supabase.storage
-            .from(bucketName)
-            .upload(filePath, fileContent, {
-              contentType: attachment.content_type || 'application/octet-stream',
-              upsert: false,
-            });
-          
-          if (uploadError) {
-            console.error("Error uploading attachment:", attachment.filename, uploadError);
-            continue;
+      // Fetch attachment details from Resend API
+      const attachmentsResponse = await fetch(`https://api.resend.com/emails/${emailId}/attachments`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${resendApiKey}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (attachmentsResponse.ok) {
+        const attachmentsData = await attachmentsResponse.json();
+        const attachments: ResendAttachment[] = attachmentsData.data || [];
+        console.log("Fetched attachment details:", attachments.length);
+
+        // Ensure bucket exists
+        const bucketName = "email-attachments";
+        const { data: existingBucket } = await supabase.storage.getBucket(bucketName);
+        
+        if (!existingBucket) {
+          console.log("Creating email-attachments bucket...");
+          const { error: bucketError } = await supabase.storage.createBucket(bucketName, {
+            public: false,
+            fileSizeLimit: 25 * 1024 * 1024, // 25MB limit
+          });
+          if (bucketError) {
+            console.error("Error creating bucket:", bucketError);
           }
-          
-          console.log("Uploaded attachment:", filePath);
-          
-          // Store attachment metadata
-          const { data: attachmentRecord, error: attachmentError } = await supabase
-            .from("email_attachments")
-            .insert({
-              email_id: emailRecord.id,
-              file_name: attachment.filename,
-              file_path: filePath,
-              file_type: attachment.content_type,
-              file_size: attachment.size || fileContent.length,
-            })
-            .select()
-            .single();
-          
-          if (attachmentError) {
-            console.error("Error storing attachment metadata:", attachmentError);
-          } else {
-            attachmentRecords.push({
-              id: attachmentRecord.id,
-              file_name: attachment.filename,
-              file_path: filePath,
-            });
-          }
-        } catch (attachError) {
-          console.error("Error processing attachment:", attachment.filename, attachError);
         }
+
+        for (const attachment of attachments) {
+          try {
+            // Download attachment from Resend
+            console.log("Downloading attachment:", attachment.filename, "from:", attachment.download_url);
+            
+            const fileResponse = await fetch(attachment.download_url, {
+              headers: {
+                'Authorization': `Bearer ${resendApiKey}`,
+              },
+            });
+
+            if (!fileResponse.ok) {
+              console.error("Failed to download attachment:", attachment.filename, fileResponse.status);
+              continue;
+            }
+
+            const fileContent = await fileResponse.arrayBuffer();
+            const sanitizedFilename = attachment.filename.replace(/[^a-zA-Z0-9._-]/g, '_');
+            const filePath = `${emailRecord.id}/${Date.now()}_${sanitizedFilename}`;
+            
+            // Upload to storage
+            const { error: uploadError } = await supabase.storage
+              .from(bucketName)
+              .upload(filePath, fileContent, {
+                contentType: attachment.content_type || 'application/octet-stream',
+                upsert: false,
+              });
+            
+            if (uploadError) {
+              console.error("Error uploading attachment:", attachment.filename, uploadError);
+              continue;
+            }
+            
+            console.log("Uploaded attachment:", filePath);
+            
+            // Store attachment metadata
+            const { data: attachmentRecord, error: attachmentError } = await supabase
+              .from("email_attachments")
+              .insert({
+                email_id: emailRecord.id,
+                file_name: attachment.filename,
+                file_path: filePath,
+                file_type: attachment.content_type,
+                file_size: fileContent.byteLength,
+              })
+              .select()
+              .single();
+            
+            if (attachmentError) {
+              console.error("Error storing attachment metadata:", attachmentError);
+            } else {
+              attachmentRecords.push({
+                id: attachmentRecord.id,
+                file_name: attachment.filename,
+                file_path: filePath,
+              });
+            }
+          } catch (attachError) {
+            console.error("Error processing attachment:", attachment.filename, attachError);
+          }
+        }
+        
+        console.log("Processed", attachmentRecords.length, "attachments successfully");
+      } else {
+        console.error("Failed to fetch attachments list:", attachmentsResponse.status);
       }
-      
-      console.log("Processed", attachmentRecords.length, "attachments successfully");
     }
 
     // Create notifications for all admins
@@ -386,7 +388,7 @@ const handler = async (req: Request): Promise<Response> => {
       const notifications = admins.map(admin => ({
         user_id: admin.user_id,
         title: "Nuevo email recibido",
-        message: `De: ${fromEmail}\nAsunto: ${emailData.subject}`,
+        message: `De: ${fromEmail}\nAsunto: ${subjectField}`,
         type: "email",
         email_id: emailRecord.id,
         ticket_id: ticketId,
@@ -410,7 +412,8 @@ const handler = async (req: Request): Promise<Response> => {
         email_id: emailRecord.id,
         ticket_id: ticketId,
         contact_id: contactId,
-        attachments_saved: attachmentRecords.length
+        attachments_saved: attachmentRecords.length,
+        content_fetched: textContent !== null || htmlContent !== null
       }),
       { status: 200, headers: jsonHeaders }
     );

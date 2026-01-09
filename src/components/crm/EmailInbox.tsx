@@ -21,7 +21,7 @@ import {
   Reply, Forward, UserPlus, AlertCircle,
   ChevronDown, ChevronRight, User, Calendar, FolderOpen,
   Ticket, AlarmClock, MailOpen, Maximize2, Minimize2, X,
-  RefreshCw, Trash2, Paperclip, Download, Undo2
+  RefreshCw, Trash2, Paperclip, Download, Undo2, Bell, Building2
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import type { Tables, Json } from '@/integrations/supabase/types';
@@ -32,6 +32,7 @@ type EmailMessage = Tables<'email_messages'> & {
   crm_contacts?: { id: string; name: string; surname: string | null; email: string | null } | null;
   tickets?: { id: string; subject: string; ticket_number: number } | null;
   presupuestos?: { id: string; nombre: string; codigo_correlativo: number } | null;
+  projects?: { id: string; name: string; project_number: number | null } | null;
   email_attachments?: EmailAttachment[];
 };
 
@@ -68,6 +69,7 @@ export function EmailInbox({ onComposeReply }: EmailInboxProps) {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showCreateContact, setShowCreateContact] = useState(false);
   const [showCreateTicket, setShowCreateTicket] = useState(false);
+  const [showCreateReminder, setShowCreateReminder] = useState(false);
   const [showSnoozeDialog, setShowSnoozeDialog] = useState(false);
   const [showFolderDialog, setShowFolderDialog] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set(['Hoy', 'Sin clasificar']));
@@ -88,6 +90,14 @@ export function EmailInbox({ onComposeReply }: EmailInboxProps) {
   const [snoozeDate, setSnoozeDate] = useState('');
   const [snoozeTime, setSnoozeTime] = useState('09:00');
   const [selectedBudgetId, setSelectedBudgetId] = useState<string>('');
+  const [selectedProjectId, setSelectedProjectId] = useState<string>('');
+  const [reminderFormData, setReminderFormData] = useState({
+    title: '',
+    description: '',
+    reminder_type: 'reminder',
+    reminder_date: '',
+    reminder_time: '09:00',
+  });
 
   // Fetch budgets for folder assignment
   const { data: budgets = [] } = useQuery({
@@ -98,6 +108,19 @@ export function EmailInbox({ onComposeReply }: EmailInboxProps) {
         .select('id, nombre, codigo_correlativo')
         .eq('archived', false)
         .order('codigo_correlativo', { ascending: false });
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  // Fetch projects for assignment
+  const { data: projects = [] } = useQuery({
+    queryKey: ['projects-for-email'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('projects')
+        .select('id, name, project_number')
+        .order('created_at', { ascending: false });
       if (error) throw error;
       return data;
     },
@@ -125,6 +148,11 @@ export function EmailInbox({ onComposeReply }: EmailInboxProps) {
             id,
             nombre,
             codigo_correlativo
+          ),
+          projects (
+            id,
+            name,
+            project_number
           ),
           email_attachments (
             id,
@@ -310,6 +338,68 @@ export function EmailInbox({ onComposeReply }: EmailInboxProps) {
     },
   });
 
+  // Create reminder mutation
+  const createReminderMutation = useMutation({
+    mutationFn: async (data: { 
+      title: string; 
+      description?: string; 
+      reminder_at: string; 
+      reminder_type: string;
+      emailId: string; 
+      contactId?: string;
+      projectId?: string;
+      budgetId?: string;
+    }) => {
+      const { data: session } = await supabase.auth.getSession();
+      const { data: newReminder, error } = await supabase
+        .from('reminders')
+        .insert({
+          title: data.title,
+          description: data.description || null,
+          reminder_at: data.reminder_at,
+          reminder_type: data.reminder_type,
+          email_id: data.emailId,
+          contact_id: data.contactId || null,
+          project_id: data.projectId || null,
+          budget_id: data.budgetId || null,
+          created_by: session?.session?.user?.id || null,
+          assigned_to: session?.session?.user?.id || null,
+        })
+        .select()
+        .single();
+      
+      if (error) throw error;
+      return newReminder;
+    },
+    onSuccess: () => {
+      toast({ title: 'Recordatorio creado correctamente' });
+      setShowCreateReminder(false);
+      queryClient.invalidateQueries({ queryKey: ['reminders'] });
+    },
+    onError: (error: any) => {
+      toast({ 
+        title: 'Error al crear recordatorio', 
+        description: error.message,
+        variant: 'destructive' 
+      });
+    },
+  });
+
+  // Assign project mutation
+  const assignProjectMutation = useMutation({
+    mutationFn: async ({ emailId, projectId }: { emailId: string; projectId: string | null }) => {
+      const { error } = await supabase
+        .from('email_messages')
+        .update({ project_id: projectId })
+        .eq('id', emailId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast({ title: 'Proyecto asignado correctamente' });
+      queryClient.invalidateQueries({ queryKey: ['email-messages'] });
+    },
+  });
+
   const filteredEmails = useMemo(() => {
     let result = emails;
     
@@ -474,7 +564,19 @@ export function EmailInbox({ onComposeReply }: EmailInboxProps) {
 
   const openFolderDialog = (email: EmailMessage) => {
     setSelectedBudgetId(email.budget_id || '');
+    setSelectedProjectId(email.project_id || '');
     setShowFolderDialog(true);
+  };
+
+  const openCreateReminderDialog = (email: EmailMessage) => {
+    setReminderFormData({
+      title: `Seguimiento: ${email.subject || 'Email'}`,
+      description: email.body_text?.substring(0, 200) || '',
+      reminder_type: 'reminder',
+      reminder_date: format(addDays(new Date(), 1), 'yyyy-MM-dd'),
+      reminder_time: '09:00',
+    });
+    setShowCreateReminder(true);
   };
 
   const handleSnooze = () => {
@@ -485,9 +587,34 @@ export function EmailInbox({ onComposeReply }: EmailInboxProps) {
 
   const handleAssignFolder = () => {
     if (!selectedEmail) return;
-    assignFolderMutation.mutate({ 
-      emailId: selectedEmail.id, 
-      budgetId: selectedBudgetId || null 
+    // Update both budget and project
+    if (selectedBudgetId !== (selectedEmail.budget_id || '')) {
+      assignFolderMutation.mutate({ 
+        emailId: selectedEmail.id, 
+        budgetId: selectedBudgetId || null 
+      });
+    }
+    if (selectedProjectId !== (selectedEmail.project_id || '')) {
+      assignProjectMutation.mutate({
+        emailId: selectedEmail.id,
+        projectId: selectedProjectId || null
+      });
+    }
+    setShowFolderDialog(false);
+  };
+
+  const handleCreateReminder = () => {
+    if (!selectedEmail || !reminderFormData.title || !reminderFormData.reminder_date) return;
+    const reminderAt = new Date(`${reminderFormData.reminder_date}T${reminderFormData.reminder_time}:00`).toISOString();
+    createReminderMutation.mutate({
+      title: reminderFormData.title,
+      description: reminderFormData.description,
+      reminder_at: reminderAt,
+      reminder_type: reminderFormData.reminder_type,
+      emailId: selectedEmail.id,
+      contactId: selectedEmail.contact_id || undefined,
+      projectId: selectedEmail.project_id || undefined,
+      budgetId: selectedEmail.budget_id || undefined,
     });
   };
 
@@ -865,10 +992,19 @@ export function EmailInbox({ onComposeReply }: EmailInboxProps) {
                   )}
                   {selectedEmail.presupuestos && (
                     <div className="text-sm">
-                      <span className="text-muted-foreground">Carpeta: </span>
+                      <span className="text-muted-foreground">Presupuesto: </span>
                       <Badge variant="outline" className="bg-primary/10">
                         <FolderOpen className="h-3 w-3 mr-1" />
                         {selectedEmail.presupuestos.codigo_correlativo} - {selectedEmail.presupuestos.nombre}
+                      </Badge>
+                    </div>
+                  )}
+                  {selectedEmail.projects && (
+                    <div className="text-sm">
+                      <span className="text-muted-foreground">Proyecto: </span>
+                      <Badge variant="outline" className="bg-blue-500/10 text-blue-600 border-blue-500/20">
+                        <Building2 className="h-3 w-3 mr-1" />
+                        {selectedEmail.projects.project_number ? `#${selectedEmail.projects.project_number} - ` : ''}{selectedEmail.projects.name}
                       </Badge>
                     </div>
                   )}
@@ -979,6 +1115,16 @@ export function EmailInbox({ onComposeReply }: EmailInboxProps) {
                     >
                       <Ticket className="h-4 w-4 mr-2" />
                       Crear Ticket
+                    </Button>
+                  )}
+                  {!selectedEmail.deleted_at && (
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => openCreateReminderDialog(selectedEmail)}
+                    >
+                      <Bell className="h-4 w-4 mr-2" />
+                      Crear Recordatorio
                     </Button>
                   )}
                   {!selectedEmail.deleted_at && (
@@ -1494,30 +1640,50 @@ export function EmailInbox({ onComposeReply }: EmailInboxProps) {
 
       {/* Folder Assignment Dialog */}
       <Dialog open={showFolderDialog} onOpenChange={setShowFolderDialog}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <FolderOpen className="h-5 w-5" />
-              Asignar Carpeta
+              Asignar a Proyecto/Presupuesto
             </DialogTitle>
           </DialogHeader>
           
           <div className="space-y-4 py-4">
             <p className="text-sm text-muted-foreground">
-              Selecciona el presupuesto para clasificar este email.
+              Vincula este email a un proyecto y/o presupuesto para organizarlo.
             </p>
             
             <div className="space-y-2">
-              <Label>Carpeta (Presupuesto)</Label>
+              <Label>Proyecto</Label>
+              <Select 
+                value={selectedProjectId} 
+                onValueChange={setSelectedProjectId}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Sin proyecto" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">Sin proyecto</SelectItem>
+                  {projects.map(project => (
+                    <SelectItem key={project.id} value={project.id}>
+                      {project.project_number ? `#${project.project_number} - ` : ''}{project.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Presupuesto</Label>
               <Select 
                 value={selectedBudgetId} 
                 onValueChange={setSelectedBudgetId}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Sin clasificar" />
+                  <SelectValue placeholder="Sin presupuesto" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Sin clasificar</SelectItem>
+                  <SelectItem value="">Sin presupuesto</SelectItem>
                   {budgets.map(budget => (
                     <SelectItem key={budget.id} value={budget.id}>
                       {budget.codigo_correlativo} - {budget.nombre}
@@ -1534,9 +1700,127 @@ export function EmailInbox({ onComposeReply }: EmailInboxProps) {
             </Button>
             <Button 
               onClick={handleAssignFolder} 
-              disabled={assignFolderMutation.isPending}
+              disabled={assignFolderMutation.isPending || assignProjectMutation.isPending}
             >
-              {assignFolderMutation.isPending ? 'Guardando...' : 'Asignar'}
+              {(assignFolderMutation.isPending || assignProjectMutation.isPending) ? 'Guardando...' : 'Asignar'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Create Reminder Dialog */}
+      <Dialog open={showCreateReminder} onOpenChange={setShowCreateReminder}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Bell className="h-5 w-5" />
+              Crear Recordatorio desde Email
+            </DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="reminder-title">Título *</Label>
+              <Input
+                id="reminder-title"
+                value={reminderFormData.title}
+                onChange={(e) => setReminderFormData({ ...reminderFormData, title: e.target.value })}
+                placeholder="Título del recordatorio"
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="reminder-description">Descripción</Label>
+              <Textarea
+                id="reminder-description"
+                value={reminderFormData.description}
+                onChange={(e) => setReminderFormData({ ...reminderFormData, description: e.target.value })}
+                placeholder="Descripción opcional..."
+                rows={3}
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label>Tipo</Label>
+              <Select 
+                value={reminderFormData.reminder_type} 
+                onValueChange={(v) => setReminderFormData({ ...reminderFormData, reminder_type: v })}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="reminder">Recordatorio</SelectItem>
+                  <SelectItem value="appointment">Cita</SelectItem>
+                  <SelectItem value="deadline">Fecha límite</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="reminder-date">Fecha *</Label>
+                <Input
+                  id="reminder-date"
+                  type="date"
+                  value={reminderFormData.reminder_date}
+                  onChange={(e) => setReminderFormData({ ...reminderFormData, reminder_date: e.target.value })}
+                  min={format(new Date(), 'yyyy-MM-dd')}
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="reminder-time">Hora</Label>
+                <Input
+                  id="reminder-time"
+                  type="time"
+                  value={reminderFormData.reminder_time}
+                  onChange={(e) => setReminderFormData({ ...reminderFormData, reminder_time: e.target.value })}
+                />
+              </div>
+            </div>
+            
+            <div className="flex gap-2">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="flex-1"
+                onClick={() => {
+                  setReminderFormData({
+                    ...reminderFormData,
+                    reminder_date: format(addDays(new Date(), 1), 'yyyy-MM-dd'),
+                    reminder_time: '09:00'
+                  });
+                }}
+              >
+                Mañana
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="flex-1"
+                onClick={() => {
+                  setReminderFormData({
+                    ...reminderFormData,
+                    reminder_date: format(addDays(new Date(), 7), 'yyyy-MM-dd'),
+                    reminder_time: '09:00'
+                  });
+                }}
+              >
+                En 1 semana
+              </Button>
+            </div>
+          </div>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCreateReminder(false)}>
+              Cancelar
+            </Button>
+            <Button 
+              onClick={handleCreateReminder} 
+              disabled={createReminderMutation.isPending || !reminderFormData.title || !reminderFormData.reminder_date}
+            >
+              {createReminderMutation.isPending ? 'Creando...' : 'Crear Recordatorio'}
             </Button>
           </DialogFooter>
         </DialogContent>

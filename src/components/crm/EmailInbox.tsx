@@ -21,7 +21,8 @@ import {
   Reply, Forward, UserPlus, AlertCircle,
   ChevronDown, ChevronRight, User, Calendar, FolderOpen,
   Ticket, AlarmClock, MailOpen, Maximize2, Minimize2, X,
-  RefreshCw, Trash2, Paperclip, Download, Undo2, Bell, Building2
+  RefreshCw, Trash2, Paperclip, Download, Undo2, Bell, Building2,
+  FileText, Image, FileSpreadsheet, FileIcon, ExternalLink
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import type { Tables, Json } from '@/integrations/supabase/types';
@@ -63,6 +64,8 @@ export function EmailInbox({ onComposeReply }: EmailInboxProps) {
   const [search, setSearch] = useState('');
   const [directionFilter, setDirectionFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [budgetFilter, setBudgetFilter] = useState<string>('all');
+  const [contactFilter, setContactFilter] = useState<string>('all');
   const [showDeleted, setShowDeleted] = useState(false);
   const [groupMode, setGroupMode] = useState<GroupMode>('date');
   const [selectedEmail, setSelectedEmail] = useState<EmailMessage | null>(null);
@@ -121,6 +124,19 @@ export function EmailInbox({ onComposeReply }: EmailInboxProps) {
         .from('projects')
         .select('id, name, project_number')
         .order('created_at', { ascending: false });
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  // Fetch contacts for filtering
+  const { data: contacts = [] } = useQuery({
+    queryKey: ['contacts-for-email-filter'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('crm_contacts')
+        .select('id, name, surname, email')
+        .order('name', { ascending: true });
       if (error) throw error;
       return data;
     },
@@ -276,6 +292,59 @@ export function EmailInbox({ onComposeReply }: EmailInboxProps) {
     },
   });
 
+  // Get file icon based on file type
+  const getFileIcon = (fileType: string | null, fileName: string) => {
+    const type = fileType?.toLowerCase() || '';
+    const name = fileName.toLowerCase();
+    
+    if (type.includes('pdf') || name.endsWith('.pdf')) {
+      return <FileText className="h-5 w-5 text-red-500" />;
+    }
+    if (type.includes('image') || name.match(/\.(jpg|jpeg|png|gif|webp|svg)$/)) {
+      return <Image className="h-5 w-5 text-blue-500" />;
+    }
+    if (type.includes('spreadsheet') || type.includes('excel') || name.match(/\.(xlsx?|csv)$/)) {
+      return <FileSpreadsheet className="h-5 w-5 text-green-500" />;
+    }
+    if (type.includes('word') || name.match(/\.(docx?|rtf)$/)) {
+      return <FileText className="h-5 w-5 text-blue-600" />;
+    }
+    return <FileIcon className="h-5 w-5 text-muted-foreground" />;
+  };
+
+  // Check if file is previewable
+  const isPreviewable = (fileType: string | null, fileName: string): boolean => {
+    const type = fileType?.toLowerCase() || '';
+    const name = fileName.toLowerCase();
+    return type.includes('pdf') || 
+           type.includes('image') || 
+           name.match(/\.(jpg|jpeg|png|gif|webp|svg|pdf)$/) !== null;
+  };
+
+  // Get signed URL for preview
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewingAttachment, setPreviewingAttachment] = useState<EmailAttachment | null>(null);
+
+  const previewAttachment = async (attachment: EmailAttachment) => {
+    try {
+      const { data, error } = await supabase.storage
+        .from('email-attachments')
+        .createSignedUrl(attachment.file_path, 3600); // 1 hour
+      
+      if (error) throw error;
+      
+      setPreviewUrl(data.signedUrl);
+      setPreviewingAttachment(attachment);
+    } catch (error: any) {
+      console.error('Error previewing attachment:', error);
+      toast({
+        title: 'Error al previsualizar',
+        description: error.message,
+        variant: 'destructive',
+      });
+    }
+  };
+
   // Download attachment function
   const downloadAttachment = async (attachment: EmailAttachment) => {
     try {
@@ -293,6 +362,8 @@ export function EmailInbox({ onComposeReply }: EmailInboxProps) {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
+      
+      toast({ title: 'Descarga iniciada', description: attachment.file_name });
     } catch (error: any) {
       console.error('Error downloading attachment:', error);
       toast({
@@ -301,6 +372,58 @@ export function EmailInbox({ onComposeReply }: EmailInboxProps) {
         variant: 'destructive',
       });
     }
+  };
+
+  // Render attachment item with preview and download
+  const renderAttachmentItem = (attachment: EmailAttachment, isFullscreen: boolean = false) => {
+    const canPreview = isPreviewable(attachment.file_type, attachment.file_name);
+    const fileIcon = getFileIcon(attachment.file_type, attachment.file_name);
+    const fileSize = attachment.file_size 
+      ? attachment.file_size > 1024 * 1024 
+        ? `${(attachment.file_size / (1024 * 1024)).toFixed(1)} MB`
+        : `${(attachment.file_size / 1024).toFixed(1)} KB`
+      : '?';
+    
+    return (
+      <div
+        key={attachment.id}
+        className={`flex items-center justify-between p-3 bg-muted/50 rounded-lg border hover:border-primary/30 transition-colors ${isFullscreen ? '' : ''}`}
+      >
+        <div className="flex items-center gap-3 min-w-0 flex-1">
+          <div className="flex-shrink-0">
+            {fileIcon}
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium truncate">{attachment.file_name}</p>
+            <p className="text-xs text-muted-foreground">{fileSize}</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-1 flex-shrink-0">
+          {canPreview && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="gap-1 h-8"
+              onClick={() => previewAttachment(attachment)}
+              title="Previsualizar"
+            >
+              <ExternalLink className="h-4 w-4" />
+              <span className="hidden sm:inline">Ver</span>
+            </Button>
+          )}
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1 h-8"
+            onClick={() => downloadAttachment(attachment)}
+            title="Descargar"
+          >
+            <Download className="h-4 w-4" />
+            <span className="hidden sm:inline">Descargar</span>
+          </Button>
+        </div>
+      </div>
+    );
   };
 
   // Create ticket mutation
@@ -410,22 +533,43 @@ export function EmailInbox({ onComposeReply }: EmailInboxProps) {
       return new Date(email.snoozed_until) <= now;
     });
     
-    if (!search) return result;
+    // Filter by budget
+    if (budgetFilter !== 'all') {
+      if (budgetFilter === 'none') {
+        result = result.filter(email => !email.budget_id);
+      } else {
+        result = result.filter(email => email.budget_id === budgetFilter);
+      }
+    }
     
-    const searchLower = search.toLowerCase();
-    return result.filter(email => {
-      const contactName = email.crm_contacts 
-        ? `${email.crm_contacts.name} ${email.crm_contacts.surname || ''}`.toLowerCase()
-        : '';
-      return (
-        contactName.includes(searchLower) ||
-        email.from_email?.toLowerCase().includes(searchLower) ||
-        email.to_emails?.some(e => e.toLowerCase().includes(searchLower)) ||
-        email.subject?.toLowerCase().includes(searchLower) ||
-        email.body_text?.toLowerCase().includes(searchLower)
-      );
-    });
-  }, [emails, search]);
+    // Filter by contact
+    if (contactFilter !== 'all') {
+      if (contactFilter === 'none') {
+        result = result.filter(email => !email.contact_id);
+      } else {
+        result = result.filter(email => email.contact_id === contactFilter);
+      }
+    }
+    
+    // Filter by search
+    if (search) {
+      const searchLower = search.toLowerCase();
+      result = result.filter(email => {
+        const contactName = email.crm_contacts 
+          ? `${email.crm_contacts.name} ${email.crm_contacts.surname || ''}`.toLowerCase()
+          : '';
+        return (
+          contactName.includes(searchLower) ||
+          email.from_email?.toLowerCase().includes(searchLower) ||
+          email.to_emails?.some(e => e.toLowerCase().includes(searchLower)) ||
+          email.subject?.toLowerCase().includes(searchLower) ||
+          email.body_text?.toLowerCase().includes(searchLower)
+        );
+      });
+    }
+    
+    return result;
+  }, [emails, search, budgetFilter, contactFilter]);
 
   // Group emails based on mode
   const groupedEmails = useMemo(() => {
@@ -839,6 +983,36 @@ export function EmailInbox({ onComposeReply }: EmailInboxProps) {
                 <SelectItem value="read">Leído</SelectItem>
               </SelectContent>
             </Select>
+            <Select value={budgetFilter} onValueChange={setBudgetFilter}>
+              <SelectTrigger className="w-[160px]">
+                <FolderOpen className="h-4 w-4 mr-2" />
+                <SelectValue placeholder="Presupuesto" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos los presupuestos</SelectItem>
+                <SelectItem value="none">Sin presupuesto</SelectItem>
+                {budgets.map(budget => (
+                  <SelectItem key={budget.id} value={budget.id}>
+                    {budget.codigo_correlativo} - {budget.nombre.substring(0, 20)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={contactFilter} onValueChange={setContactFilter}>
+              <SelectTrigger className="w-[160px]">
+                <User className="h-4 w-4 mr-2" />
+                <SelectValue placeholder="Contacto" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos los contactos</SelectItem>
+                <SelectItem value="none">Sin contacto</SelectItem>
+                {contacts.map(contact => (
+                  <SelectItem key={contact.id} value={contact.id}>
+                    {contact.name} {contact.surname || ''}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <Select value={groupMode} onValueChange={(v) => setGroupMode(v as GroupMode)}>
               <SelectTrigger className="w-[140px]">
                 <SelectValue placeholder="Agrupar por" />
@@ -868,6 +1042,20 @@ export function EmailInbox({ onComposeReply }: EmailInboxProps) {
               <Trash2 className="h-4 w-4" />
               {showDeleted ? 'Bandeja' : 'Papelera'}
             </Button>
+            {(budgetFilter !== 'all' || contactFilter !== 'all') && (
+              <Button 
+                variant="ghost" 
+                size="sm"
+                onClick={() => {
+                  setBudgetFilter('all');
+                  setContactFilter('all');
+                }}
+                className="gap-1 text-muted-foreground"
+              >
+                <X className="h-4 w-4" />
+                Limpiar filtros
+              </Button>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -1061,28 +1249,9 @@ export function EmailInbox({ onComposeReply }: EmailInboxProps) {
                         <span className="font-medium text-sm">Adjuntos ({selectedEmail.email_attachments.length})</span>
                       </div>
                       <div className="grid gap-2">
-                        {selectedEmail.email_attachments.map((attachment) => (
-                          <div
-                            key={attachment.id}
-                            className="flex items-center justify-between p-2 bg-muted/50 rounded-lg"
-                          >
-                            <div className="flex items-center gap-2 min-w-0">
-                              <Paperclip className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                              <span className="text-sm truncate">{attachment.file_name}</span>
-                              <span className="text-xs text-muted-foreground flex-shrink-0">
-                                ({(attachment.file_size ? (attachment.file_size / 1024).toFixed(1) : '?')} KB)
-                              </span>
-                            </div>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8"
-                              onClick={() => downloadAttachment(attachment)}
-                            >
-                              <Download className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        ))}
+                        {selectedEmail.email_attachments.map((attachment) => 
+                          renderAttachmentItem(attachment, false)
+                        )}
                       </div>
                     </div>
                   )}
@@ -1302,31 +1471,9 @@ export function EmailInbox({ onComposeReply }: EmailInboxProps) {
                         <span className="font-medium">Adjuntos ({selectedEmail.email_attachments.length})</span>
                       </div>
                       <div className="grid gap-2 sm:grid-cols-2">
-                        {selectedEmail.email_attachments.map((attachment) => (
-                          <div
-                            key={attachment.id}
-                            className="flex items-center justify-between p-3 bg-muted/50 rounded-lg"
-                          >
-                            <div className="flex items-center gap-3 min-w-0">
-                              <Paperclip className="h-5 w-5 text-muted-foreground flex-shrink-0" />
-                              <div className="min-w-0">
-                                <p className="text-sm font-medium truncate">{attachment.file_name}</p>
-                                <p className="text-xs text-muted-foreground">
-                                  {attachment.file_size ? (attachment.file_size / 1024).toFixed(1) : '?'} KB
-                                </p>
-                              </div>
-                            </div>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="gap-2"
-                              onClick={() => downloadAttachment(attachment)}
-                            >
-                              <Download className="h-4 w-4" />
-                              Descargar
-                            </Button>
-                          </div>
-                        ))}
+                        {selectedEmail.email_attachments.map((attachment) => 
+                          renderAttachmentItem(attachment, true)
+                        )}
                       </div>
                     </div>
                   )}
@@ -1822,6 +1969,56 @@ export function EmailInbox({ onComposeReply }: EmailInboxProps) {
             >
               {createReminderMutation.isPending ? 'Creando...' : 'Crear Recordatorio'}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Attachment Preview Dialog */}
+      <Dialog open={!!previewingAttachment} onOpenChange={() => { setPreviewingAttachment(null); setPreviewUrl(null); }}>
+        <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              {previewingAttachment && getFileIcon(previewingAttachment.file_type, previewingAttachment.file_name)}
+              <span className="truncate">{previewingAttachment?.file_name}</span>
+            </DialogTitle>
+          </DialogHeader>
+          
+          <div className="flex-1 min-h-0 overflow-hidden">
+            {previewUrl && previewingAttachment && (
+              <>
+                {previewingAttachment.file_type?.includes('pdf') || previewingAttachment.file_name.toLowerCase().endsWith('.pdf') ? (
+                  <iframe 
+                    src={previewUrl} 
+                    className="w-full h-[70vh] border rounded-lg"
+                    title={previewingAttachment.file_name}
+                  />
+                ) : previewingAttachment.file_type?.includes('image') || previewingAttachment.file_name.toLowerCase().match(/\.(jpg|jpeg|png|gif|webp|svg)$/) ? (
+                  <div className="flex items-center justify-center h-[70vh] bg-muted/30 rounded-lg">
+                    <img 
+                      src={previewUrl} 
+                      alt={previewingAttachment.file_name}
+                      className="max-w-full max-h-full object-contain"
+                    />
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-center h-[40vh] text-muted-foreground">
+                    <p>Vista previa no disponible para este tipo de archivo</p>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+          
+          <DialogFooter className="mt-4">
+            <Button variant="outline" onClick={() => { setPreviewingAttachment(null); setPreviewUrl(null); }}>
+              Cerrar
+            </Button>
+            {previewingAttachment && (
+              <Button onClick={() => downloadAttachment(previewingAttachment)} className="gap-2">
+                <Download className="h-4 w-4" />
+                Descargar
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

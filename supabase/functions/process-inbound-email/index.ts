@@ -140,9 +140,9 @@ const handler = async (req: Request): Promise<Response> => {
       );
     }
 
-    // Fetch full email content from Resend API
-    console.log("Fetching email content from Resend API...");
-    const emailContentResponse = await fetch(`https://api.resend.com/emails/${emailId}`, {
+    // Fetch full email content from Resend API - use /receiving/ endpoint for inbound emails
+    console.log("Fetching email content from Resend API (receiving endpoint)...");
+    const emailContentResponse = await fetch(`https://api.resend.com/emails/receiving/${emailId}`, {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${resendApiKey}`,
@@ -155,12 +155,12 @@ const handler = async (req: Request): Promise<Response> => {
 
     if (emailContentResponse.ok) {
       const emailContent: ResendEmailContent = await emailContentResponse.json();
-      console.log("Email content fetched - text length:", emailContent.text?.length || 0, "html length:", emailContent.html?.length || 0);
+      console.log("Email content fetched successfully - text length:", emailContent.text?.length || 0, "html length:", emailContent.html?.length || 0);
       textContent = emailContent.text || null;
       htmlContent = emailContent.html || null;
     } else {
       const errorText = await emailContentResponse.text();
-      console.error("Failed to fetch email content:", emailContentResponse.status, errorText);
+      console.error("Failed to fetch email content from receiving endpoint:", emailContentResponse.status, errorText);
       // Continue processing even if we can't get content
     }
 
@@ -281,8 +281,8 @@ const handler = async (req: Request): Promise<Response> => {
     if (webhookData.attachments && webhookData.attachments.length > 0) {
       console.log("Processing", webhookData.attachments.length, "attachments...");
       
-      // Fetch attachment details from Resend API
-      const attachmentsResponse = await fetch(`https://api.resend.com/emails/${emailId}/attachments`, {
+      // Fetch attachment details from Resend API - use /receiving/ endpoint for inbound emails
+      const attachmentsResponse = await fetch(`https://api.resend.com/emails/receiving/${emailId}/attachments`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${resendApiKey}`,

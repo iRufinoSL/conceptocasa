@@ -3,8 +3,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Button } from '@/components/ui/button';
 import { 
   Mail, Phone, MapPin, Globe, Building2, User, 
   Calendar, FileText, Tag, Briefcase, ClipboardList
@@ -12,6 +12,7 @@ import {
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { SendEmailDialog } from './SendEmailDialog';
 import type { Contact } from '@/pages/CRM';
 
 interface Management {
@@ -49,6 +50,7 @@ export function ContactDetailDialog({ contact, open, onOpenChange }: ContactDeta
   const [activityNames, setActivityNames] = useState<string[]>([]);
   const [relatedContacts, setRelatedContacts] = useState<RelatedContact[]>([]);
   const [loading, setLoading] = useState(false);
+  const [emailDialogOpen, setEmailDialogOpen] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -173,13 +175,17 @@ export function ContactDetailDialog({ contact, open, onOpenChange }: ContactDeta
       switch (type) {
         case 'email':
           return (
-            <a 
-              href={`mailto:${value}`}
-              className="text-sm break-words hover:underline hover:text-primary transition-colors"
-              onClick={(e) => e.stopPropagation()}
+            <Button
+              type="button"
+              variant="link"
+              className="h-auto p-0 text-sm break-words justify-start"
+              onClick={(e) => {
+                e.stopPropagation();
+                setEmailDialogOpen(true);
+              }}
             >
               {value}
-            </a>
+            </Button>
           );
         case 'phone':
           return (
@@ -221,9 +227,15 @@ export function ContactDetailDialog({ contact, open, onOpenChange }: ContactDeta
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] p-0 overflow-hidden">
-        <DialogHeader className="px-6 pt-6 pb-4 border-b bg-muted/30">
+    <>
+      <SendEmailDialog
+        open={emailDialogOpen}
+        onOpenChange={setEmailDialogOpen}
+        contact={{ id: contact.id, name: contact.name, surname: contact.surname, email: contact.email }}
+      />
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="max-w-2xl max-h-[90vh] p-0 overflow-hidden">
+          <DialogHeader className="px-6 pt-6 pb-4 border-b bg-muted/30">
           <div className="flex items-center gap-4">
             <Avatar className="h-16 w-16">
               <AvatarFallback className="bg-primary text-primary-foreground text-xl font-semibold">
@@ -416,7 +428,8 @@ export function ContactDetailDialog({ contact, open, onOpenChange }: ContactDeta
             </div>
           </div>
         </ScrollArea>
-      </DialogContent>
-    </Dialog>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

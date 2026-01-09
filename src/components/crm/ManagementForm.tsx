@@ -14,11 +14,28 @@ interface ManagementFormProps {
   onOpenChange: (open: boolean) => void;
   management?: Management | null;
   onSuccess: () => void;
+  // Optional prefill from contact or email
+  prefillContactId?: string | null;
+  prefillContactName?: string | null;
+  prefillTitle?: string | null;
+  prefillDescription?: string | null;
+  prefillType?: string | null;
 }
 
-export function ManagementForm({ open, onOpenChange, management, onSuccess }: ManagementFormProps) {
+export function ManagementForm({ 
+  open, 
+  onOpenChange, 
+  management, 
+  onSuccess,
+  prefillContactId,
+  prefillContactName,
+  prefillTitle,
+  prefillDescription,
+  prefillType,
+}: ManagementFormProps) {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
+  const [contactId, setContactId] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -40,18 +57,21 @@ export function ManagementForm({ open, onOpenChange, management, onSuccess }: Ma
         start_time: management.start_time?.slice(0, 5) || '',
         end_time: management.end_time?.slice(0, 5) || ''
       });
+      setContactId(null);
     } else {
+      // Apply prefills for new management
       setFormData({
-        title: '',
-        description: '',
-        management_type: 'Tarea',
+        title: prefillTitle || (prefillContactName ? `Seguimiento: ${prefillContactName}` : ''),
+        description: prefillDescription || '',
+        management_type: prefillType || 'Tarea',
         status: 'Pendiente',
         target_date: '',
         start_time: '',
         end_time: ''
       });
+      setContactId(prefillContactId || null);
     }
-  }, [management, open]);
+  }, [management, open, prefillContactId, prefillContactName, prefillTitle, prefillDescription, prefillType]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -83,11 +103,24 @@ export function ManagementForm({ open, onOpenChange, management, onSuccess }: Ma
         if (error) throw error;
         toast({ title: 'Gestión actualizada correctamente' });
       } else {
-        const { error } = await supabase
+        const { data: newManagement, error } = await supabase
           .from('crm_managements')
-          .insert(data);
+          .insert(data)
+          .select()
+          .single();
 
         if (error) throw error;
+        
+        // Link contact if provided
+        if (contactId && newManagement) {
+          await supabase
+            .from('crm_management_contacts')
+            .insert({
+              management_id: newManagement.id,
+              contact_id: contactId
+            });
+        }
+        
         toast({ title: 'Gestión creada correctamente' });
       }
 

@@ -7,12 +7,13 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
 import { 
   Mail, Phone, MapPin, Globe, Building2, User, 
-  Calendar, FileText, Tag, Briefcase, ClipboardList
+  Calendar, FileText, Tag, Briefcase, ClipboardList, Plus
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { SendEmailDialog } from './SendEmailDialog';
+import { ManagementForm } from './ManagementForm';
 import type { Contact } from '@/pages/CRM';
 
 interface Management {
@@ -51,6 +52,31 @@ export function ContactDetailDialog({ contact, open, onOpenChange }: ContactDeta
   const [relatedContacts, setRelatedContacts] = useState<RelatedContact[]>([]);
   const [loading, setLoading] = useState(false);
   const [emailDialogOpen, setEmailDialogOpen] = useState(false);
+  const [managementFormOpen, setManagementFormOpen] = useState(false);
+
+  const fetchManagements = async () => {
+    if (!contact) return;
+    
+    const { data: managementLinks } = await supabase
+      .from('crm_management_contacts')
+      .select('management_id')
+      .eq('contact_id', contact.id);
+    
+    if (managementLinks && managementLinks.length > 0) {
+      const managementIds = managementLinks.map(link => link.management_id);
+      const { data: managementsData } = await supabase
+        .from('crm_managements')
+        .select('*')
+        .in('id', managementIds)
+        .order('created_at', { ascending: false });
+      
+      if (managementsData) {
+        setManagements(managementsData);
+      }
+    } else {
+      setManagements([]);
+    }
+  };
 
   useEffect(() => {
     const fetchData = async () => {
@@ -363,11 +389,15 @@ export function ContactDetailDialog({ contact, open, onOpenChange }: ContactDeta
 
             {/* Management History */}
             <Card>
-              <CardHeader className="py-3">
+              <CardHeader className="py-3 flex flex-row items-center justify-between">
                 <CardTitle className="text-sm font-medium flex items-center gap-2">
                   <ClipboardList className="h-4 w-4" />
                   Historial de Gestiones ({managements.length})
                 </CardTitle>
+                <Button size="sm" variant="outline" onClick={() => setManagementFormOpen(true)}>
+                  <Plus className="h-4 w-4 mr-1" />
+                  Nueva Cita/Tarea
+                </Button>
               </CardHeader>
               <CardContent className="py-0 pb-4">
                 {loading ? (
@@ -430,6 +460,16 @@ export function ContactDetailDialog({ contact, open, onOpenChange }: ContactDeta
         </ScrollArea>
         </DialogContent>
       </Dialog>
+      
+      {/* Management Form for creating new appointments/tasks */}
+      <ManagementForm
+        open={managementFormOpen}
+        onOpenChange={setManagementFormOpen}
+        management={null}
+        onSuccess={fetchManagements}
+        prefillContactId={contact.id}
+        prefillContactName={`${contact.name} ${contact.surname || ''}`.trim()}
+      />
     </>
   );
 }

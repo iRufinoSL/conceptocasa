@@ -1546,6 +1546,7 @@ export type Database = {
           id: string
           is_read: boolean | null
           metadata: Json | null
+          project_id: string | null
           read_at: string | null
           received_at: string | null
           sent_at: string | null
@@ -1574,6 +1575,7 @@ export type Database = {
           id?: string
           is_read?: boolean | null
           metadata?: Json | null
+          project_id?: string | null
           read_at?: string | null
           received_at?: string | null
           sent_at?: string | null
@@ -1602,6 +1604,7 @@ export type Database = {
           id?: string
           is_read?: boolean | null
           metadata?: Json | null
+          project_id?: string | null
           read_at?: string | null
           received_at?: string | null
           sent_at?: string | null
@@ -1632,6 +1635,13 @@ export type Database = {
             columns: ["created_by"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_messages_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
             referencedColumns: ["id"]
           },
           {
@@ -2460,6 +2470,113 @@ export type Database = {
           },
         ]
       }
+      reminders: {
+        Row: {
+          assigned_to: string | null
+          budget_id: string | null
+          completed_at: string | null
+          contact_id: string | null
+          created_at: string
+          created_by: string | null
+          description: string | null
+          email_id: string | null
+          id: string
+          project_id: string | null
+          reminder_at: string
+          reminder_type: string
+          status: string
+          ticket_id: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          assigned_to?: string | null
+          budget_id?: string | null
+          completed_at?: string | null
+          contact_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          email_id?: string | null
+          id?: string
+          project_id?: string | null
+          reminder_at: string
+          reminder_type?: string
+          status?: string
+          ticket_id?: string | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          assigned_to?: string | null
+          budget_id?: string | null
+          completed_at?: string | null
+          contact_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          email_id?: string | null
+          id?: string
+          project_id?: string | null
+          reminder_at?: string
+          reminder_type?: string
+          status?: string
+          ticket_id?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reminders_assigned_to_fkey"
+            columns: ["assigned_to"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reminders_budget_id_fkey"
+            columns: ["budget_id"]
+            isOneToOne: false
+            referencedRelation: "presupuestos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reminders_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reminders_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reminders_email_id_fkey"
+            columns: ["email_id"]
+            isOneToOne: false
+            referencedRelation: "email_messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reminders_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reminders_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       system_alerts: {
         Row: {
           action_url: string | null
@@ -2535,8 +2652,10 @@ export type Database = {
           created_at: string
           created_by: string | null
           description: string | null
+          due_date: string | null
           id: string
           priority: string
+          reminder_at: string | null
           resolved_at: string | null
           status: string
           subject: string
@@ -2551,8 +2670,10 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           description?: string | null
+          due_date?: string | null
           id?: string
           priority?: string
+          reminder_at?: string | null
           resolved_at?: string | null
           status?: string
           subject: string
@@ -2567,8 +2688,10 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           description?: string | null
+          due_date?: string | null
           id?: string
           priority?: string
+          reminder_at?: string | null
           resolved_at?: string | null
           status?: string
           subject?: string

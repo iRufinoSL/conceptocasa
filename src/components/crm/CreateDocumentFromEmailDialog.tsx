@@ -1,17 +1,17 @@
 import { useState, useEffect } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { RichTextEditor } from '@/components/ui/rich-text-editor';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { FileText, Save, Paperclip, User, FolderOpen, Building2 } from 'lucide-react';
+import { ContactSelectWithCreate } from '@/components/crm/ContactSelectWithCreate';
 import type { Tables } from '@/integrations/supabase/types';
 
 type EmailAttachment = Tables<'email_attachments'>;
@@ -76,18 +76,6 @@ export function CreateDocumentFromEmailDialog({
     },
   });
 
-  // Fetch contacts
-  const { data: contacts = [] } = useQuery({
-    queryKey: ['contacts-for-document'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('crm_contacts')
-        .select('id, name, surname, email')
-        .order('name');
-      if (error) throw error;
-      return data;
-    },
-  });
 
   // Initialize form when email changes
   useEffect(() => {
@@ -288,20 +276,12 @@ export function CreateDocumentFromEmailDialog({
                   <User className="h-4 w-4" />
                   Contacto
                 </Label>
-                <Select value={contactId} onValueChange={setContactId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Sin contacto" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none__">Sin contacto</SelectItem>
-                    {contacts.map(contact => (
-                      <SelectItem key={contact.id} value={contact.id}>
-                        {contact.name} {contact.surname || ''} 
-                        {contact.email && <span className="text-muted-foreground ml-1">({contact.email})</span>}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <ContactSelectWithCreate
+                  value={contactId !== '__none__' ? contactId : null}
+                  onChange={(val) => setContactId(val || '__none__')}
+                  placeholder="Sin contacto"
+                  clearLabel="Sin contacto"
+                />
               </div>
             </div>
 

@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { ScrollArea } from '@/components/ui/scroll-area';
+
 import { AlertCircle, CheckCircle, Search, Plus, X, BookOpen } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { toast } from 'sonner';
@@ -360,8 +360,8 @@ export function PostInvoiceDialog({ invoice, open, onOpenChange, onPosted }: Pro
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
-          <DialogHeader>
+        <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col p-0">
+          <DialogHeader className="px-6 pt-6 pb-4 flex-shrink-0">
             <DialogTitle className="flex items-center gap-2">
               <BookOpen className="h-5 w-5" />
               Contabilizar Factura de Venta
@@ -371,8 +371,8 @@ export function PostInvoiceDialog({ invoice, open, onOpenChange, onPosted }: Pro
             </DialogDescription>
           </DialogHeader>
 
-          <ScrollArea className="flex-1 pr-4">
-            <div className="space-y-6 py-4">
+          <div className="flex-1 overflow-y-auto px-6">
+            <div className="space-y-6 pb-4">
               {/* Invoice Summary */}
               <Card>
                 <CardContent className="pt-4">
@@ -739,9 +739,9 @@ export function PostInvoiceDialog({ invoice, open, onOpenChange, onPosted }: Pro
                 </div>
               </div>
             </div>
-          </ScrollArea>
+          </div>
 
-          <DialogFooter className="pt-4 border-t">
+          <DialogFooter className="px-6 py-4 border-t flex-shrink-0 bg-background">
             <Button variant="outline" onClick={() => onOpenChange(false)}>
               Cancelar
             </Button>

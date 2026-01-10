@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -13,9 +13,16 @@ import { useEmailService } from '@/hooks/useEmailService';
 import { useToast } from '@/hooks/use-toast';
 import { 
   Send, Mail, User, Paperclip, X, Plus, 
-  FileText, ChevronDown, Ticket as TicketIcon
+  FileText, ChevronDown, Ticket as TicketIcon, File
 } from 'lucide-react';
 import type { Tables } from '@/integrations/supabase/types';
+
+interface AttachmentFile {
+  file: File;
+  name: string;
+  size: number;
+  type: string;
+}
 
 type Contact = Tables<'crm_contacts'>;
 type EmailTemplate = Tables<'email_templates'>;
@@ -49,6 +56,36 @@ export function ComposeEmail({ replyTo, onSent }: ComposeEmailProps) {
 
   const [showCcBcc, setShowCcBcc] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<string>('__none__');
+  const [attachments, setAttachments] = useState<AttachmentFile[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files) return;
+    
+    const newAttachments: AttachmentFile[] = Array.from(files).map(file => ({
+      file,
+      name: file.name,
+      size: file.size,
+      type: file.type
+    }));
+    
+    setAttachments(prev => [...prev, ...newAttachments]);
+    // Reset input to allow selecting the same file again
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const removeAttachment = (index: number) => {
+    setAttachments(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const formatFileSize = (bytes: number): string => {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+  };
 
   // Fetch contacts for autocomplete
   const { data: contacts = [] } = useQuery({
@@ -110,6 +147,21 @@ export function ComposeEmail({ replyTo, onSent }: ComposeEmailProps) {
     }
 
     try {
+      // Convert attachments to base64 for sending
+      const attachmentData = await Promise.all(
+        attachments.map(async (att) => {
+          const buffer = await att.file.arrayBuffer();
+          const base64 = btoa(
+            new Uint8Array(buffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
+          );
+          return {
+            filename: att.name,
+            content: base64,
+            content_type: att.type
+          };
+        })
+      );
+
       await sendEmail({
         to: formData.to,
         subject: formData.subject,
@@ -122,6 +174,7 @@ export function ComposeEmail({ replyTo, onSent }: ComposeEmailProps) {
         create_ticket: formData.createTicket,
         ticket_subject: formData.createTicket ? formData.ticketSubject || formData.subject : undefined,
         ticket_priority: formData.createTicket ? formData.ticketPriority : undefined,
+        attachments: attachmentData.length > 0 ? attachmentData : undefined,
       });
 
       toast({ title: 'Email enviado correctamente' });
@@ -140,6 +193,7 @@ export function ComposeEmail({ replyTo, onSent }: ComposeEmailProps) {
         ticketPriority: 'medium',
       });
       setSelectedTemplate('');
+      setAttachments([]);
       
       if (onSent) onSent();
     } catch (error: any) {
@@ -263,6 +317,58 @@ export function ComposeEmail({ replyTo, onSent }: ComposeEmailProps) {
               rows={10}
               className="min-h-[200px]"
             />
+          </div>
+
+          {/* Attachments */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label>Archivos adjuntos</Label>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => fileInputRef.current?.click()}
+                className="gap-2"
+              >
+                <Paperclip className="h-4 w-4" />
+                Adjuntar archivo
+              </Button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                className="hidden"
+                onChange={handleFileSelect}
+              />
+            </div>
+            
+            {attachments.length > 0 && (
+              <div className="border rounded-lg p-3 space-y-2">
+                {attachments.map((attachment, index) => (
+                  <div 
+                    key={index} 
+                    className="flex items-center justify-between bg-muted/50 rounded px-3 py-2"
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <File className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
+                      <span className="text-sm truncate">{attachment.name}</span>
+                      <span className="text-xs text-muted-foreground flex-shrink-0">
+                        ({formatFileSize(attachment.size)})
+                      </span>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => removeAttachment(index)}
+                      className="h-6 w-6 p-0"
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Create ticket option */}

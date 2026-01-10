@@ -106,12 +106,13 @@ const handler = async (req: Request): Promise<Response> => {
       .select('name, email_signature')
       .single();
     
-    const senderName = from_name || (companySettings as any)?.name || 'Lovable App';
+    const senderName = from_name || (companySettings as any)?.name || 'Concepto Casa';
     const emailSignature = (companySettings as any)?.email_signature || '';
     
-    const fromEmail = `${senderName} <onboarding@resend.dev>`;
+    // Use verified domain email - must be verified in Resend
+    const fromEmail = `${senderName} <organiza@concepto.casa>`;
 
-    console.log("Sending email to:", toEmails);
+    console.log("Sending email from:", fromEmail, "to:", toEmails);
 
     // Create ticket if requested
     let createdTicketId = ticket_id;
@@ -182,7 +183,7 @@ const handler = async (req: Request): Promise<Response> => {
       // Store failed email
       await supabase.from("email_messages").insert({
         direction: "outbound",
-        from_email: "onboarding@resend.dev",
+        from_email: "organiza@concepto.casa",
         from_name: from_name,
         to_emails: toEmails,
         cc_emails: cc,
@@ -208,7 +209,7 @@ const handler = async (req: Request): Promise<Response> => {
       .from("email_messages")
       .insert({
         direction: "outbound",
-        from_email: "onboarding@resend.dev",
+        from_email: "organiza@concepto.casa",
         from_name: from_name,
         to_emails: toEmails,
         cc_emails: cc,

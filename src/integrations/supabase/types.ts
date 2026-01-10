@@ -2213,10 +2213,13 @@ export type Database = {
       }
       project_documents: {
         Row: {
+          budget_id: string | null
+          contact_id: string | null
           created_at: string | null
           description: string | null
           document_type: string | null
           document_url: string | null
+          email_id: string | null
           file_path: string | null
           file_size: number | null
           file_type: string | null
@@ -2228,10 +2231,13 @@ export type Database = {
           visible_to: string[] | null
         }
         Insert: {
+          budget_id?: string | null
+          contact_id?: string | null
           created_at?: string | null
           description?: string | null
           document_type?: string | null
           document_url?: string | null
+          email_id?: string | null
           file_path?: string | null
           file_size?: number | null
           file_type?: string | null
@@ -2243,10 +2249,13 @@ export type Database = {
           visible_to?: string[] | null
         }
         Update: {
+          budget_id?: string | null
+          contact_id?: string | null
           created_at?: string | null
           description?: string | null
           document_type?: string | null
           document_url?: string | null
+          email_id?: string | null
           file_path?: string | null
           file_size?: number | null
           file_type?: string | null
@@ -2258,6 +2267,27 @@ export type Database = {
           visible_to?: string[] | null
         }
         Relationships: [
+          {
+            foreignKeyName: "project_documents_budget_id_fkey"
+            columns: ["budget_id"]
+            isOneToOne: false
+            referencedRelation: "presupuestos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_documents_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_documents_email_id_fkey"
+            columns: ["email_id"]
+            isOneToOne: false
+            referencedRelation: "email_messages"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "project_documents_project_id_fkey"
             columns: ["project_id"]

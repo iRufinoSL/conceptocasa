@@ -861,22 +861,23 @@ export function EmailInbox({ onComposeReply, onComposeForward }: EmailInboxProps
     const StatusIcon = status.icon;
     const isInbound = email.direction === 'inbound';
     const isRead = email.is_read;
+    const hasAttachments = email.email_attachments && email.email_attachments.length > 0;
     
     return (
       <div
         key={email.id}
-        className={`py-3 px-2 cursor-pointer transition-colors rounded-lg -mx-2 ${
+        className={`py-3 px-3 cursor-pointer transition-all rounded-lg -mx-2 border-l-4 ${
           isRead 
-            ? 'hover:bg-accent/50 bg-transparent' 
-            : 'hover:bg-primary/10 bg-primary/5 font-medium'
+            ? 'hover:bg-accent/50 bg-transparent border-l-transparent opacity-75' 
+            : 'hover:bg-primary/10 bg-primary/5 border-l-primary shadow-sm'
         }`}
         onClick={() => handleEmailClick(email)}
       >
         <div className="flex items-start gap-3">
           <div className={`flex-shrink-0 p-2 rounded-lg ${
             isInbound 
-              ? isRead ? 'bg-muted' : 'bg-green-500/20' 
-              : 'bg-blue-500/10'
+              ? isRead ? 'bg-muted' : 'bg-green-500/20 ring-2 ring-green-500/30' 
+              : isRead ? 'bg-blue-500/10' : 'bg-blue-500/20 ring-2 ring-blue-500/30'
           }`}>
             {isInbound ? (
               isRead ? (
@@ -885,12 +886,15 @@ export function EmailInbox({ onComposeReply, onComposeForward }: EmailInboxProps
                 <ArrowDownLeft className="h-4 w-4 text-green-600" />
               )
             ) : (
-              <ArrowUpRight className="h-4 w-4 text-blue-600" />
+              <ArrowUpRight className={`h-4 w-4 ${isRead ? 'text-blue-500' : 'text-blue-600'}`} />
             )}
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className={`text-sm truncate ${isRead ? 'text-muted-foreground' : 'font-semibold text-foreground'}`}>
+              {!isRead && (
+                <span className="w-2 h-2 rounded-full bg-primary flex-shrink-0" />
+              )}
+              <span className={`text-sm truncate ${isRead ? 'text-muted-foreground' : 'font-bold text-foreground'}`}>
                 {isInbound 
                   ? (email.from_name || email.from_email)
                   : email.to_emails?.[0]}
@@ -899,6 +903,9 @@ export function EmailInbox({ onComposeReply, onComposeForward }: EmailInboxProps
                 <StatusIcon className="h-3 w-3" />
                 {status.label}
               </Badge>
+              {hasAttachments && (
+                <Paperclip className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+              )}
               {email.tickets && (
                 <Badge variant="secondary" className="text-xs">
                   Ticket #{email.tickets.ticket_number}
@@ -911,10 +918,10 @@ export function EmailInbox({ onComposeReply, onComposeForward }: EmailInboxProps
                 </Badge>
               )}
             </div>
-            <p className={`text-sm mt-0.5 truncate ${isRead ? 'text-muted-foreground' : 'font-medium'}`}>
+            <p className={`text-sm mt-0.5 truncate ${isRead ? 'text-muted-foreground font-normal' : 'font-semibold text-foreground'}`}>
               {email.subject || '(Sin asunto)'}
             </p>
-            <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">
+            <p className={`text-xs mt-0.5 line-clamp-1 ${isRead ? 'text-muted-foreground/70' : 'text-muted-foreground'}`}>
               {email.body_text?.substring(0, 100) || 'Sin contenido'}
             </p>
             <div className="flex items-center gap-3 mt-1.5 text-xs text-muted-foreground">

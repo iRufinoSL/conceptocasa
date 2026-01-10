@@ -177,7 +177,10 @@ export function ComposeEmail({ replyTo, onSent }: ComposeEmailProps) {
         attachments: attachmentData.length > 0 ? attachmentData : undefined,
       });
 
-      toast({ title: 'Email enviado correctamente' });
+      toast({ 
+        title: '✓ Email enviado correctamente',
+        description: 'El email ha sido entregado al servidor de correo. Recibirás una notificación si hay algún problema de entrega.',
+      });
       
       // Reset form
       setFormData({
@@ -419,17 +422,35 @@ export function ComposeEmail({ replyTo, onSent }: ComposeEmailProps) {
 
           {/* Submit buttons */}
           <div className="flex justify-end gap-3">
-            {sending && (
-              <Button 
-                type="button" 
-                variant="outline" 
-                onClick={cancelSend}
-                className="gap-2"
-              >
-                <X className="h-4 w-4" />
-                Cancelar
-              </Button>
-            )}
+            <Button 
+              type="button" 
+              variant="outline" 
+              onClick={() => {
+                if (sending) {
+                  cancelSend();
+                } else {
+                  // Reset form
+                  setFormData({
+                    to: '',
+                    cc: '',
+                    bcc: '',
+                    subject: '',
+                    body: '',
+                    contactId: '',
+                    ticketId: '',
+                    createTicket: false,
+                    ticketSubject: '',
+                    ticketPriority: 'medium',
+                  });
+                  setSelectedTemplate('__none__');
+                  setAttachments([]);
+                }
+              }}
+              className="gap-2"
+            >
+              <X className="h-4 w-4" />
+              {sending ? 'Cancelar envío' : 'Limpiar'}
+            </Button>
             <Button type="submit" disabled={sending} className="gap-2">
               {sending ? (
                 <>

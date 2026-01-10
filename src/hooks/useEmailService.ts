@@ -35,14 +35,31 @@ interface SendEmailResult {
 
 export function useEmailService() {
   const [sending, setSending] = useState(false);
+  const [abortController, setAbortController] = useState<AbortController | null>(null);
+
+  const cancelSend = () => {
+    if (abortController) {
+      abortController.abort();
+      setAbortController(null);
+      setSending(false);
+      toast.info("Envío cancelado");
+    }
+  };
 
   const sendEmail = async (params: SendEmailParams): Promise<SendEmailResult> => {
     setSending(true);
+    const controller = new AbortController();
+    setAbortController(controller);
     
     try {
       const { data, error } = await supabase.functions.invoke("send-email", {
         body: params
       });
+
+      // Check if aborted
+      if (controller.signal.aborted) {
+        return { success: false, error: "Envío cancelado" };
+      }
 
       if (error) {
         console.error("Error sending email:", error);
@@ -65,16 +82,21 @@ export function useEmailService() {
       };
 
     } catch (error: any) {
+      if (error.name === 'AbortError' || controller.signal.aborted) {
+        return { success: false, error: "Envío cancelado" };
+      }
       console.error("Error sending email:", error);
       toast.error("Error al enviar email");
       return { success: false, error: error.message };
     } finally {
       setSending(false);
+      setAbortController(null);
     }
   };
 
   return {
     sendEmail,
-    sending
+    sending,
+    cancelSend
   };
 }

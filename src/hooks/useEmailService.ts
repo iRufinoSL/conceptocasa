@@ -2,6 +2,12 @@ import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
+interface EmailAttachment {
+  filename: string;
+  content: string; // base64 encoded
+  content_type: string;
+}
+
 interface SendEmailParams {
   to: string | string[];
   subject: string;
@@ -16,6 +22,7 @@ interface SendEmailParams {
   ticket_subject?: string;
   ticket_priority?: string;
   ticket_category?: string;
+  attachments?: EmailAttachment[];
 }
 
 interface SendEmailResult {

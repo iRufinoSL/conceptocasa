@@ -10,6 +10,12 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
 };
 
+interface EmailAttachment {
+  filename: string;
+  content: string; // base64 encoded
+  content_type: string;
+}
+
 interface SendEmailRequest {
   to: string | string[];
   subject: string;
@@ -24,6 +30,7 @@ interface SendEmailRequest {
   ticket_subject?: string;
   ticket_priority?: string;
   ticket_category?: string;
+  attachments?: EmailAttachment[];
 }
 
 const handler = async (req: Request): Promise<Response> => {
@@ -78,7 +85,8 @@ const handler = async (req: Request): Promise<Response> => {
       create_ticket,
       ticket_subject,
       ticket_priority,
-      ticket_category
+      ticket_category,
+      attachments
     } = requestData;
 
     // Validate required fields
@@ -139,6 +147,16 @@ const handler = async (req: Request): Promise<Response> => {
     
     if (cc && cc.length > 0) emailPayload.cc = cc;
     if (bcc && bcc.length > 0) emailPayload.bcc = bcc;
+    
+    // Add attachments if present
+    if (attachments && attachments.length > 0) {
+      emailPayload.attachments = attachments.map(att => ({
+        filename: att.filename,
+        content: att.content, // base64 encoded
+        content_type: att.content_type
+      }));
+      console.log(`Adding ${attachments.length} attachment(s)`);
+    }
     
     // Append signature to HTML body if configured
     if (body_html) {

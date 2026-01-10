@@ -83,9 +83,36 @@ export function CreateDocumentFromEmailDialog({
       // Set document name from email subject
       setDocName(email.subject || 'Email sin asunto');
       
-      // Set description from email body
+      // Build description from email body with metadata
+      let fullDescription = '';
+      
+      // Add email metadata header
+      const fromInfo = email.from_name ? `${email.from_name} <${email.from_email}>` : email.from_email;
+      const toInfo = email.to_emails?.join(', ') || '';
+      const dateInfo = email.received_at || email.created_at;
+      
+      fullDescription += `<p><strong>De:</strong> ${fromInfo}</p>`;
+      fullDescription += `<p><strong>Para:</strong> ${toInfo}</p>`;
+      if (dateInfo) {
+        const formattedDate = new Date(dateInfo).toLocaleDateString('es-ES', {
+          day: '2-digit',
+          month: '2-digit', 
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit'
+        });
+        fullDescription += `<p><strong>Fecha:</strong> ${formattedDate}</p>`;
+      }
+      fullDescription += `<p><strong>Asunto:</strong> ${email.subject || 'Sin asunto'}</p>`;
+      fullDescription += '<hr/>';
+      
+      // Add email body content
       const bodyContent = email.body_html || email.body_text || '';
-      setDescription(bodyContent);
+      if (bodyContent) {
+        fullDescription += bodyContent;
+      }
+      
+      setDescription(fullDescription);
       
       // Set contact from email sender
       if (email.contact_id) {
@@ -140,26 +167,19 @@ export function CreateDocumentFromEmailDialog({
     try {
       const { data: userData } = await supabase.auth.getUser();
       
-      // Create the main document
-      const { data: newDoc, error: docError } = await supabase
-        .from('project_documents')
-        .insert({
-          name: docName.trim(),
-          description: description || null,
-          document_type: docType,
-          project_id: projectId !== '__none__' ? projectId : null,
-          budget_id: budgetId !== '__none__' ? budgetId : null,
-          contact_id: contactId !== '__none__' ? contactId : null,
-          email_id: email.id,
-          uploaded_by: userData.user?.id,
-        })
-        .select()
-        .single();
-
-      if (docError) throw docError;
-
-      // If there are selected attachments, copy them to project-documents bucket
+      // Get selected attachments
       const attachmentsToCopy = email.email_attachments?.filter(a => selectedAttachments.has(a.id)) || [];
+      
+      // Variables for the main document file
+      let mainFilePath: string | null = null;
+      let mainFileType: string | null = null;
+      let mainFileSize: number | null = null;
+      
+      // Build final description with email content and attachment info
+      let finalDescription = description;
+      
+      // If there are attachments, copy them and track info
+      const copiedAttachments: { name: string; path: string; size: number | null }[] = [];
       
       for (const attachment of attachmentsToCopy) {
         try {
@@ -176,7 +196,8 @@ export function CreateDocumentFromEmailDialog({
           // Generate new path for project-documents
           const fileName = attachment.file_name || attachment.file_path.split('/').pop() || 'adjunto';
           const safeFileName = fileName.replace(/[^a-zA-Z0-9._-]/g, '-');
-          const newPath = `email-docs/${newDoc.id}/${Date.now()}-${safeFileName}`;
+          const docFolderId = crypto.randomUUID();
+          const newPath = `email-docs/${docFolderId}/${Date.now()}-${safeFileName}`;
 
           // Upload to project-documents bucket
           const { error: uploadError } = await supabase.storage
@@ -188,26 +209,53 @@ export function CreateDocumentFromEmailDialog({
             continue;
           }
 
-          // Create a related document record for the attachment
-          await supabase
-            .from('project_documents')
-            .insert({
-              name: attachment.file_name || 'Adjunto',
-              document_type: 'Adjunto',
-              file_path: newPath,
-              file_type: attachment.file_type,
-              file_size: attachment.file_size,
-              project_id: projectId !== '__none__' ? projectId : null,
-              budget_id: budgetId !== '__none__' ? budgetId : null,
-              contact_id: contactId !== '__none__' ? contactId : null,
-              email_id: email.id,
-              uploaded_by: userData.user?.id,
-              description: `Adjunto del email: ${email.subject || 'Sin asunto'}`,
-            });
+          copiedAttachments.push({
+            name: fileName,
+            path: newPath,
+            size: attachment.file_size
+          });
+          
+          // Use first attachment as the main document file
+          if (!mainFilePath) {
+            mainFilePath = newPath;
+            mainFileType = attachment.file_type;
+            mainFileSize = attachment.file_size;
+          }
         } catch (err) {
           console.error('Error processing attachment:', err);
         }
       }
+      
+      // Add attachments info to description if there are multiple
+      if (copiedAttachments.length > 1) {
+        finalDescription += '<hr/><p><strong>Adjuntos incluidos:</strong></p><ul>';
+        for (const att of copiedAttachments) {
+          const sizeStr = att.size ? ` (${formatFileSize(att.size)})` : '';
+          finalDescription += `<li>${att.name}${sizeStr}</li>`;
+        }
+        finalDescription += '</ul>';
+      } else if (copiedAttachments.length === 1) {
+        finalDescription += `<hr/><p><strong>Archivo adjunto:</strong> ${copiedAttachments[0].name}</p>`;
+      }
+      
+      // Create the unified document
+      const { error: docError } = await supabase
+        .from('project_documents')
+        .insert({
+          name: docName.trim(),
+          description: finalDescription || null,
+          document_type: docType,
+          project_id: projectId !== '__none__' ? projectId : null,
+          budget_id: budgetId !== '__none__' ? budgetId : null,
+          contact_id: contactId !== '__none__' ? contactId : null,
+          email_id: email.id,
+          file_path: mainFilePath,
+          file_type: mainFileType,
+          file_size: mainFileSize,
+          uploaded_by: userData.user?.id,
+        });
+
+      if (docError) throw docError;
 
       toast({ title: 'Documento creado correctamente' });
       queryClient.invalidateQueries({ queryKey: ['project-documents'] });
@@ -375,7 +423,7 @@ export function CreateDocumentFromEmailDialog({
                   ))}
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Los adjuntos seleccionados se copiarán como documentos relacionados.
+                  Los adjuntos seleccionados se incluirán en el documento. El primero será el archivo principal.
                 </p>
               </div>
             )}

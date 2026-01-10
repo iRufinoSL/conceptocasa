@@ -90,7 +90,7 @@ export function VATReportTab() {
   const [entries, setEntries] = useState<AccountingEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [year, setYear] = useState(new Date().getFullYear().toString());
-  const [periodType, setPeriodType] = useState<'month' | 'quarter' | 'dateRange'>('quarter');
+  const [periodType, setPeriodType] = useState<'annual' | 'month' | 'quarter' | 'dateRange'>('quarter');
   const [selectedPeriod, setSelectedPeriod] = useState<string>('Q1');
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
@@ -153,6 +153,11 @@ export function VATReportTab() {
       filterStartDate = startDate ? new Date(startDate) : new Date(yearNum, 0, 1);
       filterEndDate = endDate ? new Date(endDate) : new Date(yearNum, 11, 31);
       // Set end date to end of day
+      filterEndDate.setHours(23, 59, 59, 999);
+    } else if (periodType === 'annual') {
+      // Año completo
+      filterStartDate = new Date(yearNum, 0, 1);
+      filterEndDate = new Date(yearNum, 11, 31);
       filterEndDate.setHours(23, 59, 59, 999);
     } else if (periodType === 'quarter') {
       const quarter = QUARTERS.find(q => q.value === selectedPeriod);
@@ -335,6 +340,8 @@ export function VATReportTab() {
       const start = startDate ? format(new Date(startDate), 'dd/MM/yyyy', { locale: es }) : '';
       const end = endDate ? format(new Date(endDate), 'dd/MM/yyyy', { locale: es }) : '';
       return `${start} - ${end}`;
+    } else if (periodType === 'annual') {
+      return `Año ${year}`;
     } else if (periodType === 'quarter') {
       const quarter = QUARTERS.find(q => q.value === selectedPeriod);
       return quarter?.label || '';
@@ -583,7 +590,7 @@ export function VATReportTab() {
               <Label>Tipo de período</Label>
               <Select 
                 value={periodType} 
-                onValueChange={(value: 'month' | 'quarter' | 'dateRange') => {
+                onValueChange={(value: 'annual' | 'month' | 'quarter' | 'dateRange') => {
                   setPeriodType(value);
                   if (value === 'quarter') setSelectedPeriod('Q1');
                   else if (value === 'month') setSelectedPeriod('01');
@@ -593,6 +600,7 @@ export function VATReportTab() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="annual">Anual</SelectItem>
                   <SelectItem value="quarter">Trimestral</SelectItem>
                   <SelectItem value="month">Mensual</SelectItem>
                   <SelectItem value="dateRange">Entre fechas</SelectItem>
@@ -619,6 +627,20 @@ export function VATReportTab() {
                   />
                 </div>
               </>
+            ) : periodType === 'annual' ? (
+              <div className="space-y-2 min-w-[120px]">
+                <Label>Año</Label>
+                <Select value={year} onValueChange={setYear}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableYears.map(y => (
+                      <SelectItem key={y} value={y}>{y}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             ) : (
               <>
                 <div className="space-y-2 min-w-[120px]">

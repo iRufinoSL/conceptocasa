@@ -39,7 +39,7 @@ interface ComposeEmailProps {
 
 export function ComposeEmail({ replyTo, onSent }: ComposeEmailProps) {
   const { toast } = useToast();
-  const { sendEmail, sending } = useEmailService();
+  const { sendEmail, sending, cancelSend } = useEmailService();
 
   const [formData, setFormData] = useState({
     to: replyTo?.email || '',
@@ -320,28 +320,30 @@ export function ComposeEmail({ replyTo, onSent }: ComposeEmailProps) {
           </div>
 
           {/* Attachments */}
-          <div className="space-y-2">
+          <div className="space-y-3 border rounded-lg p-4 bg-muted/30">
             <div className="flex items-center justify-between">
-              <Label>Archivos adjuntos</Label>
+              <Label className="flex items-center gap-2">
+                <Paperclip className="h-4 w-4" />
+                Archivos adjuntos
+              </Label>
               <Button
                 type="button"
-                variant="outline"
+                variant="secondary"
                 size="sm"
                 onClick={() => fileInputRef.current?.click()}
                 className="gap-2"
               >
-                <Paperclip className="h-4 w-4" />
-                Adjuntar archivo
+                <Plus className="h-4 w-4" />
+                Añadir archivo
               </Button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                multiple
-                className="hidden"
-                onChange={handleFileSelect}
-              />
             </div>
-            
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              className="hidden"
+              onChange={handleFileSelect}
+            />
             {attachments.length > 0 && (
               <div className="border rounded-lg p-3 space-y-2">
                 {attachments.map((attachment, index) => (
@@ -415,8 +417,19 @@ export function ComposeEmail({ replyTo, onSent }: ComposeEmailProps) {
             )}
           </div>
 
-          {/* Submit button */}
+          {/* Submit buttons */}
           <div className="flex justify-end gap-3">
+            {sending && (
+              <Button 
+                type="button" 
+                variant="outline" 
+                onClick={cancelSend}
+                className="gap-2"
+              >
+                <X className="h-4 w-4" />
+                Cancelar
+              </Button>
+            )}
             <Button type="submit" disabled={sending} className="gap-2">
               {sending ? (
                 <>

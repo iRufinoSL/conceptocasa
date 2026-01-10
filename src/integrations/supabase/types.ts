@@ -19,6 +19,7 @@ export type Database = {
           account_type: string
           address: string | null
           city: string | null
+          contact_id: string | null
           created_at: string
           id: string
           name: string
@@ -31,6 +32,7 @@ export type Database = {
           account_type: string
           address?: string | null
           city?: string | null
+          contact_id?: string | null
           created_at?: string
           id?: string
           name: string
@@ -43,6 +45,7 @@ export type Database = {
           account_type?: string
           address?: string | null
           city?: string | null
+          contact_id?: string | null
           created_at?: string
           id?: string
           name?: string
@@ -51,7 +54,15 @@ export type Database = {
           province?: string | null
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "accounting_accounts_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contacts"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       accounting_documents: {
         Row: {
@@ -1896,6 +1907,7 @@ export type Database = {
       }
       invoices: {
         Row: {
+          accounting_entry_id: string | null
           budget_id: string | null
           created_at: string
           description: string | null
@@ -1903,6 +1915,7 @@ export type Database = {
           id: string
           invoice_date: string
           invoice_number: number
+          is_posted: boolean | null
           issuer_account_id: string | null
           observations: string | null
           receiver_account_id: string | null
@@ -1913,6 +1926,7 @@ export type Database = {
           vat_rate: number
         }
         Insert: {
+          accounting_entry_id?: string | null
           budget_id?: string | null
           created_at?: string
           description?: string | null
@@ -1920,6 +1934,7 @@ export type Database = {
           id?: string
           invoice_date?: string
           invoice_number: number
+          is_posted?: boolean | null
           issuer_account_id?: string | null
           observations?: string | null
           receiver_account_id?: string | null
@@ -1930,6 +1945,7 @@ export type Database = {
           vat_rate?: number
         }
         Update: {
+          accounting_entry_id?: string | null
           budget_id?: string | null
           created_at?: string
           description?: string | null
@@ -1937,6 +1953,7 @@ export type Database = {
           id?: string
           invoice_date?: string
           invoice_number?: number
+          is_posted?: boolean | null
           issuer_account_id?: string | null
           observations?: string | null
           receiver_account_id?: string | null
@@ -1947,6 +1964,13 @@ export type Database = {
           vat_rate?: number
         }
         Relationships: [
+          {
+            foreignKeyName: "invoices_accounting_entry_id_fkey"
+            columns: ["accounting_entry_id"]
+            isOneToOne: false
+            referencedRelation: "accounting_entries"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "invoices_budget_id_fkey"
             columns: ["budget_id"]

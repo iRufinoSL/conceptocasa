@@ -1170,7 +1170,7 @@ export function EmailInbox({ onComposeReply, onComposeForward }: EmailInboxProps
             </DialogHeader>
             
             {selectedEmail && (
-              <div className="flex-1 overflow-hidden flex flex-col">
+              <div className="flex-1 min-h-0 flex flex-col">
                 {/* Email metadata */}
                 <div className="border-b pb-4 mb-4 space-y-2">
                   <div className="flex items-center justify-between flex-wrap gap-2">
@@ -1246,7 +1246,7 @@ export function EmailInbox({ onComposeReply, onComposeForward }: EmailInboxProps
                 </div>
 
                 {/* Email body - Preview */}
-                <ScrollArea className="flex-1 -mx-6 px-6 min-h-[200px]">
+                <ScrollArea className="flex-1 min-h-0 -mx-6 px-6">
                   {selectedEmail.body_html || selectedEmail.body_text ? (
                     <div 
                       className="prose prose-sm max-w-none dark:prose-invert"
@@ -1413,7 +1413,7 @@ export function EmailInbox({ onComposeReply, onComposeForward }: EmailInboxProps
             </SheetHeader>
             
             {selectedEmail && (
-              <div className="flex-1 overflow-hidden flex flex-col">
+              <div className="flex-1 min-h-0 flex flex-col">
                 {/* Email metadata */}
                 <div className="p-6 border-b space-y-3 flex-shrink-0">
                   <div className="flex items-center justify-between flex-wrap gap-2">
@@ -1483,7 +1483,7 @@ export function EmailInbox({ onComposeReply, onComposeForward }: EmailInboxProps
                 </div>
 
                 {/* Email body - Fullscreen */}
-                <ScrollArea className="flex-1 p-6">
+                <ScrollArea className="flex-1 min-h-0 p-6">
                   {selectedEmail.body_html || selectedEmail.body_text ? (
                     <div 
                       className="prose prose-lg max-w-4xl mx-auto dark:prose-invert"

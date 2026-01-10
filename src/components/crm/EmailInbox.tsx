@@ -15,15 +15,16 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sh
 import { supabase } from '@/integrations/supabase/client';
 import { format, isToday, isYesterday, isThisWeek, addDays } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { 
+import {
   Mail, Search, ArrowUpRight, ArrowDownLeft, 
   CheckCircle, XCircle, Clock, Eye, Inbox,
   Reply, Forward, UserPlus, AlertCircle,
   ChevronDown, ChevronRight, User, Calendar, FolderOpen,
   Ticket, AlarmClock, MailOpen, Maximize2, Minimize2, X,
   RefreshCw, Trash2, Paperclip, Download, Undo2, Bell, Building2,
-  FileText, Image, FileSpreadsheet, FileIcon, ExternalLink
+  FileText, Image, FileSpreadsheet, FileIcon, ExternalLink, FilePlus
 } from 'lucide-react';
+import { CreateDocumentFromEmailDialog } from './CreateDocumentFromEmailDialog';
 import { useToast } from '@/hooks/use-toast';
 import type { Tables, Json } from '@/integrations/supabase/types';
 
@@ -103,6 +104,8 @@ export function EmailInbox({ onComposeReply, onComposeForward }: EmailInboxProps
     reminder_date: '',
     reminder_time: '09:00',
   });
+  const [showCreateDocument, setShowCreateDocument] = useState(false);
+  const [emailForDocument, setEmailForDocument] = useState<EmailMessage | null>(null);
 
   // Fetch budgets for folder assignment
   const { data: budgets = [] } = useQuery({
@@ -1337,6 +1340,19 @@ export function EmailInbox({ onComposeReply, onComposeForward }: EmailInboxProps
                     </Button>
                   )}
                   {!selectedEmail.deleted_at && (
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => {
+                        setEmailForDocument(selectedEmail);
+                        setShowCreateDocument(true);
+                      }}
+                    >
+                      <FilePlus className="h-4 w-4 mr-2" />
+                      Crear Documento
+                    </Button>
+                  )}
+                  {!selectedEmail.deleted_at && (
                     <>
                       <Button 
                         variant="outline" 
@@ -1563,6 +1579,23 @@ export function EmailInbox({ onComposeReply, onComposeForward }: EmailInboxProps
                   )}
                   {!selectedEmail.deleted_at && (
                     <>
+                      <Button 
+                        variant="outline"
+                        onClick={() => openCreateReminderDialog(selectedEmail)}
+                      >
+                        <Bell className="h-4 w-4 mr-2" />
+                        Recordatorio
+                      </Button>
+                      <Button 
+                        variant="outline"
+                        onClick={() => {
+                          setEmailForDocument(selectedEmail);
+                          setShowCreateDocument(true);
+                        }}
+                      >
+                        <FilePlus className="h-4 w-4 mr-2" />
+                        Crear Documento
+                      </Button>
                       <Button 
                         variant="outline"
                         onClick={openSnoozeDialog}
@@ -2110,6 +2143,13 @@ export function EmailInbox({ onComposeReply, onComposeForward }: EmailInboxProps
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Create Document from Email Dialog */}
+      <CreateDocumentFromEmailDialog
+        open={showCreateDocument}
+        onOpenChange={setShowCreateDocument}
+        email={emailForDocument}
+      />
     </div>
   );
 }

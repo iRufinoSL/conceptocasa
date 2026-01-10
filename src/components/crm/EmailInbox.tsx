@@ -334,19 +334,24 @@ export function EmailInbox({ onComposeReply, onComposeForward }: EmailInboxProps
 
   const previewAttachment = async (attachment: EmailAttachment) => {
     try {
+      console.log('Previewing attachment:', attachment.file_path);
       const { data, error } = await supabase.storage
         .from('email-attachments')
         .createSignedUrl(attachment.file_path, 3600); // 1 hour
 
-      if (error) throw error;
+      if (error) {
+        console.error('Storage signed URL error:', error);
+        throw error;
+      }
 
+      console.log('Got signed URL:', data.signedUrl ? 'success' : 'empty');
       setPreviewUrl(data.signedUrl);
       setPreviewingAttachment(attachment);
     } catch (error: any) {
       console.error('Error previewing attachment:', error);
       toast({
         title: 'Error al previsualizar',
-        description: error.message,
+        description: error?.message || 'No se pudo obtener el archivo',
         variant: 'destructive',
       });
     }
@@ -355,11 +360,15 @@ export function EmailInbox({ onComposeReply, onComposeForward }: EmailInboxProps
   // Download attachment function
   const downloadAttachment = async (attachment: EmailAttachment) => {
     try {
+      console.log('Downloading attachment:', attachment.file_path);
       const { data, error } = await supabase.storage
         .from('email-attachments')
         .download(attachment.file_path);
 
-      if (error) throw error;
+      if (error) {
+        console.error('Storage download error:', error);
+        throw error;
+      }
 
       const url = URL.createObjectURL(data);
       const a = document.createElement('a');
@@ -375,7 +384,7 @@ export function EmailInbox({ onComposeReply, onComposeForward }: EmailInboxProps
       console.error('Error downloading attachment:', error);
       toast({
         title: 'Error al descargar adjunto',
-        description: error.message,
+        description: error?.message || 'No se pudo descargar el archivo',
         variant: 'destructive',
       });
     }
@@ -1144,7 +1153,7 @@ export function EmailInbox({ onComposeReply, onComposeForward }: EmailInboxProps
       {/* Email Detail Dialog - Normal or Fullscreen */}
       {!isFullscreen ? (
         <Dialog open={!!selectedEmail} onOpenChange={() => setSelectedEmail(null)}>
-          <DialogContent className="max-w-3xl max-h-[85vh] overflow-hidden flex flex-col">
+          <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto flex flex-col">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2 pr-8">
                 <Mail className="h-5 w-5 flex-shrink-0" />

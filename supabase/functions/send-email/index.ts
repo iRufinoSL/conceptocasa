@@ -33,6 +33,51 @@ interface SendEmailRequest {
   attachments?: EmailAttachment[];
 }
 
+// Sanitize HTML content for email - whitelist-based approach
+function sanitizeHtmlForEmail(html: string): string {
+  if (!html) return '';
+  
+  let sanitized = html;
+  
+  // Remove script tags and their content
+  sanitized = sanitized.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+  
+  // Remove all event handlers (onclick, onerror, onload, etc.) - comprehensive pattern
+  sanitized = sanitized.replace(/\s+on\w+\s*=\s*["'][^"']*["']/gi, '');
+  sanitized = sanitized.replace(/\s+on\w+\s*=\s*[^\s>]*/gi, '');
+  
+  // Remove javascript: URLs (case insensitive, handles whitespace and encoding)
+  sanitized = sanitized.replace(/href\s*=\s*["']?\s*(?:javascript|data):[^"'>\s]*/gi, 'href="#"');
+  sanitized = sanitized.replace(/src\s*=\s*["']?\s*(?:javascript|data):[^"'>\s]*/gi, 'src=""');
+  
+  // Remove style tags and their content
+  sanitized = sanitized.replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '');
+  
+  // Remove dangerous tags entirely
+  sanitized = sanitized.replace(/<(iframe|object|embed|form|input|button|meta|link|base)[^>]*>.*?<\/\1>/gi, '');
+  sanitized = sanitized.replace(/<(iframe|object|embed|form|input|button|meta|link|base)[^>]*\/?>/gi, '');
+  
+  // Remove expression() in CSS (IE vulnerability)
+  sanitized = sanitized.replace(/expression\s*\([^)]*\)/gi, '');
+  
+  // Remove -moz-binding (Firefox vulnerability)
+  sanitized = sanitized.replace(/-moz-binding\s*:[^;}"']*/gi, '');
+  
+  return sanitized;
+}
+
+// Escape HTML entities for text content
+function escapeHtml(text: string): string {
+  const map: { [key: string]: string } = {
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#039;'
+  };
+  return text.replace(/[&<>"']/g, (m) => map[m]);
+}
+
 const handler = async (req: Request): Promise<Response> => {
   console.log("send-email function called");
   
@@ -159,14 +204,17 @@ const handler = async (req: Request): Promise<Response> => {
       console.log(`Adding ${attachments.length} attachment(s)`);
     }
     
-    // Append signature to HTML body if configured
+    // Append signature to HTML body if configured, then sanitize
     if (body_html) {
       let finalHtml = body_html;
       if (emailSignature) {
-        const signatureHtml = `<br><br><div style="border-top: 1px solid #ccc; padding-top: 12px; margin-top: 20px; color: #666; font-size: 14px;">${emailSignature.replace(/\n/g, '<br>')}</div>`;
+        // Escape the signature to prevent injection via company settings
+        const safeSignature = escapeHtml(emailSignature).replace(/\n/g, '<br>');
+        const signatureHtml = `<br><br><div style="border-top: 1px solid #ccc; padding-top: 12px; margin-top: 20px; color: #666; font-size: 14px;">${safeSignature}</div>`;
         finalHtml += signatureHtml;
       }
-      emailPayload.html = finalHtml;
+      // Sanitize the final HTML to remove any malicious content
+      emailPayload.html = sanitizeHtmlForEmail(finalHtml);
     } else if (body_text) {
       let finalText = body_text;
       if (emailSignature) {

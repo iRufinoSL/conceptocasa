@@ -9,12 +9,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Plus, Pencil, Trash2, ChevronDown, ChevronRight, Filter, X, FileText, Printer, Search } from 'lucide-react';
+import { Plus, Pencil, Trash2, ChevronDown, ChevronRight, Filter, X, FileText, Printer, Search, BookOpen, CheckCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import { InvoiceLinesEditor } from './InvoiceLinesEditor';
 import { InvoicePrintView } from './InvoicePrintView';
 import { AccountSelectWithCreate } from './AccountSelectWithCreate';
+import { PostInvoiceDialog } from './PostInvoiceDialog';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { formatCurrency } from '@/lib/format-utils';
@@ -36,6 +37,7 @@ interface AccountingAccount {
   postal_code?: string | null;
   province?: string | null;
   nif_cif?: string | null;
+  contact_id?: string | null;
 }
 
 type DocumentType = 'factura' | 'presupuesto' | 'proforma';
@@ -55,6 +57,8 @@ interface Invoice {
   total: number;
   created_at: string;
   document_type: DocumentType;
+  is_posted?: boolean;
+  accounting_entry_id?: string | null;
   presupuesto?: Presupuesto | null;
   issuer_account?: AccountingAccount | null;
   receiver_account?: AccountingAccount | null;
@@ -148,6 +152,7 @@ export function InvoicesTab() {
   const [filters, setFilters] = useState<Filters>(emptyFilters);
   const [showFilters, setShowFilters] = useState(false);
   const [activeDocumentType, setActiveDocumentType] = useState<DocumentType>('factura');
+  const [invoiceToPost, setInvoiceToPost] = useState<Invoice | null>(null);
 
   useEffect(() => {
     fetchData();
@@ -692,14 +697,42 @@ export function InvoicesTab() {
                               </div>
                               <div className="flex items-center gap-4">
                                 <div className="text-right">
-                                  <div className="text-sm text-muted-foreground">
-                                    {formatVatRate(invoice.vat_rate)}
+                                  <div className="flex items-center gap-2 justify-end">
+                                    {invoice.document_type === 'factura' && (
+                                      invoice.is_posted ? (
+                                        <Badge variant="outline" className="text-green-600 border-green-600 gap-1">
+                                          <CheckCircle className="h-3 w-3" />
+                                          Contabilizada
+                                        </Badge>
+                                      ) : (
+                                        <Badge variant="outline" className="text-amber-600 border-amber-600">
+                                          Pendiente
+                                        </Badge>
+                                      )
+                                    )}
+                                    <span className="text-sm text-muted-foreground">
+                                      {formatVatRate(invoice.vat_rate)}
+                                    </span>
                                   </div>
                                   <div className="font-semibold">
                                     {formatCurrency(invoice.total)}
                                   </div>
                                 </div>
                                 <div className="flex items-center gap-1">
+                                  {invoice.document_type === 'factura' && !invoice.is_posted && (
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setInvoiceToPost(invoice);
+                                      }}
+                                      title="Contabilizar"
+                                      className="text-primary"
+                                    >
+                                      <BookOpen className="h-4 w-4" />
+                                    </Button>
+                                  )}
                                   <Button
                                     variant="ghost"
                                     size="icon"
@@ -739,7 +772,7 @@ export function InvoicesTab() {
                         </CollapsibleTrigger>
                         <CollapsibleContent>
                           <CardContent className="pt-0 pb-4">
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4 p-4 bg-muted/50 rounded-lg">
+                            <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-4 p-4 bg-muted/50 rounded-lg">
                               <div>
                                 <div className="text-sm text-muted-foreground">Emisor</div>
                                 <div className="font-medium">
@@ -762,16 +795,41 @@ export function InvoicesTab() {
                                   {invoice.vat_rate === -1 ? '-' : formatCurrency(invoice.vat_amount)}
                                 </div>
                               </div>
+                              <div>
+                                <div className="text-sm text-muted-foreground">Estado</div>
+                                <div className="font-medium">
+                                  {invoice.document_type === 'factura' ? (
+                                    invoice.is_posted ? (
+                                      <span className="text-green-600">Contabilizada</span>
+                                    ) : (
+                                      <span className="text-amber-600">Pendiente</span>
+                                    )
+                                  ) : '-'}
+                                </div>
+                              </div>
                             </div>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => setSelectedInvoiceForLines(invoice)}
-                              className="gap-2"
-                            >
-                              <Plus className="h-4 w-4" />
-                              Gestionar Líneas
-                            </Button>
+                            <div className="flex gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setSelectedInvoiceForLines(invoice)}
+                                className="gap-2"
+                              >
+                                <Plus className="h-4 w-4" />
+                                Gestionar Líneas
+                              </Button>
+                              {invoice.document_type === 'factura' && !invoice.is_posted && (
+                                <Button
+                                  variant="default"
+                                  size="sm"
+                                  onClick={() => setInvoiceToPost(invoice)}
+                                  className="gap-2"
+                                >
+                                  <BookOpen className="h-4 w-4" />
+                                  Contabilizar
+                                </Button>
+                              )}
+                            </div>
                           </CardContent>
                         </CollapsibleContent>
                       </Collapsible>
@@ -965,6 +1023,21 @@ export function InvoicesTab() {
         <InvoicePrintView
           invoice={invoiceToPrint}
           onClose={() => setInvoiceToPrint(null)}
+        />
+      )}
+
+      {/* Post Invoice Dialog */}
+      {invoiceToPost && (
+        <PostInvoiceDialog
+          invoice={invoiceToPost}
+          open={!!invoiceToPost}
+          onOpenChange={(open) => {
+            if (!open) setInvoiceToPost(null);
+          }}
+          onPosted={() => {
+            fetchData();
+            setInvoiceToPost(null);
+          }}
         />
       )}
     </div>

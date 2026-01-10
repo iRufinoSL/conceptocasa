@@ -45,7 +45,8 @@ import {
   Link as LinkIcon,
   ExternalLink,
   Save,
-  Maximize2
+  Maximize2,
+  User
 } from 'lucide-react';
 import { RichTextEditor } from '@/components/ui/rich-text-editor';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -66,6 +67,7 @@ import { es } from 'date-fns/locale';
 import { AppNavDropdown } from '@/components/AppNavDropdown';
 import { BackupButton } from '@/components/BackupButton';
 import { searchMatch } from '@/lib/search-utils';
+import { ContactSelectWithCreate } from '@/components/crm/ContactSelectWithCreate';
 
 interface ProjectDocument {
   id: string;
@@ -186,6 +188,7 @@ export default function Documentos() {
   const [editDescription, setEditDescription] = useState('');
   const [editDocType, setEditDocType] = useState('Otro');
   const [editProjectId, setEditProjectId] = useState<string>('');
+  const [editContactId, setEditContactId] = useState<string | null>(null);
   const [editUrl, setEditUrl] = useState('');
   const [editFile, setEditFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
@@ -572,6 +575,7 @@ export default function Documentos() {
     setEditDescription(doc.description || '');
     setEditDocType(doc.document_type || 'Otro');
     setEditProjectId(doc.project_id || '');
+    setEditContactId((doc as any).contact_id || null);
     setEditUrl(doc.document_url || '');
     setEditFile(null);
     setEditDialogOpen(true);
@@ -636,6 +640,7 @@ export default function Documentos() {
           description: editDescription.trim() || null,
           document_type: editDocType,
           project_id: editProjectId || null,
+          contact_id: editContactId,
           document_url: editUrl.trim() || null,
           file_path: newFilePath,
           file_type: newFileType,
@@ -1279,6 +1284,20 @@ export default function Documentos() {
                     </SelectContent>
                   </Select>
                 </div>
+              </div>
+
+              {/* Edit Contact */}
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2">
+                  <User className="h-4 w-4" />
+                  Contacto asociado
+                </Label>
+                <ContactSelectWithCreate
+                  value={editContactId}
+                  onChange={setEditContactId}
+                  placeholder="Sin contacto"
+                  clearLabel="Sin contacto"
+                />
               </div>
 
               {/* Edit URL */}

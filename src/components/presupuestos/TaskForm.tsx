@@ -261,12 +261,15 @@ export function TaskForm({ budgetId, activities, task, open, onOpenChange, onSuc
 
             <div className="space-y-2 md:col-span-2">
               <Label htmlFor="activity">Actividad</Label>
-              <Select value={activityId} onValueChange={setActivityId}>
+              <Select
+                value={activityId || '__none__'}
+                onValueChange={(v) => setActivityId(v === '__none__' ? '' : v)}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Selecciona una actividad (opcional)" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Sin actividad</SelectItem>
+                  <SelectItem value="__none__">Sin actividad</SelectItem>
                   {activities.map(activity => (
                     <SelectItem key={activity.id} value={activity.id}>
                       {activity.code} - {activity.name}

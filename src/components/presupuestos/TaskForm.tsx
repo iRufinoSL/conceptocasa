@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import {
   Dialog,
@@ -10,22 +10,19 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Badge } from '@/components/ui/badge';
-import { X, Upload, Loader2, Image as ImageIcon, Search } from 'lucide-react';
+import { Check, ChevronsUpDown, X, Upload, Loader2, Search, Image as ImageIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import { useSignedUrl } from '@/hooks/useSignedUrl';
+import { formatActividadId } from '@/lib/activity-id';
 import type { BudgetTask } from './BudgetAgendaTab';
 
 interface TaskFormProps {
   budgetId: string;
-  activities: { id: string; name: string; code: string }[];
+  activities: { id: string; name: string; code: string; phase_code?: string | null }[];
   task: BudgetTask | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -42,6 +39,8 @@ export function TaskForm({ budgetId, activities, task, open, onOpenChange, onSuc
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [activityId, setActivityId] = useState('');
+  const [activitySearchQuery, setActivitySearchQuery] = useState('');
+  const [activityPopoverOpen, setActivityPopoverOpen] = useState(false);
   const [startDate, setStartDate] = useState('');
   const [durationDays, setDurationDays] = useState(1);
   const [taskStatus, setTaskStatus] = useState<'pendiente' | 'realizada'>('pendiente');
@@ -55,6 +54,27 @@ export function TaskForm({ budgetId, activities, task, open, onOpenChange, onSuc
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
+  const activityOptions = useMemo(() => {
+    return activities
+      .map(a => {
+        const label = formatActividadId({
+          phaseCode: a.phase_code,
+          activityCode: a.code,
+          name: a.name,
+        });
+
+        const searchContent = `${a.phase_code || ''} ${a.code} ${a.name}`.toLowerCase();
+        return { value: a.id, label, searchContent };
+      })
+      .sort((a, b) => a.label.localeCompare(b.label, 'es'));
+  }, [activities]);
+
+  const filteredActivities = useMemo(() => {
+    const q = activitySearchQuery.toLowerCase().trim();
+    if (!q) return activityOptions;
+    return activityOptions.filter(a => a.searchContent.includes(q));
+  }, [activityOptions, activitySearchQuery]);
+
   useEffect(() => {
     if (open) {
       fetchContacts();
@@ -62,6 +82,8 @@ export function TaskForm({ budgetId, activities, task, open, onOpenChange, onSuc
         setName(task.name);
         setDescription(task.description || '');
         setActivityId(task.activity_id || '');
+        setActivitySearchQuery('');
+        setActivityPopoverOpen(false);
         setStartDate(task.start_date || '');
         setDurationDays(task.duration_days || 1);
         setTaskStatus(task.task_status);
@@ -77,6 +99,8 @@ export function TaskForm({ budgetId, activities, task, open, onOpenChange, onSuc
     setName('');
     setDescription('');
     setActivityId('');
+    setActivitySearchQuery('');
+    setActivityPopoverOpen(false);
     setStartDate('');
     setDurationDays(1);
     setTaskStatus('pendiente');
@@ -265,22 +289,65 @@ export function TaskForm({ budgetId, activities, task, open, onOpenChange, onSuc
 
             <div className="space-y-2 md:col-span-2">
               <Label htmlFor="activity">Actividad</Label>
-              <Select
-                value={activityId || '__none__'}
-                onValueChange={(v) => setActivityId(v === '__none__' ? '' : v)}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecciona una actividad (opcional)" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none__">Sin actividad</SelectItem>
-                  {activities.map(activity => (
-                    <SelectItem key={activity.id} value={activity.id}>
-                      {activity.code} - {activity.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Popover open={activityPopoverOpen} onOpenChange={setActivityPopoverOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={activityPopoverOpen}
+                    className="w-full justify-between font-normal"
+                    type="button"
+                  >
+                    <span className="truncate">
+                      {activityId
+                        ? activityOptions.find(a => a.value === activityId)?.label
+                        : 'Sin actividad'}
+                    </span>
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[520px] p-0" align="start">
+                  <Command shouldFilter={false}>
+                    <CommandInput
+                      placeholder="Buscar por ActividadID (fase + código + nombre)..."
+                      value={activitySearchQuery}
+                      onValueChange={setActivitySearchQuery}
+                    />
+                    <CommandList className="max-h-[280px]">
+                      <CommandEmpty>No se encontraron actividades.</CommandEmpty>
+                      <CommandGroup>
+                        <CommandItem
+                          value="__none__"
+                          onSelect={() => {
+                            setActivityId('');
+                            setActivityPopoverOpen(false);
+                            setActivitySearchQuery('');
+                          }}
+                          className="cursor-pointer"
+                        >
+                          <Check className={`mr-2 h-4 w-4 ${!activityId ? 'opacity-100' : 'opacity-0'}`} />
+                          Sin actividad
+                        </CommandItem>
+                        {filteredActivities.map(opt => (
+                          <CommandItem
+                            key={opt.value}
+                            value={opt.value}
+                            onSelect={() => {
+                              setActivityId(opt.value);
+                              setActivityPopoverOpen(false);
+                              setActivitySearchQuery('');
+                            }}
+                            className="cursor-pointer"
+                          >
+                            <Check className={`mr-2 h-4 w-4 ${activityId === opt.value ? 'opacity-100' : 'opacity-0'}`} />
+                            <span className="truncate">{opt.label}</span>
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             </div>
 
             <div className="space-y-2 md:col-span-2">

@@ -2,15 +2,16 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
-import { 
-  DropdownMenu, 
-  DropdownMenuContent, 
-  DropdownMenuItem, 
-  DropdownMenuTrigger 
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
 import { MoreVertical, Pencil, Trash2, Calendar, Clock, Users, Image, MapPin } from 'lucide-react';
 import { format, addDays } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { formatActividadId } from '@/lib/activity-id';
 import type { BudgetTask } from './BudgetAgendaTab';
 
 interface TaskCardProps {
@@ -52,7 +53,11 @@ export function TaskCard({ task, compact, onEdit, onDelete, onToggleStatus, isAd
             </p>
             {task.activity && (
               <p className="text-[10px] text-muted-foreground truncate">
-                {task.activity.code} - {task.activity.name}
+                {formatActividadId({
+                  phaseCode: task.activity.phase_code,
+                  activityCode: task.activity.code,
+                  name: task.activity.name,
+                })}
               </p>
             )}
             {task.workAreas && task.workAreas.length > 0 && (
@@ -89,7 +94,11 @@ export function TaskCard({ task, compact, onEdit, onDelete, onToggleStatus, isAd
               </h4>
               {task.activity && (
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  {task.activity.code} - {task.activity.name}
+                  {formatActividadId({
+                    phaseCode: task.activity.phase_code,
+                    activityCode: task.activity.code,
+                    name: task.activity.name,
+                  })}
                 </p>
               )}
               {task.workAreas && task.workAreas.length > 0 && (

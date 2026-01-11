@@ -207,6 +207,8 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
   const [existingResourcesQuery, setExistingResourcesQuery] = useState('');
   const [form, setForm] = useState<ActivityForm>(emptyForm);
   const [isSaving, setIsSaving] = useState(false);
+  const [workAreaSearchQuery, setWorkAreaSearchQuery] = useState('');
+  const [showAllWorkAreas, setShowAllWorkAreas] = useState(false);
   
   // Import state
   const [importFile, setImportFile] = useState<File | null>(null);
@@ -472,6 +474,8 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
               tolerance_days: data.tolerance_days?.toString() || '',
               work_area_ids: (workAreaLinksRes.data || []).map(r => r.work_area_id)
             });
+            setWorkAreaSearchQuery('');
+            setShowAllWorkAreas(false);
             setFormDialogOpen(true);
           }
         }
@@ -496,6 +500,8 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
     setEditingActivity(null);
     setForm(emptyForm);
     setActivityResources([]);
+    setWorkAreaSearchQuery('');
+    setShowAllWorkAreas(false);
     setFormDialogOpen(true);
   };
 
@@ -531,6 +537,10 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
       tolerance_days: activity.tolerance_days?.toString() || '',
       work_area_ids: workAreaRelations.filter(r => r.activity_id === activity.id).map(r => r.work_area_id)
     });
+    
+    // Reset search state
+    setWorkAreaSearchQuery('');
+    setShowAllWorkAreas(false);
     
     // Fetch resources for this activity
     const resources = await fetchActivityResources(activity.id);
@@ -2673,26 +2683,114 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
                   <p className="text-xs text-muted-foreground">Selecciona las áreas donde aplica esta actividad</p>
                 </div>
               </div>
-              <div className="flex flex-wrap gap-2 mt-2">
-                {workAreas.map(wa => (
-                  <label key={wa.id} className="flex items-center gap-1.5 cursor-pointer border rounded-md px-2 py-1 hover:bg-muted/50 transition-colors">
-                    <Checkbox
-                      checked={form.work_area_ids.includes(wa.id)}
-                      onCheckedChange={(checked) => {
-                        if (checked) {
-                          setForm({ ...form, work_area_ids: [...form.work_area_ids, wa.id] });
-                        } else {
-                          setForm({ ...form, work_area_ids: form.work_area_ids.filter(id => id !== wa.id) });
-                        }
-                      }}
-                    />
-                    <span className="text-sm">{wa.name}</span>
-                    <code className="text-xs text-muted-foreground">({wa.level}/{wa.work_area})</code>
-                  </label>
-                ))}
-                {workAreas.length === 0 && (
-                  <p className="text-sm text-muted-foreground">No hay áreas de trabajo definidas</p>
+              
+              <div className="space-y-3 mt-2">
+                {/* Selected work areas - always shown */}
+                {form.work_area_ids.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-xs text-muted-foreground font-medium">Áreas seleccionadas:</p>
+                    <div className="flex flex-wrap gap-2">
+                      {form.work_area_ids.map(waId => {
+                        const wa = workAreas.find(w => w.id === waId);
+                        if (!wa) return null;
+                        return (
+                          <Badge
+                            key={wa.id}
+                            variant="default"
+                            className="cursor-pointer"
+                            onClick={() => setForm({ ...form, work_area_ids: form.work_area_ids.filter(id => id !== wa.id) })}
+                          >
+                            {wa.name} <code className="text-xs ml-1 opacity-70">({wa.level}/{wa.work_area})</code>
+                            <X className="h-3 w-3 ml-1" />
+                          </Badge>
+                        );
+                      })}
+                    </div>
+                  </div>
                 )}
+                
+                {/* Search and add work areas */}
+                <div className="space-y-2">
+                  <div className="relative">
+                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Buscar áreas por nombre..."
+                      value={workAreaSearchQuery}
+                      onChange={(e) => {
+                        setWorkAreaSearchQuery(e.target.value);
+                        if (e.target.value) setShowAllWorkAreas(true);
+                      }}
+                      className="pl-9 h-9"
+                    />
+                  </div>
+                  
+                  {workAreas.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No hay áreas de trabajo definidas</p>
+                  ) : (
+                    <>
+                      {!showAllWorkAreas && form.work_area_ids.length === 0 && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setShowAllWorkAreas(true)}
+                          className="text-xs"
+                        >
+                          Mostrar todas las áreas disponibles
+                        </Button>
+                      )}
+                      
+                      {(showAllWorkAreas || workAreaSearchQuery) && (
+                        <div className="max-h-40 overflow-y-auto space-y-1 border rounded-md p-2 bg-background">
+                          {workAreas
+                            .filter(wa => !form.work_area_ids.includes(wa.id))
+                            .filter(wa => {
+                              if (!workAreaSearchQuery) return true;
+                              const searchLower = workAreaSearchQuery.toLowerCase();
+                              const fullText = `${wa.name} ${wa.level} ${wa.work_area}`.toLowerCase();
+                              return fullText.includes(searchLower);
+                            })
+                            .map(wa => (
+                              <div
+                                key={wa.id}
+                                className="flex items-center gap-2 p-1.5 rounded hover:bg-muted cursor-pointer transition-colors"
+                                onClick={() => setForm({ ...form, work_area_ids: [...form.work_area_ids, wa.id] })}
+                              >
+                                <Badge variant="outline" className="cursor-pointer">
+                                  {wa.name} <code className="text-xs ml-1 opacity-70">({wa.level}/{wa.work_area})</code>
+                                </Badge>
+                              </div>
+                            ))
+                          }
+                          {workAreas
+                            .filter(wa => !form.work_area_ids.includes(wa.id))
+                            .filter(wa => {
+                              if (!workAreaSearchQuery) return true;
+                              const searchLower = workAreaSearchQuery.toLowerCase();
+                              const fullText = `${wa.name} ${wa.level} ${wa.work_area}`.toLowerCase();
+                              return fullText.includes(searchLower);
+                            }).length === 0 && (
+                            <p className="text-xs text-muted-foreground text-center py-2">
+                              {workAreaSearchQuery ? 'No se encontraron áreas' : 'No hay más áreas disponibles'}
+                            </p>
+                          )}
+                        </div>
+                      )}
+                      
+                      {showAllWorkAreas && !workAreaSearchQuery && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setShowAllWorkAreas(false)}
+                          className="text-xs"
+                        >
+                          Ocultar lista
+                        </Button>
+                      )}
+                    </>
+                  )}
+                </div>
               </div>
             </div>
 

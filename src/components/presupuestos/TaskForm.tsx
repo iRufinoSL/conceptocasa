@@ -18,7 +18,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { X, Upload, Loader2, Image as ImageIcon } from 'lucide-react';
+import { X, Upload, Loader2, Image as ImageIcon, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import { useSignedUrl } from '@/hooks/useSignedUrl';
 import type { BudgetTask } from './BudgetAgendaTab';
@@ -47,6 +47,8 @@ export function TaskForm({ budgetId, activities, task, open, onOpenChange, onSuc
   const [taskStatus, setTaskStatus] = useState<'pendiente' | 'realizada'>('pendiente');
   const [selectedContacts, setSelectedContacts] = useState<string[]>([]);
   const [availableContacts, setAvailableContacts] = useState<Contact[]>([]);
+  const [contactSearchQuery, setContactSearchQuery] = useState('');
+  const [showAllContacts, setShowAllContacts] = useState(false);
   const [existingImages, setExistingImages] = useState<{ id: string; file_name: string; file_path: string }[]>([]);
   const [newImages, setNewImages] = useState<File[]>([]);
   const [imagesToDelete, setImagesToDelete] = useState<string[]>([]);
@@ -79,6 +81,8 @@ export function TaskForm({ budgetId, activities, task, open, onOpenChange, onSuc
     setDurationDays(1);
     setTaskStatus('pendiente');
     setSelectedContacts([]);
+    setContactSearchQuery('');
+    setShowAllContacts(false);
     setExistingImages([]);
     setNewImages([]);
     setImagesToDelete([]);
@@ -328,27 +332,116 @@ export function TaskForm({ budgetId, activities, task, open, onOpenChange, onSuc
           {/* Contacts Section */}
           <div className="space-y-2">
             <Label>Contactos asociados</Label>
-            <div className="flex flex-wrap gap-2 p-3 border rounded-lg min-h-[60px]">
-              {isLoading ? (
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Cargando contactos...
+            <div className="p-3 border rounded-lg space-y-3">
+              {/* Selected contacts - always shown */}
+              {selectedContacts.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-xs text-muted-foreground font-medium">Contactos seleccionados:</p>
+                  <div className="flex flex-wrap gap-2">
+                    {selectedContacts.map(contactId => {
+                      const contact = availableContacts.find(c => c.id === contactId);
+                      if (!contact) return null;
+                      return (
+                        <Badge
+                          key={contact.id}
+                          variant="default"
+                          className="cursor-pointer"
+                          onClick={() => toggleContact(contact.id)}
+                        >
+                          {contact.name} {contact.surname || ''}
+                          <X className="h-3 w-3 ml-1" />
+                        </Badge>
+                      );
+                    })}
+                  </div>
                 </div>
-              ) : (
-                availableContacts.map(contact => (
-                  <Badge
-                    key={contact.id}
-                    variant={selectedContacts.includes(contact.id) ? 'default' : 'outline'}
-                    className="cursor-pointer"
-                    onClick={() => toggleContact(contact.id)}
-                  >
-                    {contact.name} {contact.surname || ''}
-                    {selectedContacts.includes(contact.id) && (
-                      <X className="h-3 w-3 ml-1" />
-                    )}
-                  </Badge>
-                ))
               )}
+              
+              {/* Search and add contacts */}
+              <div className="space-y-2">
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Buscar contactos por nombre..."
+                    value={contactSearchQuery}
+                    onChange={(e) => {
+                      setContactSearchQuery(e.target.value);
+                      if (e.target.value) setShowAllContacts(true);
+                    }}
+                    className="pl-9 h-9"
+                  />
+                </div>
+                
+                {isLoading ? (
+                  <div className="flex items-center gap-2 text-muted-foreground py-2">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Cargando contactos...
+                  </div>
+                ) : (
+                  <>
+                    {!showAllContacts && selectedContacts.length === 0 && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setShowAllContacts(true)}
+                        className="text-xs"
+                      >
+                        Mostrar todos los contactos disponibles
+                      </Button>
+                    )}
+                    
+                    {(showAllContacts || contactSearchQuery) && (
+                      <div className="max-h-40 overflow-y-auto space-y-1 border rounded-md p-2 bg-muted/30">
+                        {availableContacts
+                          .filter(c => !selectedContacts.includes(c.id))
+                          .filter(c => {
+                            if (!contactSearchQuery) return true;
+                            const searchLower = contactSearchQuery.toLowerCase();
+                            const fullName = `${c.name} ${c.surname || ''}`.toLowerCase();
+                            return fullName.includes(searchLower);
+                          })
+                          .map(contact => (
+                            <div
+                              key={contact.id}
+                              className="flex items-center gap-2 p-1.5 rounded hover:bg-muted cursor-pointer transition-colors"
+                              onClick={() => toggleContact(contact.id)}
+                            >
+                              <Badge variant="outline" className="cursor-pointer">
+                                {contact.name} {contact.surname || ''}
+                              </Badge>
+                            </div>
+                          ))
+                        }
+                        {availableContacts
+                          .filter(c => !selectedContacts.includes(c.id))
+                          .filter(c => {
+                            if (!contactSearchQuery) return true;
+                            const searchLower = contactSearchQuery.toLowerCase();
+                            const fullName = `${c.name} ${c.surname || ''}`.toLowerCase();
+                            return fullName.includes(searchLower);
+                          }).length === 0 && (
+                          <p className="text-xs text-muted-foreground text-center py-2">
+                            {contactSearchQuery ? 'No se encontraron contactos' : 'No hay más contactos disponibles'}
+                          </p>
+                        )}
+                      </div>
+                    )}
+                    
+                    {showAllContacts && !contactSearchQuery && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setShowAllContacts(false)}
+                        className="text-xs"
+                      >
+                        Ocultar lista
+                      </Button>
+                    )}
+                  </>
+                )}
+              </div>
             </div>
           </div>
 

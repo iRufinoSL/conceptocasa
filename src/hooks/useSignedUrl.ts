@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 
 interface UseSignedUrlOptions {
   expiresIn?: number; // seconds, default 3600 (1 hour)
-  bucket: 'company-logos' | 'budget-covers' | 'budget-predesigns' | 'activity-files' | 'project-documents';
+  bucket: 'company-logos' | 'budget-covers' | 'budget-predesigns' | 'activity-files' | 'project-documents' | 'task-images' | 'resource-files' | 'accounting-documents' | 'email-attachments';
 }
 
 /**
@@ -60,7 +60,7 @@ export function useSignedUrl(filePath: string | null, options: UseSignedUrlOptio
  * Utility function to get a signed URL once (for PDF generation, etc.)
  */
 export async function getSignedUrl(
-  bucket: 'company-logos' | 'budget-covers' | 'budget-predesigns' | 'activity-files' | 'project-documents',
+  bucket: 'company-logos' | 'budget-covers' | 'budget-predesigns' | 'activity-files' | 'project-documents' | 'task-images' | 'resource-files' | 'accounting-documents' | 'email-attachments',
   filePath: string,
   expiresIn: number = 3600
 ): Promise<string | null> {

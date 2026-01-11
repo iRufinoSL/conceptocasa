@@ -9,7 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ArrowLeft, Calculator, ClipboardList, Building2, FileText, Settings, Calendar, Ruler, FileDown, Image, RefreshCw, Copy, GanttChart, Upload, X, Loader2, Euro, Home, MapPin, Users, FolderOpen } from 'lucide-react';
+import { ArrowLeft, Calculator, ClipboardList, Building2, FileText, Settings, Calendar, Ruler, FileDown, Image, RefreshCw, Copy, GanttChart, Upload, X, Loader2, Euro, Home, MapPin, Users, FolderOpen, CalendarCheck } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { AppNavDropdown } from '@/components/AppNavDropdown';
@@ -29,6 +29,7 @@ import { BudgetTimelineView } from '@/components/presupuestos/BudgetTimelineView
 import { recalculateAllBudgetResources } from '@/lib/budget-utils';
 import { BudgetWorkAreasTab } from '@/components/presupuestos/BudgetWorkAreasTab';
 import { BudgetDocumentsTab } from '@/components/presupuestos/BudgetDocumentsTab';
+import { BudgetAgendaTab } from '@/components/presupuestos/BudgetAgendaTab';
 import { toast } from 'sonner';
 
 interface Presupuesto {
@@ -429,6 +430,12 @@ export default function PresupuestoDashboard() {
                   <span>Documentos</span>
                 </TabsTrigger>
               )}
+              {isTabVisible('agenda') && (
+                <TabsTrigger value="agenda" className="flex items-center gap-1.5 text-xs px-2 py-1.5">
+                  <CalendarCheck className="h-3.5 w-3.5" />
+                  <span>Agenda</span>
+                </TabsTrigger>
+              )}
               {isTabVisible('resumen') && (
                 <TabsTrigger value="resumen" className="flex items-center gap-1.5 text-xs px-2 py-1.5">
                   <Calculator className="h-3.5 w-3.5" />
@@ -534,6 +541,10 @@ export default function PresupuestoDashboard() {
               projectName={project?.name || null}
               isAdmin={isAdmin} 
             />
+          </TabsContent>
+
+          <TabsContent value="agenda" className="mt-6">
+            <BudgetAgendaTab budgetId={presupuesto.id} isAdmin={isAdmin} />
           </TabsContent>
 
           <TabsContent value="resumen" className="mt-6">

@@ -28,6 +28,7 @@ export interface BudgetTask {
     id: string;
     name: string;
     code: string;
+    phase_code?: string | null;
   } | null;
   workAreas?: {
     id: string;
@@ -61,7 +62,7 @@ type FilterMode = 'all' | 'pendiente' | 'realizada';
 
 export function BudgetAgendaTab({ budgetId, isAdmin }: BudgetAgendaTabProps) {
   const [tasks, setTasks] = useState<BudgetTask[]>([]);
-  const [activities, setActivities] = useState<{ id: string; name: string; code: string }[]>([]);
+  const [activities, setActivities] = useState<{ id: string; name: string; code: string; phase_code?: string | null }[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [viewMode, setViewMode] = useState<ViewMode>('month');
   const [filterMode, setFilterMode] = useState<FilterMode>('all');
@@ -73,7 +74,7 @@ export function BudgetAgendaTab({ budgetId, isAdmin }: BudgetAgendaTabProps) {
   const fetchActivities = useCallback(async () => {
     const { data, error } = await supabase
       .from('budget_activities')
-      .select('id, name, code')
+      .select('id, name, code, phase_id, budget_phases(code)')
       .eq('budget_id', budgetId)
       .order('code');
 
@@ -82,7 +83,14 @@ export function BudgetAgendaTab({ budgetId, isAdmin }: BudgetAgendaTabProps) {
       return;
     }
 
-    setActivities(data || []);
+    const mapped = (data || []).map((a: any) => ({
+      id: a.id,
+      name: a.name,
+      code: a.code,
+      phase_code: a.budget_phases?.code || null,
+    }));
+
+    setActivities(mapped);
   }, [budgetId]);
 
   const fetchTasks = useCallback(async () => {
@@ -141,15 +149,23 @@ export function BudgetAgendaTab({ budgetId, isAdmin }: BudgetAgendaTabProps) {
         // Fetch activity info if linked
         let activity = null;
         let workAreas: { id: string; name: string; level: string; work_area: string }[] = [];
-        
+
         if (task.activity_id) {
           const { data: activityData } = await supabase
             .from('budget_activities')
-            .select('id, name, code')
+            .select('id, name, code, phase_id, budget_phases(code)')
             .eq('id', task.activity_id)
             .single();
-          activity = activityData;
-          
+
+          activity = activityData
+            ? {
+                id: activityData.id,
+                name: activityData.name,
+                code: activityData.code,
+                phase_code: (activityData as any).budget_phases?.code || null,
+              }
+            : null;
+
           // Get work areas for this activity
           const workAreaIds = activityWorkAreasMap.get(task.activity_id) || [];
           workAreas = workAreaIds

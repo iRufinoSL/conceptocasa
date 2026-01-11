@@ -14,6 +14,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { Plus, Trash2, Edit2, MapPin, List, Layers, ChevronDown, ChevronRight, LayoutGrid, Pencil } from 'lucide-react';
 import { WorkAreasOptionsGroupedView } from './WorkAreasOptionsGroupedView';
+import { WorkAreaActivitiesSelect } from './WorkAreaActivitiesSelect';
 import { OPTION_COLORS } from '@/lib/options-utils';
 import { formatCurrency } from '@/lib/format-utils';
 import { calcResourceSubtotal } from '@/lib/budget-pricing';
@@ -780,48 +781,13 @@ export function BudgetWorkAreasTab({ budgetId, isAdmin }: BudgetWorkAreasTabProp
                   </code>
                 </p>
               </div>
-              {/* Activities multi-select */}
-              <div className="space-y-2">
-                <Label>Actividades relacionadas</Label>
-                <ScrollArea className="h-48 border rounded-md p-2">
-                  {activities.length === 0 ? (
-                    <p className="text-sm text-muted-foreground py-2">No hay actividades disponibles</p>
-                  ) : (
-                    <div className="space-y-2">
-                      {activities
-                        .sort((a, b) => a.code.localeCompare(b.code))
-                        .map((activity) => (
-                          <div key={activity.id} className="flex items-center space-x-2">
-                            <Checkbox
-                              id={`activity-${activity.id}`}
-                              checked={formData.activity_ids.includes(activity.id)}
-                              onCheckedChange={(checked) => {
-                                setFormData(prev => ({
-                                  ...prev,
-                                  activity_ids: checked
-                                    ? [...prev.activity_ids, activity.id]
-                                    : prev.activity_ids.filter(id => id !== activity.id)
-                                }));
-                              }}
-                            />
-                            <label
-                              htmlFor={`activity-${activity.id}`}
-                              className="text-sm flex-1 cursor-pointer"
-                            >
-                              <span className="font-mono text-xs text-muted-foreground mr-2">{activity.code}</span>
-                              {activity.name}
-                            </label>
-                          </div>
-                        ))}
-                    </div>
-                  )}
-                </ScrollArea>
-                {formData.activity_ids.length > 0 && (
-                  <p className="text-xs text-muted-foreground">
-                    {formData.activity_ids.length} actividades seleccionadas
-                  </p>
-                )}
-              </div>
+              {/* Activities multi-select with search - showing only related activities */}
+              <WorkAreaActivitiesSelect
+                activities={activities}
+                phases={phases}
+                selectedIds={formData.activity_ids}
+                onSelectionChange={(ids) => setFormData(prev => ({ ...prev, activity_ids: ids }))}
+              />
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setDialogOpen(false)}>

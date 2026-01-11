@@ -53,7 +53,7 @@ interface BudgetResourceFormProps {
   onSave: () => void;
 }
 
-const RESOURCE_TYPES = ['Producto', 'Mano de obra', 'Alquiler', 'Servicio', 'Impuestos'];
+const RESOURCE_TYPES = ['Producto', 'Mano de obra', 'Alquiler', 'Servicio', 'Impuestos', 'Tarea'];
 const UNIT_MEASURES = ['m2', 'm3', 'ml', 'ud', 'mes', 'kg', 'hora', 'día'];
 
 export function BudgetResourceForm({

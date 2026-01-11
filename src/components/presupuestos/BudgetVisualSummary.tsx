@@ -46,7 +46,7 @@ interface BudgetVisualSummaryProps {
 }
 
 // Valid resource types (exclude invalid types like "herramientas")
-const VALID_RESOURCE_TYPES = ['Producto', 'Mano de obra', 'Alquiler', 'Servicio', 'Impuestos'];
+const VALID_RESOURCE_TYPES = ['Producto', 'Mano de obra', 'Alquiler', 'Servicio', 'Impuestos', 'Tarea'];
 
 const RESOURCE_TYPE_COLORS: Record<string, string> = {
   'Producto': 'hsl(217, 91%, 60%)',
@@ -54,6 +54,7 @@ const RESOURCE_TYPE_COLORS: Record<string, string> = {
   'Alquiler': 'hsl(38, 92%, 50%)',
   'Servicio': 'hsl(346, 77%, 49%)',
   'Impuestos': 'hsl(280, 60%, 50%)',
+  'Tarea': 'hsl(220, 9%, 46%)',
   'Sin tipo': 'hsl(220, 9%, 46%)',
 };
 

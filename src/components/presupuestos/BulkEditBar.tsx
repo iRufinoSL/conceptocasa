@@ -75,7 +75,7 @@ const BULK_EDIT_FIELDS = [
   { value: 'activity_id', label: 'Actividad', type: 'activity' },
 ];
 
-const RESOURCE_TYPES = ['Producto', 'Mano de obra', 'Alquiler', 'Servicio'];
+const RESOURCE_TYPES = ['Producto', 'Mano de obra', 'Alquiler', 'Servicio', 'Tarea'];
 const UNITS = ['m2', 'm3', 'ml', 'ud', 'h', 'día', 'mes', 'kg', 'l', 'km'];
 
 export function BulkEditBar({

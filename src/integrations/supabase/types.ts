@@ -800,6 +800,134 @@ export type Database = {
           },
         ]
       }
+      budget_task_contacts: {
+        Row: {
+          contact_id: string
+          created_at: string
+          id: string
+          task_id: string
+        }
+        Insert: {
+          contact_id: string
+          created_at?: string
+          id?: string
+          task_id: string
+        }
+        Update: {
+          contact_id?: string
+          created_at?: string
+          id?: string
+          task_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "budget_task_contacts_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budget_task_contacts_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "budget_tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      budget_task_images: {
+        Row: {
+          created_at: string
+          file_name: string
+          file_path: string
+          file_size: number | null
+          file_type: string | null
+          id: string
+          task_id: string
+          uploaded_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          file_name: string
+          file_path: string
+          file_size?: number | null
+          file_type?: string | null
+          id?: string
+          task_id: string
+          uploaded_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          file_name?: string
+          file_path?: string
+          file_size?: number | null
+          file_type?: string | null
+          id?: string
+          task_id?: string
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "budget_task_images_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "budget_tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budget_task_images_uploaded_by_fkey"
+            columns: ["uploaded_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      budget_tasks: {
+        Row: {
+          activity_id: string
+          created_at: string
+          description: string | null
+          duration_days: number | null
+          id: string
+          name: string
+          start_date: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          activity_id: string
+          created_at?: string
+          description?: string | null
+          duration_days?: number | null
+          id?: string
+          name: string
+          start_date?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          activity_id?: string
+          created_at?: string
+          description?: string | null
+          duration_days?: number | null
+          id?: string
+          name?: string
+          start_date?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "budget_tasks_activity_id_fkey"
+            columns: ["activity_id"]
+            isOneToOne: false
+            referencedRelation: "budget_activities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       budget_work_area_activities: {
         Row: {
           activity_id: string

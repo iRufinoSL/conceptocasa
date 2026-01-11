@@ -1,7 +1,7 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Plus, Calendar, List, ChevronLeft, ChevronRight } from 'lucide-react';
@@ -12,21 +12,23 @@ import { TaskForm } from './TaskForm';
 import { TaskCard } from './TaskCard';
 import { TaskListView } from './TaskListView';
 
+// A Task is a resource with resource_type = 'Tarea'
 export interface BudgetTask {
   id: string;
-  activity_id: string;
+  budget_id: string;
+  activity_id: string | null;
   name: string;
   description: string | null;
   start_date: string | null;
   duration_days: number;
-  status: 'pendiente' | 'realizada';
+  task_status: 'pendiente' | 'realizada';
   created_at: string;
   updated_at: string;
   activity?: {
     id: string;
     name: string;
     code: string;
-  };
+  } | null;
   contacts?: {
     id: string;
     contact_id: string;
@@ -80,41 +82,69 @@ export function BudgetAgendaTab({ budgetId, isAdmin }: BudgetAgendaTabProps) {
   const fetchTasks = useCallback(async () => {
     setIsLoading(true);
     try {
-      // First get all activity IDs for this budget
-      const { data: activityIds, error: activityError } = await supabase
-        .from('budget_activities')
-        .select('id')
-        .eq('budget_id', budgetId);
-
-      if (activityError) throw activityError;
-
-      if (!activityIds || activityIds.length === 0) {
-        setTasks([]);
-        setIsLoading(false);
-        return;
-      }
-
-      const ids = activityIds.map(a => a.id);
-
-      // Fetch tasks for these activities
+      // Fetch resources with type 'Tarea' for this budget
       const { data: tasksData, error: tasksError } = await supabase
-        .from('budget_tasks')
+        .from('budget_activity_resources')
         .select(`
-          *,
-          activity:budget_activities(id, name, code),
-          contacts:budget_task_contacts(
-            id,
-            contact_id,
-            contact:crm_contacts(id, name, surname)
-          ),
-          images:budget_task_images(id, file_name, file_path)
+          id,
+          budget_id,
+          activity_id,
+          name,
+          description,
+          start_date,
+          duration_days,
+          task_status,
+          created_at,
+          updated_at
         `)
-        .in('activity_id', ids)
+        .eq('budget_id', budgetId)
+        .eq('resource_type', 'Tarea')
         .order('start_date', { ascending: true, nullsFirst: false });
 
       if (tasksError) throw tasksError;
 
-      setTasks(tasksData as BudgetTask[] || []);
+      // Get additional data for each task (activity, contacts, images)
+      const tasksWithRelations: BudgetTask[] = [];
+
+      for (const task of tasksData || []) {
+        // Fetch activity info if linked
+        let activity = null;
+        if (task.activity_id) {
+          const { data: activityData } = await supabase
+            .from('budget_activities')
+            .select('id, name, code')
+            .eq('id', task.activity_id)
+            .single();
+          activity = activityData;
+        }
+
+        // Fetch contacts
+        const { data: contactsData } = await supabase
+          .from('budget_resource_contacts')
+          .select(`
+            id,
+            contact_id,
+            contact:crm_contacts(id, name, surname)
+          `)
+          .eq('resource_id', task.id);
+
+        // Fetch images
+        const { data: imagesData } = await supabase
+          .from('budget_resource_images')
+          .select('id, file_name, file_path')
+          .eq('resource_id', task.id);
+
+        tasksWithRelations.push({
+          ...task,
+          duration_days: task.duration_days || 1,
+          task_status: (task.task_status as 'pendiente' | 'realizada') || 'pendiente',
+          activity,
+          contacts: contactsData || [],
+          images: imagesData || [],
+        });
+      }
+
+      setTasks(tasksWithRelations);
     } catch (error) {
       console.error('Error fetching tasks:', error);
       toast.error('Error al cargar las tareas');
@@ -128,19 +158,31 @@ export function BudgetAgendaTab({ budgetId, isAdmin }: BudgetAgendaTabProps) {
     fetchTasks();
   }, [fetchActivities, fetchTasks]);
 
-  const filteredTasks = tasks.filter(task => {
-    if (filterMode === 'all') return true;
-    return task.status === filterMode;
-  });
+  // Calculate end date from start date and duration
+  const getEndDate = (startDate: string, durationDays: number): Date => {
+    return addDays(new Date(startDate), durationDays - 1);
+  };
 
-  const getTasksForDate = (date: Date) => {
-    return filteredTasks.filter(task => {
+  const filteredTasks = useMemo(() => {
+    return tasks.filter(task => {
+      if (filterMode === 'all') return true;
+      return task.task_status === filterMode;
+    });
+  }, [tasks, filterMode]);
+
+  // For calendar views: only tasks with dates
+  const tasksWithDates = useMemo(() => {
+    return filteredTasks.filter(task => task.start_date);
+  }, [filteredTasks]);
+
+  const getTasksForDate = useCallback((date: Date) => {
+    return tasksWithDates.filter(task => {
       if (!task.start_date) return false;
       const taskStart = new Date(task.start_date);
-      const taskEnd = addDays(taskStart, (task.duration_days || 1) - 1);
+      const taskEnd = getEndDate(task.start_date, task.duration_days);
       return date >= taskStart && date <= taskEnd;
     });
-  };
+  }, [tasksWithDates]);
 
   const handleAddTask = () => {
     setEditingTask(null);
@@ -154,8 +196,20 @@ export function BudgetAgendaTab({ budgetId, isAdmin }: BudgetAgendaTabProps) {
 
   const handleDeleteTask = async (taskId: string) => {
     try {
+      // Delete related contacts and images first
+      await supabase
+        .from('budget_resource_contacts')
+        .delete()
+        .eq('resource_id', taskId);
+
+      await supabase
+        .from('budget_resource_images')
+        .delete()
+        .eq('resource_id', taskId);
+
+      // Delete the task (resource)
       const { error } = await supabase
-        .from('budget_tasks')
+        .from('budget_activity_resources')
         .delete()
         .eq('id', taskId);
 
@@ -170,11 +224,11 @@ export function BudgetAgendaTab({ budgetId, isAdmin }: BudgetAgendaTabProps) {
   };
 
   const handleToggleStatus = async (task: BudgetTask) => {
-    const newStatus = task.status === 'pendiente' ? 'realizada' : 'pendiente';
+    const newStatus = task.task_status === 'pendiente' ? 'realizada' : 'pendiente';
     try {
       const { error } = await supabase
-        .from('budget_tasks')
-        .update({ status: newStatus })
+        .from('budget_activity_resources')
+        .update({ task_status: newStatus })
         .eq('id', task.id);
 
       if (error) throw error;
@@ -260,8 +314,8 @@ export function BudgetAgendaTab({ budgetId, isAdmin }: BudgetAgendaTabProps) {
                   {dayTasks.slice(0, 3).map(task => (
                     <div
                       key={task.id}
-                      className={`text-[10px] px-1 py-0.5 rounded truncate ${
-                        task.status === 'realizada' 
+                      className={`text-[10px] px-1 py-0.5 rounded truncate cursor-pointer ${
+                        task.task_status === 'realizada' 
                           ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' 
                           : 'bg-primary/10 text-primary'
                       }`}
@@ -371,8 +425,8 @@ export function BudgetAgendaTab({ budgetId, isAdmin }: BudgetAgendaTabProps) {
     return '';
   };
 
-  const pendingCount = tasks.filter(t => t.status === 'pendiente').length;
-  const completedCount = tasks.filter(t => t.status === 'realizada').length;
+  const pendingCount = tasks.filter(t => t.task_status === 'pendiente').length;
+  const completedCount = tasks.filter(t => t.task_status === 'realizada').length;
 
   if (isLoading) {
     return (
@@ -502,49 +556,15 @@ export function BudgetAgendaTab({ budgetId, isAdmin }: BudgetAgendaTabProps) {
         </TabsContent>
       </Tabs>
 
-      {/* Selected Day Panel */}
-      {selectedDay && viewMode === 'month' && (
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base">
-              {format(selectedDay, "EEEE, d 'de' MMMM", { locale: es })}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {getTasksForDate(selectedDay).length === 0 ? (
-              <p className="text-sm text-muted-foreground">No hay tareas para este día</p>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {getTasksForDate(selectedDay).map(task => (
-                  <TaskCard
-                    key={task.id}
-                    task={task}
-                    onEdit={() => handleEditTask(task)}
-                    onDelete={() => handleDeleteTask(task.id)}
-                    onToggleStatus={() => handleToggleStatus(task)}
-                    isAdmin={isAdmin}
-                  />
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
       {/* Task Form Dialog */}
-      {showTaskForm && (
-        <TaskForm
-          budgetId={budgetId}
-          activities={activities}
-          task={editingTask}
-          open={showTaskForm}
-          onClose={() => {
-            setShowTaskForm(false);
-            setEditingTask(null);
-          }}
-          onSaved={handleTaskSaved}
-        />
-      )}
+      <TaskForm
+        open={showTaskForm}
+        onOpenChange={setShowTaskForm}
+        budgetId={budgetId}
+        activities={activities}
+        task={editingTask}
+        onSuccess={handleTaskSaved}
+      />
     </div>
   );
 }

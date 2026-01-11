@@ -32,7 +32,7 @@ export function TaskCard({ task, compact, onEdit, onDelete, onToggleStatus, isAd
       <div
         className={`
           p-2 rounded-lg border cursor-pointer transition-colors
-          ${task.status === 'realizada' 
+          ${task.task_status === 'realizada' 
             ? 'bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-800' 
             : 'bg-card border-border hover:bg-accent/50'
           }
@@ -41,13 +41,13 @@ export function TaskCard({ task, compact, onEdit, onDelete, onToggleStatus, isAd
       >
         <div className="flex items-start gap-2">
           <Checkbox
-            checked={task.status === 'realizada'}
+            checked={task.task_status === 'realizada'}
             onCheckedChange={() => onToggleStatus()}
             onClick={(e) => e.stopPropagation()}
             className="mt-0.5"
           />
           <div className="flex-1 min-w-0">
-            <p className={`text-xs font-medium truncate ${task.status === 'realizada' ? 'line-through text-muted-foreground' : ''}`}>
+            <p className={`text-xs font-medium truncate ${task.task_status === 'realizada' ? 'line-through text-muted-foreground' : ''}`}>
               {task.name}
             </p>
             {task.activity && (
@@ -64,7 +64,7 @@ export function TaskCard({ task, compact, onEdit, onDelete, onToggleStatus, isAd
   return (
     <Card className={`
       transition-colors
-      ${task.status === 'realizada' 
+      ${task.task_status === 'realizada' 
         ? 'bg-green-50/50 border-green-200 dark:bg-green-900/10 dark:border-green-800' 
         : ''
       }
@@ -73,12 +73,12 @@ export function TaskCard({ task, compact, onEdit, onDelete, onToggleStatus, isAd
         <div className="flex items-start justify-between gap-2">
           <div className="flex items-start gap-3 flex-1 min-w-0">
             <Checkbox
-              checked={task.status === 'realizada'}
+              checked={task.task_status === 'realizada'}
               onCheckedChange={onToggleStatus}
               className="mt-1"
             />
             <div className="flex-1 min-w-0">
-              <h4 className={`font-medium ${task.status === 'realizada' ? 'line-through text-muted-foreground' : ''}`}>
+              <h4 className={`font-medium ${task.task_status === 'realizada' ? 'line-through text-muted-foreground' : ''}`}>
                 {task.name}
               </h4>
               {task.activity && (
@@ -127,8 +127,8 @@ export function TaskCard({ task, compact, onEdit, onDelete, onToggleStatus, isAd
           </div>
           
           <div className="flex items-center gap-2">
-            <Badge variant={task.status === 'realizada' ? 'default' : 'secondary'}>
-              {task.status === 'realizada' ? 'Realizada' : 'Pendiente'}
+            <Badge variant={task.task_status === 'realizada' ? 'default' : 'secondary'}>
+              {task.task_status === 'realizada' ? 'Realizada' : 'Pendiente'}
             </Badge>
             
             {isAdmin && (

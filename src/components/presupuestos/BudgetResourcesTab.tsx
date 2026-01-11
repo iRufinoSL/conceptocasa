@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Plus, Search, Pencil, Trash2, Package, Wrench, Truck, Briefcase, FileSpreadsheet, Check, List, FolderTree, FileDown, FileText, LayoutGrid } from 'lucide-react';
+import { Plus, Search, Pencil, Trash2, Package, Wrench, Truck, Briefcase, FileSpreadsheet, Check, List, FolderTree, FileDown, FileText, LayoutGrid, CheckSquare } from 'lucide-react';
 import { OPTION_COLORS } from '@/lib/options-utils';
 import { ResourcesOptionsGroupedView } from './ResourcesOptionsGroupedView';
 import { toast } from 'sonner';
@@ -84,6 +84,7 @@ const resourceTypeIcons: Record<string, React.ReactNode> = {
   'Mano de obra': <Wrench className="h-4 w-4" />,
   'Alquiler': <Truck className="h-4 w-4" />,
   'Servicio': <Briefcase className="h-4 w-4" />,
+  'Tarea': <CheckSquare className="h-4 w-4" />,
 };
 
 const resourceTypeVariants: Record<string, string> = {
@@ -91,6 +92,7 @@ const resourceTypeVariants: Record<string, string> = {
   'Mano de obra': 'secondary',
   'Alquiler': 'outline',
   'Servicio': 'destructive',
+  'Tarea': 'default',
 };
 
 // Field options for bulk edit
@@ -103,7 +105,7 @@ const BULK_EDIT_FIELDS = [
   { value: 'activity_id', label: 'Actividad' },
 ];
 
-const RESOURCE_TYPES = ['Producto', 'Mano de obra', 'Alquiler', 'Servicio'];
+const RESOURCE_TYPES = ['Producto', 'Mano de obra', 'Alquiler', 'Servicio', 'Tarea'];
 const UNITS = ['m2', 'm3', 'ml', 'ud', 'h', 'día', 'mes', 'kg', 'l', 'km'];
 
 export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetResourcesTabProps) {

@@ -13,7 +13,7 @@ import { useEmailService } from '@/hooks/useEmailService';
 import { useToast } from '@/hooks/use-toast';
 import { 
   Send, Mail, User, Paperclip, X, Plus, 
-  FileText, ChevronDown, Ticket as TicketIcon, File
+  FileText, ChevronDown, Ticket as TicketIcon, File, Forward
 } from 'lucide-react';
 import type { Tables } from '@/integrations/supabase/types';
 
@@ -22,10 +22,19 @@ interface AttachmentFile {
   name: string;
   size: number;
   type: string;
+  isForwarded?: boolean; // Flag to identify forwarded attachments
 }
 
 type Contact = Tables<'crm_contacts'>;
 type EmailTemplate = Tables<'email_templates'>;
+
+interface ForwardAttachment {
+  id: string;
+  file_name: string;
+  file_path: string;
+  file_type: string | null;
+  file_size: number | null;
+}
 
 interface ComposeEmailProps {
   replyTo?: {
@@ -33,6 +42,8 @@ interface ComposeEmailProps {
     subject?: string;
     contactId?: string;
     ticketId?: string;
+    forwardEmailId?: string;
+    originalBody?: string;
   };
   onSent?: () => void;
 }
@@ -57,6 +68,7 @@ export function ComposeEmail({ replyTo, onSent }: ComposeEmailProps) {
   const [showCcBcc, setShowCcBcc] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<string>('__none__');
   const [attachments, setAttachments] = useState<AttachmentFile[]>([]);
+  const [loadingForwardAttachments, setLoadingForwardAttachments] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -112,6 +124,74 @@ export function ComposeEmail({ replyTo, onSent }: ComposeEmailProps) {
       return data || [];
     },
   });
+
+  // Load forwarded email attachments
+  useEffect(() => {
+    const loadForwardAttachments = async () => {
+      if (!replyTo?.forwardEmailId) return;
+      
+      setLoadingForwardAttachments(true);
+      try {
+        // Fetch attachments for the forwarded email
+        const { data: emailAttachments, error } = await supabase
+          .from('email_attachments')
+          .select('*')
+          .eq('email_id', replyTo.forwardEmailId);
+        
+        if (error) {
+          console.error('Error fetching forward attachments:', error);
+          return;
+        }
+        
+        if (!emailAttachments || emailAttachments.length === 0) return;
+        
+        // Download each attachment and convert to File
+        const forwardedFiles: AttachmentFile[] = [];
+        
+        for (const att of emailAttachments) {
+          try {
+            const { data: fileData, error: downloadError } = await supabase.storage
+              .from('email-attachments')
+              .download(att.file_path);
+            
+            if (downloadError) {
+              console.error('Error downloading attachment:', downloadError);
+              continue;
+            }
+            
+            const fileType = att.file_type || 'application/octet-stream';
+            const fileName = att.file_name;
+            const blob = new Blob([fileData], { type: fileType });
+            const file = Object.assign(blob, { name: fileName }) as unknown as File;
+            
+            forwardedFiles.push({
+              file,
+              name: att.file_name,
+              size: att.file_size || fileData.size,
+              type: att.file_type || 'application/octet-stream',
+              isForwarded: true,
+            });
+          } catch (e) {
+            console.error('Error processing attachment:', e);
+          }
+        }
+        
+        if (forwardedFiles.length > 0) {
+          setAttachments(prev => [...prev, ...forwardedFiles]);
+          toast({ 
+            title: `${forwardedFiles.length} adjunto(s) cargado(s)`,
+            description: 'Los adjuntos del email original se han añadido'
+          });
+        }
+      } catch (e) {
+        console.error('Error loading forward attachments:', e);
+      } finally {
+        setLoadingForwardAttachments(false);
+      }
+    };
+    
+    loadForwardAttachments();
+  }, [replyTo?.forwardEmailId]);
 
   // Apply template
   useEffect(() => {
@@ -328,6 +408,9 @@ export function ComposeEmail({ replyTo, onSent }: ComposeEmailProps) {
               <Label className="flex items-center gap-2">
                 <Paperclip className="h-4 w-4" />
                 Archivos adjuntos
+                {loadingForwardAttachments && (
+                  <span className="text-xs text-muted-foreground">(Cargando adjuntos...)</span>
+                )}
               </Label>
               <Button
                 type="button"
@@ -335,6 +418,7 @@ export function ComposeEmail({ replyTo, onSent }: ComposeEmailProps) {
                 size="sm"
                 onClick={() => fileInputRef.current?.click()}
                 className="gap-2"
+                disabled={loadingForwardAttachments}
               >
                 <Plus className="h-4 w-4" />
                 Añadir archivo
@@ -360,6 +444,12 @@ export function ComposeEmail({ replyTo, onSent }: ComposeEmailProps) {
                       <span className="text-xs text-muted-foreground flex-shrink-0">
                         ({formatFileSize(attachment.size)})
                       </span>
+                      {attachment.isForwarded && (
+                        <Badge variant="secondary" className="gap-1 flex-shrink-0">
+                          <Forward className="h-3 w-3" />
+                          Reenviado
+                        </Badge>
+                      )}
                     </div>
                     <Button
                       type="button"

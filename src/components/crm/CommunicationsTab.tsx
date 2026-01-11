@@ -233,6 +233,8 @@ export function CommunicationsTab() {
       subject: email.subject ? `Fwd: ${email.subject}` : 'Fwd:',
       contactId: email.contact_id,
       ticketId: email.ticket_id,
+      forwardEmailId: email.id, // Pass the email ID to load attachments
+      originalBody: email.body_html || email.body_text,
     });
     setActiveSubTab('compose');
   };

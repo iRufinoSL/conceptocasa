@@ -1163,8 +1163,8 @@ export function EmailInbox({ onComposeReply, onComposeForward }: EmailInboxProps
       {/* Email Detail Dialog - Normal or Fullscreen */}
       {!isFullscreen ? (
         <Dialog open={!!selectedEmail} onOpenChange={() => setSelectedEmail(null)}>
-          <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto flex flex-col">
-            <DialogHeader>
+          <DialogContent className="max-w-3xl max-h-[85vh] flex flex-col overflow-hidden">
+            <DialogHeader className="flex-shrink-0">
               <DialogTitle className="flex items-center gap-2 pr-8">
                 <Mail className="h-5 w-5 flex-shrink-0" />
                 <span className="truncate">{selectedEmail?.subject || '(Sin asunto)'}</span>
@@ -1180,7 +1180,8 @@ export function EmailInbox({ onComposeReply, onComposeForward }: EmailInboxProps
             </DialogHeader>
             
             {selectedEmail && (
-              <div className="flex-1 min-h-0 flex flex-col">
+              <ScrollArea className="flex-1 min-h-0 overflow-y-auto">
+                <div className="px-6 pb-6">
                 {/* Email metadata */}
                 <div className="border-b pb-4 mb-4 space-y-2">
                   <div className="flex items-center justify-between flex-wrap gap-2">
@@ -1256,7 +1257,7 @@ export function EmailInbox({ onComposeReply, onComposeForward }: EmailInboxProps
                 </div>
 
                 {/* Email body - Preview */}
-                <ScrollArea className="flex-1 min-h-0 -mx-6 px-6">
+                <div className="py-4">
                   {selectedEmail.body_html || selectedEmail.body_text ? (
                     <div 
                       className="prose prose-sm max-w-none dark:prose-invert"
@@ -1288,7 +1289,7 @@ export function EmailInbox({ onComposeReply, onComposeForward }: EmailInboxProps
                       </div>
                     </div>
                   )}
-                </ScrollArea>
+                </div>
 
                 {/* Actions */}
                 <div className="border-t pt-4 mt-4 flex flex-wrap gap-2">
@@ -1397,7 +1398,8 @@ export function EmailInbox({ onComposeReply, onComposeForward }: EmailInboxProps
                     </Button>
                   )}
                 </div>
-              </div>
+                </div>
+              </ScrollArea>
             )}
           </DialogContent>
         </Dialog>

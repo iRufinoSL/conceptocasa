@@ -29,6 +29,12 @@ export interface BudgetTask {
     name: string;
     code: string;
   } | null;
+  workAreas?: {
+    id: string;
+    name: string;
+    level: string;
+    work_area: string;
+  }[];
   contacts?: {
     id: string;
     contact_id: string;
@@ -83,32 +89,59 @@ export function BudgetAgendaTab({ budgetId, isAdmin }: BudgetAgendaTabProps) {
     setIsLoading(true);
     try {
       // Fetch resources with type 'Tarea' for this budget
-      const { data: tasksData, error: tasksError } = await supabase
-        .from('budget_activity_resources')
-        .select(`
-          id,
-          budget_id,
-          activity_id,
-          name,
-          description,
-          start_date,
-          duration_days,
-          task_status,
-          created_at,
-          updated_at
-        `)
-        .eq('budget_id', budgetId)
-        .eq('resource_type', 'Tarea')
-        .order('start_date', { ascending: true, nullsFirst: false });
+      const [tasksRes, workAreasRes, workAreaLinksRes] = await Promise.all([
+        supabase
+          .from('budget_activity_resources')
+          .select(`
+            id,
+            budget_id,
+            activity_id,
+            name,
+            description,
+            start_date,
+            duration_days,
+            task_status,
+            created_at,
+            updated_at
+          `)
+          .eq('budget_id', budgetId)
+          .eq('resource_type', 'Tarea')
+          .order('start_date', { ascending: true, nullsFirst: false }),
+        supabase
+          .from('budget_work_areas')
+          .select('id, name, level, work_area')
+          .eq('budget_id', budgetId),
+        supabase
+          .from('budget_work_area_activities')
+          .select('work_area_id, activity_id')
+      ]);
 
-      if (tasksError) throw tasksError;
+      if (tasksRes.error) throw tasksRes.error;
+
+      const tasksData = tasksRes.data || [];
+      const workAreasData = workAreasRes.data || [];
+      const workAreaLinksData = workAreaLinksRes.data || [];
+
+      // Build work area map
+      const workAreaMap = new Map(workAreasData.map(wa => [wa.id, wa]));
+      
+      // Build activity to work areas map
+      const activityWorkAreasMap = new Map<string, string[]>();
+      workAreaLinksData.forEach(link => {
+        if (!activityWorkAreasMap.has(link.activity_id)) {
+          activityWorkAreasMap.set(link.activity_id, []);
+        }
+        activityWorkAreasMap.get(link.activity_id)!.push(link.work_area_id);
+      });
 
       // Get additional data for each task (activity, contacts, images)
       const tasksWithRelations: BudgetTask[] = [];
 
-      for (const task of tasksData || []) {
+      for (const task of tasksData) {
         // Fetch activity info if linked
         let activity = null;
+        let workAreas: { id: string; name: string; level: string; work_area: string }[] = [];
+        
         if (task.activity_id) {
           const { data: activityData } = await supabase
             .from('budget_activities')
@@ -116,6 +149,12 @@ export function BudgetAgendaTab({ budgetId, isAdmin }: BudgetAgendaTabProps) {
             .eq('id', task.activity_id)
             .single();
           activity = activityData;
+          
+          // Get work areas for this activity
+          const workAreaIds = activityWorkAreasMap.get(task.activity_id) || [];
+          workAreas = workAreaIds
+            .map(id => workAreaMap.get(id))
+            .filter((wa): wa is { id: string; name: string; level: string; work_area: string } => wa !== undefined);
         }
 
         // Fetch contacts
@@ -139,6 +178,7 @@ export function BudgetAgendaTab({ budgetId, isAdmin }: BudgetAgendaTabProps) {
           duration_days: task.duration_days || 1,
           task_status: (task.task_status as 'pendiente' | 'realizada') || 'pendiente',
           activity,
+          workAreas,
           contacts: contactsData || [],
           images: imagesData || [],
         });

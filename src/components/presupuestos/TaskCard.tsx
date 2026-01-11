@@ -8,7 +8,7 @@ import {
   DropdownMenuItem, 
   DropdownMenuTrigger 
 } from '@/components/ui/dropdown-menu';
-import { MoreVertical, Pencil, Trash2, Calendar, Clock, Users, Image } from 'lucide-react';
+import { MoreVertical, Pencil, Trash2, Calendar, Clock, Users, Image, MapPin } from 'lucide-react';
 import { format, addDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import type { BudgetTask } from './BudgetAgendaTab';
@@ -55,6 +55,12 @@ export function TaskCard({ task, compact, onEdit, onDelete, onToggleStatus, isAd
                 {task.activity.code} - {task.activity.name}
               </p>
             )}
+            {task.workAreas && task.workAreas.length > 0 && (
+              <p className="text-[10px] text-muted-foreground/70 truncate flex items-center gap-0.5">
+                <MapPin className="h-2 w-2" />
+                {task.workAreas.map(wa => wa.name).join(', ')}
+              </p>
+            )}
           </div>
         </div>
       </div>
@@ -84,6 +90,12 @@ export function TaskCard({ task, compact, onEdit, onDelete, onToggleStatus, isAd
               {task.activity && (
                 <p className="text-xs text-muted-foreground mt-0.5">
                   {task.activity.code} - {task.activity.name}
+                </p>
+              )}
+              {task.workAreas && task.workAreas.length > 0 && (
+                <p className="text-xs text-muted-foreground/70 mt-0.5 flex items-center gap-1">
+                  <MapPin className="h-3 w-3" />
+                  {task.workAreas.map(wa => wa.name).join(', ')}
                 </p>
               )}
               {task.description && (

@@ -1,4 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { format, addDays } from 'date-fns';
+import { es } from 'date-fns/locale';
 import { TaskCard } from './TaskCard';
 import type { BudgetTask } from './BudgetAgendaTab';
 
@@ -27,6 +30,13 @@ export function TaskListView({ tasks, onEdit, onDelete, onToggleStatus, isAdmin 
     acc[activityKey].tasks.push(task);
     return acc;
   }, {} as Record<string, { name: string; tasks: BudgetTask[] }>);
+
+  // Calculate end date for display
+  const getEndDateDisplay = (task: BudgetTask): string | null => {
+    if (!task.start_date) return null;
+    const endDate = addDays(new Date(task.start_date), (task.duration_days || 1) - 1);
+    return format(endDate, 'd MMM yyyy', { locale: es });
+  };
 
   if (tasks.length === 0) {
     return (

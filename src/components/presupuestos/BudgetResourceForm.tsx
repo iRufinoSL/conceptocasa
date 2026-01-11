@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { NumericInput } from '@/components/ui/numeric-input';
+import { addDays, format } from 'date-fns';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Check, ChevronsUpDown } from 'lucide-react';
@@ -76,7 +77,18 @@ export function BudgetResourceForm({
     manual_units: null as number | null,
     related_units: null as number | null,
     activity_id: '',
+    start_date: '',
+    duration_days: 1,
+    task_status: 'pendiente' as 'pendiente' | 'realizada',
   });
+
+  // Calculate end date for tasks
+  const endDate = useMemo(() => {
+    if (formData.resource_type === 'Tarea' && formData.start_date) {
+      return format(addDays(new Date(formData.start_date), formData.duration_days - 1), 'yyyy-MM-dd');
+    }
+    return '';
+  }, [formData.resource_type, formData.start_date, formData.duration_days]);
   
   // Fetch related_units when activity changes
   const handleActivityChange = useCallback(async (activityId: string) => {
@@ -93,7 +105,13 @@ export function BudgetResourceForm({
   useEffect(() => {
     const initFormData = async () => {
       if (resource) {
-        // First load the existing data
+        // First load the existing data including task-specific fields
+        const resourceWithTaskFields = resource as BudgetResource & { 
+          start_date?: string | null; 
+          duration_days?: number | null; 
+          task_status?: string | null;
+        };
+        
         setFormData({
           name: resource.name,
           external_unit_cost: resource.external_unit_cost || 0,
@@ -104,6 +122,9 @@ export function BudgetResourceForm({
           manual_units: resource.manual_units,
           related_units: resource.related_units,
           activity_id: resource.activity_id || '',
+          start_date: resourceWithTaskFields.start_date || '',
+          duration_days: resourceWithTaskFields.duration_days || 1,
+          task_status: (resourceWithTaskFields.task_status as 'pendiente' | 'realizada') || 'pendiente',
         });
         
         // If resource has an activity, recalculate related_units to ensure it's up-to-date
@@ -127,6 +148,9 @@ export function BudgetResourceForm({
           manual_units: null,
           related_units: null,
           activity_id: preselectedActivityId || '',
+          start_date: '',
+          duration_days: 1,
+          task_status: 'pendiente',
         });
         
         // If preselected activity, fetch related_units
@@ -214,6 +238,9 @@ export function BudgetResourceForm({
         manual_units: formData.manual_units,
         related_units: formData.related_units,
         activity_id: activityId,
+        start_date: formData.resource_type === 'Tarea' ? (formData.start_date || null) : null,
+        duration_days: formData.resource_type === 'Tarea' ? formData.duration_days : null,
+        task_status: formData.resource_type === 'Tarea' ? formData.task_status : null,
       };
 
       if (resource) {
@@ -315,6 +342,57 @@ export function BudgetResourceForm({
               </Select>
             </div>
           </div>
+
+          {/* Task-specific fields: Show only when resource type is Tarea */}
+          {formData.resource_type === 'Tarea' && (
+            <div className="grid grid-cols-4 gap-4 p-4 bg-muted/50 rounded-lg border border-dashed">
+              <div className="col-span-4 text-sm font-medium text-muted-foreground">
+                Campos específicos de Tarea
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="start_date">Fecha inicio</Label>
+                <Input
+                  id="start_date"
+                  type="date"
+                  value={formData.start_date}
+                  onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="duration_days">Duración (días)</Label>
+                <Input
+                  id="duration_days"
+                  type="number"
+                  min="1"
+                  value={formData.duration_days}
+                  onChange={(e) => setFormData({ ...formData, duration_days: parseInt(e.target.value) || 1 })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Fecha fin (calculada)</Label>
+                <Input
+                  value={endDate || '-'}
+                  disabled
+                  className="bg-muted"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="task_status">Estado</Label>
+                <Select
+                  value={formData.task_status}
+                  onValueChange={(value) => setFormData({ ...formData, task_status: value as 'pendiente' | 'realizada' })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="pendiente">Pendiente</SelectItem>
+                    <SelectItem value="realizada">Realizada</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          )}
 
           {/* Row 2: Safety Margin */}
           <div className="grid grid-cols-3 gap-4">

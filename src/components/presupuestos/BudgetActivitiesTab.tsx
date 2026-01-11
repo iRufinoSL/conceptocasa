@@ -14,7 +14,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Plus, Search, Upload, Pencil, Trash2, MoreHorizontal, FileUp, File, X, Download, ChevronRight, ChevronDown, ChevronLeft, List, Layers, Copy, Package, Wrench, Truck, Briefcase, Eye, ArrowUpDown, ArrowUp, ArrowDown, FileDown, Clock, MapPin, Settings2 } from 'lucide-react';
+import { Plus, Search, Upload, Pencil, Trash2, MoreHorizontal, FileUp, File, X, Download, ChevronRight, ChevronDown, ChevronLeft, List, Layers, Copy, Package, Wrench, Truck, Briefcase, CheckSquare, Eye, ArrowUpDown, ArrowUp, ArrowDown, FileDown, Clock, MapPin, Settings2 } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { toast } from 'sonner';
@@ -2871,6 +2871,7 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
                             : resource.resource_type === 'Mano de obra' ? <Wrench className="h-3 w-3" />
                             : resource.resource_type === 'Alquiler' ? <Truck className="h-3 w-3" />
                             : resource.resource_type === 'Servicio' ? <Briefcase className="h-3 w-3" />
+                            : resource.resource_type === 'Tarea' ? <CheckSquare className="h-3 w-3" />
                             : null;
                           
                           return (
@@ -2886,6 +2887,7 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
                                       { value: 'Mano de obra', label: 'Mano de obra' },
                                       { value: 'Alquiler', label: 'Alquiler' },
                                       { value: 'Servicio', label: 'Servicio' },
+                                      { value: 'Tarea', label: 'Tarea' },
                                     ]}
                                     displayValue={
                                       resource.resource_type ? (
@@ -3082,15 +3084,16 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
                 {/* Resource name and type */}
                 <div className="flex items-center justify-between">
                   <h3 className="font-semibold text-lg">{viewingResource.name}</h3>
-                  {viewingResource.resource_type && (
-                    <Badge variant="outline" className="flex items-center gap-1">
-                      {viewingResource.resource_type === 'Producto' && <Package className="h-3 w-3" />}
-                      {viewingResource.resource_type === 'Mano de obra' && <Wrench className="h-3 w-3" />}
-                      {viewingResource.resource_type === 'Alquiler' && <Truck className="h-3 w-3" />}
-                      {viewingResource.resource_type === 'Servicio' && <Briefcase className="h-3 w-3" />}
-                      {viewingResource.resource_type}
-                    </Badge>
-                  )}
+                    {viewingResource.resource_type && (
+                      <Badge variant="outline" className="flex items-center gap-1">
+                        {viewingResource.resource_type === 'Producto' && <Package className="h-3 w-3" />}
+                        {viewingResource.resource_type === 'Mano de obra' && <Wrench className="h-3 w-3" />}
+                        {viewingResource.resource_type === 'Alquiler' && <Truck className="h-3 w-3" />}
+                        {viewingResource.resource_type === 'Servicio' && <Briefcase className="h-3 w-3" />}
+                        {viewingResource.resource_type === 'Tarea' && <CheckSquare className="h-3 w-3" />}
+                        {viewingResource.resource_type}
+                      </Badge>
+                    )}
                 </div>
                 
                 {/* Cost breakdown */}

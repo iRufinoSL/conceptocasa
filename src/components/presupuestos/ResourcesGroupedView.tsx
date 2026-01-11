@@ -5,7 +5,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { formatCurrency, formatNumber, formatPercent } from '@/lib/format-utils';
-import { Pencil, Trash2, Copy, Package, Wrench, Truck, Briefcase } from 'lucide-react';
+import { Pencil, Trash2, Copy, Package, Wrench, Truck, Briefcase, CheckSquare } from 'lucide-react';
 import { ResourceInlineEdit } from './ResourceInlineEdit';
 import { cn } from '@/lib/utils';
 import type { BudgetPermissions } from '@/hooks/usePermissions';
@@ -84,6 +84,7 @@ const resourceTypeIcons: Record<string, React.ReactNode> = {
   'Mano de obra': <Wrench className="h-4 w-4" />,
   'Alquiler': <Truck className="h-4 w-4" />,
   'Servicio': <Briefcase className="h-4 w-4" />,
+  'Tarea': <CheckSquare className="h-4 w-4" />,
 };
 
 const resourceTypeVariants: Record<string, string> = {
@@ -91,9 +92,10 @@ const resourceTypeVariants: Record<string, string> = {
   'Mano de obra': 'secondary',
   'Alquiler': 'outline',
   'Servicio': 'destructive',
+  'Tarea': 'default',
 };
 
-const RESOURCE_TYPES = ['Producto', 'Mano de obra', 'Alquiler', 'Servicio'];
+const RESOURCE_TYPES = ['Producto', 'Mano de obra', 'Alquiler', 'Servicio', 'Tarea'];
 const UNITS = ['m2', 'm3', 'ml', 'ud', 'h', 'día', 'mes', 'kg', 'l', 'km'];
 
 export function ResourcesGroupedView({

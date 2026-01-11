@@ -98,7 +98,12 @@ export function useTabVisibility() {
         data.forEach((item) => {
           const role = item.role as AppRole;
           if (role === 'administrador' || role === 'colaborador' || role === 'cliente') {
-            newSettings[role] = item.visible_tabs;
+            // If the settings were created before we introduced new tabs (e.g. "agenda"),
+            // ensure they're added by default so they show up.
+            const visibleTabs = Array.isArray(item.visible_tabs) ? item.visible_tabs : [];
+            const withAgenda = visibleTabs.includes('agenda') ? visibleTabs : [...visibleTabs, 'agenda'];
+            newSettings[role] = withAgenda;
+
             if (item.advanced_settings && typeof item.advanced_settings === 'object') {
               newAdvanced[role] = item.advanced_settings as TabAdvancedSettings;
             }

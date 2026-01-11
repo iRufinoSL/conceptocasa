@@ -4,13 +4,15 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Calendar, List, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, Calendar, List, ChevronLeft, ChevronRight, FileText } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, addMonths, subMonths, addWeeks, subWeeks, addDays, subDays, eachDayOfInterval, isSameMonth, isSameDay, isToday } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { TaskForm } from './TaskForm';
 import { TaskCard } from './TaskCard';
 import { TaskListView } from './TaskListView';
+import { exportTasksPdf } from './TasksPdfExport';
+import { useCompanySettings } from '@/hooks/useCompanySettings';
 
 // A Task is a resource with resource_type = 'Tarea'
 export interface BudgetTask {
@@ -63,6 +65,7 @@ type FilterMode = 'all' | 'pendiente' | 'realizada';
 export function BudgetAgendaTab({ budgetId, isAdmin }: BudgetAgendaTabProps) {
   const [tasks, setTasks] = useState<BudgetTask[]>([]);
   const [activities, setActivities] = useState<{ id: string; name: string; code: string; phase_code?: string | null }[]>([]);
+  const [budgetName, setBudgetName] = useState<string>('');
   const [isLoading, setIsLoading] = useState(true);
   const [viewMode, setViewMode] = useState<ViewMode>('month');
   const [filterMode, setFilterMode] = useState<FilterMode>('all');
@@ -70,6 +73,20 @@ export function BudgetAgendaTab({ budgetId, isAdmin }: BudgetAgendaTabProps) {
   const [showTaskForm, setShowTaskForm] = useState(false);
   const [editingTask, setEditingTask] = useState<BudgetTask | null>(null);
   const [selectedDay, setSelectedDay] = useState<Date | null>(null);
+  const { settings: companySettings } = useCompanySettings();
+
+  // Fetch budget name
+  const fetchBudgetName = useCallback(async () => {
+    const { data } = await supabase
+      .from('presupuestos')
+      .select('nombre')
+      .eq('id', budgetId)
+      .single();
+    
+    if (data) {
+      setBudgetName(data.nombre);
+    }
+  }, [budgetId]);
 
   const fetchActivities = useCallback(async () => {
     const { data, error } = await supabase
@@ -212,7 +229,8 @@ export function BudgetAgendaTab({ budgetId, isAdmin }: BudgetAgendaTabProps) {
   useEffect(() => {
     fetchActivities();
     fetchTasks();
-  }, [fetchActivities, fetchTasks]);
+    fetchBudgetName();
+  }, [fetchActivities, fetchTasks, fetchBudgetName]);
 
   // Calculate end date from start date and duration
   const getEndDate = (startDate: string, durationDays: number): Date => {
@@ -507,12 +525,24 @@ export function BudgetAgendaTab({ budgetId, isAdmin }: BudgetAgendaTabProps) {
             </Badge>
           </div>
         </div>
-        {isAdmin && (
-          <Button onClick={handleAddTask} className="flex items-center gap-2">
-            <Plus className="h-4 w-4" />
-            Nueva Tarea
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          {tasks.length > 0 && (
+            <Button 
+              variant="outline" 
+              onClick={() => exportTasksPdf(filteredTasks, budgetName || 'Presupuesto', companySettings)}
+              className="flex items-center gap-2"
+            >
+              <FileText className="h-4 w-4" />
+              Informe PDF
+            </Button>
+          )}
+          {isAdmin && (
+            <Button onClick={handleAddTask} className="flex items-center gap-2">
+              <Plus className="h-4 w-4" />
+              Nueva Tarea
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* View Mode Tabs */}

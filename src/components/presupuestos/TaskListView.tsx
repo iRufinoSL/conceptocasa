@@ -145,7 +145,7 @@ export function TaskListView({ tasks, onEdit, onDelete, onToggleStatus, isAdmin 
                     <TableCell>
                       {task.activity ? (
                         <span className="text-sm">
-                          {task.activity.code} - {task.activity.name}
+                          {task.activity.code}.-{task.activity.name}
                         </span>
                       ) : (
                         <span className="text-sm text-muted-foreground">Sin actividad</span>

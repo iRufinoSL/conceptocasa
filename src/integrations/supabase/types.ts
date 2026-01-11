@@ -365,6 +365,7 @@ export type Database = {
           budget_id: string
           created_at: string | null
           description: string | null
+          duration_days: number | null
           external_unit_cost: number | null
           id: string
           manual_units: number | null
@@ -373,6 +374,8 @@ export type Database = {
           resource_type: string | null
           safety_margin_percent: number | null
           sales_margin_percent: number | null
+          start_date: string | null
+          task_status: string | null
           unit: string | null
           updated_at: string | null
         }
@@ -381,6 +384,7 @@ export type Database = {
           budget_id: string
           created_at?: string | null
           description?: string | null
+          duration_days?: number | null
           external_unit_cost?: number | null
           id?: string
           manual_units?: number | null
@@ -389,6 +393,8 @@ export type Database = {
           resource_type?: string | null
           safety_margin_percent?: number | null
           sales_margin_percent?: number | null
+          start_date?: string | null
+          task_status?: string | null
           unit?: string | null
           updated_at?: string | null
         }
@@ -397,6 +403,7 @@ export type Database = {
           budget_id?: string
           created_at?: string | null
           description?: string | null
+          duration_days?: number | null
           external_unit_cost?: number | null
           id?: string
           manual_units?: number | null
@@ -405,6 +412,8 @@ export type Database = {
           resource_type?: string | null
           safety_margin_percent?: number | null
           sales_margin_percent?: number | null
+          start_date?: string | null
+          task_status?: string | null
           unit?: string | null
           updated_at?: string | null
         }
@@ -746,6 +755,90 @@ export type Database = {
             columns: ["budget_id"]
             isOneToOne: false
             referencedRelation: "presupuestos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      budget_resource_contacts: {
+        Row: {
+          contact_id: string
+          created_at: string
+          id: string
+          resource_id: string
+        }
+        Insert: {
+          contact_id: string
+          created_at?: string
+          id?: string
+          resource_id: string
+        }
+        Update: {
+          contact_id?: string
+          created_at?: string
+          id?: string
+          resource_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "budget_resource_contacts_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budget_resource_contacts_resource_id_fkey"
+            columns: ["resource_id"]
+            isOneToOne: false
+            referencedRelation: "budget_activity_resources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      budget_resource_images: {
+        Row: {
+          created_at: string
+          file_name: string
+          file_path: string
+          file_size: number | null
+          file_type: string | null
+          id: string
+          resource_id: string
+          uploaded_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          file_name: string
+          file_path: string
+          file_size?: number | null
+          file_type?: string | null
+          id?: string
+          resource_id: string
+          uploaded_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          file_name?: string
+          file_path?: string
+          file_size?: number | null
+          file_type?: string | null
+          id?: string
+          resource_id?: string
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "budget_resource_images_resource_id_fkey"
+            columns: ["resource_id"]
+            isOneToOne: false
+            referencedRelation: "budget_activity_resources"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budget_resource_images_uploaded_by_fkey"
+            columns: ["uploaded_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]

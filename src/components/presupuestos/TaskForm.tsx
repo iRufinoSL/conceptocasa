@@ -20,7 +20,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { X, Upload, Loader2, Image as ImageIcon } from 'lucide-react';
 import { toast } from 'sonner';
-import { useSignedUrl, extractFilePath } from '@/hooks/useSignedUrl';
+import { useSignedUrl } from '@/hooks/useSignedUrl';
 import type { BudgetTask } from './BudgetAgendaTab';
 
 interface TaskFormProps {
@@ -28,8 +28,8 @@ interface TaskFormProps {
   activities: { id: string; name: string; code: string }[];
   task: BudgetTask | null;
   open: boolean;
-  onClose: () => void;
-  onSaved: () => void;
+  onOpenChange: (open: boolean) => void;
+  onSuccess: () => void;
 }
 
 interface Contact {
@@ -38,13 +38,13 @@ interface Contact {
   surname: string | null;
 }
 
-export function TaskForm({ budgetId, activities, task, open, onClose, onSaved }: TaskFormProps) {
+export function TaskForm({ budgetId, activities, task, open, onOpenChange, onSuccess }: TaskFormProps) {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [activityId, setActivityId] = useState('');
   const [startDate, setStartDate] = useState('');
   const [durationDays, setDurationDays] = useState(1);
-  const [status, setStatus] = useState<'pendiente' | 'realizada'>('pendiente');
+  const [taskStatus, setTaskStatus] = useState<'pendiente' | 'realizada'>('pendiente');
   const [selectedContacts, setSelectedContacts] = useState<string[]>([]);
   const [availableContacts, setAvailableContacts] = useState<Contact[]>([]);
   const [existingImages, setExistingImages] = useState<{ id: string; file_name: string; file_path: string }[]>([]);
@@ -59,10 +59,10 @@ export function TaskForm({ budgetId, activities, task, open, onClose, onSaved }:
       if (task) {
         setName(task.name);
         setDescription(task.description || '');
-        setActivityId(task.activity_id);
+        setActivityId(task.activity_id || '');
         setStartDate(task.start_date || '');
         setDurationDays(task.duration_days || 1);
-        setStatus(task.status);
+        setTaskStatus(task.task_status);
         setSelectedContacts(task.contacts?.map(c => c.contact_id) || []);
         setExistingImages(task.images || []);
       } else {
@@ -77,7 +77,7 @@ export function TaskForm({ budgetId, activities, task, open, onClose, onSaved }:
     setActivityId('');
     setStartDate('');
     setDurationDays(1);
-    setStatus('pendiente');
+    setTaskStatus('pendiente');
     setSelectedContacts([]);
     setExistingImages([]);
     setNewImages([]);
@@ -124,6 +124,10 @@ export function TaskForm({ budgetId, activities, task, open, onClose, onSaved }:
     );
   };
 
+  const handleClose = () => {
+    onOpenChange(false);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -132,66 +136,63 @@ export function TaskForm({ budgetId, activities, task, open, onClose, onSaved }:
       return;
     }
 
-    if (!activityId) {
-      toast.error('Selecciona una actividad');
-      return;
-    }
-
     setIsSaving(true);
     try {
-      let taskId = task?.id;
+      let resourceId = task?.id;
 
-      // Create or update task
+      // Create or update task as a resource with type 'Tarea'
       if (task) {
         const { error } = await supabase
-          .from('budget_tasks')
+          .from('budget_activity_resources')
           .update({
             name: name.trim(),
             description: description.trim() || null,
-            activity_id: activityId,
+            activity_id: activityId || null,
             start_date: startDate || null,
             duration_days: durationDays,
-            status
+            task_status: taskStatus
           })
           .eq('id', task.id);
 
         if (error) throw error;
       } else {
         const { data, error } = await supabase
-          .from('budget_tasks')
+          .from('budget_activity_resources')
           .insert({
+            budget_id: budgetId,
             name: name.trim(),
             description: description.trim() || null,
-            activity_id: activityId,
+            activity_id: activityId || null,
+            resource_type: 'Tarea',
             start_date: startDate || null,
             duration_days: durationDays,
-            status
+            task_status: taskStatus
           })
           .select('id')
           .single();
 
         if (error) throw error;
-        taskId = data.id;
+        resourceId = data.id;
       }
 
-      if (!taskId) throw new Error('No task ID');
+      if (!resourceId) throw new Error('No resource ID');
 
       // Handle contacts - delete existing and re-add
       if (task) {
         await supabase
-          .from('budget_task_contacts')
+          .from('budget_resource_contacts')
           .delete()
-          .eq('task_id', taskId);
+          .eq('resource_id', resourceId);
       }
 
       if (selectedContacts.length > 0) {
         const contactInserts = selectedContacts.map(contactId => ({
-          task_id: taskId,
+          resource_id: resourceId,
           contact_id: contactId
         }));
 
         const { error: contactError } = await supabase
-          .from('budget_task_contacts')
+          .from('budget_resource_contacts')
           .insert(contactInserts);
 
         if (contactError) throw contactError;
@@ -201,18 +202,18 @@ export function TaskForm({ budgetId, activities, task, open, onClose, onSaved }:
       for (const imageId of imagesToDelete) {
         const imageToDelete = task?.images?.find(img => img.id === imageId);
         if (imageToDelete) {
-          await supabase.storage.from('task-images').remove([imageToDelete.file_path]);
-          await supabase.from('budget_task_images').delete().eq('id', imageId);
+          await supabase.storage.from('resource-images').remove([imageToDelete.file_path]);
+          await supabase.from('budget_resource_images').delete().eq('id', imageId);
         }
       }
 
       // Upload new images
       for (const file of newImages) {
         const fileExt = file.name.split('.').pop();
-        const fileName = `${taskId}/${Date.now()}-${Math.random().toString(36).substr(2, 9)}.${fileExt}`;
+        const fileName = `${resourceId}/${Date.now()}-${Math.random().toString(36).substr(2, 9)}.${fileExt}`;
 
         const { error: uploadError } = await supabase.storage
-          .from('task-images')
+          .from('resource-images')
           .upload(fileName, file);
 
         if (uploadError) {
@@ -220,8 +221,8 @@ export function TaskForm({ budgetId, activities, task, open, onClose, onSaved }:
           continue;
         }
 
-        await supabase.from('budget_task_images').insert({
-          task_id: taskId,
+        await supabase.from('budget_resource_images').insert({
+          resource_id: resourceId,
           file_name: file.name,
           file_path: fileName,
           file_type: file.type,
@@ -230,7 +231,7 @@ export function TaskForm({ budgetId, activities, task, open, onClose, onSaved }:
       }
 
       toast.success(task ? 'Tarea actualizada' : 'Tarea creada');
-      onSaved();
+      onSuccess();
     } catch (error) {
       console.error('Error saving task:', error);
       toast.error('Error al guardar la tarea');
@@ -240,7 +241,7 @@ export function TaskForm({ budgetId, activities, task, open, onClose, onSaved }:
   };
 
   return (
-    <Dialog open={open} onOpenChange={onClose}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{task ? 'Editar Tarea' : 'Nueva Tarea'}</DialogTitle>
@@ -259,12 +260,13 @@ export function TaskForm({ budgetId, activities, task, open, onClose, onSaved }:
             </div>
 
             <div className="space-y-2 md:col-span-2">
-              <Label htmlFor="activity">Actividad *</Label>
+              <Label htmlFor="activity">Actividad</Label>
               <Select value={activityId} onValueChange={setActivityId}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Selecciona una actividad" />
+                  <SelectValue placeholder="Selecciona una actividad (opcional)" />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="">Sin actividad</SelectItem>
                   {activities.map(activity => (
                     <SelectItem key={activity.id} value={activity.id}>
                       {activity.code} - {activity.name}
@@ -308,7 +310,7 @@ export function TaskForm({ budgetId, activities, task, open, onClose, onSaved }:
 
             <div className="space-y-2">
               <Label htmlFor="status">Estado</Label>
-              <Select value={status} onValueChange={(v) => setStatus(v as 'pendiente' | 'realizada')}>
+              <Select value={taskStatus} onValueChange={(v) => setTaskStatus(v as 'pendiente' | 'realizada')}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -402,7 +404,7 @@ export function TaskForm({ budgetId, activities, task, open, onClose, onSaved }:
           </div>
 
           <div className="flex justify-end gap-2 pt-4">
-            <Button type="button" variant="outline" onClick={onClose}>
+            <Button type="button" variant="outline" onClick={handleClose}>
               Cancelar
             </Button>
             <Button type="submit" disabled={isSaving}>
@@ -423,7 +425,7 @@ function TaskImagePreview({
   image: { id: string; file_name: string; file_path: string }; 
   onRemove: () => void;
 }) {
-  const { signedUrl, loading } = useSignedUrl(image.file_path, { bucket: 'task-images' });
+  const { signedUrl, loading } = useSignedUrl(image.file_path, { bucket: 'resource-images' });
 
   return (
     <div className="relative aspect-square rounded-lg overflow-hidden bg-muted">

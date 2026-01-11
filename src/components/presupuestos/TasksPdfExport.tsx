@@ -27,7 +27,30 @@ export async function exportTasksPdf(
   const companyEmail = companySettings.email || '';
   const companyPhone = companySettings.phone || '';
   const companyWeb = companySettings.website || '';
+  const companyLogo = companySettings.logo_signed_url || '';
   const companyInitials = companyName.substring(0, 2).toUpperCase();
+
+  // Helper to load image as base64
+  const loadImageAsBase64 = async (url: string): Promise<string | null> => {
+    try {
+      const response = await fetch(url);
+      const blob = await response.blob();
+      return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.onerror = () => resolve(null);
+        reader.readAsDataURL(blob);
+      });
+    } catch {
+      return null;
+    }
+  };
+
+  // Load company logo if available
+  let logoBase64: string | null = null;
+  if (companyLogo) {
+    logoBase64 = await loadImageAsBase64(companyLogo);
+  }
 
   // Group tasks by Level/WorkArea
   const tasksByLevelWorkArea = tasks.reduce((acc, task) => {
@@ -79,13 +102,29 @@ export async function exportTasksPdf(
 
   // Draw header
   const drawHeader = () => {
-    // Company branding box
-    doc.setFillColor(37, 99, 235);
-    doc.roundedRect(14, 10, 25, 25, 3, 3, 'F');
-    doc.setTextColor(255);
-    doc.setFontSize(16);
-    doc.setFont('helvetica', 'bold');
-    doc.text(companyInitials, 26.5, 26, { align: 'center' });
+    // Company branding - use logo if available, otherwise initials
+    if (logoBase64) {
+      try {
+        doc.addImage(logoBase64, 'PNG', 14, 10, 25, 25);
+      } catch {
+        // Fallback to initials if image fails
+        doc.setFillColor(37, 99, 235);
+        doc.roundedRect(14, 10, 25, 25, 3, 3, 'F');
+        doc.setTextColor(255);
+        doc.setFontSize(16);
+        doc.setFont('helvetica', 'bold');
+        doc.text(companyInitials, 26.5, 26, { align: 'center' });
+        doc.setTextColor(0);
+      }
+    } else {
+      doc.setFillColor(37, 99, 235);
+      doc.roundedRect(14, 10, 25, 25, 3, 3, 'F');
+      doc.setTextColor(255);
+      doc.setFontSize(16);
+      doc.setFont('helvetica', 'bold');
+      doc.text(companyInitials, 26.5, 26, { align: 'center' });
+      doc.setTextColor(0);
+    }
     doc.setTextColor(0);
     
     // Company name

@@ -9,8 +9,9 @@ import { ResourceCard } from '@/components/ResourceCard';
 import { ResourceList } from '@/components/ResourceList';
 import { ResourceForm } from '@/components/ResourceForm';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
+import { WebSearchDialog } from '@/components/recursos/WebSearchDialog';
 import { Button } from '@/components/ui/button';
-import { Plus, FolderOpen, LayoutGrid, List, ArrowLeft, Package } from 'lucide-react';
+import { Plus, FolderOpen, LayoutGrid, List, ArrowLeft, Package, Globe } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { AppNavDropdown } from '@/components/AppNavDropdown';
 import { BackupButton } from '@/components/BackupButton';
@@ -43,6 +44,7 @@ export default function Recursos() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [resourceToDelete, setResourceToDelete] = useState<ExternalResource | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('cards');
+  const [webSearchOpen, setWebSearchOpen] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -116,6 +118,34 @@ export default function Recursos() {
     });
   };
 
+  const handleWebSearchCreate = (data: {
+    name: string;
+    website: string;
+    supplierName: string;
+    supplierPhone: string;
+    supplierEmail: string;
+    unitCost: number | null;
+  }) => {
+    // Open form with pre-filled data from web search
+    setEditingResource({
+      id: '',
+      name: data.name,
+      description: `Proveedor: ${data.supplierName}${data.supplierPhone ? ` | Tel: ${data.supplierPhone}` : ''}${data.supplierEmail ? ` | Email: ${data.supplierEmail}` : ''}`,
+      resourceType: 'Material' as const,
+      unitCost: data.unitCost || 0,
+      unitMeasure: 'ud' as const,
+      website: data.website,
+      imageUrl: '',
+      registrationDate: new Date(),
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      supplierId: undefined,
+      relatedResources: [],
+    });
+    setFormOpen(true);
+  };
+
+
   if (authLoading || rolesLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -152,6 +182,10 @@ export default function Recursos() {
             </p>
           </div>
           <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={() => setWebSearchOpen(true)} className="gap-2">
+              <Globe className="h-4 w-4" />
+              <span className="hidden sm:inline">Rastrear Web</span>
+            </Button>
             <BackupButton module="resources" variant="outline" />
             <Button variant="accent" onClick={handleAddNew} className="gap-2">
               <Plus className="h-4 w-4" />
@@ -261,6 +295,13 @@ export default function Recursos() {
         onOpenChange={setDeleteDialogOpen}
         onConfirm={handleDeleteConfirm}
         resourceName={resourceToDelete?.name}
+      />
+
+      {/* Web Search Dialog */}
+      <WebSearchDialog
+        open={webSearchOpen}
+        onOpenChange={setWebSearchOpen}
+        onCreateResource={handleWebSearchCreate}
       />
     </div>
   );

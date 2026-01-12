@@ -14,6 +14,8 @@ import { useNotifications, Notification } from "@/hooks/useNotifications";
 import { formatDistanceToNow } from "date-fns";
 import { es } from "date-fns/locale";
 import { cn } from "@/lib/utils";
+import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
 
 const getNotificationIcon = (type: Notification["type"]) => {
   switch (type) {
@@ -43,8 +45,25 @@ const getNotificationColor = (type: Notification["type"]) => {
   }
 };
 
+// Safe navigation helper - only allows internal URLs
+const isInternalUrl = (url: string): boolean => {
+  // Allow relative URLs starting with /
+  if (url.startsWith('/')) {
+    return true;
+  }
+  
+  // Check if it's a same-origin URL
+  try {
+    const parsedUrl = new URL(url, window.location.origin);
+    return parsedUrl.origin === window.location.origin;
+  } catch {
+    return false;
+  }
+};
+
 export function NotificationsDropdown() {
   const { notifications, unreadCount, loading, markAsRead, markAllAsRead } = useNotifications();
+  const navigate = useNavigate();
 
   return (
     <DropdownMenu>
@@ -101,9 +120,19 @@ export function NotificationsDropdown() {
                   if (!notification.read) {
                     markAsRead(notification.id);
                   }
-                  // Navigate if action_url exists
+                  // Navigate if action_url exists - only allow internal URLs for security
                   if (notification.action_url) {
-                    window.location.href = notification.action_url;
+                    if (isInternalUrl(notification.action_url)) {
+                      // Use React Router for internal navigation
+                      if (notification.action_url.startsWith('/')) {
+                        navigate(notification.action_url);
+                      } else {
+                        window.location.href = notification.action_url;
+                      }
+                    } else {
+                      console.warn('Blocked external redirect attempt:', notification.action_url);
+                      toast.error('URL de notificación no válida');
+                    }
                   }
                 }}
               >

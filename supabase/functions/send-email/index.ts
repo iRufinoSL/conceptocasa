@@ -26,6 +26,8 @@ interface SendEmailRequest {
   bcc?: string[];
   contact_id?: string;
   ticket_id?: string;
+  budget_id?: string;
+  project_id?: string;
   create_ticket?: boolean;
   ticket_subject?: string;
   ticket_priority?: string;
@@ -127,12 +129,16 @@ const handler = async (req: Request): Promise<Response> => {
       bcc,
       contact_id,
       ticket_id,
+      budget_id,
+      project_id,
       create_ticket,
       ticket_subject,
       ticket_priority,
       ticket_category,
       attachments
     } = requestData;
+
+    console.log("Email request - budget_id:", budget_id, "project_id:", project_id);
 
     // Validate required fields
     if (!to || !subject || (!body_html && !body_text)) {
@@ -243,6 +249,8 @@ const handler = async (req: Request): Promise<Response> => {
         error_message: emailResponse.error.message,
         contact_id: contact_id,
         ticket_id: createdTicketId,
+        budget_id: budget_id,
+        project_id: project_id,
         created_by: user.id
       });
 
@@ -269,6 +277,8 @@ const handler = async (req: Request): Promise<Response> => {
         external_id: emailResponse.data?.id,
         contact_id: contact_id,
         ticket_id: createdTicketId,
+        budget_id: budget_id,
+        project_id: project_id,
         created_by: user.id,
         sent_at: new Date().toISOString()
       })

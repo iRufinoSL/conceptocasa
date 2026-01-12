@@ -53,6 +53,18 @@ interface ContactCommunication {
   created_at: string;
   from_email: string;
   to_emails: string[];
+  body_html: string | null;
+  body_text: string | null;
+  presupuestos?: {
+    id: string;
+    nombre: string;
+    codigo_correlativo: number;
+  } | null;
+  email_attachments?: {
+    id: string;
+    file_name: string;
+    file_type: string | null;
+  }[];
 }
 
 interface ContactFormProps {
@@ -86,6 +98,7 @@ export function ContactForm({ open, onOpenChange, contact, onSuccess }: ContactF
   
   // Communications
   const [contactCommunications, setContactCommunications] = useState<ContactCommunication[]>([]);
+  const [selectedEmailDetail, setSelectedEmailDetail] = useState<ContactCommunication | null>(null);
   const [formData, setFormData] = useState({
     name: '',
     surname: '',
@@ -221,14 +234,18 @@ export function ContactForm({ open, onOpenChange, contact, onSuccess }: ContactF
         // Fetch communications related to this contact
         const { data: communications } = await supabase
           .from('email_messages')
-          .select('id, subject, direction, status, created_at, from_email, to_emails')
+          .select(`
+            id, subject, direction, status, created_at, from_email, to_emails, body_html, body_text,
+            presupuestos (id, nombre, codigo_correlativo),
+            email_attachments (id, file_name, file_type)
+          `)
           .eq('contact_id', contact.id)
           .is('deleted_at', null)
           .order('created_at', { ascending: false })
           .limit(20);
         
         if (communications) {
-          setContactCommunications(communications);
+          setContactCommunications(communications as ContactCommunication[]);
         }
       };
       fetchContactData();
@@ -488,6 +505,7 @@ export function ContactForm({ open, onOpenChange, contact, onSuccess }: ContactF
   };
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
@@ -796,12 +814,14 @@ export function ContactForm({ open, onOpenChange, contact, onSuccess }: ContactF
                   No hay comunicaciones registradas con este contacto.
                 </p>
               ) : (
-                <ScrollArea className="h-40 rounded-md border">
+                <ScrollArea className="h-48 rounded-md border">
                   <div className="p-2 space-y-2">
                     {contactCommunications.map(comm => (
-                      <div 
-                        key={comm.id} 
-                        className="flex items-start gap-3 p-2 rounded hover:bg-muted/50"
+                      <button 
+                        key={comm.id}
+                        type="button"
+                        onClick={() => setSelectedEmailDetail(comm)}
+                        className="w-full flex items-start gap-3 p-2 rounded hover:bg-muted/50 cursor-pointer text-left transition-colors"
                       >
                         <div className={`mt-0.5 ${comm.direction === 'inbound' ? 'text-green-600' : 'text-blue-600'}`}>
                           {comm.direction === 'inbound' ? (
@@ -820,13 +840,23 @@ export function ContactForm({ open, onOpenChange, contact, onSuccess }: ContactF
                               : `Para: ${comm.to_emails?.join(', ') || 'Desconocido'}`
                             }
                           </p>
-                          <p className="text-xs text-muted-foreground">
-                            {format(new Date(comm.created_at), "d MMM yyyy 'a las' HH:mm", { locale: es })}
-                          </p>
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                            <span>{format(new Date(comm.created_at), "d MMM yyyy 'a las' HH:mm", { locale: es })}</span>
+                            {comm.presupuestos && (
+                              <Badge variant="outline" className="text-[10px] px-1 py-0">
+                                P{comm.presupuestos.codigo_correlativo}
+                              </Badge>
+                            )}
+                            {comm.email_attachments && comm.email_attachments.length > 0 && (
+                              <Badge variant="outline" className="text-[10px] px-1 py-0">
+                                {comm.email_attachments.length} adj.
+                              </Badge>
+                            )}
+                          </div>
                         </div>
                         <Badge 
                           variant="outline" 
-                          className={`text-xs ${
+                          className={`text-xs shrink-0 ${
                             comm.status === 'sent' ? 'text-blue-600' :
                             comm.status === 'received' ? 'text-green-600' :
                             comm.status === 'failed' ? 'text-red-600' :
@@ -838,7 +868,7 @@ export function ContactForm({ open, onOpenChange, contact, onSuccess }: ContactF
                            comm.status === 'failed' ? 'Fallido' :
                            comm.status}
                         </Badge>
-                      </div>
+                      </button>
                     ))}
                   </div>
                 </ScrollArea>
@@ -1008,5 +1038,75 @@ export function ContactForm({ open, onOpenChange, contact, onSuccess }: ContactF
         </form>
       </DialogContent>
     </Dialog>
+    
+    {/* Email Detail Dialog */}
+    <Dialog open={!!selectedEmailDetail} onOpenChange={(open) => !open && setSelectedEmailDetail(null)}>
+      <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Mail className="h-5 w-5" />
+            {selectedEmailDetail?.subject || '(Sin asunto)'}
+          </DialogTitle>
+        </DialogHeader>
+        
+        {selectedEmailDetail && (
+          <div className="flex-1 overflow-hidden flex flex-col gap-4">
+            {/* Email metadata */}
+            <div className="space-y-2 text-sm border-b pb-4">
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">
+                  {selectedEmailDetail.direction === 'inbound' ? 'De:' : 'Para:'}
+                </span>
+                <span className="font-medium">
+                  {selectedEmailDetail.direction === 'inbound' 
+                    ? selectedEmailDetail.from_email 
+                    : selectedEmailDetail.to_emails?.join(', ')}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Fecha:</span>
+                <span>{format(new Date(selectedEmailDetail.created_at), "d MMMM yyyy 'a las' HH:mm", { locale: es })}</span>
+              </div>
+              {selectedEmailDetail.presupuestos && (
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Presupuesto:</span>
+                  <Badge variant="outline" className="bg-primary/10">
+                    P{selectedEmailDetail.presupuestos.codigo_correlativo} - {selectedEmailDetail.presupuestos.nombre}
+                  </Badge>
+                </div>
+              )}
+              {selectedEmailDetail.email_attachments && selectedEmailDetail.email_attachments.length > 0 && (
+                <div className="flex items-center gap-2 flex-wrap pt-2">
+                  <span className="text-muted-foreground text-xs">Adjuntos:</span>
+                  {selectedEmailDetail.email_attachments.map(att => (
+                    <Badge key={att.id} variant="secondary" className="text-xs gap-1">
+                      <FileText className="h-3 w-3" />
+                      {att.file_name}
+                    </Badge>
+                  ))}
+                </div>
+              )}
+            </div>
+            
+            {/* Email body */}
+            <ScrollArea className="flex-1 min-h-0">
+              <div 
+                className="prose prose-sm max-w-none dark:prose-invert"
+                dangerouslySetInnerHTML={{ 
+                  __html: selectedEmailDetail.body_html || selectedEmailDetail.body_text?.replace(/\n/g, '<br>') || '<p class="text-muted-foreground">(Sin contenido)</p>' 
+                }}
+              />
+            </ScrollArea>
+            
+            <div className="flex justify-end pt-4 border-t">
+              <Button variant="outline" onClick={() => setSelectedEmailDetail(null)}>
+                Cerrar
+              </Button>
+            </div>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }

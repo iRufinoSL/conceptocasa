@@ -33,9 +33,10 @@ interface SendEmailDialogProps {
   onOpenChange: (open: boolean) => void;
   contact?: ContactBasic;
   contacts?: ContactBasic[];
+  budgetId?: string; // Optional budget ID to link email to a budget
 }
 
-export function SendEmailDialog({ open, onOpenChange, contact, contacts }: SendEmailDialogProps) {
+export function SendEmailDialog({ open, onOpenChange, contact, contacts, budgetId }: SendEmailDialogProps) {
   const queryClient = useQueryClient();
   const [subject, setSubject] = useState('');
   const [content, setContent] = useState('');
@@ -160,6 +161,7 @@ export function SendEmailDialog({ open, onOpenChange, contact, contacts }: SendE
           templateId: selectedTemplate || undefined,
           variables,
           attachments: attachmentData.length > 0 ? attachmentData : undefined,
+          budgetId: budgetId || undefined, // Pass budget_id to link email to budget
         },
       });
 

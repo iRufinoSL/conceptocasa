@@ -12,9 +12,10 @@ import { useEmailService } from '@/hooks/useEmailService';
 import { useToast } from '@/hooks/use-toast';
 import { 
   Send, Mail, User, Paperclip, X, Plus, 
-  FileText, ChevronDown, File, Forward, Users
+  FileText, ChevronDown, File, Forward, Users, FolderOpen, Loader2
 } from 'lucide-react';
 import type { Tables } from '@/integrations/supabase/types';
+import { DocumentAttachmentPicker } from './DocumentAttachmentPicker';
 
 interface AttachmentFile {
   file: File;
@@ -22,6 +23,7 @@ interface AttachmentFile {
   size: number;
   type: string;
   isForwarded?: boolean;
+  isFromDocuments?: boolean;
 }
 
 type Contact = {
@@ -35,6 +37,7 @@ type EmailTemplate = Tables<'email_templates'>;
 
 interface BudgetComposeEmailProps {
   budgetId: string;
+  projectId: string | null;
   budgetContacts: Contact[];
   replyTo?: {
     email: string;
@@ -47,7 +50,7 @@ interface BudgetComposeEmailProps {
   onSent?: () => void;
 }
 
-export function BudgetComposeEmail({ budgetId, budgetContacts, replyTo, onSent }: BudgetComposeEmailProps) {
+export function BudgetComposeEmail({ budgetId, projectId, budgetContacts, replyTo, onSent }: BudgetComposeEmailProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { sendEmail, sending, cancelSend } = useEmailService();
@@ -65,6 +68,7 @@ export function BudgetComposeEmail({ budgetId, budgetContacts, replyTo, onSent }
   const [selectedTemplate, setSelectedTemplate] = useState<string>('__none__');
   const [attachments, setAttachments] = useState<AttachmentFile[]>([]);
   const [loadingForwardAttachments, setLoadingForwardAttachments] = useState(false);
+  const [loadingDocumentAttachments, setLoadingDocumentAttachments] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -92,6 +96,66 @@ export function BudgetComposeEmail({ budgetId, budgetContacts, replyTo, onSent }
     if (bytes < 1024) return bytes + ' B';
     if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
     return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+  };
+
+  // Handle documents selected from document picker
+  const handleDocumentsSelected = async (documents: { id: string; name: string; file_path: string; file_type: string | null; file_size: number | null }[]) => {
+    if (documents.length === 0) return;
+    
+    setLoadingDocumentAttachments(true);
+    try {
+      const downloadedFiles: AttachmentFile[] = [];
+      
+      for (const doc of documents) {
+        try {
+          const { data: fileData, error: downloadError } = await supabase.storage
+            .from('project-documents')
+            .download(doc.file_path);
+          
+          if (downloadError) {
+            console.error('Error downloading document:', doc.name, downloadError);
+            toast({
+              title: 'Error',
+              description: `No se pudo cargar el documento: ${doc.name}`,
+              variant: 'destructive',
+            });
+            continue;
+          }
+          
+          const fileType = doc.file_type || 'application/octet-stream';
+          const blob = new Blob([fileData], { type: fileType });
+          // Create a file-like object for the attachment
+          const fileObj = Object.assign(blob, { name: doc.name }) as unknown as File;
+          
+          downloadedFiles.push({
+            file: fileObj,
+            name: doc.name,
+            size: doc.file_size || fileData.size,
+            type: fileType,
+            isFromDocuments: true,
+          });
+        } catch (e) {
+          console.error('Error processing document:', doc.name, e);
+        }
+      }
+      
+      if (downloadedFiles.length > 0) {
+        setAttachments(prev => [...prev, ...downloadedFiles]);
+        toast({ 
+          title: `${downloadedFiles.length} documento(s) añadido(s)`,
+          description: 'Los documentos del proyecto se han adjuntado al email',
+        });
+      }
+    } catch (e) {
+      console.error('Error loading documents:', e);
+      toast({
+        title: 'Error',
+        description: 'Error al cargar los documentos',
+        variant: 'destructive',
+      });
+    } finally {
+      setLoadingDocumentAttachments(false);
+    }
   };
 
   // Fetch email templates
@@ -404,25 +468,37 @@ export function BudgetComposeEmail({ budgetId, budgetContacts, replyTo, onSent }
 
           {/* Attachments */}
           <div className="space-y-3 border rounded-lg p-4 bg-muted/30">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between flex-wrap gap-2">
               <Label className="flex items-center gap-2">
                 <Paperclip className="h-4 w-4" />
                 Archivos adjuntos
-                {loadingForwardAttachments && (
-                  <span className="text-xs text-muted-foreground">(Cargando adjuntos...)</span>
+                {(loadingForwardAttachments || loadingDocumentAttachments) && (
+                  <span className="text-xs text-muted-foreground flex items-center gap-1">
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    Cargando...
+                  </span>
                 )}
               </Label>
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                onClick={() => fileInputRef.current?.click()}
-                className="gap-2"
-                disabled={loadingForwardAttachments}
-              >
-                <Plus className="h-4 w-4" />
-                Añadir archivo
-              </Button>
+              <div className="flex gap-2">
+                {projectId && (
+                  <DocumentAttachmentPicker
+                    projectId={projectId}
+                    onSelectDocuments={handleDocumentsSelected}
+                    disabled={loadingForwardAttachments || loadingDocumentAttachments}
+                  />
+                )}
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="gap-2"
+                  disabled={loadingForwardAttachments || loadingDocumentAttachments}
+                >
+                  <Plus className="h-4 w-4" />
+                  Subir archivo
+                </Button>
+              </div>
             </div>
             <input
               ref={fileInputRef}
@@ -448,6 +524,12 @@ export function BudgetComposeEmail({ budgetId, budgetContacts, replyTo, onSent }
                         <Badge variant="secondary" className="gap-1 flex-shrink-0">
                           <Forward className="h-3 w-3" />
                           Reenviado
+                        </Badge>
+                      )}
+                      {attachment.isFromDocuments && (
+                        <Badge variant="outline" className="gap-1 flex-shrink-0">
+                          <FolderOpen className="h-3 w-3" />
+                          Documento
                         </Badge>
                       )}
                     </div>

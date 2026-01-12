@@ -23,7 +23,7 @@ import { ResourceInlineEdit } from './ResourceInlineEdit';
 import { BulkEditBar } from './BulkEditBar';
 import { ResourcesGroupedView } from './ResourcesGroupedView';
 import { ResourcesActivityGroupedView } from './ResourcesActivityGroupedView';
-import { ResourcesTypeGroupedView } from './ResourcesTypeGroupedView';
+import { ResourcesTypePhaseActivityGroupedView } from './ResourcesTypePhaseActivityGroupedView';
 import { UnassignedResourcesSection } from './UnassignedResourcesSection';
 import { useCompanySettings } from '@/hooks/useCompanySettings';
 import { usePermissions, canAccessResource, canAccessActivity } from '@/hooks/usePermissions';
@@ -1520,7 +1520,7 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
               canEditResource={canEditResource}
             />
           ) : viewMode === 'type' ? (
-            <ResourcesTypeGroupedView
+            <ResourcesTypePhaseActivityGroupedView
               resources={filteredResources}
               activities={activities}
               phases={phases}

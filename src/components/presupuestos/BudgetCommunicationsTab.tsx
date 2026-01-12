@@ -11,11 +11,12 @@ import { BudgetWhatsAppList } from './BudgetWhatsAppList';
 
 interface BudgetCommunicationsTabProps {
   budgetId: string;
+  budgetName?: string;
   projectId: string | null;
   isAdmin: boolean;
 }
 
-export function BudgetCommunicationsTab({ budgetId, projectId, isAdmin }: BudgetCommunicationsTabProps) {
+export function BudgetCommunicationsTab({ budgetId, budgetName, projectId, isAdmin }: BudgetCommunicationsTabProps) {
   const [activeSubTab, setActiveSubTab] = useState('inbox');
   const [replyToEmail, setReplyToEmail] = useState<any>(null);
 
@@ -143,6 +144,7 @@ export function BudgetCommunicationsTab({ budgetId, projectId, isAdmin }: Budget
         <TabsContent value="whatsapp-compose" className="mt-4">
           <BudgetWhatsAppCompose 
             budgetId={budgetId}
+            budgetName={budgetName}
             projectId={projectId}
             budgetContacts={contactsWithPhone}
             onSent={() => setActiveSubTab('whatsapp')} 

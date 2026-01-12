@@ -554,7 +554,8 @@ export default function PresupuestoDashboard() {
 
           <TabsContent value="comunicaciones" className="mt-6">
             <BudgetCommunicationsTab 
-              budgetId={presupuesto.id} 
+              budgetId={presupuesto.id}
+              budgetName={presupuesto.nombre}
               projectId={presupuesto.project_id}
               isAdmin={isAdmin} 
             />

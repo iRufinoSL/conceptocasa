@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { toast } from 'sonner';
-import { Building2, Mail, Phone, MapPin, Globe, Save, Loader2, Upload, X, Image, Signature } from 'lucide-react';
+import { Building2, Mail, Phone, MapPin, Globe, Save, Loader2, Upload, X, Image, Signature, MessageSquare } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 import { useSignedUrl, extractFilePath } from '@/hooks/useSignedUrl';
 
@@ -14,6 +14,7 @@ interface CompanySettings {
   name: string;
   email: string | null;
   phone: string | null;
+  whatsapp_phone: string | null;
   address: string | null;
   website: string | null;
   logo_url: string | null;
@@ -30,6 +31,7 @@ export function CompanySettingsForm() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
+  const [whatsappPhone, setWhatsappPhone] = useState('');
   const [address, setAddress] = useState('');
   const [website, setWebsite] = useState('');
   const [logoPath, setLogoPath] = useState<string | null>(null);
@@ -59,6 +61,7 @@ export function CompanySettingsForm() {
         setName(data.name || '');
         setEmail(data.email || '');
         setPhone(data.phone || '');
+        setWhatsappPhone((data as any).whatsapp_phone || '');
         setAddress(data.address || '');
         setWebsite(data.website || '');
         // Extract file path from stored URL or use as-is if already a path
@@ -142,6 +145,7 @@ export function CompanySettingsForm() {
         name: name.trim(),
         email: email.trim() || null,
         phone: phone.trim() || null,
+        whatsapp_phone: whatsappPhone.trim() || null,
         address: address.trim() || null,
         website: website.trim() || null,
         logo_url: logoPath || null, // Store file path, not URL
@@ -294,6 +298,22 @@ export function CompanySettingsForm() {
                 className="pl-10"
               />
             </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="company-whatsapp" className="flex items-center gap-2">
+              <MessageSquare className="h-4 w-4 text-green-600" />
+              Teléfono WhatsApp
+            </Label>
+            <Input
+              id="company-whatsapp"
+              value={whatsappPhone}
+              onChange={(e) => setWhatsappPhone(e.target.value)}
+              placeholder="+34 600 000 000"
+            />
+            <p className="text-xs text-muted-foreground">
+              Este número se mostrará como origen de los WhatsApp enviados.
+            </p>
           </div>
 
           <div className="space-y-2">

@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { MessageSquare, Send, Phone, User, ExternalLink, X, Upload, FileText } from 'lucide-react';
+import { MessageSquare, Send, Phone, User, ExternalLink, X, FileText, Building2 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 
 interface Contact {
@@ -19,14 +19,22 @@ interface Contact {
   phone: string | null;
 }
 
+interface WhatsAppTemplate {
+  id: string;
+  name: string;
+  category: string;
+  content: string;
+}
+
 interface BudgetWhatsAppComposeProps {
   budgetId: string;
+  budgetName?: string;
   projectId: string | null;
   budgetContacts: Contact[];
   onSent?: () => void;
 }
 
-export function BudgetWhatsAppCompose({ budgetId, projectId, budgetContacts, onSent }: BudgetWhatsAppComposeProps) {
+export function BudgetWhatsAppCompose({ budgetId, budgetName, projectId, budgetContacts, onSent }: BudgetWhatsAppComposeProps) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   
@@ -34,6 +42,36 @@ export function BudgetWhatsAppCompose({ budgetId, projectId, budgetContacts, onS
   const [customPhone, setCustomPhone] = useState('');
   const [message, setMessage] = useState('');
   const [isSending, setIsSending] = useState(false);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
+
+  // Fetch company settings for the organization WhatsApp phone
+  const { data: companySettings } = useQuery({
+    queryKey: ['company-settings-whatsapp'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('company_settings')
+        .select('name, phone, whatsapp_phone')
+        .limit(1)
+        .single();
+      return data;
+    },
+  });
+
+  // Fetch WhatsApp templates
+  const { data: templates = [] } = useQuery({
+    queryKey: ['whatsapp-templates'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('whatsapp_templates')
+        .select('id, name, category, content')
+        .eq('is_active', true)
+        .order('category', { ascending: true })
+        .order('name', { ascending: true });
+      
+      if (error) throw error;
+      return (data || []) as WhatsAppTemplate[];
+    },
+  });
 
   // Filter contacts with phone numbers
   const contactsWithPhone = useMemo(() => 
@@ -68,6 +106,21 @@ export function BudgetWhatsAppCompose({ budgetId, projectId, budgetContacts, onS
     const encodedMessage = encodeURIComponent(message);
     return `https://wa.me/${waPhoneNumber}?text=${encodedMessage}`;
   }, [waPhoneNumber, message]);
+
+  // Handle template selection
+  const handleTemplateSelect = (templateId: string) => {
+    setSelectedTemplateId(templateId);
+    const template = templates.find(t => t.id === templateId);
+    if (template) {
+      // Replace placeholders with actual values
+      let content = template.content;
+      content = content.replace(/\{\{empresa\}\}/g, companySettings?.name || 'Nuestra empresa');
+      content = content.replace(/\{\{presupuesto\}\}/g, budgetName || budgetId);
+      content = content.replace(/\{\{contacto\}\}/g, selectedContact ? `${selectedContact.name}` : '');
+      content = content.replace(/\{\{fecha\}\}/g, new Date().toLocaleDateString('es-ES'));
+      setMessage(content);
+    }
+  };
 
   const saveMessageMutation = useMutation({
     mutationFn: async () => {
@@ -127,13 +180,31 @@ export function BudgetWhatsAppCompose({ budgetId, projectId, budgetContacts, onS
     }
   };
 
+  // Group templates by category
+  const templatesByCategory = useMemo(() => {
+    const grouped: Record<string, WhatsAppTemplate[]> = {};
+    templates.forEach(t => {
+      if (!grouped[t.category]) grouped[t.category] = [];
+      grouped[t.category].push(t);
+    });
+    return grouped;
+  }, [templates]);
+
   return (
     <Card>
       <CardHeader className="pb-3">
-        <CardTitle className="flex items-center gap-2 text-base">
-          <MessageSquare className="h-4 w-4 text-green-600" />
-          Enviar WhatsApp
-        </CardTitle>
+        <div className="flex items-center justify-between">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <MessageSquare className="h-4 w-4 text-green-600" />
+            Enviar WhatsApp
+          </CardTitle>
+          {companySettings?.whatsapp_phone && (
+            <Badge variant="outline" className="gap-1 text-green-600">
+              <Building2 className="h-3 w-3" />
+              Desde: {companySettings.whatsapp_phone}
+            </Badge>
+          )}
+        </div>
       </CardHeader>
       <CardContent className="space-y-4">
         {/* Contact selection */}
@@ -198,6 +269,37 @@ export function BudgetWhatsAppCompose({ budgetId, projectId, budgetContacts, onS
             >
               <X className="h-3 w-3" />
             </Button>
+          </div>
+        )}
+
+        {/* Template selection */}
+        {templates.length > 0 && (
+          <div className="space-y-2">
+            <Label className="flex items-center gap-2">
+              <FileText className="h-4 w-4" />
+              Plantilla de mensaje
+            </Label>
+            <Select value={selectedTemplateId} onValueChange={handleTemplateSelect}>
+              <SelectTrigger>
+                <SelectValue placeholder="Usar plantilla predefinida..." />
+              </SelectTrigger>
+              <SelectContent>
+                {Object.entries(templatesByCategory).map(([category, categoryTemplates]) => (
+                  <div key={category}>
+                    <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">
+                      {category}
+                    </div>
+                    {categoryTemplates.map(template => (
+                      <SelectItem key={template.id} value={template.id}>
+                        <div className="flex items-center gap-2">
+                          <span>{template.name}</span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </div>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         )}
 

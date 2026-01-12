@@ -1,16 +1,21 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { toast } from 'sonner';
 import { 
   Mail, MessageSquare, Search, ArrowUpRight, ArrowDownLeft, 
-  Phone, Calendar, Clock, Eye
+  Phone, Calendar, Clock, Eye, Plus
 } from 'lucide-react';
 
 interface ContactCommunicationsHistoryProps {
@@ -45,6 +50,10 @@ interface WhatsAppMessage {
 export function ContactCommunicationsHistory({ contactId, contactPhone }: ContactCommunicationsHistoryProps) {
   const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState('all');
+  const [registerDialogOpen, setRegisterDialogOpen] = useState(false);
+  const [newMessage, setNewMessage] = useState('');
+  const [newNotes, setNewNotes] = useState('');
+  const queryClient = useQueryClient();
 
   // Fetch emails for this contact
   const { data: emails = [], isLoading: loadingEmails } = useQuery({
@@ -62,7 +71,7 @@ export function ContactCommunicationsHistory({ contactId, contactPhone }: Contac
   });
 
   // Fetch WhatsApp messages for this contact
-  const { data: whatsappMessages = [], isLoading: loadingWhatsApp } = useQuery({
+  const { data: whatsappMessages = [], isLoading: loadingWhatsApp, refetch: refetchWhatsApp } = useQuery({
     queryKey: ['contact-whatsapp', contactId],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -73,6 +82,37 @@ export function ContactCommunicationsHistory({ contactId, contactPhone }: Contac
       
       if (error) throw error;
       return (data || []) as WhatsAppMessage[];
+    },
+  });
+
+  // Mutation to save received WhatsApp
+  const saveReceivedWhatsApp = useMutation({
+    mutationFn: async () => {
+      if (!newMessage.trim()) throw new Error('El mensaje es obligatorio');
+      
+      const { error } = await supabase
+        .from('whatsapp_messages')
+        .insert({
+          contact_id: contactId,
+          phone_number: contactPhone || '',
+          message: newMessage.trim(),
+          direction: 'inbound',
+          status: 'received',
+          notes: newNotes.trim() || null,
+        });
+      
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success('WhatsApp recibido registrado');
+      setNewMessage('');
+      setNewNotes('');
+      setRegisterDialogOpen(false);
+      refetchWhatsApp();
+      queryClient.invalidateQueries({ queryKey: ['contact-whatsapp', contactId] });
+    },
+    onError: (error: any) => {
+      toast.error(error.message || 'Error al registrar WhatsApp');
     },
   });
 
@@ -127,6 +167,7 @@ export function ContactCommunicationsHistory({ contactId, contactPhone }: Contac
       case 'delivered': return 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400';
       case 'read': return 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400';
       case 'replied': return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400';
+      case 'received': return 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400';
       default: return 'bg-secondary text-secondary-foreground';
     }
   };
@@ -142,135 +183,208 @@ export function ContactCommunicationsHistory({ contactId, contactPhone }: Contac
   }
 
   return (
-    <Card>
-      <CardHeader className="py-3">
-        <CardTitle className="text-sm font-medium flex items-center gap-2">
-          <Mail className="h-4 w-4" />
-          Historial de Comunicaciones
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4 py-0 pb-4">
-        {/* Stats */}
-        <div className="grid grid-cols-2 gap-2">
-          <div className="p-2 rounded-lg bg-blue-50 dark:bg-blue-950/20 text-center">
-            <div className="flex items-center justify-center gap-1 text-blue-600">
-              <Mail className="h-3 w-3" />
-              <span className="text-sm font-bold">{stats.totalEmails}</span>
-            </div>
-            <p className="text-xs text-muted-foreground">Emails</p>
-            <p className="text-xs text-muted-foreground">
-              ↑{stats.sentEmails} ↓{stats.receivedEmails}
-            </p>
+    <>
+      <Card>
+        <CardHeader className="py-3">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-sm font-medium flex items-center gap-2">
+              <Mail className="h-4 w-4" />
+              Historial de Comunicaciones
+            </CardTitle>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 text-xs gap-1"
+              onClick={() => setRegisterDialogOpen(true)}
+            >
+              <Plus className="h-3 w-3" />
+              Registrar WA recibido
+            </Button>
           </div>
-          <div className="p-2 rounded-lg bg-green-50 dark:bg-green-950/20 text-center">
-            <div className="flex items-center justify-center gap-1 text-green-600">
-              <MessageSquare className="h-3 w-3" />
-              <span className="text-sm font-bold">{stats.totalWhatsApp}</span>
-            </div>
-            <p className="text-xs text-muted-foreground">WhatsApp</p>
-            <p className="text-xs text-muted-foreground">
-              ↑{stats.sentWhatsApp} ↓{stats.receivedWhatsApp}
-            </p>
-          </div>
-        </div>
-
-        {/* Search */}
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Buscar en comunicaciones..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-9 h-8 text-sm"
-          />
-        </div>
-
-        {/* Tabs */}
-        <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-3 h-8">
-            <TabsTrigger value="all" className="text-xs">Todo ({allMessages.length})</TabsTrigger>
-            <TabsTrigger value="email" className="text-xs gap-1">
-              <Mail className="h-3 w-3" /> Email
-            </TabsTrigger>
-            <TabsTrigger value="whatsapp" className="text-xs gap-1">
-              <MessageSquare className="h-3 w-3" /> WA
-            </TabsTrigger>
-          </TabsList>
-        </Tabs>
-
-        {/* Messages list */}
-        <ScrollArea className="h-[300px]">
-          <div className="space-y-2 pr-4">
-            {filteredAll.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-4">
-                No hay comunicaciones registradas
+        </CardHeader>
+        <CardContent className="space-y-4 py-0 pb-4">
+          {/* Stats */}
+          <div className="grid grid-cols-2 gap-2">
+            <div className="p-2 rounded-lg bg-blue-50 dark:bg-blue-950/20 text-center">
+              <div className="flex items-center justify-center gap-1 text-blue-600">
+                <Mail className="h-3 w-3" />
+                <span className="text-sm font-bold">{stats.totalEmails}</span>
+              </div>
+              <p className="text-xs text-muted-foreground">Emails</p>
+              <p className="text-xs text-muted-foreground">
+                ↑{stats.sentEmails} ↓{stats.receivedEmails}
               </p>
-            ) : (
-              filteredAll.map((item) => {
-                const isEmail = item.type === 'email';
-                const isInbound = item.direction === 'inbound';
-                
-                return (
-                  <div
-                    key={`${item.type}-${item.id}`}
-                    className={`p-2 rounded-lg border ${isInbound ? 'border-l-2 border-l-green-500' : 'border-l-2 border-l-blue-500'} bg-card`}
-                  >
-                    <div className="flex items-start gap-2">
-                      <div className={`p-1.5 rounded-full ${isEmail ? 'bg-blue-100 dark:bg-blue-900/30' : 'bg-green-100 dark:bg-green-900/30'}`}>
-                        {isEmail ? (
-                          <Mail className="h-3 w-3 text-blue-600" />
-                        ) : (
-                          <MessageSquare className="h-3 w-3 text-green-600" />
-                        )}
-                      </div>
-                      
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1 flex-wrap">
-                          {isInbound ? (
-                            <ArrowDownLeft className="h-3 w-3 text-green-600" />
+            </div>
+            <div className="p-2 rounded-lg bg-green-50 dark:bg-green-950/20 text-center">
+              <div className="flex items-center justify-center gap-1 text-green-600">
+                <MessageSquare className="h-3 w-3" />
+                <span className="text-sm font-bold">{stats.totalWhatsApp}</span>
+              </div>
+              <p className="text-xs text-muted-foreground">WhatsApp</p>
+              <p className="text-xs text-muted-foreground">
+                ↑{stats.sentWhatsApp} ↓{stats.receivedWhatsApp}
+              </p>
+            </div>
+          </div>
+
+          {/* Search */}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Buscar en comunicaciones..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-9 h-8 text-sm"
+            />
+          </div>
+
+          {/* Tabs */}
+          <Tabs value={activeTab} onValueChange={setActiveTab}>
+            <TabsList className="grid w-full grid-cols-3 h-8">
+              <TabsTrigger value="all" className="text-xs">Todo ({allMessages.length})</TabsTrigger>
+              <TabsTrigger value="email" className="text-xs gap-1">
+                <Mail className="h-3 w-3" /> Email
+              </TabsTrigger>
+              <TabsTrigger value="whatsapp" className="text-xs gap-1">
+                <MessageSquare className="h-3 w-3" /> WA
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+
+          {/* Messages list */}
+          <ScrollArea className="h-[300px]">
+            <div className="space-y-2 pr-4">
+              {filteredAll.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-4">
+                  No hay comunicaciones registradas
+                </p>
+              ) : (
+                filteredAll.map((item) => {
+                  const isEmail = item.type === 'email';
+                  const isInbound = item.direction === 'inbound';
+                  
+                  return (
+                    <div
+                      key={`${item.type}-${item.id}`}
+                      className={`p-2 rounded-lg border ${isInbound ? 'border-l-2 border-l-green-500' : 'border-l-2 border-l-blue-500'} bg-card`}
+                    >
+                      <div className="flex items-start gap-2">
+                        <div className={`p-1.5 rounded-full ${isEmail ? 'bg-blue-100 dark:bg-blue-900/30' : 'bg-green-100 dark:bg-green-900/30'}`}>
+                          {isEmail ? (
+                            <Mail className="h-3 w-3 text-blue-600" />
                           ) : (
-                            <ArrowUpRight className="h-3 w-3 text-blue-600" />
+                            <MessageSquare className="h-3 w-3 text-green-600" />
                           )}
-                          <span className="text-xs font-medium">
-                            {isInbound ? 'Recibido' : 'Enviado'}
-                          </span>
-                          <Badge className={`text-[10px] h-4 ${getStatusColor(item.status)}`}>
-                            {item.status}
-                          </Badge>
                         </div>
                         
-                        {isEmail ? (
-                          <p className="text-xs mt-1 truncate font-medium">
-                            {(item as EmailMessage).subject || '(Sin asunto)'}
-                          </p>
-                        ) : (
-                          <p className="text-xs mt-1 line-clamp-2">
-                            {(item as WhatsAppMessage).message}
-                          </p>
-                        )}
-                        
-                        <div className="flex items-center gap-2 mt-1 text-[10px] text-muted-foreground">
-                          <span className="flex items-center gap-0.5">
-                            <Calendar className="h-2.5 w-2.5" />
-                            {format(new Date(item.created_at), 'd MMM yy', { locale: es })}
-                          </span>
-                          <span className="flex items-center gap-0.5">
-                            <Clock className="h-2.5 w-2.5" />
-                            {format(new Date(item.created_at), 'HH:mm')}
-                          </span>
-                          {isEmail && (item as EmailMessage).is_read && (
-                            <Eye className="h-2.5 w-2.5" />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1 flex-wrap">
+                            {isInbound ? (
+                              <ArrowDownLeft className="h-3 w-3 text-green-600" />
+                            ) : (
+                              <ArrowUpRight className="h-3 w-3 text-blue-600" />
+                            )}
+                            <span className="text-xs font-medium">
+                              {isInbound ? 'Recibido' : 'Enviado'}
+                            </span>
+                            <Badge className={`text-[10px] h-4 ${getStatusColor(item.status)}`}>
+                              {item.status}
+                            </Badge>
+                          </div>
+                          
+                          {isEmail ? (
+                            <p className="text-xs mt-1 truncate font-medium">
+                              {(item as EmailMessage).subject || '(Sin asunto)'}
+                            </p>
+                          ) : (
+                            <>
+                              <p className="text-xs mt-1 line-clamp-2">
+                                {(item as WhatsAppMessage).message}
+                              </p>
+                              {(item as WhatsAppMessage).notes && (
+                                <p className="text-[10px] mt-1 text-muted-foreground italic">
+                                  📝 {(item as WhatsAppMessage).notes}
+                                </p>
+                              )}
+                            </>
                           )}
+                          
+                          <div className="flex items-center gap-2 mt-1 text-[10px] text-muted-foreground">
+                            <span className="flex items-center gap-0.5">
+                              <Calendar className="h-2.5 w-2.5" />
+                              {format(new Date(item.created_at), 'd MMM yy', { locale: es })}
+                            </span>
+                            <span className="flex items-center gap-0.5">
+                              <Clock className="h-2.5 w-2.5" />
+                              {format(new Date(item.created_at), 'HH:mm')}
+                            </span>
+                            {isEmail && (item as EmailMessage).is_read && (
+                              <Eye className="h-2.5 w-2.5" />
+                            )}
+                          </div>
                         </div>
                       </div>
                     </div>
-                  </div>
-                );
-              })
+                  );
+                })
+              )}
+            </div>
+          </ScrollArea>
+        </CardContent>
+      </Card>
+
+      {/* Register Received WhatsApp Dialog */}
+      <Dialog open={registerDialogOpen} onOpenChange={setRegisterDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <MessageSquare className="h-5 w-5 text-green-600" />
+              Registrar WhatsApp Recibido
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <p className="text-sm text-muted-foreground">
+              Copia y pega aquí el mensaje de WhatsApp que has recibido de este contacto para registrarlo en el historial.
+            </p>
+            <div className="space-y-2">
+              <Label htmlFor="message">Mensaje recibido *</Label>
+              <Textarea
+                id="message"
+                placeholder="Pega aquí el contenido del WhatsApp..."
+                value={newMessage}
+                onChange={(e) => setNewMessage(e.target.value)}
+                rows={4}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="notes">Notas (opcional)</Label>
+              <Input
+                id="notes"
+                placeholder="Añade notas o contexto adicional..."
+                value={newNotes}
+                onChange={(e) => setNewNotes(e.target.value)}
+              />
+            </div>
+            {contactPhone && (
+              <p className="text-xs text-muted-foreground">
+                Teléfono del contacto: {contactPhone}
+              </p>
             )}
           </div>
-        </ScrollArea>
-      </CardContent>
-    </Card>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRegisterDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button 
+              onClick={() => saveReceivedWhatsApp.mutate()}
+              disabled={!newMessage.trim() || saveReceivedWhatsApp.isPending}
+              className="gap-1"
+            >
+              {saveReceivedWhatsApp.isPending ? 'Guardando...' : 'Guardar'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

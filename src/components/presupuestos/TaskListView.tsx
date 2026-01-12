@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Input } from '@/components/ui/input';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -13,8 +14,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { format, addDays } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { MoreVertical, Pencil, Trash2, Calendar, Clock, Users, MapPin, ChevronDown, ChevronRight, Layers } from 'lucide-react';
+import { MoreVertical, Pencil, Trash2, Calendar, Clock, Users, MapPin, ChevronDown, ChevronRight, Layers, Search, X } from 'lucide-react';
 import { formatActividadId } from '@/lib/activity-id';
+import { searchMatch } from '@/lib/search-utils';
 import type { BudgetTask } from './BudgetAgendaTab';
 
 interface TaskListViewProps {
@@ -33,11 +35,41 @@ interface WorkAreaGroup {
 }
 
 export function TaskListView({ tasks, onEdit, onDelete, onToggleStatus, isAdmin }: TaskListViewProps) {
+  const [searchTerm, setSearchTerm] = useState('');
   // Start with all groups expanded
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set(['__all__']));
 
+  // Filter tasks based on search term
+  const filteredTasks = useMemo(() => {
+    if (!searchTerm.trim()) return tasks;
+    
+    return tasks.filter(task => {
+      // Search in task name
+      if (searchMatch(task.name, searchTerm)) return true;
+      // Search in task description
+      if (searchMatch(task.description, searchTerm)) return true;
+      // Search in activity name
+      if (task.activity && searchMatch(task.activity.name, searchTerm)) return true;
+      // Search in activity code
+      if (task.activity && searchMatch(task.activity.code, searchTerm)) return true;
+      // Search in work areas
+      if (task.workAreas?.some(wa => 
+        searchMatch(wa.name, searchTerm) || 
+        searchMatch(wa.level, searchTerm) ||
+        searchMatch(wa.work_area, searchTerm)
+      )) return true;
+      // Search in contacts
+      if (task.contacts?.some(c => 
+        searchMatch(c.contact?.name, searchTerm) || 
+        searchMatch(c.contact?.surname, searchTerm)
+      )) return true;
+      
+      return false;
+    });
+  }, [tasks, searchTerm]);
+
   // Group tasks by Level/WorkArea (through activity)
-  const tasksByLevelWorkArea = tasks.reduce((acc, task) => {
+  const tasksByLevelWorkArea = filteredTasks.reduce((acc, task) => {
     // Get work areas from task
     const workAreas = task.workAreas && task.workAreas.length > 0
       ? task.workAreas
@@ -132,15 +164,43 @@ export function TaskListView({ tasks, onEdit, onDelete, onToggleStatus, isAdmin 
 
   return (
     <div className="space-y-2">
-      {/* Expand/Collapse controls */}
-      <div className="flex justify-end gap-2 mb-2">
-        <Button variant="ghost" size="sm" onClick={expandAll}>
-          Expandir todo
-        </Button>
-        <Button variant="ghost" size="sm" onClick={collapseAll}>
-          Colapsar todo
-        </Button>
+      {/* Search and Expand/Collapse controls */}
+      <div className="flex flex-col sm:flex-row gap-2 mb-2">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Buscar por tarea, actividad, área de trabajo, contacto..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-9 pr-9"
+          />
+          {searchTerm && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="absolute right-1 top-1/2 transform -translate-y-1/2 h-7 w-7"
+              onClick={() => setSearchTerm('')}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
+        <div className="flex gap-2 justify-end">
+          <Button variant="ghost" size="sm" onClick={expandAll}>
+            Expandir todo
+          </Button>
+          <Button variant="ghost" size="sm" onClick={collapseAll}>
+            Colapsar todo
+          </Button>
+        </div>
       </div>
+
+      {/* Results count when searching */}
+      {searchTerm && (
+        <div className="text-sm text-muted-foreground mb-2">
+          {filteredTasks.length} {filteredTasks.length === 1 ? 'resultado' : 'resultados'} para "{searchTerm}"
+        </div>
+      )}
 
       {sortedWorkAreas.map(([groupKey, { displayName, tasks: groupTasks }]) => {
         const isExpanded = expandedGroups.has(groupKey);

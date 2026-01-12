@@ -30,6 +30,7 @@ import { recalculateAllBudgetResources } from '@/lib/budget-utils';
 import { BudgetWorkAreasTab } from '@/components/presupuestos/BudgetWorkAreasTab';
 import { BudgetDocumentsTab } from '@/components/presupuestos/BudgetDocumentsTab';
 import { BudgetAgendaTab } from '@/components/presupuestos/BudgetAgendaTab';
+import { BudgetCommunicationsTab } from '@/components/presupuestos/BudgetCommunicationsTab';
 import { toast } from 'sonner';
 
 interface Presupuesto {
@@ -519,7 +520,7 @@ export default function PresupuestoDashboard() {
           </TabsContent>
 
           <TabsContent value="contactos" className="mt-6">
-            <BudgetContactsManager budgetId={presupuesto.id} isAdmin={isAdmin} />
+            <BudgetCommunicationsTab budgetId={presupuesto.id} isAdmin={isAdmin} />
           </TabsContent>
 
           <TabsContent value="areas-trabajo" className="mt-6">

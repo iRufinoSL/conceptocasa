@@ -18,6 +18,8 @@ interface SendEmailParams {
   bcc?: string[];
   contact_id?: string;
   ticket_id?: string;
+  budget_id?: string;
+  project_id?: string;
   create_ticket?: boolean;
   ticket_subject?: string;
   ticket_priority?: string;

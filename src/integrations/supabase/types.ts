@@ -1146,6 +1146,7 @@ export type Database = {
           phone: string | null
           updated_at: string
           website: string | null
+          whatsapp_phone: string | null
         }
         Insert: {
           address?: string | null
@@ -1158,6 +1159,7 @@ export type Database = {
           phone?: string | null
           updated_at?: string
           website?: string | null
+          whatsapp_phone?: string | null
         }
         Update: {
           address?: string | null
@@ -1170,6 +1172,7 @@ export type Database = {
           phone?: string | null
           updated_at?: string
           website?: string | null
+          whatsapp_phone?: string | null
         }
         Relationships: []
       }
@@ -3260,6 +3263,47 @@ export type Database = {
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      whatsapp_templates: {
+        Row: {
+          category: string | null
+          content: string
+          created_at: string
+          created_by: string | null
+          id: string
+          is_active: boolean | null
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          category?: string | null
+          content: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean | null
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          category?: string | null
+          content?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_templates_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]

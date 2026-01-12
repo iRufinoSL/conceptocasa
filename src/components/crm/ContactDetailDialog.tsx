@@ -14,6 +14,7 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { SendEmailDialog } from './SendEmailDialog';
 import { ManagementForm } from './ManagementForm';
+import { ContactCommunicationsHistory } from './ContactCommunicationsHistory';
 import type { Contact } from '@/pages/CRM';
 
 interface Management {
@@ -451,6 +452,12 @@ export function ContactDetailDialog({ contact, open, onOpenChange }: ContactDeta
                 )}
               </CardContent>
             </Card>
+
+            {/* Communications History */}
+            <ContactCommunicationsHistory 
+              contactId={contact.id} 
+              contactPhone={contact.phone}
+            />
 
             {/* Creation Info */}
             <div className="text-xs text-muted-foreground text-center pt-2 border-t">

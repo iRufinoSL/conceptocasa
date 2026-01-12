@@ -480,7 +480,7 @@ const handler = async (req: Request): Promise<Response> => {
         const resendId = resendData?.data?.id || resendData?.id || 'unknown';
         console.log(`Email sent to ${recipient.email}:`, resendId);
 
-        // Log communication
+        // Log communication in crm_communications (legacy)
         if (recipient.id) {
           await supabase.from('crm_communications').insert({
             contact_id: recipient.id,
@@ -510,6 +510,28 @@ const handler = async (req: Request): Promise<Response> => {
               .eq('contact_id', recipient.id);
           }
         }
+
+        // Also save to email_messages table for unified inbox view
+        await supabase.from('email_messages').insert({
+          from_email: senderEmail,
+          from_name: senderName,
+          to_emails: [recipient.email],
+          subject: finalSubject,
+          body_html: finalContent,
+          body_text: finalContent.replace(/<[^>]*>/g, ''), // Strip HTML for text version
+          direction: 'outbound',
+          status: 'sent',
+          sent_at: new Date().toISOString(),
+          contact_id: recipient.id || null,
+          created_by: user.id,
+          external_id: resendId,
+          metadata: {
+            resend_id: resendId,
+            campaign_id: campaignId,
+            template_id: templateId,
+            has_attachments: attachments && attachments.length > 0,
+          }
+        });
 
         results.push({ contactId: recipient.id, email: recipient.email, success: true });
       } catch (error: any) {

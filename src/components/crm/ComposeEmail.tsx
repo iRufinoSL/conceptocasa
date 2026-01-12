@@ -289,14 +289,14 @@ export function ComposeEmail({ replyTo, onSent }: ComposeEmailProps) {
   };
 
   return (
-    <Card>
-      <CardHeader>
+    <Card className="flex flex-col max-h-[calc(100vh-200px)]">
+      <CardHeader className="flex-shrink-0">
         <CardTitle className="flex items-center gap-2">
           <Mail className="h-5 w-5" />
           Redactar Email
         </CardTitle>
       </CardHeader>
-      <CardContent>
+      <CardContent className="flex-1 overflow-y-auto">
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* Template selector */}
           <div className="flex items-center gap-3">

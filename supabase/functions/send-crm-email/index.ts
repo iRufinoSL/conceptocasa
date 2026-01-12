@@ -38,6 +38,12 @@ function getCorsHeaders(origin: string | null): Record<string, string> {
   };
 }
 
+interface EmailAttachment {
+  filename: string;
+  content: string; // base64 encoded
+  content_type: string;
+}
+
 interface SendEmailRequest {
   contactId?: string;
   contactIds?: string[];
@@ -47,6 +53,7 @@ interface SendEmailRequest {
   templateId?: string;
   campaignId?: string;
   variables?: Record<string, string>;
+  attachments?: EmailAttachment[];
 }
 
 // HTML entity encoding to prevent XSS in template variables
@@ -296,7 +303,7 @@ const handler = async (req: Request): Promise<Response> => {
     const isAdmin = isAdminData === true;
 
     const body: SendEmailRequest = await req.json();
-    const { contactId, contactIds, email, subject, content, templateId, campaignId, variables = {} } = body;
+    const { contactId, contactIds, email, subject, content, templateId, campaignId, variables = {}, attachments = [] } = body;
 
     if (!subject || !content) {
       return new Response(
@@ -445,13 +452,29 @@ const handler = async (req: Request): Promise<Response> => {
           await new Promise(resolve => setTimeout(resolve, 100));
         }
 
-        // Send email
-        const emailResponse = await resend.emails.send({
+        // Send email with attachments if provided
+        const emailPayload: {
+          from: string;
+          to: string[];
+          subject: string;
+          html: string;
+          attachments?: { filename: string; content: string }[];
+        } = {
           from: `${senderName} <${senderEmail}>`,
           to: [recipient.email],
           subject: finalSubject,
           html: finalContent,
-        });
+        };
+
+        // Add attachments if any
+        if (attachments && attachments.length > 0) {
+          emailPayload.attachments = attachments.map(att => ({
+            filename: att.filename,
+            content: att.content, // Resend accepts base64 content directly
+          }));
+        }
+
+        const emailResponse = await resend.emails.send(emailPayload);
 
         const resendData = emailResponse as { data?: { id?: string }; id?: string };
         const resendId = resendData?.data?.id || resendData?.id || 'unknown';

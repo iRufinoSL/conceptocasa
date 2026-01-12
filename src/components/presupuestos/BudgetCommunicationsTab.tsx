@@ -6,7 +6,6 @@ import { supabase } from '@/integrations/supabase/client';
 import { Inbox, Send, Users, Mail } from 'lucide-react';
 import { BudgetEmailInbox } from './BudgetEmailInbox';
 import { BudgetComposeEmail } from './BudgetComposeEmail';
-import { BudgetContactsManager } from './BudgetContactsManager';
 
 interface BudgetCommunicationsTabProps {
   budgetId: string;
@@ -14,7 +13,7 @@ interface BudgetCommunicationsTabProps {
 }
 
 export function BudgetCommunicationsTab({ budgetId, isAdmin }: BudgetCommunicationsTabProps) {
-  const [activeSubTab, setActiveSubTab] = useState('contacts');
+  const [activeSubTab, setActiveSubTab] = useState('inbox');
   const [replyToEmail, setReplyToEmail] = useState<any>(null);
 
   // Fetch budget contacts for the contact selector
@@ -78,11 +77,7 @@ export function BudgetCommunicationsTab({ budgetId, isAdmin }: BudgetCommunicati
   return (
     <div className="space-y-4">
       <Tabs value={activeSubTab} onValueChange={setActiveSubTab}>
-        <TabsList className="grid w-full max-w-lg grid-cols-4">
-          <TabsTrigger value="contacts" className="gap-2">
-            <Users className="h-4 w-4" />
-            <span className="hidden sm:inline">Contactos</span>
-          </TabsTrigger>
+        <TabsList className="grid w-full max-w-md grid-cols-3">
           <TabsTrigger value="inbox" className="gap-2">
             <Inbox className="h-4 w-4" />
             <span className="hidden sm:inline">Bandeja</span>
@@ -92,15 +87,10 @@ export function BudgetCommunicationsTab({ budgetId, isAdmin }: BudgetCommunicati
             <span className="hidden sm:inline">Redactar</span>
           </TabsTrigger>
           <TabsTrigger value="quick-send" className="gap-2">
-            <Mail className="h-4 w-4" />
+            <Users className="h-4 w-4" />
             <span className="hidden sm:inline">Enviar a...</span>
           </TabsTrigger>
         </TabsList>
-
-        {/* Contacts Tab - Full BudgetContactsManager */}
-        <TabsContent value="contacts" className="mt-4">
-          <BudgetContactsManager budgetId={budgetId} isAdmin={isAdmin} />
-        </TabsContent>
 
         {/* Inbox Tab - Shows emails related to this budget */}
         <TabsContent value="inbox" className="mt-4">
@@ -137,7 +127,7 @@ export function BudgetCommunicationsTab({ budgetId, isAdmin }: BudgetCommunicati
               {contactsWithEmail.length === 0 ? (
                 <p className="text-sm text-muted-foreground py-4 text-center">
                   No hay contactos con email vinculados a este presupuesto.
-                  Añade contactos en la pestaña "Contactos" para poder enviarles emails.
+                  Añade contactos en la pestaña "QUIÉN?" para poder enviarles emails.
                 </p>
               ) : (
                 <div className="space-y-2">

@@ -9,7 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ArrowLeft, Calculator, ClipboardList, Building2, FileText, Settings, Calendar, Ruler, FileDown, Image, RefreshCw, Copy, GanttChart, Upload, X, Loader2, Euro, Home, MapPin, Users, FolderOpen, CalendarCheck } from 'lucide-react';
+import { ArrowLeft, Calculator, ClipboardList, Building2, FileText, Settings, Calendar, Ruler, FileDown, Image, RefreshCw, Copy, GanttChart, Upload, X, Loader2, Euro, Home, MapPin, Users, FolderOpen, CalendarCheck, Mail } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { AppNavDropdown } from '@/components/AppNavDropdown';
@@ -437,6 +437,10 @@ export default function PresupuestoDashboard() {
                   <span>Agenda</span>
                 </TabsTrigger>
               )}
+              <TabsTrigger value="comunicaciones" className="flex items-center gap-1.5 text-xs px-2 py-1.5">
+                <Mail className="h-3.5 w-3.5" />
+                <span>Comunicaciones</span>
+              </TabsTrigger>
               {isTabVisible('resumen') && (
                 <TabsTrigger value="resumen" className="flex items-center gap-1.5 text-xs px-2 py-1.5">
                   <Calculator className="h-3.5 w-3.5" />
@@ -520,7 +524,7 @@ export default function PresupuestoDashboard() {
           </TabsContent>
 
           <TabsContent value="contactos" className="mt-6">
-            <BudgetCommunicationsTab budgetId={presupuesto.id} isAdmin={isAdmin} />
+            <BudgetContactsManager budgetId={presupuesto.id} isAdmin={isAdmin} />
           </TabsContent>
 
           <TabsContent value="areas-trabajo" className="mt-6">
@@ -546,6 +550,10 @@ export default function PresupuestoDashboard() {
 
           <TabsContent value="agenda" className="mt-6">
             <BudgetAgendaTab budgetId={presupuesto.id} isAdmin={isAdmin} />
+          </TabsContent>
+
+          <TabsContent value="comunicaciones" className="mt-6">
+            <BudgetCommunicationsTab budgetId={presupuesto.id} isAdmin={isAdmin} />
           </TabsContent>
 
           <TabsContent value="resumen" className="mt-6">

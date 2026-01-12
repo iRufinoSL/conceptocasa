@@ -32,7 +32,9 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
+import { z } from 'zod';
+import { parseNumber as parseExcelNumber, getCellString, resourceImportSchema } from '@/lib/excel-utils';
 
 interface BudgetResource {
   id: string;
@@ -1173,25 +1175,44 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
 
     try {
       if (isExcel) {
-        // Handle Excel file
+        // Handle Excel file with ExcelJS
         const arrayBuffer = await file.arrayBuffer();
-        const workbook = XLSX.read(arrayBuffer, { type: 'array' });
-        const sheetName = workbook.SheetNames[0];
-        const worksheet = workbook.Sheets[sheetName];
+        const workbook = new ExcelJS.Workbook();
+        await workbook.xlsx.load(arrayBuffer);
         
-        // Convert to JSON with header row
-        const jsonData = XLSX.utils.sheet_to_json<Record<string, any>>(worksheet, { defval: '' });
+        const worksheet = workbook.worksheets[0];
+        if (!worksheet) {
+          toast.error('No se encontró hoja de cálculo en el archivo');
+          return;
+        }
+        
+        // Get headers from first row
+        const headers: string[] = [];
+        const headerRow = worksheet.getRow(1);
+        headerRow.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+          headers[colNumber - 1] = getCellString(cell.value).toLowerCase();
+        });
         
         const resourcesData: Array<ReturnType<typeof processRowData>> = [];
         
-        for (const row of jsonData) {
-          const processed = processRowData(row, existingNames);
+        // Process data rows (starting from row 2)
+        for (let rowIndex = 2; rowIndex <= worksheet.rowCount; rowIndex++) {
+          const row = worksheet.getRow(rowIndex);
+          if (!row.hasValues) continue;
+          
+          const rowData: Record<string, any> = {};
+          headers.forEach((header, idx) => {
+            const cell = row.getCell(idx + 1);
+            rowData[header] = cell.value;
+          });
+          
+          const processed = processRowData(rowData, existingNames);
           if (processed) resourcesData.push(processed);
         }
         
         await importResources(
           resourcesData.filter((r): r is NonNullable<typeof r> => r !== null),
-          jsonData.length
+          worksheet.rowCount - 1
         );
       } else {
         // Handle CSV file

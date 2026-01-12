@@ -19,7 +19,15 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { MeasurementMultiSelect } from '@/components/presupuestos/MeasurementMultiSelect';
 import { MeasurementsWorkAreaGroupedView } from '@/components/presupuestos/MeasurementsWorkAreaGroupedView';
 import { syncAllAffectedResources, syncResourcesRelatedUnits } from '@/lib/budget-utils';
-import * as XLSX from 'xlsx';
+import { 
+  readExcelFile, 
+  writeExcelFile, 
+  measurementImportSchema, 
+  MEASUREMENT_COLUMN_MAPPING,
+  parseNumber as parseEuropeanNumber,
+  getCellString,
+  MEASUREMENT_UNITS
+} from '@/lib/excel-utils';
 
 
 interface Measurement {
@@ -69,7 +77,7 @@ interface BudgetMeasurementsTabProps {
   isAdmin: boolean;
 }
 
-const MEASUREMENT_UNITS = ['m2', 'm3', 'ml', 'ud', 'mes', 'día', 'hora', 'kg', 't', 'l', 'pa'];
+// MEASUREMENT_UNITS imported from excel-utils
 
 export function BudgetMeasurementsTab({ budgetId, isAdmin }: BudgetMeasurementsTabProps) {
   const [measurements, setMeasurements] = useState<Measurement[]>([]);
@@ -541,47 +549,27 @@ export function BudgetMeasurementsTab({ budgetId, isAdmin }: BudgetMeasurementsT
 
     setIsImporting(true);
     try {
-      const data = await importFile.arrayBuffer();
-      const workbook = XLSX.read(data, { type: 'array' });
-      const sheetName = workbook.SheetNames[0];
-      const worksheet = workbook.Sheets[sheetName];
-      const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
+      // Use the new excel-utils module with validation
+      const result = await readExcelFile(
+        importFile, 
+        measurementImportSchema,
+        MEASUREMENT_COLUMN_MAPPING,
+        {
+          skipDuplicates: new Set(measurements.map(m => m.name.toLowerCase().trim())),
+          duplicateField: 'name'
+        }
+      );
 
-      if (jsonData.length < 2) {
-        toast.error('El archivo no contiene datos suficientes');
+      if (!result.success && result.data.length === 0) {
+        const errorMsg = result.errors[0]?.message || 'Error al procesar el archivo';
+        toast.error(errorMsg);
         return;
       }
 
-      // Get headers from first row
-      const headers = jsonData[0].map((h: any) => String(h || '').trim().toLowerCase());
-      
-      // Expected columns mapping
-      const columnMap: Record<string, string> = {
-        'nombre': 'name',
-        'medición': 'name',
-        'medicion': 'name',
-        'uds manual': 'manual_units',
-        'uds': 'manual_units',
-        'unidades': 'manual_units',
-        'ud medida': 'measurement_unit',
-        'unidad': 'measurement_unit',
-        'mediciones relacionadas': 'related_measurements',
-        'relacionadas': 'related_measurements',
-        'relaciones': 'related_measurements',
-      };
-
-      // Map header indices
-      const headerIndices: Record<string, number> = {};
-      headers.forEach((h, idx) => {
-        const mappedKey = columnMap[h];
-        if (mappedKey) {
-          headerIndices[mappedKey] = idx;
-        }
-      });
-
-      if (headerIndices['name'] === undefined) {
-        toast.error('No se encontró la columna "Nombre" o "Medición" en el archivo');
-        return;
+      // Show validation errors if any
+      if (result.errors.length > 0) {
+        console.warn('Import validation errors:', result.errors);
+        toast.warning(`${result.errors.length} filas con errores de validación omitidas`);
       }
 
       // Build a map of existing measurements by name (case-insensitive)
@@ -590,7 +578,7 @@ export function BudgetMeasurementsTab({ budgetId, isAdmin }: BudgetMeasurementsT
         existingMeasurementsMap.set(m.name.toLowerCase().trim(), m.id);
       });
 
-      // Parse rows - first pass to collect all measurements and their relations
+      // Process validated data
       interface ImportedMeasurement {
         name: string;
         manual_units: number | null;
@@ -603,29 +591,22 @@ export function BudgetMeasurementsTab({ budgetId, isAdmin }: BudgetMeasurementsT
       const newMeasurementNames = new Set<string>();
       let duplicateCount = 0;
 
-      for (let i = 1; i < jsonData.length; i++) {
-        const row = jsonData[i];
-        if (!row || row.length === 0) continue;
-
-        const name = String(row[headerIndices['name']] || '').trim();
+      for (const row of result.data) {
+        const name = row.name;
         if (!name) continue;
 
         const isExisting = existingMeasurementsMap.has(name.toLowerCase());
         
         // Parse related measurements (comma or semicolon separated)
         let relatedNames: string[] = [];
-        if (headerIndices['related_measurements'] !== undefined) {
-          const relatedStr = String(row[headerIndices['related_measurements']] || '').trim();
-          if (relatedStr) {
-            relatedNames = relatedStr
-              .split(/[,;]/)
-              .map(s => s.trim())
-              .filter(s => s.length > 0);
-          }
+        if (row.related_measurements) {
+          relatedNames = row.related_measurements
+            .split(/[,;]/)
+            .map(s => s.trim())
+            .filter(s => s.length > 0);
         }
 
         if (isExisting) {
-          // For existing measurements, we'll only update relations if specified
           if (relatedNames.length > 0) {
             importedMeasurements.push({
               name,
@@ -639,28 +620,14 @@ export function BudgetMeasurementsTab({ budgetId, isAdmin }: BudgetMeasurementsT
           continue;
         }
 
-        // Check if already added in this import batch
         if (newMeasurementNames.has(name.toLowerCase())) {
           continue;
         }
 
-        const manualUnits = headerIndices['manual_units'] !== undefined 
-          ? parseEuropeanNumber(row[headerIndices['manual_units']]) 
-          : null;
-        
-        let measurementUnit = headerIndices['measurement_unit'] !== undefined 
-          ? String(row[headerIndices['measurement_unit']] || '').trim().toLowerCase() 
-          : 'ud';
-        
-        // Validate measurement unit
-        if (!MEASUREMENT_UNITS.includes(measurementUnit)) {
-          measurementUnit = 'ud';
-        }
-
         importedMeasurements.push({
           name,
-          manual_units: manualUnits,
-          measurement_unit: measurementUnit,
+          manual_units: row.manual_units ?? null,
+          measurement_unit: row.measurement_unit || 'ud',
           related_names: relatedNames,
           isNew: true
         });
@@ -695,13 +662,12 @@ export function BudgetMeasurementsTab({ budgetId, isAdmin }: BudgetMeasurementsT
         if (insertError) throw insertError;
         insertedMeasurements = insertedData || [];
 
-        // Add inserted measurements to our map
         insertedMeasurements.forEach(m => {
           existingMeasurementsMap.set(m.name.toLowerCase().trim(), m.id);
         });
       }
 
-      // Now create relations
+      // Create relations
       const relationsToInsert: Array<{ measurement_id: string; related_measurement_id: string }> = [];
       const existingRelationsSet = new Set(
         relations.map(r => `${r.measurement_id}:${r.related_measurement_id}`)
@@ -716,7 +682,7 @@ export function BudgetMeasurementsTab({ budgetId, isAdmin }: BudgetMeasurementsT
         for (const relatedName of imported.related_names) {
           const relatedId = existingMeasurementsMap.get(relatedName.toLowerCase().trim());
           if (!relatedId) continue;
-          if (relatedId === measurementId) continue; // No self-relation
+          if (relatedId === measurementId) continue;
 
           const relationKey = `${measurementId}:${relatedId}`;
           if (existingRelationsSet.has(relationKey)) continue;
@@ -763,7 +729,7 @@ export function BudgetMeasurementsTab({ budgetId, isAdmin }: BudgetMeasurementsT
   };
 
   // Handle export to Excel
-  const handleExport = () => {
+  const handleExport = async () => {
     if (measurements.length === 0) {
       toast.error('No hay mediciones para exportar');
       return;
@@ -795,45 +761,39 @@ export function BudgetMeasurementsTab({ budgetId, isAdmin }: BudgetMeasurementsT
           .join('; ');
 
         // Calculate values
-        const relatedUnits = getRelatedUnits(measurement.id);
+        const relatedUnitsVal = getRelatedUnits(measurement.id);
         const calculatedUnits = getCalculatedUnits(measurement);
 
         return {
-          'Nombre': measurement.name,
-          'Uds Manual': measurement.manual_units !== null ? measurement.manual_units : '',
-          'Ud Medida': measurement.measurement_unit || 'ud',
-          'Mediciones Relacionadas': relatedNames,
-          'Uds Relacionadas': relatedUnits > 0 ? relatedUnits : '',
-          'Uds Cálculo': calculatedUnits,
-          'Actividades Relacionadas': relatedActivitiesNames,
-          'MediciónID': generateMedicionId(measurement)
+          Nombre: measurement.name,
+          UdsManual: measurement.manual_units !== null ? measurement.manual_units : '',
+          UdMedida: measurement.measurement_unit || 'ud',
+          MedicionesRelacionadas: relatedNames,
+          UdsRelacionadas: relatedUnitsVal > 0 ? relatedUnitsVal : '',
+          UdsCalculo: calculatedUnits,
+          ActividadesRelacionadas: relatedActivitiesNames,
+          MedicionID: generateMedicionId(measurement)
         };
       });
 
-      // Create workbook and worksheet
-      const worksheet = XLSX.utils.json_to_sheet(exportData);
-      const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, worksheet, 'Mediciones');
-
-      // Auto-size columns
-      const colWidths = [
-        { wch: 30 }, // Nombre
-        { wch: 12 }, // Uds Manual
-        { wch: 10 }, // Ud Medida
-        { wch: 40 }, // Mediciones Relacionadas
-        { wch: 15 }, // Uds Relacionadas
-        { wch: 12 }, // Uds Cálculo
-        { wch: 50 }, // Actividades Relacionadas
-        { wch: 60 }, // MediciónID
+      // Define columns for export
+      const columns = [
+        { header: 'Nombre', key: 'Nombre', width: 30 },
+        { header: 'Uds Manual', key: 'UdsManual', width: 12 },
+        { header: 'Ud Medida', key: 'UdMedida', width: 10 },
+        { header: 'Mediciones Relacionadas', key: 'MedicionesRelacionadas', width: 40 },
+        { header: 'Uds Relacionadas', key: 'UdsRelacionadas', width: 15 },
+        { header: 'Uds Cálculo', key: 'UdsCalculo', width: 12 },
+        { header: 'Actividades Relacionadas', key: 'ActividadesRelacionadas', width: 50 },
+        { header: 'MediciónID', key: 'MedicionID', width: 60 },
       ];
-      worksheet['!cols'] = colWidths;
 
       // Generate filename with date
       const date = new Date().toISOString().split('T')[0];
       const fileName = `mediciones_${date}.xlsx`;
 
-      // Download
-      XLSX.writeFile(workbook, fileName);
+      // Use the new writeExcelFile utility
+      await writeExcelFile(exportData, columns, fileName, 'Mediciones');
       toast.success(`Exportadas ${measurements.length} mediciones`);
     } catch (error) {
       console.error('Error exporting:', error);

@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { Mail, Send, FileText, Paperclip, X, Plus, File } from 'lucide-react';
+import { Mail, Send, FileText, Paperclip, X, Plus, File, ChevronDown } from 'lucide-react';
 import type { Tables } from '@/integrations/supabase/types';
 
 type EmailTemplate = Tables<'email_templates'>;
@@ -43,6 +43,8 @@ export function SendEmailDialog({ open, onOpenChange, contact, contacts }: SendE
   const [variables, setVariables] = useState<Record<string, string>>({});
   const [attachments, setAttachments] = useState<AttachmentFile[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const [showScrollIndicator, setShowScrollIndicator] = useState(false);
   
 
   const recipients = contacts || (contact ? [contact] : []);
@@ -64,6 +66,41 @@ export function SendEmailDialog({ open, onOpenChange, contact, contacts }: SendE
     },
     enabled: open,
   });
+
+  // Check if content is scrollable and update indicator
+  useEffect(() => {
+    const checkScroll = () => {
+      if (scrollContainerRef.current) {
+        const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current;
+        const isScrollable = scrollHeight > clientHeight;
+        const isNotAtBottom = scrollTop + clientHeight < scrollHeight - 20;
+        setShowScrollIndicator(isScrollable && isNotAtBottom);
+      }
+    };
+
+    // Check initially and after content changes
+    checkScroll();
+    const timer = setTimeout(checkScroll, 100);
+
+    return () => clearTimeout(timer);
+  }, [open, templates, selectedTemplate, attachments]);
+
+  const handleScroll = () => {
+    if (scrollContainerRef.current) {
+      const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current;
+      const isNotAtBottom = scrollTop + clientHeight < scrollHeight - 20;
+      setShowScrollIndicator(isNotAtBottom);
+    }
+  };
+
+  const scrollToBottom = () => {
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTo({
+        top: scrollContainerRef.current.scrollHeight,
+        behavior: 'smooth'
+      });
+    }
+  };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -200,8 +237,64 @@ export function SendEmailDialog({ open, onOpenChange, contact, contacts }: SendE
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex-1 overflow-y-auto pr-2 min-h-0">
+        <div 
+          ref={scrollContainerRef}
+          onScroll={handleScroll}
+          className="flex-1 overflow-y-auto pr-2 min-h-0 relative"
+        >
           <div className="space-y-4 pb-4">
+            {/* Attachments - Moved to top for visibility */}
+            <div className="space-y-2 border border-primary/30 rounded-lg p-3 bg-primary/5">
+              <div className="flex items-center justify-between">
+                <Label className="flex items-center gap-2 text-sm font-medium">
+                  <Paperclip className="h-4 w-4 text-primary" />
+                  Archivos adjuntos {attachments.length > 0 && `(${attachments.length})`}
+                </Label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="gap-1 h-7 text-xs"
+                >
+                  <Plus className="h-3 w-3" />
+                  Añadir
+                </Button>
+              </div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                className="hidden"
+                onChange={handleFileSelect}
+              />
+              {attachments.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {attachments.map((attachment, index) => (
+                    <div 
+                      key={index} 
+                      className="flex items-center gap-1.5 bg-background border rounded px-2 py-1"
+                    >
+                      <File className="h-3 w-3 flex-shrink-0 text-primary" />
+                      <span className="text-xs truncate max-w-[120px]">{attachment.name}</span>
+                      <span className="text-[10px] text-muted-foreground">
+                        ({formatFileSize(attachment.size)})
+                      </span>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => removeAttachment(index)}
+                        className="h-5 w-5 p-0 ml-1"
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
             {/* Recipients info */}
             <div className="bg-muted/50 p-3 rounded-lg">
               <p className="text-sm text-muted-foreground">
@@ -281,72 +374,25 @@ export function SendEmailDialog({ open, onOpenChange, contact, contacts }: SendE
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
                 placeholder="Escribe el contenido del email (HTML permitido)..."
-                className="min-h-[150px] font-mono text-sm"
+                className="min-h-[120px] font-mono text-sm"
               />
               <p className="text-xs text-muted-foreground">
                 Puedes usar HTML para dar formato. Variables disponibles: {'{{nombre}}'}, {'{{email}}'}, {'{{empresa_nombre}}'}
               </p>
             </div>
-
-            {/* Attachments - More prominent section */}
-            <div className="space-y-3 border-2 border-dashed border-primary/30 rounded-lg p-4 bg-primary/5">
-              <div className="flex items-center justify-between">
-                <Label className="flex items-center gap-2 text-base font-medium">
-                  <Paperclip className="h-5 w-5 text-primary" />
-                  Archivos adjuntos
-                </Label>
-                <Button
-                  type="button"
-                  variant="default"
-                  size="sm"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="gap-2"
-                >
-                  <Plus className="h-4 w-4" />
-                  Añadir archivo
-                </Button>
-              </div>
-              <input
-                ref={fileInputRef}
-                type="file"
-                multiple
-                className="hidden"
-                onChange={handleFileSelect}
-              />
-              {attachments.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-2">
-                  Haz clic en "Añadir archivo" para adjuntar documentos al email
-                </p>
-              ) : (
-                <div className="border rounded-lg p-3 space-y-2 bg-background">
-                  {attachments.map((attachment, index) => (
-                    <div 
-                      key={index} 
-                      className="flex items-center justify-between bg-muted/50 rounded px-3 py-2"
-                    >
-                      <div className="flex items-center gap-2 min-w-0">
-                        <File className="h-4 w-4 flex-shrink-0 text-primary" />
-                        <span className="text-sm truncate">{attachment.name}</span>
-                        <span className="text-xs text-muted-foreground flex-shrink-0">
-                          ({formatFileSize(attachment.size)})
-                        </span>
-                      </div>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => removeAttachment(index)}
-                        className="h-6 w-6 p-0"
-                      >
-                        <X className="h-3 w-3" />
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
           </div>
         </div>
+
+        {/* Scroll indicator */}
+        {showScrollIndicator && (
+          <button
+            onClick={scrollToBottom}
+            className="absolute bottom-20 left-1/2 -translate-x-1/2 flex items-center gap-1 px-3 py-1.5 bg-primary text-primary-foreground rounded-full shadow-lg text-xs animate-bounce hover:bg-primary/90 transition-colors"
+          >
+            <ChevronDown className="h-3 w-3" />
+            Más contenido
+          </button>
+        )}
 
         <DialogFooter className="flex-shrink-0 pt-4 border-t mt-2">
           <div className="flex gap-2 ml-auto">

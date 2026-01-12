@@ -9,10 +9,11 @@ import { BudgetComposeEmail } from './BudgetComposeEmail';
 
 interface BudgetCommunicationsTabProps {
   budgetId: string;
+  projectId: string | null;
   isAdmin: boolean;
 }
 
-export function BudgetCommunicationsTab({ budgetId, isAdmin }: BudgetCommunicationsTabProps) {
+export function BudgetCommunicationsTab({ budgetId, projectId, isAdmin }: BudgetCommunicationsTabProps) {
   const [activeSubTab, setActiveSubTab] = useState('inbox');
   const [replyToEmail, setReplyToEmail] = useState<any>(null);
 
@@ -105,6 +106,7 @@ export function BudgetCommunicationsTab({ budgetId, isAdmin }: BudgetCommunicati
         <TabsContent value="compose" className="mt-4">
           <BudgetComposeEmail 
             budgetId={budgetId}
+            projectId={projectId}
             budgetContacts={contactsWithEmail}
             replyTo={replyToEmail} 
             onSent={() => {

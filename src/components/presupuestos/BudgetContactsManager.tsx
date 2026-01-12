@@ -10,7 +10,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { Plus, Trash2, Users, Building2, UserPlus, ChevronDown, List, FolderOpen, Search, X, Mail, Pencil } from 'lucide-react';
+import { Plus, Trash2, Users, Building2, UserPlus, ChevronDown, List, FolderOpen, Search, X, Mail, Pencil, MessageCircle } from 'lucide-react';
 import { ContactForm } from '@/components/crm/ContactForm';
 import { SendEmailDialog } from '@/components/crm/SendEmailDialog';
 
@@ -246,6 +246,16 @@ export function BudgetContactsManager({ budgetId, isAdmin }: BudgetContactsManag
     return first + second;
   };
 
+  const handleSendWhatsApp = (contact: Contact) => {
+    if (!contact.phone) return;
+    // Clean phone number - remove spaces, dashes, etc
+    const cleanPhone = contact.phone.replace(/[\s\-\(\)]/g, '');
+    // Add country code if not present (Spain default)
+    const phoneWithCode = cleanPhone.startsWith('+') ? cleanPhone.replace('+', '') : `34${cleanPhone}`;
+    const waUrl = `https://wa.me/${phoneWithCode}`;
+    window.open(waUrl, '_blank');
+  };
+
   const clients = budgetContacts.filter(bc => bc.contact_role === 'cliente');
   const providers = budgetContacts.filter(bc => bc.contact_role === 'proveedor');
   const others = budgetContacts.filter(bc => bc.contact_role === 'otros');
@@ -358,6 +368,22 @@ export function BudgetContactsManager({ budgetId, isAdmin }: BudgetContactsManag
         </div>
       </div>
       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        {bc.contact?.phone && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 text-green-600 hover:text-green-700"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (bc.contact) {
+                handleSendWhatsApp(bc.contact);
+              }
+            }}
+            title="Enviar WhatsApp"
+          >
+            <MessageCircle className="h-4 w-4" />
+          </Button>
+        )}
         {bc.contact?.email && (
           <Button
             variant="ghost"

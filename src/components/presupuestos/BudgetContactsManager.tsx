@@ -10,8 +10,9 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { Plus, Trash2, Users, Building2, UserPlus, ChevronDown, List, FolderOpen, Search, X } from 'lucide-react';
+import { Plus, Trash2, Users, Building2, UserPlus, ChevronDown, List, FolderOpen, Search, X, Mail, Pencil } from 'lucide-react';
 import { ContactForm } from '@/components/crm/ContactForm';
+import { SendEmailDialog } from '@/components/crm/SendEmailDialog';
 
 interface ProfessionalActivity {
   id: string;
@@ -56,6 +57,10 @@ export function BudgetContactsManager({ budgetId, isAdmin }: BudgetContactsManag
   const [showNewContactDialog, setShowNewContactDialog] = useState(false);
   const [expandedActivities, setExpandedActivities] = useState<Set<string>>(new Set());
   const [othersSearchTerm, setOthersSearchTerm] = useState('');
+  const [emailDialogOpen, setEmailDialogOpen] = useState(false);
+  const [emailContact, setEmailContact] = useState<Contact | null>(null);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editContact, setEditContact] = useState<Contact | null>(null);
 
   const fetchData = async () => {
     setIsLoading(true);
@@ -313,40 +318,63 @@ export function BudgetContactsManager({ budgetId, isAdmin }: BudgetContactsManag
           {bc.contact?.email && (
             <>
               {bc.contact?.professional_activities && bc.contact.professional_activities.length > 0 && <span>•</span>}
-              <a 
-                href={`mailto:${bc.contact.email}`}
-                className="hover:underline hover:text-primary transition-colors"
-                onClick={(e) => e.stopPropagation()}
-              >
-                {bc.contact.email}
-              </a>
+              <span className="truncate max-w-[150px]">{bc.contact.email}</span>
             </>
           )}
           {bc.contact?.phone && (
             <>
               <span>•</span>
-              <a 
-                href={`tel:${bc.contact.phone.replace(/[^\d+]/g, '')}`}
-                className="hover:underline hover:text-primary transition-colors"
-                onClick={(e) => e.stopPropagation()}
-              >
-                {bc.contact.phone}
-              </a>
+              <span>{bc.contact.phone}</span>
             </>
           )}
           {bc.contact?.city && <span>• {bc.contact.city}</span>}
         </div>
       </div>
-      {isAdmin && (
+      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        {bc.contact?.email && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 text-primary hover:text-primary"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (bc.contact) {
+                setEmailContact(bc.contact);
+                setEmailDialogOpen(true);
+              }
+            }}
+            title="Enviar email"
+          >
+            <Mail className="h-4 w-4" />
+          </Button>
+        )}
         <Button
           variant="ghost"
           size="icon"
-          className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity text-destructive hover:text-destructive"
-          onClick={() => handleRemoveContact(bc.id, role)}
+          className="h-8 w-8"
+          onClick={(e) => {
+            e.stopPropagation();
+            if (bc.contact) {
+              setEditContact(bc.contact);
+              setEditDialogOpen(true);
+            }
+          }}
+          title="Editar contacto"
         >
-          <Trash2 className="h-4 w-4" />
+          <Pencil className="h-4 w-4" />
         </Button>
-      )}
+        {isAdmin && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 text-destructive hover:text-destructive"
+            onClick={() => handleRemoveContact(bc.id, role)}
+            title="Eliminar de presupuesto"
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        )}
+      </div>
     </div>
   );
 
@@ -607,6 +635,55 @@ export function BudgetContactsManager({ budgetId, isAdmin }: BudgetContactsManag
         onOpenChange={setShowNewContactDialog}
         contact={null}
         onSuccess={handleNewContactSaved}
+      />
+
+      {/* Send Email Dialog */}
+      <SendEmailDialog
+        open={emailDialogOpen}
+        onOpenChange={setEmailDialogOpen}
+        contact={emailContact ? {
+          id: emailContact.id,
+          name: emailContact.name,
+          surname: emailContact.surname,
+          email: emailContact.email
+        } : undefined}
+      />
+
+      {/* Edit Contact Form */}
+      <ContactForm
+        open={editDialogOpen}
+        onOpenChange={(open) => {
+          setEditDialogOpen(open);
+          if (!open) {
+            setEditContact(null);
+            fetchData(); // Refresh data after edit
+          }
+        }}
+        contact={editContact ? {
+          id: editContact.id,
+          name: editContact.name,
+          surname: editContact.surname,
+          email: editContact.email,
+          phone: editContact.phone,
+          contact_type: editContact.contact_type,
+          city: editContact.city,
+          status: 'active',
+          created_at: null,
+          address: null,
+          province: null,
+          postal_code: null,
+          country: null,
+          nif_dni: null,
+          website: null,
+          observations: null,
+          tags: null,
+          professional_activity_id: null
+        } : null}
+        onSuccess={() => {
+          setEditDialogOpen(false);
+          setEditContact(null);
+          fetchData();
+        }}
       />
     </>
   );

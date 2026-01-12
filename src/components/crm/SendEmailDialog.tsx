@@ -189,7 +189,7 @@ export function SendEmailDialog({ open, onOpenChange, contact, contacts }: SendE
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
+      <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col overflow-hidden">
         <DialogHeader className="flex-shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <Mail className="h-5 w-5" />
@@ -200,7 +200,7 @@ export function SendEmailDialog({ open, onOpenChange, contact, contacts }: SendE
           </DialogDescription>
         </DialogHeader>
 
-        <ScrollArea className="flex-1 pr-4">
+        <div className="flex-1 overflow-y-auto pr-2 min-h-0">
           <div className="space-y-4 pb-4">
             {/* Recipients info */}
             <div className="bg-muted/50 p-3 rounded-lg">
@@ -281,23 +281,23 @@ export function SendEmailDialog({ open, onOpenChange, contact, contacts }: SendE
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
                 placeholder="Escribe el contenido del email (HTML permitido)..."
-                className="min-h-[200px] font-mono text-sm"
+                className="min-h-[150px] font-mono text-sm"
               />
               <p className="text-xs text-muted-foreground">
                 Puedes usar HTML para dar formato. Variables disponibles: {'{{nombre}}'}, {'{{email}}'}, {'{{empresa_nombre}}'}
               </p>
             </div>
 
-            {/* Attachments */}
-            <div className="space-y-3 border rounded-lg p-4 bg-muted/30">
+            {/* Attachments - More prominent section */}
+            <div className="space-y-3 border-2 border-dashed border-primary/30 rounded-lg p-4 bg-primary/5">
               <div className="flex items-center justify-between">
-                <Label className="flex items-center gap-2">
-                  <Paperclip className="h-4 w-4" />
+                <Label className="flex items-center gap-2 text-base font-medium">
+                  <Paperclip className="h-5 w-5 text-primary" />
                   Archivos adjuntos
                 </Label>
                 <Button
                   type="button"
-                  variant="secondary"
+                  variant="default"
                   size="sm"
                   onClick={() => fileInputRef.current?.click()}
                   className="gap-2"
@@ -313,15 +313,19 @@ export function SendEmailDialog({ open, onOpenChange, contact, contacts }: SendE
                 className="hidden"
                 onChange={handleFileSelect}
               />
-              {attachments.length > 0 && (
-                <div className="border rounded-lg p-3 space-y-2">
+              {attachments.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-2">
+                  Haz clic en "Añadir archivo" para adjuntar documentos al email
+                </p>
+              ) : (
+                <div className="border rounded-lg p-3 space-y-2 bg-background">
                   {attachments.map((attachment, index) => (
                     <div 
                       key={index} 
                       className="flex items-center justify-between bg-muted/50 rounded px-3 py-2"
                     >
                       <div className="flex items-center gap-2 min-w-0">
-                        <File className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
+                        <File className="h-4 w-4 flex-shrink-0 text-primary" />
                         <span className="text-sm truncate">{attachment.name}</span>
                         <span className="text-xs text-muted-foreground flex-shrink-0">
                           ({formatFileSize(attachment.size)})
@@ -342,9 +346,9 @@ export function SendEmailDialog({ open, onOpenChange, contact, contacts }: SendE
               )}
             </div>
           </div>
-        </ScrollArea>
+        </div>
 
-        <DialogFooter className="flex-shrink-0 pt-4 border-t">
+        <DialogFooter className="flex-shrink-0 pt-4 border-t mt-2">
           <div className="flex gap-2 ml-auto">
             <Button variant="outline" onClick={() => onOpenChange(false)}>
               Cancelar

@@ -10,8 +10,10 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { X, Plus, Briefcase, Users, FileText, Search } from 'lucide-react';
+import { X, Plus, Briefcase, Users, FileText, Search, Mail, ArrowUpRight, ArrowDownLeft } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { format } from 'date-fns';
+import { es } from 'date-fns/locale';
 import type { Contact } from '@/pages/CRM';
 
 interface ProfessionalActivity {
@@ -43,6 +45,16 @@ interface AvailableBudget {
   poblacion: string;
 }
 
+interface ContactCommunication {
+  id: string;
+  subject: string | null;
+  direction: string;
+  status: string;
+  created_at: string;
+  from_email: string;
+  to_emails: string[];
+}
+
 interface ContactFormProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -72,6 +84,8 @@ export function ContactForm({ open, onOpenChange, contact, onSuccess }: ContactF
   const [selectedBudgetIds, setSelectedBudgetIds] = useState<string[]>([]);
   const [budgetSearchTerm, setBudgetSearchTerm] = useState('');
   
+  // Communications
+  const [contactCommunications, setContactCommunications] = useState<ContactCommunication[]>([]);
   const [formData, setFormData] = useState({
     name: '',
     surname: '',
@@ -203,6 +217,19 @@ export function ContactForm({ open, onOpenChange, contact, onSuccess }: ContactF
           setRelatedBudgets(budgets);
           setSelectedBudgetIds(budgets.map(b => b.id));
         }
+
+        // Fetch communications related to this contact
+        const { data: communications } = await supabase
+          .from('email_messages')
+          .select('id, subject, direction, status, created_at, from_email, to_emails')
+          .eq('contact_id', contact.id)
+          .is('deleted_at', null)
+          .order('created_at', { ascending: false })
+          .limit(20);
+        
+        if (communications) {
+          setContactCommunications(communications);
+        }
       };
       fetchContactData();
     } else if (!contact && open) {
@@ -230,6 +257,7 @@ export function ContactForm({ open, onOpenChange, contact, onSuccess }: ContactF
       setActivitySearchTerm('');
       setContactSearchTerm('');
       setBudgetSearchTerm('');
+      setContactCommunications([]);
     }
   }, [contact, open]);
 
@@ -752,6 +780,71 @@ export function ContactForm({ open, onOpenChange, contact, onSuccess }: ContactF
               )}
             </div>
           </div>
+
+          {/* Communications - only shown when editing an existing contact */}
+          {contact && (
+            <div className="space-y-2">
+              <Label className="flex items-center gap-2">
+                <Mail className="h-4 w-4" />
+                Comunicaciones
+                {contactCommunications.length > 0 && (
+                  <Badge variant="secondary" className="ml-auto">{contactCommunications.length}</Badge>
+                )}
+              </Label>
+              {contactCommunications.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-2">
+                  No hay comunicaciones registradas con este contacto.
+                </p>
+              ) : (
+                <ScrollArea className="h-40 rounded-md border">
+                  <div className="p-2 space-y-2">
+                    {contactCommunications.map(comm => (
+                      <div 
+                        key={comm.id} 
+                        className="flex items-start gap-3 p-2 rounded hover:bg-muted/50"
+                      >
+                        <div className={`mt-0.5 ${comm.direction === 'inbound' ? 'text-green-600' : 'text-blue-600'}`}>
+                          {comm.direction === 'inbound' ? (
+                            <ArrowDownLeft className="h-4 w-4" />
+                          ) : (
+                            <ArrowUpRight className="h-4 w-4" />
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">
+                            {comm.subject || '(Sin asunto)'}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {comm.direction === 'inbound' 
+                              ? `De: ${comm.from_email}`
+                              : `Para: ${comm.to_emails?.join(', ') || 'Desconocido'}`
+                            }
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {format(new Date(comm.created_at), "d MMM yyyy 'a las' HH:mm", { locale: es })}
+                          </p>
+                        </div>
+                        <Badge 
+                          variant="outline" 
+                          className={`text-xs ${
+                            comm.status === 'sent' ? 'text-blue-600' :
+                            comm.status === 'received' ? 'text-green-600' :
+                            comm.status === 'failed' ? 'text-red-600' :
+                            'text-muted-foreground'
+                          }`}
+                        >
+                          {comm.status === 'sent' ? 'Enviado' :
+                           comm.status === 'received' ? 'Recibido' :
+                           comm.status === 'failed' ? 'Fallido' :
+                           comm.status}
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
+                </ScrollArea>
+              )}
+            </div>
+          )}
 
           {/* Tags */}
           <div className="space-y-2">

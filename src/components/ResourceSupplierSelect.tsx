@@ -70,9 +70,14 @@ export function ResourceSupplierSelect({ value, onChange }: ResourceSupplierSele
     return contact.city ? `${fullName} (${contact.city})` : fullName;
   };
 
-  const handleNewContactSaved = async () => {
+  const handleNewContactSaved = async (newContactId?: string) => {
     await fetchContacts();
     setShowNewContactDialog(false);
+    // Select the newly created contact
+    if (newContactId) {
+      const newContact = contacts.find(c => c.id === newContactId);
+      onChange(newContactId, newContact);
+    }
   };
 
   return (

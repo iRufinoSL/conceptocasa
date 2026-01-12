@@ -76,19 +76,12 @@ export function ContactSelectWithCreate({
     return contact.city ? `${fullName} (${contact.city})` : fullName;
   };
 
-  const handleNewContactSaved = async () => {
+  const handleNewContactSaved = async (newContactId?: string) => {
     await fetchContacts();
     setShowNewContactDialog(false);
-    // Select the most recently created contact
-    const { data } = await supabase
-      .from('crm_contacts')
-      .select('id')
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .single();
-    
-    if (data) {
-      onChange(data.id);
+    // Select the newly created contact using the passed ID
+    if (newContactId) {
+      onChange(newContactId);
     }
   };
 

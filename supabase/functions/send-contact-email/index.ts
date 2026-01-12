@@ -36,6 +36,9 @@ interface ContactEmailRequest {
   phone: string;
   subject: string;
   message: string;
+  // Attachment fields
+  attachmentPaths?: string[];
+  attachmentNames?: string[];
   // Housing profile fields
   isHousingProfile?: boolean;
   numPlantas?: string;
@@ -204,7 +207,7 @@ const handler = async (req: Request): Promise<Response> => {
     }
 
     const requestData = body as ContactEmailRequest;
-    const { name, email, phone, subject, message, isHousingProfile } = requestData;
+    const { name, email, phone, subject, message, isHousingProfile, attachmentPaths, attachmentNames } = requestData;
 
     console.log(
       "Received contact form submission from IP:",
@@ -213,6 +216,8 @@ const handler = async (req: Request): Promise<Response> => {
       origin,
       "- Is Housing Profile:",
       isHousingProfile,
+      "- Attachments:",
+      attachmentPaths?.length || 0,
       "- Remaining requests:",
       rateLimit.remaining
     );
@@ -430,6 +435,26 @@ const handler = async (req: Request): Promise<Response> => {
       } else {
         console.log("System alert created");
       }
+      
+      // 7. Save attachment references to database if there are any
+      if (attachmentPaths && attachmentPaths.length > 0) {
+        console.log("Saving attachment references for project:", projectId);
+        for (let i = 0; i < attachmentPaths.length; i++) {
+          const { error: attachmentError } = await supabase
+            .from('contact_form_attachments')
+            .insert({
+              project_id: projectId,
+              file_path: attachmentPaths[i],
+              file_name: attachmentNames?.[i] || attachmentPaths[i].split('/').pop() || 'unknown',
+              file_type: attachmentPaths[i].split('.').pop() || null
+            });
+          
+          if (attachmentError) {
+            console.error("Error saving attachment reference:", attachmentError);
+          }
+        }
+        console.log(`Saved ${attachmentPaths.length} attachment references`);
+      }
     }
 
     // Send notification email to the company
@@ -458,6 +483,14 @@ const handler = async (req: Request): Promise<Response> => {
           <hr />
           <p><strong>Mensaje:</strong></p>
           <p>${safeMessage}</p>
+          ${attachmentPaths && attachmentPaths.length > 0 ? `
+          <hr />
+          <p><strong>📎 Archivos adjuntos (${attachmentPaths.length}):</strong></p>
+          <ul>
+            ${attachmentNames?.map((name, i) => `<li>${escapeHtml(name)}</li>`).join('') || attachmentPaths.map(p => `<li>${escapeHtml(p.split('/').pop() || 'archivo')}</li>`).join('')}
+          </ul>
+          <p style="color: #666; font-size: 12px;">Los archivos están disponibles en el panel de administración.</p>
+          ` : ''}
           ${isHousingProfile ? `
           <hr />
           <p style="color: #666; font-size: 12px;">

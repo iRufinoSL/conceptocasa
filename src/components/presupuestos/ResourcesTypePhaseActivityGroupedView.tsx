@@ -3,7 +3,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ChevronDown, ChevronRight, Pencil, Trash2, Package, Wrench, Truck, Briefcase, CheckSquare, Calculator, Filter, FilterX } from 'lucide-react';
+import { ChevronDown, ChevronRight, Pencil, Trash2, Package, Wrench, Truck, Briefcase, CheckSquare, Filter, FilterX } from 'lucide-react';
 import { formatCurrency, formatNumber, formatPercent } from '@/lib/format-utils';
 import { ResourceInlineEdit } from './ResourceInlineEdit';
 
@@ -276,28 +276,22 @@ export function ResourcesTypePhaseActivityGroupedView({
     setExpandedActivities(newExpanded);
   };
 
+  // Toggle activity selection - when selecting, automatically filter to show only selected
   const toggleActivitySelection = (activityId: string) => {
     const newSelected = new Set(selectedActivityIds);
     if (newSelected.has(activityId)) {
       newSelected.delete(activityId);
+      // If no activities selected anymore, show all
+      if (newSelected.size === 0) {
+        setShowOnlySelected(false);
+      }
     } else {
       newSelected.add(activityId);
+      // When selecting activities, automatically show only selected
+      setShowOnlySelected(true);
     }
     setSelectedActivityIds(newSelected);
   };
-
-  const handleRecalculate = useCallback(() => {
-    setShowOnlySelected(true);
-  }, []);
-
-  const handleShowAll = useCallback(() => {
-    setShowOnlySelected(false);
-  }, []);
-
-  const clearActivitySelection = useCallback(() => {
-    setSelectedActivityIds(new Set());
-    setShowOnlySelected(false);
-  }, []);
 
   // Get phase name
   const getPhaseName = (phaseId: string) => {
@@ -323,76 +317,31 @@ export function ResourcesTypePhaseActivityGroupedView({
     return types.filter(type => (typeResourceCounts[type] || 0) > 0);
   }, [typeResourceCounts]);
 
-  // Get all unique activities from resources
-  const availableActivities = useMemo(() => {
-    const activitySet = new Set<string>();
-    resources.forEach(r => {
-      if (r.activity_id) activitySet.add(r.activity_id);
-    });
-    return activities.filter(a => activitySet.has(a.id));
-  }, [resources, activities]);
-
   return (
     <div className="space-y-4">
-      {/* Activity Filter Controls */}
-      <div className="flex flex-wrap items-center gap-2 p-3 bg-muted/30 rounded-lg border">
-        <span className="text-sm font-medium text-muted-foreground">Filtrar por Actividades:</span>
-        <div className="flex flex-wrap gap-1 flex-1">
-          {availableActivities.map(activity => {
-            const phase = activity.phase_id ? phases.find(p => p.id === activity.phase_id) : null;
-            const isSelected = selectedActivityIds.has(activity.id);
-            return (
-              <Badge
-                key={activity.id}
-                variant={isSelected ? "default" : "outline"}
-                className={`cursor-pointer transition-colors ${isSelected ? '' : 'hover:bg-muted'}`}
-                onClick={() => toggleActivitySelection(activity.id)}
-              >
-                {phase?.code || ''} {activity.code}.-{activity.name}
-              </Badge>
-            );
-          })}
-        </div>
-        <div className="flex items-center gap-2">
-          {selectedActivityIds.size > 0 && (
-            <>
-              <Button
-                size="sm"
-                variant={showOnlySelected ? "secondary" : "default"}
-                onClick={handleRecalculate}
-                className="gap-1.5"
-              >
-                <Calculator className="h-4 w-4" />
-                Recalcular ({selectedActivityIds.size})
-              </Button>
-              {showOnlySelected && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={handleShowAll}
-                  className="gap-1.5"
-                >
-                  <FilterX className="h-4 w-4" />
-                  Mostrar todos
-                </Button>
-              )}
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={clearActivitySelection}
-              >
-                Limpiar
-              </Button>
-            </>
-          )}
-          {showOnlySelected && (
+      {/* Show filter info only when filtering is active */}
+      {showOnlySelected && selectedActivityIds.size > 0 && (
+        <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg border">
+          <div className="flex items-center gap-2">
             <Badge variant="secondary" className="gap-1">
               <Filter className="h-3 w-3" />
-              Filtrado activo
+              Mostrando {selectedActivityIds.size} actividad{selectedActivityIds.size > 1 ? 'es' : ''} seleccionada{selectedActivityIds.size > 1 ? 's' : ''}
             </Badge>
-          )}
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              setSelectedActivityIds(new Set());
+              setShowOnlySelected(false);
+            }}
+            className="gap-1.5"
+          >
+            <FilterX className="h-4 w-4" />
+            Mostrar todos
+          </Button>
         </div>
-      </div>
+      )}
 
       <div className="rounded-md border overflow-x-auto">
         <Table>

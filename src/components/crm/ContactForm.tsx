@@ -10,7 +10,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { X, Plus, Briefcase, Users, FileText } from 'lucide-react';
+import { X, Plus, Briefcase, Users, FileText, Search } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import type { Contact } from '@/pages/CRM';
 
@@ -61,6 +61,10 @@ export function ContactForm({ open, onOpenChange, contact, onSuccess }: ContactF
   const [newTag, setNewTag] = useState('');
   const [newActivityName, setNewActivityName] = useState('');
   const [showNewActivity, setShowNewActivity] = useState(false);
+  
+  // Search terms for related sections
+  const [activitySearchTerm, setActivitySearchTerm] = useState('');
+  const [contactSearchTerm, setContactSearchTerm] = useState('');
   
   // Budgets
   const [relatedBudgets, setRelatedBudgets] = useState<RelatedBudget[]>([]);
@@ -223,6 +227,8 @@ export function ContactForm({ open, onOpenChange, contact, onSuccess }: ContactF
       setSelectedRelatedContactIds([]);
       setRelatedBudgets([]);
       setSelectedBudgetIds([]);
+      setActivitySearchTerm('');
+      setContactSearchTerm('');
       setBudgetSearchTerm('');
     }
   }, [contact, open]);
@@ -254,15 +260,38 @@ export function ContactForm({ open, onOpenChange, contact, onSuccess }: ContactF
   // Filter out current contact from available contacts
   const availableRelatedContacts = allContacts.filter(c => c.id !== contact?.id);
   
-  // Filter budgets by search term
+  // Filter activities by search term (only unselected for adding)
+  const filteredActivities = activities.filter(a => {
+    const searchLower = activitySearchTerm.toLowerCase().trim();
+    return a.name.toLowerCase().includes(searchLower) && !selectedActivityIds.includes(a.id);
+  });
+  
+  // Selected activities
+  const selectedActivities = activities.filter(a => selectedActivityIds.includes(a.id));
+  
+  // Filter contacts by search term (only unselected for adding)
+  const filteredContacts = availableRelatedContacts.filter(c => {
+    const searchLower = contactSearchTerm.toLowerCase().trim();
+    const fullName = `${c.name} ${c.surname || ''}`.toLowerCase();
+    return fullName.includes(searchLower) && !selectedRelatedContactIds.includes(c.id);
+  });
+  
+  // Selected contacts
+  const selectedContacts = allContacts.filter(c => selectedRelatedContactIds.includes(c.id));
+  
+  // Filter budgets by search term (only unselected for adding)
   const filteredBudgets = availableBudgets.filter(b => {
     const searchLower = budgetSearchTerm.toLowerCase();
-    return (
+    const matchesSearch = (
       b.nombre.toLowerCase().includes(searchLower) ||
       b.poblacion.toLowerCase().includes(searchLower) ||
       `${b.codigo_correlativo}`.includes(searchLower)
     );
+    return matchesSearch && !selectedBudgetIds.includes(b.id);
   });
+  
+  // Selected budgets
+  const selectedBudgetsData = availableBudgets.filter(b => selectedBudgetIds.includes(b.id));
 
   const handleAddTag = () => {
     const tag = newTag.trim();
@@ -494,51 +523,65 @@ export function ContactForm({ open, onOpenChange, contact, onSuccess }: ContactF
             <Label className="flex items-center gap-2">
               <Briefcase className="h-4 w-4" />
               Actividades Profesionales
+              {selectedActivityIds.length > 0 && (
+                <Badge variant="secondary" className="ml-auto">{selectedActivityIds.length}</Badge>
+              )}
             </Label>
             {!showNewActivity ? (
-              <div className="space-y-2">
-                <ScrollArea className="h-32 rounded-md border p-2">
-                  {activities.length === 0 ? (
-                    <p className="text-sm text-muted-foreground p-2">No hay actividades definidas</p>
-                  ) : (
-                    <div className="space-y-2">
-                      {activities.map(activity => (
-                        <div key={activity.id} className="flex items-center space-x-2">
-                          <Checkbox
-                            id={`activity-${activity.id}`}
-                            checked={selectedActivityIds.includes(activity.id)}
-                            onCheckedChange={() => toggleActivity(activity.id)}
-                          />
-                          <label
-                            htmlFor={`activity-${activity.id}`}
-                            className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
-                          >
-                            {activity.name}
-                          </label>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </ScrollArea>
-                {selectedActivityIds.length > 0 && (
-                  <div className="flex flex-wrap gap-1">
-                    {selectedActivityIds.map(id => {
-                      const activity = activities.find(a => a.id === id);
-                      return activity ? (
-                        <Badge key={id} variant="secondary" className="gap-1">
-                          {activity.name}
-                          <button
-                            type="button"
-                            onClick={() => toggleActivity(id)}
-                            className="ml-1 hover:text-destructive"
-                          >
-                            <X className="h-3 w-3" />
-                          </button>
-                        </Badge>
-                      ) : null;
-                    })}
+              <div className="space-y-3">
+                {/* Selected activities */}
+                {selectedActivities.length > 0 && (
+                  <div className="flex flex-wrap gap-1 p-2 bg-muted/50 rounded-md">
+                    {selectedActivities.map(activity => (
+                      <Badge key={activity.id} variant="secondary" className="gap-1">
+                        {activity.name}
+                        <button
+                          type="button"
+                          onClick={() => toggleActivity(activity.id)}
+                          className="ml-1 hover:text-destructive"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </Badge>
+                    ))}
                   </div>
                 )}
+                
+                {/* Search to add activities */}
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Buscar actividad profesional..."
+                    value={activitySearchTerm}
+                    onChange={(e) => setActivitySearchTerm(e.target.value)}
+                    className="pl-9"
+                  />
+                </div>
+                
+                {activitySearchTerm && (
+                  <ScrollArea className="h-28 rounded-md border p-2">
+                    {filteredActivities.length === 0 ? (
+                      <p className="text-sm text-muted-foreground p-2">No se encontraron actividades</p>
+                    ) : (
+                      <div className="space-y-1">
+                        {filteredActivities.map(activity => (
+                          <div 
+                            key={activity.id} 
+                            className="flex items-center space-x-2 p-1.5 rounded hover:bg-muted cursor-pointer"
+                            onClick={() => {
+                              toggleActivity(activity.id);
+                              setActivitySearchTerm('');
+                            }}
+                          >
+                            <Plus className="h-4 w-4 text-muted-foreground" />
+                            <span className="text-sm">{activity.name}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </ScrollArea>
+                )}
+                
                 <Button type="button" variant="outline" size="sm" onClick={() => setShowNewActivity(true)} className="w-full">
                   <Plus className="h-4 w-4 mr-2" />
                   Nueva Actividad
@@ -567,52 +610,67 @@ export function ContactForm({ open, onOpenChange, contact, onSuccess }: ContactF
             <Label className="flex items-center gap-2">
               <Users className="h-4 w-4" />
               Contactos Relacionados
-            </Label>
-            <ScrollArea className="h-32 rounded-md border p-2">
-              {availableRelatedContacts.length === 0 ? (
-                <p className="text-sm text-muted-foreground p-2">No hay otros contactos disponibles</p>
-              ) : (
-                <div className="space-y-2">
-                  {availableRelatedContacts.map(relContact => (
-                    <div key={relContact.id} className="flex items-center space-x-2">
-                      <Checkbox
-                        id={`related-${relContact.id}`}
-                        checked={selectedRelatedContactIds.includes(relContact.id)}
-                        onCheckedChange={() => toggleRelatedContact(relContact.id)}
-                      />
-                      <label
-                        htmlFor={`related-${relContact.id}`}
-                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer flex items-center gap-2"
-                      >
-                        {relContact.name} {relContact.surname}
-                        <Badge variant="outline" className="text-xs">
-                          {relContact.contact_type}
-                        </Badge>
-                      </label>
-                    </div>
-                  ))}
-                </div>
+              {selectedRelatedContactIds.length > 0 && (
+                <Badge variant="secondary" className="ml-auto">{selectedRelatedContactIds.length}</Badge>
               )}
-            </ScrollArea>
-          {selectedRelatedContactIds.length > 0 && (
-              <div className="flex flex-wrap gap-1">
-                {selectedRelatedContactIds.map(id => {
-                  const relContact = allContacts.find(c => c.id === id);
-                  return relContact ? (
-                    <Badge key={id} variant="secondary" className="gap-1">
+            </Label>
+            <div className="space-y-3">
+              {/* Selected contacts */}
+              {selectedContacts.length > 0 && (
+                <div className="flex flex-wrap gap-1 p-2 bg-muted/50 rounded-md">
+                  {selectedContacts.map(relContact => (
+                    <Badge key={relContact.id} variant="secondary" className="gap-1">
                       {relContact.name} {relContact.surname}
                       <button
                         type="button"
-                        onClick={() => toggleRelatedContact(id)}
+                        onClick={() => toggleRelatedContact(relContact.id)}
                         className="ml-1 hover:text-destructive"
                       >
                         <X className="h-3 w-3" />
                       </button>
                     </Badge>
-                  ) : null;
-                })}
+                  ))}
+                </div>
+              )}
+              
+              {/* Search to add contacts */}
+              <div className="relative">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Buscar contacto por nombre..."
+                  value={contactSearchTerm}
+                  onChange={(e) => setContactSearchTerm(e.target.value)}
+                  className="pl-9"
+                />
               </div>
-            )}
+              
+              {contactSearchTerm && (
+                <ScrollArea className="h-28 rounded-md border p-2">
+                  {filteredContacts.length === 0 ? (
+                    <p className="text-sm text-muted-foreground p-2">No se encontraron contactos</p>
+                  ) : (
+                    <div className="space-y-1">
+                      {filteredContacts.map(relContact => (
+                        <div 
+                          key={relContact.id} 
+                          className="flex items-center space-x-2 p-1.5 rounded hover:bg-muted cursor-pointer"
+                          onClick={() => {
+                            toggleRelatedContact(relContact.id);
+                            setContactSearchTerm('');
+                          }}
+                        >
+                          <Plus className="h-4 w-4 text-muted-foreground" />
+                          <span className="text-sm">{relContact.name} {relContact.surname}</span>
+                          <Badge variant="outline" className="text-xs ml-auto">
+                            {relContact.contact_type}
+                          </Badge>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </ScrollArea>
+              )}
+            </div>
           </div>
 
           {/* Related Budgets */}
@@ -620,49 +678,17 @@ export function ContactForm({ open, onOpenChange, contact, onSuccess }: ContactF
             <Label className="flex items-center gap-2">
               <FileText className="h-4 w-4" />
               Presupuestos Relacionados
-            </Label>
-            <Input
-              placeholder="Buscar presupuesto por nombre, población o código..."
-              value={budgetSearchTerm}
-              onChange={(e) => setBudgetSearchTerm(e.target.value)}
-              className="mb-2"
-            />
-            <ScrollArea className="h-32 rounded-md border p-2">
-              {filteredBudgets.length === 0 ? (
-                <p className="text-sm text-muted-foreground p-2">
-                  {budgetSearchTerm ? 'No se encontraron presupuestos' : 'No hay presupuestos disponibles'}
-                </p>
-              ) : (
-                <div className="space-y-2">
-                  {filteredBudgets.map(budget => (
-                    <div key={budget.id} className="flex items-center space-x-2">
-                      <Checkbox
-                        id={`budget-${budget.id}`}
-                        checked={selectedBudgetIds.includes(budget.id)}
-                        onCheckedChange={() => toggleBudget(budget.id)}
-                      />
-                      <label
-                        htmlFor={`budget-${budget.id}`}
-                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer flex items-center gap-2"
-                      >
-                        <span className="text-muted-foreground">{budget.codigo_correlativo}</span>
-                        {budget.nombre}
-                        <Badge variant="outline" className="text-xs">
-                          {budget.poblacion}
-                        </Badge>
-                      </label>
-                    </div>
-                  ))}
-                </div>
+              {selectedBudgetIds.length > 0 && (
+                <Badge variant="secondary" className="ml-auto">{selectedBudgetIds.length}</Badge>
               )}
-            </ScrollArea>
-            {selectedBudgetIds.length > 0 && (
-              <div className="flex flex-wrap gap-1">
-                {selectedBudgetIds.map(id => {
-                  const budget = availableBudgets.find(b => b.id === id);
-                  return budget ? (
+            </Label>
+            <div className="space-y-3">
+              {/* Selected budgets */}
+              {selectedBudgetsData.length > 0 && (
+                <div className="flex flex-wrap gap-1 p-2 bg-muted/50 rounded-md">
+                  {selectedBudgetsData.map(budget => (
                     <Badge 
-                      key={id} 
+                      key={budget.id} 
                       variant="secondary" 
                       className="gap-1 cursor-pointer hover:bg-secondary/80"
                       onClick={() => {
@@ -675,17 +701,56 @@ export function ContactForm({ open, onOpenChange, contact, onSuccess }: ContactF
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
-                          toggleBudget(id);
+                          toggleBudget(budget.id);
                         }}
                         className="ml-1 hover:text-destructive"
                       >
                         <X className="h-3 w-3" />
                       </button>
                     </Badge>
-                  ) : null;
-                })}
+                  ))}
+                </div>
+              )}
+              
+              {/* Search to add budgets */}
+              <div className="relative">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Buscar presupuesto por nombre, población o código..."
+                  value={budgetSearchTerm}
+                  onChange={(e) => setBudgetSearchTerm(e.target.value)}
+                  className="pl-9"
+                />
               </div>
-            )}
+              
+              {budgetSearchTerm && (
+                <ScrollArea className="h-28 rounded-md border p-2">
+                  {filteredBudgets.length === 0 ? (
+                    <p className="text-sm text-muted-foreground p-2">No se encontraron presupuestos</p>
+                  ) : (
+                    <div className="space-y-1">
+                      {filteredBudgets.map(budget => (
+                        <div 
+                          key={budget.id} 
+                          className="flex items-center space-x-2 p-1.5 rounded hover:bg-muted cursor-pointer"
+                          onClick={() => {
+                            toggleBudget(budget.id);
+                            setBudgetSearchTerm('');
+                          }}
+                        >
+                          <Plus className="h-4 w-4 text-muted-foreground" />
+                          <span className="text-muted-foreground text-sm">{budget.codigo_correlativo}</span>
+                          <span className="text-sm">{budget.nombre}</span>
+                          <Badge variant="outline" className="text-xs ml-auto">
+                            {budget.poblacion}
+                          </Badge>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </ScrollArea>
+              )}
+            </div>
           </div>
 
           {/* Tags */}

@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { Webhook } from "https://esm.sh/svix@1.15.0";
 
 // No CORS headers - this is a server-to-server webhook endpoint
 const jsonHeaders = {
@@ -54,6 +55,42 @@ const handler = async (req: Request): Promise<Response> => {
     );
   }
 
+  // Verify webhook signature from Resend using Svix
+  const webhookSecret = Deno.env.get("RESEND_WEBHOOK_SECRET");
+  const rawBody = await req.text();
+  
+  if (webhookSecret) {
+    const svixId = req.headers.get("svix-id");
+    const svixTimestamp = req.headers.get("svix-timestamp");
+    const svixSignature = req.headers.get("svix-signature");
+    
+    if (!svixId || !svixTimestamp || !svixSignature) {
+      console.error("Missing Svix webhook headers");
+      return new Response(
+        JSON.stringify({ error: "Missing webhook signature headers" }),
+        { status: 401, headers: jsonHeaders }
+      );
+    }
+    
+    try {
+      const wh = new Webhook(webhookSecret);
+      wh.verify(rawBody, {
+        "svix-id": svixId,
+        "svix-timestamp": svixTimestamp,
+        "svix-signature": svixSignature,
+      });
+      console.log("Webhook signature verified successfully");
+    } catch (err) {
+      console.error("Webhook signature verification failed:", err);
+      return new Response(
+        JSON.stringify({ error: "Invalid webhook signature" }),
+        { status: 401, headers: jsonHeaders }
+      );
+    }
+  } else {
+    console.warn("RESEND_WEBHOOK_SECRET not configured - skipping signature verification");
+  }
+
   try {
     // Create Supabase client with service role for webhook
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -69,7 +106,6 @@ const handler = async (req: Request): Promise<Response> => {
       );
     }
 
-    const rawBody = await req.text();
     console.log("Raw request body (first 2000 chars):", rawBody.substring(0, 2000));
     
     let payload: any;

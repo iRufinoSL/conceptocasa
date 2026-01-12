@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Mail, Phone, MapPin, Users, MoreVertical, Pencil, Trash2, LayoutGrid, List, FolderOpen, ChevronRight, Send } from 'lucide-react';
+import { Mail, Phone, MapPin, Users, MoreVertical, Pencil, Trash2, LayoutGrid, List, FolderOpen, ChevronRight, Send, MessageCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { ContactDetailDialog } from './ContactDetailDialog';
 import { SendEmailDialog } from './SendEmailDialog';
@@ -196,6 +196,16 @@ export function ContactsTab({ contacts, searchTerm, onEdit, onDelete }: Contacts
     console.log('Email dialog should now be open');
   };
 
+  const handleSendWhatsApp = (contact: Contact) => {
+    if (!contact.phone) return;
+    // Clean phone number - remove spaces, dashes, etc
+    const cleanPhone = contact.phone.replace(/[\s\-\(\)]/g, '');
+    // Add country code if not present (Spain default)
+    const phoneWithCode = cleanPhone.startsWith('+') ? cleanPhone.replace('+', '') : `34${cleanPhone}`;
+    const waUrl = `https://wa.me/${phoneWithCode}`;
+    window.open(waUrl, '_blank');
+  };
+
   if (filteredContacts.length === 0) {
     return (
       <Card className="py-16">
@@ -266,6 +276,7 @@ export function ContactsTab({ contacts, searchTerm, onEdit, onDelete }: Contacts
               onEdit={onEdit}
               onDelete={onDelete}
               onSendEmail={handleSendEmail}
+              onSendWhatsApp={handleSendWhatsApp}
               onViewDetail={(c) => {
                 setSelectedContact(c);
                 setDetailOpen(true);
@@ -365,14 +376,18 @@ export function ContactsTab({ contacts, searchTerm, onEdit, onDelete }: Contacts
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                         {contact.email && (
-                          <>
-                            <DropdownMenuItem onClick={() => handleSendEmail(contact)}>
-                              <Send className="h-4 w-4 mr-2" />
-                              Enviar Email
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                          </>
+                          <DropdownMenuItem onClick={() => handleSendEmail(contact)}>
+                            <Send className="h-4 w-4 mr-2" />
+                            Enviar Email
+                          </DropdownMenuItem>
                         )}
+                        {contact.phone && (
+                          <DropdownMenuItem onClick={() => handleSendWhatsApp(contact)}>
+                            <MessageCircle className="h-4 w-4 mr-2" />
+                            Enviar WhatsApp
+                          </DropdownMenuItem>
+                        )}
+                        {(contact.email || contact.phone) && <DropdownMenuSeparator />}
                         <DropdownMenuItem onClick={() => onEdit(contact)}>
                           <Pencil className="h-4 w-4 mr-2" />
                           Editar
@@ -481,14 +496,18 @@ export function ContactsTab({ contacts, searchTerm, onEdit, onDelete }: Contacts
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end">
                                   {contact.email && (
-                                    <>
-                                      <DropdownMenuItem onClick={() => handleSendEmail(contact)}>
-                                        <Send className="h-4 w-4 mr-2" />
-                                        Enviar Email
-                                      </DropdownMenuItem>
-                                      <DropdownMenuSeparator />
-                                    </>
+                                    <DropdownMenuItem onClick={() => handleSendEmail(contact)}>
+                                      <Send className="h-4 w-4 mr-2" />
+                                      Enviar Email
+                                    </DropdownMenuItem>
                                   )}
+                                  {contact.phone && (
+                                    <DropdownMenuItem onClick={() => handleSendWhatsApp(contact)}>
+                                      <MessageCircle className="h-4 w-4 mr-2" />
+                                      Enviar WhatsApp
+                                    </DropdownMenuItem>
+                                  )}
+                                  {(contact.email || contact.phone) && <DropdownMenuSeparator />}
                                   <DropdownMenuItem onClick={() => onEdit(contact)}>
                                     <Pencil className="h-4 w-4 mr-2" />
                                     Editar
@@ -521,6 +540,7 @@ function ContactCard({
   onEdit,
   onDelete,
   onSendEmail,
+  onSendWhatsApp,
   onViewDetail,
   getInitials,
   getTypeVariant,
@@ -531,6 +551,7 @@ function ContactCard({
   onEdit: (contact: Contact) => void;
   onDelete: (contact: Contact) => void;
   onSendEmail: (contact: Contact) => void;
+  onSendWhatsApp: (contact: Contact) => void;
   onViewDetail: (contact: Contact) => void;
   getInitials: (name: string, surname?: string | null) => string;
   getTypeVariant: (type: string) => "default" | "outline";
@@ -569,14 +590,18 @@ function ContactCard({
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
                   {contact.email && (
-                    <>
-                      <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onSendEmail(contact); }}>
-                        <Send className="h-4 w-4 mr-2" />
-                        Enviar Email
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                    </>
+                    <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onSendEmail(contact); }}>
+                      <Send className="h-4 w-4 mr-2" />
+                      Enviar Email
+                    </DropdownMenuItem>
                   )}
+                  {contact.phone && (
+                    <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onSendWhatsApp(contact); }}>
+                      <MessageCircle className="h-4 w-4 mr-2" />
+                      Enviar WhatsApp
+                    </DropdownMenuItem>
+                  )}
+                  {(contact.email || contact.phone) && <DropdownMenuSeparator />}
                   <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onEdit(contact); }}>
                     <Pencil className="h-4 w-4 mr-2" />
                     Editar

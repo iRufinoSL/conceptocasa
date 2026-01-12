@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { X, Check } from "lucide-react";
+import { X, Check, Paperclip, File, Loader2 } from "lucide-react";
 import homeModern from "@/assets/home-modern.jpg";
 import homeClassic from "@/assets/home-classic.jpg";
 import homeRustic from "@/assets/home-rustic.jpg";
@@ -31,10 +31,22 @@ interface HousingProfileFormProps {
   onOpenChange: (open: boolean) => void;
 }
 
+// Helper to format file size
+const formatFileSize = (bytes: number): string => {
+  if (bytes === 0) return '0 Bytes';
+  const k = 1024;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+};
+
 const HousingProfileForm = ({ open, onOpenChange }: HousingProfileFormProps) => {
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showStyleSelector, setShowStyleSelector] = useState(false);
+  const [attachments, setAttachments] = useState<File[]>([]);
+  const [isUploadingFiles, setIsUploadingFiles] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -79,6 +91,75 @@ const HousingProfileForm = ({ open, onOpenChange }: HousingProfileFormProps) => 
         ? prev.estiloConstructivo.filter(s => s !== styleId)
         : [...prev.estiloConstructivo, styleId]
     }));
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files) return;
+    
+    const newFiles = Array.from(files);
+    const maxSize = 10 * 1024 * 1024; // 10MB
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'application/pdf', 
+      'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'];
+    
+    const validFiles = newFiles.filter(file => {
+      if (file.size > maxSize) {
+        toast({
+          title: "Archivo demasiado grande",
+          description: `${file.name} excede el límite de 10MB`,
+          variant: "destructive",
+        });
+        return false;
+      }
+      if (!allowedTypes.includes(file.type)) {
+        toast({
+          title: "Tipo de archivo no permitido",
+          description: `${file.name} no es un tipo de archivo válido`,
+          variant: "destructive",
+        });
+        return false;
+      }
+      return true;
+    });
+    
+    setAttachments(prev => [...prev, ...validFiles]);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const removeAttachment = (index: number) => {
+    setAttachments(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const uploadAttachments = async (): Promise<string[]> => {
+    if (attachments.length === 0) return [];
+    
+    setIsUploadingFiles(true);
+    const uploadedPaths: string[] = [];
+    
+    try {
+      for (const file of attachments) {
+        const timestamp = Date.now();
+        const sanitizedName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+        const filePath = `housing-profile/${timestamp}_${sanitizedName}`;
+        
+        const { error } = await supabase.storage
+          .from('contact-attachments')
+          .upload(filePath, file);
+        
+        if (error) {
+          console.error('Error uploading file:', error);
+          throw error;
+        }
+        
+        uploadedPaths.push(filePath);
+      }
+      return uploadedPaths;
+    } finally {
+      setIsUploadingFiles(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -133,6 +214,9 @@ ${formData.message || "Sin mensaje adicional"}
     `.trim();
 
     try {
+      // Upload attachments first
+      const attachmentPaths = await uploadAttachments();
+      
       const { error } = await supabase.functions.invoke('send-contact-email', {
         body: {
           name: formData.name,
@@ -142,6 +226,9 @@ ${formData.message || "Sin mensaje adicional"}
           message: messageBody,
           // Flag to indicate this is a housing profile
           isHousingProfile: true,
+          // Attachments
+          attachmentPaths: attachmentPaths.length > 0 ? attachmentPaths : undefined,
+          attachmentNames: attachments.length > 0 ? attachments.map(f => f.name) : undefined,
           // Send all form fields for database storage
           numPlantas: formData.numPlantas,
           m2PorPlanta: formData.m2PorPlanta,
@@ -200,6 +287,7 @@ ${formData.message || "Sin mensaje adicional"}
         estiloConstructivo: [],
         fechaIdealFinalizacion: "",
       });
+      setAttachments([]);
       onOpenChange(false);
     } catch (error: any) {
       console.error("Error sending housing profile:", error);
@@ -594,12 +682,79 @@ ${formData.message || "Sin mensaje adicional"}
               </div>
             </div>
 
+            {/* File Attachments Section */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold text-foreground border-b pb-2">Archivos Adjuntos (opcional)</h3>
+              <div className="border-2 border-dashed border-primary/30 rounded-lg p-4 bg-primary/5">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  accept=".jpg,.jpeg,.png,.webp,.gif,.pdf,.doc,.docx,.xls,.xlsx"
+                  onChange={handleFileSelect}
+                  className="hidden"
+                />
+                
+                {attachments.length === 0 ? (
+                  <div 
+                    className="flex flex-col items-center justify-center py-6 cursor-pointer"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    <Paperclip className="h-10 w-10 text-primary/60 mb-3" />
+                    <p className="text-sm text-muted-foreground text-center font-medium">
+                      Haz clic para adjuntar documentos
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Planos, fotos del terreno, referencias visuales...
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      PDF, imágenes, Word, Excel (máx. 10MB por archivo)
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {attachments.map((file, index) => (
+                      <div key={index} className="flex items-center gap-2 bg-background p-2 rounded">
+                        <File className="h-4 w-4 text-primary flex-shrink-0" />
+                        <span className="text-sm truncate flex-1">{file.name}</span>
+                        <span className="text-xs text-muted-foreground">{formatFileSize(file.size)}</span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => removeAttachment(index)}
+                          className="h-6 w-6 p-0"
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="w-full mt-2"
+                    >
+                      <Paperclip className="h-4 w-4 mr-2" />
+                      Añadir más archivos
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </div>
+
             <Button 
               type="submit" 
               className="w-full bg-primary hover:bg-primary/90 text-lg py-6"
-              disabled={isSubmitting}
+              disabled={isSubmitting || isUploadingFiles}
             >
-              {isSubmitting ? "Enviando..." : "Enviar"}
+              {isSubmitting || isUploadingFiles ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  {isUploadingFiles ? "Subiendo archivos..." : "Enviando..."}
+                </>
+              ) : "Enviar"}
             </Button>
           </form>
         </ScrollArea>

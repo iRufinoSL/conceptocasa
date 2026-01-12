@@ -281,10 +281,15 @@ const handler = async (req: Request): Promise<Response> => {
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     
+    // Client with user auth for RLS-protected operations
     const supabase = createClient(supabaseUrl, supabaseAnonKey, {
       global: { headers: { Authorization: authHeader } }
     });
+    
+    // Service role client for inserting attachments (bypasses RLS)
+    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
     // Verify user is authenticated
     const { data: { user }, error: userError } = await supabase.auth.getUser();
@@ -513,7 +518,7 @@ const handler = async (req: Request): Promise<Response> => {
         }
 
         // Also save to email_messages table for unified inbox view
-        const { data: emailMessageData } = await supabase.from('email_messages').insert({
+        const { data: emailMessageData, error: emailMessageError } = await supabase.from('email_messages').insert({
           from_email: senderEmail,
           from_name: senderName,
           to_emails: [recipient.email],
@@ -535,8 +540,14 @@ const handler = async (req: Request): Promise<Response> => {
           }
         }).select('id').single();
 
-        // Store attachments in email_attachments table if the email was saved
+        if (emailMessageError) {
+          console.error(`Error saving email message:`, emailMessageError);
+        }
+
+        // Store attachments in email_attachments table using admin client to bypass RLS
         if (emailMessageData?.id && attachments && attachments.length > 0) {
+          console.log(`Saving ${attachments.length} attachments for email ${emailMessageData.id}`);
+          
           const attachmentRecords = attachments.map(att => ({
             email_id: emailMessageData.id,
             file_name: att.filename,
@@ -545,7 +556,14 @@ const handler = async (req: Request): Promise<Response> => {
             file_size: Math.ceil((att.content.length * 3) / 4), // Approximate size from base64
           }));
           
-          await supabase.from('email_attachments').insert(attachmentRecords);
+          // Use admin client to insert attachments (bypasses RLS)
+          const { error: attachmentError } = await supabaseAdmin.from('email_attachments').insert(attachmentRecords);
+          
+          if (attachmentError) {
+            console.error(`Error saving attachments:`, attachmentError);
+          } else {
+            console.log(`Successfully saved ${attachments.length} attachment records`);
+          }
         }
 
         results.push({ contactId: recipient.id, email: recipient.email, success: true });

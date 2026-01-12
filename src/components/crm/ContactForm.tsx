@@ -59,7 +59,7 @@ interface ContactFormProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   contact?: Contact | null;
-  onSuccess: () => void;
+  onSuccess: (newContactId?: string) => void;
 }
 
 export function ContactForm({ open, onOpenChange, contact, onSuccess }: ContactFormProps) {
@@ -478,7 +478,7 @@ export function ContactForm({ open, onOpenChange, contact, onSuccess }: ContactF
       }
 
       toast({ title: contact ? 'Contacto actualizado correctamente' : 'Contacto creado correctamente' });
-      onSuccess();
+      onSuccess(contactId);
       onOpenChange(false);
     } catch (error: any) {
       toast({ title: 'Error', description: error.message, variant: 'destructive' });

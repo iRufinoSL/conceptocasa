@@ -318,7 +318,7 @@ export default function CRM() {
         open={contactFormOpen}
         onOpenChange={setContactFormOpen}
         contact={editingContact}
-        onSuccess={fetchData}
+        onSuccess={() => fetchData()}
       />
       <ManagementForm
         open={managementFormOpen}

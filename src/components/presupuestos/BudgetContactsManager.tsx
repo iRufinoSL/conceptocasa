@@ -55,6 +55,7 @@ export function BudgetContactsManager({ budgetId, isAdmin }: BudgetContactsManag
   const [isAddingProvider, setIsAddingProvider] = useState(false);
   const [isAddingOther, setIsAddingOther] = useState(false);
   const [showNewContactDialog, setShowNewContactDialog] = useState(false);
+  const [newContactRole, setNewContactRole] = useState<'cliente' | 'proveedor' | 'otros'>('otros');
   const [expandedActivities, setExpandedActivities] = useState<Set<string>>(new Set());
   const [othersSearchTerm, setOthersSearchTerm] = useState('');
   const [emailDialogOpen, setEmailDialogOpen] = useState(false);
@@ -196,9 +197,35 @@ export function BudgetContactsManager({ budgetId, isAdmin }: BudgetContactsManag
     }
   };
 
-  const handleNewContactSaved = () => {
-    fetchData();
+  const handleNewContactSaved = async (newContactId?: string) => {
+    await fetchData();
     setShowNewContactDialog(false);
+    
+    // Auto-add the new contact to the budget with the selected role
+    if (newContactId && newContactRole) {
+      try {
+        const { error } = await supabase
+          .from('budget_contacts')
+          .insert({
+            budget_id: budgetId,
+            contact_id: newContactId,
+            contact_role: newContactRole
+          });
+
+        if (error) throw error;
+
+        const roleLabel = newContactRole === 'cliente' ? 'Cliente' : newContactRole === 'proveedor' ? 'Proveedor' : 'Contacto';
+        toast({ title: `${roleLabel} creado y añadido correctamente` });
+        fetchData();
+      } catch (error: any) {
+        console.error('Error adding new contact to budget:', error);
+      }
+    }
+  };
+
+  const openNewContactDialog = (role: 'cliente' | 'proveedor' | 'otros') => {
+    setNewContactRole(role);
+    setShowNewContactDialog(true);
   };
 
   const toggleActivityExpanded = (activityId: string) => {
@@ -408,11 +435,22 @@ export function BudgetContactsManager({ budgetId, isAdmin }: BudgetContactsManag
         <CardContent className="space-y-6">
           {/* Clients Section */}
           <div className="space-y-3">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center justify-between">
               <Badge variant="outline" className="bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-300 border-green-200 dark:border-green-800">
                 <Users className="h-3 w-3 mr-1" />
                 Clientes ({clients.length})
               </Badge>
+              {isAdmin && (
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => openNewContactDialog('cliente')}
+                  className="text-xs"
+                >
+                  <UserPlus className="h-3.5 w-3.5 mr-1" />
+                  Nuevo Contacto
+                </Button>
+              )}
             </div>
             
             {isAdmin && (
@@ -451,11 +489,22 @@ export function BudgetContactsManager({ budgetId, isAdmin }: BudgetContactsManag
 
           {/* Providers Section */}
           <div className="space-y-3">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center justify-between">
               <Badge variant="outline" className="bg-yellow-50 text-yellow-700 dark:bg-yellow-950 dark:text-yellow-300 border-yellow-200 dark:border-yellow-800">
                 <Building2 className="h-3 w-3 mr-1" />
                 Proveedores ({providers.length})
               </Badge>
+              {isAdmin && (
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => openNewContactDialog('proveedor')}
+                  className="text-xs"
+                >
+                  <UserPlus className="h-3.5 w-3.5 mr-1" />
+                  Nuevo Contacto
+                </Button>
+              )}
             </div>
             
             {isAdmin && (
@@ -503,7 +552,7 @@ export function BudgetContactsManager({ budgetId, isAdmin }: BudgetContactsManag
                 <Button 
                   variant="outline" 
                   size="sm" 
-                  onClick={() => setShowNewContactDialog(true)}
+                  onClick={() => openNewContactDialog('otros')}
                   className="text-xs"
                 >
                   <UserPlus className="h-3.5 w-3.5 mr-1" />

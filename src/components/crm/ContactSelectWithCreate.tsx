@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/popover';
 import { supabase } from '@/integrations/supabase/client';
 import { ContactForm } from '@/components/crm/ContactForm';
+import { normalizeSearchText } from '@/lib/search-utils';
 
 interface Contact {
   id: string;
@@ -107,7 +108,14 @@ export function ContactSelectWithCreate({
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-[350px] p-0 bg-popover z-50" align="start">
-          <Command className="bg-popover">
+          <Command 
+            className="bg-popover"
+            filter={(value, search) => {
+              const normalizedValue = normalizeSearchText(value);
+              const normalizedSearch = normalizeSearchText(search);
+              return normalizedValue.includes(normalizedSearch) ? 1 : 0;
+            }}
+          >
             <CommandInput placeholder="Buscar contacto..." />
             <CommandList className="max-h-[300px]">
               <CommandEmpty>

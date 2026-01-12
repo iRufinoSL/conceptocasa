@@ -22,7 +22,7 @@ serve(async (req) => {
   }
 
   try {
-    const { query, resourceType } = await req.json();
+    const { query, resourceType, geoFilter } = await req.json();
 
     if (!query) {
       return new Response(
@@ -40,10 +40,18 @@ serve(async (req) => {
       );
     }
 
-    console.log('Searching for resources:', query, 'Type:', resourceType);
+    console.log('Searching for resources:', query, 'Type:', resourceType, 'GeoFilter:', geoFilter);
 
-    // Build search query for construction/renovation suppliers
-    const searchQuery = `${query} ${resourceType || ''} proveedor distribuidor España precio contacto`.trim();
+    // Build search query with geographic filter
+    let locationString = '';
+    if (geoFilter?.location) {
+      locationString = geoFilter.location;
+    }
+
+    const searchQuery = `${query} ${resourceType || ''} proveedor distribuidor ${locationString} precio contacto`.trim();
+    
+    // Determine country code for Firecrawl
+    const countryCode = geoFilter?.country || 'ES';
 
     // Use Firecrawl search API
     const searchResponse = await fetch('https://api.firecrawl.dev/v1/search', {
@@ -55,8 +63,8 @@ serve(async (req) => {
       body: JSON.stringify({
         query: searchQuery,
         limit: 10,
-        lang: 'es',
-        country: 'ES',
+        lang: countryCode === 'ES' ? 'es' : countryCode === 'PT' ? 'pt' : countryCode === 'FR' ? 'fr' : countryCode === 'IT' ? 'it' : countryCode === 'DE' ? 'de' : 'en',
+        country: countryCode,
         scrapeOptions: {
           formats: ['markdown'],
         },

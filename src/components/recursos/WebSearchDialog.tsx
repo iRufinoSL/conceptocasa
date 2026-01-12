@@ -5,10 +5,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Search, Loader2, Globe, Phone, Mail, Euro, ExternalLink, Plus } from 'lucide-react';
+import { Search, Loader2, Globe, Phone, Mail, Euro, ExternalLink, Plus, MapPin } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { ChevronDown } from 'lucide-react';
 
 interface SearchResult {
   supplierName: string;
@@ -40,13 +43,69 @@ const RESOURCE_TYPES = [
   { value: 'otros', label: 'Otros' },
 ];
 
+const SPANISH_PROVINCES = [
+  'Álava', 'Albacete', 'Alicante', 'Almería', 'Asturias', 'Ávila', 'Badajoz', 'Barcelona',
+  'Burgos', 'Cáceres', 'Cádiz', 'Cantabria', 'Castellón', 'Ciudad Real', 'Córdoba', 'Cuenca',
+  'Girona', 'Granada', 'Guadalajara', 'Guipúzcoa', 'Huelva', 'Huesca', 'Illes Balears', 'Jaén',
+  'A Coruña', 'La Rioja', 'Las Palmas', 'León', 'Lleida', 'Lugo', 'Madrid', 'Málaga', 'Murcia',
+  'Navarra', 'Ourense', 'Palencia', 'Pontevedra', 'Salamanca', 'Santa Cruz de Tenerife',
+  'Segovia', 'Sevilla', 'Soria', 'Tarragona', 'Teruel', 'Toledo', 'Valencia', 'Valladolid',
+  'Vizcaya', 'Zamora', 'Zaragoza', 'Ceuta', 'Melilla'
+];
+
+const COUNTRIES = [
+  { value: 'ES', label: 'España' },
+  { value: 'PT', label: 'Portugal' },
+  { value: 'FR', label: 'Francia' },
+  { value: 'IT', label: 'Italia' },
+  { value: 'DE', label: 'Alemania' },
+  { value: 'GB', label: 'Reino Unido' },
+  { value: 'NL', label: 'Países Bajos' },
+  { value: 'BE', label: 'Bélgica' },
+];
+
+type GeoFilterType = 'none' | 'country' | 'province' | 'city' | 'radius';
+
 export function WebSearchDialog({ open, onOpenChange, onCreateResource }: WebSearchDialogProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [resourceType, setResourceType] = useState<string>('');
   const [isSearching, setIsSearching] = useState(false);
   const [results, setResults] = useState<SearchResult[]>([]);
   const [searchPerformed, setSearchPerformed] = useState(false);
+  const [geoFilterOpen, setGeoFilterOpen] = useState(true);
+  
+  // Geographic filters
+  const [geoFilterType, setGeoFilterType] = useState<GeoFilterType>('country');
+  const [selectedCountry, setSelectedCountry] = useState('ES');
+  const [selectedProvince, setSelectedProvince] = useState('');
+  const [cityName, setCityName] = useState('');
+  const [radiusKm, setRadiusKm] = useState('50');
+  const [radiusLocation, setRadiusLocation] = useState('');
+  
   const { toast } = useToast();
+
+  // Build geographic filter string for search
+  const buildGeoFilter = () => {
+    switch (geoFilterType) {
+      case 'country':
+        const country = COUNTRIES.find(c => c.value === selectedCountry);
+        return { location: country?.label || 'España', country: selectedCountry };
+      case 'province':
+        return selectedProvince 
+          ? { location: `${selectedProvince}, España`, country: 'ES' }
+          : { location: 'España', country: 'ES' };
+      case 'city':
+        return cityName 
+          ? { location: `${cityName}, España`, country: 'ES' }
+          : { location: 'España', country: 'ES' };
+      case 'radius':
+        return radiusLocation 
+          ? { location: `${radiusLocation} ${radiusKm}km`, country: 'ES', radius: radiusKm }
+          : { location: 'España', country: 'ES' };
+      default:
+        return { location: '', country: '' };
+    }
+  };
 
   const handleSearch = async () => {
     if (!searchQuery.trim()) {
@@ -62,10 +121,13 @@ export function WebSearchDialog({ open, onOpenChange, onCreateResource }: WebSea
     setSearchPerformed(true);
 
     try {
+      const geoFilter = buildGeoFilter();
+      
       const { data, error } = await supabase.functions.invoke('search-resources', {
         body: { 
           query: searchQuery,
           resourceType: resourceType || undefined,
+          geoFilter,
         },
       });
 
@@ -129,6 +191,12 @@ export function WebSearchDialog({ open, onOpenChange, onCreateResource }: WebSea
     setResourceType('');
     setResults([]);
     setSearchPerformed(false);
+    setGeoFilterType('country');
+    setSelectedCountry('ES');
+    setSelectedProvince('');
+    setCityName('');
+    setRadiusKm('50');
+    setRadiusLocation('');
     onOpenChange(false);
   };
 
@@ -143,6 +211,128 @@ export function WebSearchDialog({ open, onOpenChange, onCreateResource }: WebSea
         </DialogHeader>
 
         <div className="space-y-4">
+          {/* Geographic Filter */}
+          <Collapsible open={geoFilterOpen} onOpenChange={setGeoFilterOpen}>
+            <CollapsibleTrigger asChild>
+              <Button variant="outline" className="w-full justify-between">
+                <div className="flex items-center gap-2">
+                  <MapPin className="h-4 w-4" />
+                  <span>Filtro geográfico</span>
+                  {geoFilterType !== 'none' && (
+                    <span className="text-xs text-muted-foreground">
+                      ({geoFilterType === 'country' ? COUNTRIES.find(c => c.value === selectedCountry)?.label :
+                        geoFilterType === 'province' ? selectedProvince || 'Sin seleccionar' :
+                        geoFilterType === 'city' ? cityName || 'Sin especificar' :
+                        geoFilterType === 'radius' ? `${radiusLocation || 'Sin ubicación'} (${radiusKm}km)` : ''})
+                    </span>
+                  )}
+                </div>
+                <ChevronDown className={`h-4 w-4 transition-transform ${geoFilterOpen ? 'rotate-180' : ''}`} />
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="pt-4">
+              <div className="space-y-4 p-4 border rounded-lg bg-muted/30">
+                <RadioGroup value={geoFilterType} onValueChange={(v) => setGeoFilterType(v as GeoFilterType)}>
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="country" id="geo-country" />
+                      <Label htmlFor="geo-country">Por país</Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="province" id="geo-province" />
+                      <Label htmlFor="geo-province">Por provincia</Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="city" id="geo-city" />
+                      <Label htmlFor="geo-city">Por ciudad/localidad</Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="radius" id="geo-radius" />
+                      <Label htmlFor="geo-radius">Por radio de distancia</Label>
+                    </div>
+                  </div>
+                </RadioGroup>
+
+                {geoFilterType === 'country' && (
+                  <div className="space-y-2">
+                    <Label>País</Label>
+                    <Select value={selectedCountry} onValueChange={setSelectedCountry}>
+                      <SelectTrigger className="w-full sm:w-[250px]">
+                        <SelectValue placeholder="Seleccionar país" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {COUNTRIES.map((country) => (
+                          <SelectItem key={country.value} value={country.value}>
+                            {country.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
+                {geoFilterType === 'province' && (
+                  <div className="space-y-2">
+                    <Label>Provincia</Label>
+                    <Select value={selectedProvince} onValueChange={setSelectedProvince}>
+                      <SelectTrigger className="w-full sm:w-[250px]">
+                        <SelectValue placeholder="Seleccionar provincia" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {SPANISH_PROVINCES.map((province) => (
+                          <SelectItem key={province} value={province}>
+                            {province}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
+                {geoFilterType === 'city' && (
+                  <div className="space-y-2">
+                    <Label>Ciudad o localidad</Label>
+                    <Input
+                      placeholder="Ej: Valencia, Getafe, Marbella..."
+                      value={cityName}
+                      onChange={(e) => setCityName(e.target.value)}
+                      className="w-full sm:w-[300px]"
+                    />
+                  </div>
+                )}
+
+                {geoFilterType === 'radius' && (
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label>Ubicación central</Label>
+                      <Input
+                        placeholder="Ej: Calle Mayor 10, Madrid"
+                        value={radiusLocation}
+                        onChange={(e) => setRadiusLocation(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Radio (km)</Label>
+                      <Select value={radiusKm} onValueChange={setRadiusKm}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="10">10 km</SelectItem>
+                          <SelectItem value="25">25 km</SelectItem>
+                          <SelectItem value="50">50 km</SelectItem>
+                          <SelectItem value="100">100 km</SelectItem>
+                          <SelectItem value="200">200 km</SelectItem>
+                          <SelectItem value="500">500 km</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
+
           {/* Search Form */}
           <div className="grid gap-4 sm:grid-cols-[1fr_180px_auto]">
             <div className="space-y-2">

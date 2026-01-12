@@ -3,9 +3,11 @@ import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { supabase } from '@/integrations/supabase/client';
-import { Inbox, Send, Users, Mail } from 'lucide-react';
+import { Inbox, Send, Users, Mail, MessageSquare } from 'lucide-react';
 import { BudgetEmailInbox } from './BudgetEmailInbox';
 import { BudgetComposeEmail } from './BudgetComposeEmail';
+import { BudgetWhatsAppCompose } from './BudgetWhatsAppCompose';
+import { BudgetWhatsAppList } from './BudgetWhatsAppList';
 
 interface BudgetCommunicationsTabProps {
   budgetId: string;
@@ -53,6 +55,14 @@ export function BudgetCommunicationsTab({ budgetId, projectId, isAdmin }: Budget
       .map(bc => bc.contact!);
   }, [budgetContacts]);
 
+  // Get unique contacts with phone numbers for WhatsApp
+  const contactsWithPhone = useMemo(() => {
+    const seen = new Set<string>();
+    return budgetContacts
+      .filter(bc => bc.contact?.phone && !seen.has(bc.contact.id) && seen.add(bc.contact.id))
+      .map(bc => bc.contact!);
+  }, [budgetContacts]);
+
   const handleComposeReply = (email: any) => {
     setReplyToEmail({
       email: email.direction === 'inbound' ? email.from_email : email.to_emails?.[0],
@@ -78,18 +88,26 @@ export function BudgetCommunicationsTab({ budgetId, projectId, isAdmin }: Budget
   return (
     <div className="space-y-4">
       <Tabs value={activeSubTab} onValueChange={setActiveSubTab}>
-        <TabsList className="grid w-full max-w-md grid-cols-3">
+        <TabsList className="grid w-full max-w-xl grid-cols-5">
           <TabsTrigger value="inbox" className="gap-2">
             <Inbox className="h-4 w-4" />
-            <span className="hidden sm:inline">Bandeja</span>
+            <span className="hidden sm:inline">Email</span>
           </TabsTrigger>
           <TabsTrigger value="compose" className="gap-2">
             <Send className="h-4 w-4" />
             <span className="hidden sm:inline">Redactar</span>
           </TabsTrigger>
+          <TabsTrigger value="whatsapp" className="gap-2">
+            <MessageSquare className="h-4 w-4" />
+            <span className="hidden sm:inline">WhatsApp</span>
+          </TabsTrigger>
+          <TabsTrigger value="whatsapp-compose" className="gap-2">
+            <MessageSquare className="h-4 w-4 text-green-600" />
+            <span className="hidden sm:inline">Enviar WA</span>
+          </TabsTrigger>
           <TabsTrigger value="quick-send" className="gap-2">
             <Users className="h-4 w-4" />
-            <span className="hidden sm:inline">Enviar a...</span>
+            <span className="hidden sm:inline">Contactos</span>
           </TabsTrigger>
         </TabsList>
 
@@ -113,6 +131,21 @@ export function BudgetCommunicationsTab({ budgetId, projectId, isAdmin }: Budget
               setReplyToEmail(null);
               setActiveSubTab('inbox');
             }} 
+          />
+        </TabsContent>
+
+        {/* WhatsApp List Tab */}
+        <TabsContent value="whatsapp" className="mt-4">
+          <BudgetWhatsAppList budgetId={budgetId} isAdmin={isAdmin} />
+        </TabsContent>
+
+        {/* WhatsApp Compose Tab */}
+        <TabsContent value="whatsapp-compose" className="mt-4">
+          <BudgetWhatsAppCompose 
+            budgetId={budgetId}
+            projectId={projectId}
+            budgetContacts={contactsWithPhone}
+            onSent={() => setActiveSubTab('whatsapp')} 
           />
         </TabsContent>
 

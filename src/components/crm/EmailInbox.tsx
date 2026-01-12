@@ -17,7 +17,7 @@ import { format, isToday, isYesterday, isThisWeek, addDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import {
   Mail, Search, ArrowUpRight, ArrowDownLeft, 
-  CheckCircle, XCircle, Clock, Eye, Inbox,
+  CheckCircle, XCircle, Clock, Eye, Inbox, Send,
   Reply, Forward, UserPlus, AlertCircle,
   ChevronDown, ChevronRight, User, Calendar, FolderOpen,
   Ticket, AlarmClock, MailOpen, Maximize2, Minimize2, X,
@@ -79,6 +79,8 @@ export function EmailInbox({ onComposeReply, onComposeForward }: EmailInboxProps
   const [showSnoozeDialog, setShowSnoozeDialog] = useState(false);
   const [showFolderDialog, setShowFolderDialog] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set(['Hoy', 'Sin clasificar']));
+  const [isInboxExpanded, setIsInboxExpanded] = useState(true);
+  const [isOutboxExpanded, setIsOutboxExpanded] = useState(true);
   const [creatingContact, setCreatingContact] = useState(false);
   const [contactFormData, setContactFormData] = useState({
     name: '',
@@ -588,12 +590,15 @@ export function EmailInbox({ onComposeReply, onComposeForward }: EmailInboxProps
     
     return result;
   }, [emails, search, budgetFilter, contactFilter]);
+  // Separate inbound and outbound emails for the two mailboxes
+  const inboundEmails = useMemo(() => filteredEmails.filter(e => e.direction === 'inbound'), [filteredEmails]);
+  const outboundEmails = useMemo(() => filteredEmails.filter(e => e.direction === 'outbound'), [filteredEmails]);
 
-  // Group emails based on mode
-  const groupedEmails = useMemo(() => {
+  // Group emails by mode - for inbound
+  const groupedInboundEmails = useMemo(() => {
     const groups: Record<string, { emails: EmailMessage[]; label: string; icon: any }> = {};
     
-    filteredEmails.forEach(email => {
+    inboundEmails.forEach(email => {
       let groupKey: string;
       let groupLabel: string;
       let groupIcon: any;
@@ -616,10 +621,10 @@ export function EmailInbox({ onComposeReply, onComposeForward }: EmailInboxProps
         }
         groupIcon = Calendar;
       } else if (groupMode === 'sender') {
-        const senderEmail = email.direction === 'inbound' ? email.from_email : email.to_emails?.[0] || 'desconocido';
-        const senderName = email.direction === 'inbound' 
-          ? (email.crm_contacts ? `${email.crm_contacts.name} ${email.crm_contacts.surname || ''}`.trim() : email.from_name || email.from_email)
-          : email.to_emails?.[0] || 'Desconocido';
+        const senderEmail = email.from_email;
+        const senderName = email.crm_contacts 
+          ? `${email.crm_contacts.name} ${email.crm_contacts.surname || ''}`.trim() 
+          : email.from_name || email.from_email;
         groupKey = senderEmail;
         groupLabel = senderName;
         groupIcon = User;
@@ -656,7 +661,73 @@ export function EmailInbox({ onComposeReply, onComposeForward }: EmailInboxProps
     });
     
     return sortedEntries;
-  }, [filteredEmails, groupMode]);
+  }, [inboundEmails, groupMode]);
+
+  // Group emails by mode - for outbound
+  const groupedOutboundEmails = useMemo(() => {
+    const groups: Record<string, { emails: EmailMessage[]; label: string; icon: any }> = {};
+    
+    outboundEmails.forEach(email => {
+      let groupKey: string;
+      let groupLabel: string;
+      let groupIcon: any;
+      
+      if (groupMode === 'date') {
+        const emailDate = new Date(email.created_at);
+        if (isToday(emailDate)) {
+          groupKey = 'today';
+          groupLabel = 'Hoy';
+        } else if (isYesterday(emailDate)) {
+          groupKey = 'yesterday';
+          groupLabel = 'Ayer';
+        } else if (isThisWeek(emailDate)) {
+          groupKey = 'thisweek';
+          groupLabel = 'Esta semana';
+        } else {
+          const monthKey = format(emailDate, 'yyyy-MM');
+          groupKey = monthKey;
+          groupLabel = format(emailDate, 'MMMM yyyy', { locale: es });
+        }
+        groupIcon = Calendar;
+      } else if (groupMode === 'sender') {
+        const recipientEmail = email.to_emails?.[0] || 'desconocido';
+        groupKey = recipientEmail;
+        groupLabel = recipientEmail;
+        groupIcon = User;
+      } else {
+        // folder mode
+        if (email.budget_id && email.presupuestos) {
+          groupKey = email.budget_id;
+          groupLabel = `${email.presupuestos.codigo_correlativo} - ${email.presupuestos.nombre}`;
+        } else {
+          groupKey = 'unclassified';
+          groupLabel = 'Sin clasificar';
+        }
+        groupIcon = FolderOpen;
+      }
+      
+      if (!groups[groupKey]) {
+        groups[groupKey] = { emails: [], label: groupLabel, icon: groupIcon };
+      }
+      groups[groupKey].emails.push(email);
+    });
+    
+    // Sort groups
+    const sortedEntries = Object.entries(groups).sort(([keyA], [keyB]) => {
+      if (groupMode === 'date') {
+        const order = ['today', 'yesterday', 'thisweek'];
+        const indexA = order.indexOf(keyA);
+        const indexB = order.indexOf(keyB);
+        if (indexA !== -1 && indexB !== -1) return indexA - indexB;
+        if (indexA !== -1) return -1;
+        if (indexB !== -1) return 1;
+        return keyB.localeCompare(keyA);
+      }
+      return keyA.localeCompare(keyB);
+    });
+    
+    return sortedEntries;
+  }, [outboundEmails, groupMode]);
 
   const stats = useMemo(() => {
     const total = emails.length;
@@ -1093,72 +1164,153 @@ export function EmailInbox({ onComposeReply, onComposeForward }: EmailInboxProps
         </CardContent>
       </Card>
 
-      {/* Email List */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="flex items-center gap-2">
-            {showDeleted ? <Trash2 className="h-5 w-5" /> : <Inbox className="h-5 w-5" />}
-            {showDeleted ? 'Papelera' : 'Bandeja de Entrada'}
-            <Badge variant="secondary" className="ml-2">
-              {filteredEmails.length}
-            </Badge>
-            {!showDeleted && stats.unread > 0 && (
-              <Badge className="ml-1 bg-primary">
-                {stats.unread} sin leer
-              </Badge>
-            )}
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {isLoading ? (
-            <div className="text-center py-8 text-muted-foreground">Cargando...</div>
-          ) : filteredEmails.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              <Mail className="h-12 w-12 mx-auto mb-3 opacity-30" />
-              <p>No hay emails</p>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {groupedEmails.map(([groupKey, group]) => {
-                const GroupIcon = group.icon;
-                const isExpanded = expandedGroups.has(group.label);
-                const unreadInGroup = group.emails.filter(e => !e.is_read && e.direction === 'inbound').length;
-                
-                return (
-                  <Collapsible 
-                    key={groupKey} 
-                    open={isExpanded} 
-                    onOpenChange={() => toggleGroup(group.label)}
-                  >
-                    <CollapsibleTrigger className="flex items-center gap-2 w-full p-2 hover:bg-accent/50 rounded-lg transition-colors">
-                      {isExpanded ? (
-                        <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                      ) : (
-                        <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                      )}
-                      <GroupIcon className="h-4 w-4 text-muted-foreground" />
-                      <span className="font-medium text-sm">{group.label}</span>
-                      <Badge variant="outline" className="ml-auto text-xs">
-                        {group.emails.length}
-                      </Badge>
-                      {unreadInGroup > 0 && (
-                        <Badge className="bg-primary text-xs">
-                          {unreadInGroup}
-                        </Badge>
-                      )}
-                    </CollapsibleTrigger>
-                    <CollapsibleContent className="ml-6 border-l pl-4 mt-1">
-                      <div className="divide-y">
-                        {group.emails.map(email => renderEmailItem(email))}
-                      </div>
-                    </CollapsibleContent>
-                  </Collapsible>
-                );
-              })}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      {/* Email Lists - Inbox and Outbox */}
+      <div className="space-y-4">
+        {/* Inbox - Bandeja de Entrada */}
+        <Card>
+          <Collapsible open={isInboxExpanded} onOpenChange={setIsInboxExpanded}>
+            <CardHeader className="pb-3">
+              <CollapsibleTrigger className="w-full">
+                <CardTitle className="flex items-center gap-2 cursor-pointer hover:text-primary transition-colors">
+                  {isInboxExpanded ? (
+                    <ChevronDown className="h-5 w-5" />
+                  ) : (
+                    <ChevronRight className="h-5 w-5" />
+                  )}
+                  {showDeleted ? <Trash2 className="h-5 w-5" /> : <Inbox className="h-5 w-5" />}
+                  {showDeleted ? 'Papelera - Entrada' : 'Bandeja de Entrada'}
+                  <Badge variant="secondary" className="ml-2">
+                    {inboundEmails.length}
+                  </Badge>
+                  {!showDeleted && stats.unread > 0 && (
+                    <Badge className="ml-1 bg-primary">
+                      {stats.unread} sin leer
+                    </Badge>
+                  )}
+                </CardTitle>
+              </CollapsibleTrigger>
+            </CardHeader>
+            <CollapsibleContent>
+              <CardContent>
+                {isLoading ? (
+                  <div className="text-center py-8 text-muted-foreground">Cargando...</div>
+                ) : inboundEmails.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <Mail className="h-12 w-12 mx-auto mb-3 opacity-30" />
+                    <p>No hay emails recibidos</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {groupedInboundEmails.map(([groupKey, group]) => {
+                      const GroupIcon = group.icon;
+                      const isExpanded = expandedGroups.has(`inbox-${group.label}`);
+                      const unreadInGroup = group.emails.filter(e => !e.is_read).length;
+                      
+                      return (
+                        <Collapsible 
+                          key={groupKey} 
+                          open={isExpanded} 
+                          onOpenChange={() => toggleGroup(`inbox-${group.label}`)}
+                        >
+                          <CollapsibleTrigger className="flex items-center gap-2 w-full p-2 hover:bg-accent/50 rounded-lg transition-colors">
+                            {isExpanded ? (
+                              <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                            ) : (
+                              <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                            )}
+                            <GroupIcon className="h-4 w-4 text-muted-foreground" />
+                            <span className="font-medium text-sm">{group.label}</span>
+                            <Badge variant="outline" className="ml-auto text-xs">
+                              {group.emails.length}
+                            </Badge>
+                            {unreadInGroup > 0 && (
+                              <Badge className="bg-primary text-xs">
+                                {unreadInGroup}
+                              </Badge>
+                            )}
+                          </CollapsibleTrigger>
+                          <CollapsibleContent className="ml-6 border-l pl-4 mt-1">
+                            <div className="divide-y">
+                              {group.emails.map(email => renderEmailItem(email))}
+                            </div>
+                          </CollapsibleContent>
+                        </Collapsible>
+                      );
+                    })}
+                  </div>
+                )}
+              </CardContent>
+            </CollapsibleContent>
+          </Collapsible>
+        </Card>
+
+        {/* Outbox - Bandeja de Salida */}
+        <Card>
+          <Collapsible open={isOutboxExpanded} onOpenChange={setIsOutboxExpanded}>
+            <CardHeader className="pb-3">
+              <CollapsibleTrigger className="w-full">
+                <CardTitle className="flex items-center gap-2 cursor-pointer hover:text-primary transition-colors">
+                  {isOutboxExpanded ? (
+                    <ChevronDown className="h-5 w-5" />
+                  ) : (
+                    <ChevronRight className="h-5 w-5" />
+                  )}
+                  {showDeleted ? <Trash2 className="h-5 w-5" /> : <Send className="h-5 w-5" />}
+                  {showDeleted ? 'Papelera - Salida' : 'Bandeja de Salida'}
+                  <Badge variant="secondary" className="ml-2">
+                    {outboundEmails.length}
+                  </Badge>
+                </CardTitle>
+              </CollapsibleTrigger>
+            </CardHeader>
+            <CollapsibleContent>
+              <CardContent>
+                {isLoading ? (
+                  <div className="text-center py-8 text-muted-foreground">Cargando...</div>
+                ) : outboundEmails.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <Send className="h-12 w-12 mx-auto mb-3 opacity-30" />
+                    <p>No hay emails enviados</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {groupedOutboundEmails.map(([groupKey, group]) => {
+                      const GroupIcon = group.icon;
+                      const isExpanded = expandedGroups.has(`outbox-${group.label}`);
+                      
+                      return (
+                        <Collapsible 
+                          key={groupKey} 
+                          open={isExpanded} 
+                          onOpenChange={() => toggleGroup(`outbox-${group.label}`)}
+                        >
+                          <CollapsibleTrigger className="flex items-center gap-2 w-full p-2 hover:bg-accent/50 rounded-lg transition-colors">
+                            {isExpanded ? (
+                              <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                            ) : (
+                              <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                            )}
+                            <GroupIcon className="h-4 w-4 text-muted-foreground" />
+                            <span className="font-medium text-sm">{group.label}</span>
+                            <Badge variant="outline" className="ml-auto text-xs">
+                              {group.emails.length}
+                            </Badge>
+                          </CollapsibleTrigger>
+                          <CollapsibleContent className="ml-6 border-l pl-4 mt-1">
+                            <div className="divide-y">
+                              {group.emails.map(email => renderEmailItem(email))}
+                            </div>
+                          </CollapsibleContent>
+                        </Collapsible>
+                      );
+                    })}
+                  </div>
+                )}
+              </CardContent>
+            </CollapsibleContent>
+          </Collapsible>
+        </Card>
+      </div>
 
       {/* Email Detail Dialog - Normal or Fullscreen */}
       {!isFullscreen ? (

@@ -43,7 +43,7 @@ export function SendEmailDialog({ open, onOpenChange, contact, contacts }: SendE
   const [variables, setVariables] = useState<Record<string, string>>({});
   const [attachments, setAttachments] = useState<AttachmentFile[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const scrollRef = useRef<HTMLDivElement>(null);
+  
 
   const recipients = contacts || (contact ? [contact] : []);
   const recipientCount = recipients.filter(c => c.email).length;
@@ -80,10 +80,6 @@ export function SendEmailDialog({ open, onOpenChange, contact, contacts }: SendE
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
-    // Scroll to bottom to show attachments
-    setTimeout(() => {
-      scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
-    }, 100);
   };
 
   const removeAttachment = (index: number) => {
@@ -186,9 +182,6 @@ export function SendEmailDialog({ open, onOpenChange, contact, contacts }: SendE
     sendEmailMutation.mutate();
   };
 
-  const scrollToBottom = () => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
-  };
 
   const templateVariables = selectedTemplate 
     ? (templates.find(t => t.id === selectedTemplate)?.variables as string[] || [])
@@ -207,7 +200,7 @@ export function SendEmailDialog({ open, onOpenChange, contact, contacts }: SendE
           </DialogDescription>
         </DialogHeader>
 
-        <ScrollArea ref={scrollRef} className="flex-1 pr-4">
+        <ScrollArea className="flex-1 pr-4">
           <div className="space-y-4 pb-4">
             {/* Recipients info */}
             <div className="bg-muted/50 p-3 rounded-lg">
@@ -352,28 +345,17 @@ export function SendEmailDialog({ open, onOpenChange, contact, contacts }: SendE
         </ScrollArea>
 
         <DialogFooter className="flex-shrink-0 pt-4 border-t">
-          <div className="flex items-center justify-between w-full">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={scrollToBottom}
-              className="text-xs text-muted-foreground"
-            >
-              Ir al final ↓
+          <div className="flex gap-2 ml-auto">
+            <Button variant="outline" onClick={() => onOpenChange(false)}>
+              Cancelar
             </Button>
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={() => onOpenChange(false)}>
-                Cancelar
-              </Button>
-              <Button 
-                onClick={handleSend} 
-                disabled={sendEmailMutation.isPending || recipientCount === 0}
-              >
-                <Send className="h-4 w-4 mr-2" />
-                {sendEmailMutation.isPending ? 'Enviando...' : `Enviar a ${recipientCount} contacto(s)`}
-              </Button>
-            </div>
+            <Button 
+              onClick={handleSend} 
+              disabled={sendEmailMutation.isPending || recipientCount === 0}
+            >
+              <Send className="h-4 w-4 mr-2" />
+              {sendEmailMutation.isPending ? 'Enviando...' : `Enviar a ${recipientCount} contacto(s)`}
+            </Button>
           </div>
         </DialogFooter>
       </DialogContent>

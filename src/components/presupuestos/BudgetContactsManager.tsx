@@ -696,6 +696,7 @@ export function BudgetContactsManager({ budgetId, isAdmin }: BudgetContactsManag
           surname: emailContact.surname,
           email: emailContact.email
         } : undefined}
+        budgetId={budgetId}
       />
 
       {/* Edit Contact Form */}

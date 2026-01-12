@@ -54,6 +54,7 @@ interface SendEmailRequest {
   campaignId?: string;
   variables?: Record<string, string>;
   attachments?: EmailAttachment[];
+  budgetId?: string; // Optional budget ID to link email to a budget
 }
 
 // HTML entity encoding to prevent XSS in template variables
@@ -303,7 +304,7 @@ const handler = async (req: Request): Promise<Response> => {
     const isAdmin = isAdminData === true;
 
     const body: SendEmailRequest = await req.json();
-    const { contactId, contactIds, email, subject, content, templateId, campaignId, variables = {}, attachments = [] } = body;
+    const { contactId, contactIds, email, subject, content, templateId, campaignId, variables = {}, attachments = [], budgetId } = body;
 
     if (!subject || !content) {
       return new Response(
@@ -512,7 +513,7 @@ const handler = async (req: Request): Promise<Response> => {
         }
 
         // Also save to email_messages table for unified inbox view
-        await supabase.from('email_messages').insert({
+        const { data: emailMessageData } = await supabase.from('email_messages').insert({
           from_email: senderEmail,
           from_name: senderName,
           to_emails: [recipient.email],
@@ -523,6 +524,7 @@ const handler = async (req: Request): Promise<Response> => {
           status: 'sent',
           sent_at: new Date().toISOString(),
           contact_id: recipient.id || null,
+          budget_id: budgetId || null, // Link email to budget if provided
           created_by: user.id,
           external_id: resendId,
           metadata: {
@@ -531,7 +533,20 @@ const handler = async (req: Request): Promise<Response> => {
             template_id: templateId,
             has_attachments: attachments && attachments.length > 0,
           }
-        });
+        }).select('id').single();
+
+        // Store attachments in email_attachments table if the email was saved
+        if (emailMessageData?.id && attachments && attachments.length > 0) {
+          const attachmentRecords = attachments.map(att => ({
+            email_id: emailMessageData.id,
+            file_name: att.filename,
+            file_path: `attachments/${emailMessageData.id}/${att.filename}`, // Virtual path for reference
+            file_type: att.content_type,
+            file_size: Math.ceil((att.content.length * 3) / 4), // Approximate size from base64
+          }));
+          
+          await supabase.from('email_attachments').insert(attachmentRecords);
+        }
 
         results.push({ contactId: recipient.id, email: recipient.email, success: true });
       } catch (error: any) {

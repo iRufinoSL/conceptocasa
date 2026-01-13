@@ -543,9 +543,15 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
   };
 
   // Export resources to PDF with detailed cost breakdown
-  const exportResourcesPDF = () => {
+  const exportResourcesPDF = async () => {
     const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.getWidth();
+    
+    // Determine which resources to export: selected or all
+    const hasSelection = selectedIds.size > 0;
+    const resourcesToExport = hasSelection 
+      ? resources.filter(r => selectedIds.has(r.id))
+      : resources;
     
     // Company info from settings
     const companyName = companySettings.name || 'Mi Empresa';
@@ -554,15 +560,49 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
     const companyAddress = companySettings.address || '';
     const companyWeb = companySettings.website || '';
     const companyInitials = companyName.substring(0, 2).toUpperCase();
+    const logoUrl = companySettings.logo_signed_url;
     
-    // Header with company branding
-    doc.setFillColor(37, 99, 235);
-    doc.roundedRect(14, 10, 25, 25, 3, 3, 'F');
-    doc.setTextColor(255);
-    doc.setFontSize(16);
-    doc.setFont('helvetica', 'bold');
-    doc.text(companyInitials, 26.5, 26, { align: 'center' });
-    doc.setTextColor(0);
+    // Try to load company logo
+    let logoLoaded = false;
+    if (logoUrl) {
+      try {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        await new Promise<void>((resolve, reject) => {
+          img.onload = () => {
+            try {
+              // Calculate aspect ratio to fit in 25x25 box
+              const maxWidth = 25;
+              const maxHeight = 25;
+              const ratio = Math.min(maxWidth / img.width, maxHeight / img.height);
+              const width = img.width * ratio;
+              const height = img.height * ratio;
+              doc.addImage(img, 'PNG', 14, 10, width, height);
+              logoLoaded = true;
+              resolve();
+            } catch (e) {
+              reject(e);
+            }
+          };
+          img.onerror = reject;
+          img.src = logoUrl;
+        });
+      } catch (error) {
+        console.error('Error loading logo for PDF:', error);
+        // Fallback to initials
+      }
+    }
+    
+    // Fallback: draw initials if logo not loaded
+    if (!logoLoaded) {
+      doc.setFillColor(37, 99, 235);
+      doc.roundedRect(14, 10, 25, 25, 3, 3, 'F');
+      doc.setTextColor(255);
+      doc.setFontSize(16);
+      doc.setFont('helvetica', 'bold');
+      doc.text(companyInitials, 26.5, 26, { align: 'center' });
+      doc.setTextColor(0);
+    }
     
     doc.setFontSize(16);
     doc.setFont('helvetica', 'bold');
@@ -583,10 +623,13 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
     doc.setDrawColor(200);
     doc.line(14, 40, pageWidth - 14, 40);
     
-    // Document title
+    // Document title - indicate if showing selected resources
     doc.setFontSize(14);
     doc.setFont('helvetica', 'bold');
-    doc.text('DESGLOSE DE RECURSOS POR FASE Y ACTIVIDAD', pageWidth / 2, 50, { align: 'center' });
+    const titleText = hasSelection 
+      ? `DESGLOSE DE ${resourcesToExport.length} RECURSOS SELECCIONADOS`
+      : 'DESGLOSE DE RECURSOS POR FASE Y ACTIVIDAD';
+    doc.text(titleText, pageWidth / 2, 50, { align: 'center' });
     
     doc.setFontSize(12);
     doc.setFont('helvetica', 'normal');
@@ -602,15 +645,15 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
     doc.setFontSize(11);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(37, 99, 235);
-    doc.text('Resumen General', 14, yPos);
+    doc.text(hasSelection ? 'Resumen de Selección' : 'Resumen General', 14, yPos);
     doc.setTextColor(0);
     
     yPos += 8;
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
     
-    // Group by type
-    const byType = resources.reduce((acc, r) => {
+    // Group by type - using resourcesToExport
+    const byType = resourcesToExport.reduce((acc, r) => {
       const type = r.resource_type || 'Sin tipo';
       const fields = calculateFields(r);
       if (!acc[type]) acc[type] = { count: 0, total: 0 };
@@ -619,10 +662,22 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
       return acc;
     }, {} as Record<string, { count: number; total: number }>);
     
+    // Calculate total for exported resources
+    const exportedTotal = resourcesToExport.reduce((sum, r) => sum + calculateFields(r).subtotalSales, 0);
+    
+    // Get unique activities and phases for exported resources
+    const exportedActivityIds = new Set(resourcesToExport.map(r => r.activity_id).filter(Boolean));
+    const exportedPhaseIds = new Set(
+      activities
+        .filter(a => exportedActivityIds.has(a.id))
+        .map(a => a.phase_id)
+        .filter(Boolean)
+    );
+    
     const summaryData = [
-      ['Total de recursos:', resources.length.toString()],
-      ['Total de actividades:', activities.length.toString()],
-      ['Total de fases:', phases.length.toString()],
+      ['Total de recursos:', resourcesToExport.length.toString()],
+      ['Total de actividades:', exportedActivityIds.size.toString()],
+      ['Total de fases:', exportedPhaseIds.size.toString()],
     ];
     
     summaryData.forEach(([label, value]) => {
@@ -637,8 +692,9 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
     doc.roundedRect(14, yPos - 4, pageWidth - 28, 10, 2, 2, 'F');
     doc.setTextColor(255);
     doc.setFont('helvetica', 'bold');
-    doc.text('TOTAL €SubTotal Recursos:', 18, yPos + 3);
-    doc.text(formatPdfCurrency(allTotals.subtotal), pageWidth - 18, yPos + 3, { align: 'right' });
+    const totalLabel = hasSelection ? 'TOTAL SELECCIONADO:' : 'TOTAL €SubTotal Recursos:';
+    doc.text(totalLabel, 18, yPos + 3);
+    doc.text(formatPdfCurrency(exportedTotal), pageWidth - 18, yPos + 3, { align: 'right' });
     doc.setTextColor(0);
     doc.setFont('helvetica', 'normal');
 
@@ -677,11 +733,11 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
     
     yPos += 5;
     
-    // Build table data
+    // Build table data - using resourcesToExport
     const tableData: any[] = [];
     
     // Resources without activity
-    const unassignedResources = resources.filter(r => !r.activity_id);
+    const unassignedResources = resourcesToExport.filter(r => !r.activity_id);
     if (unassignedResources.length > 0) {
       const unassignedTotal = unassignedResources.reduce((sum, r) => sum + calculateFields(r).subtotalSales, 0);
       tableData.push([
@@ -704,7 +760,7 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
     // Group by phase then activity
     phases.forEach(phase => {
       const phaseActivities = activities.filter(a => a.phase_id === phase.id);
-      const phaseResources = resources.filter(r => {
+      const phaseResources = resourcesToExport.filter(r => {
         const activity = activities.find(a => a.id === r.activity_id);
         return activity?.phase_id === phase.id;
       });
@@ -721,7 +777,7 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
       
       // Activities within phase
       phaseActivities.forEach(activity => {
-        const activityResources = resources.filter(r => r.activity_id === activity.id);
+        const activityResources = resourcesToExport.filter(r => r.activity_id === activity.id);
         if (activityResources.length === 0) return;
         
         const activityTotal = activityResources.reduce((sum, r) => sum + calculateFields(r).subtotalSales, 0);
@@ -750,7 +806,7 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
     // Activities without phase
     const activitiesWithoutPhase = activities.filter(a => !a.phase_id);
     activitiesWithoutPhase.forEach(activity => {
-      const activityResources = resources.filter(r => r.activity_id === activity.id);
+      const activityResources = resourcesToExport.filter(r => r.activity_id === activity.id);
       if (activityResources.length === 0) return;
       
       const activityTotal = activityResources.reduce((sum, r) => sum + calculateFields(r).subtotalSales, 0);
@@ -774,9 +830,10 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
     });
     
     // Total row
+    const totalRowLabel = hasSelection ? 'TOTAL SELECCIONADO' : 'TOTAL PRESUPUESTO';
     tableData.push([
-      { content: 'TOTAL PRESUPUESTO', colSpan: 5, styles: { fillColor: [34, 197, 94], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'right' } },
-      { content: formatPdfCurrency(allTotals.subtotal), styles: { fillColor: [34, 197, 94], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'right' } }
+      { content: totalRowLabel, colSpan: 5, styles: { fillColor: [34, 197, 94], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'right' } },
+      { content: formatPdfCurrency(exportedTotal), styles: { fillColor: [34, 197, 94], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'right' } }
     ]);
 
     autoTable(doc, {
@@ -820,9 +877,13 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
     }
 
     // Save
-    const fileName = `recursos_${budgetName.replace(/[^a-zA-Z0-9]/g, '_')}_${format(new Date(), 'yyyyMMdd')}.pdf`;
+    const selectionSuffix = hasSelection ? '_seleccion' : '';
+    const fileName = `recursos_${budgetName.replace(/[^a-zA-Z0-9]/g, '_')}${selectionSuffix}_${format(new Date(), 'yyyyMMdd')}.pdf`;
     doc.save(fileName);
-    toast.success('PDF exportado correctamente');
+    toast.success(hasSelection 
+      ? `PDF exportado con ${resourcesToExport.length} recursos seleccionados`
+      : 'PDF exportado correctamente'
+    );
   };
 
   const handleEdit = (resource: BudgetResource) => {

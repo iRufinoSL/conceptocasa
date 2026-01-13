@@ -1461,6 +1461,7 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
               onRefresh={fetchData}
               onBulkDelete={() => setBulkDeleteDialogOpen(true)}
               isAdmin={isAdmin}
+              calculateFields={calculateFields}
             />
           )}
 

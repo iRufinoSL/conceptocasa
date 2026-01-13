@@ -14,7 +14,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Check, X, Undo2, Trash2, AlertTriangle } from 'lucide-react';
+import { Check, X, Undo2, Trash2, AlertTriangle, Calculator } from 'lucide-react';
+import { formatCurrency } from '@/lib/format-utils';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { getActivityMeasurementUnits } from '@/lib/budget-utils';
@@ -54,6 +55,15 @@ interface UndoState {
   timestamp: Date;
 }
 
+interface CalculatedFields {
+  safetyMarginUd: number;
+  internalCostUd: number;
+  salesMarginUd: number;
+  salesCostUd: number;
+  calculatedUnits: number;
+  subtotalSales: number;
+}
+
 interface BulkEditBarProps {
   selectedIds: Set<string>;
   resources: BudgetResource[];
@@ -63,6 +73,7 @@ interface BulkEditBarProps {
   onRefresh: () => void;
   onBulkDelete: () => void;
   isAdmin: boolean;
+  calculateFields?: (resource: BudgetResource) => CalculatedFields;
 }
 
 const BULK_EDIT_FIELDS = [
@@ -87,6 +98,7 @@ export function BulkEditBar({
   onRefresh,
   onBulkDelete,
   isAdmin,
+  calculateFields,
 }: BulkEditBarProps) {
   const [bulkEditField, setBulkEditField] = useState<string>('');
   const [bulkEditValue, setBulkEditValue] = useState<string | number>('');
@@ -96,6 +108,11 @@ export function BulkEditBar({
 
   const selectedResources = resources.filter(r => selectedIds.has(r.id));
   const selectedField = BULK_EDIT_FIELDS.find(f => f.value === bulkEditField);
+
+  // Calculate subtotal for selected resources
+  const selectedSubtotal = calculateFields 
+    ? selectedResources.reduce((sum, r) => sum + calculateFields(r).subtotalSales, 0)
+    : 0;
 
   const getActivityDisplayName = (activityId: string | null) => {
     if (!activityId) return 'Sin actividad';
@@ -357,10 +374,18 @@ export function BulkEditBar({
     <>
       <div className="bg-primary/10 border border-primary/20 rounded-lg p-3 mb-4 animate-in slide-in-from-top-2">
         <div className="flex flex-wrap items-center gap-3">
-          {/* Selection count */}
+          {/* Selection count and subtotal */}
           <Badge variant="secondary" className="h-7">
             {selectedIds.size} seleccionados
           </Badge>
+          
+          {/* Subtotal of selected resources */}
+          {calculateFields && (
+            <Badge variant="default" className="h-7 gap-1">
+              <Calculator className="h-3 w-3" />
+              Subtotal: {formatCurrency(selectedSubtotal)}
+            </Badge>
+          )}
 
           {/* Field selector */}
           <Select value={bulkEditField} onValueChange={(v) => { setBulkEditField(v); setBulkEditValue(''); }}>

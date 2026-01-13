@@ -783,7 +783,10 @@ const Landing = () => {
                   onClick={() => setShowHousingForm(true)}
                 >
                   <FileText className="w-5 h-5 mr-2 flex-shrink-0" />
-                  <span className="text-left">Si tienes definido el perfil de tu vivienda, envía esta información y te lo preparamos</span>
+                  <span className="text-left flex flex-col leading-tight">
+                    <span>Si tienes definido el perfil de tu vivienda,</span>
+                    <span>envía esta información y te lo preparamos</span>
+                  </span>
                 </Button>
               </form>
             </Card>
@@ -810,7 +813,7 @@ const Landing = () => {
               </span>
             </div>
             <p className="text-sm text-background/70">
-              © {new Date().getFullYear()} Terra.Idea.Concepto. Todos los derechos reservados.
+              organiza@concepto.casa © {new Date().getFullYear()} Terra.Idea.Concepto. Todos los derechos reservados.
             </p>
           </div>
         </div>

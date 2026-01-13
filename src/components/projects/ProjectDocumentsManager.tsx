@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -6,6 +6,8 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { 
@@ -22,7 +24,10 @@ import {
   ExternalLink,
   Plus,
   X,
-  Save
+  Save,
+  List,
+  FolderOpen,
+  ChevronDown
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -49,17 +54,17 @@ interface ProjectDocumentsManagerProps {
 }
 
 const DEFAULT_DOCUMENT_TYPES = [
-  'Plano',
-  'Presupuesto',
-  'Contrato',
-  'Factura',
-  'Informe',
-  'Fotografía',
   'Certificado',
+  'Contrato',
+  'Enlace web',
+  'Factura',
+  'Fotografía',
+  'Informe',
   'Licencia',
   'Memoria',
-  'Enlace web',
-  'Otro'
+  'Otro',
+  'Plano',
+  'Presupuesto'
 ];
 
 export function ProjectDocumentsManager({ 
@@ -97,8 +102,61 @@ export function ProjectDocumentsManager({
   const [isSaving, setIsSaving] = useState(false);
   const editFileInputRef = useRef<HTMLInputElement>(null);
 
-  // Combine default and custom types
-  const allDocumentTypes = [...DEFAULT_DOCUMENT_TYPES, ...customTypes.filter(t => !DEFAULT_DOCUMENT_TYPES.includes(t))];
+  // View mode state
+  const [viewMode, setViewMode] = useState<'alphabetical' | 'grouped'>('alphabetical');
+  const [expandedTypes, setExpandedTypes] = useState<Set<string>>(new Set());
+
+  // Combine default and custom types, sorted alphabetically
+  const allDocumentTypes = useMemo(() => {
+    const combined = [...DEFAULT_DOCUMENT_TYPES, ...customTypes.filter(t => !DEFAULT_DOCUMENT_TYPES.includes(t))];
+    return combined.sort((a, b) => a.localeCompare(b, 'es'));
+  }, [customTypes]);
+
+  // Documents sorted alphabetically
+  const sortedDocuments = useMemo(() => {
+    return [...documents].sort((a, b) => a.name.localeCompare(b.name, 'es'));
+  }, [documents]);
+
+  // Documents grouped by type
+  const groupedDocuments = useMemo(() => {
+    const groups: Record<string, ProjectDocument[]> = {};
+    
+    documents.forEach(doc => {
+      const type = doc.document_type || 'Sin tipo';
+      if (!groups[type]) {
+        groups[type] = [];
+      }
+      groups[type].push(doc);
+    });
+    
+    // Sort documents within each group alphabetically
+    Object.keys(groups).forEach(type => {
+      groups[type].sort((a, b) => a.name.localeCompare(b.name, 'es'));
+    });
+    
+    // Return sorted by type name
+    return Object.entries(groups).sort(([a], [b]) => a.localeCompare(b, 'es'));
+  }, [documents]);
+
+  const toggleTypeExpanded = (type: string) => {
+    setExpandedTypes(prev => {
+      const next = new Set(prev);
+      if (next.has(type)) {
+        next.delete(type);
+      } else {
+        next.add(type);
+      }
+      return next;
+    });
+  };
+
+  const expandAllTypes = () => {
+    setExpandedTypes(new Set(groupedDocuments.map(([type]) => type)));
+  };
+
+  const collapseAllTypes = () => {
+    setExpandedTypes(new Set());
+  };
 
   const fetchDocuments = async () => {
     setIsLoading(true);
@@ -707,9 +765,11 @@ export function ProjectDocumentsManager({
           </div>
         )}
 
-        {/* Documents List */}
-        <div className="space-y-2">
-          <p className="text-sm font-medium">Documentos ({documents.length})</p>
+        {/* Documents List with View Tabs */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-medium">Documentos ({documents.length})</p>
+          </div>
           
           {isLoading ? (
             <div className="py-8 text-center">
@@ -721,96 +781,204 @@ export function ProjectDocumentsManager({
               <p className="text-sm">No hay documentos</p>
             </div>
           ) : (
-            <div className="space-y-2">
-              {documents.map((doc) => (
-                <div 
-                  key={doc.id}
-                  className="flex items-center gap-3 p-3 bg-card border rounded-lg group hover:bg-muted/50 transition-colors"
-                >
-                  <div className="p-2 bg-muted rounded">
-                    {getFileIcon(doc)}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium truncate text-sm">{doc.name}</p>
-                    <div className="flex items-center gap-2 mt-1 flex-wrap">
-                      <Badge variant="outline" className="text-xs">
-                        {doc.document_type || 'Otro'}
-                      </Badge>
-                      {doc.file_path && (
-                        <span className="text-xs text-muted-foreground">
-                          {formatFileSize(doc.file_size)}
-                        </span>
-                      )}
-                      {doc.document_url && (
-                        <Badge variant="secondary" className="text-xs">
-                          <LinkIcon className="h-3 w-3 mr-1" />
-                          URL
-                        </Badge>
-                      )}
-                      {doc.created_at && (
-                        <span className="text-xs text-muted-foreground">
-                          {format(new Date(doc.created_at), 'd MMM yyyy', { locale: es })}
-                        </span>
-                      )}
-                    </div>
-                    {doc.description && (
-                      <p className="text-xs text-muted-foreground mt-1 truncate">
-                        {doc.description}
-                      </p>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-1">
-                    {doc.document_url && (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8"
-                        onClick={() => handleOpenUrl(doc.document_url!)}
-                        title="Abrir enlace"
-                      >
-                        <ExternalLink className="h-4 w-4" />
-                      </Button>
-                    )}
-                    {doc.file_path && (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8"
-                        onClick={() => handleDownload(doc)}
-                        title="Descargar archivo"
-                      >
-                        <Download className="h-4 w-4" />
-                      </Button>
-                    )}
-                    {canEdit && (
-                      <>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
-                          onClick={() => startEditing(doc)}
-                          title="Editar documento"
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-destructive hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
-                          onClick={() => handleDelete(doc)}
-                          title="Eliminar documento"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </>
-                    )}
-                  </div>
+            <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as 'alphabetical' | 'grouped')}>
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="alphabetical" className="gap-2">
+                  <List className="h-4 w-4" />
+                  Alfabético
+                </TabsTrigger>
+                <TabsTrigger value="grouped" className="gap-2">
+                  <FolderOpen className="h-4 w-4" />
+                  Por Tipo
+                </TabsTrigger>
+              </TabsList>
+
+              {/* Alphabetical View */}
+              <TabsContent value="alphabetical" className="mt-3">
+                <div className="space-y-2">
+                  {sortedDocuments.map((doc) => (
+                    <DocumentRow 
+                      key={doc.id}
+                      doc={doc}
+                      canEdit={canEdit}
+                      onEdit={startEditing}
+                      onDelete={handleDelete}
+                      onDownload={handleDownload}
+                      onOpenUrl={handleOpenUrl}
+                      getFileIcon={getFileIcon}
+                      formatFileSize={formatFileSize}
+                    />
+                  ))}
                 </div>
-              ))}
-            </div>
+              </TabsContent>
+
+              {/* Grouped by Type View */}
+              <TabsContent value="grouped" className="mt-3">
+                <div className="flex justify-end gap-2 mb-3">
+                  <Button variant="ghost" size="sm" onClick={expandAllTypes}>
+                    Expandir todo
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={collapseAllTypes}>
+                    Colapsar todo
+                  </Button>
+                </div>
+                <div className="space-y-2">
+                  {groupedDocuments.map(([type, docs]) => (
+                    <Collapsible
+                      key={type}
+                      open={expandedTypes.has(type)}
+                      onOpenChange={() => toggleTypeExpanded(type)}
+                    >
+                      <CollapsibleTrigger asChild>
+                        <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg cursor-pointer hover:bg-muted transition-colors">
+                          <div className="flex items-center gap-3">
+                            <FolderOpen className="h-5 w-5 text-primary" />
+                            <span className="font-medium">{type}</span>
+                            <Badge variant="secondary" className="text-xs">
+                              {docs.length}
+                            </Badge>
+                          </div>
+                          <ChevronDown className={`h-4 w-4 transition-transform ${expandedTypes.has(type) ? 'rotate-180' : ''}`} />
+                        </div>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent>
+                        <div className="pl-4 border-l-2 border-muted ml-2 mt-2 space-y-2">
+                          {docs.map((doc) => (
+                            <DocumentRow 
+                              key={doc.id}
+                              doc={doc}
+                              canEdit={canEdit}
+                              onEdit={startEditing}
+                              onDelete={handleDelete}
+                              onDownload={handleDownload}
+                              onOpenUrl={handleOpenUrl}
+                              getFileIcon={getFileIcon}
+                              formatFileSize={formatFileSize}
+                              showType={false}
+                            />
+                          ))}
+                        </div>
+                      </CollapsibleContent>
+                    </Collapsible>
+                  ))}
+                </div>
+              </TabsContent>
+            </Tabs>
           )}
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// Extracted component for document row to avoid repetition
+interface DocumentRowProps {
+  doc: ProjectDocument;
+  canEdit: boolean;
+  onEdit: (doc: ProjectDocument) => void;
+  onDelete: (doc: ProjectDocument) => void;
+  onDownload: (doc: ProjectDocument) => void;
+  onOpenUrl: (url: string) => void;
+  getFileIcon: (doc: ProjectDocument) => React.ReactNode;
+  formatFileSize: (bytes: number | null) => string;
+  showType?: boolean;
+}
+
+function DocumentRow({ 
+  doc, 
+  canEdit, 
+  onEdit, 
+  onDelete, 
+  onDownload, 
+  onOpenUrl, 
+  getFileIcon, 
+  formatFileSize,
+  showType = true 
+}: DocumentRowProps) {
+  return (
+    <div 
+      className="flex items-center gap-3 p-3 bg-card border rounded-lg group hover:bg-muted/50 transition-colors"
+    >
+      <div className="p-2 bg-muted rounded">
+        {getFileIcon(doc)}
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="font-medium truncate text-sm">{doc.name}</p>
+        <div className="flex items-center gap-2 mt-1 flex-wrap">
+          {showType && (
+            <Badge variant="outline" className="text-xs">
+              {doc.document_type || 'Otro'}
+            </Badge>
+          )}
+          {doc.file_path && (
+            <span className="text-xs text-muted-foreground">
+              {formatFileSize(doc.file_size)}
+            </span>
+          )}
+          {doc.document_url && (
+            <Badge variant="secondary" className="text-xs">
+              <LinkIcon className="h-3 w-3 mr-1" />
+              URL
+            </Badge>
+          )}
+          {doc.created_at && (
+            <span className="text-xs text-muted-foreground">
+              {format(new Date(doc.created_at), 'd MMM yyyy', { locale: es })}
+            </span>
+          )}
+        </div>
+        {doc.description && (
+          <p className="text-xs text-muted-foreground mt-1 truncate">
+            {doc.description}
+          </p>
+        )}
+      </div>
+      <div className="flex items-center gap-1">
+        {doc.document_url && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            onClick={() => onOpenUrl(doc.document_url!)}
+            title="Abrir enlace"
+          >
+            <ExternalLink className="h-4 w-4" />
+          </Button>
+        )}
+        {doc.file_path && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            onClick={() => onDownload(doc)}
+            title="Descargar archivo"
+          >
+            <Download className="h-4 w-4" />
+          </Button>
+        )}
+        {canEdit && (
+          <>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
+              onClick={() => onEdit(doc)}
+              title="Editar documento"
+            >
+              <Edit className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-destructive hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
+              onClick={() => onDelete(doc)}
+              title="Eliminar documento"
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </>
+        )}
+      </div>
+    </div>
   );
 }

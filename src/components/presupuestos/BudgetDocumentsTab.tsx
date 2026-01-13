@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -44,11 +44,15 @@ import {
   Image,
   FileSpreadsheet,
   FileArchive,
-  Maximize2
+  Maximize2,
+  List,
+  ChevronDown
 } from 'lucide-react';
 import { RichTextEditor } from '@/components/ui/rich-text-editor';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import DOMPurify from 'dompurify';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -85,17 +89,17 @@ interface BudgetDocumentsTabProps {
 }
 
 const DEFAULT_DOCUMENT_TYPES = [
-  'Plano',
-  'Presupuesto',
-  'Contrato',
-  'Factura',
-  'Informe',
-  'Fotografía',
   'Certificado',
+  'Contrato',
+  'Enlace web',
+  'Factura',
+  'Fotografía',
+  'Informe',
   'Licencia',
   'Memoria',
-  'Enlace web',
-  'Otro'
+  'Otro',
+  'Plano',
+  'Presupuesto'
 ];
 
 const toSafeStorageKey = (input: string) => {
@@ -133,11 +137,185 @@ const isValidUrl = (url: string) => {
   }
 };
 
+// Reusable DocumentRow component
+interface DocumentRowProps {
+  doc: ProjectDocument;
+  isAdmin: boolean;
+  getFileIcon: (doc: ProjectDocument) => React.ReactNode;
+  truncateDescription: (text: string | null, maxLength?: number) => string;
+  formatFileSize: (bytes: number | null) => string;
+  hideType?: boolean;
+  onDescriptionPreview: (title: string, content: string) => void;
+  onOpenUrl: (url: string) => void;
+  onPreview: (doc: ProjectDocument) => void;
+  onDownload: (doc: ProjectDocument) => void;
+  onEdit: (doc: ProjectDocument) => void;
+  onDelete: (doc: ProjectDocument) => void;
+}
+
+function DocumentRow({
+  doc,
+  isAdmin,
+  getFileIcon,
+  truncateDescription,
+  formatFileSize,
+  hideType,
+  onDescriptionPreview,
+  onOpenUrl,
+  onPreview,
+  onDownload,
+  onEdit,
+  onDelete
+}: DocumentRowProps) {
+  return (
+    <TableRow>
+      <TableCell>
+        <div className="flex items-center gap-3">
+          {getFileIcon(doc)}
+          <div className="min-w-0">
+            <p className="font-medium truncate">{doc.name}</p>
+            {doc.description && (
+              <div className="flex items-center gap-1">
+                <p className="text-xs text-muted-foreground truncate">
+                  {truncateDescription(doc.description)}
+                </p>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-5 w-5 shrink-0"
+                  onClick={() => onDescriptionPreview(doc.name, doc.description || '')}
+                  title="Ver descripción completa"
+                >
+                  <Maximize2 className="h-3 w-3" />
+                </Button>
+              </div>
+            )}
+          </div>
+        </div>
+      </TableCell>
+      {!hideType && (
+        <TableCell>
+          <Badge variant="outline">{doc.document_type || 'Otro'}</Badge>
+        </TableCell>
+      )}
+      <TableCell className="hidden md:table-cell text-muted-foreground">
+        {formatFileSize(doc.file_size)}
+      </TableCell>
+      <TableCell className="hidden md:table-cell text-muted-foreground">
+        {doc.created_at 
+          ? format(new Date(doc.created_at), 'dd/MM/yyyy', { locale: es })
+          : '-'}
+      </TableCell>
+      <TableCell>
+        <div className="flex items-center justify-end gap-1">
+          {doc.document_url && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => onOpenUrl(doc.document_url!)}
+              title="Abrir enlace"
+            >
+              <ExternalLink className="h-4 w-4" />
+            </Button>
+          )}
+          {doc.file_path && (
+            <>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => onPreview(doc)}
+                title="Previsualizar"
+              >
+                <Eye className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => onDownload(doc)}
+                title="Descargar"
+              >
+                <Download className="h-4 w-4" />
+              </Button>
+            </>
+          )}
+          {isAdmin && (
+            <>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => onEdit(doc)}
+                title="Editar"
+              >
+                <Pencil className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => onDelete(doc)}
+                className="text-destructive hover:text-destructive"
+                title="Eliminar"
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </>
+          )}
+        </div>
+      </TableCell>
+    </TableRow>
+  );
+}
+
 export function BudgetDocumentsTab({ budgetId, projectId, projectName, isAdmin }: BudgetDocumentsTabProps) {
   const [documents, setDocuments] = useState<ProjectDocument[]>([]);
   const [loading, setLoading] = useState(true);
   const [customTypes, setCustomTypes] = useState<string[]>([]);
-  const allDocumentTypes = [...DEFAULT_DOCUMENT_TYPES, ...customTypes.filter(t => !DEFAULT_DOCUMENT_TYPES.includes(t))];
+  const [viewMode, setViewMode] = useState<'alphabetical' | 'grouped'>('alphabetical');
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+
+  // Sort document types alphabetically
+  const allDocumentTypes = useMemo(() => {
+    const combined = [...DEFAULT_DOCUMENT_TYPES, ...customTypes.filter(t => !DEFAULT_DOCUMENT_TYPES.includes(t))];
+    return combined.sort((a, b) => a.localeCompare(b, 'es'));
+  }, [customTypes]);
+
+  // Sort documents alphabetically
+  const sortedDocuments = useMemo(() => {
+    return [...documents].sort((a, b) => a.name.localeCompare(b.name, 'es'));
+  }, [documents]);
+
+  // Group documents by type
+  const groupedDocuments = useMemo(() => {
+    const groups: Record<string, ProjectDocument[]> = {};
+    documents.forEach(doc => {
+      const type = doc.document_type || 'Sin tipo';
+      if (!groups[type]) groups[type] = [];
+      groups[type].push(doc);
+    });
+    // Sort each group alphabetically
+    Object.keys(groups).forEach(key => {
+      groups[key].sort((a, b) => a.name.localeCompare(b.name, 'es'));
+    });
+    // Return sorted by type name
+    return Object.entries(groups).sort((a, b) => a[0].localeCompare(b[0], 'es'));
+  }, [documents]);
+
+  const toggleGroup = (type: string) => {
+    const newExpanded = new Set(expandedGroups);
+    if (newExpanded.has(type)) {
+      newExpanded.delete(type);
+    } else {
+      newExpanded.add(type);
+    }
+    setExpandedGroups(newExpanded);
+  };
+
+  const expandAllGroups = () => {
+    setExpandedGroups(new Set(groupedDocuments.map(([type]) => type)));
+  };
+
+  const collapseAllGroups = () => {
+    setExpandedGroups(new Set());
+  };
 
   // Upload state
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
@@ -569,117 +747,125 @@ export function BudgetDocumentsTab({ budgetId, projectId, projectName, isAdmin }
               )}
             </div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Nombre</TableHead>
-                  <TableHead>Tipo</TableHead>
-                  <TableHead className="hidden md:table-cell">Tamaño</TableHead>
-                  <TableHead className="hidden md:table-cell">Fecha</TableHead>
-                  <TableHead className="text-right">Acciones</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {documents.map((doc) => (
-                  <TableRow key={doc.id}>
-                    <TableCell>
-                      <div className="flex items-center gap-3">
-                        {getFileIcon(doc)}
-                        <div className="min-w-0">
-                          <p className="font-medium truncate">{doc.name}</p>
-                          {doc.description && (
-                            <div className="flex items-center gap-1">
-                              <p className="text-xs text-muted-foreground truncate">
-                                {truncateDescription(doc.description)}
-                              </p>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-5 w-5 shrink-0"
-                                onClick={() => {
-                                  setDescriptionPreviewTitle(doc.name);
-                                  setDescriptionPreviewContent(doc.description || '');
-                                  setDescriptionPreviewOpen(true);
-                                }}
-                                title="Ver descripción completa"
-                              >
-                                <Maximize2 className="h-3 w-3" />
-                              </Button>
-                            </div>
-                          )}
+            <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as 'alphabetical' | 'grouped')}>
+              <TabsList className="grid w-full grid-cols-2 mb-4">
+                <TabsTrigger value="alphabetical" className="gap-2">
+                  <List className="h-4 w-4" />
+                  Alfabético
+                </TabsTrigger>
+                <TabsTrigger value="grouped" className="gap-2">
+                  <FolderOpen className="h-4 w-4" />
+                  Por Tipo
+                </TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="alphabetical">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Nombre</TableHead>
+                      <TableHead>Tipo</TableHead>
+                      <TableHead className="hidden md:table-cell">Tamaño</TableHead>
+                      <TableHead className="hidden md:table-cell">Fecha</TableHead>
+                      <TableHead className="text-right">Acciones</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {sortedDocuments.map((doc) => (
+                      <DocumentRow 
+                        key={doc.id} 
+                        doc={doc} 
+                        isAdmin={isAdmin}
+                        getFileIcon={getFileIcon}
+                        truncateDescription={truncateDescription}
+                        formatFileSize={formatFileSize}
+                        onDescriptionPreview={(title, content) => {
+                          setDescriptionPreviewTitle(title);
+                          setDescriptionPreviewContent(content);
+                          setDescriptionPreviewOpen(true);
+                        }}
+                        onOpenUrl={openSafeUrl}
+                        onPreview={handlePreview}
+                        onDownload={handleDownload}
+                        onEdit={handleEditClick}
+                        onDelete={handleDeleteClick}
+                      />
+                    ))}
+                  </TableBody>
+                </Table>
+              </TabsContent>
+
+              <TabsContent value="grouped">
+                <div className="flex gap-2 mb-4">
+                  <Button variant="outline" size="sm" onClick={expandAllGroups}>
+                    Expandir todo
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={collapseAllGroups}>
+                    Colapsar todo
+                  </Button>
+                </div>
+                <div className="space-y-2">
+                  {groupedDocuments.map(([type, docs]) => (
+                    <Collapsible 
+                      key={type} 
+                      open={expandedGroups.has(type)}
+                      onOpenChange={() => toggleGroup(type)}
+                    >
+                      <CollapsibleTrigger asChild>
+                        <Button 
+                          variant="ghost" 
+                          className="w-full justify-between p-3 h-auto"
+                        >
+                          <div className="flex items-center gap-2">
+                            <FolderOpen className="h-4 w-4" />
+                            <span className="font-medium">{type}</span>
+                            <Badge variant="secondary" className="ml-2">{docs.length}</Badge>
+                          </div>
+                          <ChevronDown className={`h-4 w-4 transition-transform ${expandedGroups.has(type) ? 'rotate-180' : ''}`} />
+                        </Button>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent>
+                        <div className="border rounded-md mt-1">
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead>Nombre</TableHead>
+                                <TableHead className="hidden md:table-cell">Tamaño</TableHead>
+                                <TableHead className="hidden md:table-cell">Fecha</TableHead>
+                                <TableHead className="text-right">Acciones</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {docs.map((doc) => (
+                                <DocumentRow 
+                                  key={doc.id} 
+                                  doc={doc} 
+                                  isAdmin={isAdmin}
+                                  getFileIcon={getFileIcon}
+                                  truncateDescription={truncateDescription}
+                                  formatFileSize={formatFileSize}
+                                  hideType
+                                  onDescriptionPreview={(title, content) => {
+                                    setDescriptionPreviewTitle(title);
+                                    setDescriptionPreviewContent(content);
+                                    setDescriptionPreviewOpen(true);
+                                  }}
+                                  onOpenUrl={openSafeUrl}
+                                  onPreview={handlePreview}
+                                  onDownload={handleDownload}
+                                  onEdit={handleEditClick}
+                                  onDelete={handleDeleteClick}
+                                />
+                              ))}
+                            </TableBody>
+                          </Table>
                         </div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline">{doc.document_type || 'Otro'}</Badge>
-                    </TableCell>
-                    <TableCell className="hidden md:table-cell text-muted-foreground">
-                      {formatFileSize(doc.file_size)}
-                    </TableCell>
-                    <TableCell className="hidden md:table-cell text-muted-foreground">
-                      {doc.created_at 
-                        ? format(new Date(doc.created_at), 'dd/MM/yyyy', { locale: es })
-                        : '-'}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center justify-end gap-1">
-                        {doc.document_url && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => openSafeUrl(doc.document_url!)}
-                            title="Abrir enlace"
-                          >
-                            <ExternalLink className="h-4 w-4" />
-                          </Button>
-                        )}
-                        {doc.file_path && (
-                          <>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handlePreview(doc)}
-                              title="Previsualizar"
-                            >
-                              <Eye className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleDownload(doc)}
-                              title="Descargar"
-                            >
-                              <Download className="h-4 w-4" />
-                            </Button>
-                          </>
-                        )}
-                        {isAdmin && (
-                          <>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleEditClick(doc)}
-                              title="Editar"
-                            >
-                              <Pencil className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleDeleteClick(doc)}
-                              className="text-destructive hover:text-destructive"
-                              title="Eliminar"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </>
-                        )}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                      </CollapsibleContent>
+                    </Collapsible>
+                  ))}
+                </div>
+              </TabsContent>
+            </Tabs>
           )}
         </CardContent>
       </Card>

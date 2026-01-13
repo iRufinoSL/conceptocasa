@@ -104,6 +104,7 @@ export function ContactForm({ open, onOpenChange, contact, onSuccess }: ContactF
     surname: '',
     email: '',
     phone: '+34 ',
+    secondary_phones: [] as string[],
     contact_type: 'Persona',
     status: 'Prospecto',
     address: '',
@@ -160,6 +161,7 @@ export function ContactForm({ open, onOpenChange, contact, onSuccess }: ContactF
             surname: fullContact.surname || '',
             email: fullContact.email || '',
             phone: fullContact.phone || '+34 ',
+            secondary_phones: fullContact.secondary_phones || [],
             contact_type: fullContact.contact_type || 'Persona',
             status: fullContact.status || 'Prospecto',
             address: fullContact.address || '',
@@ -255,6 +257,7 @@ export function ContactForm({ open, onOpenChange, contact, onSuccess }: ContactF
         surname: '',
         email: '',
         phone: '+34 ',
+        secondary_phones: [],
         contact_type: 'Persona',
         status: 'Prospecto',
         address: '',
@@ -389,6 +392,9 @@ export function ContactForm({ open, onOpenChange, contact, onSuccess }: ContactF
         surname: formData.surname.trim() || null,
         email: formData.email.trim() || null,
         phone: formData.phone.trim() || null,
+        secondary_phones: formData.secondary_phones.filter(p => p.trim()).length > 0 
+          ? formData.secondary_phones.filter(p => p.trim()) 
+          : [],
         contact_type: formData.contact_type,
         status: formData.status,
         address: formData.address.trim() || null,
@@ -927,7 +933,7 @@ export function ContactForm({ open, onOpenChange, contact, onSuccess }: ContactF
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="phone">Teléfono</Label>
+              <Label htmlFor="phone">Teléfono principal</Label>
               <Input
                 id="phone"
                 value={formData.phone}
@@ -935,6 +941,47 @@ export function ContactForm({ open, onOpenChange, contact, onSuccess }: ContactF
                 placeholder="+34 600 000 000"
                 maxLength={20}
               />
+              
+              {/* Secondary phones */}
+              {formData.secondary_phones.map((phone, index) => (
+                <div key={index} className="flex gap-2">
+                  <Input
+                    value={phone}
+                    onChange={(e) => {
+                      const newPhones = [...formData.secondary_phones];
+                      newPhones[index] = e.target.value;
+                      setFormData({ ...formData, secondary_phones: newPhones });
+                    }}
+                    placeholder="+34 600 000 000"
+                    maxLength={20}
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => {
+                      const newPhones = formData.secondary_phones.filter((_, i) => i !== index);
+                      setFormData({ ...formData, secondary_phones: newPhones });
+                    }}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
+              
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setFormData({ 
+                  ...formData, 
+                  secondary_phones: [...formData.secondary_phones, '+34 '] 
+                })}
+                className="gap-1"
+              >
+                <Plus className="h-3 w-3" />
+                Añadir teléfono
+              </Button>
             </div>
           </div>
 

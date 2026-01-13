@@ -1427,6 +1427,7 @@ export type Database = {
           postal_code: string | null
           professional_activity_id: string | null
           province: string | null
+          secondary_phones: string[] | null
           status: string
           surname: string | null
           tags: string[] | null
@@ -1450,6 +1451,7 @@ export type Database = {
           postal_code?: string | null
           professional_activity_id?: string | null
           province?: string | null
+          secondary_phones?: string[] | null
           status?: string
           surname?: string | null
           tags?: string[] | null
@@ -1473,6 +1475,7 @@ export type Database = {
           postal_code?: string | null
           professional_activity_id?: string | null
           province?: string | null
+          secondary_phones?: string[] | null
           status?: string
           surname?: string | null
           tags?: string[] | null

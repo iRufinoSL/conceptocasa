@@ -31,6 +31,7 @@ interface BudgetPhase {
   start_date: string | null;
   duration_days: number | null;
   estimated_end_date: string | null;
+  time_percent: number | null;
 }
 
 interface BudgetActivity {
@@ -58,6 +59,7 @@ interface PhaseForm {
   selectedActivities: string[];
   start_date: string;
   duration_days: string;
+  time_percent: string;
 }
 
 interface BudgetPhasesTabProps {
@@ -73,6 +75,26 @@ const emptyForm: PhaseForm = {
   selectedActivities: [],
   start_date: '',
   duration_days: '',
+  time_percent: '',
+};
+
+// Calculate budget duration in days
+const calculateBudgetDuration = (startDate: string | null | undefined, endDate: string | null | undefined): number => {
+  if (!startDate || !endDate) return 0;
+  const start = new Date(startDate);
+  const end = new Date(endDate);
+  const diffTime = end.getTime() - start.getTime();
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  return diffDays > 0 ? diffDays : 0;
+};
+
+// Calculate phase start date from time_percent
+const calculatePhaseStartDate = (budgetStartDate: string | null | undefined, budgetDuration: number, timePercent: number | null): string | null => {
+  if (!budgetStartDate || !budgetDuration || timePercent === null) return null;
+  const start = new Date(budgetStartDate);
+  const daysOffset = Math.floor((timePercent / 100) * budgetDuration);
+  start.setDate(start.getDate() + daysOffset);
+  return start.toISOString().split('T')[0];
 };
 
 // Calculate subtotal for a resource
@@ -246,6 +268,7 @@ export function BudgetPhasesTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
       selectedActivities: phaseActivities,
       start_date: phase.start_date || '',
       duration_days: phase.duration_days?.toString() || '',
+      time_percent: phase.time_percent?.toString() || '',
     });
     setFormDialogOpen(true);
   };
@@ -264,6 +287,12 @@ export function BudgetPhasesTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
     setIsSaving(true);
     try {
       let phaseId = currentPhase?.id;
+      
+      // Calculate start_date from time_percent if provided
+      const budgetDuration = calculateBudgetDuration(budgetStartDate, budgetEndDate);
+      const timePercent = form.time_percent ? parseFloat(form.time_percent) : null;
+      const calculatedStartDate = calculatePhaseStartDate(budgetStartDate, budgetDuration, timePercent);
+      const finalStartDate = calculatedStartDate || (form.start_date || null);
 
       if (currentPhase) {
         const { error } = await supabase
@@ -271,8 +300,9 @@ export function BudgetPhasesTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
           .update({
             name: form.name.trim(),
             code: form.code.trim() || null,
-            start_date: form.start_date || null,
+            start_date: finalStartDate,
             duration_days: form.duration_days ? parseInt(form.duration_days) : null,
+            time_percent: timePercent,
           })
           .eq('id', currentPhase.id);
 
@@ -284,8 +314,9 @@ export function BudgetPhasesTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
             budget_id: budgetId,
             name: form.name.trim(),
             code: form.code.trim() || null,
-            start_date: form.start_date || null,
+            start_date: finalStartDate,
             duration_days: form.duration_days ? parseInt(form.duration_days) : null,
+            time_percent: timePercent,
           })
           .select()
           .single();
@@ -541,9 +572,19 @@ export function BudgetPhasesTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
   };
 
   // Handle inline time field update
-  const handleInlineTimeUpdate = async (phaseId: string, field: 'start_date' | 'duration_days', value: string | number | null) => {
+  const handleInlineTimeUpdate = async (phaseId: string, field: 'start_date' | 'duration_days' | 'time_percent', value: string | number | null) => {
     try {
       const updateData: any = { [field]: value };
+      
+      // If updating time_percent, also calculate and update start_date
+      if (field === 'time_percent' && value !== null) {
+        const budgetDuration = calculateBudgetDuration(budgetStartDate, budgetEndDate);
+        const calculatedStartDate = calculatePhaseStartDate(budgetStartDate, budgetDuration, value as number);
+        if (calculatedStartDate) {
+          updateData.start_date = calculatedStartDate;
+        }
+      }
+      
       const { error } = await supabase
         .from('budget_phases')
         .update(updateData)
@@ -553,7 +594,7 @@ export function BudgetPhasesTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
       
       // Update local state
       setPhases(prev => prev.map(p => 
-        p.id === phaseId ? { ...p, [field]: value } : p
+        p.id === phaseId ? { ...p, ...updateData } : p
       ));
       
       // Refetch to get calculated fields
@@ -669,6 +710,24 @@ export function BudgetPhasesTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
         </div>
       </CardHeader>
       <CardContent>
+        {/* Budget Duration Info */}
+        {viewMode === 'time' && budgetStartDate && budgetEndDate && (
+          <div className="mb-4 p-3 bg-muted/50 rounded-lg flex items-center gap-6 text-sm">
+            <div>
+              <span className="text-muted-foreground">Fecha Inicio Presupuesto:</span>{' '}
+              <span className="font-medium">{format(parseISO(budgetStartDate), 'dd/MM/yyyy', { locale: es })}</span>
+            </div>
+            <div>
+              <span className="text-muted-foreground">Fecha Fin Presupuesto:</span>{' '}
+              <span className="font-medium">{format(parseISO(budgetEndDate), 'dd/MM/yyyy', { locale: es })}</span>
+            </div>
+            <div>
+              <span className="text-muted-foreground">Duración Presupuesto:</span>{' '}
+              <span className="font-medium">{calculateBudgetDuration(budgetStartDate, budgetEndDate)} días</span>
+            </div>
+          </div>
+        )}
+
         {/* Search */}
         <div className="relative mb-4">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -691,7 +750,8 @@ export function BudgetPhasesTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
               <TableHeader>
                 <TableRow>
                   <TableHead>FaseID</TableHead>
-                  <TableHead>Fecha Inicio</TableHead>
+                  <TableHead className="text-center w-24">Tiempo %</TableHead>
+                  <TableHead>Fecha Inicio (calculada)</TableHead>
                   <TableHead className="text-center">Duración (días)</TableHead>
                   <TableHead>Fecha Fin Estimada</TableHead>
                   {isAdmin && <TableHead className="w-20">Acciones</TableHead>}
@@ -701,22 +761,29 @@ export function BudgetPhasesTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
                 {filteredPhases.map((phase) => (
                   <TableRow key={phase.id}>
                     <TableCell className="font-medium">{generatePhaseId(phase)}</TableCell>
-                    <TableCell>
+                    <TableCell className="text-center">
                       {isAdmin ? (
                         <Input
-                          type="date"
-                          value={phase.start_date || ''}
-                          min={budgetStartDate || undefined}
-                          max={budgetEndDate || undefined}
-                          onChange={(e) => handleInlineTimeUpdate(phase.id, 'start_date', e.target.value || null)}
-                          className="w-36 h-8"
+                          type="number"
+                          value={phase.time_percent ?? ''}
+                          min={0}
+                          max={100}
+                          onChange={(e) => handleInlineTimeUpdate(phase.id, 'time_percent', e.target.value ? parseFloat(e.target.value) : null)}
+                          className="w-20 h-8 text-center mx-auto"
+                          placeholder="0-100"
                         />
                       ) : (
-                        <span>
-                          {phase.start_date 
-                            ? format(parseISO(phase.start_date), 'dd/MM/yyyy', { locale: es })
-                            : '-'}
-                        </span>
+                        <span>{phase.time_percent ?? '-'}%</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <span className={phase.time_percent !== null ? 'text-primary font-medium' : ''}>
+                        {phase.start_date 
+                          ? format(parseISO(phase.start_date), 'dd/MM/yyyy', { locale: es })
+                          : '-'}
+                      </span>
+                      {phase.time_percent !== null && (
+                        <span className="text-xs text-muted-foreground ml-1">(calc.)</span>
                       )}
                     </TableCell>
                     <TableCell className="text-center">
@@ -889,6 +956,52 @@ export function BudgetPhasesTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
                 placeholder="Nombre de la fase"
               />
             </div>
+            {/* Time Management Fields */}
+            <div className="grid grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="time_percent">Tiempo % (0-100)</Label>
+                <Input
+                  id="time_percent"
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={form.time_percent}
+                  onChange={(e) => setForm({ ...form, time_percent: e.target.value })}
+                  placeholder="0"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Posición en la línea temporal del presupuesto
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="duration_days">Duración (días)</Label>
+                <Input
+                  id="duration_days"
+                  type="number"
+                  min={0}
+                  value={form.duration_days}
+                  onChange={(e) => setForm({ ...form, duration_days: e.target.value })}
+                  placeholder="0"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-muted-foreground">Fecha Inicio (calculada)</Label>
+                <div className="h-10 px-3 py-2 border rounded-md bg-muted/50 text-sm">
+                  {(() => {
+                    const budgetDuration = calculateBudgetDuration(budgetStartDate, budgetEndDate);
+                    const timePercent = form.time_percent ? parseFloat(form.time_percent) : null;
+                    const calculatedDate = calculatePhaseStartDate(budgetStartDate, budgetDuration, timePercent);
+                    return calculatedDate 
+                      ? format(parseISO(calculatedDate), 'dd/MM/yyyy', { locale: es })
+                      : '-';
+                  })()}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Se calcula desde Tiempo% × Duración Presupuesto
+                </p>
+              </div>
+            </div>
+
             <div className="space-y-2">
               <Label>Actividades asociadas</Label>
               <ScrollArea className="h-48 border rounded-md p-3">

@@ -48,6 +48,8 @@ interface PresupuestoForm {
   coordenadas_lat: string;
   coordenadas_lng: string;
   status: PresupuestoStatus;
+  start_date: string;
+  end_date: string;
 }
 
 const emptyForm: PresupuestoForm = {
@@ -58,7 +60,19 @@ const emptyForm: PresupuestoForm = {
   provincia: '',
   coordenadas_lat: '',
   coordenadas_lng: '',
-  status: 'activo'
+  status: 'activo',
+  start_date: '',
+  end_date: ''
+};
+
+// Calculate duration in days between two dates
+const calculateDurationDays = (startDate: string, endDate: string): number | null => {
+  if (!startDate || !endDate) return null;
+  const start = new Date(startDate);
+  const end = new Date(endDate);
+  const diffTime = end.getTime() - start.getTime();
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  return diffDays > 0 ? diffDays : null;
 };
 
 const STATUS_LABELS: Record<PresupuestoStatus, string> = {
@@ -366,7 +380,9 @@ export default function Presupuestos() {
       provincia: p.provincia || '',
       coordenadas_lat: p.coordenadas_lat?.toString() || '',
       coordenadas_lng: p.coordenadas_lng?.toString() || '',
-      status: p.status || 'activo'
+      status: p.status || 'activo',
+      start_date: (p as any).start_date || '',
+      end_date: (p as any).end_date || ''
     });
     setFormDialogOpen(true);
   };
@@ -400,7 +416,9 @@ export default function Presupuestos() {
         coordenadas_lat: form.coordenadas_lat ? parseFloat(form.coordenadas_lat) : null,
         coordenadas_lng: form.coordenadas_lng ? parseFloat(form.coordenadas_lng) : null,
         status: form.status,
-        archived: form.status === 'archivado'
+        archived: form.status === 'archivado',
+        start_date: form.start_date || null,
+        end_date: form.end_date || null
       };
 
       if (editingPresupuesto) {
@@ -892,6 +910,35 @@ export default function Presupuestos() {
                   onChange={(e) => setForm({ ...form, coordenadas_lng: e.target.value })}
                   placeholder="Ej: -3.7038"
                 />
+              </div>
+            </div>
+
+            {/* Dates */}
+            <div className="grid grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="start_date">Fecha Inicio</Label>
+                <Input
+                  id="start_date"
+                  type="date"
+                  value={form.start_date}
+                  onChange={(e) => setForm({ ...form, start_date: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="end_date">Fecha Fin</Label>
+                <Input
+                  id="end_date"
+                  type="date"
+                  value={form.end_date}
+                  onChange={(e) => setForm({ ...form, end_date: e.target.value })}
+                  min={form.start_date || undefined}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-muted-foreground">Duración (días)</Label>
+                <div className="h-10 px-3 py-2 border rounded-md bg-muted/50 text-sm">
+                  {calculateDurationDays(form.start_date, form.end_date) ?? '-'}
+                </div>
               </div>
             </div>
 

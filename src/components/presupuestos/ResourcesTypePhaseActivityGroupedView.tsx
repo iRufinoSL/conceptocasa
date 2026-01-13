@@ -1,9 +1,9 @@
-import { useMemo, useState, Fragment, useCallback } from 'react';
+import { useMemo, useState, Fragment } from 'react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ChevronDown, ChevronRight, Pencil, Trash2, Package, Wrench, Truck, Briefcase, CheckSquare, Filter, FilterX } from 'lucide-react';
+import { ChevronDown, ChevronRight, Pencil, Trash2, Package, Wrench, Truck, Briefcase, CheckSquare } from 'lucide-react';
 import { formatCurrency, formatNumber, formatPercent } from '@/lib/format-utils';
 import { ResourceInlineEdit } from './ResourceInlineEdit';
 
@@ -102,10 +102,6 @@ export function ResourcesTypePhaseActivityGroupedView({
   const [expandedPhases, setExpandedPhases] = useState<Set<string>>(new Set());
   const [expandedActivities, setExpandedActivities] = useState<Set<string>>(new Set());
   
-  // Activity selection for filtering
-  const [selectedActivityIds, setSelectedActivityIds] = useState<Set<string>>(new Set());
-  const [showOnlySelected, setShowOnlySelected] = useState(false);
-
   const isAdmin = permissions?.isAdmin;
 
   // Build hierarchical structure: Type -> Phase -> Activity -> Resources
@@ -154,28 +150,8 @@ export function ResourcesTypePhaseActivityGroupedView({
     return structure;
   }, [resources, activities]);
 
-  // Filter resources based on selected activities
-  const filteredHierarchicalData = useMemo(() => {
-    if (!showOnlySelected || selectedActivityIds.size === 0) {
-      return hierarchicalData;
-    }
-    
-    const filtered: Record<string, Record<string, Record<string, BudgetResource[]>>> = {};
-    
-    Object.entries(hierarchicalData).forEach(([type, phases]) => {
-      Object.entries(phases).forEach(([phaseId, activities]) => {
-        Object.entries(activities).forEach(([activityId, resources]) => {
-          if (selectedActivityIds.has(activityId)) {
-            if (!filtered[type]) filtered[type] = {};
-            if (!filtered[type][phaseId]) filtered[type][phaseId] = {};
-            filtered[type][phaseId][activityId] = resources;
-          }
-        });
-      });
-    });
-    
-    return filtered;
-  }, [hierarchicalData, selectedActivityIds, showOnlySelected]);
+  // Use full hierarchical data (no implicit filtering)
+  const filteredHierarchicalData = hierarchicalData;
 
   // Calculate totals per type
   const typeTotals = useMemo(() => {
@@ -276,22 +252,6 @@ export function ResourcesTypePhaseActivityGroupedView({
     setExpandedActivities(newExpanded);
   };
 
-  // Toggle activity selection - when selecting, automatically filter to show only selected
-  const toggleActivitySelection = (activityId: string) => {
-    const newSelected = new Set(selectedActivityIds);
-    if (newSelected.has(activityId)) {
-      newSelected.delete(activityId);
-      // If no activities selected anymore, show all
-      if (newSelected.size === 0) {
-        setShowOnlySelected(false);
-      }
-    } else {
-      newSelected.add(activityId);
-      // When selecting activities, automatically show only selected
-      setShowOnlySelected(true);
-    }
-    setSelectedActivityIds(newSelected);
-  };
 
   // Get phase name
   const getPhaseName = (phaseId: string) => {
@@ -319,30 +279,6 @@ export function ResourcesTypePhaseActivityGroupedView({
 
   return (
     <div className="space-y-4">
-      {/* Show filter info only when filtering is active */}
-      {showOnlySelected && selectedActivityIds.size > 0 && (
-        <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg border">
-          <div className="flex items-center gap-2">
-            <Badge variant="secondary" className="gap-1">
-              <Filter className="h-3 w-3" />
-              Mostrando {selectedActivityIds.size} actividad{selectedActivityIds.size > 1 ? 'es' : ''} seleccionada{selectedActivityIds.size > 1 ? 's' : ''}
-            </Badge>
-          </div>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => {
-              setSelectedActivityIds(new Set());
-              setShowOnlySelected(false);
-            }}
-            className="gap-1.5"
-          >
-            <FilterX className="h-4 w-4" />
-            Mostrar todos
-          </Button>
-        </div>
-      )}
-
       <div className="rounded-md border overflow-x-auto">
         <Table>
           <TableHeader>
@@ -472,23 +408,11 @@ export function ResourcesTypePhaseActivityGroupedView({
                           const isActivityExpanded = expandedActivities.has(activityKey);
                           const activityTotal = activityTotals[type]?.[phaseId]?.[activityId] || 0;
                           const activityName = getActivityName(activityId);
-                          const isActivitySelected = activityId !== '__no_activity__' && selectedActivityIds.has(activityId);
-
                           return (
                             <Fragment key={activityKey}>
                               {/* Activity Header Row */}
                               <TableRow className="cursor-pointer hover:bg-primary/5 bg-primary/10">
-                                {isAdmin && (
-                                  <TableCell className="py-1">
-                                    {activityId !== '__no_activity__' && (
-                                      <Checkbox
-                                        checked={isActivitySelected}
-                                        onCheckedChange={() => toggleActivitySelection(activityId)}
-                                        onClick={(e) => e.stopPropagation()}
-                                      />
-                                    )}
-                                  </TableCell>
-                                )}
+                                {isAdmin && <TableCell className="py-1" />}
                                 <TableCell 
                                   colSpan={isAdmin ? 11 : 12}
                                   className="py-1 pl-20"
@@ -498,9 +422,7 @@ export function ResourcesTypePhaseActivityGroupedView({
                                     <Button variant="ghost" size="icon" className="h-5 w-5 shrink-0">
                                       {isActivityExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
                                     </Button>
-                                    <span className={`text-sm ${isActivitySelected ? 'font-semibold text-primary' : ''}`}>
-                                      {activityName}
-                                    </span>
+                                    <span className="text-sm">{activityName}</span>
                                     <span className="text-xs text-muted-foreground">
                                       ({activityResources.length} recursos)
                                     </span>

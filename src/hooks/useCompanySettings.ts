@@ -18,8 +18,8 @@ const DEFAULT_SETTINGS: CompanySettings = {
   name: 'Concepto.Casa',
   email: 'organiza@concepto.casa',
   phone: '+34 690 123 533',
-  address: 'Barcelona, España',
-  website: 'www.concepto.casa',
+  address: null,
+  website: 'www.concepto.casa; https://concepto.casa',
   logo_url: null,
   logo_signed_url: null,
 };

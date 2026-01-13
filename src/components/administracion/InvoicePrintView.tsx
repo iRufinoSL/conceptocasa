@@ -477,7 +477,8 @@ export function InvoicePrintView({ invoice, onClose }: Props) {
 
           {/* Footer */}
           <div style={{ textAlign: 'center', paddingTop: '20px', borderTop: '1px solid #e5e5e5', fontSize: '12px', color: '#666' }}>
-            <p><strong>ConceptoCasa</strong> | <a href="https://concepto.casa" style={{ color: '#3b82f6', textDecoration: 'none' }}>https://concepto.casa</a> | organiza@concepto.casa</p>
+            <p>organiza@concepto.casa | +34 690 123 533</p>
+            <p>www.concepto.casa; <a href="https://concepto.casa" style={{ color: '#3b82f6', textDecoration: 'none' }}>https://concepto.casa</a></p>
           </div>
         </div>
 

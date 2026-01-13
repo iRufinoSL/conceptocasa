@@ -349,6 +349,8 @@ export function BudgetDocumentsTab({ budgetId, projectId, projectName, isAdmin }
   const [editUrl, setEditUrl] = useState('');
   const [editFile, setEditFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
+  const [isAddingEditCustomType, setIsAddingEditCustomType] = useState(false);
+  const [newEditCustomType, setNewEditCustomType] = useState('');
   const editFileInputRef = useRef<HTMLInputElement>(null);
 
   // Description preview state
@@ -1035,16 +1037,72 @@ export function BudgetDocumentsTab({ budgetId, projectId, projectName, isAdmin }
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Tipo de documento</Label>
-                <Select value={editDocType} onValueChange={setEditDocType}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {allDocumentTypes.map((type) => (
-                      <SelectItem key={type} value={type}>{type}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                {isAddingEditCustomType ? (
+                  <div className="flex gap-2">
+                    <Input
+                      value={newEditCustomType}
+                      onChange={(e) => setNewEditCustomType(e.target.value)}
+                      placeholder="Nuevo tipo..."
+                      maxLength={50}
+                      autoFocus
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          if (newEditCustomType.trim()) {
+                            const trimmed = newEditCustomType.trim();
+                            if (!allDocumentTypes.includes(trimmed)) {
+                              setCustomTypes([...customTypes, trimmed]);
+                            }
+                            setEditDocType(trimmed);
+                            setNewEditCustomType('');
+                            setIsAddingEditCustomType(false);
+                          }
+                        }
+                        if (e.key === 'Escape') {
+                          setIsAddingEditCustomType(false);
+                          setNewEditCustomType('');
+                        }
+                      }}
+                    />
+                    <Button 
+                      size="icon" 
+                      variant="ghost" 
+                      onClick={() => {
+                        if (newEditCustomType.trim()) {
+                          const trimmed = newEditCustomType.trim();
+                          if (!allDocumentTypes.includes(trimmed)) {
+                            setCustomTypes([...customTypes, trimmed]);
+                          }
+                          setEditDocType(trimmed);
+                          setNewEditCustomType('');
+                          setIsAddingEditCustomType(false);
+                        }
+                      }}
+                    >
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex gap-2">
+                    <Select value={editDocType} onValueChange={setEditDocType}>
+                      <SelectTrigger className="flex-1">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {allDocumentTypes.map((type) => (
+                          <SelectItem key={type} value={type}>{type}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Button 
+                      size="icon" 
+                      variant="outline" 
+                      onClick={() => setIsAddingEditCustomType(true)}
+                      title="Añadir tipo personalizado"
+                    >
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                  </div>
+                )}
               </div>
 
               <div className="space-y-2">

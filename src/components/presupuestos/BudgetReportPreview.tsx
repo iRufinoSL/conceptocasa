@@ -3528,7 +3528,8 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
 
               {/* Footer */}
               <div className="text-center text-xs text-muted-foreground pt-4 border-t print:mt-8">
-                <p>{[companySettings.name, companySettings.email, companySettings.phone, companySettings.website].filter(Boolean).join(' | ')}</p>
+                <p>{[companySettings.email, companySettings.phone].filter(Boolean).join(' | ')}</p>
+                <p>www.concepto.casa; https://concepto.casa</p>
               </div>
             </div>
           )}

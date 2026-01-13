@@ -140,7 +140,7 @@ export async function exportTasksPdf(
     doc.setTextColor(100);
     const contactLine = [companyEmail, companyPhone].filter(Boolean).join(' | ');
     if (contactLine) doc.text(contactLine, 45, 26);
-    if (companyWeb) doc.text(companyWeb, 45, 32);
+    doc.text('www.concepto.casa; https://concepto.casa', 45, 32);
     doc.setTextColor(0);
     
     // Separator line

@@ -661,6 +661,7 @@ export type Database = {
           order_index: number | null
           parent_id: string | null
           start_date: string | null
+          time_percent: number | null
           updated_at: string | null
         }
         Insert: {
@@ -674,6 +675,7 @@ export type Database = {
           order_index?: number | null
           parent_id?: string | null
           start_date?: string | null
+          time_percent?: number | null
           updated_at?: string | null
         }
         Update: {
@@ -687,6 +689,7 @@ export type Database = {
           order_index?: number | null
           parent_id?: string | null
           start_date?: string | null
+          time_percent?: number | null
           updated_at?: string | null
         }
         Relationships: [

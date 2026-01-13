@@ -1680,6 +1680,42 @@ export type Database = {
           },
         ]
       }
+      email_budget_assignments: {
+        Row: {
+          budget_id: string
+          created_at: string
+          email_id: string
+          id: string
+        }
+        Insert: {
+          budget_id: string
+          created_at?: string
+          email_id: string
+          id?: string
+        }
+        Update: {
+          budget_id?: string
+          created_at?: string
+          email_id?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_budget_assignments_budget_id_fkey"
+            columns: ["budget_id"]
+            isOneToOne: false
+            referencedRelation: "presupuestos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_budget_assignments_email_id_fkey"
+            columns: ["email_id"]
+            isOneToOne: false
+            referencedRelation: "email_messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       email_campaign_recipients: {
         Row: {
           campaign_id: string
@@ -1922,6 +1958,42 @@ export type Database = {
             columns: ["ticket_id"]
             isOneToOne: false
             referencedRelation: "tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      email_project_assignments: {
+        Row: {
+          created_at: string
+          email_id: string
+          id: string
+          project_id: string
+        }
+        Insert: {
+          created_at?: string
+          email_id: string
+          id?: string
+          project_id: string
+        }
+        Update: {
+          created_at?: string
+          email_id?: string
+          id?: string
+          project_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_project_assignments_email_id_fkey"
+            columns: ["email_id"]
+            isOneToOne: false
+            referencedRelation: "email_messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_project_assignments_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
             referencedColumns: ["id"]
           },
         ]

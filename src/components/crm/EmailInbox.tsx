@@ -97,8 +97,8 @@ export function EmailInbox({ onComposeReply, onComposeForward }: EmailInboxProps
   });
   const [snoozeDate, setSnoozeDate] = useState('');
   const [snoozeTime, setSnoozeTime] = useState('09:00');
-  const [selectedBudgetId, setSelectedBudgetId] = useState<string>('__none__');
-  const [selectedProjectId, setSelectedProjectId] = useState<string>('__none__');
+  const [selectedBudgetIds, setSelectedBudgetIds] = useState<string[]>([]);
+  const [selectedProjectIds, setSelectedProjectIds] = useState<string[]>([]);
   const [reminderFormData, setReminderFormData] = useState({
     title: '',
     description: '',
@@ -251,19 +251,32 @@ export function EmailInbox({ onComposeReply, onComposeForward }: EmailInboxProps
     },
   });
 
-  // Assign folder mutation
-  const assignFolderMutation = useMutation({
-    mutationFn: async ({ emailId, budgetId }: { emailId: string; budgetId: string | null }) => {
-      const { error } = await supabase
-        .from('email_messages')
-        .update({ budget_id: budgetId })
-        .eq('id', emailId);
-      if (error) throw error;
+  // Assign budgets mutation (multiple)
+  const assignBudgetsMutation = useMutation({
+    mutationFn: async ({ emailId, budgetIds }: { emailId: string; budgetIds: string[] }) => {
+      // Delete existing assignments for this email
+      const { error: deleteError } = await supabase
+        .from('email_budget_assignments')
+        .delete()
+        .eq('email_id', emailId);
+      if (deleteError) throw deleteError;
+      
+      // Insert new assignments
+      if (budgetIds.length > 0) {
+        const insertData = budgetIds.map(budgetId => ({
+          email_id: emailId,
+          budget_id: budgetId,
+        }));
+        const { error: insertError } = await supabase
+          .from('email_budget_assignments')
+          .insert(insertData);
+        if (insertError) throw insertError;
+      }
     },
     onSuccess: () => {
-      toast({ title: 'Carpeta asignada correctamente' });
-      setShowFolderDialog(false);
+      toast({ title: 'Presupuestos asignados correctamente' });
       queryClient.invalidateQueries({ queryKey: ['email-messages'] });
+      queryClient.invalidateQueries({ queryKey: ['email-budget-assignments'] });
     },
   });
 
@@ -528,18 +541,32 @@ export function EmailInbox({ onComposeReply, onComposeForward }: EmailInboxProps
     },
   });
 
-  // Assign project mutation
-  const assignProjectMutation = useMutation({
-    mutationFn: async ({ emailId, projectId }: { emailId: string; projectId: string | null }) => {
-      const { error } = await supabase
-        .from('email_messages')
-        .update({ project_id: projectId })
-        .eq('id', emailId);
-      if (error) throw error;
+  // Assign projects mutation (multiple)
+  const assignProjectsMutation = useMutation({
+    mutationFn: async ({ emailId, projectIds }: { emailId: string; projectIds: string[] }) => {
+      // Delete existing assignments for this email
+      const { error: deleteError } = await supabase
+        .from('email_project_assignments')
+        .delete()
+        .eq('email_id', emailId);
+      if (deleteError) throw deleteError;
+      
+      // Insert new assignments
+      if (projectIds.length > 0) {
+        const insertData = projectIds.map(projectId => ({
+          email_id: emailId,
+          project_id: projectId,
+        }));
+        const { error: insertError } = await supabase
+          .from('email_project_assignments')
+          .insert(insertData);
+        if (insertError) throw insertError;
+      }
     },
     onSuccess: () => {
-      toast({ title: 'Proyecto asignado correctamente' });
+      toast({ title: 'Proyectos asignados correctamente' });
       queryClient.invalidateQueries({ queryKey: ['email-messages'] });
+      queryClient.invalidateQueries({ queryKey: ['email-project-assignments'] });
     },
   });
 
@@ -795,11 +822,18 @@ export function EmailInbox({ onComposeReply, onComposeForward }: EmailInboxProps
     setShowSnoozeDialog(true);
   };
 
-  const openFolderDialog = (email: EmailMessage) => {
+  const openFolderDialog = async (email: EmailMessage) => {
     // Avoid nested dialogs (email detail dialog + folder dialog) which can blank the UI.
     setFolderTargetEmail(email);
-    setSelectedBudgetId(email.budget_id ?? '__none__');
-    setSelectedProjectId(email.project_id ?? '__none__');
+    
+    // Fetch existing assignments
+    const [budgetAssignments, projectAssignments] = await Promise.all([
+      supabase.from('email_budget_assignments').select('budget_id').eq('email_id', email.id),
+      supabase.from('email_project_assignments').select('project_id').eq('email_id', email.id),
+    ]);
+    
+    setSelectedBudgetIds(budgetAssignments.data?.map(a => a.budget_id) || []);
+    setSelectedProjectIds(projectAssignments.data?.map(a => a.project_id) || []);
     setShowFolderDialog(true);
   };
 
@@ -820,25 +854,20 @@ export function EmailInbox({ onComposeReply, onComposeForward }: EmailInboxProps
     snoozeEmailMutation.mutate({ emailId: selectedEmail.id, snoozedUntil });
   };
 
-  const handleAssignFolder = () => {
+  const handleAssignFolder = async () => {
     if (!folderTargetEmail) return;
 
-    const nextBudgetId = selectedBudgetId === '__none__' ? null : selectedBudgetId;
-    const nextProjectId = selectedProjectId === '__none__' ? null : selectedProjectId;
-
-    // Update both budget and project
-    if (nextBudgetId !== (folderTargetEmail.budget_id ?? null)) {
-      assignFolderMutation.mutate({
+    // Assign budgets and projects in parallel
+    await Promise.all([
+      assignBudgetsMutation.mutateAsync({
         emailId: folderTargetEmail.id,
-        budgetId: nextBudgetId,
-      });
-    }
-    if (nextProjectId !== (folderTargetEmail.project_id ?? null)) {
-      assignProjectMutation.mutate({
+        budgetIds: selectedBudgetIds,
+      }),
+      assignProjectsMutation.mutateAsync({
         emailId: folderTargetEmail.id,
-        projectId: nextProjectId,
-      });
-    }
+        projectIds: selectedProjectIds,
+      }),
+    ]);
 
     setShowFolderDialog(false);
     setFolderTargetEmail(null);
@@ -2050,47 +2079,67 @@ export function EmailInbox({ onComposeReply, onComposeForward }: EmailInboxProps
           
           <div className="space-y-4 py-4">
             <p className="text-sm text-muted-foreground">
-              Vincula este email a un proyecto y/o presupuesto para organizarlo.
+              Vincula este email a uno o más proyectos y/o presupuestos para organizarlo.
             </p>
             
             <div className="space-y-2">
-              <Label>Proyecto</Label>
-              <Select 
-                value={selectedProjectId} 
-                onValueChange={setSelectedProjectId}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Sin proyecto" />
-                </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none__">Sin proyecto</SelectItem>
-                    {projects.map(project => (
-                      <SelectItem key={project.id} value={project.id}>
+              <Label>Proyectos ({selectedProjectIds.length} seleccionados)</Label>
+              <ScrollArea className="h-40 rounded-md border p-2">
+                <div className="space-y-2">
+                  {projects.map(project => (
+                    <label key={project.id} className="flex items-center gap-2 cursor-pointer hover:bg-muted/50 p-1 rounded">
+                      <input
+                        type="checkbox"
+                        checked={selectedProjectIds.includes(project.id)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedProjectIds([...selectedProjectIds, project.id]);
+                          } else {
+                            setSelectedProjectIds(selectedProjectIds.filter(id => id !== project.id));
+                          }
+                        }}
+                        className="h-4 w-4 rounded border-primary text-primary focus:ring-primary"
+                      />
+                      <span className="text-sm">
                         {project.project_number ? `#${project.project_number} - ` : ''}{project.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-              </Select>
+                      </span>
+                    </label>
+                  ))}
+                  {projects.length === 0 && (
+                    <p className="text-sm text-muted-foreground italic">No hay proyectos disponibles</p>
+                  )}
+                </div>
+              </ScrollArea>
             </div>
 
             <div className="space-y-2">
-              <Label>Presupuesto</Label>
-              <Select 
-                value={selectedBudgetId} 
-                onValueChange={setSelectedBudgetId}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Sin presupuesto" />
-                </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none__">Sin presupuesto</SelectItem>
-                    {budgets.map(budget => (
-                      <SelectItem key={budget.id} value={budget.id}>
+              <Label>Presupuestos ({selectedBudgetIds.length} seleccionados)</Label>
+              <ScrollArea className="h-40 rounded-md border p-2">
+                <div className="space-y-2">
+                  {budgets.map(budget => (
+                    <label key={budget.id} className="flex items-center gap-2 cursor-pointer hover:bg-muted/50 p-1 rounded">
+                      <input
+                        type="checkbox"
+                        checked={selectedBudgetIds.includes(budget.id)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedBudgetIds([...selectedBudgetIds, budget.id]);
+                          } else {
+                            setSelectedBudgetIds(selectedBudgetIds.filter(id => id !== budget.id));
+                          }
+                        }}
+                        className="h-4 w-4 rounded border-primary text-primary focus:ring-primary"
+                      />
+                      <span className="text-sm">
                         {budget.codigo_correlativo} - {budget.nombre}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-              </Select>
+                      </span>
+                    </label>
+                  ))}
+                  {budgets.length === 0 && (
+                    <p className="text-sm text-muted-foreground italic">No hay presupuestos disponibles</p>
+                  )}
+                </div>
+              </ScrollArea>
             </div>
           </div>
           
@@ -2100,9 +2149,9 @@ export function EmailInbox({ onComposeReply, onComposeForward }: EmailInboxProps
             </Button>
             <Button 
               onClick={handleAssignFolder} 
-              disabled={assignFolderMutation.isPending || assignProjectMutation.isPending}
+              disabled={assignBudgetsMutation.isPending || assignProjectsMutation.isPending}
             >
-              {(assignFolderMutation.isPending || assignProjectMutation.isPending) ? 'Guardando...' : 'Asignar'}
+              {(assignBudgetsMutation.isPending || assignProjectsMutation.isPending) ? 'Guardando...' : 'Asignar'}
             </Button>
           </DialogFooter>
         </DialogContent>

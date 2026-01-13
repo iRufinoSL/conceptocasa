@@ -32,10 +32,25 @@ export function BudgetEmailInbox({ budgetId, onComposeReply, onComposeForward }:
   const [isInboxExpanded, setIsInboxExpanded] = useState(true);
   const [isOutboxExpanded, setIsOutboxExpanded] = useState(true);
 
-  // Fetch emails related to this budget
+  // Fetch emails related to this budget via junction table
   const { data: emails = [], isLoading } = useQuery({
     queryKey: ['budget-emails', budgetId],
     queryFn: async () => {
+      // First get email IDs assigned to this budget
+      const { data: assignments, error: assignmentsError } = await supabase
+        .from('email_budget_assignments')
+        .select('email_id')
+        .eq('budget_id', budgetId);
+      
+      if (assignmentsError) throw assignmentsError;
+      
+      if (!assignments || assignments.length === 0) {
+        return [];
+      }
+      
+      const emailIds = assignments.map(a => a.email_id);
+      
+      // Then fetch the emails
       const { data, error } = await supabase
         .from('email_messages')
         .select(`
@@ -43,7 +58,7 @@ export function BudgetEmailInbox({ budgetId, onComposeReply, onComposeForward }:
           crm_contacts (name, surname, email),
           email_attachments (id, file_name)
         `)
-        .eq('budget_id', budgetId)
+        .in('id', emailIds)
         .is('deleted_at', null)
         .order('created_at', { ascending: false });
       

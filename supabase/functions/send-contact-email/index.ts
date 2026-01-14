@@ -513,27 +513,100 @@ const handler = async (req: Request): Promise<Response> => {
     
     let confirmationEmail;
     try {
+      // Build housing profile HTML section if applicable
+      let housingProfileHtml = '';
+      if (isHousingProfile) {
+        const styleLabels: Record<string, string> = {
+          moderna: 'Moderna',
+          clasica: 'Clásica',
+          rustica: 'Rústica',
+          madera: 'Madera',
+          ecologica: 'Ecológica/Saludable',
+          mediterranea: 'Mediterránea'
+        };
+        
+        const estilos = requestData.estiloConstructivo?.map(e => styleLabels[e] || e).join(', ') || 'No especificado';
+        const { poblacion, provincia } = parsePoblacionProvincia(requestData.poblacionProvincia || '');
+        
+        housingProfileHtml = `
+          <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0;">
+            <h2 style="color: #333; margin-bottom: 16px; border-bottom: 2px solid #ddd; padding-bottom: 8px;">📋 Tu Perfil de Vivienda</h2>
+            
+            <h3 style="color: #555; margin-top: 16px;">📍 Ubicación</h3>
+            <p style="margin: 4px 0;"><strong>Población:</strong> ${escapeHtml(poblacion || 'No especificado')}</p>
+            <p style="margin: 4px 0;"><strong>Provincia:</strong> ${escapeHtml(provincia || 'No especificado')}</p>
+            ${requestData.tieneTerreno ? `<p style="margin: 4px 0;"><strong>Dispone de terreno:</strong> ${escapeHtml(requestData.tieneTerreno)}</p>` : ''}
+            
+            <h3 style="color: #555; margin-top: 16px;">🏗️ Estructura</h3>
+            <p style="margin: 4px 0;"><strong>Número de plantas:</strong> ${escapeHtml(requestData.numPlantas || 'No especificado')}</p>
+            <p style="margin: 4px 0;"><strong>M² por planta:</strong> ${escapeHtml(requestData.m2PorPlanta || 'No especificado')}</p>
+            <p style="margin: 4px 0;"><strong>Forma geométrica:</strong> ${escapeHtml(requestData.formaGeometrica || 'No especificado')}</p>
+            <p style="margin: 4px 0;"><strong>Tipo de tejado:</strong> ${escapeHtml(requestData.tipoTejado || 'No especificado')}</p>
+            
+            <h3 style="color: #555; margin-top: 16px;">🛏️ Distribución</h3>
+            <p style="margin: 4px 0;"><strong>Total habitaciones:</strong> ${escapeHtml(requestData.numHabitacionesTotal || 'No especificado')}</p>
+            <p style="margin: 4px 0;"><strong>Habitaciones con baño:</strong> ${escapeHtml(requestData.numHabitacionesConBano || 'No especificado')}</p>
+            <p style="margin: 4px 0;"><strong>Habitaciones con vestidor:</strong> ${escapeHtml(requestData.numHabitacionesConVestidor || 'No especificado')}</p>
+            <p style="margin: 4px 0;"><strong>Total baños:</strong> ${escapeHtml(requestData.numBanosTotal || 'No especificado')}</p>
+            <p style="margin: 4px 0;"><strong>Tipo de salón:</strong> ${escapeHtml(requestData.tipoSalon || 'No especificado')}</p>
+            <p style="margin: 4px 0;"><strong>Tipo de cocina:</strong> ${escapeHtml(requestData.tipoCocina || 'No especificado')}</p>
+            ${requestData.lavanderia ? `<p style="margin: 4px 0;"><strong>Lavandería:</strong> ${escapeHtml(requestData.lavanderia)}</p>` : ''}
+            ${requestData.despensa ? `<p style="margin: 4px 0;"><strong>Despensa:</strong> ${escapeHtml(requestData.despensa)}</p>` : ''}
+            
+            <h3 style="color: #555; margin-top: 16px;">🌳 Espacios Exteriores</h3>
+            ${requestData.porcheCubierto ? `<p style="margin: 4px 0;"><strong>Porche cubierto:</strong> ${escapeHtml(requestData.porcheCubierto)}</p>` : ''}
+            ${requestData.patioDescubierto ? `<p style="margin: 4px 0;"><strong>Patio descubierto:</strong> ${escapeHtml(requestData.patioDescubierto)}</p>` : ''}
+            ${requestData.garaje ? `<p style="margin: 4px 0;"><strong>Garaje:</strong> ${escapeHtml(requestData.garaje)}</p>` : ''}
+            
+            <h3 style="color: #555; margin-top: 16px;">🎨 Estilo y Presupuesto</h3>
+            <p style="margin: 4px 0;"><strong>Estilos preferidos:</strong> ${escapeHtml(estilos)}</p>
+            <p style="margin: 4px 0;"><strong>Presupuesto global:</strong> ${escapeHtml(requestData.presupuestoGlobal || 'No especificado')}</p>
+            ${requestData.fechaIdealFinalizacion ? `<p style="margin: 4px 0;"><strong>Fecha ideal finalización:</strong> ${escapeHtml(requestData.fechaIdealFinalizacion)}</p>` : ''}
+            
+            ${requestData.message ? `
+            <h3 style="color: #555; margin-top: 16px;">💬 Mensaje Adicional</h3>
+            <p style="margin: 4px 0;">${safeMessage}</p>
+            ` : ''}
+          </div>
+        `;
+      }
+      
       confirmationEmail = await resend.emails.send({
         from: `${senderName} <${senderEmail}>`,
         to: [email],
         subject: isHousingProfile 
-          ? "Hemos recibido tu perfil de vivienda - Concepto.Casa"
+          ? `Perfil de vivienda de ${safeName}`
           : "Hemos recibido tu mensaje - Concepto.Casa",
-        html: `
-          <h1>¡Gracias por contactarnos, ${safeName}!</h1>
-          <p>${isHousingProfile 
-            ? 'Hemos recibido tu perfil de vivienda y lo estamos revisando. Te contactaremos pronto con una propuesta personalizada.'
-            : 'Hemos recibido tu mensaje y nos pondremos en contacto contigo lo antes posible.'}</p>
-          <hr />
-          <p><strong>Tu mensaje:</strong></p>
-          <p>${safeMessage}</p>
-          <hr />
-          <p>Saludos cordiales,<br />El equipo de Concepto.Casa</p>
-          <p style="color: #666; font-size: 12px;">
-            Teléfono: +34 690 123 533<br />
-            Email: organiza@concepto.casa
-          </p>
-        `,
+        html: isHousingProfile 
+          ? `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+              <h1 style="color: #333;">¡Hola ${safeName}!</h1>
+              <p style="font-size: 16px; color: #444; line-height: 1.6;">
+                <strong>Hemos recibido correctamente este perfil de vivienda, lo empezamos a trabajar y en breve nos pondremos en contacto.</strong>
+              </p>
+              ${housingProfileHtml}
+              <hr style="border: none; border-top: 1px solid #ddd; margin: 24px 0;" />
+              <p style="color: #666;">Saludos cordiales,<br />El equipo de Concepto.Casa</p>
+              <p style="color: #888; font-size: 12px;">
+                Teléfono: +34 690 123 533<br />
+                Email: organiza@concepto.casa<br />
+                Web: www.concepto.casa
+              </p>
+            </div>
+          `
+          : `
+            <h1>¡Gracias por contactarnos, ${safeName}!</h1>
+            <p>Hemos recibido tu mensaje y nos pondremos en contacto contigo lo antes posible.</p>
+            <hr />
+            <p><strong>Tu mensaje:</strong></p>
+            <p>${safeMessage}</p>
+            <hr />
+            <p>Saludos cordiales,<br />El equipo de Concepto.Casa</p>
+            <p style="color: #666; font-size: 12px;">
+              Teléfono: +34 690 123 533<br />
+              Email: organiza@concepto.casa
+            </p>
+          `,
       });
       console.log("Confirmation email response:", JSON.stringify(confirmationEmail));
     } catch (emailError: any) {

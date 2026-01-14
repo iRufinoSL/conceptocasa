@@ -386,21 +386,70 @@ const handler = async (req: Request): Promise<Response> => {
         }
       }
       
-      // 4. Create opportunity linked to contact
+      // 4. Create opportunity linked to contact with full housing profile
       if (contactId!) {
         const opportunityName = `${firstName}_${poblacion}`;
+        
+        // Build full housing profile description
+        const profileDescription = `
+**PERFIL DE VIVIENDA**
+
+**Contacto:**
+- Nombre: ${name}
+- Email: ${email}
+- Teléfono: ${phone}
+
+**Ubicación:**
+- Población: ${poblacion || 'No especificada'}
+- Provincia: ${provincia || 'No especificada'}
+
+**Características de la vivienda:**
+- Número de plantas: ${requestData.numPlantas || 'No especificado'}
+- M² por planta: ${requestData.m2PorPlanta || 'No especificado'}
+- Forma geométrica: ${requestData.formaGeometrica || 'No especificada'}
+- Tipo de tejado: ${requestData.tipoTejado || 'No especificado'}
+
+**Distribución:**
+- Habitaciones totales: ${requestData.numHabitacionesTotal || 'No especificado'}
+- Habitaciones con baño: ${requestData.numHabitacionesConBano || 'No especificado'}
+- Baños totales: ${requestData.numBanosTotal || 'No especificado'}
+- Habitaciones con vestidor: ${requestData.numHabitacionesConVestidor || 'No especificado'}
+
+**Espacios:**
+- Tipo de salón: ${requestData.tipoSalon || 'No especificado'}
+- Tipo de cocina: ${requestData.tipoCocina || 'No especificado'}
+- Lavandería: ${requestData.lavanderia || 'No'}
+- Despensa: ${requestData.despensa || 'No'}
+
+**Exteriores:**
+- Porche cubierto: ${requestData.porcheCubierto || 'No'}
+- Patio descubierto: ${requestData.patioDescubierto || 'No'}
+- Garaje: ${requestData.garaje || 'No'}
+- Tiene terreno: ${requestData.tieneTerreno || 'No especificado'}
+
+**Estilo constructivo:** ${Array.isArray(requestData.estiloConstructivo) ? requestData.estiloConstructivo.join(', ') : requestData.estiloConstructivo || 'No especificado'}
+
+**Presupuesto global:** ${requestData.presupuestoGlobal || 'No especificado'}
+
+**Fecha ideal de finalización:** ${requestData.fechaIdealFinalizacion || 'No especificada'}
+
+**Mensaje adicional:**
+${requestData.message || 'Sin mensaje adicional'}
+        `.trim();
+        
         const { error: opportunityError } = await supabase
           .from('crm_opportunities')
           .insert({
             name: opportunityName,
             contact_id: contactId,
-            description: `Oportunidad creada desde perfil de vivienda. Proyecto: ${projectName}`
+            description: profileDescription,
+            tags: ['Perfil de vivienda']
           });
         
         if (opportunityError) {
           console.error("Error creating opportunity:", opportunityError);
         } else {
-          console.log("Opportunity created:", opportunityName);
+          console.log("Opportunity created with housing profile:", opportunityName);
         }
         
         // 5. Link contact to project

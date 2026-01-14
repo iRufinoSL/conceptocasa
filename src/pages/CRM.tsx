@@ -57,6 +57,7 @@ export interface Opportunity {
   name: string;
   description: string | null;
   contact_id: string | null;
+  tags: string[] | null;
   created_at: string | null;
 }
 

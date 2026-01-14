@@ -105,12 +105,12 @@ export function OpportunityForm({ open, onOpenChange, opportunity, contacts, onS
 
           <div className="space-y-2">
             <Label htmlFor="contact_id">Contacto asociado</Label>
-            <Select value={formData.contact_id} onValueChange={(v) => setFormData({ ...formData, contact_id: v })}>
+            <Select value={formData.contact_id || "none"} onValueChange={(v) => setFormData({ ...formData, contact_id: v === "none" ? "" : v })}>
               <SelectTrigger>
                 <SelectValue placeholder="Seleccionar contacto..." />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Sin contacto</SelectItem>
+                <SelectItem value="none">Sin contacto</SelectItem>
                 {contacts.map((contact) => (
                   <SelectItem key={contact.id} value={contact.id}>
                     {contact.name} {contact.surname}

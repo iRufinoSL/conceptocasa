@@ -766,6 +766,33 @@ export function UrbanProfileCard({ budgetId, cadastralReference: initialRef, isA
                           />
                         </div>
                       </div>
+                      
+                      {/* Google Maps URL display */}
+                      {coordLat && coordLng && (
+                        <div className="space-y-1">
+                          <Label className="text-xs text-muted-foreground flex items-center gap-1">
+                            <ExternalLink className="h-3 w-3" />
+                            URL Google Maps
+                          </Label>
+                          <div className="flex items-center gap-2">
+                            <Input
+                              value={`https://www.google.com/maps?q=${coordLat},${coordLng}`}
+                              readOnly
+                              className="h-8 text-xs font-mono bg-muted/50"
+                            />
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={openGoogleMaps}
+                              className="h-8 px-3 shrink-0"
+                            >
+                              <ExternalLink className="h-3 w-3 mr-1" />
+                              Abrir
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                      
                       <div className="space-y-1">
                         <Label className="text-xs text-muted-foreground flex items-center gap-1">
                           <FileText className="h-3 w-3" />

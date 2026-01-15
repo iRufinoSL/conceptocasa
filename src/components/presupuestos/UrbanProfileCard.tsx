@@ -229,31 +229,38 @@ export function UrbanProfileCard({ budgetId, cadastralReference: initialRef, isA
         <CollapsibleContent>
           <CardContent className="space-y-4">
             {/* Search Section */}
-            <div className="flex gap-2">
-              <div className="flex-1">
-                <Label htmlFor="cadastral-ref" className="sr-only">Referencia Catastral</Label>
-                <Input
-                  id="cadastral-ref"
-                  placeholder="Ej: 52025A06004590000RS"
-                  value={searchRef}
-                  onChange={(e) => setSearchRef(e.target.value.toUpperCase())}
-                  className="font-mono"
-                />
+            <div className="space-y-3">
+              <div className="flex gap-2">
+                <div className="flex-1">
+                  <Label htmlFor="cadastral-ref" className="sr-only">Referencia Catastral</Label>
+                  <Input
+                    id="cadastral-ref"
+                    placeholder="Ej: 52025A06004590000RS"
+                    value={searchRef}
+                    onChange={(e) => setSearchRef(e.target.value.toUpperCase())}
+                    className="font-mono"
+                  />
+                </div>
               </div>
+              
+              {/* Main Action Button */}
               <Button 
                 onClick={handleCatastroSearch} 
                 disabled={isSearching || !searchRef.trim()}
+                className="w-full"
+                size="lg"
               >
                 {isSearching ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : profile ? (
-                  <RefreshCw className="h-4 w-4" />
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    Consultando Catastro...
+                  </>
                 ) : (
-                  <Search className="h-4 w-4" />
+                  <>
+                    <Search className="h-4 w-4 mr-2" />
+                    {profile ? 'Actualizar Calificación del Terreno' : 'Consultar Calificación del Terreno'}
+                  </>
                 )}
-                <span className="ml-2 hidden sm:inline">
-                  {profile ? 'Actualizar' : 'Consultar Catastro'}
-                </span>
               </Button>
             </div>
 

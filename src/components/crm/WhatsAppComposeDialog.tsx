@@ -171,7 +171,7 @@ export function WhatsAppComposeDialog({
     if (!contact?.phone || !savedMessageId) return;
 
     try {
-      // Copy message to clipboard
+      // Copy message to clipboard as backup
       await navigator.clipboard.writeText(message);
       setMessageCopied(true);
 
@@ -181,14 +181,15 @@ export function WhatsAppComposeDialog({
         .update({ status: 'sent', sent_at: new Date().toISOString() })
         .eq('id', savedMessageId);
 
-      // Open WhatsApp
+      // Open WhatsApp with the message pre-filled using the text parameter
       const phoneNumber = getPhoneForWhatsApp(contact.phone);
-      const waUrl = `https://wa.me/${phoneNumber}`;
+      const encodedMessage = encodeURIComponent(message);
+      const waUrl = `https://wa.me/${phoneNumber}?text=${encodedMessage}`;
       window.open(waUrl, '_blank');
 
       toast({
         title: 'WhatsApp abierto',
-        description: 'El mensaje ha sido copiado al portapapeles. Pégalo en WhatsApp.',
+        description: 'El mensaje está listo para enviar en WhatsApp.',
       });
 
       // Close dialog after a short delay
@@ -197,9 +198,10 @@ export function WhatsAppComposeDialog({
       }, 1000);
     } catch (error) {
       console.error('Error opening WhatsApp:', error);
-      // Fallback: just open WhatsApp
+      // Fallback: open WhatsApp with message
       const phoneNumber = getPhoneForWhatsApp(contact.phone);
-      window.open(`https://wa.me/${phoneNumber}`, '_blank');
+      const encodedMessage = encodeURIComponent(message);
+      window.open(`https://wa.me/${phoneNumber}?text=${encodedMessage}`, '_blank');
     }
   };
 

@@ -37,9 +37,14 @@ interface UserProfile {
   created_at: string | null;
   roles: string[];
   budgetAccessCount?: number;
-  notification_email?: string | null;
-  notification_phone?: string | null;
-  notification_type?: string | null;
+  // Personal/Direct notifications (immediate alerts)
+  personal_notification_email?: string | null;
+  personal_notification_phone?: string | null;
+  personal_notification_type?: string | null;
+  // System/Professional notifications (budget, activities, etc.)
+  system_notification_email?: string | null;
+  system_notification_phone?: string | null;
+  system_notification_type?: string | null;
 }
 
 type AppRole = 'administrador' | 'colaborador' | 'cliente';
@@ -77,9 +82,14 @@ export default function Usuarios() {
   const [editingUser, setEditingUser] = useState<UserProfile | null>(null);
   const [editFullName, setEditFullName] = useState('');
   const [editRole, setEditRole] = useState<AppRole>('cliente');
-  const [editNotificationEmail, setEditNotificationEmail] = useState('');
-  const [editNotificationPhone, setEditNotificationPhone] = useState('');
-  const [editNotificationType, setEditNotificationType] = useState<string>('email');
+  // Personal notifications state
+  const [editPersonalNotificationEmail, setEditPersonalNotificationEmail] = useState('');
+  const [editPersonalNotificationPhone, setEditPersonalNotificationPhone] = useState('');
+  const [editPersonalNotificationType, setEditPersonalNotificationType] = useState<string>('email');
+  // System notifications state
+  const [editSystemNotificationEmail, setEditSystemNotificationEmail] = useState('');
+  const [editSystemNotificationPhone, setEditSystemNotificationPhone] = useState('');
+  const [editSystemNotificationType, setEditSystemNotificationType] = useState<string>('email');
   const [isEditing, setIsEditing] = useState(false);
   
   // Delete dialog
@@ -357,9 +367,14 @@ export default function Usuarios() {
     setEditingUser(userToEdit);
     setEditFullName(userToEdit.full_name || '');
     setEditRole((userToEdit.roles[0] as AppRole) || 'cliente');
-    setEditNotificationEmail(userToEdit.notification_email || '');
-    setEditNotificationPhone(userToEdit.notification_phone || '');
-    setEditNotificationType(userToEdit.notification_type || 'email');
+    // Personal notifications
+    setEditPersonalNotificationEmail(userToEdit.personal_notification_email || '');
+    setEditPersonalNotificationPhone(userToEdit.personal_notification_phone || '');
+    setEditPersonalNotificationType(userToEdit.personal_notification_type || 'email');
+    // System notifications
+    setEditSystemNotificationEmail(userToEdit.system_notification_email || '');
+    setEditSystemNotificationPhone(userToEdit.system_notification_phone || '');
+    setEditSystemNotificationType(userToEdit.system_notification_type || 'email');
     setIsEditOpen(true);
   };
 
@@ -368,14 +383,17 @@ export default function Usuarios() {
     
     setIsEditing(true);
     try {
-      // Update profile
+      // Update profile with dual notification preferences
       const { error: profileError } = await supabase
         .from('profiles')
         .update({ 
           full_name: editFullName,
-          notification_email: editNotificationEmail || null,
-          notification_phone: editNotificationPhone || null,
-          notification_type: editNotificationType
+          personal_notification_email: editPersonalNotificationEmail || null,
+          personal_notification_phone: editPersonalNotificationPhone || null,
+          personal_notification_type: editPersonalNotificationType,
+          system_notification_email: editSystemNotificationEmail || null,
+          system_notification_phone: editSystemNotificationPhone || null,
+          system_notification_type: editSystemNotificationType
         })
         .eq('id', editingUser.id);
 
@@ -792,55 +810,110 @@ export default function Usuarios() {
             
             {/* Notification preferences section - only for admins */}
             {editingUser?.roles.includes('administrador') && (
-              <div className="space-y-4 pt-4 border-t">
-                <h4 className="font-medium text-sm">Preferencias de Notificación</h4>
-                <p className="text-xs text-muted-foreground">
-                  Configura cómo recibir avisos cuando lleguen nuevos perfiles de vivienda
-                </p>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="edit-notification-type">Tipo de notificación</Label>
-                  <Select value={editNotificationType} onValueChange={setEditNotificationType}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Seleccionar tipo" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="email">Solo Email</SelectItem>
-                      <SelectItem value="sms">Solo SMS</SelectItem>
-                      <SelectItem value="both">Email y SMS</SelectItem>
-                      <SelectItem value="none">Sin notificaciones</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                
-                {(editNotificationType === 'email' || editNotificationType === 'both') && (
-                  <div className="space-y-2">
-                    <Label htmlFor="edit-notification-email">Email de notificaciones</Label>
-                    <Input
-                      id="edit-notification-email"
-                      type="email"
-                      placeholder={editingUser?.email || 'email@ejemplo.com'}
-                      value={editNotificationEmail}
-                      onChange={(e) => setEditNotificationEmail(e.target.value)}
-                    />
+              <div className="space-y-6 pt-4 border-t">
+                {/* Personal/Direct Notifications */}
+                <div className="space-y-4">
+                  <div>
+                    <h4 className="font-medium text-sm">Notificaciones Personales</h4>
                     <p className="text-xs text-muted-foreground">
-                      Si se deja vacío, se usará el email de la cuenta
+                      Avisos directos e inmediatos (nuevos perfiles de vivienda, alertas personales)
                     </p>
                   </div>
-                )}
-                
-                {(editNotificationType === 'sms' || editNotificationType === 'both') && (
+                  
                   <div className="space-y-2">
-                    <Label htmlFor="edit-notification-phone">Teléfono para SMS</Label>
-                    <Input
-                      id="edit-notification-phone"
-                      type="tel"
-                      placeholder="+34 690 123 456"
-                      value={editNotificationPhone}
-                      onChange={(e) => setEditNotificationPhone(e.target.value)}
-                    />
+                    <Label htmlFor="edit-personal-notification-type">Canal de notificación</Label>
+                    <Select value={editPersonalNotificationType} onValueChange={setEditPersonalNotificationType}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Seleccionar canal" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="email">Solo Email</SelectItem>
+                        <SelectItem value="sms">Solo SMS</SelectItem>
+                        <SelectItem value="whatsapp">Solo WhatsApp</SelectItem>
+                        <SelectItem value="all">Todos los canales</SelectItem>
+                        <SelectItem value="none">Sin notificaciones</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
-                )}
+                  
+                  {editPersonalNotificationType !== 'none' && editPersonalNotificationType !== 'sms' && editPersonalNotificationType !== 'whatsapp' && (
+                    <div className="space-y-2">
+                      <Label htmlFor="edit-personal-notification-email">Email personal</Label>
+                      <Input
+                        id="edit-personal-notification-email"
+                        type="email"
+                        placeholder={editingUser?.email || 'email@ejemplo.com'}
+                        value={editPersonalNotificationEmail}
+                        onChange={(e) => setEditPersonalNotificationEmail(e.target.value)}
+                      />
+                    </div>
+                  )}
+                  
+                  {(editPersonalNotificationType === 'sms' || editPersonalNotificationType === 'whatsapp' || editPersonalNotificationType === 'all') && (
+                    <div className="space-y-2">
+                      <Label htmlFor="edit-personal-notification-phone">Teléfono personal</Label>
+                      <Input
+                        id="edit-personal-notification-phone"
+                        type="tel"
+                        placeholder="+34 690 123 456"
+                        value={editPersonalNotificationPhone}
+                        onChange={(e) => setEditPersonalNotificationPhone(e.target.value)}
+                      />
+                    </div>
+                  )}
+                </div>
+                
+                {/* System/Professional Notifications */}
+                <div className="space-y-4 pt-4 border-t border-dashed">
+                  <div>
+                    <h4 className="font-medium text-sm">Notificaciones del Sistema</h4>
+                    <p className="text-xs text-muted-foreground">
+                      Comunicaciones generales (presupuestos, actividades, actualizaciones profesionales)
+                    </p>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-system-notification-type">Canal de notificación</Label>
+                    <Select value={editSystemNotificationType} onValueChange={setEditSystemNotificationType}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Seleccionar canal" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="email">Solo Email</SelectItem>
+                        <SelectItem value="sms">Solo SMS</SelectItem>
+                        <SelectItem value="whatsapp">Solo WhatsApp</SelectItem>
+                        <SelectItem value="all">Todos los canales</SelectItem>
+                        <SelectItem value="none">Sin notificaciones</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  {editSystemNotificationType !== 'none' && editSystemNotificationType !== 'sms' && editSystemNotificationType !== 'whatsapp' && (
+                    <div className="space-y-2">
+                      <Label htmlFor="edit-system-notification-email">Email profesional</Label>
+                      <Input
+                        id="edit-system-notification-email"
+                        type="email"
+                        placeholder={editingUser?.email || 'email@ejemplo.com'}
+                        value={editSystemNotificationEmail}
+                        onChange={(e) => setEditSystemNotificationEmail(e.target.value)}
+                      />
+                    </div>
+                  )}
+                  
+                  {(editSystemNotificationType === 'sms' || editSystemNotificationType === 'whatsapp' || editSystemNotificationType === 'all') && (
+                    <div className="space-y-2">
+                      <Label htmlFor="edit-system-notification-phone">Teléfono profesional</Label>
+                      <Input
+                        id="edit-system-notification-phone"
+                        type="tel"
+                        placeholder="+34 690 123 456"
+                        value={editSystemNotificationPhone}
+                        onChange={(e) => setEditSystemNotificationPhone(e.target.value)}
+                      />
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </div>

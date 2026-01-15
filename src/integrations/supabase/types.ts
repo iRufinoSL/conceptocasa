@@ -2529,6 +2529,12 @@ export type Database = {
           notification_email: string | null
           notification_phone: string | null
           notification_type: string | null
+          personal_notification_email: string | null
+          personal_notification_phone: string | null
+          personal_notification_type: string | null
+          system_notification_email: string | null
+          system_notification_phone: string | null
+          system_notification_type: string | null
           updated_at: string | null
         }
         Insert: {
@@ -2539,6 +2545,12 @@ export type Database = {
           notification_email?: string | null
           notification_phone?: string | null
           notification_type?: string | null
+          personal_notification_email?: string | null
+          personal_notification_phone?: string | null
+          personal_notification_type?: string | null
+          system_notification_email?: string | null
+          system_notification_phone?: string | null
+          system_notification_type?: string | null
           updated_at?: string | null
         }
         Update: {
@@ -2549,6 +2561,12 @@ export type Database = {
           notification_email?: string | null
           notification_phone?: string | null
           notification_type?: string | null
+          personal_notification_email?: string | null
+          personal_notification_phone?: string | null
+          personal_notification_type?: string | null
+          system_notification_email?: string | null
+          system_notification_phone?: string | null
+          system_notification_type?: string | null
           updated_at?: string | null
         }
         Relationships: []

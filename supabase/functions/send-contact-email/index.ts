@@ -490,7 +490,7 @@ ${requestData.message || 'Sin mensaje adicional'}
       const adminSenderName = "Concepto.Casa";
       
       try {
-        // Fetch user_roles and then profiles
+        // Fetch user_roles and then profiles with personal notification preferences
         const { data: adminRoles } = await supabase
           .from('user_roles')
           .select('user_id')
@@ -500,22 +500,23 @@ ${requestData.message || 'Sin mensaje adicional'}
           const adminUserIds = adminRoles.map(r => r.user_id);
           const { data: adminProfilesData } = await supabase
             .from('profiles')
-            .select('id, email, full_name, notification_email, notification_phone, notification_type')
+            .select('id, email, full_name, personal_notification_email, personal_notification_phone, personal_notification_type')
             .in('id', adminUserIds);
           
           if (adminProfilesData) {
             for (const admin of adminProfilesData) {
-              const notifType = admin.notification_type || 'email';
-              const notifEmail = admin.notification_email || admin.email;
+              // Use personal notification preferences for immediate alerts
+              const notifType = admin.personal_notification_type || 'email';
+              const notifEmail = admin.personal_notification_email || admin.email;
               
-              // Skip if notification_type is 'none' or 'sms' only
-              if (notifType === 'none' || notifType === 'sms') {
+              // Skip if notification_type is 'none' or only SMS/WhatsApp
+              if (notifType === 'none' || notifType === 'sms' || notifType === 'whatsapp') {
                 console.log(`Skipping email notification for admin ${admin.full_name} - preference is ${notifType}`);
                 continue;
               }
               
-              // Send email notification
-              if ((notifType === 'email' || notifType === 'both') && notifEmail) {
+              // Send email notification for 'email' or 'all' preferences
+              if ((notifType === 'email' || notifType === 'all') && notifEmail) {
                 console.log(`Sending housing profile notification to admin: ${notifEmail}`);
                 try {
                   await resend.emails.send({

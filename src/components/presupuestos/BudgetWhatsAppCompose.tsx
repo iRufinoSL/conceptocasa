@@ -100,10 +100,13 @@ export function BudgetWhatsAppCompose({ budgetId, budgetName, projectId, budgetC
   // Format phone for wa.me (remove + and spaces)
   const waPhoneNumber = useMemo(() => {
     let clean = phoneNumber.replace(/\s+/g, '').replace(/^\+/, '');
-    // If starts with 0034 or 34, keep it; if starts with 6/7/9, add 34
-    if (/^[679]/.test(clean) && clean.length <= 9) {
-      clean = '34' + clean;
-    }
+
+    // Convert 00 prefix (e.g., 0034...) to international format
+    if (clean.startsWith('00')) clean = clean.slice(2);
+
+    // If starts with 34 (Spain country code) keep it; if it's a local Spanish number, add 34
+    if (/^[6789]\d{8}$/.test(clean)) clean = '34' + clean;
+
     return clean;
   }, [phoneNumber]);
 

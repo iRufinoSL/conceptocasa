@@ -485,6 +485,83 @@ ${requestData.message || 'Sin mensaje adicional'}
         console.log("System alert created");
       }
       
+      // 7. Send notification to admins with notification preferences
+      const adminSenderEmail = "noreply@concepto.casa";
+      const adminSenderName = "Concepto.Casa";
+      
+      try {
+        // Fetch user_roles and then profiles
+        const { data: adminRoles } = await supabase
+          .from('user_roles')
+          .select('user_id')
+          .eq('role', 'administrador');
+        
+        if (adminRoles && adminRoles.length > 0) {
+          const adminUserIds = adminRoles.map(r => r.user_id);
+          const { data: adminProfilesData } = await supabase
+            .from('profiles')
+            .select('id, email, full_name, notification_email, notification_phone, notification_type')
+            .in('id', adminUserIds);
+          
+          if (adminProfilesData) {
+            for (const admin of adminProfilesData) {
+              const notifType = admin.notification_type || 'email';
+              const notifEmail = admin.notification_email || admin.email;
+              
+              // Skip if notification_type is 'none' or 'sms' only
+              if (notifType === 'none' || notifType === 'sms') {
+                console.log(`Skipping email notification for admin ${admin.full_name} - preference is ${notifType}`);
+                continue;
+              }
+              
+              // Send email notification
+              if ((notifType === 'email' || notifType === 'both') && notifEmail) {
+                console.log(`Sending housing profile notification to admin: ${notifEmail}`);
+                try {
+                  await resend.emails.send({
+                    from: `${adminSenderName} <${adminSenderEmail}>`,
+                    to: [notifEmail],
+                    subject: `🏠 Nuevo Perfil de Vivienda: ${safeName} - ${poblacion || 'Sin ubicación'}`,
+                    html: `
+                      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                        <h2 style="color: #333;">🏠 Nuevo Perfil de Vivienda Recibido</h2>
+                        <p>Hola ${admin.full_name || 'Administrador'},</p>
+                        <p>Se ha recibido un nuevo perfil de vivienda con los siguientes datos:</p>
+                        
+                        <div style="background-color: #f5f5f5; padding: 15px; border-radius: 8px; margin: 20px 0;">
+                          <p><strong>Nombre:</strong> ${safeName}</p>
+                          <p><strong>Email:</strong> ${safeEmail}</p>
+                          <p><strong>Teléfono:</strong> ${safePhone}</p>
+                          <p><strong>Ubicación:</strong> ${poblacion || 'No especificada'}, ${provincia || ''}</p>
+                          <p><strong>Presupuesto:</strong> ${requestData.presupuestoGlobal || 'No especificado'}</p>
+                        </div>
+                        
+                        <p>
+                          <a href="https://conceptocasa.lovable.app/crm?tab=oportunidades" 
+                             style="background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">
+                            Ver en Oportunidades
+                          </a>
+                        </p>
+                        
+                        <hr style="border: none; border-top: 1px solid #ddd; margin: 24px 0;" />
+                        <p style="color: #666; font-size: 12px;">
+                          Este es un mensaje automático del sistema Concepto.Casa
+                        </p>
+                      </div>
+                    `,
+                  });
+                  console.log(`Admin notification sent to ${notifEmail}`);
+                } catch (notifError) {
+                  console.error(`Error sending notification to ${notifEmail}:`, notifError);
+                }
+              }
+            }
+          }
+        }
+      } catch (notifFetchError) {
+        console.error("Error fetching admin profiles for notifications:", notifFetchError);
+      }
+      
       // 7. Save attachment references to database if there are any
       if (attachmentPaths && attachmentPaths.length > 0) {
         console.log("Saving attachment references for project:", projectId);

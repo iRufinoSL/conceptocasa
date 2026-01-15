@@ -18,6 +18,7 @@ interface UrbanRegulationsResult {
   minDistanceSlopes?: { value: number | null; source: string };
   additionalInfo?: string;
   sources: string[];
+  valuesFound?: number;
 }
 
 Deno.serve(async (req) => {
@@ -147,6 +148,29 @@ Los valores deben ser números, no texto.`
       );
     }
 
+    // Count how many values were found
+    let valuesFound = 0;
+    const checkValue = (obj: { value: number | null | undefined; source: string } | undefined) => {
+      if (obj?.value !== null && obj?.value !== undefined) {
+        valuesFound++;
+        return true;
+      }
+      return false;
+    };
+
+    checkValue(regulations.maxBuildableVolume);
+    checkValue(regulations.maxHeight);
+    checkValue(regulations.buildabilityIndex);
+    checkValue(regulations.maxOccupation);
+    checkValue(regulations.frontSetback);
+    checkValue(regulations.sideSetback);
+    checkValue(regulations.rearSetback);
+    checkValue(regulations.minDistanceNeighbors);
+    checkValue(regulations.minDistanceRoads);
+    checkValue(regulations.minDistanceSlopes);
+
+    console.log(`Values found: ${valuesFound}/10`);
+
     // If budgetId is provided, update the urban profile
     if (budgetId) {
       const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -196,22 +220,36 @@ Los valores deben ser números, no texto.`
         updateData.min_distance_slopes_source = regulations.minDistanceSlopes.source;
       }
 
-      if (Object.keys(updateData).length > 0) {
-        updateData.analysis_status = 'regulations_loaded';
-        updateData.last_analyzed_at = new Date().toISOString();
-        
-        const { error: updateError } = await supabase
-          .from('urban_profiles')
-          .update(updateData)
-          .eq('budget_id', budgetId);
-
-        if (updateError) {
-          console.error('Error updating urban profile:', updateError);
-        } else {
-          console.log('Urban profile updated with regulations data');
+      // Always update analysis notes with additional info and sources
+      if (regulations.additionalInfo || (regulations.sources && regulations.sources.length > 0)) {
+        const notes: string[] = [];
+        if (regulations.additionalInfo) {
+          notes.push(regulations.additionalInfo);
         }
+        if (regulations.sources && regulations.sources.length > 0) {
+          notes.push('\n\n**Fuentes consultadas:**\n' + regulations.sources.map(s => `- ${s}`).join('\n'));
+        }
+        updateData.analysis_notes = notes.join('\n');
+      }
+
+      // Always update status and timestamp
+      updateData.analysis_status = valuesFound > 0 ? 'regulations_loaded' : 'catastro_loaded';
+      updateData.last_analyzed_at = new Date().toISOString();
+      
+      const { error: updateError } = await supabase
+        .from('urban_profiles')
+        .update(updateData)
+        .eq('budget_id', budgetId);
+
+      if (updateError) {
+        console.error('Error updating urban profile:', updateError);
+      } else {
+        console.log(`Urban profile updated. Values found: ${valuesFound}`);
       }
     }
+
+    // Add valuesFound to response for better UX
+    regulations.valuesFound = valuesFound;
 
     return new Response(
       JSON.stringify({

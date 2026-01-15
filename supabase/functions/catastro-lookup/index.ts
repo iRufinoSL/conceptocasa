@@ -43,6 +43,27 @@ function parseXMLValue(xml: string, tag: string): string | null {
   return match ? match[1].trim() : null;
 }
 
+// Parse all values for a given tag and return them as an array
+function parseXMLAllValues(xml: string, tag: string): string[] {
+  const regex = new RegExp(`<${tag}[^>]*>([^<]*)</${tag}>`, 'gi');
+  const matches: string[] = [];
+  let match;
+  while ((match = regex.exec(xml)) !== null) {
+    const value = match[1].trim();
+    if (value) matches.push(value);
+  }
+  return matches;
+}
+
+// Sum all numeric values for a given tag (useful for surfaces in subparcels)
+function sumXMLValues(xml: string, tag: string): number {
+  const values = parseXMLAllValues(xml, tag);
+  return values.reduce((sum, val) => {
+    const num = parseFloat(val);
+    return sum + (isNaN(num) ? 0 : num);
+  }, 0);
+}
+
 function parseXMLAttribute(xml: string, tag: string, attr: string): string | null {
   const regex = new RegExp(`<${tag}[^>]*${attr}="([^"]*)"`, 'i');
   const match = xml.match(regex);
@@ -101,8 +122,11 @@ async function lookupCadastralReference(ref: string): Promise<CatastroData | nul
   // Documentation: https://ovc.catastro.meh.es/ovcservweb/ovcswlocalizacionrc/ovccoordenadas.asmx
   
   try {
+    // For coordinates, use only the first 14 characters (required by the API)
+    const coordRef = cleanRef.substring(0, 14);
+    
     // First, try to get coordinates from cadastral reference
-    const coordUrl = `https://ovc.catastro.meh.es/ovcservweb/OVCSWLocalizacionRC/OVCCoordenadas.asmx/Consulta_CPMRC?Provincia=&Municipio=&SRS=EPSG:4326&RC=${cleanRef}`;
+    const coordUrl = `https://ovc.catastro.meh.es/ovcservweb/OVCSWLocalizacionRC/OVCCoordenadas.asmx/Consulta_CPMRC?Provincia=&Municipio=&SRS=EPSG:4326&RC=${coordRef}`;
     
     console.log('Querying Catastro coordinates:', coordUrl);
     const coordResponse = await fetch(coordUrl);
@@ -121,12 +145,12 @@ async function lookupCadastralReference(ref: string): Promise<CatastroData | nul
     const lat = parseXMLValue(coordXml, 'lat') || parseXMLValue(coordXml, 'ycen');
     const lng = parseXMLValue(coordXml, 'lon') || parseXMLValue(coordXml, 'xcen');
     
-    // Extract location data
+    // Extract location data from coordinates response
     const province = parseXMLValue(coordXml, 'np') || parseXMLValue(coordXml, 'cpro');
     const municipality = parseXMLValue(coordXml, 'nm') || parseXMLValue(coordXml, 'cmun');
     const address = parseXMLValue(coordXml, 'ldt') || parseXMLValue(coordXml, 'dir');
     
-    // Now get detailed data using DNPRC service
+    // Now get detailed data using DNPRC service with the full reference
     const detailUrl = `https://ovc.catastro.meh.es/ovcservweb/OVCSWLocalizacionRC/OVCCallejero.asmx/Consulta_DNPRC?Provincia=&Municipio=&RC=${cleanRef}`;
     
     console.log('Querying Catastro details:', detailUrl);
@@ -134,6 +158,11 @@ async function lookupCadastralReference(ref: string): Promise<CatastroData | nul
     const detailXml = await detailResponse.text();
     
     console.log('Catastro details response:', detailXml.substring(0, 500));
+    console.log('Catastro details response (cont):', detailXml.substring(500, 1500));
+    
+    // Log any sfc tags found
+    const sfcMatch = detailXml.match(/<sfc[^>]*>([^<]*)<\/sfc>/gi);
+    console.log('SFC tags found in response:', sfcMatch);
     
     // Extract more detailed information
     const provinceDetail = parseXMLValue(detailXml, 'np') || province;
@@ -141,8 +170,53 @@ async function lookupCadastralReference(ref: string): Promise<CatastroData | nul
     const locality = parseXMLValue(detailXml, 'nv') || parseXMLValue(detailXml, 'loine');
     const addressDetail = parseXMLValue(detailXml, 'ldt') || address;
     const landUse = parseXMLValue(detailXml, 'luso') || parseXMLValue(detailXml, 'uso');
-    const surfaceStr = parseXMLValue(detailXml, 'sfc');
-    const surfaceArea = surfaceStr ? parseFloat(surfaceStr) : undefined;
+    
+    // Try multiple approaches for surface area
+    // For parcels without buildings, surface might be in subparcels (<ss>) section
+    let surfaceArea: number | undefined;
+    
+    // First, try direct surface tags
+    let surfaceStr = parseXMLValue(detailXml, 'sfc');
+    if (surfaceStr && parseFloat(surfaceStr) > 0) {
+      surfaceArea = parseFloat(surfaceStr);
+    }
+    
+    // If surface is 0 or not found, try sfcp (superficie parcela)
+    if (!surfaceArea) {
+      surfaceStr = parseXMLValue(detailXml, 'sfcp');
+      if (surfaceStr && parseFloat(surfaceStr) > 0) {
+        surfaceArea = parseFloat(surfaceStr);
+      }
+    }
+    
+    // Try stp (superficie total parcela)
+    if (!surfaceArea) {
+      surfaceStr = parseXMLValue(detailXml, 'stp');
+      if (surfaceStr && parseFloat(surfaceStr) > 0) {
+        surfaceArea = parseFloat(surfaceStr);
+      }
+    }
+    
+    // For parcels with subparcels (rural land), sum all 'sfc' values in subparcels
+    // The XML has <ss><ssp><sfc>616</sfc>...</ssp></ss> structure
+    if (!surfaceArea || surfaceArea === 0) {
+      const summedSurface = sumXMLValues(detailXml, 'sfc');
+      if (summedSurface > 0) {
+        surfaceArea = summedSurface;
+        console.log('Using summed subparcel surfaces:', summedSurface);
+      }
+    }
+    
+    // Also try in coordinates response
+    if (!surfaceArea) {
+      const coordSurface = sumXMLValues(coordXml, 'sfc');
+      if (coordSurface > 0) {
+        surfaceArea = coordSurface;
+      }
+    }
+    
+    // If surface is 0 or undefined, the API might not have returned it
+    console.log('Parsed surface area:', surfaceArea);
     
     // Extract land class (cn = clase de naturaleza) from Catastro
     // Values: UR (urbano), RU (rústico), SU (urbanizable), etc.

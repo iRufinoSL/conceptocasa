@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import DOMPurify from 'dompurify';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -1188,7 +1189,13 @@ export function ContactForm({ open, onOpenChange, contact, onSuccess }: ContactF
               <div 
                 className="prose prose-sm max-w-none dark:prose-invert"
                 dangerouslySetInnerHTML={{ 
-                  __html: selectedEmailDetail.body_html || selectedEmailDetail.body_text?.replace(/\n/g, '<br>') || '<p class="text-muted-foreground">(Sin contenido)</p>' 
+                  __html: DOMPurify.sanitize(
+                    selectedEmailDetail.body_html || selectedEmailDetail.body_text?.replace(/\n/g, '<br>') || '<p class="text-muted-foreground">(Sin contenido)</p>',
+                    {
+                      ALLOWED_TAGS: ['p', 'br', 'b', 'i', 'u', 'strong', 'em', 'a', 'ul', 'ol', 'li', 'div', 'span', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'table', 'tr', 'td', 'th', 'thead', 'tbody', 'img'],
+                      ALLOWED_ATTR: ['href', 'target', 'style', 'class', 'src', 'alt', 'width', 'height']
+                    }
+                  )
                 }}
               />
             </ScrollArea>

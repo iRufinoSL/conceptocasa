@@ -3235,33 +3235,51 @@ export type Database = {
       }
       urban_profiles: {
         Row: {
+          additional_restrictions: Json | null
           address: string | null
           analysis_notes: string | null
           analysis_status: string | null
           autonomous_community: string | null
           budget_id: string
           buildability_index: number | null
+          buildability_index_source: string | null
           cadastral_reference: string
           cadastral_value: number | null
           climatic_zone: string | null
           construction_year: number | null
+          coordinates_source: string | null
           created_at: string
           created_by: string | null
           front_setback: number | null
+          front_setback_source: string | null
+          google_maps_lat: number | null
+          google_maps_lng: number | null
           id: string
           land_class: string | null
           land_use: string | null
           last_analyzed_at: string | null
           locality: string | null
+          max_buildable_volume: number | null
+          max_buildable_volume_source: string | null
           max_floors: number | null
           max_height: number | null
+          max_height_source: string | null
           max_occupation_percent: number | null
+          max_occupation_source: string | null
+          min_distance_neighbors: number | null
+          min_distance_neighbors_source: string | null
+          min_distance_roads: number | null
+          min_distance_roads_source: string | null
+          min_distance_slopes: number | null
+          min_distance_slopes_source: string | null
           min_plot_area: number | null
           municipality: string | null
           province: string | null
           rear_setback: number | null
+          rear_setback_source: string | null
           seismic_zone: string | null
           side_setback: number | null
+          side_setback_source: string | null
           snow_zone: string | null
           surface_area: number | null
           updated_at: string
@@ -3270,33 +3288,51 @@ export type Database = {
           wind_zone: string | null
         }
         Insert: {
+          additional_restrictions?: Json | null
           address?: string | null
           analysis_notes?: string | null
           analysis_status?: string | null
           autonomous_community?: string | null
           budget_id: string
           buildability_index?: number | null
+          buildability_index_source?: string | null
           cadastral_reference: string
           cadastral_value?: number | null
           climatic_zone?: string | null
           construction_year?: number | null
+          coordinates_source?: string | null
           created_at?: string
           created_by?: string | null
           front_setback?: number | null
+          front_setback_source?: string | null
+          google_maps_lat?: number | null
+          google_maps_lng?: number | null
           id?: string
           land_class?: string | null
           land_use?: string | null
           last_analyzed_at?: string | null
           locality?: string | null
+          max_buildable_volume?: number | null
+          max_buildable_volume_source?: string | null
           max_floors?: number | null
           max_height?: number | null
+          max_height_source?: string | null
           max_occupation_percent?: number | null
+          max_occupation_source?: string | null
+          min_distance_neighbors?: number | null
+          min_distance_neighbors_source?: string | null
+          min_distance_roads?: number | null
+          min_distance_roads_source?: string | null
+          min_distance_slopes?: number | null
+          min_distance_slopes_source?: string | null
           min_plot_area?: number | null
           municipality?: string | null
           province?: string | null
           rear_setback?: number | null
+          rear_setback_source?: string | null
           seismic_zone?: string | null
           side_setback?: number | null
+          side_setback_source?: string | null
           snow_zone?: string | null
           surface_area?: number | null
           updated_at?: string
@@ -3305,33 +3341,51 @@ export type Database = {
           wind_zone?: string | null
         }
         Update: {
+          additional_restrictions?: Json | null
           address?: string | null
           analysis_notes?: string | null
           analysis_status?: string | null
           autonomous_community?: string | null
           budget_id?: string
           buildability_index?: number | null
+          buildability_index_source?: string | null
           cadastral_reference?: string
           cadastral_value?: number | null
           climatic_zone?: string | null
           construction_year?: number | null
+          coordinates_source?: string | null
           created_at?: string
           created_by?: string | null
           front_setback?: number | null
+          front_setback_source?: string | null
+          google_maps_lat?: number | null
+          google_maps_lng?: number | null
           id?: string
           land_class?: string | null
           land_use?: string | null
           last_analyzed_at?: string | null
           locality?: string | null
+          max_buildable_volume?: number | null
+          max_buildable_volume_source?: string | null
           max_floors?: number | null
           max_height?: number | null
+          max_height_source?: string | null
           max_occupation_percent?: number | null
+          max_occupation_source?: string | null
+          min_distance_neighbors?: number | null
+          min_distance_neighbors_source?: string | null
+          min_distance_roads?: number | null
+          min_distance_roads_source?: string | null
+          min_distance_slopes?: number | null
+          min_distance_slopes_source?: string | null
           min_plot_area?: number | null
           municipality?: string | null
           province?: string | null
           rear_setback?: number | null
+          rear_setback_source?: string | null
           seismic_zone?: string | null
           side_setback?: number | null
+          side_setback_source?: string | null
           snow_zone?: string | null
           surface_area?: number | null
           updated_at?: string

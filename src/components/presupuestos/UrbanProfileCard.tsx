@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import type { Json } from '@/integrations/supabase/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -20,9 +21,24 @@ import {
   Home,
   FileText,
   AlertCircle,
-  CheckCircle2
+  CheckCircle2,
+  ExternalLink,
+  Navigation,
+  ArrowLeftRight,
+  MoveVertical,
+  Landmark,
+  Plus,
+  Trash2
 } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+
+interface AdditionalRestriction {
+  id: string;
+  name: string;
+  value: number | null;
+  unit: string;
+  source: string;
+}
 
 interface UrbanProfile {
   id: string;
@@ -41,13 +57,19 @@ interface UrbanProfile {
   urban_classification: string | null;
   urban_qualification: string | null;
   buildability_index: number | null;
+  buildability_index_source: string | null;
   max_height: number | null;
+  max_height_source: string | null;
   max_floors: number | null;
   min_plot_area: number | null;
   front_setback: number | null;
+  front_setback_source: string | null;
   side_setback: number | null;
+  side_setback_source: string | null;
   rear_setback: number | null;
+  rear_setback_source: string | null;
   max_occupation_percent: number | null;
+  max_occupation_source: string | null;
   climatic_zone: string | null;
   wind_zone: string | null;
   seismic_zone: string | null;
@@ -56,6 +78,19 @@ interface UrbanProfile {
   analysis_notes: string | null;
   last_analyzed_at: string | null;
   created_at: string;
+  // New fields
+  google_maps_lat: number | null;
+  google_maps_lng: number | null;
+  coordinates_source: string | null;
+  max_buildable_volume: number | null;
+  max_buildable_volume_source: string | null;
+  min_distance_neighbors: number | null;
+  min_distance_neighbors_source: string | null;
+  min_distance_roads: number | null;
+  min_distance_roads_source: string | null;
+  min_distance_slopes: number | null;
+  min_distance_slopes_source: string | null;
+  additional_restrictions: AdditionalRestriction[] | null;
 }
 
 interface CatastroData {
@@ -91,6 +126,106 @@ const statusLabels: Record<string, { label: string; color: string; icon: React.E
   complete: { label: 'Completo', color: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200', icon: CheckCircle2 },
 };
 
+// Component for editable field with source
+function EditableFieldWithSource({
+  label,
+  value,
+  source,
+  unit,
+  onSave,
+  icon: Icon,
+}: {
+  label: string;
+  value: number | null;
+  source: string | null;
+  unit: string;
+  onSave: (value: number | null, source: string | null) => Promise<void>;
+  icon?: React.ElementType;
+}) {
+  const [editValue, setEditValue] = useState<number | undefined>(value ?? undefined);
+  const [editSource, setEditSource] = useState(source || '');
+  const [isEditing, setIsEditing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+
+  const hasChanges = editValue !== (value ?? undefined) || editSource !== (source || '');
+
+  const handleSave = async () => {
+    setIsSaving(true);
+    try {
+      await onSave(editValue ?? null, editSource || null);
+      setIsEditing(false);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleCancel = () => {
+    setEditValue(value ?? undefined);
+    setEditSource(source || '');
+    setIsEditing(false);
+  };
+
+  return (
+    <div className="p-3 rounded-lg bg-muted/30 border space-y-2">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2 text-sm font-medium">
+          {Icon && <Icon className="h-4 w-4 text-primary" />}
+          <span>{label}</span>
+        </div>
+        {hasChanges && (
+          <div className="flex items-center gap-1">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleSave}
+              disabled={isSaving}
+              className="h-6 px-2"
+            >
+              {isSaving ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle2 className="h-3 w-3 text-green-600" />}
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={handleCancel}
+              className="h-6 px-2"
+            >
+              ✕
+            </Button>
+          </div>
+        )}
+      </div>
+      <div className="flex items-center gap-2">
+        <NumericInput
+          value={editValue}
+          onChange={(v) => {
+            setEditValue(v);
+            setIsEditing(true);
+          }}
+          placeholder="Valor"
+          className="w-24 h-8"
+          min={0}
+        />
+        <span className="text-sm text-muted-foreground">{unit}</span>
+      </div>
+      <div className="space-y-1">
+        <Label className="text-xs text-muted-foreground flex items-center gap-1">
+          <FileText className="h-3 w-3" />
+          Fuente legal
+        </Label>
+        <Input
+          value={editSource}
+          onChange={(e) => {
+            setEditSource(e.target.value);
+            setIsEditing(true);
+          }}
+          placeholder="Ej: PGOU Municipal Art. 45, BOE 123/2024"
+          className="h-8 text-xs"
+        />
+      </div>
+    </div>
+  );
+}
+
 export function UrbanProfileCard({ budgetId, cadastralReference: initialRef, isAdmin }: UrbanProfileCardProps) {
   const { toast } = useToast();
   const [profile, setProfile] = useState<UrbanProfile | null>(null);
@@ -101,6 +236,13 @@ export function UrbanProfileCard({ budgetId, cadastralReference: initialRef, isA
   const [isExpanded, setIsExpanded] = useState(true);
   const [manualSurface, setManualSurface] = useState<number | undefined>(undefined);
   const [isEditingSurface, setIsEditingSurface] = useState(false);
+  
+  // Coordinates state
+  const [coordLat, setCoordLat] = useState<number | undefined>(undefined);
+  const [coordLng, setCoordLng] = useState<number | undefined>(undefined);
+  const [coordSource, setCoordSource] = useState('');
+  const [isSavingCoords, setIsSavingCoords] = useState(false);
+  const [isEditingCoords, setIsEditingCoords] = useState(false);
 
   const fetchProfile = async () => {
     try {
@@ -113,12 +255,34 @@ export function UrbanProfileCard({ budgetId, cadastralReference: initialRef, isA
         .maybeSingle();
 
       if (error) throw error;
-      setProfile(data);
-      if (data?.cadastral_reference) {
-        setSearchRef(data.cadastral_reference);
-      }
-      if (data?.surface_area) {
-        setManualSurface(data.surface_area);
+      
+      // Cast to handle the additional_restrictions field - parse JSONB
+      if (data) {
+        const profileData: UrbanProfile = {
+          ...data,
+          additional_restrictions: Array.isArray(data.additional_restrictions) 
+            ? data.additional_restrictions as unknown as AdditionalRestriction[]
+            : null,
+        };
+        setProfile(profileData);
+        
+        if (profileData.cadastral_reference) {
+          setSearchRef(profileData.cadastral_reference);
+        }
+        if (profileData.surface_area) {
+          setManualSurface(profileData.surface_area);
+        }
+        if (profileData.google_maps_lat) {
+          setCoordLat(profileData.google_maps_lat);
+        }
+        if (profileData.google_maps_lng) {
+          setCoordLng(profileData.google_maps_lng);
+        }
+        if (profileData.coordinates_source) {
+          setCoordSource(profileData.coordinates_source);
+        }
+      } else {
+        setProfile(null);
       }
     } catch (error) {
       console.error('Error fetching urban profile:', error);
@@ -154,6 +318,102 @@ export function UrbanProfileCard({ budgetId, cadastralReference: initialRef, isA
       });
     } finally {
       setIsSavingSurface(false);
+    }
+  };
+
+  const handleSaveCoordinates = async () => {
+    if (!profile?.id) return;
+    
+    setIsSavingCoords(true);
+    try {
+      const { error } = await supabase
+        .from('urban_profiles')
+        .update({
+          google_maps_lat: coordLat ?? null,
+          google_maps_lng: coordLng ?? null,
+          coordinates_source: coordSource || null,
+        })
+        .eq('id', profile.id);
+      
+      if (error) throw error;
+      
+      setProfile(prev => prev ? {
+        ...prev,
+        google_maps_lat: coordLat ?? null,
+        google_maps_lng: coordLng ?? null,
+        coordinates_source: coordSource || null,
+      } : prev);
+      setIsEditingCoords(false);
+      toast({
+        title: 'Coordenadas actualizadas',
+        description: coordLat && coordLng ? `Lat: ${coordLat}, Lng: ${coordLng}` : 'Coordenadas eliminadas',
+      });
+    } catch (error) {
+      console.error('Error saving coordinates:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'No se pudieron guardar las coordenadas',
+      });
+    } finally {
+      setIsSavingCoords(false);
+    }
+  };
+
+  const handleSaveField = async (field: string, sourceField: string, value: number | null, source: string | null) => {
+    if (!profile?.id) return;
+    
+    try {
+      const updateData: Record<string, unknown> = {
+        [field]: value,
+        [sourceField]: source,
+      };
+      
+      const { error } = await supabase
+        .from('urban_profiles')
+        .update(updateData)
+        .eq('id', profile.id);
+      
+      if (error) throw error;
+      
+      setProfile(prev => prev ? { ...prev, ...updateData } as UrbanProfile : prev);
+      toast({
+        title: 'Campo actualizado',
+        description: 'Los datos se han guardado correctamente',
+      });
+    } catch (error) {
+      console.error('Error saving field:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'No se pudo guardar el campo',
+      });
+    }
+  };
+
+  const handleSaveAdditionalRestrictions = async (restrictions: AdditionalRestriction[]) => {
+    if (!profile?.id) return;
+    
+    try {
+      const { error } = await supabase
+        .from('urban_profiles')
+        .update({ additional_restrictions: restrictions as unknown as Json })
+        .eq('id', profile.id);
+      
+      if (error) throw error;
+      
+      setProfile(prev => prev ? { ...prev, additional_restrictions: restrictions } : prev);
+      toast({
+        title: 'Restricciones actualizadas',
+        description: 'Los datos se han guardado correctamente',
+      });
+    } catch (error) {
+      console.error('Error saving restrictions:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'No se pudieron guardar las restricciones',
+      });
     }
   };
 
@@ -222,6 +482,18 @@ export function UrbanProfileCard({ budgetId, cadastralReference: initialRef, isA
     return num.toLocaleString('es-ES');
   };
 
+  const openGoogleMaps = () => {
+    if (coordLat && coordLng) {
+      window.open(`https://www.google.com/maps?q=${coordLat},${coordLng}`, '_blank');
+    }
+  };
+
+  const coordsHaveChanged = () => {
+    return coordLat !== (profile?.google_maps_lat ?? undefined) ||
+           coordLng !== (profile?.google_maps_lng ?? undefined) ||
+           coordSource !== (profile?.coordinates_source || '');
+  };
+
   if (isLoading) {
     return (
       <Card className="border-dashed">
@@ -234,6 +506,8 @@ export function UrbanProfileCard({ budgetId, cadastralReference: initialRef, isA
 
   const statusInfo = getStatusInfo();
   const StatusIcon = statusInfo.icon;
+  
+  const additionalRestrictions: AdditionalRestriction[] = profile?.additional_restrictions || [];
 
   return (
     <Card className="border-primary/20">
@@ -333,6 +607,100 @@ export function UrbanProfileCard({ budgetId, cadastralReference: initialRef, isA
                         </div>
                       )}
                     </div>
+                    
+                    {/* Google Maps Coordinates */}
+                    <div className="p-3 rounded-lg bg-muted/30 border space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2 text-sm font-medium">
+                          <Navigation className="h-4 w-4 text-primary" />
+                          <span>Coordenadas Google Maps</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          {coordsHaveChanged() && (
+                            <>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={handleSaveCoordinates}
+                                disabled={isSavingCoords}
+                                className="h-6 px-2"
+                              >
+                                {isSavingCoords ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle2 className="h-3 w-3 text-green-600" />}
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => {
+                                  setCoordLat(profile.google_maps_lat ?? undefined);
+                                  setCoordLng(profile.google_maps_lng ?? undefined);
+                                  setCoordSource(profile.coordinates_source || '');
+                                  setIsEditingCoords(false);
+                                }}
+                                className="h-6 px-2"
+                              >
+                                ✕
+                              </Button>
+                            </>
+                          )}
+                          {coordLat && coordLng && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={openGoogleMaps}
+                              className="h-6 px-2"
+                              title="Abrir en Google Maps"
+                            >
+                              <ExternalLink className="h-3 w-3" />
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1">
+                          <Label className="text-xs text-muted-foreground">Latitud</Label>
+                          <Input
+                            type="number"
+                            step="any"
+                            value={coordLat ?? ''}
+                            onChange={(e) => {
+                              setCoordLat(e.target.value ? parseFloat(e.target.value) : undefined);
+                              setIsEditingCoords(true);
+                            }}
+                            placeholder="40.4168"
+                            className="h-8 text-sm"
+                          />
+                        </div>
+                        <div className="flex-1">
+                          <Label className="text-xs text-muted-foreground">Longitud</Label>
+                          <Input
+                            type="number"
+                            step="any"
+                            value={coordLng ?? ''}
+                            onChange={(e) => {
+                              setCoordLng(e.target.value ? parseFloat(e.target.value) : undefined);
+                              setIsEditingCoords(true);
+                            }}
+                            placeholder="-3.7038"
+                            className="h-8 text-sm"
+                          />
+                        </div>
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs text-muted-foreground flex items-center gap-1">
+                          <FileText className="h-3 w-3" />
+                          Fuente
+                        </Label>
+                        <Input
+                          value={coordSource}
+                          onChange={(e) => {
+                            setCoordSource(e.target.value);
+                            setIsEditingCoords(true);
+                          }}
+                          placeholder="Ej: Sede Electrónica del Catastro"
+                          className="h-8 text-xs"
+                        />
+                      </div>
+                    </div>
                   </div>
 
                   {/* Land Section */}
@@ -425,50 +793,239 @@ export function UrbanProfileCard({ budgetId, cadastralReference: initialRef, isA
                   </div>
                 </div>
 
-                {/* Urban Parameters (if available) */}
-                {(profile.urban_classification || profile.buildability_index || profile.max_height) && (
-                  <>
-                    <Separator />
-                    <div className="space-y-3">
-                      <h4 className="font-medium flex items-center gap-2 text-sm">
-                        <Ruler className="h-4 w-4 text-primary" />
-                        Parámetros Urbanísticos
-                      </h4>
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
-                        {profile.urban_classification && (
-                          <div>
-                            <span className="text-muted-foreground">Clasificación:</span>
-                            <p className="font-medium">{profile.urban_classification}</p>
+                {/* Construction Parameters Section */}
+                <Separator />
+                <div className="space-y-3">
+                  <h4 className="font-medium flex items-center gap-2 text-sm">
+                    <Building2 className="h-4 w-4 text-primary" />
+                    Capacidades Constructivas
+                  </h4>
+                  <p className="text-xs text-muted-foreground">
+                    Datos obtenidos del PGOU/Normas Subsidiarias del Municipio. Consultar con el Ayuntamiento para verificar.
+                  </p>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {/* Max Buildable Volume */}
+                    <EditableFieldWithSource
+                      label="Volumen máximo de edificación"
+                      value={profile.max_buildable_volume}
+                      source={profile.max_buildable_volume_source}
+                      unit="m³"
+                      icon={Building2}
+                      onSave={(value, source) => handleSaveField('max_buildable_volume', 'max_buildable_volume_source', value, source)}
+                    />
+                    
+                    {/* Buildability Index */}
+                    <EditableFieldWithSource
+                      label="Índice de edificabilidad"
+                      value={profile.buildability_index}
+                      source={profile.buildability_index_source}
+                      unit="m²/m²"
+                      icon={Ruler}
+                      onSave={(value, source) => handleSaveField('buildability_index', 'buildability_index_source', value, source)}
+                    />
+                    
+                    {/* Max Height */}
+                    <EditableFieldWithSource
+                      label="Altura máxima permitida"
+                      value={profile.max_height}
+                      source={profile.max_height_source}
+                      unit="m"
+                      icon={MoveVertical}
+                      onSave={(value, source) => handleSaveField('max_height', 'max_height_source', value, source)}
+                    />
+                    
+                    {/* Max Occupation */}
+                    <EditableFieldWithSource
+                      label="Ocupación máxima"
+                      value={profile.max_occupation_percent}
+                      source={profile.max_occupation_source}
+                      unit="%"
+                      icon={Home}
+                      onSave={(value, source) => handleSaveField('max_occupation_percent', 'max_occupation_source', value, source)}
+                    />
+                  </div>
+                </div>
+
+                {/* Setbacks Section */}
+                <Separator />
+                <div className="space-y-3">
+                  <h4 className="font-medium flex items-center gap-2 text-sm">
+                    <ArrowLeftRight className="h-4 w-4 text-primary" />
+                    Distancias Mínimas / Retranqueos
+                  </h4>
+                  <p className="text-xs text-muted-foreground">
+                    Distancias mínimas a respetar según normativa urbanística aplicable.
+                  </p>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {/* Front Setback */}
+                    <EditableFieldWithSource
+                      label="Retranqueo frontal"
+                      value={profile.front_setback}
+                      source={profile.front_setback_source}
+                      unit="m"
+                      icon={ArrowLeftRight}
+                      onSave={(value, source) => handleSaveField('front_setback', 'front_setback_source', value, source)}
+                    />
+                    
+                    {/* Side Setback */}
+                    <EditableFieldWithSource
+                      label="Retranqueo lateral"
+                      value={profile.side_setback}
+                      source={profile.side_setback_source}
+                      unit="m"
+                      icon={ArrowLeftRight}
+                      onSave={(value, source) => handleSaveField('side_setback', 'side_setback_source', value, source)}
+                    />
+                    
+                    {/* Rear Setback */}
+                    <EditableFieldWithSource
+                      label="Retranqueo posterior"
+                      value={profile.rear_setback}
+                      source={profile.rear_setback_source}
+                      unit="m"
+                      icon={ArrowLeftRight}
+                      onSave={(value, source) => handleSaveField('rear_setback', 'rear_setback_source', value, source)}
+                    />
+                    
+                    {/* Min Distance to Neighbors */}
+                    <EditableFieldWithSource
+                      label="Distancia mínima a colindantes"
+                      value={profile.min_distance_neighbors}
+                      source={profile.min_distance_neighbors_source}
+                      unit="m"
+                      icon={Home}
+                      onSave={(value, source) => handleSaveField('min_distance_neighbors', 'min_distance_neighbors_source', value, source)}
+                    />
+                    
+                    {/* Min Distance to Roads */}
+                    <EditableFieldWithSource
+                      label="Distancia mínima a caminos/carreteras"
+                      value={profile.min_distance_roads}
+                      source={profile.min_distance_roads_source}
+                      unit="m"
+                      icon={Landmark}
+                      onSave={(value, source) => handleSaveField('min_distance_roads', 'min_distance_roads_source', value, source)}
+                    />
+                    
+                    {/* Min Distance to Slopes */}
+                    <EditableFieldWithSource
+                      label="Distancia mínima a taludes"
+                      value={profile.min_distance_slopes}
+                      source={profile.min_distance_slopes_source}
+                      unit="m"
+                      icon={Mountain}
+                      onSave={(value, source) => handleSaveField('min_distance_slopes', 'min_distance_slopes_source', value, source)}
+                    />
+                  </div>
+                </div>
+
+                {/* Additional Restrictions Section */}
+                <Separator />
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-medium flex items-center gap-2 text-sm">
+                      <FileText className="h-4 w-4 text-primary" />
+                      Otras Restricciones y Mediciones
+                    </h4>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        const newRestriction: AdditionalRestriction = {
+                          id: crypto.randomUUID(),
+                          name: '',
+                          value: null,
+                          unit: 'm',
+                          source: '',
+                        };
+                        handleSaveAdditionalRestrictions([...additionalRestrictions, newRestriction]);
+                      }}
+                    >
+                      <Plus className="h-3 w-3 mr-1" />
+                      Añadir
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Otras mediciones que puedan afectar al proyecto constructivo.
+                  </p>
+                  
+                  {additionalRestrictions.length > 0 ? (
+                    <div className="space-y-2">
+                      {additionalRestrictions.map((restriction, index) => (
+                        <div key={restriction.id} className="p-3 rounded-lg bg-muted/30 border space-y-2">
+                          <div className="flex items-center justify-between">
+                            <Input
+                              value={restriction.name}
+                              onChange={(e) => {
+                                const updated = [...additionalRestrictions];
+                                updated[index] = { ...restriction, name: e.target.value };
+                                handleSaveAdditionalRestrictions(updated);
+                              }}
+                              placeholder="Nombre de la restricción"
+                              className="h-8 text-sm font-medium flex-1 mr-2"
+                            />
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => {
+                                const updated = additionalRestrictions.filter((_, i) => i !== index);
+                                handleSaveAdditionalRestrictions(updated);
+                              }}
+                              className="h-8 px-2 text-destructive hover:text-destructive"
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
                           </div>
-                        )}
-                        {profile.buildability_index && (
-                          <div>
-                            <span className="text-muted-foreground">Edificabilidad:</span>
-                            <p className="font-medium">{profile.buildability_index} m²/m²</p>
+                          <div className="flex items-center gap-2">
+                            <NumericInput
+                              value={restriction.value ?? undefined}
+                              onChange={(v) => {
+                                const updated = [...additionalRestrictions];
+                                updated[index] = { ...restriction, value: v ?? null };
+                                handleSaveAdditionalRestrictions(updated);
+                              }}
+                              placeholder="Valor"
+                              className="w-24 h-8"
+                              min={0}
+                            />
+                            <Input
+                              value={restriction.unit}
+                              onChange={(e) => {
+                                const updated = [...additionalRestrictions];
+                                updated[index] = { ...restriction, unit: e.target.value };
+                                handleSaveAdditionalRestrictions(updated);
+                              }}
+                              placeholder="Unidad"
+                              className="w-16 h-8 text-sm"
+                            />
                           </div>
-                        )}
-                        {profile.max_height && (
-                          <div>
-                            <span className="text-muted-foreground">Altura máx:</span>
-                            <p className="font-medium">{profile.max_height} m</p>
+                          <div className="space-y-1">
+                            <Label className="text-xs text-muted-foreground flex items-center gap-1">
+                              <FileText className="h-3 w-3" />
+                              Fuente legal
+                            </Label>
+                            <Input
+                              value={restriction.source}
+                              onChange={(e) => {
+                                const updated = [...additionalRestrictions];
+                                updated[index] = { ...restriction, source: e.target.value };
+                                handleSaveAdditionalRestrictions(updated);
+                              }}
+                              placeholder="Ej: PGOU Art. X, Ley Y/Z"
+                              className="h-8 text-xs"
+                            />
                           </div>
-                        )}
-                        {profile.max_floors && (
-                          <div>
-                            <span className="text-muted-foreground">Plantas máx:</span>
-                            <p className="font-medium">{profile.max_floors}</p>
-                          </div>
-                        )}
-                        {profile.max_occupation_percent && (
-                          <div>
-                            <span className="text-muted-foreground">Ocupación máx:</span>
-                            <p className="font-medium">{profile.max_occupation_percent}%</p>
-                          </div>
-                        )}
-                      </div>
+                        </div>
+                      ))}
                     </div>
-                  </>
-                )}
+                  ) : (
+                    <p className="text-sm text-muted-foreground italic">
+                      No hay restricciones adicionales. Pulsa "Añadir" para incluir mediciones que afecten al proyecto.
+                    </p>
+                  )}
+                </div>
 
                 {/* CTE Zones (if available) */}
                 {(profile.climatic_zone || profile.wind_zone || profile.seismic_zone) && (

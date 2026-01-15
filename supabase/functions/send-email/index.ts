@@ -289,6 +289,22 @@ const handler = async (req: Request): Promise<Response> => {
       console.error("Error storing email record:", insertError);
     } else {
       console.log("Email record stored:", emailRecord.id);
+      
+      // Create budget assignment if budget_id is provided
+      if (budget_id && emailRecord?.id) {
+        const { error: assignmentError } = await supabase
+          .from("email_budget_assignments")
+          .insert({
+            email_id: emailRecord.id,
+            budget_id: budget_id
+          });
+        
+        if (assignmentError) {
+          console.error("Error creating budget assignment:", assignmentError);
+        } else {
+          console.log("Budget assignment created for email:", emailRecord.id);
+        }
+      }
     }
 
     return new Response(

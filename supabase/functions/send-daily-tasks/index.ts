@@ -4,10 +4,31 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const resend = new Resend(Deno.env.get("RESEND_API_KEY"));
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+// Allowed origins for CORS
+const ALLOWED_ORIGINS = [
+  'https://concepto.casa',
+  'https://www.concepto.casa',
+  'https://conceptocasa.lovable.app',
+];
+
+function isOriginAllowed(origin: string | null): boolean {
+  if (!origin) return false;
+  if (ALLOWED_ORIGINS.includes(origin)) return true;
+  // Allow Lovable preview domains
+  if (origin.match(/^https:\/\/[a-z0-9-]+--[a-z0-9-]+\.lovable\.app$/)) return true;
+  if (origin.match(/^https:\/\/[a-z0-9-]+\.lovable\.app$/)) return true;
+  return false;
+}
+
+function getCorsHeaders(origin: string | null): Record<string, string> {
+  const allowedOrigin = isOriginAllowed(origin) ? origin! : ALLOWED_ORIGINS[0];
+  return {
+    'Access-Control-Allow-Origin': allowedOrigin,
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Vary': 'Origin',
+  };
+}
 
 interface Task {
   id: string;
@@ -50,6 +71,9 @@ function checkRateLimit(identifier: string): { allowed: boolean; retryAfterMs?: 
 
 const handler = async (req: Request): Promise<Response> => {
   console.log("send-daily-tasks function called");
+
+  const origin = req.headers.get("Origin");
+  const corsHeaders = getCorsHeaders(origin);
 
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });

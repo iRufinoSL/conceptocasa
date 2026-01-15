@@ -74,8 +74,23 @@ export function WhatsAppComposeDialog({
 
   const getPhoneForWhatsApp = (phone: string | null | undefined) => {
     if (!phone) return null;
-    const cleanPhone = phone.replace(/[\s\-\(\)]/g, '');
-    return cleanPhone.startsWith('+') ? cleanPhone.replace('+', '') : `34${cleanPhone}`;
+
+    // Remove spaces, dashes, parentheses, etc.
+    let clean = phone.replace(/[\s\-\(\)\.]/g, '');
+
+    // Convert 00 prefix to international format
+    if (clean.startsWith('00')) clean = clean.slice(2);
+
+    // If it starts with +, remove it for wa.me
+    if (clean.startsWith('+')) clean = clean.slice(1);
+
+    // If it's a Spanish local mobile/landline (9 digits starting 6/7/8/9), prepend country code
+    if (/^[6789]\d{8}$/.test(clean)) return `34${clean}`;
+
+    // If it already includes country code (e.g., 34...), keep as-is
+    if (/^\d{10,15}$/.test(clean)) return clean;
+
+    return null;
   };
 
   const handleSaveMessage = async () => {
@@ -167,13 +182,52 @@ export function WhatsAppComposeDialog({
     }
   };
 
+  const copyToClipboard = async (text: string) => {
+    // Primary path (modern browsers)
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      // Fallback path
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.top = '0';
+        ta.style.left = '0';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        const ok = document.execCommand('copy');
+        document.body.removeChild(ta);
+        return ok;
+      } catch {
+        return false;
+      }
+    }
+  };
+
   const handleOpenWhatsApp = async () => {
     if (!contact?.phone || !savedMessageId) return;
 
+    const phoneNumber = getPhoneForWhatsApp(contact.phone);
+    if (!phoneNumber) {
+      toast({
+        title: 'Error',
+        description: 'El contacto no tiene un teléfono válido para WhatsApp',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const encodedMessage = encodeURIComponent(message.trim());
+    const waUrl = `https://wa.me/${phoneNumber}?text=${encodedMessage}`;
+
     try {
-      // Copy message to clipboard as backup
-      await navigator.clipboard.writeText(message);
-      setMessageCopied(true);
+      // Copy message to clipboard as a convenience (some WhatsApp clients may ignore URL text)
+      const copied = await copyToClipboard(message.trim());
+      setMessageCopied(copied);
 
       // Update message status to sent
       await supabase
@@ -181,27 +235,22 @@ export function WhatsAppComposeDialog({
         .update({ status: 'sent', sent_at: new Date().toISOString() })
         .eq('id', savedMessageId);
 
-      // Open WhatsApp with the message pre-filled using the text parameter
-      const phoneNumber = getPhoneForWhatsApp(contact.phone);
-      const encodedMessage = encodeURIComponent(message);
-      const waUrl = `https://wa.me/${phoneNumber}?text=${encodedMessage}`;
+      // Open WhatsApp with the message pre-filled
       window.open(waUrl, '_blank');
 
       toast({
         title: 'WhatsApp abierto',
-        description: 'El mensaje está listo para enviar en WhatsApp.',
+        description: copied
+          ? 'El mensaje se ha copiado al portapapeles y se ha preparado en WhatsApp.'
+          : 'WhatsApp se ha abierto. Si no aparece el texto, pega el mensaje (Ctrl+V).',
       });
 
-      // Close dialog after a short delay
       setTimeout(() => {
         onOpenChange(false);
       }, 1000);
     } catch (error) {
       console.error('Error opening WhatsApp:', error);
-      // Fallback: open WhatsApp with message
-      const phoneNumber = getPhoneForWhatsApp(contact.phone);
-      const encodedMessage = encodeURIComponent(message);
-      window.open(`https://wa.me/${phoneNumber}?text=${encodedMessage}`, '_blank');
+      window.open(waUrl, '_blank');
     }
   };
 

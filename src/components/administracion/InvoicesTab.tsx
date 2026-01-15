@@ -194,8 +194,8 @@ export function InvoicesTab() {
         .select(`
           *,
           presupuesto:presupuestos(id, nombre, codigo_correlativo, version),
-          issuer_account:accounting_accounts!invoices_issuer_account_id_fkey(id, name, account_type, address, city, postal_code, province, nif_cif),
-          receiver_account:accounting_accounts!invoices_receiver_account_id_fkey(id, name, account_type, address, city, postal_code, province, nif_cif)
+          issuer_account:accounting_accounts!invoices_issuer_account_id_fkey(id, name, account_type, contact_id, address, city, postal_code, province, nif_cif),
+          receiver_account:accounting_accounts!invoices_receiver_account_id_fkey(id, name, account_type, contact_id, address, city, postal_code, province, nif_cif)
         `)
         .order('invoice_date', { ascending: false })
         .order('invoice_number', { ascending: false });

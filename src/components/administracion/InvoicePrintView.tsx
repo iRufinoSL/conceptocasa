@@ -21,16 +21,24 @@ interface Invoice {
   vat_amount: number;
   total: number;
   document_type?: DocumentType;
-  issuer_account?: { 
-    name: string; 
+  issuer_account_id?: string | null;
+  receiver_account_id?: string | null;
+  issuer_account?: {
+    id?: string;
+    name: string;
+    account_type?: string;
+    contact_id?: string | null;
     address?: string | null;
     city?: string | null;
     postal_code?: string | null;
     province?: string | null;
     nif_cif?: string | null;
   } | null;
-  receiver_account?: { 
-    name: string; 
+  receiver_account?: {
+    id?: string;
+    name: string;
+    account_type?: string;
+    contact_id?: string | null;
     address?: string | null;
     city?: string | null;
     postal_code?: string | null;
@@ -67,6 +75,14 @@ interface InvoiceLine {
   subtotal: number;
 }
 
+type ContactFiscal = {
+  address?: string | null;
+  city?: string | null;
+  postal_code?: string | null;
+  province?: string | null;
+  nif_dni?: string | null;
+};
+
 interface Props {
   invoice: Invoice;
   onClose: () => void;
@@ -75,12 +91,35 @@ interface Props {
 export function InvoicePrintView({ invoice, onClose }: Props) {
   const [lines, setLines] = useState<InvoiceLine[]>([]);
   const [loading, setLoading] = useState(true);
+  const [receiverContactFiscal, setReceiverContactFiscal] = useState<ContactFiscal | null>(null);
   const printRef = useRef<HTMLDivElement>(null);
   const { settings: companySettings } = useCompanySettings();
 
   useEffect(() => {
     fetchLines();
   }, [invoice.id]);
+
+  useEffect(() => {
+    const contactId = invoice.receiver_account?.contact_id;
+    if (!contactId) {
+      setReceiverContactFiscal(null);
+      return;
+    }
+
+    supabase
+      .from('crm_contacts')
+      .select('address, city, postal_code, province, nif_dni')
+      .eq('id', contactId)
+      .maybeSingle()
+      .then(({ data, error }) => {
+        if (error) {
+          console.warn('No se pudo cargar el contacto del receptor:', error);
+          setReceiverContactFiscal(null);
+          return;
+        }
+        setReceiverContactFiscal(data || null);
+      });
+  }, [invoice.receiver_account?.contact_id]);
 
   const fetchLines = async () => {
     try {
@@ -317,20 +356,37 @@ export function InvoicePrintView({ invoice, onClose }: Props) {
     return format(new Date(dateStr), "d 'de' MMMM 'de' yyyy", { locale: es });
   };
 
-  // Render party address block
-  const renderPartyAddress = (account: Invoice['issuer_account'] | Invoice['receiver_account']) => {
-    if (!account) return null;
-    
-    const addressParts = [];
-    if (account.address) addressParts.push(account.address);
-    
-    const cityLine = [account.postal_code, account.city].filter(Boolean).join(' - ');
+  // Render party address block (con fallback a datos del contacto si la cuenta contable está incompleta)
+  const renderPartyAddress = (
+    account: Invoice['issuer_account'] | Invoice['receiver_account'],
+    contactFiscal?: ContactFiscal | null
+  ) => {
+    if (!account && !contactFiscal) return null;
+
+    const pick = (...values: Array<string | null | undefined>) => {
+      for (const v of values) {
+        if (typeof v === 'string' && v.trim() !== '') return v;
+        if (v != null && typeof v !== 'string') return String(v);
+      }
+      return null;
+    };
+
+    const address = pick(account?.address, contactFiscal?.address);
+    const postalCode = pick(account?.postal_code, contactFiscal?.postal_code);
+    const city = pick(account?.city, contactFiscal?.city);
+    const province = pick(account?.province, contactFiscal?.province);
+
+    const addressParts: string[] = [];
+    if (address) addressParts.push(address);
+
+    const cityLineParts = [postalCode, city].filter((p): p is string => !!p);
+    const cityLine = cityLineParts.join(' - ');
     if (cityLine) addressParts.push(cityLine);
-    
-    if (account.province) addressParts.push(account.province);
-    
+
+    if (province) addressParts.push(province);
+
     if (addressParts.length === 0) return null;
-    
+
     return (
       <div style={{ fontSize: '13px', color: '#444', lineHeight: '1.6' }}>
         {addressParts.map((part, idx) => (
@@ -418,10 +474,10 @@ export function InvoicePrintView({ invoice, onClose }: Props) {
               <div style={{ fontSize: '16px', fontWeight: '600', color: '#1a1a1a', marginBottom: '8px' }}>
                 {invoice.receiver_account?.name || 'No definido'}
               </div>
-              {renderPartyAddress(invoice.receiver_account)}
-              {invoice.receiver_account?.nif_cif && (
+              {renderPartyAddress(invoice.receiver_account, receiverContactFiscal)}
+              {(invoice.receiver_account?.nif_cif || receiverContactFiscal?.nif_dni) && (
                 <div style={{ fontSize: '13px', color: '#1a1a1a', marginTop: '8px', fontWeight: '500' }}>
-                  NIF/CIF: {invoice.receiver_account.nif_cif}
+                  NIF/CIF: {invoice.receiver_account?.nif_cif || receiverContactFiscal?.nif_dni}
                 </div>
               )}
             </div>

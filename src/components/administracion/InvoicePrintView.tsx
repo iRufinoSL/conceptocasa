@@ -10,6 +10,13 @@ import { useCompanySettings } from '@/hooks/useCompanySettings';
 
 type DocumentType = 'factura' | 'presupuesto' | 'proforma';
 
+interface Presupuesto {
+  id: string;
+  nombre: string;
+  codigo_correlativo: number;
+  version: string;
+}
+
 interface Invoice {
   id: string;
   invoice_number: number;
@@ -23,6 +30,7 @@ interface Invoice {
   document_type?: DocumentType;
   issuer_account_id?: string | null;
   receiver_account_id?: string | null;
+  presupuesto?: Presupuesto | null;
   issuer_account?: {
     id?: string;
     name: string;
@@ -422,6 +430,7 @@ export function InvoicePrintView({ invoice, onClose }: Props) {
         <div ref={printRef} className="bg-white p-8 rounded-lg">
           {/* Header */}
           <div className="invoice-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '40px', paddingBottom: '20px', borderBottom: '2px solid #e5e5e5' }}>
+            {/* Logo */}
             <div className="logo-section" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
               {logoUrl ? (
                 <img 
@@ -442,6 +451,23 @@ export function InvoicePrintView({ invoice, onClose }: Props) {
                 </>
               )}
             </div>
+
+            {/* Presupuesto vinculado (centro) */}
+            {invoice.presupuesto && (
+              <div style={{ textAlign: 'center', flex: 1 }}>
+                <div style={{ fontSize: '11px', textTransform: 'uppercase', color: '#888', letterSpacing: '0.5px', marginBottom: '4px' }}>
+                  Presupuesto
+                </div>
+                <div style={{ fontSize: '14px', fontWeight: '600', color: '#1a1a1a' }}>
+                  {String(invoice.presupuesto.codigo_correlativo).padStart(4, '0')} - {invoice.presupuesto.nombre}
+                </div>
+                <div style={{ fontSize: '12px', color: '#666' }}>
+                  Versión {invoice.presupuesto.version}
+                </div>
+              </div>
+            )}
+
+            {/* Tipo de documento y número */}
             <div style={{ textAlign: 'right' }}>
               <h1 style={{ fontSize: '28px', color: DOCUMENT_TYPE_COLORS[invoice.document_type || 'factura'], marginBottom: '4px' }}>
                 {DOCUMENT_TYPE_LABELS[invoice.document_type || 'factura']}

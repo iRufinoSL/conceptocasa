@@ -17,3 +17,6 @@ verify_jwt = false
 
 [functions.search-resources]
 verify_jwt = false
+
+[functions.send-daily-tasks]
+verify_jwt = false

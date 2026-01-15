@@ -982,36 +982,54 @@ export type Database = {
       }
       budget_tasks: {
         Row: {
-          activity_id: string
+          activity_id: string | null
+          budget_id: string | null
           created_at: string
+          created_by: string | null
           description: string | null
           duration_days: number | null
+          end_time: string | null
           id: string
           name: string
+          resource_id: string | null
           start_date: string | null
+          start_time: string | null
           status: string
+          target_date: string | null
           updated_at: string
         }
         Insert: {
-          activity_id: string
+          activity_id?: string | null
+          budget_id?: string | null
           created_at?: string
+          created_by?: string | null
           description?: string | null
           duration_days?: number | null
+          end_time?: string | null
           id?: string
           name: string
+          resource_id?: string | null
           start_date?: string | null
+          start_time?: string | null
           status?: string
+          target_date?: string | null
           updated_at?: string
         }
         Update: {
-          activity_id?: string
+          activity_id?: string | null
+          budget_id?: string | null
           created_at?: string
+          created_by?: string | null
           description?: string | null
           duration_days?: number | null
+          end_time?: string | null
           id?: string
           name?: string
+          resource_id?: string | null
           start_date?: string | null
+          start_time?: string | null
           status?: string
+          target_date?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -1020,6 +1038,27 @@ export type Database = {
             columns: ["activity_id"]
             isOneToOne: false
             referencedRelation: "budget_activities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budget_tasks_budget_id_fkey"
+            columns: ["budget_id"]
+            isOneToOne: false
+            referencedRelation: "presupuestos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budget_tasks_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budget_tasks_resource_id_fkey"
+            columns: ["resource_id"]
+            isOneToOne: false
+            referencedRelation: "budget_activity_resources"
             referencedColumns: ["id"]
           },
         ]

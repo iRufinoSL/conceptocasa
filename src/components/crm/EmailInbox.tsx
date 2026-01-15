@@ -283,16 +283,31 @@ export function EmailInbox({ onComposeReply, onComposeForward }: EmailInboxProps
   // Soft delete email mutation (move to trash)
   const deleteEmailMutation = useMutation({
     mutationFn: async (emailId: string) => {
-      const { error } = await supabase
+      console.log('Deleting email:', emailId);
+      const { error, data } = await supabase
         .from('email_messages')
         .update({ deleted_at: new Date().toISOString() })
-        .eq('id', emailId);
-      if (error) throw error;
+        .eq('id', emailId)
+        .select();
+      if (error) {
+        console.error('Error deleting email:', error);
+        throw error;
+      }
+      console.log('Email deleted successfully:', data);
+      return data;
     },
     onSuccess: () => {
       toast({ title: 'Email movido a papelera' });
       setSelectedEmail(null);
       queryClient.invalidateQueries({ queryKey: ['email-messages'] });
+    },
+    onError: (error: any) => {
+      console.error('Delete mutation error:', error);
+      toast({ 
+        title: 'Error al borrar email', 
+        description: error?.message || 'No se pudo borrar el email',
+        variant: 'destructive' 
+      });
     },
   });
 

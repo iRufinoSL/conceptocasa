@@ -356,25 +356,18 @@ export function InvoicePrintView({ invoice, onClose }: Props) {
     return format(new Date(dateStr), "d 'de' MMMM 'de' yyyy", { locale: es });
   };
 
-  // Render party address block (con fallback a datos del contacto si la cuenta contable está incompleta)
+  // Render party address block - si hay contactFiscal (de contact_id), esos datos son la fuente principal
   const renderPartyAddress = (
     account: Invoice['issuer_account'] | Invoice['receiver_account'],
     contactFiscal?: ContactFiscal | null
   ) => {
     if (!account && !contactFiscal) return null;
 
-    const pick = (...values: Array<string | null | undefined>) => {
-      for (const v of values) {
-        if (typeof v === 'string' && v.trim() !== '') return v;
-        if (v != null && typeof v !== 'string') return String(v);
-      }
-      return null;
-    };
-
-    const address = pick(account?.address, contactFiscal?.address);
-    const postalCode = pick(account?.postal_code, contactFiscal?.postal_code);
-    const city = pick(account?.city, contactFiscal?.city);
-    const province = pick(account?.province, contactFiscal?.province);
+    // Si hay contacto vinculado, sus datos tienen prioridad sobre los de la cuenta contable
+    const address = contactFiscal?.address || account?.address;
+    const postalCode = contactFiscal?.postal_code || account?.postal_code;
+    const city = contactFiscal?.city || account?.city;
+    const province = contactFiscal?.province || account?.province;
 
     const addressParts: string[] = [];
     if (address) addressParts.push(address);
@@ -397,6 +390,11 @@ export function InvoicePrintView({ invoice, onClose }: Props) {
         ))}
       </div>
     );
+  };
+
+  // Obtiene el NIF/CIF priorizando el contacto si existe
+  const getReceiverNif = () => {
+    return receiverContactFiscal?.nif_dni || invoice.receiver_account?.nif_cif;
   };
 
   if (loading) {
@@ -475,9 +473,9 @@ export function InvoicePrintView({ invoice, onClose }: Props) {
                 {invoice.receiver_account?.name || 'No definido'}
               </div>
               {renderPartyAddress(invoice.receiver_account, receiverContactFiscal)}
-              {(invoice.receiver_account?.nif_cif || receiverContactFiscal?.nif_dni) && (
+              {getReceiverNif() && (
                 <div style={{ fontSize: '13px', color: '#1a1a1a', marginTop: '8px', fontWeight: '500' }}>
-                  NIF/CIF: {invoice.receiver_account?.nif_cif || receiverContactFiscal?.nif_dni}
+                  NIF/CIF: {getReceiverNif()}
                 </div>
               )}
             </div>

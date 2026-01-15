@@ -23,3 +23,6 @@ verify_jwt = false
 
 [functions.search-urban-regulations]
 verify_jwt = true
+
+[functions.extract-pgou-data]
+verify_jwt = true

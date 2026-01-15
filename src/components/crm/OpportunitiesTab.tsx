@@ -1,10 +1,11 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Target, User, Calendar, MoreVertical, Pencil, Trash2 } from 'lucide-react';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Target, User, Calendar, MoreVertical, Pencil, Trash2, ChevronDown } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { searchMatch } from '@/lib/search-utils';
@@ -19,6 +20,8 @@ interface OpportunitiesTabProps {
 }
 
 export function OpportunitiesTab({ opportunities, contacts, searchTerm, onEdit, onDelete }: OpportunitiesTabProps) {
+  const [expandedDescriptions, setExpandedDescriptions] = useState<Set<string>>(new Set());
+
   const filteredOpportunities = useMemo(() => {
     if (!searchTerm) return opportunities;
     return opportunities.filter(opp =>
@@ -34,6 +37,22 @@ export function OpportunitiesTab({ opportunities, contacts, searchTerm, onEdit, 
 
   const getInitials = (name: string) => {
     return name.slice(0, 2).toUpperCase();
+  };
+
+  const toggleDescription = (id: string) => {
+    setExpandedDescriptions(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(id)) {
+        newSet.delete(id);
+      } else {
+        newSet.add(id);
+      }
+      return newSet;
+    });
+  };
+
+  const isHousingProfile = (opp: Opportunity) => {
+    return opp.tags?.includes('Perfil de vivienda');
   };
 
   if (filteredOpportunities.length === 0) {
@@ -100,9 +119,30 @@ export function OpportunitiesTab({ opportunities, contacts, searchTerm, onEdit, 
                 {opportunity.name}
               </CardTitle>
               {opportunity.description && (
-                <CardDescription className="line-clamp-2">
-                  {opportunity.description}
-                </CardDescription>
+                isHousingProfile(opportunity) ? (
+                  <Collapsible open={expandedDescriptions.has(opportunity.id)}>
+                    <CollapsibleTrigger asChild>
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        className="w-full justify-between mt-2 text-emerald-600 hover:text-emerald-700"
+                        onClick={(e) => { e.stopPropagation(); toggleDescription(opportunity.id); }}
+                      >
+                        Ver perfil de vivienda
+                        <ChevronDown className={`h-4 w-4 transition-transform ${expandedDescriptions.has(opportunity.id) ? 'rotate-180' : ''}`} />
+                      </Button>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent className="mt-2">
+                      <div className="text-sm text-muted-foreground whitespace-pre-wrap bg-muted/50 p-3 rounded-md max-h-64 overflow-y-auto">
+                        {opportunity.description}
+                      </div>
+                    </CollapsibleContent>
+                  </Collapsible>
+                ) : (
+                  <CardDescription className="line-clamp-2">
+                    {opportunity.description}
+                  </CardDescription>
+                )
               )}
             </CardHeader>
             <CardContent className="space-y-3">

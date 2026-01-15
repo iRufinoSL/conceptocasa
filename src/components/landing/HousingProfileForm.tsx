@@ -217,11 +217,14 @@ ${formData.message || "Sin mensaje adicional"}
       // Upload attachments first
       const attachmentPaths = await uploadAttachments();
       
+      // Prepend +34 to phone if not already present
+      const phoneWithPrefix = formData.phone.startsWith('+') ? formData.phone : `+34${formData.phone.replace(/\s/g, '')}`;
+      
       const { error } = await supabase.functions.invoke('send-contact-email', {
         body: {
           name: formData.name,
           email: formData.email,
-          phone: formData.phone,
+          phone: phoneWithPrefix,
           subject: "Perfil de Vivienda - Solicitud Detallada",
           message: messageBody,
           // Flag to indicate this is a housing profile
@@ -344,16 +347,21 @@ ${formData.message || "Sin mensaje adicional"}
                 </div>
                 <div>
                   <label className="text-sm font-medium text-foreground">Teléfono *</label>
-                  <Input 
-                    type="tel" 
-                    name="phone"
-                    value={formData.phone}
-                    onChange={handleInputChange}
-                    className="mt-1" 
-                    placeholder="+34 600 000 000" 
-                    required 
-                    maxLength={20}
-                  />
+                  <div className="flex mt-1">
+                    <span className="inline-flex items-center px-3 rounded-l-md border border-r-0 border-input bg-muted text-muted-foreground text-sm">
+                      +34
+                    </span>
+                    <Input 
+                      type="tel" 
+                      name="phone"
+                      value={formData.phone}
+                      onChange={handleInputChange}
+                      className="rounded-l-none" 
+                      placeholder="600 000 000" 
+                      required 
+                      maxLength={15}
+                    />
+                  </div>
                 </div>
               </div>
             </div>

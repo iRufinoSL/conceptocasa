@@ -13,6 +13,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Plus, Trash2, Users, Building2, UserPlus, ChevronDown, List, FolderOpen, Search, X, Mail, Pencil, MessageCircle } from 'lucide-react';
 import { ContactForm } from '@/components/crm/ContactForm';
 import { SendEmailDialog } from '@/components/crm/SendEmailDialog';
+import { WhatsAppComposeDialog } from '@/components/crm/WhatsAppComposeDialog';
 
 interface ProfessionalActivity {
   id: string;
@@ -60,6 +61,8 @@ export function BudgetContactsManager({ budgetId, isAdmin }: BudgetContactsManag
   const [othersSearchTerm, setOthersSearchTerm] = useState('');
   const [emailDialogOpen, setEmailDialogOpen] = useState(false);
   const [emailContact, setEmailContact] = useState<Contact | null>(null);
+  const [whatsappDialogOpen, setWhatsappDialogOpen] = useState(false);
+  const [whatsappContact, setWhatsappContact] = useState<Contact | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editContact, setEditContact] = useState<Contact | null>(null);
 
@@ -248,12 +251,8 @@ export function BudgetContactsManager({ budgetId, isAdmin }: BudgetContactsManag
 
   const handleSendWhatsApp = (contact: Contact) => {
     if (!contact.phone) return;
-    // Clean phone number - remove spaces, dashes, etc
-    const cleanPhone = contact.phone.replace(/[\s\-\(\)]/g, '');
-    // Add country code if not present (Spain default)
-    const phoneWithCode = cleanPhone.startsWith('+') ? cleanPhone.replace('+', '') : `34${cleanPhone}`;
-    const waUrl = `https://wa.me/${phoneWithCode}`;
-    window.open(waUrl, '_blank');
+    setWhatsappContact(contact);
+    setWhatsappDialogOpen(true);
   };
 
   const clients = budgetContacts.filter(bc => bc.contact_role === 'cliente');
@@ -760,6 +759,14 @@ export function BudgetContactsManager({ budgetId, isAdmin }: BudgetContactsManag
           setEditContact(null);
           fetchData();
         }}
+      />
+
+      {/* WhatsApp Compose Dialog */}
+      <WhatsAppComposeDialog
+        open={whatsappDialogOpen}
+        onOpenChange={setWhatsappDialogOpen}
+        contact={whatsappContact}
+        budgetId={budgetId}
       />
     </>
   );

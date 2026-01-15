@@ -14,12 +14,27 @@ interface CatastroData {
   surfaceArea?: number;
   landUse?: string;
   landClass?: string;
+  landClassDescription?: string;
+  landClassSource?: string;
+  canBuild?: boolean;
   constructionYear?: number;
   coordinates?: {
     lat: number;
     lng: number;
   };
 }
+
+// Land class types from Catastro and their buildability
+const LAND_CLASS_INFO: Record<string, { description: string; canBuild: boolean }> = {
+  'UR': { description: 'Suelo Urbano - Terreno apto para edificación según PGOU municipal', canBuild: true },
+  'RU': { description: 'Suelo Rústico - Terreno no urbanizable, uso agrícola/ganadero', canBuild: false },
+  'RS': { description: 'Suelo Rústico con edificación', canBuild: false },
+  'SU': { description: 'Suelo Urbanizable - Terreno programado para desarrollo urbano', canBuild: true },
+  'SP': { description: 'Suelo Urbanizable Programado', canBuild: true },
+  'SG': { description: 'Suelo Urbanizable Sectorizado', canBuild: true },
+  'SN': { description: 'Suelo Urbanizable No Sectorizado', canBuild: false },
+  'NU': { description: 'Suelo No Urbanizable de especial protección', canBuild: false },
+};
 
 // Parse XML response from Catastro
 function parseXMLValue(xml: string, tag: string): string | null {
@@ -98,10 +113,33 @@ async function lookupCadastralReference(ref: string): Promise<CatastroData | nul
     const surfaceStr = parseXMLValue(detailXml, 'sfc');
     const surfaceArea = surfaceStr ? parseFloat(surfaceStr) : undefined;
     
-    // Determine land class from reference format
-    // Rustic: starts with numbers (parcel code)
-    // Urban: starts with letters
-    const landClass = /^\d/.test(cleanRef) ? 'Rústico' : 'Urbano';
+    // Extract land class (cn = clase de naturaleza) from Catastro
+    // Values: UR (urbano), RU (rústico), SU (urbanizable), etc.
+    let landClassCode = parseXMLValue(detailXml, 'cn') || parseXMLValue(coordXml, 'cn');
+    
+    // Fallback: determine from reference format if not in XML
+    // Rustic references start with numbers, Urban start with letters
+    if (!landClassCode) {
+      landClassCode = /^\d/.test(cleanRef) ? 'RU' : 'UR';
+    }
+    
+    // Get land class info
+    const landClassInfo = LAND_CLASS_INFO[landClassCode] || {
+      description: landClassCode === 'RU' || /^\d/.test(cleanRef) 
+        ? 'Suelo Rústico - Consultar PGOU para usos permitidos'
+        : 'Suelo Urbano - Consultar PGOU para parámetros edificatorios',
+      canBuild: !/^\d/.test(cleanRef)
+    };
+    
+    // Determine readable land class name
+    let landClass: string;
+    switch (landClassCode) {
+      case 'UR': landClass = 'Urbano'; break;
+      case 'RU': case 'RS': landClass = 'Rústico'; break;
+      case 'SU': case 'SP': case 'SG': landClass = 'Urbanizable'; break;
+      case 'SN': case 'NU': landClass = 'No Urbanizable'; break;
+      default: landClass = /^\d/.test(cleanRef) ? 'Rústico' : 'Urbano';
+    }
     
     // Get construction year if available
     const yearStr = parseXMLValue(detailXml, 'ant');
@@ -116,6 +154,9 @@ async function lookupCadastralReference(ref: string): Promise<CatastroData | nul
       surfaceArea,
       landUse: landUse || undefined,
       landClass,
+      landClassDescription: landClassInfo.description,
+      landClassSource: 'Catastro - Sede Electrónica del Catastro (SEC)',
+      canBuild: landClassInfo.canBuild,
       constructionYear,
     };
     

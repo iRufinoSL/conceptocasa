@@ -66,6 +66,9 @@ interface CatastroData {
   surfaceArea?: number;
   landUse?: string;
   landClass?: string;
+  landClassDescription?: string;
+  landClassSource?: string;
+  canBuild?: boolean;
   constructionYear?: number;
   coordinates?: {
     lat: number;
@@ -294,20 +297,44 @@ export function UrbanProfileCard({ budgetId, cadastralReference: initialRef, isA
                       <TreePine className="h-4 w-4 text-primary" />
                       Terreno
                     </h4>
-                    <div className="grid grid-cols-2 gap-2 text-sm">
-                      <div>
-                        <span className="text-muted-foreground">Superficie:</span>
-                        <p className="font-medium">
-                          {profile.surface_area ? `${formatNumber(profile.surface_area)} m²` : '-'}
+                    <div className="space-y-2 text-sm">
+                      {/* Land Class - Main field */}
+                      <div className="p-3 rounded-lg bg-muted/50 border">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-muted-foreground font-medium">Tipo de Terreno:</span>
+                          <Badge variant={
+                            profile.land_class === 'Urbano' ? 'default' :
+                            profile.land_class === 'Urbanizable' ? 'secondary' :
+                            'outline'
+                          }>
+                            {profile.land_class || 'No determinado'}
+                          </Badge>
+                        </div>
+                        {/* Description from Catastro */}
+                        <p className="text-xs text-muted-foreground mt-2">
+                          {profile.land_class === 'Urbano' && 'Suelo Urbano - Terreno apto para edificación según PGOU municipal'}
+                          {profile.land_class === 'Rústico' && 'Suelo Rústico - Terreno no urbanizable, uso agrícola/ganadero. Requiere consulta específica al Ayuntamiento para usos permitidos.'}
+                          {profile.land_class === 'Urbanizable' && 'Suelo Urbanizable - Terreno programado para desarrollo urbano. Requiere Plan Parcial aprobado.'}
+                          {profile.land_class === 'No Urbanizable' && 'Suelo No Urbanizable de especial protección. No se permite edificación.'}
+                          {!profile.land_class && 'Consultar clasificación en el PGOU municipal'}
                         </p>
+                        <div className="flex items-center gap-1 mt-2 text-xs text-muted-foreground">
+                          <FileText className="h-3 w-3" />
+                          <span>Fuente: Catastro - Sede Electrónica del Catastro (SEC)</span>
+                        </div>
                       </div>
-                      <div>
-                        <span className="text-muted-foreground">Clase:</span>
-                        <p className="font-medium">{profile.land_class || '-'}</p>
-                      </div>
-                      <div className="col-span-2">
-                        <span className="text-muted-foreground">Uso:</span>
-                        <p className="font-medium">{profile.land_use || '-'}</p>
+                      
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <span className="text-muted-foreground">Superficie:</span>
+                          <p className="font-medium">
+                            {profile.surface_area ? `${formatNumber(profile.surface_area)} m²` : '-'}
+                          </p>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Uso:</span>
+                          <p className="font-medium">{profile.land_use || '-'}</p>
+                        </div>
                       </div>
                     </div>
                   </div>

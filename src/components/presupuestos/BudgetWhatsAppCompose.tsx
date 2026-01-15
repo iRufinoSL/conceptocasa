@@ -6,10 +6,11 @@ import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { MessageSquare, Send, Phone, User, ExternalLink, X, FileText, Building2 } from 'lucide-react';
+import { MessageSquare, Send, Phone, User, ExternalLink, X, FileText, Building2, Save, CheckCircle, ListTodo } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 
 interface Contact {
@@ -41,8 +42,13 @@ export function BudgetWhatsAppCompose({ budgetId, budgetName, projectId, budgetC
   const [selectedContactId, setSelectedContactId] = useState<string>('');
   const [customPhone, setCustomPhone] = useState('');
   const [message, setMessage] = useState('');
-  const [isSending, setIsSending] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
+  
+  // New state for saved message and task creation
+  const [savedMessageId, setSavedMessageId] = useState<string | null>(null);
+  const [createTask, setCreateTask] = useState(false);
+  const [taskDescription, setTaskDescription] = useState('');
 
   // Fetch company settings for the organization WhatsApp phone
   const { data: companySettings } = useQuery({
@@ -122,6 +128,7 @@ export function BudgetWhatsAppCompose({ budgetId, budgetName, projectId, budgetC
     }
   };
 
+  // Save message mutation
   const saveMessageMutation = useMutation({
     mutationFn: async () => {
       const { data, error } = await supabase
@@ -133,7 +140,7 @@ export function BudgetWhatsAppCompose({ budgetId, budgetName, projectId, budgetC
           phone_number: phoneNumber,
           direction: 'outbound',
           message: message,
-          status: 'sent',
+          status: 'pending', // Changed to pending until actually sent
           created_by: user?.id,
         })
         .select()
@@ -142,9 +149,9 @@ export function BudgetWhatsAppCompose({ budgetId, budgetName, projectId, budgetC
       if (error) throw error;
       return data;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['whatsapp-messages', budgetId] });
-      toast.success('Mensaje registrado');
+      setSavedMessageId(data.id);
     },
     onError: (error) => {
       console.error('Error saving WhatsApp message:', error);
@@ -152,25 +159,108 @@ export function BudgetWhatsAppCompose({ budgetId, budgetName, projectId, budgetC
     },
   });
 
-  const handleSendWhatsApp = async () => {
-    if (!waUrl) {
+  // Create task mutation
+  const createTaskMutation = useMutation({
+    mutationFn: async (whatsappMessageId: string) => {
+      const contactName = selectedContact 
+        ? `${selectedContact.name} ${selectedContact.surname || ''}`.trim()
+        : phoneNumber;
+      
+      const { data, error } = await supabase
+        .from('budget_tasks')
+        .insert({
+          budget_id: budgetId,
+          name: `WhatsApp enviado a ${contactName}`,
+          description: taskDescription || `Seguimiento del mensaje enviado por WhatsApp`,
+          status: 'pendiente',
+          created_by: user?.id,
+        })
+        .select()
+        .single();
+      
+      if (error) throw error;
+      
+      // If there's a contact, link it to the task
+      if (selectedContactId) {
+        await supabase
+          .from('budget_task_contacts')
+          .insert({
+            task_id: data.id,
+            contact_id: selectedContactId,
+          });
+      }
+      
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['budget-tasks', budgetId] });
+      toast.success('Tarea creada');
+    },
+    onError: (error) => {
+      console.error('Error creating task:', error);
+      toast.error('Error al crear la tarea');
+    },
+  });
+
+  // Update message status to sent
+  const updateMessageStatusMutation = useMutation({
+    mutationFn: async (messageId: string) => {
+      const { error } = await supabase
+        .from('whatsapp_messages')
+        .update({ status: 'sent' })
+        .eq('id', messageId);
+      
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['whatsapp-messages', budgetId] });
+    },
+  });
+
+  // Step 1: Save message and optionally create task
+  const handleSaveMessage = async () => {
+    if (!phoneNumber || !message.trim()) {
       toast.error('Introduce un número y mensaje');
       return;
     }
 
-    setIsSending(true);
+    setIsSaving(true);
     
     try {
-      // Save message to database first
-      await saveMessageMutation.mutateAsync();
+      // Save message to database
+      const savedMessage = await saveMessageMutation.mutateAsync();
       
-      // Copy message to clipboard for easy pasting
+      // Create task if requested
+      if (createTask) {
+        await createTaskMutation.mutateAsync(savedMessage.id);
+      }
+      
+      toast.success('Mensaje guardado. Ahora puedes enviarlo por WhatsApp.');
+    } catch (error) {
+      console.error('Error:', error);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // Step 2: Open WhatsApp and mark as sent
+  const handleOpenWhatsApp = async () => {
+    if (!waUrl || !savedMessageId) {
+      toast.error('Primero guarda el mensaje');
+      return;
+    }
+
+    try {
+      // Copy message to clipboard
       try {
         await navigator.clipboard.writeText(message);
         toast.success('Mensaje copiado al portapapeles');
       } catch (clipboardError) {
         console.warn('Could not copy to clipboard:', clipboardError);
       }
+      
+      // Update status to sent
+      await updateMessageStatusMutation.mutateAsync(savedMessageId);
       
       // Open WhatsApp
       window.open(waUrl, '_blank');
@@ -179,12 +269,37 @@ export function BudgetWhatsAppCompose({ budgetId, budgetName, projectId, budgetC
       setMessage('');
       setSelectedContactId('');
       setCustomPhone('');
+      setSavedMessageId(null);
+      setCreateTask(false);
+      setTaskDescription('');
+      setSelectedTemplateId('');
       
       onSent?.();
     } catch (error) {
       console.error('Error:', error);
-    } finally {
-      setIsSending(false);
+    }
+  };
+
+  // Reset saved message when content changes
+  const handleMessageChange = (newMessage: string) => {
+    setMessage(newMessage);
+    if (savedMessageId) {
+      setSavedMessageId(null); // Invalidate saved message if content changes
+    }
+  };
+
+  const handleContactChange = (contactId: string) => {
+    setSelectedContactId(contactId);
+    setCustomPhone('');
+    if (savedMessageId) {
+      setSavedMessageId(null); // Invalidate saved message if contact changes
+    }
+  };
+
+  const handleCustomPhoneChange = (phone: string) => {
+    setCustomPhone(phone);
+    if (savedMessageId) {
+      setSavedMessageId(null); // Invalidate saved message if phone changes
     }
   };
 
@@ -197,6 +312,9 @@ export function BudgetWhatsAppCompose({ budgetId, budgetName, projectId, budgetC
     });
     return grouped;
   }, [templates]);
+
+  const canSave = phoneNumber && message.trim() && !savedMessageId;
+  const canSend = savedMessageId && waUrl;
 
   return (
     <Card>
@@ -219,10 +337,7 @@ export function BudgetWhatsAppCompose({ budgetId, budgetName, projectId, budgetC
         <div className="space-y-2">
           <Label>Contacto</Label>
           {contactsWithPhone.length > 0 ? (
-            <Select value={selectedContactId} onValueChange={(value) => {
-              setSelectedContactId(value);
-              setCustomPhone('');
-            }}>
+            <Select value={selectedContactId} onValueChange={handleContactChange}>
               <SelectTrigger>
                 <SelectValue placeholder="Seleccionar contacto..." />
               </SelectTrigger>
@@ -254,7 +369,7 @@ export function BudgetWhatsAppCompose({ budgetId, budgetName, projectId, budgetC
               <Input
                 placeholder="+34 600 000 000"
                 value={customPhone}
-                onChange={(e) => setCustomPhone(e.target.value)}
+                onChange={(e) => handleCustomPhoneChange(e.target.value)}
               />
             </div>
           </div>
@@ -273,7 +388,7 @@ export function BudgetWhatsAppCompose({ budgetId, budgetName, projectId, budgetC
               variant="ghost"
               size="icon"
               className="h-6 w-6 ml-auto"
-              onClick={() => setSelectedContactId('')}
+              onClick={() => handleContactChange('')}
             >
               <X className="h-3 w-3" />
             </Button>
@@ -317,32 +432,104 @@ export function BudgetWhatsAppCompose({ budgetId, budgetName, projectId, budgetC
           <Textarea
             placeholder="Escribe tu mensaje..."
             value={message}
-            onChange={(e) => setMessage(e.target.value)}
+            onChange={(e) => handleMessageChange(e.target.value)}
             rows={4}
+            disabled={!!savedMessageId}
           />
           <p className="text-xs text-muted-foreground">
             {message.length} caracteres
           </p>
         </div>
 
-        {/* Info note */}
-        <div className="p-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-lg">
-          <p className="text-xs text-amber-800 dark:text-amber-200">
-            <strong>Nota:</strong> Se abrirá WhatsApp con el mensaje preparado y el texto se copiará al portapapeles. 
-            Puedes pegarlo directamente en WhatsApp si es necesario.
-          </p>
-        </div>
+        {/* Task creation option - only show before saving */}
+        {!savedMessageId && (
+          <div className="space-y-3 p-3 border rounded-lg bg-muted/30">
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="create-task"
+                checked={createTask}
+                onCheckedChange={(checked) => setCreateTask(checked === true)}
+              />
+              <Label htmlFor="create-task" className="flex items-center gap-2 cursor-pointer">
+                <ListTodo className="h-4 w-4" />
+                Crear tarea de seguimiento
+              </Label>
+            </div>
+            
+            {createTask && (
+              <div className="space-y-2 pl-6">
+                <Label className="text-sm">Descripción de la tarea (opcional)</Label>
+                <Input
+                  placeholder="Ej: Confirmar recepción del mensaje..."
+                  value={taskDescription}
+                  onChange={(e) => setTaskDescription(e.target.value)}
+                />
+              </div>
+            )}
+          </div>
+        )}
 
-        {/* Send button */}
-        <Button
-          onClick={handleSendWhatsApp}
-          disabled={!waUrl || isSending}
-          className="w-full gap-2 bg-green-600 hover:bg-green-700"
-        >
-          <Send className="h-4 w-4" />
-          {isSending ? 'Abriendo WhatsApp...' : 'Abrir WhatsApp y Enviar'}
-          <ExternalLink className="h-3 w-3" />
-        </Button>
+        {/* Saved message indicator */}
+        {savedMessageId && (
+          <div className="p-3 bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 rounded-lg">
+            <div className="flex items-center gap-2 text-green-700 dark:text-green-300">
+              <CheckCircle className="h-4 w-4" />
+              <span className="text-sm font-medium">Mensaje guardado correctamente</span>
+            </div>
+            <p className="text-xs text-green-600 dark:text-green-400 mt-1">
+              Ahora puedes abrir WhatsApp para enviarlo. El mensaje se copiará al portapapeles.
+            </p>
+          </div>
+        )}
+
+        {/* Info note */}
+        {!savedMessageId && (
+          <div className="p-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-lg">
+            <p className="text-xs text-amber-800 dark:text-amber-200">
+              <strong>Paso 1:</strong> Primero guarda el mensaje en el sistema. 
+              <strong> Paso 2:</strong> Después podrás abrir WhatsApp para enviarlo.
+            </p>
+          </div>
+        )}
+
+        {/* Action buttons */}
+        <div className="flex gap-2">
+          {!savedMessageId ? (
+            <Button
+              onClick={handleSaveMessage}
+              disabled={!canSave || isSaving}
+              className="flex-1 gap-2"
+              variant="default"
+            >
+              <Save className="h-4 w-4" />
+              {isSaving ? 'Guardando...' : 'Guardar mensaje'}
+            </Button>
+          ) : (
+            <>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setSavedMessageId(null);
+                  setCreateTask(false);
+                  setTaskDescription('');
+                }}
+                className="gap-2"
+              >
+                <X className="h-4 w-4" />
+                Editar
+              </Button>
+              <Button
+                onClick={handleOpenWhatsApp}
+                disabled={!canSend}
+                className="flex-1 gap-2 bg-green-600 hover:bg-green-700"
+              >
+                <Send className="h-4 w-4" />
+                Abrir WhatsApp y Enviar
+                <ExternalLink className="h-3 w-3" />
+              </Button>
+            </>
+          )}
+        </div>
       </CardContent>
     </Card>
   );

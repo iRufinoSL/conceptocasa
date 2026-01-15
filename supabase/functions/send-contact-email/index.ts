@@ -42,7 +42,9 @@ interface ContactEmailRequest {
   // Housing profile fields
   isHousingProfile?: boolean;
   numPlantas?: string;
-  m2PorPlanta?: string;
+  m2Planta1?: string;
+  m2Planta2?: string;
+  m2Planta3?: string;
   formaGeometrica?: string;
   tipoTejado?: string;
   numHabitacionesTotal?: string;
@@ -319,7 +321,9 @@ const handler = async (req: Request): Promise<Response> => {
           contact_email: email,
           contact_phone: phone,
           num_plantas: requestData.numPlantas || null,
-          m2_por_planta: requestData.m2PorPlanta || null,
+          m2_planta_1: requestData.m2Planta1 || null,
+          m2_planta_2: requestData.m2Planta2 || null,
+          m2_planta_3: requestData.m2Planta3 || null,
           forma_geometrica: requestData.formaGeometrica || null,
           tipo_tejado: requestData.tipoTejado || null,
           num_habitaciones_total: requestData.numHabitacionesTotal || null,
@@ -405,7 +409,9 @@ const handler = async (req: Request): Promise<Response> => {
 
 **Características de la vivienda:**
 - Número de plantas: ${requestData.numPlantas || 'No especificado'}
-- M² por planta: ${requestData.m2PorPlanta || 'No especificado'}
+${requestData.m2Planta1 ? `- M² planta 1: ${requestData.m2Planta1}` : ''}
+${requestData.m2Planta2 ? `- M² planta 2: ${requestData.m2Planta2}` : ''}
+${requestData.m2Planta3 ? `- M² planta 3: ${requestData.m2Planta3}` : ''}
 - Forma geométrica: ${requestData.formaGeometrica || 'No especificada'}
 - Tipo de tejado: ${requestData.tipoTejado || 'No especificado'}
 
@@ -635,6 +641,9 @@ ${requestData.message || 'Sin mensaje adicional'}
 
     console.log("Notification email sent:", notificationEmail);
 
+    // Add delay to avoid Resend rate limit (max 2 requests per second)
+    await new Promise(resolve => setTimeout(resolve, 1000));
+
     // Send confirmation email to the user
     console.log("Attempting to send confirmation email to:", email);
     
@@ -666,7 +675,9 @@ ${requestData.message || 'Sin mensaje adicional'}
             
             <h3 style="color: #555; margin-top: 16px;">🏗️ Estructura</h3>
             <p style="margin: 4px 0;"><strong>Número de plantas:</strong> ${escapeHtml(requestData.numPlantas || 'No especificado')}</p>
-            <p style="margin: 4px 0;"><strong>M² por planta:</strong> ${escapeHtml(requestData.m2PorPlanta || 'No especificado')}</p>
+            ${requestData.m2Planta1 ? `<p style="margin: 4px 0;"><strong>M² planta 1:</strong> ${escapeHtml(requestData.m2Planta1)}</p>` : ''}
+            ${requestData.m2Planta2 ? `<p style="margin: 4px 0;"><strong>M² planta 2:</strong> ${escapeHtml(requestData.m2Planta2)}</p>` : ''}
+            ${requestData.m2Planta3 ? `<p style="margin: 4px 0;"><strong>M² planta 3:</strong> ${escapeHtml(requestData.m2Planta3)}</p>` : ''}
             <p style="margin: 4px 0;"><strong>Forma geométrica:</strong> ${escapeHtml(requestData.formaGeometrica || 'No especificado')}</p>
             <p style="margin: 4px 0;"><strong>Tipo de tejado:</strong> ${escapeHtml(requestData.tipoTejado || 'No especificado')}</p>
             

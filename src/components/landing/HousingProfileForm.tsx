@@ -54,7 +54,9 @@ const HousingProfileForm = ({ open, onOpenChange }: HousingProfileFormProps) => 
     message: "",
     // Campos específicos del perfil de vivienda
     numPlantas: "",
-    m2PorPlanta: "",
+    m2Planta1: "",
+    m2Planta2: "",
+    m2Planta3: "",
     formaGeometrica: "",
     tipoTejado: "",
     numHabitacionesTotal: "",
@@ -181,7 +183,7 @@ DATOS DE CONTACTO:
 
 CARACTERÍSTICAS DE LA VIVIENDA:
 - Número de plantas: ${formData.numPlantas || "No especificado"}
-- M² habitables por planta: ${formData.m2PorPlanta || "No especificado"}
+- M² planta 1: ${formData.m2Planta1 || "No especificado"}${parseInt(formData.numPlantas) >= 2 ? `\n- M² planta 2: ${formData.m2Planta2 || "No especificado"}` : ''}${parseInt(formData.numPlantas) >= 3 ? `\n- M² planta 3: ${formData.m2Planta3 || "No especificado"}` : ''}
 - Forma geométrica de la planta: ${formData.formaGeometrica || "No especificado"}
 - Tipo de tejado: ${formData.tipoTejado || "No especificado"}
 
@@ -234,7 +236,9 @@ ${formData.message || "Sin mensaje adicional"}
           attachmentNames: attachments.length > 0 ? attachments.map(f => f.name) : undefined,
           // Send all form fields for database storage
           numPlantas: formData.numPlantas,
-          m2PorPlanta: formData.m2PorPlanta,
+          m2Planta1: formData.m2Planta1,
+          m2Planta2: formData.m2Planta2,
+          m2Planta3: formData.m2Planta3,
           formaGeometrica: formData.formaGeometrica,
           tipoTejado: formData.tipoTejado,
           numHabitacionesTotal: formData.numHabitacionesTotal,
@@ -270,7 +274,9 @@ ${formData.message || "Sin mensaje adicional"}
         phone: "",
         message: "",
         numPlantas: "",
-        m2PorPlanta: "",
+        m2Planta1: "",
+        m2Planta2: "",
+        m2Planta3: "",
         formaGeometrica: "",
         tipoTejado: "",
         numHabitacionesTotal: "",
@@ -372,26 +378,56 @@ ${formData.message || "Sin mensaje adicional"}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div>
                   <label className="text-sm font-medium text-foreground">¿Cuántas plantas?</label>
-                  <Input 
-                    name="numPlantas"
-                    value={formData.numPlantas}
-                    onChange={handleInputChange}
-                    className="mt-1" 
-                    placeholder="Ej: 2" 
-                    maxLength={50}
-                  />
+                  <Select value={formData.numPlantas} onValueChange={(v) => handleSelectChange("numPlantas", v)}>
+                    <SelectTrigger className="mt-1">
+                      <SelectValue placeholder="Seleccionar..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="1">1 planta</SelectItem>
+                      <SelectItem value="2">2 plantas</SelectItem>
+                      <SelectItem value="3">3 plantas</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
-                <div>
-                  <label className="text-sm font-medium text-foreground">M² habitables por planta</label>
-                  <Input 
-                    name="m2PorPlanta"
-                    value={formData.m2PorPlanta}
-                    onChange={handleInputChange}
-                    className="mt-1" 
-                    placeholder="Ej: 80" 
-                    maxLength={50}
-                  />
-                </div>
+                {parseInt(formData.numPlantas) >= 1 && (
+                  <div>
+                    <label className="text-sm font-medium text-foreground">M² habitables planta 1</label>
+                    <Input 
+                      name="m2Planta1"
+                      value={formData.m2Planta1}
+                      onChange={handleInputChange}
+                      className="mt-1" 
+                      placeholder="Ej: 80" 
+                      maxLength={50}
+                    />
+                  </div>
+                )}
+                {parseInt(formData.numPlantas) >= 2 && (
+                  <div>
+                    <label className="text-sm font-medium text-foreground">M² habitables planta 2</label>
+                    <Input 
+                      name="m2Planta2"
+                      value={formData.m2Planta2}
+                      onChange={handleInputChange}
+                      className="mt-1" 
+                      placeholder="Ej: 60" 
+                      maxLength={50}
+                    />
+                  </div>
+                )}
+                {parseInt(formData.numPlantas) >= 3 && (
+                  <div>
+                    <label className="text-sm font-medium text-foreground">M² habitables planta 3</label>
+                    <Input 
+                      name="m2Planta3"
+                      value={formData.m2Planta3}
+                      onChange={handleInputChange}
+                      className="mt-1" 
+                      placeholder="Ej: 40" 
+                      maxLength={50}
+                    />
+                  </div>
+                )}
                 <div>
                   <label className="text-sm font-medium text-foreground">Forma geométrica</label>
                   <Select value={formData.formaGeometrica} onValueChange={(v) => handleSelectChange("formaGeometrica", v)}>

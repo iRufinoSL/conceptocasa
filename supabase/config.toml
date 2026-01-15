@@ -10,13 +10,13 @@ verify_jwt = true
 verify_jwt = true
 
 [functions.send-email]
-verify_jwt = false
+verify_jwt = true
 
 [functions.process-inbound-email]
 verify_jwt = false
 
 [functions.search-resources]
-verify_jwt = false
+verify_jwt = true
 
 [functions.send-daily-tasks]
 verify_jwt = false

@@ -371,62 +371,50 @@ export function UrbanProfileCard({ budgetId, cadastralReference: initialRef, isA
                       <div className="grid grid-cols-2 gap-2">
                         <div>
                           <span className="text-muted-foreground">Superficie gráfica:</span>
-                          {isEditingSurface ? (
-                            <div className="flex items-center gap-2 mt-1">
-                              <NumericInput
-                                value={manualSurface}
-                                onChange={setManualSurface}
-                                placeholder="616"
-                                className="w-24 h-8"
-                                min={0}
-                                max={999999}
-                              />
-                              <span className="text-sm text-muted-foreground">m²</span>
-                              <Button 
-                                size="sm" 
-                                variant="outline"
-                                onClick={handleSaveSurface}
-                                disabled={isSavingSurface}
-                                className="h-8 px-2"
-                              >
-                                {isSavingSurface ? (
-                                  <Loader2 className="h-3 w-3 animate-spin" />
-                                ) : (
-                                  <CheckCircle2 className="h-3 w-3" />
-                                )}
-                              </Button>
-                              <Button 
-                                size="sm" 
-                                variant="ghost"
-                                onClick={() => {
-                                  setIsEditingSurface(false);
-                                  setManualSurface(profile.surface_area || undefined);
-                                }}
-                                className="h-8 px-2"
-                              >
-                                ✕
-                              </Button>
-                            </div>
-                          ) : (
-                            <div className="flex items-center gap-2">
-                              <p className="font-medium">
-                                {profile.surface_area ? `${formatNumber(profile.surface_area)} m²` : '-'}
-                              </p>
-                              {isAdmin && (
+                          <div className="flex items-center gap-2 mt-1">
+                            <NumericInput
+                              value={manualSurface}
+                              onChange={(value) => {
+                                setManualSurface(value);
+                                setIsEditingSurface(true);
+                              }}
+                              placeholder="Introducir m²"
+                              className="w-28 h-8"
+                              min={0}
+                              max={999999}
+                            />
+                            <span className="text-sm text-muted-foreground">m²</span>
+                            {isEditingSurface && manualSurface !== profile.surface_area && (
+                              <>
                                 <Button 
                                   size="sm" 
-                                  variant="ghost" 
-                                  onClick={() => {
-                                    setManualSurface(profile.surface_area || undefined);
-                                    setIsEditingSurface(true);
-                                  }}
-                                  className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground"
+                                  variant="outline"
+                                  onClick={handleSaveSurface}
+                                  disabled={isSavingSurface}
+                                  className="h-8 px-2"
+                                  title="Guardar"
                                 >
-                                  Editar
+                                  {isSavingSurface ? (
+                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                  ) : (
+                                    <CheckCircle2 className="h-3 w-3 text-green-600" />
+                                  )}
                                 </Button>
-                              )}
-                            </div>
-                          )}
+                                <Button 
+                                  size="sm" 
+                                  variant="ghost"
+                                  onClick={() => {
+                                    setIsEditingSurface(false);
+                                    setManualSurface(profile.surface_area || undefined);
+                                  }}
+                                  className="h-8 px-2"
+                                  title="Cancelar"
+                                >
+                                  ✕
+                                </Button>
+                              </>
+                            )}
+                          </div>
                         </div>
                         <div>
                           <span className="text-muted-foreground">Uso:</span>

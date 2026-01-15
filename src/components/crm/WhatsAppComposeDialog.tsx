@@ -5,10 +5,16 @@ import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { MessageCircle, Save, Send, CheckCircle2 } from 'lucide-react';
+import { MessageCircle, Save, Send, CheckCircle2, CalendarIcon, Clock, Repeat } from 'lucide-react';
+import { format } from 'date-fns';
+import { es } from 'date-fns/locale';
+import { cn } from '@/lib/utils';
 
 interface Contact {
   id: string;
@@ -35,9 +41,22 @@ export function WhatsAppComposeDialog({
   const [message, setMessage] = useState('');
   const [createTask, setCreateTask] = useState(false);
   const [taskName, setTaskName] = useState('');
+  const [taskDate, setTaskDate] = useState<Date | undefined>(undefined);
+  const [taskTime, setTaskTime] = useState('');
+  const [taskRepeatDaily, setTaskRepeatDaily] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [savedMessageId, setSavedMessageId] = useState<string | null>(null);
   const [messageCopied, setMessageCopied] = useState(false);
+
+  // Generate time options (every 30 minutes)
+  const timeOptions = [];
+  for (let h = 0; h < 24; h++) {
+    for (let m = 0; m < 60; m += 30) {
+      const hour = h.toString().padStart(2, '0');
+      const minute = m.toString().padStart(2, '0');
+      timeOptions.push(`${hour}:${minute}`);
+    }
+  }
 
   // Reset state when dialog opens or contact changes
   useEffect(() => {
@@ -45,6 +64,9 @@ export function WhatsAppComposeDialog({
       setMessage('');
       setCreateTask(false);
       setTaskName('');
+      setTaskDate(undefined);
+      setTaskTime('');
+      setTaskRepeatDaily(false);
       setSavedMessageId(null);
       setMessageCopied(false);
     }
@@ -99,15 +121,29 @@ export function WhatsAppComposeDialog({
 
       // Create task if requested
       if (createTask && taskName.trim()) {
+        // Prepare task data
+        const taskData: any = {
+          name: taskName.trim(),
+          description: `Seguimiento de WhatsApp enviado a ${contact.name}${contact.surname ? ' ' + contact.surname : ''}${taskRepeatDaily ? '\n🔄 Repetir diariamente hasta completar' : ''}`,
+          budget_id: budgetId || null,
+          status: 'pending',
+          created_by: user?.id
+        };
+
+        // Add date if specified
+        if (taskDate) {
+          taskData.target_date = format(taskDate, 'yyyy-MM-dd');
+          taskData.start_date = format(taskDate, 'yyyy-MM-dd');
+        }
+
+        // Add time if specified
+        if (taskTime) {
+          taskData.start_time = taskTime;
+        }
+
         const { error: taskError } = await supabase
           .from('budget_tasks')
-          .insert({
-            name: taskName.trim(),
-            description: `Seguimiento de WhatsApp enviado a ${contact.name}${contact.surname ? ' ' + contact.surname : ''}`,
-            budget_id: budgetId || null,
-            status: 'pending',
-            created_by: user?.id
-          });
+          .insert(taskData);
 
         if (taskError) {
           console.error('Error creating task:', taskError);
@@ -221,13 +257,76 @@ export function WhatsAppComposeDialog({
               </div>
 
               {createTask && (
-                <div className="space-y-2 ml-6">
-                  <Label className="text-sm">Nombre de la tarea</Label>
-                  <Input
-                    value={taskName}
-                    onChange={(e) => setTaskName(e.target.value)}
-                    placeholder={`Seguimiento WhatsApp - ${contactFullName}`}
-                  />
+                <div className="space-y-3 ml-6">
+                  <div className="space-y-2">
+                    <Label className="text-sm">Nombre de la tarea</Label>
+                    <Input
+                      value={taskName}
+                      onChange={(e) => setTaskName(e.target.value)}
+                      placeholder={`Seguimiento WhatsApp - ${contactFullName}`}
+                    />
+                  </div>
+                  
+                  {/* Date and Time */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <Label className="text-xs text-muted-foreground">Fecha</Label>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className={cn(
+                              "w-full justify-start text-left font-normal h-8",
+                              !taskDate && "text-muted-foreground"
+                            )}
+                          >
+                            <CalendarIcon className="mr-2 h-3 w-3" />
+                            {taskDate ? format(taskDate, "d MMM", { locale: es }) : "Seleccionar"}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                          <Calendar
+                            mode="single"
+                            selected={taskDate}
+                            onSelect={setTaskDate}
+                            initialFocus
+                            locale={es}
+                          />
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+                    
+                    <div className="space-y-1">
+                      <Label className="text-xs text-muted-foreground">Hora</Label>
+                      <Select value={taskTime} onValueChange={setTaskTime}>
+                        <SelectTrigger className="h-8">
+                          <Clock className="mr-2 h-3 w-3" />
+                          <SelectValue placeholder="HH:MM" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {timeOptions.map((time) => (
+                            <SelectItem key={time} value={time}>
+                              {time}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  
+                  {/* Repeat daily option */}
+                  <div className="flex items-center space-x-2 pt-1">
+                    <Checkbox
+                      id="repeatDaily"
+                      checked={taskRepeatDaily}
+                      onCheckedChange={(checked) => setTaskRepeatDaily(checked === true)}
+                    />
+                    <Label htmlFor="repeatDaily" className="cursor-pointer text-sm flex items-center gap-1">
+                      <Repeat className="h-3 w-3" />
+                      Repetir aviso diariamente hasta completar
+                    </Label>
+                  </div>
                 </div>
               )}
             </div>

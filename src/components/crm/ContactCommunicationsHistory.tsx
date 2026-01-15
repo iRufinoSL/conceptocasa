@@ -15,7 +15,7 @@ import { es } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { 
   Mail, MessageSquare, Search, ArrowUpRight, ArrowDownLeft, 
-  Phone, Calendar, Clock, Eye, Plus
+  Phone, Calendar, Clock, Eye, Plus, Maximize2, X
 } from 'lucide-react';
 
 interface ContactCommunicationsHistoryProps {
@@ -51,6 +51,7 @@ export function ContactCommunicationsHistory({ contactId, contactPhone }: Contac
   const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState('all');
   const [registerDialogOpen, setRegisterDialogOpen] = useState(false);
+  const [expandedDialogOpen, setExpandedDialogOpen] = useState(false);
   const [newMessage, setNewMessage] = useState('');
   const [newNotes, setNewNotes] = useState('');
   const queryClient = useQueryClient();
@@ -191,15 +192,26 @@ export function ContactCommunicationsHistory({ contactId, contactPhone }: Contac
               <Mail className="h-4 w-4" />
               Historial de Comunicaciones
             </CardTitle>
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-7 text-xs gap-1"
-              onClick={() => setRegisterDialogOpen(true)}
-            >
-              <Plus className="h-3 w-3" />
-              Registrar WA recibido
-            </Button>
+            <div className="flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 w-7 p-0"
+                onClick={() => setExpandedDialogOpen(true)}
+                title="Expandir a pantalla completa"
+              >
+                <Maximize2 className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs gap-1"
+                onClick={() => setRegisterDialogOpen(true)}
+              >
+                <Plus className="h-3 w-3" />
+                Registrar WA recibido
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent className="space-y-4 py-0 pb-4">
@@ -381,6 +393,161 @@ export function ContactCommunicationsHistory({ contactId, contactPhone }: Contac
               className="gap-1"
             >
               {saveReceivedWhatsApp.isPending ? 'Guardando...' : 'Guardar'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Expanded Full-Screen Communications Dialog */}
+      <Dialog open={expandedDialogOpen} onOpenChange={setExpandedDialogOpen}>
+        <DialogContent className="max-w-4xl h-[90vh] flex flex-col">
+          <DialogHeader className="flex-shrink-0">
+            <div className="flex items-center justify-between">
+              <DialogTitle className="flex items-center gap-2">
+                <Mail className="h-5 w-5" />
+                Historial de Comunicaciones
+              </DialogTitle>
+            </div>
+          </DialogHeader>
+          
+          <div className="flex-1 flex flex-col gap-4 overflow-hidden py-4">
+            {/* Stats */}
+            <div className="grid grid-cols-2 gap-3 flex-shrink-0">
+              <div className="p-3 rounded-lg bg-blue-50 dark:bg-blue-950/20 text-center">
+                <div className="flex items-center justify-center gap-2 text-blue-600">
+                  <Mail className="h-4 w-4" />
+                  <span className="text-lg font-bold">{stats.totalEmails}</span>
+                </div>
+                <p className="text-sm text-muted-foreground">Emails</p>
+                <p className="text-sm text-muted-foreground">
+                  ↑ {stats.sentEmails} enviados · ↓ {stats.receivedEmails} recibidos
+                </p>
+              </div>
+              <div className="p-3 rounded-lg bg-green-50 dark:bg-green-950/20 text-center">
+                <div className="flex items-center justify-center gap-2 text-green-600">
+                  <MessageSquare className="h-4 w-4" />
+                  <span className="text-lg font-bold">{stats.totalWhatsApp}</span>
+                </div>
+                <p className="text-sm text-muted-foreground">WhatsApp</p>
+                <p className="text-sm text-muted-foreground">
+                  ↑ {stats.sentWhatsApp} enviados · ↓ {stats.receivedWhatsApp} recibidos
+                </p>
+              </div>
+            </div>
+
+            {/* Search */}
+            <div className="relative flex-shrink-0">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Buscar en comunicaciones..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-9"
+              />
+            </div>
+
+            {/* Tabs */}
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-shrink-0">
+              <TabsList className="grid w-full grid-cols-3">
+                <TabsTrigger value="all">Todo ({allMessages.length})</TabsTrigger>
+                <TabsTrigger value="email" className="gap-1">
+                  <Mail className="h-4 w-4" /> Email ({filteredEmails.length})
+                </TabsTrigger>
+                <TabsTrigger value="whatsapp" className="gap-1">
+                  <MessageSquare className="h-4 w-4" /> WhatsApp ({filteredWhatsApp.length})
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
+
+            {/* Messages list - takes remaining space */}
+            <ScrollArea className="flex-1 min-h-0">
+              <div className="space-y-3 pr-4">
+                {filteredAll.length === 0 ? (
+                  <p className="text-muted-foreground text-center py-8">
+                    No hay comunicaciones registradas
+                  </p>
+                ) : (
+                  filteredAll.map((item) => {
+                    const isEmail = item.type === 'email';
+                    const isInbound = item.direction === 'inbound';
+                    
+                    return (
+                      <div
+                        key={`expanded-${item.type}-${item.id}`}
+                        className={`p-4 rounded-lg border ${isInbound ? 'border-l-4 border-l-green-500' : 'border-l-4 border-l-blue-500'} bg-card`}
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className={`p-2 rounded-full ${isEmail ? 'bg-blue-100 dark:bg-blue-900/30' : 'bg-green-100 dark:bg-green-900/30'}`}>
+                            {isEmail ? (
+                              <Mail className="h-4 w-4 text-blue-600" />
+                            ) : (
+                              <MessageSquare className="h-4 w-4 text-green-600" />
+                            )}
+                          </div>
+                          
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap mb-1">
+                              {isInbound ? (
+                                <ArrowDownLeft className="h-4 w-4 text-green-600" />
+                              ) : (
+                                <ArrowUpRight className="h-4 w-4 text-blue-600" />
+                              )}
+                              <span className="text-sm font-medium">
+                                {isInbound ? 'Recibido' : 'Enviado'}
+                              </span>
+                              <Badge className={`text-xs ${getStatusColor(item.status)}`}>
+                                {item.status}
+                              </Badge>
+                              <span className="text-xs text-muted-foreground ml-auto flex items-center gap-1">
+                                <Calendar className="h-3 w-3" />
+                                {format(new Date(item.created_at), "d MMM yyyy 'a las' HH:mm", { locale: es })}
+                              </span>
+                            </div>
+                            
+                            {isEmail ? (
+                              <>
+                                <p className="font-medium">
+                                  {(item as EmailMessage).subject || '(Sin asunto)'}
+                                </p>
+                                {(item as EmailMessage).body_text && (
+                                  <p className="text-sm text-muted-foreground mt-1 line-clamp-3">
+                                    {(item as EmailMessage).body_text}
+                                  </p>
+                                )}
+                              </>
+                            ) : (
+                              <>
+                                <p className="text-sm mt-1 whitespace-pre-wrap">
+                                  {(item as WhatsAppMessage).message}
+                                </p>
+                                {(item as WhatsAppMessage).notes && (
+                                  <p className="text-xs mt-2 text-muted-foreground italic bg-muted/50 p-2 rounded">
+                                    📝 {(item as WhatsAppMessage).notes}
+                                  </p>
+                                )}
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </ScrollArea>
+          </div>
+
+          <DialogFooter className="flex-shrink-0 border-t pt-4">
+            <Button
+              variant="outline"
+              onClick={() => setRegisterDialogOpen(true)}
+              className="gap-1"
+            >
+              <Plus className="h-4 w-4" />
+              Registrar WA recibido
+            </Button>
+            <Button onClick={() => setExpandedDialogOpen(false)}>
+              Cerrar
             </Button>
           </DialogFooter>
         </DialogContent>

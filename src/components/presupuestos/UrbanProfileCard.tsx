@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import type { Json } from '@/integrations/supabase/types';
 import { Button } from '@/components/ui/button';
@@ -28,9 +28,11 @@ import {
   MoveVertical,
   Landmark,
   Plus,
-  Trash2
+  Trash2,
+  Upload
 } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import * as pdfjsLib from 'pdfjs-dist';
 
 interface AdditionalRestriction {
   id: string;
@@ -233,11 +235,13 @@ export function UrbanProfileCard({ budgetId, cadastralReference: initialRef, isA
   const [isLoading, setIsLoading] = useState(true);
   const [isSearching, setIsSearching] = useState(false);
   const [isSearchingRegulations, setIsSearchingRegulations] = useState(false);
+  const [isProcessingPdf, setIsProcessingPdf] = useState(false);
   const [isSavingSurface, setIsSavingSurface] = useState(false);
   const [searchRef, setSearchRef] = useState(initialRef || '');
   const [isExpanded, setIsExpanded] = useState(true);
   const [manualSurface, setManualSurface] = useState<number | undefined>(undefined);
   const [isEditingSurface, setIsEditingSurface] = useState(false);
+  const pdfInputRef = useRef<HTMLInputElement>(null);
   
   // Coordinates state
   const [coordLat, setCoordLat] = useState<number | undefined>(undefined);
@@ -245,6 +249,11 @@ export function UrbanProfileCard({ budgetId, cadastralReference: initialRef, isA
   const [coordSource, setCoordSource] = useState('');
   const [isSavingCoords, setIsSavingCoords] = useState(false);
   const [isEditingCoords, setIsEditingCoords] = useState(false);
+
+  // Initialize PDF.js worker
+  useEffect(() => {
+    pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+  }, []);
 
   const fetchProfile = async () => {
     try {
@@ -542,6 +551,123 @@ export function UrbanProfileCard({ budgetId, cadastralReference: initialRef, isA
     }
   };
 
+  const handlePdfUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (file.type !== 'application/pdf') {
+      toast({
+        variant: 'destructive',
+        title: 'Archivo no válido',
+        description: 'Por favor, selecciona un archivo PDF',
+      });
+      return;
+    }
+
+    if (file.size > 20 * 1024 * 1024) {
+      toast({
+        variant: 'destructive',
+        title: 'Archivo demasiado grande',
+        description: 'El PDF no puede superar los 20MB',
+      });
+      return;
+    }
+
+    setIsProcessingPdf(true);
+    toast({
+      title: 'Procesando PDF...',
+      description: 'Extrayendo texto del documento. Esto puede tardar unos segundos.',
+    });
+
+    try {
+      // Read the PDF file
+      const arrayBuffer = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      
+      let fullText = '';
+      const maxPages = Math.min(pdf.numPages, 50); // Limit to 50 pages
+
+      toast({
+        title: 'Extrayendo texto...',
+        description: `Procesando ${maxPages} de ${pdf.numPages} páginas`,
+      });
+
+      for (let i = 1; i <= maxPages; i++) {
+        const page = await pdf.getPage(i);
+        const textContent = await page.getTextContent();
+        const pageText = textContent.items
+          .map((item: any) => item.str)
+          .join(' ');
+        fullText += pageText + '\n\n';
+      }
+
+      if (fullText.trim().length < 100) {
+        toast({
+          variant: 'destructive',
+          title: 'PDF sin texto legible',
+          description: 'El PDF parece ser una imagen escaneada. Prueba con un PDF con texto seleccionable.',
+        });
+        return;
+      }
+
+      toast({
+        title: 'Analizando con IA...',
+        description: 'Extrayendo parámetros urbanísticos del documento',
+      });
+
+      // Send to edge function for AI processing
+      const { data, error } = await supabase.functions.invoke('extract-pgou-data', {
+        body: {
+          pdfText: fullText,
+          municipality: profile?.municipality,
+          landClass: profile?.land_class || 'Urbano',
+          budgetId,
+        },
+      });
+
+      if (error) throw error;
+
+      if (data?.success) {
+        const valuesFound = data.data?.valuesFound || 0;
+        
+        if (data.data?.parseError) {
+          toast({
+            title: 'Análisis completado',
+            description: 'Se procesó el PDF pero no se pudo estructurar la información automáticamente.',
+          });
+        } else if (valuesFound === 0) {
+          toast({
+            variant: 'default',
+            title: 'No se encontraron datos',
+            description: 'El PDF no contiene los parámetros urbanísticos buscados o están en un formato no reconocible.',
+          });
+        } else {
+          toast({
+            title: '¡Datos extraídos correctamente!',
+            description: `Se han encontrado ${valuesFound} parámetros urbanísticos en el PDF`,
+          });
+        }
+
+        await fetchProfile();
+      } else {
+        throw new Error(data?.error || 'Error al procesar el PDF');
+      }
+    } catch (error) {
+      console.error('Error processing PDF:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Error al procesar PDF',
+        description: error instanceof Error ? error.message : 'No se pudo extraer la información del PDF',
+      });
+    } finally {
+      setIsProcessingPdf(false);
+      // Reset file input
+      if (pdfInputRef.current) {
+        pdfInputRef.current.value = '';
+      }
+    }
+  };
+
   const getStatusInfo = () => {
     const status = profile?.analysis_status || 'pending';
     return statusLabels[status] || statusLabels.pending;
@@ -646,25 +772,56 @@ export function UrbanProfileCard({ budgetId, cadastralReference: initialRef, isA
               
               {/* Search Urban Regulations Button - only show after catastro data is loaded */}
               {profile && profile.municipality && (
-                <Button 
-                  onClick={handleSearchRegulations} 
-                  disabled={isSearchingRegulations}
-                  variant="secondary"
-                  className="w-full"
-                  size="lg"
-                >
-                  {isSearchingRegulations ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                      Buscando normativa urbanística...
-                    </>
-                  ) : (
-                    <>
-                      <FileText className="h-4 w-4 mr-2" />
-                      Buscar Normativa Urbanística (PGOU)
-                    </>
-                  )}
-                </Button>
+                <div className="flex gap-2">
+                  <Button 
+                    onClick={handleSearchRegulations} 
+                    disabled={isSearchingRegulations || isProcessingPdf}
+                    variant="secondary"
+                    className="flex-1"
+                    size="lg"
+                  >
+                    {isSearchingRegulations ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                        Buscando en web...
+                      </>
+                    ) : (
+                      <>
+                        <Search className="h-4 w-4 mr-2" />
+                        Buscar PGOU en Web
+                      </>
+                    )}
+                  </Button>
+                  
+                  {/* Hidden file input for PDF upload */}
+                  <input
+                    type="file"
+                    ref={pdfInputRef}
+                    accept="application/pdf"
+                    onChange={handlePdfUpload}
+                    className="hidden"
+                  />
+                  
+                  <Button 
+                    onClick={() => pdfInputRef.current?.click()} 
+                    disabled={isProcessingPdf || isSearchingRegulations}
+                    variant="outline"
+                    size="lg"
+                    className="flex-1"
+                  >
+                    {isProcessingPdf ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                        Procesando PDF...
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="h-4 w-4 mr-2" />
+                        Subir PDF del PGOU
+                      </>
+                    )}
+                  </Button>
+                </div>
               )}
             </div>
 

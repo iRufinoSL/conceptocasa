@@ -7,7 +7,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
-import { 
+import { NumericInput } from '@/components/ui/numeric-input';
+import {
   MapPin, 
   Building2, 
   Ruler, 
@@ -95,8 +96,11 @@ export function UrbanProfileCard({ budgetId, cadastralReference: initialRef, isA
   const [profile, setProfile] = useState<UrbanProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSearching, setIsSearching] = useState(false);
+  const [isSavingSurface, setIsSavingSurface] = useState(false);
   const [searchRef, setSearchRef] = useState(initialRef || '');
   const [isExpanded, setIsExpanded] = useState(true);
+  const [manualSurface, setManualSurface] = useState<number | undefined>(undefined);
+  const [isEditingSurface, setIsEditingSurface] = useState(false);
 
   const fetchProfile = async () => {
     try {
@@ -113,10 +117,43 @@ export function UrbanProfileCard({ budgetId, cadastralReference: initialRef, isA
       if (data?.cadastral_reference) {
         setSearchRef(data.cadastral_reference);
       }
+      if (data?.surface_area) {
+        setManualSurface(data.surface_area);
+      }
     } catch (error) {
       console.error('Error fetching urban profile:', error);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleSaveSurface = async () => {
+    if (!profile?.id || manualSurface === undefined) return;
+    
+    setIsSavingSurface(true);
+    try {
+      const { error } = await supabase
+        .from('urban_profiles')
+        .update({ surface_area: manualSurface })
+        .eq('id', profile.id);
+      
+      if (error) throw error;
+      
+      setProfile(prev => prev ? { ...prev, surface_area: manualSurface } : prev);
+      setIsEditingSurface(false);
+      toast({
+        title: 'Superficie actualizada',
+        description: `Superficie gráfica: ${manualSurface} m²`,
+      });
+    } catch (error) {
+      console.error('Error saving surface:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'No se pudo guardar la superficie',
+      });
+    } finally {
+      setIsSavingSurface(false);
     }
   };
 
@@ -333,10 +370,63 @@ export function UrbanProfileCard({ budgetId, cadastralReference: initialRef, isA
                       
                       <div className="grid grid-cols-2 gap-2">
                         <div>
-                          <span className="text-muted-foreground">Superficie:</span>
-                          <p className="font-medium">
-                            {profile.surface_area ? `${formatNumber(profile.surface_area)} m²` : '-'}
-                          </p>
+                          <span className="text-muted-foreground">Superficie gráfica:</span>
+                          {isEditingSurface ? (
+                            <div className="flex items-center gap-2 mt-1">
+                              <NumericInput
+                                value={manualSurface}
+                                onChange={setManualSurface}
+                                placeholder="616"
+                                className="w-24 h-8"
+                                min={0}
+                                max={999999}
+                              />
+                              <span className="text-sm text-muted-foreground">m²</span>
+                              <Button 
+                                size="sm" 
+                                variant="outline"
+                                onClick={handleSaveSurface}
+                                disabled={isSavingSurface}
+                                className="h-8 px-2"
+                              >
+                                {isSavingSurface ? (
+                                  <Loader2 className="h-3 w-3 animate-spin" />
+                                ) : (
+                                  <CheckCircle2 className="h-3 w-3" />
+                                )}
+                              </Button>
+                              <Button 
+                                size="sm" 
+                                variant="ghost"
+                                onClick={() => {
+                                  setIsEditingSurface(false);
+                                  setManualSurface(profile.surface_area || undefined);
+                                }}
+                                className="h-8 px-2"
+                              >
+                                ✕
+                              </Button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2">
+                              <p className="font-medium">
+                                {profile.surface_area ? `${formatNumber(profile.surface_area)} m²` : '-'}
+                              </p>
+                              {isAdmin && (
+                                <Button 
+                                  size="sm" 
+                                  variant="ghost" 
+                                  onClick={() => {
+                                    setManualSurface(profile.surface_area || undefined);
+                                    setIsEditingSurface(true);
+                                  }}
+                                  className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground"
+                                >
+                                  Editar
+                                </Button>
+                              )}
+                            </div>
+                          )}
                         </div>
                         <div>
                           <span className="text-muted-foreground">Uso:</span>

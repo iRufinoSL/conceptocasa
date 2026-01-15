@@ -64,7 +64,38 @@ function parseCadastralReference(ref: string): { provinceCode: string; municipal
 }
 
 async function lookupCadastralReference(ref: string): Promise<CatastroData | null> {
-  const cleanRef = ref.replace(/\s/g, '').toUpperCase();
+  // Clean the input: remove common prefixes like "Referencia catastral", extra spaces, etc.
+  let cleanRef = ref.toUpperCase().trim();
+  
+  // Remove common Spanish prefixes that users might copy-paste
+  const prefixesToRemove = [
+    'REFERENCIA CATASTRAL:',
+    'REFERENCIA CATASTRAL',
+    'REF. CATASTRAL:',
+    'REF. CATASTRAL',
+    'REF CATASTRAL:',
+    'REF CATASTRAL',
+    'RC:',
+    'RC',
+  ];
+  
+  for (const prefix of prefixesToRemove) {
+    if (cleanRef.startsWith(prefix)) {
+      cleanRef = cleanRef.substring(prefix.length).trim();
+      break;
+    }
+  }
+  
+  // Remove all spaces and ensure uppercase
+  cleanRef = cleanRef.replace(/\s/g, '');
+  
+  // Validate cadastral reference format (should be 14-20 alphanumeric characters)
+  if (cleanRef.length < 14 || cleanRef.length > 20) {
+    console.log(`Invalid cadastral reference length: ${cleanRef.length} (expected 14-20)`);
+    // Still try to query, catastro will return proper error
+  }
+  
+  console.log('Cleaned cadastral reference:', cleanRef);
   
   // Use the Catastro OVC (Oficina Virtual del Catastro) web service
   // Documentation: https://ovc.catastro.meh.es/ovcservweb/ovcswlocalizacionrc/ovccoordenadas.asmx

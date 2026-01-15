@@ -501,16 +501,27 @@ export function UrbanProfileCard({ budgetId, cadastralReference: initialRef, isA
 
       if (data?.success) {
         const regulations = data.data;
+        const valuesFound = regulations.valuesFound || 0;
         
         if (regulations.parseError) {
           toast({
             title: 'Búsqueda completada',
             description: 'Se encontró información pero no se pudo estructurar automáticamente. Revisa los campos manualmente.',
           });
+        } else if (valuesFound === 0) {
+          // No numeric values found, but sources may be available
+          const sourcesCount = regulations.sources?.length || 0;
+          toast({
+            variant: 'default',
+            title: 'Búsqueda completada',
+            description: sourcesCount > 0 
+              ? `No se encontraron valores numéricos específicos en el PGOU de ${profile.municipality}. Se encontraron ${sourcesCount} fuentes que puedes consultar manualmente. Revisa las notas de análisis.`
+              : `No se encontraron datos específicos en el PGOU de ${profile.municipality}. Puedes introducir los valores manualmente.`,
+          });
         } else {
           toast({
             title: 'Normativa urbanística encontrada',
-            description: `Se han actualizado los campos con datos del PGOU de ${profile.municipality}`,
+            description: `Se han actualizado ${valuesFound} campos con datos del PGOU de ${profile.municipality}`,
           });
         }
         

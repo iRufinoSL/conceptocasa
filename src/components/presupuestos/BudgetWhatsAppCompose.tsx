@@ -164,6 +164,14 @@ export function BudgetWhatsAppCompose({ budgetId, budgetName, projectId, budgetC
       // Save message to database first
       await saveMessageMutation.mutateAsync();
       
+      // Copy message to clipboard for easy pasting
+      try {
+        await navigator.clipboard.writeText(message);
+        toast.success('Mensaje copiado al portapapeles');
+      } catch (clipboardError) {
+        console.warn('Could not copy to clipboard:', clipboardError);
+      }
+      
       // Open WhatsApp
       window.open(waUrl, '_blank');
       
@@ -320,8 +328,8 @@ export function BudgetWhatsAppCompose({ budgetId, budgetName, projectId, budgetC
         {/* Info note */}
         <div className="p-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-lg">
           <p className="text-xs text-amber-800 dark:text-amber-200">
-            <strong>Nota:</strong> Se abrirá WhatsApp con el mensaje preparado. 
-            Los adjuntos deben añadirse manualmente en WhatsApp.
+            <strong>Nota:</strong> Se abrirá WhatsApp con el mensaje preparado y el texto se copiará al portapapeles. 
+            Puedes pegarlo directamente en WhatsApp si es necesario.
           </p>
         </div>
 

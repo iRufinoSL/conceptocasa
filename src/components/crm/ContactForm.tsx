@@ -105,6 +105,7 @@ export function ContactForm({ open, onOpenChange, contact, onSuccess }: ContactF
     email: '',
     phone: '+34 ',
     secondary_phones: [] as string[],
+    secondary_emails: [] as string[],
     contact_type: 'Persona',
     status: 'Prospecto',
     address: '',
@@ -162,6 +163,7 @@ export function ContactForm({ open, onOpenChange, contact, onSuccess }: ContactF
             email: fullContact.email || '',
             phone: fullContact.phone || '+34 ',
             secondary_phones: fullContact.secondary_phones || [],
+            secondary_emails: (fullContact as any).secondary_emails || [],
             contact_type: fullContact.contact_type || 'Persona',
             status: fullContact.status || 'Prospecto',
             address: fullContact.address || '',
@@ -257,7 +259,8 @@ export function ContactForm({ open, onOpenChange, contact, onSuccess }: ContactF
         surname: '',
         email: '',
         phone: '+34 ',
-        secondary_phones: [],
+        secondary_phones: [] as string[],
+        secondary_emails: [] as string[],
         contact_type: 'Persona',
         status: 'Prospecto',
         address: '',
@@ -268,7 +271,7 @@ export function ContactForm({ open, onOpenChange, contact, onSuccess }: ContactF
         nif_dni: '',
         website: '',
         observations: '',
-        tags: []
+        tags: [] as string[]
       });
       setSelectedActivityIds([]);
       setSelectedRelatedContactIds([]);
@@ -394,6 +397,9 @@ export function ContactForm({ open, onOpenChange, contact, onSuccess }: ContactF
         phone: formData.phone.trim() || null,
         secondary_phones: formData.secondary_phones.filter(p => p.trim()).length > 0 
           ? formData.secondary_phones.filter(p => p.trim()) 
+          : [],
+        secondary_emails: formData.secondary_emails.filter(e => e.trim()).length > 0 
+          ? formData.secondary_emails.filter(e => e.trim()) 
           : [],
         contact_type: formData.contact_type,
         status: formData.status,
@@ -922,7 +928,7 @@ export function ContactForm({ open, onOpenChange, contact, onSuccess }: ContactF
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="email">Email principal</Label>
               <Input
                 id="email"
                 type="email"
@@ -931,6 +937,48 @@ export function ContactForm({ open, onOpenChange, contact, onSuccess }: ContactF
                 placeholder="email@ejemplo.com"
                 maxLength={255}
               />
+              
+              {/* Secondary emails */}
+              {formData.secondary_emails.map((email, index) => (
+                <div key={index} className="flex gap-2">
+                  <Input
+                    type="email"
+                    value={email}
+                    onChange={(e) => {
+                      const newEmails = [...formData.secondary_emails];
+                      newEmails[index] = e.target.value;
+                      setFormData({ ...formData, secondary_emails: newEmails });
+                    }}
+                    placeholder="otro@ejemplo.com"
+                    maxLength={255}
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => {
+                      const newEmails = formData.secondary_emails.filter((_, i) => i !== index);
+                      setFormData({ ...formData, secondary_emails: newEmails });
+                    }}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
+              
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setFormData({ 
+                  ...formData, 
+                  secondary_emails: [...formData.secondary_emails, ''] 
+                })}
+                className="gap-1"
+              >
+                <Plus className="h-3 w-3" />
+                Añadir email
+              </Button>
             </div>
             <div className="space-y-2">
               <Label htmlFor="phone">Teléfono principal</Label>

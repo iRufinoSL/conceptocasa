@@ -10,6 +10,7 @@ import { Mail, Phone, MapPin, Users, MoreVertical, Pencil, Trash2, LayoutGrid, L
 import { supabase } from '@/integrations/supabase/client';
 import { ContactDetailDialog } from './ContactDetailDialog';
 import { SendEmailDialog } from './SendEmailDialog';
+import { WhatsAppComposeDialog } from './WhatsAppComposeDialog';
 import { searchMatch } from '@/lib/search-utils';
 import type { Contact } from '@/pages/CRM';
 
@@ -32,6 +33,8 @@ export function ContactsTab({ contacts, searchTerm, onEdit, onDelete }: Contacts
   const [detailOpen, setDetailOpen] = useState(false);
   const [emailDialogOpen, setEmailDialogOpen] = useState(false);
   const [emailContact, setEmailContact] = useState<Contact | null>(null);
+  const [whatsappDialogOpen, setWhatsappDialogOpen] = useState(false);
+  const [whatsappContact, setWhatsappContact] = useState<Contact | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
     return (localStorage.getItem('crm-contacts-view') as ViewMode) || 'cards';
   });
@@ -198,12 +201,8 @@ export function ContactsTab({ contacts, searchTerm, onEdit, onDelete }: Contacts
 
   const handleSendWhatsApp = (contact: Contact) => {
     if (!contact.phone) return;
-    // Clean phone number - remove spaces, dashes, etc
-    const cleanPhone = contact.phone.replace(/[\s\-\(\)]/g, '');
-    // Add country code if not present (Spain default)
-    const phoneWithCode = cleanPhone.startsWith('+') ? cleanPhone.replace('+', '') : `34${cleanPhone}`;
-    const waUrl = `https://wa.me/${phoneWithCode}`;
-    window.open(waUrl, '_blank');
+    setWhatsappContact(contact);
+    setWhatsappDialogOpen(true);
   };
 
   if (filteredContacts.length === 0) {
@@ -266,7 +265,12 @@ export function ContactsTab({ contacts, searchTerm, onEdit, onDelete }: Contacts
         contact={emailContact || undefined}
       />
 
-      {/* Cards View */}
+      {/* WhatsApp Compose Dialog */}
+      <WhatsAppComposeDialog
+        open={whatsappDialogOpen}
+        onOpenChange={setWhatsappDialogOpen}
+        contact={whatsappContact}
+      />
       {viewMode === 'cards' && (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {filteredContacts.map((contact) => (

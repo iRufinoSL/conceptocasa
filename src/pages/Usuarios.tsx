@@ -37,6 +37,9 @@ interface UserProfile {
   created_at: string | null;
   roles: string[];
   budgetAccessCount?: number;
+  notification_email?: string | null;
+  notification_phone?: string | null;
+  notification_type?: string | null;
 }
 
 type AppRole = 'administrador' | 'colaborador' | 'cliente';
@@ -74,6 +77,9 @@ export default function Usuarios() {
   const [editingUser, setEditingUser] = useState<UserProfile | null>(null);
   const [editFullName, setEditFullName] = useState('');
   const [editRole, setEditRole] = useState<AppRole>('cliente');
+  const [editNotificationEmail, setEditNotificationEmail] = useState('');
+  const [editNotificationPhone, setEditNotificationPhone] = useState('');
+  const [editNotificationType, setEditNotificationType] = useState<string>('email');
   const [isEditing, setIsEditing] = useState(false);
   
   // Delete dialog
@@ -161,7 +167,10 @@ export default function Usuarios() {
         roles: roles
           ?.filter(r => r.user_id === profile.id)
           .map(r => r.role) || [],
-        budgetAccessCount: accessCounts[profile.id] || 0
+        budgetAccessCount: accessCounts[profile.id] || 0,
+        notification_email: profile.notification_email,
+        notification_phone: profile.notification_phone,
+        notification_type: profile.notification_type
       }));
 
       setUsers(usersWithRoles);
@@ -348,6 +357,9 @@ export default function Usuarios() {
     setEditingUser(userToEdit);
     setEditFullName(userToEdit.full_name || '');
     setEditRole((userToEdit.roles[0] as AppRole) || 'cliente');
+    setEditNotificationEmail(userToEdit.notification_email || '');
+    setEditNotificationPhone(userToEdit.notification_phone || '');
+    setEditNotificationType(userToEdit.notification_type || 'email');
     setIsEditOpen(true);
   };
 
@@ -359,7 +371,12 @@ export default function Usuarios() {
       // Update profile
       const { error: profileError } = await supabase
         .from('profiles')
-        .update({ full_name: editFullName })
+        .update({ 
+          full_name: editFullName,
+          notification_email: editNotificationEmail || null,
+          notification_phone: editNotificationPhone || null,
+          notification_type: editNotificationType
+        })
         .eq('id', editingUser.id);
 
       if (profileError) throw profileError;
@@ -748,7 +765,7 @@ export default function Usuarios() {
               Modifica los datos del usuario {editingUser?.email}
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-4">
+          <div className="space-y-4 py-4 max-h-[60vh] overflow-y-auto">
             <div className="space-y-2">
               <Label htmlFor="edit-name">Nombre Completo</Label>
               <Input
@@ -772,6 +789,60 @@ export default function Usuarios() {
                 </SelectContent>
               </Select>
             </div>
+            
+            {/* Notification preferences section - only for admins */}
+            {editingUser?.roles.includes('administrador') && (
+              <div className="space-y-4 pt-4 border-t">
+                <h4 className="font-medium text-sm">Preferencias de Notificación</h4>
+                <p className="text-xs text-muted-foreground">
+                  Configura cómo recibir avisos cuando lleguen nuevos perfiles de vivienda
+                </p>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="edit-notification-type">Tipo de notificación</Label>
+                  <Select value={editNotificationType} onValueChange={setEditNotificationType}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Seleccionar tipo" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="email">Solo Email</SelectItem>
+                      <SelectItem value="sms">Solo SMS</SelectItem>
+                      <SelectItem value="both">Email y SMS</SelectItem>
+                      <SelectItem value="none">Sin notificaciones</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                {(editNotificationType === 'email' || editNotificationType === 'both') && (
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-notification-email">Email de notificaciones</Label>
+                    <Input
+                      id="edit-notification-email"
+                      type="email"
+                      placeholder={editingUser?.email || 'email@ejemplo.com'}
+                      value={editNotificationEmail}
+                      onChange={(e) => setEditNotificationEmail(e.target.value)}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Si se deja vacío, se usará el email de la cuenta
+                    </p>
+                  </div>
+                )}
+                
+                {(editNotificationType === 'sms' || editNotificationType === 'both') && (
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-notification-phone">Teléfono para SMS</Label>
+                    <Input
+                      id="edit-notification-phone"
+                      type="tel"
+                      placeholder="+34 690 123 456"
+                      value={editNotificationPhone}
+                      onChange={(e) => setEditNotificationPhone(e.target.value)}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsEditOpen(false)}>

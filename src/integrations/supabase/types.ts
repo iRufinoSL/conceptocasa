@@ -2526,6 +2526,9 @@ export type Database = {
           email: string
           full_name: string | null
           id: string
+          notification_email: string | null
+          notification_phone: string | null
+          notification_type: string | null
           updated_at: string | null
         }
         Insert: {
@@ -2533,6 +2536,9 @@ export type Database = {
           email: string
           full_name?: string | null
           id: string
+          notification_email?: string | null
+          notification_phone?: string | null
+          notification_type?: string | null
           updated_at?: string | null
         }
         Update: {
@@ -2540,6 +2546,9 @@ export type Database = {
           email?: string
           full_name?: string | null
           id?: string
+          notification_email?: string | null
+          notification_phone?: string | null
+          notification_type?: string | null
           updated_at?: string | null
         }
         Relationships: []

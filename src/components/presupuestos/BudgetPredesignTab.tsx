@@ -11,6 +11,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Plus, Pencil, Trash2, Upload, X, Maximize2, FileImage, FileText, LayoutGrid, Layers, ChevronDown, ChevronRight } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
+import { UrbanProfileCard } from './UrbanProfileCard';
 
 interface BudgetPredesign {
   id: string;
@@ -417,8 +418,19 @@ export function BudgetPredesignTab({ budgetId, isAdmin }: BudgetPredesignTabProp
     </Card>
   );
 
+  // Get cadastral reference from predesigns if exists
+  const cadastralPredesign = predesigns.find(p => p.content_type === 'Referencia catastral');
+  const cadastralReference = cadastralPredesign?.content;
+
   return (
     <div className="space-y-6">
+      {/* Urban Profile Section */}
+      <UrbanProfileCard 
+        budgetId={budgetId} 
+        cadastralReference={cadastralReference}
+        isAdmin={isAdmin} 
+      />
+
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
           <h3 className="text-lg font-semibold">Ante-proyecto</h3>

@@ -3188,6 +3188,228 @@ export type Database = {
           },
         ]
       }
+      urban_profile_regulations: {
+        Row: {
+          created_at: string
+          extracted_data: Json | null
+          extraction_date: string | null
+          id: string
+          notes: string | null
+          profile_id: string
+          regulation_id: string
+        }
+        Insert: {
+          created_at?: string
+          extracted_data?: Json | null
+          extraction_date?: string | null
+          id?: string
+          notes?: string | null
+          profile_id: string
+          regulation_id: string
+        }
+        Update: {
+          created_at?: string
+          extracted_data?: Json | null
+          extraction_date?: string | null
+          id?: string
+          notes?: string | null
+          profile_id?: string
+          regulation_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "urban_profile_regulations_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "urban_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "urban_profile_regulations_regulation_id_fkey"
+            columns: ["regulation_id"]
+            isOneToOne: false
+            referencedRelation: "urban_regulations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      urban_profiles: {
+        Row: {
+          address: string | null
+          analysis_notes: string | null
+          analysis_status: string | null
+          autonomous_community: string | null
+          budget_id: string
+          buildability_index: number | null
+          cadastral_reference: string
+          cadastral_value: number | null
+          climatic_zone: string | null
+          construction_year: number | null
+          created_at: string
+          created_by: string | null
+          front_setback: number | null
+          id: string
+          land_class: string | null
+          land_use: string | null
+          last_analyzed_at: string | null
+          locality: string | null
+          max_floors: number | null
+          max_height: number | null
+          max_occupation_percent: number | null
+          min_plot_area: number | null
+          municipality: string | null
+          province: string | null
+          rear_setback: number | null
+          seismic_zone: string | null
+          side_setback: number | null
+          snow_zone: string | null
+          surface_area: number | null
+          updated_at: string
+          urban_classification: string | null
+          urban_qualification: string | null
+          wind_zone: string | null
+        }
+        Insert: {
+          address?: string | null
+          analysis_notes?: string | null
+          analysis_status?: string | null
+          autonomous_community?: string | null
+          budget_id: string
+          buildability_index?: number | null
+          cadastral_reference: string
+          cadastral_value?: number | null
+          climatic_zone?: string | null
+          construction_year?: number | null
+          created_at?: string
+          created_by?: string | null
+          front_setback?: number | null
+          id?: string
+          land_class?: string | null
+          land_use?: string | null
+          last_analyzed_at?: string | null
+          locality?: string | null
+          max_floors?: number | null
+          max_height?: number | null
+          max_occupation_percent?: number | null
+          min_plot_area?: number | null
+          municipality?: string | null
+          province?: string | null
+          rear_setback?: number | null
+          seismic_zone?: string | null
+          side_setback?: number | null
+          snow_zone?: string | null
+          surface_area?: number | null
+          updated_at?: string
+          urban_classification?: string | null
+          urban_qualification?: string | null
+          wind_zone?: string | null
+        }
+        Update: {
+          address?: string | null
+          analysis_notes?: string | null
+          analysis_status?: string | null
+          autonomous_community?: string | null
+          budget_id?: string
+          buildability_index?: number | null
+          cadastral_reference?: string
+          cadastral_value?: number | null
+          climatic_zone?: string | null
+          construction_year?: number | null
+          created_at?: string
+          created_by?: string | null
+          front_setback?: number | null
+          id?: string
+          land_class?: string | null
+          land_use?: string | null
+          last_analyzed_at?: string | null
+          locality?: string | null
+          max_floors?: number | null
+          max_height?: number | null
+          max_occupation_percent?: number | null
+          min_plot_area?: number | null
+          municipality?: string | null
+          province?: string | null
+          rear_setback?: number | null
+          seismic_zone?: string | null
+          side_setback?: number | null
+          snow_zone?: string | null
+          surface_area?: number | null
+          updated_at?: string
+          urban_classification?: string | null
+          urban_qualification?: string | null
+          wind_zone?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "urban_profiles_budget_id_fkey"
+            columns: ["budget_id"]
+            isOneToOne: false
+            referencedRelation: "presupuestos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "urban_profiles_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      urban_regulations: {
+        Row: {
+          created_at: string
+          document_path: string | null
+          document_url: string | null
+          effective_date: string | null
+          id: string
+          is_active: boolean | null
+          issuing_authority: string | null
+          name: string
+          publication_date: string | null
+          regulation_type: string
+          scope_autonomous_community: string | null
+          scope_municipality: string | null
+          scope_province: string | null
+          summary: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          document_path?: string | null
+          document_url?: string | null
+          effective_date?: string | null
+          id?: string
+          is_active?: boolean | null
+          issuing_authority?: string | null
+          name: string
+          publication_date?: string | null
+          regulation_type: string
+          scope_autonomous_community?: string | null
+          scope_municipality?: string | null
+          scope_province?: string | null
+          summary?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          document_path?: string | null
+          document_url?: string | null
+          effective_date?: string | null
+          id?: string
+          is_active?: boolean | null
+          issuing_authority?: string | null
+          name?: string
+          publication_date?: string | null
+          regulation_type?: string
+          scope_autonomous_community?: string | null
+          scope_municipality?: string | null
+          scope_province?: string | null
+          summary?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       user_activity_access: {
         Row: {
           access_level: string

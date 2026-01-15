@@ -25,11 +25,63 @@ interface Task {
   contacts?: { name: string; surname: string | null }[];
 }
 
+// Simple in-memory rate limiting (resets on function cold start)
+const rateLimitStore = new Map<string, { count: number; resetTime: number }>();
+const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000; // 1 hour
+const MAX_REQUESTS_PER_WINDOW = 5; // Max 5 requests per hour
+
+function checkRateLimit(identifier: string): { allowed: boolean; retryAfterMs?: number } {
+  const now = Date.now();
+  const record = rateLimitStore.get(identifier);
+  
+  if (!record || now > record.resetTime) {
+    // Create new window
+    rateLimitStore.set(identifier, { count: 1, resetTime: now + RATE_LIMIT_WINDOW_MS });
+    return { allowed: true };
+  }
+  
+  if (record.count >= MAX_REQUESTS_PER_WINDOW) {
+    return { allowed: false, retryAfterMs: record.resetTime - now };
+  }
+  
+  record.count++;
+  return { allowed: true };
+}
+
 const handler = async (req: Request): Promise<Response> => {
   console.log("send-daily-tasks function called");
 
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
+  }
+
+  // Only allow POST requests for triggering the email
+  if (req.method !== "POST") {
+    return new Response(
+      JSON.stringify({ error: "Method not allowed" }),
+      { status: 405, headers: { "Content-Type": "application/json", ...corsHeaders } }
+    );
+  }
+
+  // Rate limiting by IP or use a generic key
+  const clientIP = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || 
+                   req.headers.get("cf-connecting-ip") || 
+                   "unknown";
+  
+  const rateCheck = checkRateLimit(`daily-tasks:${clientIP}`);
+  if (!rateCheck.allowed) {
+    console.log(`Rate limit exceeded for IP: ${clientIP}`);
+    return new Response(
+      JSON.stringify({ error: "Too many requests" }),
+      { 
+        status: 429, 
+        headers: { 
+          "Content-Type": "application/json",
+          "Retry-After": String(Math.ceil((rateCheck.retryAfterMs || 0) / 1000)),
+          ...corsHeaders 
+        } 
+      }
+    );
   }
 
   try {
@@ -373,8 +425,9 @@ const handler = async (req: Request): Promise<Response> => {
 
   } catch (error: any) {
     console.error("Error in send-daily-tasks:", error);
+    // Return generic error message to avoid information disclosure
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: "Internal server error" }),
       { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
     );
   }

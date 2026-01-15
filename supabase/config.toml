@@ -20,3 +20,6 @@ verify_jwt = true
 
 [functions.send-daily-tasks]
 verify_jwt = false
+
+[functions.search-urban-regulations]
+verify_jwt = true

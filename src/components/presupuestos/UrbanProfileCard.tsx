@@ -121,6 +121,7 @@ interface UrbanProfileCardProps {
 const statusLabels: Record<string, { label: string; color: string; icon: React.ElementType }> = {
   pending: { label: 'Pendiente', color: 'bg-muted text-muted-foreground', icon: AlertCircle },
   catastro_loaded: { label: 'Catastro cargado', color: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200', icon: Search },
+  regulations_loaded: { label: 'Normativa cargada', color: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200', icon: FileText },
   pgou_loaded: { label: 'PGOU analizado', color: 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200', icon: FileText },
   cte_loaded: { label: 'CTE analizado', color: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200', icon: Building2 },
   complete: { label: 'Completo', color: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200', icon: CheckCircle2 },
@@ -231,6 +232,7 @@ export function UrbanProfileCard({ budgetId, cadastralReference: initialRef, isA
   const [profile, setProfile] = useState<UrbanProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSearching, setIsSearching] = useState(false);
+  const [isSearchingRegulations, setIsSearchingRegulations] = useState(false);
   const [isSavingSurface, setIsSavingSurface] = useState(false);
   const [searchRef, setSearchRef] = useState(initialRef || '');
   const [isExpanded, setIsExpanded] = useState(true);
@@ -472,6 +474,62 @@ export function UrbanProfileCard({ budgetId, cadastralReference: initialRef, isA
     }
   };
 
+  const handleSearchRegulations = async () => {
+    if (!profile?.municipality || !profile?.province) {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Primero consulta el Catastro para obtener el municipio y provincia',
+      });
+      return;
+    }
+
+    setIsSearchingRegulations(true);
+
+    try {
+      const { data, error } = await supabase.functions.invoke('search-urban-regulations', {
+        body: {
+          municipality: profile.municipality,
+          province: profile.province,
+          landClass: profile.land_class || 'Urbano',
+          budgetId,
+        },
+      });
+
+      if (error) throw error;
+
+      if (data?.success) {
+        const regulations = data.data;
+        
+        if (regulations.parseError) {
+          toast({
+            title: 'Búsqueda completada',
+            description: 'Se encontró información pero no se pudo estructurar automáticamente. Revisa los campos manualmente.',
+          });
+        } else {
+          toast({
+            title: 'Normativa urbanística encontrada',
+            description: `Se han actualizado los campos con datos del PGOU de ${profile.municipality}`,
+          });
+        }
+        
+        // Refresh profile to show updated data
+        fetchProfile();
+      } else {
+        throw new Error(data?.error || 'Error desconocido');
+      }
+    } catch (error) {
+      console.error('Error searching regulations:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Error al buscar normativa',
+        description: error instanceof Error ? error.message : 'No se pudo obtener la información',
+      });
+    } finally {
+      setIsSearchingRegulations(false);
+    }
+  };
+
   const getStatusInfo = () => {
     const status = profile?.analysis_status || 'pending';
     return statusLabels[status] || statusLabels.pending;
@@ -573,6 +631,29 @@ export function UrbanProfileCard({ budgetId, cadastralReference: initialRef, isA
                   </>
                 )}
               </Button>
+              
+              {/* Search Urban Regulations Button - only show after catastro data is loaded */}
+              {profile && profile.municipality && (
+                <Button 
+                  onClick={handleSearchRegulations} 
+                  disabled={isSearchingRegulations}
+                  variant="secondary"
+                  className="w-full"
+                  size="lg"
+                >
+                  {isSearchingRegulations ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                      Buscando normativa urbanística...
+                    </>
+                  ) : (
+                    <>
+                      <FileText className="h-4 w-4 mr-2" />
+                      Buscar Normativa Urbanística (PGOU)
+                    </>
+                  )}
+                </Button>
+              )}
             </div>
 
             {/* Profile Data */}

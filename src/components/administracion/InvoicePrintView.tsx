@@ -6,6 +6,7 @@ import { Printer, Download, Home } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { formatCurrency } from '@/lib/format-utils';
+import { useCompanySettings } from '@/hooks/useCompanySettings';
 
 type DocumentType = 'factura' | 'presupuesto' | 'proforma';
 
@@ -75,6 +76,7 @@ export function InvoicePrintView({ invoice, onClose }: Props) {
   const [lines, setLines] = useState<InvoiceLine[]>([]);
   const [loading, setLoading] = useState(true);
   const printRef = useRef<HTMLDivElement>(null);
+  const { settings: companySettings } = useCompanySettings();
 
   useEffect(() => {
     fetchLines();
@@ -147,6 +149,11 @@ export function InvoicePrintView({ invoice, onClose }: Props) {
               width: 28px;
               height: 28px;
               color: white;
+            }
+            .logo-image {
+              max-width: 180px;
+              max-height: 60px;
+              object-fit: contain;
             }
             .company-name {
               font-size: 24px;
@@ -310,6 +317,32 @@ export function InvoicePrintView({ invoice, onClose }: Props) {
     return format(new Date(dateStr), "d 'de' MMMM 'de' yyyy", { locale: es });
   };
 
+  // Render party address block
+  const renderPartyAddress = (account: Invoice['issuer_account'] | Invoice['receiver_account']) => {
+    if (!account) return null;
+    
+    const addressParts = [];
+    if (account.address) addressParts.push(account.address);
+    
+    const cityLine = [account.postal_code, account.city].filter(Boolean).join(' - ');
+    if (cityLine) addressParts.push(cityLine);
+    
+    if (account.province) addressParts.push(account.province);
+    
+    if (addressParts.length === 0) return null;
+    
+    return (
+      <div style={{ fontSize: '13px', color: '#444', lineHeight: '1.6' }}>
+        {addressParts.map((part, idx) => (
+          <span key={idx}>
+            {part}
+            {idx < addressParts.length - 1 && <br />}
+          </span>
+        ))}
+      </div>
+    );
+  };
+
   if (loading) {
     return (
       <Dialog open onOpenChange={onClose}>
@@ -322,6 +355,9 @@ export function InvoicePrintView({ invoice, onClose }: Props) {
     );
   }
 
+  // Determine logo to display
+  const logoUrl = companySettings.logo_signed_url || companySettings.logo_url;
+
   return (
     <Dialog open onOpenChange={onClose}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
@@ -333,13 +369,24 @@ export function InvoicePrintView({ invoice, onClose }: Props) {
           {/* Header */}
           <div className="invoice-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '40px', paddingBottom: '20px', borderBottom: '2px solid #e5e5e5' }}>
             <div className="logo-section" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <div style={{ width: '48px', height: '48px', background: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
-                  <polyline points="9 22 9 12 15 12 15 22"/>
-                </svg>
-              </div>
-              <div style={{ fontSize: '24px', fontWeight: '700', color: '#1a1a1a' }}>ConceptoCasa</div>
+              {logoUrl ? (
+                <img 
+                  src={logoUrl} 
+                  alt={companySettings.name} 
+                  style={{ maxWidth: '180px', maxHeight: '60px', objectFit: 'contain' }}
+                  className="logo-image"
+                />
+              ) : (
+                <>
+                  <div style={{ width: '48px', height: '48px', background: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+                      <polyline points="9 22 9 12 15 12 15 22"/>
+                    </svg>
+                  </div>
+                  <div style={{ fontSize: '24px', fontWeight: '700', color: '#1a1a1a' }}>{companySettings.name}</div>
+                </>
+              )}
             </div>
             <div style={{ textAlign: 'right' }}>
               <h1 style={{ fontSize: '28px', color: DOCUMENT_TYPE_COLORS[invoice.document_type || 'factura'], marginBottom: '4px' }}>
@@ -349,48 +396,31 @@ export function InvoicePrintView({ invoice, onClose }: Props) {
             </div>
           </div>
 
-          {/* Parties */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '40px' }}>
-            <div style={{ width: '45%' }}>
-              <div style={{ fontSize: '12px', textTransform: 'uppercase', color: '#666', marginBottom: '8px', letterSpacing: '0.5px' }}>Emisor</div>
-              <div style={{ fontSize: '16px', fontWeight: '600', color: '#1a1a1a', marginBottom: '4px' }}>
+          {/* Parties - Emisor y Receptor con todos los datos */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '40px', gap: '24px' }}>
+            {/* Emisor */}
+            <div style={{ flex: 1, padding: '16px', background: '#f8fafc', borderRadius: '8px', borderLeft: '4px solid #3b82f6' }}>
+              <div style={{ fontSize: '12px', textTransform: 'uppercase', color: '#3b82f6', marginBottom: '12px', letterSpacing: '0.5px', fontWeight: '600' }}>Emisor</div>
+              <div style={{ fontSize: '16px', fontWeight: '600', color: '#1a1a1a', marginBottom: '8px' }}>
                 {invoice.issuer_account?.name || 'No definido'}
               </div>
-              {invoice.issuer_account?.address && (
-                <div style={{ fontSize: '13px', color: '#444', lineHeight: '1.4' }}>
-                  {invoice.issuer_account.address}
-                  {(invoice.issuer_account.postal_code || invoice.issuer_account.city) && (
-                    <><br />{[invoice.issuer_account.postal_code, invoice.issuer_account.city].filter(Boolean).join(' - ')}</>
-                  )}
-                  {invoice.issuer_account.province && (
-                    <><br />{invoice.issuer_account.province}</>
-                  )}
-                </div>
-              )}
+              {renderPartyAddress(invoice.issuer_account)}
               {invoice.issuer_account?.nif_cif && (
-                <div style={{ fontSize: '13px', color: '#666', marginTop: '4px' }}>
+                <div style={{ fontSize: '13px', color: '#1a1a1a', marginTop: '8px', fontWeight: '500' }}>
                   NIF/CIF: {invoice.issuer_account.nif_cif}
                 </div>
               )}
             </div>
-            <div style={{ width: '45%' }}>
-              <div style={{ fontSize: '12px', textTransform: 'uppercase', color: '#666', marginBottom: '8px', letterSpacing: '0.5px' }}>Receptor</div>
-              <div style={{ fontSize: '16px', fontWeight: '600', color: '#1a1a1a', marginBottom: '4px' }}>
+
+            {/* Receptor */}
+            <div style={{ flex: 1, padding: '16px', background: '#f8fafc', borderRadius: '8px', borderLeft: '4px solid #10b981' }}>
+              <div style={{ fontSize: '12px', textTransform: 'uppercase', color: '#10b981', marginBottom: '12px', letterSpacing: '0.5px', fontWeight: '600' }}>Receptor / Cliente</div>
+              <div style={{ fontSize: '16px', fontWeight: '600', color: '#1a1a1a', marginBottom: '8px' }}>
                 {invoice.receiver_account?.name || 'No definido'}
               </div>
-              {invoice.receiver_account?.address && (
-                <div style={{ fontSize: '13px', color: '#444', lineHeight: '1.4' }}>
-                  {invoice.receiver_account.address}
-                  {(invoice.receiver_account.postal_code || invoice.receiver_account.city) && (
-                    <><br />{[invoice.receiver_account.postal_code, invoice.receiver_account.city].filter(Boolean).join(' - ')}</>
-                  )}
-                  {invoice.receiver_account.province && (
-                    <><br />{invoice.receiver_account.province}</>
-                  )}
-                </div>
-              )}
+              {renderPartyAddress(invoice.receiver_account)}
               {invoice.receiver_account?.nif_cif && (
-                <div style={{ fontSize: '13px', color: '#666', marginTop: '4px' }}>
+                <div style={{ fontSize: '13px', color: '#1a1a1a', marginTop: '8px', fontWeight: '500' }}>
                   NIF/CIF: {invoice.receiver_account.nif_cif}
                 </div>
               )}
@@ -477,8 +507,8 @@ export function InvoicePrintView({ invoice, onClose }: Props) {
 
           {/* Footer */}
           <div style={{ textAlign: 'center', paddingTop: '20px', borderTop: '1px solid #e5e5e5', fontSize: '12px', color: '#666' }}>
-            <p>organiza@concepto.casa | +34 690 123 533</p>
-            <p>www.concepto.casa; <a href="https://concepto.casa" style={{ color: '#3b82f6', textDecoration: 'none' }}>https://concepto.casa</a></p>
+            <p>{companySettings.email} | {companySettings.phone}</p>
+            <p>{companySettings.website}</p>
           </div>
         </div>
 

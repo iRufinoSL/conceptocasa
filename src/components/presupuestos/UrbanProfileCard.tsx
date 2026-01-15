@@ -458,7 +458,8 @@ export function UrbanProfileCard({ budgetId, cadastralReference: initialRef, isA
           title: 'Datos del Catastro obtenidos',
           description: `Parcela en ${catastroData.municipality}, ${catastroData.province}`,
         });
-        fetchProfile();
+        // Force refresh profile to update UI with new data
+        await fetchProfile();
       } else {
         throw new Error(data?.error || 'Error desconocido');
       }

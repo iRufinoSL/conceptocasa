@@ -52,12 +52,26 @@ export function ComposeEmail({ replyTo, onSent }: ComposeEmailProps) {
   const { toast } = useToast();
   const { sendEmail, sending, cancelSend } = useEmailService();
 
+  // Build initial body for forwards - include original message
+  const getInitialBody = () => {
+    if (replyTo?.forwardEmailId && replyTo?.originalBody) {
+      const separator = '<br><br>---------- Mensaje reenviado ----------<br><br>';
+      return separator + replyTo.originalBody;
+    }
+    return '';
+  };
+
   const [formData, setFormData] = useState({
     to: replyTo?.email || '',
     cc: '',
     bcc: '',
-    subject: replyTo?.subject ? `Re: ${replyTo.subject}` : '',
-    body: '',
+    // Don't add Re: prefix if subject already starts with Fwd: or Re:
+    subject: replyTo?.subject 
+      ? (replyTo.subject.startsWith('Fwd:') || replyTo.subject.startsWith('Re:') 
+          ? replyTo.subject 
+          : `Re: ${replyTo.subject}`)
+      : '',
+    body: getInitialBody(),
     contactId: replyTo?.contactId || '',
     ticketId: replyTo?.ticketId || '',
     createTicket: false,

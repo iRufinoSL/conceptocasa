@@ -29,10 +29,13 @@ import {
   Landmark,
   Plus,
   Trash2,
-  Upload
+  Upload,
+  Map,
+  Globe
 } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import * as pdfjsLib from 'pdfjs-dist';
+import { openSafeUrl, isSafeUrl } from '@/lib/url-utils';
 
 interface AdditionalRestriction {
   id: string;
@@ -128,6 +131,102 @@ const statusLabels: Record<string, { label: string; color: string; icon: React.E
   cte_loaded: { label: 'CTE analizado', color: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200', icon: Building2 },
   complete: { label: 'Completo', color: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200', icon: CheckCircle2 },
 };
+
+// Component to render analysis notes with clickable links
+function AnalysisNotesRenderer({ notes }: { notes: string }) {
+  // Parse markdown-style links [text](url) and convert to clickable links
+  const renderWithLinks = (text: string) => {
+    const parts: React.ReactNode[] = [];
+    const linkRegex = /\[([^\]]+)\]\(([^)]+)\)/g;
+    let lastIndex = 0;
+    let match;
+    let keyIndex = 0;
+
+    while ((match = linkRegex.exec(text)) !== null) {
+      // Add text before the link
+      if (match.index > lastIndex) {
+        parts.push(<span key={`text-${keyIndex++}`}>{text.slice(lastIndex, match.index)}</span>);
+      }
+      
+      const linkText = match[1];
+      const url = match[2];
+      
+      // Validate URL is safe before rendering
+      if (isSafeUrl(url)) {
+        parts.push(
+          <a
+            key={`link-${keyIndex++}`}
+            href={url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-primary hover:underline inline-flex items-center gap-1"
+            onClick={(e) => {
+              e.preventDefault();
+              openSafeUrl(url);
+            }}
+          >
+            {linkText}
+            <ExternalLink className="h-3 w-3" />
+          </a>
+        );
+      } else {
+        parts.push(<span key={`text-${keyIndex++}`}>{linkText}</span>);
+      }
+      
+      lastIndex = match.index + match[0].length;
+    }
+    
+    // Add remaining text
+    if (lastIndex < text.length) {
+      parts.push(<span key={`text-${keyIndex++}`}>{text.slice(lastIndex)}</span>);
+    }
+    
+    return parts.length > 0 ? parts : text;
+  };
+
+  // Split by lines and render each with proper formatting
+  const lines = notes.split('\n');
+  
+  return (
+    <div className="space-y-1">
+      {lines.map((line, idx) => {
+        const trimmedLine = line.trim();
+        
+        // Headers with **text**
+        if (trimmedLine.startsWith('**') && trimmedLine.endsWith('**')) {
+          return (
+            <p key={idx} className="font-semibold text-foreground mt-3 first:mt-0">
+              {trimmedLine.replace(/\*\*/g, '')}
+            </p>
+          );
+        }
+        
+        // Bullet points
+        if (trimmedLine.startsWith('•') || trimmedLine.startsWith('-')) {
+          const content = trimmedLine.replace(/^[•-]\s*/, '');
+          return (
+            <div key={idx} className="flex items-start gap-2 ml-2">
+              <span className="text-muted-foreground">•</span>
+              <span className="text-muted-foreground">{renderWithLinks(content)}</span>
+            </div>
+          );
+        }
+        
+        // Empty lines
+        if (!trimmedLine) {
+          return <div key={idx} className="h-1" />;
+        }
+        
+        // Regular text
+        return (
+          <p key={idx} className="text-muted-foreground">
+            {renderWithLinks(line)}
+          </p>
+        );
+      })}
+    </div>
+  );
+}
 
 // Component for editable field with source
 function EditableFieldWithSource({
@@ -1343,13 +1442,125 @@ export function UrbanProfileCard({ budgetId, cadastralReference: initialRef, isA
                   </>
                 )}
 
-                {/* Notes */}
+                {/* Cartographic Tools Section */}
+                {coordLat && coordLng && (
+                  <>
+                    <Separator />
+                    <div className="space-y-3">
+                      <h4 className="font-medium flex items-center gap-2 text-sm">
+                        <Map className="h-4 w-4 text-primary" />
+                        Cartografía y Visualización
+                      </h4>
+                      <p className="text-xs text-muted-foreground">
+                        Accede a la cartografía de la parcela con límites, curvas de nivel y ortofotografías.
+                      </p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                        {/* IBERPIX - IGN Viewer with contour lines */}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="w-full justify-start gap-2"
+                          onClick={() => openSafeUrl(`https://www.ign.es/iberpix/visor/?center=${coordLng},${coordLat}&zoom=17`)}
+                        >
+                          <Map className="h-4 w-4 text-blue-600" />
+                          <div className="text-left">
+                            <div className="text-xs font-medium">IBERPIX (IGN)</div>
+                            <div className="text-[10px] text-muted-foreground">Curvas de nivel, MDT</div>
+                          </div>
+                          <ExternalLink className="h-3 w-3 ml-auto" />
+                        </Button>
+                        
+                        {/* Sede Electrónica del Catastro */}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="w-full justify-start gap-2"
+                          onClick={() => openSafeUrl(`https://www1.sedecatastro.gob.es/cartografia/mapa.aspx?buscar=S&from=OVCBusqueda&pest=rc&RCCompleta=${profile?.cadastral_reference || ''}`)}
+                        >
+                          <Landmark className="h-4 w-4 text-amber-600" />
+                          <div className="text-left">
+                            <div className="text-xs font-medium">Sede Catastro</div>
+                            <div className="text-[10px] text-muted-foreground">Límites parcela</div>
+                          </div>
+                          <ExternalLink className="h-3 w-3 ml-auto" />
+                        </Button>
+                        
+                        {/* Google Earth Web */}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="w-full justify-start gap-2"
+                          onClick={() => openSafeUrl(`https://earth.google.com/web/@${coordLat},${coordLng},500a,500d,35y,0h,0t,0r`)}
+                        >
+                          <Globe className="h-4 w-4 text-green-600" />
+                          <div className="text-left">
+                            <div className="text-xs font-medium">Google Earth</div>
+                            <div className="text-[10px] text-muted-foreground">Vista 3D, terreno</div>
+                          </div>
+                          <ExternalLink className="h-3 w-3 ml-auto" />
+                        </Button>
+                        
+                        {/* PNOA - Orthophoto */}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="w-full justify-start gap-2"
+                          onClick={() => openSafeUrl(`https://www.ign.es/iberpix/visor/?center=${coordLng},${coordLat}&zoom=18&layers=mapa-base-todo&capasbase=ortofotoPNOA`)}
+                        >
+                          <MapPin className="h-4 w-4 text-purple-600" />
+                          <div className="text-left">
+                            <div className="text-xs font-medium">Ortofoto PNOA</div>
+                            <div className="text-[10px] text-muted-foreground">Foto aérea alta res.</div>
+                          </div>
+                          <ExternalLink className="h-3 w-3 ml-auto" />
+                        </Button>
+                        
+                        {/* SIGPAC - Agricultural viewer */}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="w-full justify-start gap-2"
+                          onClick={() => openSafeUrl(`https://sigpac.mapa.gob.es/fega/visor/?lon=${coordLng}&lat=${coordLat}&zoom=17`)}
+                        >
+                          <TreePine className="h-4 w-4 text-emerald-600" />
+                          <div className="text-left">
+                            <div className="text-xs font-medium">SIGPAC</div>
+                            <div className="text-[10px] text-muted-foreground">Parcelas agrarias</div>
+                          </div>
+                          <ExternalLink className="h-3 w-3 ml-auto" />
+                        </Button>
+                        
+                        {/* Google Maps Terrain */}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="w-full justify-start gap-2"
+                          onClick={() => openSafeUrl(`https://www.google.com/maps/@${coordLat},${coordLng},17z/data=!5m1!1e4`)}
+                        >
+                          <Mountain className="h-4 w-4 text-orange-600" />
+                          <div className="text-left">
+                            <div className="text-xs font-medium">Google Maps Terreno</div>
+                            <div className="text-[10px] text-muted-foreground">Relieve, topografía</div>
+                          </div>
+                          <ExternalLink className="h-3 w-3 ml-auto" />
+                        </Button>
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                {/* Notes with clickable links */}
                 {profile.analysis_notes && (
                   <>
                     <Separator />
-                    <div className="text-sm">
-                      <span className="text-muted-foreground">Notas del análisis:</span>
-                      <p className="mt-1">{profile.analysis_notes}</p>
+                    <div className="text-sm space-y-2">
+                      <h4 className="font-medium flex items-center gap-2">
+                        <FileText className="h-4 w-4 text-primary" />
+                        Notas del análisis y fuentes
+                      </h4>
+                      <div className="prose prose-sm dark:prose-invert max-w-none">
+                        <AnalysisNotesRenderer notes={profile.analysis_notes} />
+                      </div>
                     </div>
                   </>
                 )}

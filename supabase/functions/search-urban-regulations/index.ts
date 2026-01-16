@@ -5,6 +5,13 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+interface SourceInfo {
+  url: string;
+  title?: string;
+  type?: string;
+  downloadConditions?: string;
+}
+
 interface UrbanRegulationsResult {
   maxBuildableVolume?: { value: number | null; source: string };
   maxHeight?: { value: number | null; source: string };
@@ -17,7 +24,8 @@ interface UrbanRegulationsResult {
   minDistanceRoads?: { value: number | null; source: string };
   minDistanceSlopes?: { value: number | null; source: string };
   additionalInfo?: string;
-  sources: string[];
+  sources: (string | SourceInfo)[];
+  applicableRegulations?: string[];
   valuesFound?: number;
 }
 
@@ -46,12 +54,22 @@ Deno.serve(async (req) => {
 
     console.log(`Searching urban regulations for ${municipality}, ${province} (${landClass})`);
 
-    // Build the search query
+    // Build the search query - extended to include ALL applicable regulations, not just PGOU
     const landType = landClass === 'Rústico' ? 'suelo rústico' : 'suelo urbano';
     const searchQuery = `
-Busca las condiciones urbanísticas del PGOU del municipio de ${municipality} en la provincia de ${province} para ${landType}. 
-Necesito los siguientes datos específicos con sus fuentes:
+Busca TODA la normativa urbanística y legislación aplicable al municipio de ${municipality} en la provincia de ${province} para ${landType}.
 
+NORMATIVA A BUSCAR:
+1. PGOU (Plan General de Ordenación Urbanística) del municipio
+2. Normas Subsidiarias municipales (si no hay PGOU)
+3. Normativa urbanística autonómica (LOUA en Andalucía, LOT en Canarias, LOTUP en Valencia, etc.)
+4. Planes Especiales de Protección (si aplica)
+5. Normativa de protección ambiental o paisajística (si aplica a la zona)
+6. Normativa de costas/aguas (si está cerca de litoral, ríos o embalses)
+7. Servidumbres de paso, carreteras o infraestructuras
+8. Planes Parciales o de Desarrollo aprobados
+
+DATOS ESPECÍFICOS A EXTRAER:
 1. Volumen máximo de edificación (m³)
 2. Altura máxima permitida (metros)
 3. Índice de edificabilidad (m²/m²)
@@ -59,8 +77,11 @@ Necesito los siguientes datos específicos con sus fuentes:
 5. Retranqueos: frontal, lateral y posterior (metros)
 6. Distancias mínimas: a colindantes, a caminos/carreteras, y a taludes (metros)
 
-Para cada dato indica la fuente exacta (artículo del PGOU, normativa urbanística, etc.).
-Si no encuentras algún dato específico, indica "No encontrado".
+IMPORTANTE: 
+- Para cada dato indica la fuente exacta (artículo, ley, normativa)
+- Incluye TODAS las URLs donde se puede consultar/descargar la normativa
+- Si hay condiciones para descargar (registro, pago, etc.) indícalo
+- Si no encuentras algún dato específico, indica "No encontrado"
     `.trim();
 
     const response = await fetch('https://api.perplexity.ai/chat/completions', {
@@ -74,7 +95,7 @@ Si no encuentras algún dato específico, indica "No encontrado".
         messages: [
           {
             role: 'system',
-            content: `Eres un experto en urbanismo español. Extrae datos numéricos precisos de normativas urbanísticas municipales (PGOU, normas subsidiarias). 
+            content: `Eres un experto en urbanismo español. Extrae datos numéricos precisos de TODA la normativa urbanística aplicable (PGOU, normas subsidiarias, legislación autonómica, normativa de protección ambiental, costas, etc.).
             
 Responde SOLO en formato JSON con esta estructura exacta:
 {
@@ -88,17 +109,22 @@ Responde SOLO en formato JSON con esta estructura exacta:
   "minDistanceNeighbors": { "value": null o número, "source": "fuente" },
   "minDistanceRoads": { "value": null o número, "source": "fuente" },
   "minDistanceSlopes": { "value": null o número, "source": "fuente" },
-  "additionalInfo": "Información adicional relevante",
-  "sources": ["URL1", "URL2"]
+  "additionalInfo": "Información adicional relevante sobre otras normativas aplicables",
+  "sources": [
+    { "url": "URL1", "title": "Título del documento", "type": "PGOU/Normas/Ley", "downloadConditions": "Libre descarga / Requiere registro / etc." },
+    { "url": "URL2", "title": "Título", "type": "Tipo", "downloadConditions": "Condiciones" }
+  ],
+  "applicableRegulations": ["PGOU Municipal", "LOUA Andalucía", "Ley de Costas", etc.]
 }
 
-Si no encuentras un valor, pon value: null y en source indica "No encontrado en PGOU de [municipio]".
-Los valores deben ser números, no texto.`
+Si no encuentras un valor, pon value: null y en source indica "No encontrado".
+Los valores deben ser números, no texto.
+En sources incluye TODAS las URLs de normativa consultable con título descriptivo.`
           },
           { role: 'user', content: searchQuery }
         ],
         temperature: 0.1,
-        max_tokens: 2000,
+        max_tokens: 3000,
       }),
     });
 
@@ -220,16 +246,30 @@ Los valores deben ser números, no texto.`
         updateData.min_distance_slopes_source = regulations.minDistanceSlopes.source;
       }
 
-      // Always update analysis notes with additional info and sources
-      if (regulations.additionalInfo || (regulations.sources && regulations.sources.length > 0)) {
-        const notes: string[] = [];
-        if (regulations.additionalInfo) {
-          notes.push(regulations.additionalInfo);
-        }
-        if (regulations.sources && regulations.sources.length > 0) {
-          notes.push('\n\n**Fuentes consultadas:**\n' + regulations.sources.map(s => `- ${s}`).join('\n'));
-        }
-        updateData.analysis_notes = notes.join('\n');
+      // Always update analysis notes with additional info, sources and applicable regulations
+      const notes: string[] = [];
+      if (regulations.additionalInfo) {
+        notes.push(regulations.additionalInfo);
+      }
+      if (regulations.applicableRegulations && regulations.applicableRegulations.length > 0) {
+        notes.push('\n\n**Normativa aplicable:**\n' + regulations.applicableRegulations.map((r: string) => `• ${r}`).join('\n'));
+      }
+      if (regulations.sources && regulations.sources.length > 0) {
+        notes.push('\n\n**Fuentes consultadas:**');
+        regulations.sources.forEach((s: string | SourceInfo) => {
+          if (typeof s === 'string') {
+            notes.push(`\n- ${s}`);
+          } else {
+            const sourceInfo = s as SourceInfo;
+            const title = sourceInfo.title || 'Documento';
+            const type = sourceInfo.type ? ` (${sourceInfo.type})` : '';
+            const conditions = sourceInfo.downloadConditions ? ` - ${sourceInfo.downloadConditions}` : '';
+            notes.push(`\n- [${title}${type}](${sourceInfo.url})${conditions}`);
+          }
+        });
+      }
+      if (notes.length > 0) {
+        updateData.analysis_notes = notes.join('');
       }
 
       // Always update status and timestamp

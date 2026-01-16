@@ -46,27 +46,11 @@ interface Task {
   contacts?: { name: string; surname: string | null }[];
 }
 
-// Simple in-memory rate limiting (resets on function cold start)
-const rateLimitStore = new Map<string, { count: number; resetTime: number }>();
-const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000; // 1 hour
-const MAX_REQUESTS_PER_WINDOW = 5; // Max 5 requests per hour
-
-function checkRateLimit(identifier: string): { allowed: boolean; retryAfterMs?: number } {
-  const now = Date.now();
-  const record = rateLimitStore.get(identifier);
-  
-  if (!record || now > record.resetTime) {
-    // Create new window
-    rateLimitStore.set(identifier, { count: 1, resetTime: now + RATE_LIMIT_WINDOW_MS });
-    return { allowed: true };
-  }
-  
-  if (record.count >= MAX_REQUESTS_PER_WINDOW) {
-    return { allowed: false, retryAfterMs: record.resetTime - now };
-  }
-  
-  record.count++;
-  return { allowed: true };
+interface UserWithTasks {
+  userId: string;
+  email: string;
+  fullName: string | null;
+  tasks: Task[];
 }
 
 const handler = async (req: Request): Promise<Response> => {
@@ -87,27 +71,6 @@ const handler = async (req: Request): Promise<Response> => {
     );
   }
 
-  // Rate limiting by IP or use a generic key
-  const clientIP = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || 
-                   req.headers.get("cf-connecting-ip") || 
-                   "unknown";
-  
-  const rateCheck = checkRateLimit(`daily-tasks:${clientIP}`);
-  if (!rateCheck.allowed) {
-    console.log(`Rate limit exceeded for IP: ${clientIP}`);
-    return new Response(
-      JSON.stringify({ error: "Too many requests" }),
-      { 
-        status: 429, 
-        headers: { 
-          "Content-Type": "application/json",
-          "Retry-After": String(Math.ceil((rateCheck.retryAfterMs || 0) / 1000)),
-          ...corsHeaders 
-        } 
-      }
-    );
-  }
-
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -117,9 +80,34 @@ const handler = async (req: Request): Promise<Response> => {
     const today = new Date();
     const todayStr = today.toISOString().split('T')[0];
     
-    console.log(`Fetching pending tasks for date: ${todayStr}`);
+    console.log(`Fetching pending tasks for date: ${todayStr} and overdue`);
 
-    // Fetch tasks from budget_tasks table (new model)
+    // Fetch all users with notification_email set
+    const { data: usersWithNotifications, error: usersError } = await supabase
+      .from('profiles')
+      .select('id, email, full_name, notification_email, notification_type')
+      .not('notification_email', 'is', null)
+      .neq('notification_type', 'none');
+
+    if (usersError) {
+      console.error('Error fetching users:', usersError);
+      return new Response(
+        JSON.stringify({ error: "Error fetching users" }),
+        { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
+
+    if (!usersWithNotifications || usersWithNotifications.length === 0) {
+      console.log('No users with notification email configured');
+      return new Response(
+        JSON.stringify({ success: true, message: 'No users configured for notifications' }),
+        { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
+
+    console.log(`Found ${usersWithNotifications.length} users with notifications enabled`);
+
+    // Fetch tasks from budget_tasks table - pending and (today or overdue)
     const { data: budgetTasksData, error: budgetTasksError } = await supabase
       .from('budget_tasks')
       .select(`
@@ -132,10 +120,11 @@ const handler = async (req: Request): Promise<Response> => {
         end_time,
         status,
         budget_id,
-        activity_id
+        activity_id,
+        created_by
       `)
       .eq('status', 'pendiente')
-      .or(`target_date.eq.${todayStr},start_date.eq.${todayStr}`);
+      .or(`target_date.lte.${todayStr},start_date.lte.${todayStr}`);
 
     if (budgetTasksError) {
       console.error('Error fetching budget_tasks:', budgetTasksError);
@@ -155,13 +144,34 @@ const handler = async (req: Request): Promise<Response> => {
       `)
       .eq('resource_type', 'Tarea')
       .eq('task_status', 'pendiente')
-      .eq('start_date', todayStr);
+      .lte('start_date', todayStr);
 
     if (resourceTasksError) {
       console.error('Error fetching resource tasks:', resourceTasksError);
     }
 
-    // Combine tasks
+    // Fetch CRM managements (tasks/objectives from CRM)
+    const { data: crmManagementsData, error: crmManagementsError } = await supabase
+      .from('crm_managements')
+      .select(`
+        id,
+        title,
+        description,
+        target_date,
+        start_time,
+        end_time,
+        status,
+        management_type,
+        created_by
+      `)
+      .eq('status', 'Pendiente')
+      .lte('target_date', todayStr);
+
+    if (crmManagementsError) {
+      console.error('Error fetching CRM managements:', crmManagementsError);
+    }
+
+    // Process all tasks
     const allTasks: Task[] = [];
 
     // Process budget_tasks
@@ -264,12 +274,42 @@ const handler = async (req: Request): Promise<Response> => {
       });
     }
 
-    console.log(`Found ${allTasks.length} pending tasks for today`);
+    // Process CRM managements as tasks
+    for (const mgmt of crmManagementsData || []) {
+      // Get contacts linked to this management
+      const { data: mgmtContacts } = await supabase
+        .from('crm_management_contacts')
+        .select('contact:crm_contacts(name, surname)')
+        .eq('management_id', mgmt.id);
+      
+      const contacts = mgmtContacts?.map((mc: any) => ({
+        name: mc.contact?.name || '',
+        surname: mc.contact?.surname || null
+      })) || [];
+
+      allTasks.push({
+        id: mgmt.id,
+        name: mgmt.title,
+        description: mgmt.description,
+        target_date: mgmt.target_date,
+        start_date: mgmt.target_date,
+        start_time: mgmt.start_time,
+        end_time: mgmt.end_time,
+        status: mgmt.status,
+        task_status: null,
+        budget_id: null,
+        budget_name: null,
+        activity_name: mgmt.management_type,
+        contacts
+      });
+    }
+
+    console.log(`Found ${allTasks.length} total pending tasks for today or overdue`);
 
     if (allTasks.length === 0) {
-      console.log('No pending tasks for today, skipping email');
+      console.log('No pending tasks, skipping emails');
       return new Response(
-        JSON.stringify({ success: true, message: 'No pending tasks for today' }),
+        JSON.stringify({ success: true, message: 'No pending tasks' }),
         { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
       );
     }
@@ -284,7 +324,7 @@ const handler = async (req: Request): Promise<Response> => {
       return 0;
     });
 
-    // Build HTML email
+    // Send email to each user with notifications enabled
     const appUrl = "https://conceptocasa.lovable.app";
     const formattedDate = today.toLocaleDateString('es-ES', { 
       weekday: 'long', 
@@ -293,163 +333,261 @@ const handler = async (req: Request): Promise<Response> => {
       day: 'numeric' 
     });
 
-    // Separate tasks with and without time
-    const tasksWithTime = allTasks.filter(t => t.start_time);
-    const tasksWithoutTime = allTasks.filter(t => !t.start_time);
+    let emailsSent = 0;
+    let emailsFailed = 0;
 
-    let tasksHtml = '';
+    for (const userProfile of usersWithNotifications) {
+      const notificationEmail = userProfile.notification_email;
+      if (!notificationEmail) continue;
 
-    if (tasksWithTime.length > 0) {
-      tasksHtml += `
-        <h3 style="color: #1e3a5f; margin-top: 24px; margin-bottom: 12px; border-bottom: 2px solid #e0e0e0; padding-bottom: 8px;">
-          🕐 Tareas con hora programada
-        </h3>
-        <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
-          <thead>
-            <tr style="background: #f5f5f5;">
-              <th style="padding: 10px; text-align: left; border-bottom: 2px solid #ddd;">Hora</th>
-              <th style="padding: 10px; text-align: left; border-bottom: 2px solid #ddd;">Tarea</th>
-              <th style="padding: 10px; text-align: left; border-bottom: 2px solid #ddd;">Presupuesto</th>
-              <th style="padding: 10px; text-align: left; border-bottom: 2px solid #ddd;">Contactos</th>
-            </tr>
-          </thead>
-          <tbody>
-      `;
+      // For now, send all tasks to all users with notifications
+      // In the future, could filter by user's access to budgets
+      const userTasks = allTasks;
 
-      for (const task of tasksWithTime) {
-        const timeRange = task.end_time 
-          ? `${task.start_time?.slice(0, 5)} - ${task.end_time.slice(0, 5)}`
-          : task.start_time?.slice(0, 5) || '';
-        
-        const contactsStr = task.contacts?.map(c => 
-          c.surname ? `${c.name} ${c.surname}` : c.name
-        ).join(', ') || '-';
+      if (userTasks.length === 0) continue;
 
-        const taskUrl = task.budget_id 
-          ? `${appUrl}/presupuestos/${task.budget_id}?tab=agenda&task=${task.id}`
-          : `${appUrl}/agenda?task=${task.id}`;
+      // Separate tasks with and without time
+      const tasksWithTime = userTasks.filter(t => t.start_time);
+      const tasksWithoutTime = userTasks.filter(t => !t.start_time);
 
+      // Separate today's tasks from overdue
+      const todayTasks = userTasks.filter(t => {
+        const taskDate = t.target_date || t.start_date;
+        return taskDate === todayStr;
+      });
+      const overdueTasks = userTasks.filter(t => {
+        const taskDate = t.target_date || t.start_date;
+        return taskDate && taskDate < todayStr;
+      });
+
+      let tasksHtml = '';
+
+      // Overdue tasks section
+      if (overdueTasks.length > 0) {
         tasksHtml += `
-          <tr style="border-bottom: 1px solid #eee;">
-            <td style="padding: 10px; font-weight: bold; color: #2563eb;">${timeRange}</td>
-            <td style="padding: 10px;">
-              <a href="${taskUrl}" style="color: #1e3a5f; text-decoration: none; font-weight: 500;">
+          <h3 style="color: #dc2626; margin-top: 24px; margin-bottom: 12px; border-bottom: 2px solid #fecaca; padding-bottom: 8px;">
+            ⚠️ Tareas vencidas (${overdueTasks.length})
+          </h3>
+          <ul style="list-style: none; padding: 0; margin: 0;">
+        `;
+
+        for (const task of overdueTasks) {
+          const taskDate = task.target_date || task.start_date;
+          const contactsStr = task.contacts?.map(c => 
+            c.surname ? `${c.name} ${c.surname}` : c.name
+          ).join(', ');
+
+          const taskUrl = task.budget_id 
+            ? `${appUrl}/presupuestos/${task.budget_id}?tab=agenda&task=${task.id}`
+            : `${appUrl}/agenda?task=${task.id}`;
+
+          tasksHtml += `
+            <li style="padding: 12px; margin-bottom: 8px; background: #fef2f2; border-radius: 8px; border-left: 4px solid #dc2626;">
+              <a href="${taskUrl}" style="color: #991b1b; text-decoration: none; font-weight: 500; font-size: 15px;">
                 ${task.name}
               </a>
-              ${task.description ? `<br><span style="color: #666; font-size: 12px;">${task.description.substring(0, 100)}${task.description.length > 100 ? '...' : ''}</span>` : ''}
-            </td>
-            <td style="padding: 10px;">${task.budget_name || '-'}</td>
-            <td style="padding: 10px; color: #666;">${contactsStr}</td>
-          </tr>
-        `;
+              <p style="margin: 4px 0 0 0; color: #b91c1c; font-size: 12px;">
+                📅 Vencida: ${taskDate ? new Date(taskDate).toLocaleDateString('es-ES') : 'Sin fecha'}
+              </p>
+              ${task.description ? `<p style="margin: 4px 0 0 0; color: #666; font-size: 13px;">${task.description.substring(0, 150)}${task.description.length > 150 ? '...' : ''}</p>` : ''}
+              <div style="margin-top: 6px; font-size: 12px; color: #888;">
+                ${task.budget_name ? `<span>📁 ${task.budget_name}</span>` : ''}
+                ${task.activity_name ? ` · <span>${task.activity_name}</span>` : ''}
+                ${contactsStr ? ` · <span>👤 ${contactsStr}</span>` : ''}
+              </div>
+            </li>
+          `;
+        }
+        tasksHtml += '</ul>';
       }
-      tasksHtml += '</tbody></table>';
-    }
 
-    if (tasksWithoutTime.length > 0) {
-      tasksHtml += `
-        <h3 style="color: #1e3a5f; margin-top: 24px; margin-bottom: 12px; border-bottom: 2px solid #e0e0e0; padding-bottom: 8px;">
-          📋 Tareas del día
-        </h3>
-        <ul style="list-style: none; padding: 0; margin: 0;">
-      `;
+      // Today's tasks with time
+      const todayWithTime = tasksWithTime.filter(t => {
+        const taskDate = t.target_date || t.start_date;
+        return taskDate === todayStr;
+      });
 
-      for (const task of tasksWithoutTime) {
-        const contactsStr = task.contacts?.map(c => 
-          c.surname ? `${c.name} ${c.surname}` : c.name
-        ).join(', ');
-
-        const taskUrl = task.budget_id 
-          ? `${appUrl}/presupuestos/${task.budget_id}?tab=agenda&task=${task.id}`
-          : `${appUrl}/agenda?task=${task.id}`;
-
+      if (todayWithTime.length > 0) {
         tasksHtml += `
-          <li style="padding: 12px; margin-bottom: 8px; background: #f9fafb; border-radius: 8px; border-left: 4px solid #2563eb;">
-            <a href="${taskUrl}" style="color: #1e3a5f; text-decoration: none; font-weight: 500; font-size: 15px;">
-              ${task.name}
-            </a>
-            ${task.description ? `<p style="margin: 4px 0 0 0; color: #666; font-size: 13px;">${task.description.substring(0, 150)}${task.description.length > 150 ? '...' : ''}</p>` : ''}
-            <div style="margin-top: 6px; font-size: 12px; color: #888;">
-              ${task.budget_name ? `<span>📁 ${task.budget_name}</span>` : ''}
-              ${task.activity_name ? ` · <span>${task.activity_name}</span>` : ''}
-              ${contactsStr ? ` · <span>👤 ${contactsStr}</span>` : ''}
-            </div>
-          </li>
+          <h3 style="color: #1e3a5f; margin-top: 24px; margin-bottom: 12px; border-bottom: 2px solid #e0e0e0; padding-bottom: 8px;">
+            🕐 Tareas de hoy con hora programada
+          </h3>
+          <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+            <thead>
+              <tr style="background: #f5f5f5;">
+                <th style="padding: 10px; text-align: left; border-bottom: 2px solid #ddd;">Hora</th>
+                <th style="padding: 10px; text-align: left; border-bottom: 2px solid #ddd;">Tarea</th>
+                <th style="padding: 10px; text-align: left; border-bottom: 2px solid #ddd;">Presupuesto</th>
+                <th style="padding: 10px; text-align: left; border-bottom: 2px solid #ddd;">Contactos</th>
+              </tr>
+            </thead>
+            <tbody>
         `;
-      }
-      tasksHtml += '</ul>';
-    }
 
-    const emailHtml = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      </head>
-      <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 700px; margin: 0 auto; padding: 20px; background: #f5f5f5;">
-        <div style="background: white; border-radius: 12px; padding: 24px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
-          <div style="text-align: center; margin-bottom: 24px;">
-            <h1 style="color: #1e3a5f; margin: 0 0 8px 0; font-size: 24px;">
-              📋 Tareas Pendientes
-            </h1>
-            <p style="color: #666; margin: 0; font-size: 14px;">
-              ${formattedDate}
+        for (const task of todayWithTime) {
+          const timeRange = task.end_time 
+            ? `${task.start_time?.slice(0, 5)} - ${task.end_time.slice(0, 5)}`
+            : task.start_time?.slice(0, 5) || '';
+          
+          const contactsStr = task.contacts?.map(c => 
+            c.surname ? `${c.name} ${c.surname}` : c.name
+          ).join(', ') || '-';
+
+          const taskUrl = task.budget_id 
+            ? `${appUrl}/presupuestos/${task.budget_id}?tab=agenda&task=${task.id}`
+            : `${appUrl}/agenda?task=${task.id}`;
+
+          tasksHtml += `
+            <tr style="border-bottom: 1px solid #eee;">
+              <td style="padding: 10px; font-weight: bold; color: #2563eb;">${timeRange}</td>
+              <td style="padding: 10px;">
+                <a href="${taskUrl}" style="color: #1e3a5f; text-decoration: none; font-weight: 500;">
+                  ${task.name}
+                </a>
+                ${task.description ? `<br><span style="color: #666; font-size: 12px;">${task.description.substring(0, 100)}${task.description.length > 100 ? '...' : ''}</span>` : ''}
+              </td>
+              <td style="padding: 10px;">${task.budget_name || '-'}</td>
+              <td style="padding: 10px; color: #666;">${contactsStr}</td>
+            </tr>
+          `;
+        }
+        tasksHtml += '</tbody></table>';
+      }
+
+      // Today's tasks without time
+      const todayWithoutTime = tasksWithoutTime.filter(t => {
+        const taskDate = t.target_date || t.start_date;
+        return taskDate === todayStr;
+      });
+
+      if (todayWithoutTime.length > 0) {
+        tasksHtml += `
+          <h3 style="color: #1e3a5f; margin-top: 24px; margin-bottom: 12px; border-bottom: 2px solid #e0e0e0; padding-bottom: 8px;">
+            📋 Tareas del día
+          </h3>
+          <ul style="list-style: none; padding: 0; margin: 0;">
+        `;
+
+        for (const task of todayWithoutTime) {
+          const contactsStr = task.contacts?.map(c => 
+            c.surname ? `${c.name} ${c.surname}` : c.name
+          ).join(', ');
+
+          const taskUrl = task.budget_id 
+            ? `${appUrl}/presupuestos/${task.budget_id}?tab=agenda&task=${task.id}`
+            : `${appUrl}/agenda?task=${task.id}`;
+
+          tasksHtml += `
+            <li style="padding: 12px; margin-bottom: 8px; background: #f9fafb; border-radius: 8px; border-left: 4px solid #2563eb;">
+              <a href="${taskUrl}" style="color: #1e3a5f; text-decoration: none; font-weight: 500; font-size: 15px;">
+                ${task.name}
+              </a>
+              ${task.description ? `<p style="margin: 4px 0 0 0; color: #666; font-size: 13px;">${task.description.substring(0, 150)}${task.description.length > 150 ? '...' : ''}</p>` : ''}
+              <div style="margin-top: 6px; font-size: 12px; color: #888;">
+                ${task.budget_name ? `<span>📁 ${task.budget_name}</span>` : ''}
+                ${task.activity_name ? ` · <span>${task.activity_name}</span>` : ''}
+                ${contactsStr ? ` · <span>👤 ${contactsStr}</span>` : ''}
+              </div>
+            </li>
+          `;
+        }
+        tasksHtml += '</ul>';
+      }
+
+      const greeting = userProfile.full_name ? `Hola ${userProfile.full_name.split(' ')[0]},` : 'Hola,';
+
+      const emailHtml = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        </head>
+        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 700px; margin: 0 auto; padding: 20px; background: #f5f5f5;">
+          <div style="background: white; border-radius: 12px; padding: 24px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
+            <div style="text-align: center; margin-bottom: 24px;">
+              <h1 style="color: #1e3a5f; margin: 0 0 8px 0; font-size: 24px;">
+                📋 Tareas Pendientes
+              </h1>
+              <p style="color: #666; margin: 0; font-size: 14px;">
+                ${formattedDate}
+              </p>
+            </div>
+
+            <p style="color: #333; font-size: 15px; margin-bottom: 16px;">
+              ${greeting}
+            </p>
+            <p style="color: #666; font-size: 14px; margin-bottom: 20px;">
+              Tienes <strong>${userTasks.length}</strong> tareas pendientes${overdueTasks.length > 0 ? `, incluyendo <strong style="color: #dc2626;">${overdueTasks.length} vencidas</strong>` : ''}.
+            </p>
+
+            <div style="background: #eff6ff; border-radius: 8px; padding: 16px; margin-bottom: 20px; display: flex; justify-content: center; gap: 24px;">
+              <div style="text-align: center;">
+                <span style="font-size: 28px; font-weight: bold; color: #2563eb;">${todayTasks.length}</span>
+                <span style="color: #1e40af; display: block; font-size: 12px;">para hoy</span>
+              </div>
+              ${overdueTasks.length > 0 ? `
+              <div style="text-align: center;">
+                <span style="font-size: 28px; font-weight: bold; color: #dc2626;">${overdueTasks.length}</span>
+                <span style="color: #991b1b; display: block; font-size: 12px;">vencidas</span>
+              </div>
+              ` : ''}
+            </div>
+
+            ${tasksHtml}
+
+            <div style="margin-top: 32px; padding-top: 20px; border-top: 1px solid #eee; text-align: center;">
+              <a href="${appUrl}/agenda" style="display: inline-block; background: #2563eb; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 500;">
+                Ver Agenda Completa
+              </a>
+            </div>
+
+            <p style="color: #999; font-size: 11px; text-align: center; margin-top: 24px;">
+              Este email se envía automáticamente desde Concepto Casa.<br>
+              Recibes este email porque tienes activadas las notificaciones en tu perfil.<br>
+              <a href="${appUrl}" style="color: #2563eb;">conceptocasa.lovable.app</a>
             </p>
           </div>
+        </body>
+        </html>
+      `;
 
-          <div style="background: #eff6ff; border-radius: 8px; padding: 16px; margin-bottom: 20px; text-align: center;">
-            <span style="font-size: 32px; font-weight: bold; color: #2563eb;">${allTasks.length}</span>
-            <span style="color: #1e40af; margin-left: 8px;">tareas pendientes para hoy</span>
-          </div>
+      try {
+        const subjectOverdue = overdueTasks.length > 0 ? ` (⚠️ ${overdueTasks.length} vencidas)` : '';
+        const emailResponse = await resend.emails.send({
+          from: "Concepto Casa <noreply@concepto.casa>",
+          to: [notificationEmail],
+          subject: `📋 Tareas pendientes (${userTasks.length})${subjectOverdue} - ${formattedDate}`,
+          html: emailHtml,
+        });
 
-          ${tasksHtml}
-
-          <div style="margin-top: 32px; padding-top: 20px; border-top: 1px solid #eee; text-align: center;">
-            <a href="${appUrl}/agenda" style="display: inline-block; background: #2563eb; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 500;">
-              Ver Agenda Completa
-            </a>
-          </div>
-
-          <p style="color: #999; font-size: 11px; text-align: center; margin-top: 24px;">
-            Este email se envía automáticamente desde Concepto Casa.<br>
-            <a href="${appUrl}" style="color: #2563eb;">conceptocasa.lovable.app</a>
-          </p>
-        </div>
-      </body>
-      </html>
-    `;
-
-    // Send email
-    const emailResponse = await resend.emails.send({
-      from: "Concepto Casa <noreply@concepto.casa>",
-      to: ["organiza@concepto.casa"],
-      subject: `📋 Tareas pendientes para hoy (${allTasks.length}) - ${formattedDate}`,
-      html: emailHtml,
-    });
-
-    if (emailResponse.error) {
-      console.error("Resend error:", emailResponse.error);
-      return new Response(
-        JSON.stringify({ error: emailResponse.error.message }),
-        { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
-      );
+        if (emailResponse.error) {
+          console.error(`Error sending email to ${notificationEmail}:`, emailResponse.error);
+          emailsFailed++;
+        } else {
+          console.log(`Email sent to ${notificationEmail}:`, emailResponse.data?.id);
+          emailsSent++;
+        }
+      } catch (emailError) {
+        console.error(`Error sending email to ${notificationEmail}:`, emailError);
+        emailsFailed++;
+      }
     }
 
-    console.log("Email sent successfully:", emailResponse.data?.id);
+    console.log(`Emails sent: ${emailsSent}, failed: ${emailsFailed}`);
 
     return new Response(
       JSON.stringify({ 
         success: true, 
         tasksCount: allTasks.length,
-        emailId: emailResponse.data?.id 
+        emailsSent,
+        emailsFailed
       }),
       { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
     );
 
   } catch (error: any) {
     console.error("Error in send-daily-tasks:", error);
-    // Return generic error message to avoid information disclosure
     return new Response(
       JSON.stringify({ error: "Internal server error" }),
       { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }

@@ -44,6 +44,18 @@ INSTRUCCIONES CRÍTICAS:
 7. Para RETRANQUEOS: busca en las ordenanzas por tipo de suelo (urbano, rústico, etc.)
 8. Para ALTURAS/PLANTAS: busca "altura máxima", "número de plantas", "pisos", "cornisa".
 
+AFECCIONES SECTORIALES A DETECTAR (MUY IMPORTANTE):
+- **AERONÁUTICAS (AESA)**: Busca "servidumbre aeronáutica", "pasillo aéreo", "zona de aproximación", "AESA", "aeropuerto", "helipuerto", "superficie limitadora". Las distancias y alturas varían según proximidad al aeropuerto.
+- **LEY DE COSTAS**: Busca "dominio público marítimo-terrestre", "servidumbre de protección" (100m), "servidumbre de tránsito" (6m), "zona de influencia" (500m), "Ley 22/1988", "deslinde".
+- **MONTES/BOSQUES**: Busca "monte público", "monte catalogado", "zona forestal", "franja de protección contra incendios", "25 metros", "50 metros de masa forestal".
+- **CARRETERAS**: Busca "zona de dominio público", "zona de servidumbre", "línea de edificación", "autovía", "carretera estatal/autonómica".
+- **AGUAS/CAUCES**: Busca "dominio público hidráulico", "zona de policía" (100m), "zona de servidumbre" (5m), "cauce", "río", "arroyo", "CHC", "Confederación Hidrográfica".
+- **PATRIMONIO**: Busca "BIC", "bien de interés cultural", "entorno de protección", "zona arqueológica", "conjunto histórico".
+- **VÍAS PECUARIAS**: Busca "cañada", "cordel", "vereda", "vía pecuaria", "deslinde".
+- **FERROCARRIL**: Busca "zona de dominio público ferroviario", "línea de edificación", "ADIF".
+- **GASODUCTO/OLEODUCTO**: Busca "franja de seguridad", "servidumbre de paso", "gaseoducto", "oleoducto", "CLH", "Enagás".
+- **ELECTRICIDAD**: Busca "línea de alta tensión", "servidumbre eléctrica", "pasillo eléctrico", "REE".
+
 CONCLUSIÓN EDIFICABLE (MUY IMPORTANTE):
 - Si el documento dice explícitamente "edificable" o "no edificable", respeta esa conclusión.
 - Si hay contradicción, prioriza el texto literal más claro (p.ej. "SE CERTIFICA: ... edificable").
@@ -67,11 +79,14 @@ RESPONDE SOLO en formato JSON con esta estructura exacta:
   "minDistanceNeighbors": { "value": null o número en metros, "source": "artículo o sección" },
   "minDistanceRoads": { "value": null o número en metros, "source": "artículo o sección" },
   "minDistanceSlopes": { "value": null o número en metros, "source": "artículo o sección" },
-  "minDistanceCemetery": { "value": null o número en metros, "source": "ley o artículo - BUSCAR expresiones como '200 metros del cementerio', 'distancia sanitaria', 'zona afección cementerio'" },
+  "minDistanceCemetery": { "value": null o número en metros, "source": "ley o artículo" },
   "minDistancePowerLines": { "value": null o número en metros, "source": "normativa sectorial" },
   "minDistanceWaterCourses": { "value": null o número en metros, "source": "artículo o sección" },
   "minDistanceRailway": { "value": null o número en metros, "source": "normativa sectorial" },
   "minDistancePipeline": { "value": null o número en metros, "source": "normativa sectorial" },
+  "minDistanceCoast": { "value": null o número en metros, "source": "Ley de Costas o PGOU" },
+  "minDistanceForest": { "value": null o número en metros, "source": "normativa forestal o PGOU" },
+  "minDistanceAirport": { "value": null o número en metros o altura máxima, "source": "AESA o normativa aeronáutica" },
   "fenceSetback": { "value": null o número en metros, "source": "artículo o sección" },
   "accessWidth": { "value": null o número en metros, "source": "artículo o sección" },
   "hasMunicipalSewage": { "value": null o true o false, "source": "información del municipio" },
@@ -85,8 +100,13 @@ RESPONDE SOLO en formato JSON con esta estructura exacta:
   "affectedByPowerLines": true o false o null,
   "affectedByCemetery": true o false o null,
   "affectedByWaterCourses": true o false o null,
+  "affectedByCoast": true o false o null,
+  "affectedByAirport": true o false o null,
+  "affectedByForest": true o false o null,
+  "affectedByHeritage": true o false o null,
+  "affectedByLivestockRoute": true o false o null,
   "sectoralRestrictions": [
-    { "type": "tipo de afección", "description": "descripción", "distance": número o null, "source": "referencia" }
+    { "type": "tipo de afección (AESA/COSTAS/MONTES/CARRETERAS/AGUAS/PATRIMONIO/VÍAS PECUARIAS/FERROCARRIL/GASODUCTO/ELECTRICIDAD)", "description": "descripción detallada", "distance": número o null, "maxHeight": número o null, "source": "referencia normativa" }
   ],
   "additionalInfo": "Cualquier otra información urbanística relevante encontrada que no encaje en los campos anteriores",
   "documentSummary": "Breve resumen del tipo de documento y sus conclusiones principales"
@@ -112,7 +132,7 @@ RESPONDE SOLO en formato JSON con esta estructura exacta:
     'PARCELA',
     'SUPERFICIE',
     'VOLUMEN',
-    // New keywords for better extraction
+    // Normativa general
     'CEMENTERIO',
     'SANITARIA',
     'ORDENANZA',
@@ -127,11 +147,54 @@ RESPONDE SOLO en formato JSON con esta estructura exacta:
     'SUELO RÚSTICO',
     'NO URBANIZABLE',
     'ZONA RESIDENCIAL',
+    // Afecciones sectoriales
     'LÍNEA ELÉCTRICA',
+    'ALTA TENSIÓN',
     'CAUCE',
     'FERROCARRIL',
     'GASODUCTO',
     'OLEODUCTO',
+    // Aeronáuticas (AESA)
+    'AEROPUERTO',
+    'AESA',
+    'SERVIDUMBRE AERONÁUTICA',
+    'PASILLO AÉREO',
+    'SUPERFICIE LIMITADORA',
+    'HELIPUERTO',
+    // Ley de Costas
+    'LEY DE COSTAS',
+    'DOMINIO PÚBLICO MARÍTIMO',
+    'SERVIDUMBRE DE PROTECCIÓN',
+    'SERVIDUMBRE DE TRÁNSITO',
+    'DESLINDE',
+    'ZONA DE INFLUENCIA',
+    // Montes y bosques
+    'MONTE PÚBLICO',
+    'MONTE CATALOGADO',
+    'ZONA FORESTAL',
+    'MASA FORESTAL',
+    'INCENDIOS',
+    'FRANJA DE PROTECCIÓN',
+    // Patrimonio
+    'BIC',
+    'BIEN DE INTERÉS CULTURAL',
+    'ZONA ARQUEOLÓGICA',
+    'CONJUNTO HISTÓRICO',
+    'ENTORNO DE PROTECCIÓN',
+    // Vías pecuarias
+    'VÍA PECUARIA',
+    'CAÑADA',
+    'CORDEL',
+    'VEREDA',
+    // Aguas
+    'DOMINIO PÚBLICO HIDRÁULICO',
+    'ZONA DE POLICÍA',
+    'CONFEDERACIÓN HIDROGRÁFICA',
+    // Carreteras
+    'ZONA DE DOMINIO PÚBLICO',
+    'LÍNEA DE EDIFICACIÓN',
+    'AUTOVÍA',
+    'AUTOPISTA',
   ];
 
   const snippets: string[] = [];

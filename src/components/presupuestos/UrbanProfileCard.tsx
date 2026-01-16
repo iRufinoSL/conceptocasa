@@ -38,7 +38,9 @@ import {
   Fuel,
   Cross,
   Fence,
-  Car
+  Car,
+  Container,
+  Waves
 } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import * as pdfjsLib from 'pdfjs-dist';
@@ -128,6 +130,13 @@ interface UrbanProfile {
   affected_by_cemetery: boolean | null;
   affected_by_water_courses: boolean | null;
   sectoral_restrictions: Json | null;
+  // Sewage/Sanitation fields
+  has_municipal_sewage: boolean | null;
+  has_municipal_sewage_source: string | null;
+  requires_septic_tank: boolean | null;
+  septic_tank_regulations: string | null;
+  septic_tank_min_distance: number | null;
+  septic_tank_min_distance_source: string | null;
 }
 
 interface CatastroData {
@@ -1463,6 +1472,71 @@ export function UrbanProfileCard({ budgetId, cadastralReference: initialRef, isA
                       onSave={(value, source) => handleSaveField('access_width', 'access_width_source', value, source)}
                     />
                   </div>
+                </div>
+
+                {/* Sewage/Sanitation Section - Saneamiento */}
+                <Separator />
+                <div className="space-y-3">
+                  <h4 className="font-medium flex items-center gap-2 text-sm">
+                    <Waves className="h-4 w-4 text-blue-500" />
+                    Saneamiento
+                  </h4>
+                  <p className="text-xs text-muted-foreground">
+                    Información sobre red de saneamiento municipal y requisitos de fosa séptica.
+                  </p>
+                  
+                  {/* Sewage Status Indicators */}
+                  <div className="flex flex-wrap gap-2">
+                    {profile.has_municipal_sewage === true && (
+                      <Badge variant="outline" className="bg-green-50 text-green-700 border-green-300 dark:bg-green-900/20 dark:text-green-400">
+                        <Waves className="h-3 w-3 mr-1" />
+                        Red de saneamiento municipal disponible
+                      </Badge>
+                    )}
+                    {profile.has_municipal_sewage === false && (
+                      <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-300 dark:bg-amber-900/20 dark:text-amber-400">
+                        <Waves className="h-3 w-3 mr-1" />
+                        Sin red de saneamiento municipal
+                      </Badge>
+                    )}
+                    {profile.requires_septic_tank === true && (
+                      <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-300 dark:bg-orange-900/20 dark:text-orange-400">
+                        <Container className="h-3 w-3 mr-1" />
+                        Requiere fosa séptica
+                      </Badge>
+                    )}
+                    {profile.requires_septic_tank === false && (
+                      <Badge variant="outline" className="bg-green-50 text-green-700 border-green-300 dark:bg-green-900/20 dark:text-green-400">
+                        <Container className="h-3 w-3 mr-1" />
+                        No requiere fosa séptica
+                      </Badge>
+                    )}
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {/* Septic Tank Min Distance */}
+                    <EditableFieldWithSource
+                      label="Distancia mínima fosa séptica"
+                      value={profile.septic_tank_min_distance}
+                      source={profile.septic_tank_min_distance_source}
+                      unit="m"
+                      icon={Container}
+                      onSave={(value, source) => handleSaveField('septic_tank_min_distance', 'septic_tank_min_distance_source', value, source)}
+                    />
+                  </div>
+                  
+                  {/* Septic Tank Regulations if present */}
+                  {profile.septic_tank_regulations && (
+                    <div className="p-3 rounded-lg bg-muted/30 border">
+                      <div className="flex items-center gap-2 text-sm font-medium mb-2">
+                        <FileText className="h-4 w-4 text-primary" />
+                        <span>Normativa de fosa séptica</span>
+                      </div>
+                      <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+                        {profile.septic_tank_regulations}
+                      </p>
+                    </div>
+                  )}
                 </div>
 
                 {/* Additional Restrictions Section */}

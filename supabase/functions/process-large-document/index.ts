@@ -49,19 +49,26 @@ INSTRUCCIONES:
    - Retranqueo del cerramiento al viario
    - Anchura mínima de acceso rodado
 
-3. Identifica SI LA PARCELA ESTÁ AFECTADA por:
+3. Busca información sobre SANEAMIENTO Y SERVICIOS:
+   - Si el municipio/zona tiene red de saneamiento municipal (alcantarillado)
+   - Si se requiere instalación de fosa séptica
+   - Normativa aplicable a la fosa séptica (distancias, capacidad, etc.)
+   - Distancia mínima de la fosa séptica a edificaciones o pozos
+
+4. Identifica SI LA PARCELA ESTÁ AFECTADA por:
    - Líneas eléctricas
    - Proximidad a cementerio
    - Cauces de agua
+   - Falta de red de saneamiento
    - Otras servidumbres
 
-4. Para cada valor encontrado, indica el artículo, sección, ley o referencia donde lo encontraste.
+5. Para cada valor encontrado, indica el artículo, sección, ley o referencia donde lo encontraste.
 
-5. Si un valor no aparece explícitamente, pon null.
+6. Si un valor no aparece explícitamente, pon null.
 
-6. Si hay varios valores posibles (por zonas, usos, etc.), extrae el más restrictivo o el aplicable a vivienda unifamiliar.
+7. Si hay varios valores posibles (por zonas, usos, etc.), extrae el más restrictivo o el aplicable a vivienda unifamiliar.
 
-7. Indica si la parcela es divisible o indivisible según la normativa.
+8. Indica si la parcela es divisible o indivisible según la normativa.
 
 RESPONDE SOLO en formato JSON con esta estructura exacta:
 {
@@ -84,6 +91,10 @@ RESPONDE SOLO en formato JSON con esta estructura exacta:
   "minDistancePipeline": { "value": null o número en metros, "source": "normativa sectorial" },
   "fenceSetback": { "value": null o número en metros, "source": "artículo o sección" },
   "accessWidth": { "value": null o número en metros, "source": "artículo o sección" },
+  "hasMunicipalSewage": { "value": null o true o false, "source": "información del municipio" },
+  "requiresSepticTank": { "value": null o true o false, "source": "normativa aplicable" },
+  "septicTankRegulations": { "value": null o "texto con la normativa", "source": "artículo o sección" },
+  "septicTankMinDistance": { "value": null o número en metros, "source": "normativa sanitaria" },
   "isDivisible": { "value": null o true o false, "source": "artículo o sección" },
   "affectedByPowerLines": true o false o null,
   "affectedByCemetery": true o false o null,
@@ -296,6 +307,7 @@ Deno.serve(async (req) => {
         checkValue(extractedData.minDistancePipeline as { value: number | null });
         checkValue(extractedData.fenceSetback as { value: number | null });
         checkValue(extractedData.accessWidth as { value: number | null });
+        checkValue(extractedData.septicTankMinDistance as { value: number | null });
       }
 
       // Update the upload record with results
@@ -409,6 +421,24 @@ Deno.serve(async (req) => {
         }
         if (typeof edAny.affectedByWaterCourses === 'boolean') {
           updateData.affected_by_water_courses = edAny.affectedByWaterCourses;
+        }
+        // Sewage/Sanitation fields
+        const hasMunicipalSewageField = (extractedData as Record<string, { value?: boolean | null; source?: string }>).hasMunicipalSewage;
+        if (typeof hasMunicipalSewageField?.value === 'boolean') {
+          updateData.has_municipal_sewage = hasMunicipalSewageField.value;
+          updateData.has_municipal_sewage_source = hasMunicipalSewageField.source;
+        }
+        const requiresSepticTankField = (extractedData as Record<string, { value?: boolean | null; source?: string }>).requiresSepticTank;
+        if (typeof requiresSepticTankField?.value === 'boolean') {
+          updateData.requires_septic_tank = requiresSepticTankField.value;
+        }
+        const septicTankRegulationsField = (extractedData as Record<string, { value?: string | null; source?: string }>).septicTankRegulations;
+        if (septicTankRegulationsField?.value) {
+          updateData.septic_tank_regulations = septicTankRegulationsField.value;
+        }
+        if (ed.septicTankMinDistance?.value) {
+          updateData.septic_tank_min_distance = ed.septicTankMinDistance.value;
+          updateData.septic_tank_min_distance_source = ed.septicTankMinDistance.source;
         }
         // Store sectoral restrictions as JSON
         if (Array.isArray(edAny.sectoralRestrictions) && edAny.sectoralRestrictions.length > 0) {

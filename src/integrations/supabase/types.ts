@@ -3358,6 +3358,8 @@ export type Database = {
           front_setback_source: string | null
           google_maps_lat: number | null
           google_maps_lng: number | null
+          has_municipal_sewage: boolean | null
+          has_municipal_sewage_source: string | null
           id: string
           is_divisible: boolean | null
           is_divisible_source: string | null
@@ -3396,8 +3398,12 @@ export type Database = {
           province: string | null
           rear_setback: number | null
           rear_setback_source: string | null
+          requires_septic_tank: boolean | null
           sectoral_restrictions: Json | null
           seismic_zone: string | null
+          septic_tank_min_distance: number | null
+          septic_tank_min_distance_source: string | null
+          septic_tank_regulations: string | null
           side_setback: number | null
           side_setback_source: string | null
           snow_zone: string | null
@@ -3434,6 +3440,8 @@ export type Database = {
           front_setback_source?: string | null
           google_maps_lat?: number | null
           google_maps_lng?: number | null
+          has_municipal_sewage?: boolean | null
+          has_municipal_sewage_source?: string | null
           id?: string
           is_divisible?: boolean | null
           is_divisible_source?: string | null
@@ -3472,8 +3480,12 @@ export type Database = {
           province?: string | null
           rear_setback?: number | null
           rear_setback_source?: string | null
+          requires_septic_tank?: boolean | null
           sectoral_restrictions?: Json | null
           seismic_zone?: string | null
+          septic_tank_min_distance?: number | null
+          septic_tank_min_distance_source?: string | null
+          septic_tank_regulations?: string | null
           side_setback?: number | null
           side_setback_source?: string | null
           snow_zone?: string | null
@@ -3510,6 +3522,8 @@ export type Database = {
           front_setback_source?: string | null
           google_maps_lat?: number | null
           google_maps_lng?: number | null
+          has_municipal_sewage?: boolean | null
+          has_municipal_sewage_source?: string | null
           id?: string
           is_divisible?: boolean | null
           is_divisible_source?: string | null
@@ -3548,8 +3562,12 @@ export type Database = {
           province?: string | null
           rear_setback?: number | null
           rear_setback_source?: string | null
+          requires_septic_tank?: boolean | null
           sectoral_restrictions?: Json | null
           seismic_zone?: string | null
+          septic_tank_min_distance?: number | null
+          septic_tank_min_distance_source?: string | null
+          septic_tank_regulations?: string | null
           side_setback?: number | null
           side_setback_source?: string | null
           snow_zone?: string | null

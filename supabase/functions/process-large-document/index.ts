@@ -31,12 +31,18 @@ async function analyzeWithAI(
 
 TIPOS DE DOCUMENTOS QUE PUEDES RECIBIR:
 1. **CERTIFICADO URBANÍSTICO / CÉDULA URBANÍSTICA** - Documento oficial del Ayuntamiento que certifica las condiciones urbanísticas de una parcela específica.
+2. **PGOU / NORMATIVA URBANÍSTICA** - Plan General de Ordenación Urbana con artículos, ordenanzas y parámetros de edificación por zonas.
+3. **NORMAS SUBSIDIARIAS / NORMAS COMPLEMENTARIAS** - Regulación urbanística municipal.
 
 INSTRUCCIONES CRÍTICAS:
-1. Lee con máxima atención. Si es un Certificado Urbanístico, normalmente contiene la respuesta explícita.
-2. Si hay una imagen de página (OCR), úsala como fuente principal cuando el texto sea incompleto.
-3. Extrae valores numéricos exactos.
-4. Incluye siempre la fuente exacta (sección/artículo/página) cuando sea posible.
+1. Lee con máxima atención TODO el documento. Los datos pueden estar en cualquier parte (tablas, artículos, anexos).
+2. Si es un Certificado Urbanístico, normalmente contiene la respuesta explícita.
+3. Si es PGOU/Normativa, busca las ORDENANZAS DE ZONA, los artículos sobre edificabilidad, alturas, retranqueos.
+4. Extrae valores numéricos exactos.
+5. Incluye siempre la fuente exacta (sección/artículo/página) cuando sea posible.
+6. Para DISTANCIAS A CEMENTERIOS: busca "cementerio", "sanitaria", "200 metros", "50 metros" - suele estar en normativa sectorial.
+7. Para RETRANQUEOS: busca en las ordenanzas por tipo de suelo (urbano, rústico, etc.)
+8. Para ALTURAS/PLANTAS: busca "altura máxima", "número de plantas", "pisos", "cornisa".
 
 CONCLUSIÓN EDIFICABLE (MUY IMPORTANTE):
 - Si el documento dice explícitamente "edificable" o "no edificable", respeta esa conclusión.
@@ -61,7 +67,7 @@ RESPONDE SOLO en formato JSON con esta estructura exacta:
   "minDistanceNeighbors": { "value": null o número en metros, "source": "artículo o sección" },
   "minDistanceRoads": { "value": null o número en metros, "source": "artículo o sección" },
   "minDistanceSlopes": { "value": null o número en metros, "source": "artículo o sección" },
-  "minDistanceCemetery": { "value": null o número en metros, "source": "ley o artículo" },
+  "minDistanceCemetery": { "value": null o número en metros, "source": "ley o artículo - BUSCAR expresiones como '200 metros del cementerio', 'distancia sanitaria', 'zona afección cementerio'" },
   "minDistancePowerLines": { "value": null o número en metros, "source": "normativa sectorial" },
   "minDistanceWaterCourses": { "value": null o número en metros, "source": "artículo o sección" },
   "minDistanceRailway": { "value": null o número en metros, "source": "normativa sectorial" },
@@ -89,6 +95,7 @@ RESPONDE SOLO en formato JSON con esta estructura exacta:
   // Keep the request small + focused (prevents timeouts on very long PDFs)
   const text = input.text || '';
 
+  // Extended keyword list for better extraction from large normative documents
   const keywords = [
     'SE CERTIFICA',
     'CERTIFICA',
@@ -105,6 +112,26 @@ RESPONDE SOLO en formato JSON con esta estructura exacta:
     'PARCELA',
     'SUPERFICIE',
     'VOLUMEN',
+    // New keywords for better extraction
+    'CEMENTERIO',
+    'SANITARIA',
+    'ORDENANZA',
+    'ARTÍCULO',
+    'PARÁMETROS',
+    'ALTURA MÁXIMA',
+    'CORNISA',
+    'LINDERO',
+    'FACHADA',
+    'USOS PERMITIDOS',
+    'SUELO URBANO',
+    'SUELO RÚSTICO',
+    'NO URBANIZABLE',
+    'ZONA RESIDENCIAL',
+    'LÍNEA ELÉCTRICA',
+    'CAUCE',
+    'FERROCARRIL',
+    'GASODUCTO',
+    'OLEODUCTO',
   ];
 
   const snippets: string[] = [];
@@ -113,27 +140,30 @@ RESPONDE SOLO en formato JSON con esta estructura exacta:
     const ku = k.toUpperCase();
     let idx = 0;
     let hits = 0;
-    while (hits < 6) {
+    // Increase hits per keyword to 8 for better coverage
+    while (hits < 8) {
       const found = upper.indexOf(ku, idx);
       if (found === -1) break;
-      const start = Math.max(0, found - 350);
-      const end = Math.min(text.length, found + ku.length + 350);
+      // Increase context window for each snippet
+      const start = Math.max(0, found - 500);
+      const end = Math.min(text.length, found + ku.length + 500);
       snippets.push(text.slice(start, end));
       idx = found + ku.length;
       hits++;
     }
   }
 
-  const head = text.slice(0, 15000);
+  // For large documents, take more from the head (normativa often has index/content pages)
+  const head = text.slice(0, 25000);
 
-  // Hard cap total content to avoid gateway/model limits and function timeouts
+  // Increase total content limit to handle large normative documents better
   const analysisText = [
     '=== INICIO DEL DOCUMENTO (recorte) ===\n' + head,
     snippets.length ? '\n\n=== EXTRACTOS POR PALABRAS CLAVE ===\n' + snippets.join('\n\n---\n\n') : '',
   ]
     .filter(Boolean)
     .join('\n')
-    .slice(0, 60000);
+    .slice(0, 90000);
 
   const hasImage = !!input.firstPageImageDataUrl;
   const model = 'google/gemini-3-flash-preview';

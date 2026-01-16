@@ -51,6 +51,9 @@ interface SearchResult {
   email: string;
   price: string;
   description: string;
+  hasTechnicalSheet?: boolean;
+  hasCEMarking?: boolean;
+  certifications?: string[];
 }
 
 serve(async (req) => {
@@ -123,7 +126,7 @@ serve(async (req) => {
       );
     }
 
-    const { query, resourceType, geoFilter } = body;
+    const { query, resourceType, geoFilter, specificWebsite, specificSupplier, searchExtras } = body;
 
     // Input validation
     if (!query || typeof query !== 'string') {
@@ -159,6 +162,22 @@ serve(async (req) => {
         : 'ES'
     };
 
+    // Validate specific website
+    const sanitizedWebsite = specificWebsite && typeof specificWebsite === 'string'
+      ? specificWebsite.trim().slice(0, 100).replace(/^https?:\/\//, '').replace(/^www\./, '')
+      : '';
+
+    // Validate specific supplier
+    const sanitizedSupplier = specificSupplier && typeof specificSupplier === 'string'
+      ? specificSupplier.trim().slice(0, 100)
+      : '';
+
+    // Validate search extras (ficha_tecnica, marcado_ce, certificaciones)
+    const validExtras = ['ficha_tecnica', 'marcado_ce', 'certificaciones'];
+    const sanitizedExtras = Array.isArray(searchExtras) 
+      ? searchExtras.filter(e => validExtras.includes(e))
+      : [];
+
     const apiKey = Deno.env.get('FIRECRAWL_API_KEY');
     if (!apiKey) {
       console.error('FIRECRAWL_API_KEY not configured');
@@ -168,16 +187,61 @@ serve(async (req) => {
       );
     }
 
-    console.log('Searching for resources:', sanitizedQuery, 'Type:', sanitizedResourceType, 'GeoFilter:', sanitizedGeoFilter, 'User:', userId);
+    console.log('Searching for resources:', sanitizedQuery, 'Type:', sanitizedResourceType, 'GeoFilter:', sanitizedGeoFilter, 'Website:', sanitizedWebsite, 'Supplier:', sanitizedSupplier, 'Extras:', sanitizedExtras, 'User:', userId);
 
-    // Build search query with geographic filter
-    const searchQuery = `${sanitizedQuery} ${sanitizedResourceType} proveedor distribuidor ${sanitizedGeoFilter.location} precio contacto`.trim();
+    // Build search query with all filters
+    let searchQueryParts = [sanitizedQuery];
+    
+    if (sanitizedResourceType) {
+      searchQueryParts.push(sanitizedResourceType);
+    }
+    
+    if (sanitizedSupplier) {
+      searchQueryParts.push(`"${sanitizedSupplier}"`);
+    }
+    
+    // Add quality/certification terms based on extras
+    if (sanitizedExtras.includes('ficha_tecnica')) {
+      searchQueryParts.push('ficha técnica especificaciones técnicas');
+    }
+    if (sanitizedExtras.includes('marcado_ce')) {
+      searchQueryParts.push('marcado CE certificado europeo');
+    }
+    if (sanitizedExtras.includes('certificaciones')) {
+      searchQueryParts.push('certificación calidad ISO normativa española homologación');
+    }
+    
+    // Add geo and contact terms
+    searchQueryParts.push('proveedor distribuidor');
+    if (sanitizedGeoFilter.location) {
+      searchQueryParts.push(sanitizedGeoFilter.location);
+    }
+    searchQueryParts.push('precio contacto');
+    
+    const searchQuery = searchQueryParts.join(' ').trim();
     
     // Determine country code for Firecrawl
     const countryCode = sanitizedGeoFilter.country;
     const langMap: Record<string, string> = {
       'ES': 'es', 'PT': 'pt', 'FR': 'fr', 'IT': 'it', 'DE': 'de'
     };
+
+    // Build Firecrawl request options
+    const firecrawlBody: Record<string, unknown> = {
+      query: searchQuery,
+      limit: 15,
+      lang: langMap[countryCode] || 'en',
+      country: countryCode,
+      scrapeOptions: {
+        formats: ['markdown'],
+      },
+    };
+
+    // Add domain filter if specific website is provided
+    if (sanitizedWebsite) {
+      firecrawlBody.search_domain_filter = [sanitizedWebsite];
+      console.log('Filtering to domain:', sanitizedWebsite);
+    }
 
     // Use Firecrawl search API
     const searchResponse = await fetch('https://api.firecrawl.dev/v1/search', {
@@ -186,15 +250,7 @@ serve(async (req) => {
         'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        query: searchQuery,
-        limit: 10,
-        lang: langMap[countryCode] || 'en',
-        country: countryCode,
-        scrapeOptions: {
-          formats: ['markdown'],
-        },
-      }),
+      body: JSON.stringify(firecrawlBody),
     });
 
     const searchData = await searchResponse.json();
@@ -209,19 +265,54 @@ serve(async (req) => {
 
     console.log('Search completed, processing results...');
 
+    // Patterns for detecting quality indicators
+    const technicalSheetPatterns = [
+      /ficha\s*t[eé]cnica/i,
+      /technical\s*sheet/i,
+      /especificaciones\s*t[eé]cnicas/i,
+      /datos\s*t[eé]cnicos/i,
+      /hoja\s*de\s*producto/i,
+      /datasheet/i,
+    ];
+
+    const ceMarkingPatterns = [
+      /marcado\s*ce/i,
+      /ce\s*mark(ing)?/i,
+      /certificado\s*ce/i,
+      /conformidad\s*europea/i,
+      /\bce\b.*\bnorma/i,
+      /directiva.*europea/i,
+    ];
+
+    const certificationPatterns = [
+      { pattern: /iso\s*\d+/i, name: 'ISO' },
+      { pattern: /une[- ]?en/i, name: 'UNE-EN' },
+      { pattern: /aenor/i, name: 'AENOR' },
+      { pattern: /ral/i, name: 'RAL' },
+      { pattern: /cte/i, name: 'CTE' },
+      { pattern: /dop/i, name: 'DoP' },
+      { pattern: /euroclase/i, name: 'Euroclase' },
+      { pattern: /reacci[oó]n\s*al\s*fuego/i, name: 'Reacción fuego' },
+      { pattern: /clase\s*energ[eé]tica/i, name: 'Clase energética' },
+      { pattern: /rite/i, name: 'RITE' },
+      { pattern: /rohs/i, name: 'RoHS' },
+      { pattern: /reach/i, name: 'REACH' },
+    ];
+
     // Process results to extract supplier information
     const results: SearchResult[] = [];
 
     if (searchData.data && Array.isArray(searchData.data)) {
       for (const item of searchData.data) {
-        const content = item.markdown || item.description || '';
+        const content = (item.markdown || item.description || '').toLowerCase();
+        const fullContent = item.markdown || item.description || '';
         const url = item.url || '';
         const title = item.title || '';
 
         // Extract contact information using regex patterns
-        const phoneMatch = content.match(/(?:\+34\s?)?(?:\d{3}[\s.-]?\d{3}[\s.-]?\d{3}|\d{2}[\s.-]?\d{3}[\s.-]?\d{2}[\s.-]?\d{2})/g);
-        const emailMatch = content.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g);
-        const priceMatch = content.match(/(?:\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{2})?|\d+(?:[.,]\d{2})?)\s*€/g);
+        const phoneMatch = fullContent.match(/(?:\+34\s?)?(?:\d{3}[\s.-]?\d{3}[\s.-]?\d{3}|\d{2}[\s.-]?\d{3}[\s.-]?\d{2}[\s.-]?\d{2})/g);
+        const emailMatch = fullContent.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g);
+        const priceMatch = fullContent.match(/(?:\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{2})?|\d+(?:[.,]\d{2})?)\s*€/g);
 
         // Extract supplier name from title or URL
         let supplierName = title;
@@ -235,6 +326,20 @@ serve(async (req) => {
           }
         }
 
+        // Check for technical sheet
+        const hasTechnicalSheet = technicalSheetPatterns.some(pattern => pattern.test(content));
+
+        // Check for CE marking
+        const hasCEMarking = ceMarkingPatterns.some(pattern => pattern.test(content));
+
+        // Find certifications
+        const certifications: string[] = [];
+        for (const cert of certificationPatterns) {
+          if (cert.pattern.test(content) && !certifications.includes(cert.name)) {
+            certifications.push(cert.name);
+          }
+        }
+
         results.push({
           supplierName: supplierName || 'Proveedor desconocido',
           website: url,
@@ -242,6 +347,9 @@ serve(async (req) => {
           email: emailMatch ? emailMatch[0] : '',
           price: priceMatch ? priceMatch[0] : '',
           description: item.description || title || '',
+          hasTechnicalSheet,
+          hasCEMarking,
+          certifications: certifications.length > 0 ? certifications : undefined,
         });
       }
     }

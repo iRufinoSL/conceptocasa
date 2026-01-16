@@ -5,13 +5,15 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Search, Loader2, Globe, Phone, Mail, Euro, ExternalLink, Plus, MapPin } from 'lucide-react';
+import { Search, Loader2, Globe, Phone, Mail, Euro, ExternalLink, Plus, MapPin, FileText, Shield, Building2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { ChevronDown } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Badge } from '@/components/ui/badge';
 
 interface SearchResult {
   supplierName: string;
@@ -20,6 +22,9 @@ interface SearchResult {
   email: string;
   price: string;
   description: string;
+  hasTechnicalSheet?: boolean;
+  hasCEMarking?: boolean;
+  certifications?: string[];
 }
 
 interface WebSearchDialogProps {
@@ -41,6 +46,12 @@ const RESOURCE_TYPES = [
   { value: 'maquinaria', label: 'Maquinaria' },
   { value: 'subcontrata', label: 'Subcontrata' },
   { value: 'otros', label: 'Otros' },
+];
+
+const SEARCH_EXTRAS = [
+  { value: 'ficha_tecnica', label: 'Ficha técnica', icon: FileText },
+  { value: 'marcado_ce', label: 'Marcado CE/EU', icon: Shield },
+  { value: 'certificaciones', label: 'Certificaciones calidad', icon: Shield },
 ];
 
 const SPANISH_PROVINCES = [
@@ -73,6 +84,7 @@ export function WebSearchDialog({ open, onOpenChange, onCreateResource }: WebSea
   const [results, setResults] = useState<SearchResult[]>([]);
   const [searchPerformed, setSearchPerformed] = useState(false);
   const [geoFilterOpen, setGeoFilterOpen] = useState(true);
+  const [advancedFiltersOpen, setAdvancedFiltersOpen] = useState(false);
   
   // Geographic filters
   const [geoFilterType, setGeoFilterType] = useState<GeoFilterType>('country');
@@ -81,6 +93,11 @@ export function WebSearchDialog({ open, onOpenChange, onCreateResource }: WebSea
   const [cityName, setCityName] = useState('');
   const [radiusKm, setRadiusKm] = useState('50');
   const [radiusLocation, setRadiusLocation] = useState('');
+  
+  // Advanced filters - specific website/supplier and quality requirements
+  const [specificWebsite, setSpecificWebsite] = useState('');
+  const [specificSupplier, setSpecificSupplier] = useState('');
+  const [searchExtras, setSearchExtras] = useState<string[]>([]);
   
   const { toast } = useToast();
 
@@ -128,6 +145,9 @@ export function WebSearchDialog({ open, onOpenChange, onCreateResource }: WebSea
           query: searchQuery,
           resourceType: resourceType || undefined,
           geoFilter,
+          specificWebsite: specificWebsite.trim() || undefined,
+          specificSupplier: specificSupplier.trim() || undefined,
+          searchExtras: searchExtras.length > 0 ? searchExtras : undefined,
         },
       });
 
@@ -197,7 +217,18 @@ export function WebSearchDialog({ open, onOpenChange, onCreateResource }: WebSea
     setCityName('');
     setRadiusKm('50');
     setRadiusLocation('');
+    setSpecificWebsite('');
+    setSpecificSupplier('');
+    setSearchExtras([]);
     onOpenChange(false);
+  };
+
+  const toggleSearchExtra = (value: string) => {
+    setSearchExtras(prev => 
+      prev.includes(value) 
+        ? prev.filter(v => v !== value)
+        : [...prev, value]
+    );
   };
 
   return (
@@ -333,6 +364,83 @@ export function WebSearchDialog({ open, onOpenChange, onCreateResource }: WebSea
             </CollapsibleContent>
           </Collapsible>
 
+          {/* Advanced Filters - Specific Website/Supplier */}
+          <Collapsible open={advancedFiltersOpen} onOpenChange={setAdvancedFiltersOpen}>
+            <CollapsibleTrigger asChild>
+              <Button variant="outline" className="w-full justify-between">
+                <div className="flex items-center gap-2">
+                  <Building2 className="h-4 w-4" />
+                  <span>Búsqueda avanzada</span>
+                  {(specificWebsite || specificSupplier || searchExtras.length > 0) && (
+                    <span className="text-xs text-muted-foreground">
+                      ({[
+                        specificWebsite && 'web específica',
+                        specificSupplier && 'proveedor',
+                        searchExtras.length > 0 && `${searchExtras.length} filtros`
+                      ].filter(Boolean).join(', ')})
+                    </span>
+                  )}
+                </div>
+                <ChevronDown className={`h-4 w-4 transition-transform ${advancedFiltersOpen ? 'rotate-180' : ''}`} />
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="pt-4">
+              <div className="space-y-4 p-4 border rounded-lg bg-muted/30">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="specific-website">Buscar en web específica</Label>
+                    <Input
+                      id="specific-website"
+                      placeholder="Ej: leroy-merlin.es, porcelanosa.com..."
+                      value={specificWebsite}
+                      onChange={(e) => setSpecificWebsite(e.target.value)}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Limita la búsqueda a un sitio web concreto
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="specific-supplier">Buscar proveedor concreto</Label>
+                    <Input
+                      id="specific-supplier"
+                      placeholder="Ej: Roca, Porcelanosa, Grohe..."
+                      value={specificSupplier}
+                      onChange={(e) => setSpecificSupplier(e.target.value)}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Busca productos de un fabricante o distribuidor específico
+                    </p>
+                  </div>
+                </div>
+                
+                <div className="space-y-2">
+                  <Label>Incluir en la búsqueda</Label>
+                  <div className="flex flex-wrap gap-3">
+                    {SEARCH_EXTRAS.map((extra) => (
+                      <div key={extra.value} className="flex items-center space-x-2">
+                        <Checkbox
+                          id={`extra-${extra.value}`}
+                          checked={searchExtras.includes(extra.value)}
+                          onCheckedChange={() => toggleSearchExtra(extra.value)}
+                        />
+                        <Label 
+                          htmlFor={`extra-${extra.value}`}
+                          className="flex items-center gap-1.5 text-sm cursor-pointer"
+                        >
+                          <extra.icon className="h-3.5 w-3.5 text-muted-foreground" />
+                          {extra.label}
+                        </Label>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Busca fichas técnicas, marcado CE/EU y certificaciones de calidad según normativa española
+                  </p>
+                </div>
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
+
           {/* Search Form */}
           <div className="grid gap-4 sm:grid-cols-[1fr_180px_auto]">
             <div className="space-y-2">
@@ -402,6 +510,27 @@ export function WebSearchDialog({ open, onOpenChange, onCreateResource }: WebSea
                                   {result.description}
                                 </div>
                               )}
+                              {/* Quality badges */}
+                              <div className="flex flex-wrap gap-1 mt-1">
+                                {result.hasTechnicalSheet && (
+                                  <Badge variant="outline" className="text-[10px] px-1 py-0 h-4">
+                                    <FileText className="h-2.5 w-2.5 mr-0.5" />
+                                    Ficha
+                                  </Badge>
+                                )}
+                                {result.hasCEMarking && (
+                                  <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 bg-green-50 text-green-700 border-green-200">
+                                    <Shield className="h-2.5 w-2.5 mr-0.5" />
+                                    CE
+                                  </Badge>
+                                )}
+                                {result.certifications && result.certifications.length > 0 && (
+                                  <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 bg-blue-50 text-blue-700 border-blue-200">
+                                    <Shield className="h-2.5 w-2.5 mr-0.5" />
+                                    {result.certifications.length} cert.
+                                  </Badge>
+                                )}
+                              </div>
                             </div>
                           </TableCell>
                           <TableCell>

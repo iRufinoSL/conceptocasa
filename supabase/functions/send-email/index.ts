@@ -141,6 +141,34 @@ const handler = async (req: Request): Promise<Response> => {
 
     console.log("Authenticated user:", user.email);
 
+    // Verify user has staff role (administrador or colaborador)
+    const { data: roleData, error: roleError } = await supabase
+      .from('user_roles')
+      .select('role')
+      .eq('user_id', user.id);
+
+    if (roleError) {
+      console.error("Error fetching user roles:", roleError);
+      return new Response(
+        JSON.stringify({ error: "Failed to verify permissions" }),
+        { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
+
+    const isStaff = roleData?.some((r: { role: string }) => 
+      ['administrador', 'colaborador'].includes(r.role)
+    );
+
+    if (!isStaff) {
+      console.error("User lacks staff role:", user.id);
+      return new Response(
+        JSON.stringify({ error: "Insufficient permissions" }),
+        { status: 403, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
+
+    console.log("User role verified as staff");
+
     const requestData: SendEmailRequest = await req.json();
     const { 
       to, 
@@ -313,19 +341,29 @@ const handler = async (req: Request): Promise<Response> => {
     } else {
       console.log("Email record stored:", emailRecord.id);
       
-      // Create budget assignment if budget_id is provided
+      // Create budget assignment if budget_id is provided (verify access first)
       if (budget_id && emailRecord?.id) {
-        const { error: assignmentError } = await supabase
-          .from("email_budget_assignments")
-          .insert({
-            email_id: emailRecord.id,
-            budget_id: budget_id
-          });
-        
-        if (assignmentError) {
-          console.error("Error creating budget assignment:", assignmentError);
+        // Verify user has access to this budget
+        const { data: hasAccess } = await supabase.rpc('has_presupuesto_access', {
+          _user_id: user.id,
+          _presupuesto_id: budget_id
+        });
+
+        if (hasAccess) {
+          const { error: assignmentError } = await supabase
+            .from("email_budget_assignments")
+            .insert({
+              email_id: emailRecord.id,
+              budget_id: budget_id
+            });
+          
+          if (assignmentError) {
+            console.error("Error creating budget assignment:", assignmentError);
+          } else {
+            console.log("Budget assignment created for email:", emailRecord.id);
+          }
         } else {
-          console.log("Budget assignment created for email:", emailRecord.id);
+          console.warn("User lacks access to budget, skipping assignment:", budget_id);
         }
       }
     }

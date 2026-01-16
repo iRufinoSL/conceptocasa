@@ -61,7 +61,7 @@ RESPONDE SOLO en formato JSON con esta estructura exacta:
   "documentSummary": "Breve resumen del tipo de documento y su contenido principal"
 }`;
 
-  const response = await fetch('https://lovable.dev/api/ai/v1/chat/completions', {
+  const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${LOVABLE_API_KEY}`,

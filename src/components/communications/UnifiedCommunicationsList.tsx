@@ -13,11 +13,12 @@ import {
   Mail, MessageSquare, Smartphone, ChevronDown, ChevronRight, 
   Reply, Forward, Trash2, ArrowDownLeft, ArrowUpRight,
   Paperclip, Eye, Clock, CheckCircle, XCircle, Search, Inbox, Send,
-  ArrowLeft, Maximize2
+  ArrowLeft, Maximize2, FolderOpen, ClipboardList, Building2, FileText
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import type { Tables } from '@/integrations/supabase/types';
 import DOMPurify from 'dompurify';
+import { CommunicationActionsDialog } from './CommunicationActionsDialog';
 
 // Types for unified communications
 type EmailMessage = Tables<'email_messages'> & {
@@ -98,6 +99,9 @@ export function UnifiedCommunicationsList({
   const [isInboxExpanded, setIsInboxExpanded] = useState(true);
   const [isOutboxExpanded, setIsOutboxExpanded] = useState(true);
   const [fullscreenFolder, setFullscreenFolder] = useState<'inbox' | 'outbox' | null>(null);
+  const [actionsDialogOpen, setActionsDialogOpen] = useState(false);
+  const [actionsCommunication, setActionsCommunication] = useState<UnifiedCommunication | null>(null);
+  const [communicationAssignments, setCommunicationAssignments] = useState<{budgetIds: string[], projectIds: string[]}>({budgetIds: [], projectIds: []});
 
   // Fetch emails
   const { data: emails = [], isLoading: loadingEmails } = useQuery({
@@ -330,6 +334,34 @@ export function UnifiedCommunicationsList({
     }
   };
 
+  // Open actions dialog with current assignments
+  const handleOpenActionsDialog = async (comm: UnifiedCommunication) => {
+    setActionsCommunication(comm);
+    
+    // Fetch current assignments
+    let budgetIds: string[] = [];
+    let projectIds: string[] = [];
+    
+    if (comm.type === 'email') {
+      const [budgetAssignments, projectAssignments] = await Promise.all([
+        supabase.from('email_budget_assignments').select('budget_id').eq('email_id', comm.id),
+        supabase.from('email_project_assignments').select('project_id').eq('email_id', comm.id),
+      ]);
+      budgetIds = budgetAssignments.data?.map(a => a.budget_id) || [];
+      projectIds = projectAssignments.data?.map(a => a.project_id) || [];
+    } else {
+      const [budgetAssignments, projectAssignments] = await Promise.all([
+        supabase.from('whatsapp_budget_assignments').select('budget_id').eq('message_id', comm.id),
+        supabase.from('whatsapp_project_assignments').select('project_id').eq('message_id', comm.id),
+      ]);
+      budgetIds = budgetAssignments.data?.map(a => a.budget_id) || [];
+      projectIds = projectAssignments.data?.map(a => a.project_id) || [];
+    }
+    
+    setCommunicationAssignments({ budgetIds, projectIds });
+    setActionsDialogOpen(true);
+  };
+
   const isLoading = loadingEmails || loadingWhatsApp;
 
   // Communication list item component
@@ -441,7 +473,18 @@ export function UnifiedCommunicationsList({
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* Action buttons for assign and task */}
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => handleOpenActionsDialog(comm)}
+                className="gap-1"
+              >
+                <FolderOpen className="h-4 w-4" />
+                Asociar/Tarea
+              </Button>
+              
               {comm.type === 'email' && onComposeReply && (
                 <>
                   <Button variant="outline" size="sm" onClick={handleReply}>
@@ -723,6 +766,22 @@ export function UnifiedCommunicationsList({
           )}
         </div>
       </div>
+
+      {/* Actions Dialog */}
+      {actionsCommunication && (
+        <CommunicationActionsDialog
+          open={actionsDialogOpen}
+          onOpenChange={setActionsDialogOpen}
+          communicationId={actionsCommunication.id}
+          communicationType={actionsCommunication.type as 'email' | 'whatsapp'}
+          communicationSubject={actionsCommunication.subject}
+          communicationContent={actionsCommunication.content}
+          contactId={(actionsCommunication.originalData as any)?.contact_id}
+          contactName={actionsCommunication.contactName}
+          currentBudgetIds={communicationAssignments.budgetIds}
+          currentProjectIds={communicationAssignments.projectIds}
+        />
+      )}
     </div>
   );
 }

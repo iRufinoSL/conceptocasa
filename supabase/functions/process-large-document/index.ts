@@ -86,12 +86,11 @@ RESPONDE SOLO en formato JSON con esta estructura exacta:
   "documentSummary": "Breve resumen del tipo de documento y sus conclusiones principales"
 }`;
 
-  // Provide a more robust input: head + tail + keyword snippets
+  // Keep the request small + focused (prevents timeouts on very long PDFs)
   const text = input.text || '';
-  const head = text.slice(0, 45000);
-  const tail = text.length > 90000 ? text.slice(-45000) : '';
 
   const keywords = [
+    'SE CERTIFICA',
     'CERTIFICA',
     'EDIFICABLE',
     'NO EDIFICABLE',
@@ -114,39 +113,53 @@ RESPONDE SOLO en formato JSON con esta estructura exacta:
     const ku = k.toUpperCase();
     let idx = 0;
     let hits = 0;
-    while (hits < 8) {
+    while (hits < 6) {
       const found = upper.indexOf(ku, idx);
       if (found === -1) break;
-      const start = Math.max(0, found - 400);
-      const end = Math.min(text.length, found + ku.length + 400);
+      const start = Math.max(0, found - 350);
+      const end = Math.min(text.length, found + ku.length + 350);
       snippets.push(text.slice(start, end));
       idx = found + ku.length;
       hits++;
     }
   }
 
+  const head = text.slice(0, 15000);
+
+  // Hard cap total content to avoid gateway/model limits and function timeouts
   const analysisText = [
     '=== INICIO DEL DOCUMENTO (recorte) ===\n' + head,
-    tail ? '\n\n=== FINAL DEL DOCUMENTO (recorte) ===\n' + tail : '',
     snippets.length ? '\n\n=== EXTRACTOS POR PALABRAS CLAVE ===\n' + snippets.join('\n\n---\n\n') : '',
-  ].filter(Boolean).join('\n');
+  ]
+    .filter(Boolean)
+    .join('\n')
+    .slice(0, 60000);
 
   const hasImage = !!input.firstPageImageDataUrl;
-  const model = hasImage ? 'openai/gpt-5-mini' : 'google/gemini-2.5-flash';
+  const model = 'google/gemini-3-flash-preview';
 
   const userContent: any = hasImage
     ? [
-        { type: 'text', text: `Analiza el siguiente contenido extraído (puede estar incompleto) y la imagen de la primera página si la necesitas:\n\n${analysisText}` },
+        {
+          type: 'text',
+          text: `Analiza el siguiente contenido extraído (puede estar incompleto) y la imagen de la primera página si la necesitas:\n\n${analysisText}`,
+        },
         { type: 'image_url', image_url: { url: input.firstPageImageDataUrl } },
       ]
     : `Analiza el siguiente texto extraído de un documento urbanístico:\n\n${analysisText}`;
 
+  // IMPORTANT: avoid leaving uploads stuck in 'processing' by enforcing a hard timeout
+  const controller = new AbortController();
+  const timeoutMs = 45_000;
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
   const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
     method: 'POST',
     headers: {
-      'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+      Authorization: `Bearer ${LOVABLE_API_KEY}`,
       'Content-Type': 'application/json',
     },
+    signal: controller.signal,
     body: JSON.stringify({
       model,
       messages: [
@@ -154,13 +167,18 @@ RESPONDE SOLO en formato JSON con esta estructura exacta:
         { role: 'user', content: userContent },
       ],
       temperature: 0.1,
-      max_tokens: 3000,
+      max_tokens: 2000,
     }),
-  });
+  }).finally(() => clearTimeout(timeout));
 
   if (!response.ok) {
-    const errorText = await response.text();
+    const errorText = await response.text().catch(() => '');
     console.error('Lovable AI error:', response.status, errorText);
+
+    // Surface common billing/rate limit errors clearly
+    if (response.status === 429) throw new Error('Rate limit de IA excedido (429). Inténtalo en 1-2 minutos.');
+    if (response.status === 402) throw new Error('Créditos de IA agotados (402). Añade créditos y reintenta.');
+
     throw new Error(`Error de Lovable AI: ${response.status}`);
   }
 

@@ -12,7 +12,8 @@ import { es } from 'date-fns/locale';
 import { 
   Mail, MessageSquare, Smartphone, ChevronDown, ChevronRight, 
   Reply, Forward, Trash2, ArrowDownLeft, ArrowUpRight,
-  Paperclip, Eye, Clock, CheckCircle, XCircle, Search, Inbox, Send
+  Paperclip, Eye, Clock, CheckCircle, XCircle, Search, Inbox, Send,
+  ArrowLeft, Maximize2
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import type { Tables } from '@/integrations/supabase/types';
@@ -96,6 +97,7 @@ export function UnifiedCommunicationsList({
   const [selectedCommunication, setSelectedCommunication] = useState<UnifiedCommunication | null>(null);
   const [isInboxExpanded, setIsInboxExpanded] = useState(true);
   const [isOutboxExpanded, setIsOutboxExpanded] = useState(true);
+  const [fullscreenFolder, setFullscreenFolder] = useState<'inbox' | 'outbox' | null>(null);
 
   // Fetch emails
   const { data: emails = [], isLoading: loadingEmails } = useQuery({
@@ -498,6 +500,85 @@ export function UnifiedCommunicationsList({
     );
   }
 
+  // Fullscreen folder view
+  if (fullscreenFolder) {
+    const isInbox = fullscreenFolder === 'inbox';
+    const communications = isInbox ? inboundCommunications : outboundCommunications;
+    const FolderIcon = isInbox ? Inbox : Send;
+    const folderLabel = isInbox ? 'Entrada' : 'Salida';
+    const folderColor = isInbox ? 'text-green-600' : 'text-blue-600';
+
+    return (
+      <div className="fixed inset-0 z-50 bg-background flex flex-col">
+        {/* Header */}
+        <div className="flex items-center gap-4 p-4 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+          <Button 
+            variant="ghost" 
+            size="sm"
+            onClick={() => {
+              setFullscreenFolder(null);
+              setSelectedCommunication(null);
+            }}
+            className="gap-2"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Volver
+          </Button>
+          <div className="flex items-center gap-2">
+            <FolderIcon className={`h-5 w-5 ${folderColor}`} />
+            <h2 className="font-semibold text-lg">{folderLabel}</h2>
+            <Badge variant="secondary">{communications.length}</Badge>
+          </div>
+          {/* Search in fullscreen */}
+          <div className="flex-1 max-w-md ml-auto">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Buscar..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-9"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 overflow-hidden grid grid-cols-1 lg:grid-cols-2 gap-0">
+          {/* List */}
+          <ScrollArea className="h-full border-r">
+            <div className="p-4 space-y-2">
+              {communications.length === 0 ? (
+                <div className="text-center py-12 text-muted-foreground">
+                  <FolderIcon className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <p>No hay comunicaciones de {folderLabel.toLowerCase()}</p>
+                </div>
+              ) : (
+                communications.map(comm => (
+                  <CommunicationListItem key={comm.id} comm={comm} />
+                ))
+              )}
+            </div>
+          </ScrollArea>
+
+          {/* Detail */}
+          <div className="h-full overflow-auto">
+            {selectedCommunication ? (
+              <CommunicationDetail comm={selectedCommunication} />
+            ) : (
+              <div className="h-full flex items-center justify-center">
+                <div className="text-center text-muted-foreground py-8">
+                  <Mail className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <p>Selecciona una comunicación para ver los detalles</p>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
       {/* Stats */}
@@ -552,7 +633,20 @@ export function UnifiedCommunicationsList({
                   <span className="font-medium">Entrada</span>
                   <Badge variant="secondary">{inboundCommunications.length}</Badge>
                 </div>
-                {isInboxExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setFullscreenFolder('inbox');
+                    }}
+                  >
+                    <Maximize2 className="h-3.5 w-3.5" />
+                  </Button>
+                  {isInboxExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                </div>
               </Button>
             </CollapsibleTrigger>
             <CollapsibleContent>
@@ -581,7 +675,20 @@ export function UnifiedCommunicationsList({
                   <span className="font-medium">Salida</span>
                   <Badge variant="secondary">{outboundCommunications.length}</Badge>
                 </div>
-                {isOutboxExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setFullscreenFolder('outbox');
+                    }}
+                  >
+                    <Maximize2 className="h-3.5 w-3.5" />
+                  </Button>
+                  {isOutboxExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                </div>
               </Button>
             </CollapsibleTrigger>
             <CollapsibleContent>

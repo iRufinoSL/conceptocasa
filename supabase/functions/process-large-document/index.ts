@@ -24,65 +24,81 @@ async function analyzeWithAI(
     throw new Error('LOVABLE_API_KEY not configured');
   }
 
-  const systemPrompt = `Eres un experto en urbanismo español especializado en analizar documentos urbanísticos: Certificados Urbanísticos, Cédulas Urbanísticas, Fichas de Urbanismo, PGOU, Normas Subsidiarias, etc.
+  const systemPrompt = `Eres un experto en urbanismo español especializado en analizar documentos urbanísticos oficiales. Tu trabajo es extraer ABSOLUTAMENTE TODOS los datos urbanísticos del documento proporcionado.
 
-Tu tarea es extraer TODOS los datos numéricos y restricciones del texto proporcionado para ${landClass} en el municipio de ${municipality || 'el municipio indicado'}.
+TIPOS DE DOCUMENTOS QUE PUEDES RECIBIR:
+1. **CERTIFICADO URBANÍSTICO / CÉDULA URBANÍSTICA** - Documento oficial del Ayuntamiento que certifica las condiciones urbanísticas de una parcela específica. Suele tener secciones como "CERTIFICA", "NORMATIVA APLICABLE", "CONDICIONES DE EDIFICACIÓN", etc.
+2. **PGOU / Plan General** - Normativa general del municipio
+3. **Normas Subsidiarias** - Normativa municipal en ausencia de PGOU
+4. **Plan Parcial** - Desarrollo de un sector específico
+5. **Fichas urbanísticas** - Resúmenes de parámetros por zona
 
-INSTRUCCIONES:
-1. Busca en el texto los siguientes parámetros urbanísticos BÁSICOS:
-   - Volumen máximo edificable (m³ o m³/parcela)
-   - Altura máxima (metros o número de plantas)
-   - Número máximo de plantas
-   - Índice de edificabilidad (m²/m² o m²t/m²s)
-   - Ocupación máxima (porcentaje)
-   - Superficie máxima construida (m²)
-   - Retranqueos: frontal, lateral y posterior (metros)
-   - Distancias mínimas: a colindantes, a caminos/carreteras, a taludes (metros)
+INSTRUCCIONES CRÍTICAS:
+1. LEE EL DOCUMENTO COMPLETO con máxima atención. Los Certificados Urbanísticos contienen TODA la información que necesitamos.
 
-2. Busca AFECCIONES SECTORIALES (muy importantes):
-   - Distancia mínima a cementerios (normalmente 40m)
-   - Distancia mínima a líneas eléctricas de alta tensión
-   - Distancia a carreteras (según tipo: nacional, autonómica, comarcal, local)
-   - Distancia a cauces de agua/ríos
-   - Distancia a vías férreas
-   - Distancia a gasoductos u oleoductos
-   - Retranqueo del cerramiento al viario
-   - Anchura mínima de acceso rodado
+2. BUSCA ESTAS PALABRAS CLAVE en el documento:
+   - "EDIFICABLE" / "NO EDIFICABLE" / "APTO PARA EDIFICAR" - ¡MUY IMPORTANTE!
+   - "Clasificación del suelo" / "Clasificación urbanística"
+   - "Calificación urbanística" / "Zona" / "Subzona"
+   - "Volumen máximo" / "Volumen de edificación"
+   - "Altura máxima" / "Altura reguladora" / "Altura cornisa"
+   - "Plantas" / "Número de plantas"
+   - "Ocupación" / "Ocupación máxima"
+   - "Edificabilidad" / "Índice de edificabilidad"
+   - "Retranqueo" / "Retranqueos" / "Separación a linderos"
+   - "Parcela mínima" / "Superficie mínima"
+   - "Frente mínimo" / "Fachada mínima"
 
-3. Busca información sobre SANEAMIENTO Y SERVICIOS:
-   - Si el municipio/zona tiene red de saneamiento municipal (alcantarillado)
-   - Si se requiere instalación de fosa séptica
-   - Normativa aplicable a la fosa séptica (distancias, capacidad, etc.)
-   - Distancia mínima de la fosa séptica a edificaciones o pozos
+3. EXTRAE VALORES NUMÉRICOS exactos cuando los encuentres. Si dice "7 metros" o "7,00 m" o "7m", el valor es 7.
 
-4. Busca información sobre DISTANCIA A SERVICIOS/ACOMETIDAS:
-   - Distancia a la acometida de agua potable más cercana (metros)
-   - Distancia a la red de saneamiento municipal más cercana (metros)
-   - Distancia a la conexión eléctrica más cercana (metros)
+4. INDICA LA FUENTE exacta: artículo, sección o página donde encontraste el dato.
 
-5. Identifica SI LA PARCELA ESTÁ AFECTADA por:
-   - Líneas eléctricas
-   - Proximidad a cementerio
-   - Cauces de agua
-   - Falta de red de saneamiento
-   - Otras servidumbres
+5. **CONCLUSIÓN EDIFICABLE**: Determina si la parcela ES EDIFICABLE basándote en:
+   - Si el documento lo dice explícitamente ("edificable", "apto para edificar", etc.)
+   - Si la clasificación es Suelo Urbano consolidado = generalmente edificable
+   - Si la clasificación es Suelo Rústico/No Urbanizable = generalmente NO edificable
+   - Si hay condiciones que impiden edificar (servidumbres, protecciones, etc.)
 
-6. Para cada valor encontrado, indica el artículo, sección, ley o referencia donde lo encontraste.
+PARÁMETROS A EXTRAER (busca TODOS):
+- ¿Es edificable? (isEdificable: true/false)
+- Clasificación del suelo (urban_classification: "Suelo Urbano", "Suelo Rústico", etc.)
+- Calificación urbanística (urban_qualification: zona o subzona)
+- Volumen máximo edificable (m³)
+- Altura máxima (metros)
+- Número máximo de plantas
+- Índice de edificabilidad (m²/m² o m²t/m²s)
+- Ocupación máxima (%)
+- Superficie máxima construida (m²)
+- Retranqueos: frontal, lateral y posterior (metros)
+- Parcela mínima (m²)
+- Frente mínimo de parcela (metros)
+- Distancias mínimas: a colindantes, caminos, cementerios, líneas eléctricas, cauces de agua
 
-7. Si un valor no aparece explícitamente, pon null.
+AFECCIONES Y SERVIDUMBRES - Busca si hay:
+- Líneas eléctricas que afecten a la parcela
+- Proximidad a cementerios
+- Cauces de agua o zonas inundables
+- Carreteras y sus zonas de protección
+- Vías pecuarias
+- Cualquier otra servidumbre
 
-8. Si hay varios valores posibles (por zonas, usos, etc.), extrae el más restrictivo o el aplicable a vivienda unifamiliar.
-
-9. Indica si la parcela es divisible o indivisible según la normativa.
+SANEAMIENTO - Busca:
+- Si hay red de saneamiento municipal
+- Si se requiere fosa séptica
 
 RESPONDE SOLO en formato JSON con esta estructura exacta:
 {
+  "isEdificable": { "value": true o false o null, "source": "texto literal del documento o sección" },
+  "urbanClassification": { "value": "clasificación encontrada o null", "source": "sección o artículo" },
+  "urbanQualification": { "value": "calificación/zona encontrada o null", "source": "sección o artículo" },
   "maxBuildableVolume": { "value": null o número, "source": "artículo o sección" },
   "maxHeight": { "value": null o número en metros, "source": "artículo o sección" },
   "maxFloors": { "value": null o número, "source": "artículo o sección" },
   "buildabilityIndex": { "value": null o número, "source": "artículo o sección" },
   "maxOccupation": { "value": null o número (porcentaje sin %), "source": "artículo o sección" },
   "maxBuiltSurface": { "value": null o número en m², "source": "artículo o sección" },
+  "minPlotArea": { "value": null o número en m², "source": "artículo o sección" },
+  "minFrontage": { "value": null o número en metros, "source": "artículo o sección" },
   "frontSetback": { "value": null o número en metros, "source": "artículo o sección" },
   "sideSetback": { "value": null o número en metros, "source": "artículo o sección" },
   "rearSetback": { "value": null o número en metros, "source": "artículo o sección" },
@@ -110,9 +126,11 @@ RESPONDE SOLO en formato JSON con esta estructura exacta:
   "sectoralRestrictions": [
     { "type": "tipo de afección", "description": "descripción", "distance": número o null, "source": "referencia" }
   ],
-  "additionalInfo": "Cualquier otra información urbanística relevante encontrada",
-  "documentSummary": "Breve resumen del tipo de documento y su contenido principal"
-}`;
+  "additionalInfo": "Cualquier otra información urbanística relevante encontrada que no encaje en los campos anteriores",
+  "documentSummary": "Breve resumen del tipo de documento (Certificado Urbanístico de [municipio], PGOU, etc.) y sus conclusiones principales"
+}
+
+IMPORTANTE: Si el documento es un CERTIFICADO URBANÍSTICO oficial, TODA la información está ahí. Lee con cuidado y extrae absolutamente todo.`;
 
   const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
     method: 'POST',
@@ -338,13 +356,37 @@ Deno.serve(async (req) => {
       if (budgetId && extractedData && !extractedData.parseError) {
         const updateData: Record<string, unknown> = {};
         
-        const ed = extractedData as Record<string, { value?: number; source?: string }>;
+        const ed = extractedData as Record<string, { value?: number | string | boolean; source?: string }>;
+        const edAny = extractedData as Record<string, unknown>;
         
-        if (ed.maxBuildableVolume?.value) {
+        // CRITICAL: isEdificable - the most important conclusion
+        const isEdificableField = ed.isEdificable;
+        if (typeof isEdificableField?.value === 'boolean') {
+          updateData.is_buildable = isEdificableField.value;
+          updateData.is_buildable_source = isEdificableField.source || 'Certificado Urbanístico';
+        }
+        
+        // Urban classification and qualification from document
+        const urbanClassField = ed.urbanClassification;
+        if (urbanClassField?.value && typeof urbanClassField.value === 'string') {
+          updateData.urban_classification = urbanClassField.value;
+        }
+        const urbanQualField = ed.urbanQualification;
+        if (urbanQualField?.value && typeof urbanQualField.value === 'string') {
+          updateData.urban_qualification = urbanQualField.value;
+        }
+        
+        // Min plot area and frontage
+        const minPlotAreaField = ed.minPlotArea as { value?: number; source?: string };
+        if (minPlotAreaField?.value) {
+          updateData.min_plot_area = minPlotAreaField.value;
+        }
+        
+        if (ed.maxBuildableVolume?.value && typeof ed.maxBuildableVolume.value === 'number') {
           updateData.max_buildable_volume = ed.maxBuildableVolume.value;
           updateData.max_buildable_volume_source = ed.maxBuildableVolume.source;
         }
-        if (ed.maxHeight?.value) {
+        if (ed.maxHeight?.value && typeof ed.maxHeight.value === 'number') {
           updateData.max_height = ed.maxHeight.value;
           updateData.max_height_source = ed.maxHeight.source;
         }
@@ -423,7 +465,7 @@ Deno.serve(async (req) => {
           updateData.is_divisible = isDivisibleField.value;
           updateData.is_divisible_source = isDivisibleField.source;
         }
-        const edAny = extractedData as Record<string, unknown>;
+        // edAny is already defined above, reusing it
         if (typeof edAny.affectedByPowerLines === 'boolean') {
           updateData.affected_by_power_lines = edAny.affectedByPowerLines;
         }

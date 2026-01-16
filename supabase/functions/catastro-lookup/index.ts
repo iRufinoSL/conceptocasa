@@ -332,6 +332,9 @@ Deno.serve(async (req) => {
         land_use: catastroData.landUse,
         land_class: catastroData.landClass,
         construction_year: catastroData.constructionYear,
+        // Derive buildability from land class
+        is_buildable: catastroData.canBuild ?? null,
+        is_buildable_source: catastroData.canBuild !== undefined ? 'Derivado de la calificación (Catastro)' : null,
         analysis_status: 'catastro_loaded',
         last_analyzed_at: new Date().toISOString(),
       };

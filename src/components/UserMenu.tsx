@@ -13,13 +13,15 @@ import {
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { ChangePasswordDialog } from './ChangePasswordDialog';
+import { NotificationSettingsDialog } from './NotificationSettingsDialog';
 import { toast } from 'sonner';
-import { User, LogOut, Key, Shield } from 'lucide-react';
+import { User, LogOut, Key, Shield, Bell } from 'lucide-react';
 
 export function UserMenu() {
   const navigate = useNavigate();
   const { user, roles, signOut } = useAuth();
   const [showChangePassword, setShowChangePassword] = useState(false);
+  const [showNotificationSettings, setShowNotificationSettings] = useState(false);
 
   const handleSignOut = async () => {
     const { error } = await signOut();
@@ -88,6 +90,10 @@ export function UserMenu() {
             </div>
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={() => setShowNotificationSettings(true)}>
+            <Bell className="mr-2 h-4 w-4" />
+            <span>Notificaciones de Tareas</span>
+          </DropdownMenuItem>
           <DropdownMenuItem onClick={() => setShowChangePassword(true)}>
             <Key className="mr-2 h-4 w-4" />
             <span>Cambiar Contraseña</span>
@@ -103,6 +109,11 @@ export function UserMenu() {
       <ChangePasswordDialog 
         open={showChangePassword} 
         onOpenChange={setShowChangePassword} 
+      />
+      
+      <NotificationSettingsDialog
+        open={showNotificationSettings}
+        onOpenChange={setShowNotificationSettings}
       />
     </>
   );

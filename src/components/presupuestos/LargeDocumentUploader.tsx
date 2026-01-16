@@ -38,6 +38,16 @@ const DOCUMENT_TYPES = [
   { value: 'otro', label: 'Otro documento urbanístico' },
 ];
 
+function sanitizeStorageFileName(name: string) {
+  // Storage keys should be URL-safe; remove accents and unsafe chars.
+  const normalized = name.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  return normalized
+    .replace(/\s+/g, '-')
+    .replace(/[^a-zA-Z0-9._-]/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+}
+
 export function LargeDocumentUploader({
   budgetId,
   municipality,
@@ -117,9 +127,10 @@ export function LargeDocumentUploader({
       if (selectedFile) {
         sourceType = 'storage';
         
-        // Generate unique path
+        // Generate unique path (sanitize filename to avoid Storage "Invalid key" errors)
         const timestamp = Date.now();
-        storagePath = `${budgetId}/${timestamp}_${selectedFile.name}`;
+        const safeName = sanitizeStorageFileName(selectedFile.name);
+        storagePath = `${budgetId}/${timestamp}_${safeName}`;
 
         toast({
           title: 'Subiendo documento...',

@@ -42,6 +42,7 @@ interface BudgetTask {
 }
 
 type ViewMode = 'month' | 'week' | 'day' | 'list';
+type TaskFilterMode = 'pendiente' | 'todas';
 
 export default function Agenda() {
   const navigate = useNavigate();
@@ -54,6 +55,7 @@ export default function Agenda() {
   const [isLoading, setIsLoading] = useState(true);
   const [formOpen, setFormOpen] = useState(false);
   const [selectedManagement, setSelectedManagement] = useState<Management | null>(null);
+  const [taskFilterMode, setTaskFilterMode] = useState<TaskFilterMode>('pendiente');
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
     const saved = localStorage.getItem('agenda-view-mode');
     return (saved === 'month' || saved === 'week' || saved === 'day' || saved === 'list') ? saved : 'week';
@@ -77,7 +79,7 @@ export default function Agenda() {
   };
 
   const fetchBudgetTasks = useCallback(async () => {
-    // Fetch from new budget_tasks table
+    // Fetch from new budget_tasks table (ALL tasks, not just pending)
     const { data: tasksData, error: tasksError } = await supabase
       .from('budget_tasks')
       .select(`
@@ -91,14 +93,13 @@ export default function Agenda() {
         status,
         budget_id
       `)
-      .eq('status', 'pendiente')
       .order('target_date', { ascending: true });
 
     if (tasksError) {
       console.error('Error fetching budget_tasks:', tasksError);
     }
 
-    // Fetch from budget_activity_resources (Tarea type)
+    // Fetch from budget_activity_resources (Tarea type) - ALL tasks
     const { data: resourceTasks, error: resourceError } = await supabase
       .from('budget_activity_resources')
       .select(`
@@ -110,7 +111,6 @@ export default function Agenda() {
         budget_id
       `)
       .eq('resource_type', 'Tarea')
-      .eq('task_status', 'pendiente')
       .order('start_date', { ascending: true });
 
     if (resourceError) {
@@ -157,7 +157,7 @@ export default function Agenda() {
         start_date: task.start_date,
         start_time: null,
         end_time: null,
-        status: 'pendiente',
+        status: task.task_status || 'pendiente',
         task_status: task.task_status,
         budget_id: task.budget_id,
         budget_name: budgetName,
@@ -167,6 +167,21 @@ export default function Agenda() {
 
     setBudgetTasks(allTasks);
   }, []);
+
+  // Filtered tasks based on filter mode
+  const filteredBudgetTasks = useMemo(() => {
+    if (taskFilterMode === 'todas') {
+      return budgetTasks;
+    }
+    return budgetTasks.filter(t => t.status === 'pendiente' || t.task_status === 'pendiente');
+  }, [budgetTasks, taskFilterMode]);
+
+  // Count tasks by status
+  const taskCounts = useMemo(() => {
+    const pending = budgetTasks.filter(t => t.status === 'pendiente' || (!t.status && t.task_status === 'pendiente')).length;
+    const completed = budgetTasks.filter(t => t.status === 'realizada' || t.task_status === 'realizada').length;
+    return { pending, completed, total: budgetTasks.length };
+  }, [budgetTasks]);
 
   useEffect(() => {
     if (user) {
@@ -225,40 +240,43 @@ export default function Agenda() {
     const grouped: Record<string, BudgetTask[]> = {};
     weekDays.forEach(day => {
       const dateKey = format(day, 'yyyy-MM-dd');
-      grouped[dateKey] = budgetTasks.filter(t => {
+      grouped[dateKey] = filteredBudgetTasks.filter(t => {
         const taskDate = t.target_date || t.start_date;
         return taskDate && isSameDay(new Date(taskDate), day);
       });
     });
     return grouped;
-  }, [budgetTasks, weekDays]);
+  }, [filteredBudgetTasks, weekDays]);
 
   // Get dates that have managements or tasks
   const datesWithEvents = useMemo(() => {
     const managementDates = managements
       .filter(m => m.target_date)
       .map(m => new Date(m.target_date!));
-    const taskDates = budgetTasks
+    const taskDates = filteredBudgetTasks
       .filter(t => t.target_date || t.start_date)
       .map(t => new Date((t.target_date || t.start_date)!));
     return [...managementDates, ...taskDates];
-  }, [managements, budgetTasks]);
+  }, [managements, filteredBudgetTasks]);
 
-  // Handle task toggle status
+  // Handle task toggle status (bidirectional)
   const handleTaskToggle = async (task: BudgetTask) => {
     try {
+      const currentStatus = task.status || task.task_status || 'pendiente';
+      const newStatus = currentStatus === 'pendiente' ? 'realizada' : 'pendiente';
+      
       if (task.source === 'budget_tasks') {
         await supabase
           .from('budget_tasks')
-          .update({ status: 'realizada' })
+          .update({ status: newStatus })
           .eq('id', task.id);
       } else {
         await supabase
           .from('budget_activity_resources')
-          .update({ task_status: 'realizada' })
+          .update({ task_status: newStatus })
           .eq('id', task.id);
       }
-      toast.success('Tarea completada');
+      toast.success(newStatus === 'realizada' ? 'Tarea completada' : 'Tarea marcada como pendiente');
       fetchBudgetTasks();
     } catch (error) {
       console.error('Error updating task:', error);
@@ -370,6 +388,38 @@ export default function Agenda() {
 
       {/* Main Content */}
       <main className="container mx-auto px-4 py-8">
+        {/* Task Filter Controls */}
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-4">
+            {/* Task Filter Toggle */}
+            <div className="flex items-center border rounded-lg">
+              <Button
+                variant={taskFilterMode === 'pendiente' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setTaskFilterMode('pendiente')}
+                className="rounded-r-none gap-1"
+              >
+                <span className="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
+                Pendientes ({taskCounts.pending})
+              </Button>
+              <Button
+                variant={taskFilterMode === 'todas' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setTaskFilterMode('todas')}
+                className="rounded-l-none gap-1"
+              >
+                Todas ({taskCounts.total})
+              </Button>
+            </div>
+            {taskCounts.completed > 0 && (
+              <Badge variant="outline" className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                <CheckCircle2 className="h-3 w-3 mr-1" />
+                {taskCounts.completed} realizadas
+              </Badge>
+            )}
+          </div>
+        </div>
+        
         {viewMode === 'month' && (
           <AgendaMonthView
             currentMonth={currentMonth}
@@ -403,7 +453,7 @@ export default function Agenda() {
                   {managements.filter(m => m.target_date && weekDays.some(day => isSameDay(new Date(m.target_date!), day))).length} citas
                 </Badge>
                 <Badge variant="secondary">
-                  {budgetTasks.filter(t => (t.target_date || t.start_date) && weekDays.some(day => isSameDay(new Date((t.target_date || t.start_date)!), day))).length} tareas
+                  {filteredBudgetTasks.filter(t => (t.target_date || t.start_date) && weekDays.some(day => isSameDay(new Date((t.target_date || t.start_date)!), day))).length} tareas
                 </Badge>
               </div>
             </div>
@@ -449,22 +499,29 @@ export default function Agenda() {
                           {m.title}
                         </div>
                       ))}
-                      {/* Show budget tasks */}
-                      {dayTasks.slice(0, 2 - Math.min(dayManagements.length, 2)).map((t) => (
-                        <div 
-                          key={t.id}
-                          className="text-xs p-1.5 rounded bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 truncate border-l-2 border-blue-500"
-                          title={`${t.name}${t.budget_name ? ` - ${t.budget_name}` : ''}`}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleTaskClick(t);
-                          }}
-                        >
-                          <span className="mr-1">📋</span>
-                          {t.start_time && <span className="opacity-70">{t.start_time.slice(0, 5)} </span>}
-                          {t.name}
-                        </div>
-                      ))}
+                      {/* Show budget tasks with color based on status */}
+                      {dayTasks.slice(0, 2 - Math.min(dayManagements.length, 2)).map((t) => {
+                        const isCompleted = t.status === 'realizada' || t.task_status === 'realizada';
+                        return (
+                          <div 
+                            key={t.id}
+                            className={`text-xs p-1.5 rounded truncate border-l-2 ${
+                              isCompleted 
+                                ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 border-green-500 line-through opacity-75' 
+                                : 'bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300 border-amber-500'
+                            }`}
+                            title={`${t.name}${t.budget_name ? ` - ${t.budget_name}` : ''}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleTaskClick(t);
+                            }}
+                          >
+                            <span className="mr-1">{isCompleted ? '✅' : '📋'}</span>
+                            {t.start_time && <span className="opacity-70">{t.start_time.slice(0, 5)} </span>}
+                            {t.name}
+                          </div>
+                        );
+                      })}
                       {totalItems > 2 && (
                         <p className="text-xs text-muted-foreground text-center">
                           +{totalItems - 2} más
@@ -483,7 +540,7 @@ export default function Agenda() {
             selectedDate={selectedDate}
             onSelectDate={setSelectedDate}
             managements={managements}
-            budgetTasks={budgetTasks}
+            budgetTasks={filteredBudgetTasks}
             datesWithEvents={datesWithEvents}
             canEdit={canEdit}
             onAddEvent={() => { setSelectedManagement(null); setFormOpen(true); }}
@@ -504,57 +561,66 @@ export default function Agenda() {
                   {managements.filter(m => m.target_date && new Date(m.target_date) >= new Date()).length} citas
                 </Badge>
                 <Badge variant="secondary">
-                  {budgetTasks.filter(t => (t.target_date || t.start_date) && new Date((t.target_date || t.start_date)!) >= new Date()).length} tareas
+                  {filteredBudgetTasks.filter(t => (t.target_date || t.start_date) && new Date((t.target_date || t.start_date)!) >= new Date()).length} tareas
                 </Badge>
               </div>
             </div>
             
             {/* Budget Tasks Section */}
-            {budgetTasks.filter(t => (t.target_date || t.start_date) && new Date((t.target_date || t.start_date)!) >= new Date()).length > 0 && (
+            {filteredBudgetTasks.filter(t => (t.target_date || t.start_date) && new Date((t.target_date || t.start_date)!) >= new Date()).length > 0 && (
               <div>
                 <h3 className="text-lg font-medium mb-3 flex items-center gap-2">
-                  <CheckCircle2 className="h-5 w-5 text-blue-500" />
+                  <CheckCircle2 className="h-5 w-5 text-amber-500" />
                   Tareas de Presupuestos
                 </h3>
                 <Card>
                   <CardContent className="divide-y p-0">
-                    {budgetTasks
+                    {filteredBudgetTasks
                       .filter(t => (t.target_date || t.start_date) && new Date((t.target_date || t.start_date)!) >= new Date())
                       .sort((a, b) => {
                         const dateA = new Date((a.target_date || a.start_date)!);
                         const dateB = new Date((b.target_date || b.start_date)!);
                         return dateA.getTime() - dateB.getTime();
                       })
-                      .map((task) => (
-                        <div 
-                          key={task.id}
-                          className="flex items-center gap-4 py-4 hover:bg-muted/50 cursor-pointer transition-colors px-6"
-                          onClick={() => handleTaskClick(task)}
-                        >
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleTaskToggle(task);
-                            }}
+                      .map((task) => {
+                        const isCompleted = task.status === 'realizada' || task.task_status === 'realizada';
+                        return (
+                          <div 
+                            key={task.id}
+                            className={`flex items-center gap-4 py-4 hover:bg-muted/50 cursor-pointer transition-colors px-6 ${isCompleted ? 'opacity-75' : ''}`}
+                            onClick={() => handleTaskClick(task)}
                           >
-                            <CheckCircle2 className="h-5 w-5 text-muted-foreground hover:text-green-500" />
-                          </Button>
-                          <div className="flex-1 min-w-0">
-                            <p className="font-medium truncate">{task.name}</p>
-                            <p className="text-sm text-muted-foreground">
-                              {(task.target_date || task.start_date) && format(new Date((task.target_date || task.start_date)!), "EEEE, d 'de' MMMM", { locale: es })}
-                              {task.start_time && ` · ${task.start_time.slice(0, 5)}`}
-                              {task.budget_name && ` · 📁 ${task.budget_name}`}
-                            </p>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleTaskToggle(task);
+                              }}
+                            >
+                              <CheckCircle2 className={`h-5 w-5 ${isCompleted ? 'text-green-500' : 'text-muted-foreground hover:text-green-500'}`} />
+                            </Button>
+                            <div className="flex-1 min-w-0">
+                              <p className={`font-medium truncate ${isCompleted ? 'line-through text-muted-foreground' : ''}`}>{task.name}</p>
+                              <p className="text-sm text-muted-foreground">
+                                {(task.target_date || task.start_date) && format(new Date((task.target_date || task.start_date)!), "EEEE, d 'de' MMMM", { locale: es })}
+                                {task.start_time && ` · ${task.start_time.slice(0, 5)}`}
+                                {task.budget_name && ` · 📁 ${task.budget_name}`}
+                              </p>
+                            </div>
+                            <Badge 
+                              variant="secondary" 
+                              className={isCompleted 
+                                ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300" 
+                                : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"
+                              }
+                            >
+                              {isCompleted ? 'Realizada' : 'Pendiente'}
+                            </Badge>
                           </div>
-                          <Badge variant="secondary" className="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
-                            Pendiente
-                          </Badge>
-                        </div>
-                      ))}
+                        );
+                      })}
                   </CardContent>
                 </Card>
               </div>

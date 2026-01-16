@@ -483,10 +483,13 @@ export default function Agenda() {
             selectedDate={selectedDate}
             onSelectDate={setSelectedDate}
             managements={managements}
+            budgetTasks={budgetTasks}
             datesWithEvents={datesWithEvents}
             canEdit={canEdit}
             onAddEvent={() => { setSelectedManagement(null); setFormOpen(true); }}
             onEventClick={handleEventClick}
+            onTaskClick={handleTaskClick}
+            onTaskToggle={handleTaskToggle}
             getTypeIcon={getTypeIcon}
             getStatusVariant={getStatusVariant}
           />

@@ -137,6 +137,13 @@ interface UrbanProfile {
   septic_tank_regulations: string | null;
   septic_tank_min_distance: number | null;
   septic_tank_min_distance_source: string | null;
+  // Distance to utilities/services
+  distance_to_water_supply: number | null;
+  distance_to_water_supply_source: string | null;
+  distance_to_sewage_network: number | null;
+  distance_to_sewage_network_source: string | null;
+  distance_to_electricity: number | null;
+  distance_to_electricity_source: string | null;
 }
 
 interface CatastroData {
@@ -1537,6 +1544,50 @@ export function UrbanProfileCard({ budgetId, cadastralReference: initialRef, isA
                       </p>
                     </div>
                   )}
+                </div>
+
+                {/* Distance to Utilities/Services Section */}
+                <Separator />
+                <div className="space-y-3">
+                  <h4 className="font-medium flex items-center gap-2 text-sm">
+                    <Zap className="h-4 w-4 text-yellow-500" />
+                    Distancia a Servicios / Acometidas
+                  </h4>
+                  <p className="text-xs text-muted-foreground">
+                    Distancia desde la parcela a los puntos de conexión de servicios públicos.
+                  </p>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    {/* Distance to Water Supply */}
+                    <EditableFieldWithSource
+                      label="Distancia a acometida de agua"
+                      value={profile.distance_to_water_supply}
+                      source={profile.distance_to_water_supply_source}
+                      unit="m"
+                      icon={Droplets}
+                      onSave={(value, source) => handleSaveField('distance_to_water_supply', 'distance_to_water_supply_source', value, source)}
+                    />
+                    
+                    {/* Distance to Sewage Network */}
+                    <EditableFieldWithSource
+                      label="Distancia a red de saneamiento"
+                      value={profile.distance_to_sewage_network}
+                      source={profile.distance_to_sewage_network_source}
+                      unit="m"
+                      icon={Waves}
+                      onSave={(value, source) => handleSaveField('distance_to_sewage_network', 'distance_to_sewage_network_source', value, source)}
+                    />
+                    
+                    {/* Distance to Electricity */}
+                    <EditableFieldWithSource
+                      label="Distancia a conexión eléctrica"
+                      value={profile.distance_to_electricity}
+                      source={profile.distance_to_electricity_source}
+                      unit="m"
+                      icon={Zap}
+                      onSave={(value, source) => handleSaveField('distance_to_electricity', 'distance_to_electricity_source', value, source)}
+                    />
+                  </div>
                 </div>
 
                 {/* Additional Restrictions Section */}

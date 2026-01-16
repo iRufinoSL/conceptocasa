@@ -55,20 +55,25 @@ INSTRUCCIONES:
    - Normativa aplicable a la fosa séptica (distancias, capacidad, etc.)
    - Distancia mínima de la fosa séptica a edificaciones o pozos
 
-4. Identifica SI LA PARCELA ESTÁ AFECTADA por:
+4. Busca información sobre DISTANCIA A SERVICIOS/ACOMETIDAS:
+   - Distancia a la acometida de agua potable más cercana (metros)
+   - Distancia a la red de saneamiento municipal más cercana (metros)
+   - Distancia a la conexión eléctrica más cercana (metros)
+
+5. Identifica SI LA PARCELA ESTÁ AFECTADA por:
    - Líneas eléctricas
    - Proximidad a cementerio
    - Cauces de agua
    - Falta de red de saneamiento
    - Otras servidumbres
 
-5. Para cada valor encontrado, indica el artículo, sección, ley o referencia donde lo encontraste.
+6. Para cada valor encontrado, indica el artículo, sección, ley o referencia donde lo encontraste.
 
-6. Si un valor no aparece explícitamente, pon null.
+7. Si un valor no aparece explícitamente, pon null.
 
-7. Si hay varios valores posibles (por zonas, usos, etc.), extrae el más restrictivo o el aplicable a vivienda unifamiliar.
+8. Si hay varios valores posibles (por zonas, usos, etc.), extrae el más restrictivo o el aplicable a vivienda unifamiliar.
 
-8. Indica si la parcela es divisible o indivisible según la normativa.
+9. Indica si la parcela es divisible o indivisible según la normativa.
 
 RESPONDE SOLO en formato JSON con esta estructura exacta:
 {
@@ -95,6 +100,9 @@ RESPONDE SOLO en formato JSON con esta estructura exacta:
   "requiresSepticTank": { "value": null o true o false, "source": "normativa aplicable" },
   "septicTankRegulations": { "value": null o "texto con la normativa", "source": "artículo o sección" },
   "septicTankMinDistance": { "value": null o número en metros, "source": "normativa sanitaria" },
+  "distanceToWaterSupply": { "value": null o número en metros, "source": "informe o documento" },
+  "distanceToSewageNetwork": { "value": null o número en metros, "source": "informe o documento" },
+  "distanceToElectricity": { "value": null o número en metros, "source": "informe o documento" },
   "isDivisible": { "value": null o true o false, "source": "artículo o sección" },
   "affectedByPowerLines": true o false o null,
   "affectedByCemetery": true o false o null,
@@ -308,6 +316,9 @@ Deno.serve(async (req) => {
         checkValue(extractedData.fenceSetback as { value: number | null });
         checkValue(extractedData.accessWidth as { value: number | null });
         checkValue(extractedData.septicTankMinDistance as { value: number | null });
+        checkValue(extractedData.distanceToWaterSupply as { value: number | null });
+        checkValue(extractedData.distanceToSewageNetwork as { value: number | null });
+        checkValue(extractedData.distanceToElectricity as { value: number | null });
       }
 
       // Update the upload record with results
@@ -439,6 +450,19 @@ Deno.serve(async (req) => {
         if (ed.septicTankMinDistance?.value) {
           updateData.septic_tank_min_distance = ed.septicTankMinDistance.value;
           updateData.septic_tank_min_distance_source = ed.septicTankMinDistance.source;
+        }
+        // Distance to utilities/services
+        if (ed.distanceToWaterSupply?.value) {
+          updateData.distance_to_water_supply = ed.distanceToWaterSupply.value;
+          updateData.distance_to_water_supply_source = ed.distanceToWaterSupply.source;
+        }
+        if (ed.distanceToSewageNetwork?.value) {
+          updateData.distance_to_sewage_network = ed.distanceToSewageNetwork.value;
+          updateData.distance_to_sewage_network_source = ed.distanceToSewageNetwork.source;
+        }
+        if (ed.distanceToElectricity?.value) {
+          updateData.distance_to_electricity = ed.distanceToElectricity.value;
+          updateData.distance_to_electricity_source = ed.distanceToElectricity.source;
         }
         // Store sectoral restrictions as JSON
         if (Array.isArray(edAny.sectoralRestrictions) && edAny.sectoralRestrictions.length > 0) {

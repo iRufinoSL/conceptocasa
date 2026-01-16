@@ -3352,6 +3352,12 @@ export type Database = {
           coordinates_source: string | null
           created_at: string
           created_by: string | null
+          distance_to_electricity: number | null
+          distance_to_electricity_source: string | null
+          distance_to_sewage_network: number | null
+          distance_to_sewage_network_source: string | null
+          distance_to_water_supply: number | null
+          distance_to_water_supply_source: string | null
           fence_setback: number | null
           fence_setback_source: string | null
           front_setback: number | null
@@ -3434,6 +3440,12 @@ export type Database = {
           coordinates_source?: string | null
           created_at?: string
           created_by?: string | null
+          distance_to_electricity?: number | null
+          distance_to_electricity_source?: string | null
+          distance_to_sewage_network?: number | null
+          distance_to_sewage_network_source?: string | null
+          distance_to_water_supply?: number | null
+          distance_to_water_supply_source?: string | null
           fence_setback?: number | null
           fence_setback_source?: string | null
           front_setback?: number | null
@@ -3516,6 +3528,12 @@ export type Database = {
           coordinates_source?: string | null
           created_at?: string
           created_by?: string | null
+          distance_to_electricity?: number | null
+          distance_to_electricity_source?: string | null
+          distance_to_sewage_network?: number | null
+          distance_to_sewage_network_source?: string | null
+          distance_to_water_supply?: number | null
+          distance_to_water_supply_source?: string | null
           fence_setback?: number | null
           fence_setback_source?: string | null
           front_setback?: number | null

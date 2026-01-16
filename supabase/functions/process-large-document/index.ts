@@ -13,11 +13,14 @@ interface ProcessingResult {
   error?: string;
 }
 
-// Use Lovable AI to analyze extracted text
+// Use Lovable AI to analyze extracted text (with optional image for OCR)
 async function analyzeWithAI(
-  text: string, 
-  municipality: string | null,
-  landClass: string
+  input: {
+    text: string;
+    municipality: string | null;
+    landClass: string;
+    firstPageImageDataUrl?: string | null;
+  }
 ): Promise<Record<string, unknown>> {
   const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
   if (!LOVABLE_API_KEY) {
@@ -27,64 +30,17 @@ async function analyzeWithAI(
   const systemPrompt = `Eres un experto en urbanismo español especializado en analizar documentos urbanísticos oficiales. Tu trabajo es extraer ABSOLUTAMENTE TODOS los datos urbanísticos del documento proporcionado.
 
 TIPOS DE DOCUMENTOS QUE PUEDES RECIBIR:
-1. **CERTIFICADO URBANÍSTICO / CÉDULA URBANÍSTICA** - Documento oficial del Ayuntamiento que certifica las condiciones urbanísticas de una parcela específica. Suele tener secciones como "CERTIFICA", "NORMATIVA APLICABLE", "CONDICIONES DE EDIFICACIÓN", etc.
-2. **PGOU / Plan General** - Normativa general del municipio
-3. **Normas Subsidiarias** - Normativa municipal en ausencia de PGOU
-4. **Plan Parcial** - Desarrollo de un sector específico
-5. **Fichas urbanísticas** - Resúmenes de parámetros por zona
+1. **CERTIFICADO URBANÍSTICO / CÉDULA URBANÍSTICA** - Documento oficial del Ayuntamiento que certifica las condiciones urbanísticas de una parcela específica.
 
 INSTRUCCIONES CRÍTICAS:
-1. LEE EL DOCUMENTO COMPLETO con máxima atención. Los Certificados Urbanísticos contienen TODA la información que necesitamos.
+1. Lee con máxima atención. Si es un Certificado Urbanístico, normalmente contiene la respuesta explícita.
+2. Si hay una imagen de página (OCR), úsala como fuente principal cuando el texto sea incompleto.
+3. Extrae valores numéricos exactos.
+4. Incluye siempre la fuente exacta (sección/artículo/página) cuando sea posible.
 
-2. BUSCA ESTAS PALABRAS CLAVE en el documento:
-   - "EDIFICABLE" / "NO EDIFICABLE" / "APTO PARA EDIFICAR" - ¡MUY IMPORTANTE!
-   - "Clasificación del suelo" / "Clasificación urbanística"
-   - "Calificación urbanística" / "Zona" / "Subzona"
-   - "Volumen máximo" / "Volumen de edificación"
-   - "Altura máxima" / "Altura reguladora" / "Altura cornisa"
-   - "Plantas" / "Número de plantas"
-   - "Ocupación" / "Ocupación máxima"
-   - "Edificabilidad" / "Índice de edificabilidad"
-   - "Retranqueo" / "Retranqueos" / "Separación a linderos"
-   - "Parcela mínima" / "Superficie mínima"
-   - "Frente mínimo" / "Fachada mínima"
-
-3. EXTRAE VALORES NUMÉRICOS exactos cuando los encuentres. Si dice "7 metros" o "7,00 m" o "7m", el valor es 7.
-
-4. INDICA LA FUENTE exacta: artículo, sección o página donde encontraste el dato.
-
-5. **CONCLUSIÓN EDIFICABLE**: Determina si la parcela ES EDIFICABLE basándote en:
-   - Si el documento lo dice explícitamente ("edificable", "apto para edificar", etc.)
-   - Si la clasificación es Suelo Urbano consolidado = generalmente edificable
-   - Si la clasificación es Suelo Rústico/No Urbanizable = generalmente NO edificable
-   - Si hay condiciones que impiden edificar (servidumbres, protecciones, etc.)
-
-PARÁMETROS A EXTRAER (busca TODOS):
-- ¿Es edificable? (isEdificable: true/false)
-- Clasificación del suelo (urban_classification: "Suelo Urbano", "Suelo Rústico", etc.)
-- Calificación urbanística (urban_qualification: zona o subzona)
-- Volumen máximo edificable (m³)
-- Altura máxima (metros)
-- Número máximo de plantas
-- Índice de edificabilidad (m²/m² o m²t/m²s)
-- Ocupación máxima (%)
-- Superficie máxima construida (m²)
-- Retranqueos: frontal, lateral y posterior (metros)
-- Parcela mínima (m²)
-- Frente mínimo de parcela (metros)
-- Distancias mínimas: a colindantes, caminos, cementerios, líneas eléctricas, cauces de agua
-
-AFECCIONES Y SERVIDUMBRES - Busca si hay:
-- Líneas eléctricas que afecten a la parcela
-- Proximidad a cementerios
-- Cauces de agua o zonas inundables
-- Carreteras y sus zonas de protección
-- Vías pecuarias
-- Cualquier otra servidumbre
-
-SANEAMIENTO - Busca:
-- Si hay red de saneamiento municipal
-- Si se requiere fosa séptica
+CONCLUSIÓN EDIFICABLE (MUY IMPORTANTE):
+- Si el documento dice explícitamente "edificable" o "no edificable", respeta esa conclusión.
+- Si hay contradicción, prioriza el texto literal más claro (p.ej. "SE CERTIFICA: ... edificable").
 
 RESPONDE SOLO en formato JSON con esta estructura exacta:
 {
@@ -127,10 +83,63 @@ RESPONDE SOLO en formato JSON con esta estructura exacta:
     { "type": "tipo de afección", "description": "descripción", "distance": número o null, "source": "referencia" }
   ],
   "additionalInfo": "Cualquier otra información urbanística relevante encontrada que no encaje en los campos anteriores",
-  "documentSummary": "Breve resumen del tipo de documento (Certificado Urbanístico de [municipio], PGOU, etc.) y sus conclusiones principales"
-}
+  "documentSummary": "Breve resumen del tipo de documento y sus conclusiones principales"
+}`;
 
-IMPORTANTE: Si el documento es un CERTIFICADO URBANÍSTICO oficial, TODA la información está ahí. Lee con cuidado y extrae absolutamente todo.`;
+  // Provide a more robust input: head + tail + keyword snippets
+  const text = input.text || '';
+  const head = text.slice(0, 45000);
+  const tail = text.length > 90000 ? text.slice(-45000) : '';
+
+  const keywords = [
+    'CERTIFICA',
+    'EDIFICABLE',
+    'NO EDIFICABLE',
+    'APTO PARA EDIFICAR',
+    'CLASIFICACIÓN',
+    'CALIFICACIÓN',
+    'EDIFICABILIDAD',
+    'OCUPACIÓN',
+    'ALTURA',
+    'PLANTAS',
+    'RETRANQUEO',
+    'PARCELA',
+    'SUPERFICIE',
+    'VOLUMEN',
+  ];
+
+  const snippets: string[] = [];
+  const upper = text.toUpperCase();
+  for (const k of keywords) {
+    const ku = k.toUpperCase();
+    let idx = 0;
+    let hits = 0;
+    while (hits < 8) {
+      const found = upper.indexOf(ku, idx);
+      if (found === -1) break;
+      const start = Math.max(0, found - 400);
+      const end = Math.min(text.length, found + ku.length + 400);
+      snippets.push(text.slice(start, end));
+      idx = found + ku.length;
+      hits++;
+    }
+  }
+
+  const analysisText = [
+    '=== INICIO DEL DOCUMENTO (recorte) ===\n' + head,
+    tail ? '\n\n=== FINAL DEL DOCUMENTO (recorte) ===\n' + tail : '',
+    snippets.length ? '\n\n=== EXTRACTOS POR PALABRAS CLAVE ===\n' + snippets.join('\n\n---\n\n') : '',
+  ].filter(Boolean).join('\n');
+
+  const hasImage = !!input.firstPageImageDataUrl;
+  const model = hasImage ? 'openai/gpt-5-mini' : 'google/gemini-2.5-flash';
+
+  const userContent: any = hasImage
+    ? [
+        { type: 'text', text: `Analiza el siguiente contenido extraído (puede estar incompleto) y la imagen de la primera página si la necesitas:\n\n${analysisText}` },
+        { type: 'image_url', image_url: { url: input.firstPageImageDataUrl } },
+      ]
+    : `Analiza el siguiente texto extraído de un documento urbanístico:\n\n${analysisText}`;
 
   const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
     method: 'POST',
@@ -139,10 +148,10 @@ IMPORTANTE: Si el documento es un CERTIFICADO URBANÍSTICO oficial, TODA la info
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      model: 'google/gemini-2.5-flash',
+      model,
       messages: [
         { role: 'system', content: systemPrompt },
-        { role: 'user', content: `Analiza el siguiente texto extraído de un documento urbanístico:\n\n${text.substring(0, 50000)}` }
+        { role: 'user', content: userContent },
       ],
       temperature: 0.1,
       max_tokens: 3000,
@@ -255,55 +264,102 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  try {
-    const { uploadId, sourceType, storagePath, externalUrl, municipality, landClass, budgetId } = await req.json();
-
-    if (!uploadId) {
-      return new Response(
-        JSON.stringify({ success: false, error: 'ID de carga requerido' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
-    console.log(`Processing document upload ${uploadId}, source: ${sourceType}`);
-
-    // Update status to processing
-    await supabase
-      .from('urban_document_uploads')
-      .update({
-        status: 'processing',
-        processing_started_at: new Date().toISOString(),
-      })
-      .eq('id', uploadId);
-
-    let extractedText = '';
-    let pageCount = 0;
-
     try {
-      if (sourceType === 'url' && externalUrl) {
-        const result = await fetchAndExtractFromUrl(externalUrl);
-        extractedText = result.text;
-        pageCount = result.pageCount;
-      } else if (sourceType === 'storage' && storagePath) {
-        const result = await processFromStorage(supabaseUrl, supabaseServiceKey, storagePath);
-        extractedText = result.text;
-        pageCount = result.pageCount;
-      } else {
-        throw new Error('Fuente de documento no válida');
+      const {
+        uploadId,
+        sourceType,
+        storagePath,
+        externalUrl,
+        municipality,
+        landClass,
+        budgetId,
+        pdfText,
+        pdfPageCount,
+        firstPageImageDataUrl,
+      } = await req.json();
+
+      if (!uploadId) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'ID de carga requerido' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
       }
 
-      console.log(`Extracted ${extractedText.length} characters from ${pageCount} pages`);
+      const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+      const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+      const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-      // Analyze with AI
-      const extractedData = await analyzeWithAI(
-        extractedText,
-        municipality,
-        landClass || 'suelo urbano'
-      );
+      console.log(`Processing document upload ${uploadId}, source: ${sourceType}`);
+
+      // Update status to processing
+      await supabase
+        .from('urban_document_uploads')
+        .update({
+          status: 'processing',
+          processing_started_at: new Date().toISOString(),
+        })
+        .eq('id', uploadId);
+
+      let extractedText = '';
+      let pageCount = 0;
+
+      try {
+        // Prefer client-side extracted text (more reliable than Blob.text() for PDFs)
+        if (typeof pdfText === 'string' && pdfText.trim().length > 0) {
+          extractedText = pdfText;
+          pageCount = typeof pdfPageCount === 'number' && pdfPageCount > 0 ? pdfPageCount : 1;
+          console.log(`Using client-extracted PDF text (${extractedText.length} chars)`);
+        } else if (sourceType === 'url' && externalUrl) {
+          const result = await fetchAndExtractFromUrl(externalUrl);
+          extractedText = result.text;
+          pageCount = result.pageCount;
+        } else if (sourceType === 'storage' && storagePath) {
+          const result = await processFromStorage(supabaseUrl, supabaseServiceKey, storagePath);
+          extractedText = result.text;
+          pageCount = result.pageCount;
+        } else {
+          throw new Error('Fuente de documento no válida');
+        }
+
+        console.log(`Extracted ${extractedText.length} characters from ${pageCount} pages`);
+
+        // Analyze with AI (use image for OCR fallback if provided)
+        let extractedData = await analyzeWithAI({
+          text: extractedText,
+          municipality: municipality ?? null,
+          landClass: landClass || 'suelo urbano',
+          firstPageImageDataUrl: typeof firstPageImageDataUrl === 'string' ? firstPageImageDataUrl : null,
+        });
+
+        // Heuristic correction for buildable / not buildable if the document clearly states it
+        try {
+          const txt = extractedText || '';
+          const hasNoEdificable = /\bno\s+edificable\b/i.test(txt);
+          const hasEdificable = /\bedificable\b/i.test(txt) || /\bapto\s+para\s+edificar\b/i.test(txt);
+          const ie = (extractedData as any)?.isEdificable;
+          if (ie && typeof ie.value === 'boolean') {
+            if (ie.value === false && !hasNoEdificable && hasEdificable) {
+              (extractedData as any).isEdificable = {
+                value: true,
+                source: 'Heurística: el documento contiene "edificable/apto para edificar" y no contiene "no edificable"',
+              };
+            }
+            if (ie.value === true && hasNoEdificable) {
+              (extractedData as any).isEdificable = {
+                value: false,
+                source: 'Heurística: el documento contiene explícitamente "no edificable"',
+              };
+            }
+          } else {
+            if (hasNoEdificable) {
+              (extractedData as any).isEdificable = { value: false, source: 'Heurística: aparece "no edificable"' };
+            } else if (hasEdificable) {
+              (extractedData as any).isEdificable = { value: true, source: 'Heurística: aparece "edificable/apto para edificar"' };
+            }
+          }
+        } catch (e) {
+          console.warn('Buildable heuristic failed:', e);
+        }
 
       // Count values found
       let valuesFound = 0;

@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
 import { Progress } from '@/components/ui/progress';
+import * as pdfjsLib from 'pdfjs-dist';
 import {
   Upload,
   Link,
@@ -48,6 +49,45 @@ function sanitizeStorageFileName(name: string) {
     .replace(/^-|-$/g, '');
 }
 
+async function extractPdfTextAndFirstPagePreview(file: File): Promise<{
+  text: string;
+  pageCount: number;
+  firstPageImageDataUrl: string | null;
+}> {
+  const arrayBuffer = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+
+  const maxPages = Math.min(pdf.numPages, 50);
+  let fullText = '';
+
+  for (let i = 1; i <= maxPages; i++) {
+    const page = await pdf.getPage(i);
+    const textContent = await page.getTextContent();
+    const pageText = (textContent.items as any[]).map((item) => item.str).join(' ');
+    fullText += pageText + '\n\n';
+  }
+
+  // Render first page to an image for OCR fallback
+  let firstPageImageDataUrl: string | null = null;
+  try {
+    const firstPage = await pdf.getPage(1);
+    const viewport = firstPage.getViewport({ scale: 2 });
+    const canvas = document.createElement('canvas');
+    const context = canvas.getContext('2d');
+    if (context) {
+      canvas.width = Math.ceil(viewport.width);
+      canvas.height = Math.ceil(viewport.height);
+      await firstPage.render({ canvasContext: context as any, viewport } as any).promise;
+      firstPageImageDataUrl = canvas.toDataURL('image/png');
+    }
+  } catch {
+    // If rendering fails, we still continue with text only.
+    firstPageImageDataUrl = null;
+  }
+
+  return { text: fullText, pageCount: pdf.numPages, firstPageImageDataUrl };
+}
+
 export function LargeDocumentUploader({
   budgetId,
   municipality,
@@ -57,6 +97,11 @@ export function LargeDocumentUploader({
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isExpanded, setIsExpanded] = useState(true);
+
+  // Initialize PDF.js worker
+  useEffect(() => {
+    pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+  }, []);
   
   // Upload state
   const [isUploading, setIsUploading] = useState(false);
@@ -124,9 +169,33 @@ export function LargeDocumentUploader({
       let storagePath: string | null = null;
       let sourceType: 'storage' | 'url';
 
+      // Optional client-side PDF extraction to improve reliability (and enable OCR fallback)
+      let pdfText: string | undefined;
+      let pdfPageCount: number | undefined;
+      let firstPageImageDataUrl: string | null | undefined;
+
+      if (selectedFile) {
+        try {
+          const extracted = await extractPdfTextAndFirstPagePreview(selectedFile);
+          pdfText = extracted.text;
+          pdfPageCount = extracted.pageCount;
+          firstPageImageDataUrl = extracted.firstPageImageDataUrl;
+
+          // If the PDF is scanned, text extraction will be near-empty; keep image for OCR.
+          if ((pdfText || '').trim().length < 100 && firstPageImageDataUrl) {
+            toast({
+              title: 'PDF escaneado detectado',
+              description: 'No hay texto seleccionable. Usaré OCR para extraer la información.',
+            });
+          }
+        } catch (e) {
+          console.warn('PDF text extraction failed, continuing with upload:', e);
+        }
+      }
+
       if (selectedFile) {
         sourceType = 'storage';
-        
+
         // Generate unique path (sanitize filename to avoid Storage "Invalid key" errors)
         const timestamp = Date.now();
         const safeName = sanitizeStorageFileName(selectedFile.name);
@@ -145,7 +214,14 @@ export function LargeDocumentUploader({
             upsert: false,
           });
 
-        if (uploadError) throw uploadError;
+        if (uploadError) {
+          const msg = (uploadError as any)?.message || 'Error al subir el documento';
+          throw new Error(
+            msg.includes('Invalid key')
+              ? `${msg}. Prueba a renombrar el PDF (solo letras/números) y vuelve a intentar.`
+              : msg
+          );
+        }
 
         setUploadProgress(50);
 
@@ -167,7 +243,6 @@ export function LargeDocumentUploader({
 
         if (recordError) throw recordError;
         uploadId = uploadRecord.id;
-
       } else {
         sourceType = 'url';
 
@@ -198,7 +273,7 @@ export function LargeDocumentUploader({
         description: 'Extrayendo información urbanística con IA. Esto puede tardar unos minutos.',
       });
 
-      // Call edge function to process
+      // Call backend function to process
       const { data: processResult, error: processError } = await supabase.functions.invoke('process-large-document', {
         body: {
           uploadId,
@@ -208,6 +283,10 @@ export function LargeDocumentUploader({
           municipality,
           landClass: landClass || 'Urbano',
           budgetId,
+          // Improved extraction inputs
+          pdfText,
+          pdfPageCount,
+          firstPageImageDataUrl,
         },
       });
 
@@ -230,7 +309,6 @@ export function LargeDocumentUploader({
       } else {
         throw new Error(processResult?.error || 'Error al procesar documento');
       }
-
     } catch (error) {
       console.error('Error uploading/processing document:', error);
       setProcessingResult({

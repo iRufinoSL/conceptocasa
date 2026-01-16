@@ -3332,8 +3332,13 @@ export type Database = {
       }
       urban_profiles: {
         Row: {
+          access_width: number | null
+          access_width_source: string | null
           additional_restrictions: Json | null
           address: string | null
+          affected_by_cemetery: boolean | null
+          affected_by_power_lines: boolean | null
+          affected_by_water_courses: boolean | null
           analysis_notes: string | null
           analysis_status: string | null
           autonomous_community: string | null
@@ -3347,33 +3352,51 @@ export type Database = {
           coordinates_source: string | null
           created_at: string
           created_by: string | null
+          fence_setback: number | null
+          fence_setback_source: string | null
           front_setback: number | null
           front_setback_source: string | null
           google_maps_lat: number | null
           google_maps_lng: number | null
           id: string
+          is_divisible: boolean | null
+          is_divisible_source: string | null
           land_class: string | null
           land_use: string | null
           last_analyzed_at: string | null
           locality: string | null
           max_buildable_volume: number | null
           max_buildable_volume_source: string | null
+          max_built_surface: number | null
+          max_built_surface_source: string | null
           max_floors: number | null
+          max_floors_source: string | null
           max_height: number | null
           max_height_source: string | null
           max_occupation_percent: number | null
           max_occupation_source: string | null
+          min_distance_cemetery: number | null
+          min_distance_cemetery_source: string | null
           min_distance_neighbors: number | null
           min_distance_neighbors_source: string | null
+          min_distance_pipeline: number | null
+          min_distance_pipeline_source: string | null
+          min_distance_power_lines: number | null
+          min_distance_power_lines_source: string | null
+          min_distance_railway: number | null
+          min_distance_railway_source: string | null
           min_distance_roads: number | null
           min_distance_roads_source: string | null
           min_distance_slopes: number | null
           min_distance_slopes_source: string | null
+          min_distance_water_courses: number | null
+          min_distance_water_courses_source: string | null
           min_plot_area: number | null
           municipality: string | null
           province: string | null
           rear_setback: number | null
           rear_setback_source: string | null
+          sectoral_restrictions: Json | null
           seismic_zone: string | null
           side_setback: number | null
           side_setback_source: string | null
@@ -3385,8 +3408,13 @@ export type Database = {
           wind_zone: string | null
         }
         Insert: {
+          access_width?: number | null
+          access_width_source?: string | null
           additional_restrictions?: Json | null
           address?: string | null
+          affected_by_cemetery?: boolean | null
+          affected_by_power_lines?: boolean | null
+          affected_by_water_courses?: boolean | null
           analysis_notes?: string | null
           analysis_status?: string | null
           autonomous_community?: string | null
@@ -3400,33 +3428,51 @@ export type Database = {
           coordinates_source?: string | null
           created_at?: string
           created_by?: string | null
+          fence_setback?: number | null
+          fence_setback_source?: string | null
           front_setback?: number | null
           front_setback_source?: string | null
           google_maps_lat?: number | null
           google_maps_lng?: number | null
           id?: string
+          is_divisible?: boolean | null
+          is_divisible_source?: string | null
           land_class?: string | null
           land_use?: string | null
           last_analyzed_at?: string | null
           locality?: string | null
           max_buildable_volume?: number | null
           max_buildable_volume_source?: string | null
+          max_built_surface?: number | null
+          max_built_surface_source?: string | null
           max_floors?: number | null
+          max_floors_source?: string | null
           max_height?: number | null
           max_height_source?: string | null
           max_occupation_percent?: number | null
           max_occupation_source?: string | null
+          min_distance_cemetery?: number | null
+          min_distance_cemetery_source?: string | null
           min_distance_neighbors?: number | null
           min_distance_neighbors_source?: string | null
+          min_distance_pipeline?: number | null
+          min_distance_pipeline_source?: string | null
+          min_distance_power_lines?: number | null
+          min_distance_power_lines_source?: string | null
+          min_distance_railway?: number | null
+          min_distance_railway_source?: string | null
           min_distance_roads?: number | null
           min_distance_roads_source?: string | null
           min_distance_slopes?: number | null
           min_distance_slopes_source?: string | null
+          min_distance_water_courses?: number | null
+          min_distance_water_courses_source?: string | null
           min_plot_area?: number | null
           municipality?: string | null
           province?: string | null
           rear_setback?: number | null
           rear_setback_source?: string | null
+          sectoral_restrictions?: Json | null
           seismic_zone?: string | null
           side_setback?: number | null
           side_setback_source?: string | null
@@ -3438,8 +3484,13 @@ export type Database = {
           wind_zone?: string | null
         }
         Update: {
+          access_width?: number | null
+          access_width_source?: string | null
           additional_restrictions?: Json | null
           address?: string | null
+          affected_by_cemetery?: boolean | null
+          affected_by_power_lines?: boolean | null
+          affected_by_water_courses?: boolean | null
           analysis_notes?: string | null
           analysis_status?: string | null
           autonomous_community?: string | null
@@ -3453,33 +3504,51 @@ export type Database = {
           coordinates_source?: string | null
           created_at?: string
           created_by?: string | null
+          fence_setback?: number | null
+          fence_setback_source?: string | null
           front_setback?: number | null
           front_setback_source?: string | null
           google_maps_lat?: number | null
           google_maps_lng?: number | null
           id?: string
+          is_divisible?: boolean | null
+          is_divisible_source?: string | null
           land_class?: string | null
           land_use?: string | null
           last_analyzed_at?: string | null
           locality?: string | null
           max_buildable_volume?: number | null
           max_buildable_volume_source?: string | null
+          max_built_surface?: number | null
+          max_built_surface_source?: string | null
           max_floors?: number | null
+          max_floors_source?: string | null
           max_height?: number | null
           max_height_source?: string | null
           max_occupation_percent?: number | null
           max_occupation_source?: string | null
+          min_distance_cemetery?: number | null
+          min_distance_cemetery_source?: string | null
           min_distance_neighbors?: number | null
           min_distance_neighbors_source?: string | null
+          min_distance_pipeline?: number | null
+          min_distance_pipeline_source?: string | null
+          min_distance_power_lines?: number | null
+          min_distance_power_lines_source?: string | null
+          min_distance_railway?: number | null
+          min_distance_railway_source?: string | null
           min_distance_roads?: number | null
           min_distance_roads_source?: string | null
           min_distance_slopes?: number | null
           min_distance_slopes_source?: string | null
+          min_distance_water_courses?: number | null
+          min_distance_water_courses_source?: string | null
           min_plot_area?: number | null
           municipality?: string | null
           province?: string | null
           rear_setback?: number | null
           rear_setback_source?: string | null
+          sectoral_restrictions?: Json | null
           seismic_zone?: string | null
           side_setback?: number | null
           side_setback_source?: string | null

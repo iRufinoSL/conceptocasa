@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -450,6 +450,58 @@ export function UnifiedCommunicationsList({
     const TypeIcon = typeIcons[comm.type];
     const status = statusConfig[comm.status as keyof typeof statusConfig] || statusConfig.pending;
     const StatusIcon = status.icon;
+    
+    // State for assigned budgets and projects
+    const [assignedBudgets, setAssignedBudgets] = useState<{id: string, nombre: string}[]>([]);
+    const [assignedProjects, setAssignedProjects] = useState<{id: string, project_number: number, name: string}[]>([]);
+    
+    // Fetch assigned budgets and projects for this communication
+    useEffect(() => {
+      const fetchAssignments = async () => {
+        let budgetIds: string[] = [];
+        let projectIds: string[] = [];
+        
+        if (comm.type === 'email') {
+          const [budgetAssignments, projectAssignments] = await Promise.all([
+            supabase.from('email_budget_assignments').select('budget_id').eq('email_id', comm.id),
+            supabase.from('email_project_assignments').select('project_id').eq('email_id', comm.id),
+          ]);
+          budgetIds = budgetAssignments.data?.map(a => a.budget_id) || [];
+          projectIds = projectAssignments.data?.map(a => a.project_id) || [];
+        } else {
+          const [budgetAssignments, projectAssignments] = await Promise.all([
+            supabase.from('whatsapp_budget_assignments').select('budget_id').eq('message_id', comm.id),
+            supabase.from('whatsapp_project_assignments').select('project_id').eq('message_id', comm.id),
+          ]);
+          budgetIds = budgetAssignments.data?.map(a => a.budget_id) || [];
+          projectIds = projectAssignments.data?.map(a => a.project_id) || [];
+        }
+        
+        // Fetch budget details
+        if (budgetIds.length > 0) {
+          const { data: budgets } = await supabase
+            .from('presupuestos')
+            .select('id, nombre')
+            .in('id', budgetIds);
+          setAssignedBudgets(budgets || []);
+        } else {
+          setAssignedBudgets([]);
+        }
+        
+        // Fetch project details
+        if (projectIds.length > 0) {
+          const { data: projects } = await supabase
+            .from('projects')
+            .select('id, project_number, name')
+            .in('id', projectIds);
+          setAssignedProjects(projects || []);
+        } else {
+          setAssignedProjects([]);
+        }
+      };
+      
+      fetchAssignments();
+    }, [comm.id, comm.type]);
 
     const renderContent = () => {
       if (comm.type === 'email') {
@@ -469,6 +521,40 @@ export function UnifiedCommunicationsList({
     return (
       <Card className="h-full">
         <CardContent className="p-4 space-y-4">
+          {/* Assigned Budgets and Projects Header */}
+          {(assignedBudgets.length > 0 || assignedProjects.length > 0) && (
+            <div className="flex flex-wrap items-center gap-2 pb-3 border-b">
+              {assignedBudgets.map(budget => (
+                <a
+                  key={budget.id}
+                  href={`/presupuestos/${budget.id}?tab=agenda`}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 hover:bg-primary/20 text-primary rounded-full text-sm font-medium transition-colors cursor-pointer"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    window.location.href = `/presupuestos/${budget.id}?tab=agenda`;
+                  }}
+                >
+                  <FileText className="h-3.5 w-3.5" />
+                  {budget.nombre}
+                </a>
+              ))}
+              {assignedProjects.map(project => (
+                <a
+                  key={project.id}
+                  href={`/proyectos/${project.id}`}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-secondary/50 hover:bg-secondary text-secondary-foreground rounded-full text-sm font-medium transition-colors cursor-pointer"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    window.location.href = `/proyectos/${project.id}`;
+                  }}
+                >
+                  <Building2 className="h-3.5 w-3.5" />
+                  P{project.project_number} - {project.name}
+                </a>
+              ))}
+            </div>
+          )}
+          
           <div className="flex items-start justify-between">
             <div className="flex items-center gap-3">
               <div className={`p-2 rounded-full ${typeColors[comm.type]}`}>

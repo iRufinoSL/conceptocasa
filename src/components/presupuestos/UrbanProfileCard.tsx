@@ -128,7 +128,7 @@ const statusLabels: Record<string, { label: string; color: string; icon: React.E
   pending: { label: 'Pendiente', color: 'bg-muted text-muted-foreground', icon: AlertCircle },
   catastro_loaded: { label: 'Catastro cargado', color: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200', icon: Search },
   regulations_loaded: { label: 'Normativa cargada', color: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200', icon: FileText },
-  pgou_loaded: { label: 'PGOU analizado', color: 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200', icon: FileText },
+  pgou_loaded: { label: 'Normativa analizada', color: 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200', icon: FileText },
   cte_loaded: { label: 'CTE analizado', color: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200', icon: Building2 },
   complete: { label: 'Completo', color: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200', icon: CheckCircle2 },
 };
@@ -321,7 +321,7 @@ function EditableFieldWithSource({
             setEditSource(e.target.value);
             setIsEditing(true);
           }}
-          placeholder="Ej: PGOU Municipal Art. 45, BOE 123/2024"
+          placeholder="Ej: Normativa Urbanística Art. 45, BOE 123/2024"
           className="h-8 text-xs"
         />
       </div>
@@ -624,13 +624,13 @@ export function UrbanProfileCard({ budgetId, cadastralReference: initialRef, isA
             variant: 'default',
             title: 'Búsqueda completada',
             description: sourcesCount > 0 
-              ? `No se encontraron valores numéricos específicos en el PGOU de ${profile.municipality}. Se encontraron ${sourcesCount} fuentes que puedes consultar manualmente. Revisa las notas de análisis.`
-              : `No se encontraron datos específicos en el PGOU de ${profile.municipality}. Puedes introducir los valores manualmente.`,
+              ? `No se encontraron valores numéricos específicos en la normativa urbanística de ${profile.municipality}. Se encontraron ${sourcesCount} fuentes que puedes consultar manualmente. Revisa las notas de análisis.`
+              : `No se encontraron datos específicos en la normativa urbanística de ${profile.municipality}. Puedes introducir los valores manualmente.`,
           });
         } else {
           toast({
             title: 'Normativa urbanística encontrada',
-            description: `Se han actualizado ${valuesFound} campos con datos del PGOU de ${profile.municipality}`,
+            description: `Se han actualizado ${valuesFound} campos con datos de la normativa urbanística de ${profile.municipality}`,
           });
         }
         
@@ -888,7 +888,7 @@ export function UrbanProfileCard({ budgetId, cadastralReference: initialRef, isA
                     ) : (
                       <>
                         <Search className="h-4 w-4 mr-2" />
-                        Buscar PGOU en Web
+                        Buscar Normativa Urbanística en Web
                       </>
                     )}
                   </Button>
@@ -1111,11 +1111,11 @@ export function UrbanProfileCard({ budgetId, cadastralReference: initialRef, isA
                         </div>
                         {/* Description from Catastro */}
                         <p className="text-xs text-muted-foreground mt-2">
-                          {profile.land_class === 'Urbano' && 'Suelo Urbano - Terreno apto para edificación según PGOU municipal'}
+                          {profile.land_class === 'Urbano' && 'Suelo Urbano - Terreno apto para edificación según normativa urbanística municipal'}
                           {profile.land_class === 'Rústico' && 'Suelo Rústico - Terreno no urbanizable, uso agrícola/ganadero. Requiere consulta específica al Ayuntamiento para usos permitidos.'}
                           {profile.land_class === 'Urbanizable' && 'Suelo Urbanizable - Terreno programado para desarrollo urbano. Requiere Plan Parcial aprobado.'}
                           {profile.land_class === 'No Urbanizable' && 'Suelo No Urbanizable de especial protección. No se permite edificación.'}
-                          {!profile.land_class && 'Consultar clasificación en el PGOU municipal'}
+                          {!profile.land_class && 'Consultar clasificación en la normativa urbanística municipal'}
                         </p>
                         <div className="flex items-center gap-1 mt-2 text-xs text-muted-foreground">
                           <FileText className="h-3 w-3" />
@@ -1188,7 +1188,7 @@ export function UrbanProfileCard({ budgetId, cadastralReference: initialRef, isA
                     Capacidades Constructivas
                   </h4>
                   <p className="text-xs text-muted-foreground">
-                    Datos obtenidos del PGOU/Normas Subsidiarias del Municipio. Consultar con el Ayuntamiento para verificar.
+                    Datos obtenidos de la normativa urbanística del Municipio (PGOU, Plan Parcial, Normas Subsidiarias, etc.). Consultar con el Ayuntamiento para verificar.
                   </p>
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -1400,7 +1400,7 @@ export function UrbanProfileCard({ budgetId, cadastralReference: initialRef, isA
                                 updated[index] = { ...restriction, source: e.target.value };
                                 handleSaveAdditionalRestrictions(updated);
                               }}
-                              placeholder="Ej: PGOU Art. X, Ley Y/Z"
+                              placeholder="Ej: Normativa Urbanística Art. X, Ley Y/Z"
                               className="h-8 text-xs"
                             />
                           </div>

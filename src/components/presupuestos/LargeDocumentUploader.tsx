@@ -30,9 +30,9 @@ interface LargeDocumentUploaderProps {
 }
 
 const DOCUMENT_TYPES = [
-  { value: 'pgou', label: 'PGOU - Plan General de Ordenación Urbanística' },
-  { value: 'normas_subsidiarias', label: 'Normas Subsidiarias' },
+  { value: 'pgou', label: 'PGOU / Plan General de Ordenación Urbanística' },
   { value: 'plan_parcial', label: 'Plan Parcial' },
+  { value: 'normas_subsidiarias', label: 'Normas Subsidiarias' },
   { value: 'ordenanza', label: 'Ordenanza Municipal' },
   { value: 'normativa_autonomica', label: 'Normativa Autonómica' },
   { value: 'otro', label: 'Otro documento urbanístico' },
@@ -272,7 +272,7 @@ export function LargeDocumentUploader({
             </CollapsibleTrigger>
           </div>
           <CardDescription>
-            Sube un PDF de PGOU grande (hasta 100MB) o proporciona un enlace de Dropbox/Google Drive
+            Sube un PDF de normativa urbanística grande (hasta 100MB) o proporciona un enlace de Dropbox/Google Drive
           </CardDescription>
         </CardHeader>
 

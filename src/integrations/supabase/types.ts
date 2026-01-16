@@ -3619,6 +3619,42 @@ export type Database = {
           },
         ]
       }
+      whatsapp_budget_assignments: {
+        Row: {
+          budget_id: string
+          created_at: string
+          id: string
+          message_id: string
+        }
+        Insert: {
+          budget_id: string
+          created_at?: string
+          id?: string
+          message_id: string
+        }
+        Update: {
+          budget_id?: string
+          created_at?: string
+          id?: string
+          message_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_budget_assignments_budget_id_fkey"
+            columns: ["budget_id"]
+            isOneToOne: false
+            referencedRelation: "presupuestos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "whatsapp_budget_assignments_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       whatsapp_messages: {
         Row: {
           budget_id: string | null
@@ -3686,6 +3722,42 @@ export type Database = {
           },
           {
             foreignKeyName: "whatsapp_messages_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      whatsapp_project_assignments: {
+        Row: {
+          created_at: string
+          id: string
+          message_id: string
+          project_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          message_id: string
+          project_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          message_id?: string
+          project_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_project_assignments_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "whatsapp_project_assignments_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"

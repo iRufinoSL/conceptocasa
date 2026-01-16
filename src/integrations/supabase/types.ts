@@ -3367,6 +3367,8 @@ export type Database = {
           has_municipal_sewage: boolean | null
           has_municipal_sewage_source: string | null
           id: string
+          is_buildable: boolean | null
+          is_buildable_source: string | null
           is_divisible: boolean | null
           is_divisible_source: string | null
           land_class: string | null
@@ -3455,6 +3457,8 @@ export type Database = {
           has_municipal_sewage?: boolean | null
           has_municipal_sewage_source?: string | null
           id?: string
+          is_buildable?: boolean | null
+          is_buildable_source?: string | null
           is_divisible?: boolean | null
           is_divisible_source?: string | null
           land_class?: string | null
@@ -3543,6 +3547,8 @@ export type Database = {
           has_municipal_sewage?: boolean | null
           has_municipal_sewage_source?: string | null
           id?: string
+          is_buildable?: boolean | null
+          is_buildable_source?: string | null
           is_divisible?: boolean | null
           is_divisible_source?: string | null
           land_class?: string | null

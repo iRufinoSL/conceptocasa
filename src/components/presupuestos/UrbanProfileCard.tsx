@@ -144,6 +144,9 @@ interface UrbanProfile {
   distance_to_sewage_network_source: string | null;
   distance_to_electricity: number | null;
   distance_to_electricity_source: string | null;
+  // Buildability conclusion
+  is_buildable: boolean | null;
+  is_buildable_source: string | null;
 }
 
 interface CatastroData {
@@ -1144,10 +1147,28 @@ export function UrbanProfileCard({ budgetId, cadastralReference: initialRef, isA
                       Terreno
                     </h4>
                     <div className="space-y-2 text-sm">
-                      {/* Land Class - Main field */}
+                      {/* Land Class and Buildability - Main field */}
                       <div className="p-3 rounded-lg bg-muted/50 border">
+                        {/* Buildability conclusion - MOST IMPORTANT */}
+                        <div className="flex items-center justify-between mb-3 pb-3 border-b">
+                          <span className="text-foreground font-semibold text-base">¿Edificable?</span>
+                          <Badge 
+                            variant={profile.is_buildable === true ? 'default' : profile.is_buildable === false ? 'destructive' : 'outline'}
+                            className={`text-sm px-3 py-1 ${profile.is_buildable === true ? 'bg-green-600 hover:bg-green-700' : profile.is_buildable === false ? 'bg-red-600' : ''}`}
+                          >
+                            {profile.is_buildable === true ? '✓ SÍ EDIFICABLE' : profile.is_buildable === false ? '✗ NO EDIFICABLE' : 'Por determinar'}
+                          </Badge>
+                        </div>
+                        {profile.is_buildable_source && (
+                          <div className="flex items-center gap-1 mb-3 text-xs text-muted-foreground">
+                            <FileText className="h-3 w-3" />
+                            <span>Fuente: {profile.is_buildable_source}</span>
+                          </div>
+                        )}
+                        
+                        {/* Land Class (Calificación) */}
                         <div className="flex items-center justify-between mb-1">
-                          <span className="text-muted-foreground font-medium">Tipo de Terreno:</span>
+                          <span className="text-muted-foreground font-medium">Calificación del Terreno:</span>
                           <Badge variant={
                             profile.land_class === 'Urbano' ? 'default' :
                             profile.land_class === 'Urbanizable' ? 'secondary' :

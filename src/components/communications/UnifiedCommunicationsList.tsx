@@ -99,6 +99,7 @@ export function UnifiedCommunicationsList({
   const [isInboxExpanded, setIsInboxExpanded] = useState(true);
   const [isOutboxExpanded, setIsOutboxExpanded] = useState(true);
   const [fullscreenFolder, setFullscreenFolder] = useState<'inbox' | 'outbox' | null>(null);
+  const [filterUnreadOnly, setFilterUnreadOnly] = useState(false);
   const [actionsDialogOpen, setActionsDialogOpen] = useState(false);
   const [actionsCommunication, setActionsCommunication] = useState<UnifiedCommunication | null>(null);
   const [communicationAssignments, setCommunicationAssignments] = useState<{budgetIds: string[], projectIds: string[]}>({budgetIds: [], projectIds: []});
@@ -230,6 +231,22 @@ export function UnifiedCommunicationsList({
     },
   });
 
+  // Mark all emails as read mutation
+  const markAllAsReadMutation = useMutation({
+    mutationFn: async (emailIds: string[]) => {
+      const { error } = await supabase
+        .from('email_messages')
+        .update({ is_read: true, read_at: new Date().toISOString() })
+        .in('id', emailIds);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast({ title: 'Todos los emails marcados como leídos' });
+      queryClient.invalidateQueries({ queryKey: ['unified-emails'] });
+      setFilterUnreadOnly(false);
+    },
+  });
+
   // Unify communications
   const unifiedCommunications = useMemo(() => {
     const communications: UnifiedCommunication[] = [];
@@ -293,9 +310,23 @@ export function UnifiedCommunicationsList({
     );
   }, [unifiedCommunications, search]);
 
-  // Separate inbound and outbound
-  const inboundCommunications = filteredCommunications.filter(c => c.direction === 'inbound');
+  // Separate inbound and outbound (with optional unread filter for inbox)
+  const inboundCommunications = useMemo(() => {
+    let comms = filteredCommunications.filter(c => c.direction === 'inbound');
+    if (filterUnreadOnly) {
+      comms = comms.filter(c => c.type === 'email' && !c.isRead);
+    }
+    return comms;
+  }, [filteredCommunications, filterUnreadOnly]);
+  
   const outboundCommunications = filteredCommunications.filter(c => c.direction === 'outbound');
+  
+  // Get unread email IDs for "mark all as read" functionality
+  const unreadEmailIds = useMemo(() => {
+    return filteredCommunications
+      .filter(c => c.type === 'email' && !c.isRead && c.direction === 'inbound')
+      .map(c => c.id);
+  }, [filteredCommunications]);
 
   // Stats
   const stats = {
@@ -561,6 +592,7 @@ export function UnifiedCommunicationsList({
             onClick={() => {
               setFullscreenFolder(null);
               setSelectedCommunication(null);
+              setFilterUnreadOnly(false);
             }}
             className="gap-2"
           >
@@ -571,9 +603,45 @@ export function UnifiedCommunicationsList({
             <FolderIcon className={`h-5 w-5 ${folderColor}`} />
             <h2 className="font-semibold text-lg">{folderLabel}</h2>
             <Badge variant="secondary">{communications.length}</Badge>
+            {filterUnreadOnly && isInbox && (
+              <Badge variant="outline" className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+                Solo no leídos
+              </Badge>
+            )}
           </div>
+          
+          {/* Actions */}
+          <div className="flex items-center gap-2 ml-auto">
+            {/* Toggle unread filter */}
+            {isInbox && (
+              <Button
+                variant={filterUnreadOnly ? "default" : "outline"}
+                size="sm"
+                onClick={() => setFilterUnreadOnly(!filterUnreadOnly)}
+                className="gap-1"
+              >
+                <Eye className="h-4 w-4" />
+                {filterUnreadOnly ? 'Mostrar todos' : 'Solo no leídos'}
+              </Button>
+            )}
+            
+            {/* Mark all as read */}
+            {isInbox && unreadEmailIds.length > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => markAllAsReadMutation.mutate(unreadEmailIds)}
+                disabled={markAllAsReadMutation.isPending}
+                className="gap-1"
+              >
+                <CheckCircle className="h-4 w-4" />
+                {markAllAsReadMutation.isPending ? 'Marcando...' : `Marcar ${unreadEmailIds.length} como leídos`}
+              </Button>
+            )}
+          </div>
+          
           {/* Search in fullscreen */}
-          <div className="flex-1 max-w-md ml-auto">
+          <div className="flex-1 max-w-md">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
@@ -646,7 +714,15 @@ export function UnifiedCommunicationsList({
           <div className="text-xl font-bold text-green-500">{stats.whatsapp}</div>
           <div className="text-xs text-muted-foreground">WhatsApp</div>
         </Card>
-        <Card className="p-3">
+        <Card 
+          className={`p-3 cursor-pointer transition-colors hover:bg-accent ${filterUnreadOnly ? 'ring-2 ring-amber-500 bg-amber-50 dark:bg-amber-950/20' : ''}`}
+          onClick={() => {
+            if (stats.unread > 0) {
+              setFilterUnreadOnly(true);
+              setFullscreenFolder('inbox');
+            }
+          }}
+        >
           <div className="text-xl font-bold text-amber-600">{stats.unread}</div>
           <div className="text-xs text-muted-foreground">No leídos</div>
         </Card>

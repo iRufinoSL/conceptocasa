@@ -24,39 +24,73 @@ async function analyzeWithAI(
     throw new Error('LOVABLE_API_KEY not configured');
   }
 
-  const systemPrompt = `Eres un experto en urbanismo español especializado en analizar documentos de Planes Generales de Ordenación Urbanística (PGOU).
+  const systemPrompt = `Eres un experto en urbanismo español especializado en analizar documentos urbanísticos: Certificados Urbanísticos, Cédulas Urbanísticas, Fichas de Urbanismo, PGOU, Normas Subsidiarias, etc.
 
-Tu tarea es extraer datos numéricos específicos del texto proporcionado de un PGOU para ${landClass} en el municipio de ${municipality || 'el municipio indicado'}.
+Tu tarea es extraer TODOS los datos numéricos y restricciones del texto proporcionado para ${landClass} en el municipio de ${municipality || 'el municipio indicado'}.
 
 INSTRUCCIONES:
-1. Busca en el texto los siguientes parámetros urbanísticos:
+1. Busca en el texto los siguientes parámetros urbanísticos BÁSICOS:
    - Volumen máximo edificable (m³ o m³/parcela)
    - Altura máxima (metros o número de plantas)
+   - Número máximo de plantas
    - Índice de edificabilidad (m²/m² o m²t/m²s)
    - Ocupación máxima (porcentaje)
+   - Superficie máxima construida (m²)
    - Retranqueos: frontal, lateral y posterior (metros)
    - Distancias mínimas: a colindantes, a caminos/carreteras, a taludes (metros)
 
-2. Para cada valor encontrado, indica el artículo, sección o referencia donde lo encontraste.
+2. Busca AFECCIONES SECTORIALES (muy importantes):
+   - Distancia mínima a cementerios (normalmente 40m)
+   - Distancia mínima a líneas eléctricas de alta tensión
+   - Distancia a carreteras (según tipo: nacional, autonómica, comarcal, local)
+   - Distancia a cauces de agua/ríos
+   - Distancia a vías férreas
+   - Distancia a gasoductos u oleoductos
+   - Retranqueo del cerramiento al viario
+   - Anchura mínima de acceso rodado
 
-3. Si un valor no aparece explícitamente, pon null.
+3. Identifica SI LA PARCELA ESTÁ AFECTADA por:
+   - Líneas eléctricas
+   - Proximidad a cementerio
+   - Cauces de agua
+   - Otras servidumbres
 
-4. Si hay varios valores posibles (por zonas, usos, etc.), extrae el más general o común para vivienda unifamiliar.
+4. Para cada valor encontrado, indica el artículo, sección, ley o referencia donde lo encontraste.
 
-5. Convierte plantas a metros si es necesario (1 planta ≈ 3m, 2 plantas ≈ 6m, etc.)
+5. Si un valor no aparece explícitamente, pon null.
+
+6. Si hay varios valores posibles (por zonas, usos, etc.), extrae el más restrictivo o el aplicable a vivienda unifamiliar.
+
+7. Indica si la parcela es divisible o indivisible según la normativa.
 
 RESPONDE SOLO en formato JSON con esta estructura exacta:
 {
   "maxBuildableVolume": { "value": null o número, "source": "artículo o sección" },
   "maxHeight": { "value": null o número en metros, "source": "artículo o sección" },
+  "maxFloors": { "value": null o número, "source": "artículo o sección" },
   "buildabilityIndex": { "value": null o número, "source": "artículo o sección" },
   "maxOccupation": { "value": null o número (porcentaje sin %), "source": "artículo o sección" },
+  "maxBuiltSurface": { "value": null o número en m², "source": "artículo o sección" },
   "frontSetback": { "value": null o número en metros, "source": "artículo o sección" },
   "sideSetback": { "value": null o número en metros, "source": "artículo o sección" },
   "rearSetback": { "value": null o número en metros, "source": "artículo o sección" },
   "minDistanceNeighbors": { "value": null o número en metros, "source": "artículo o sección" },
   "minDistanceRoads": { "value": null o número en metros, "source": "artículo o sección" },
   "minDistanceSlopes": { "value": null o número en metros, "source": "artículo o sección" },
+  "minDistanceCemetery": { "value": null o número en metros, "source": "ley o artículo" },
+  "minDistancePowerLines": { "value": null o número en metros, "source": "normativa sectorial" },
+  "minDistanceWaterCourses": { "value": null o número en metros, "source": "artículo o sección" },
+  "minDistanceRailway": { "value": null o número en metros, "source": "normativa sectorial" },
+  "minDistancePipeline": { "value": null o número en metros, "source": "normativa sectorial" },
+  "fenceSetback": { "value": null o número en metros, "source": "artículo o sección" },
+  "accessWidth": { "value": null o número en metros, "source": "artículo o sección" },
+  "isDivisible": { "value": null o true o false, "source": "artículo o sección" },
+  "affectedByPowerLines": true o false o null,
+  "affectedByCemetery": true o false o null,
+  "affectedByWaterCourses": true o false o null,
+  "sectoralRestrictions": [
+    { "type": "tipo de afección", "description": "descripción", "distance": número o null, "source": "referencia" }
+  ],
   "additionalInfo": "Cualquier otra información urbanística relevante encontrada",
   "documentSummary": "Breve resumen del tipo de documento y su contenido principal"
 }`;
@@ -245,14 +279,23 @@ Deno.serve(async (req) => {
       if (extractedData && !extractedData.parseError) {
         checkValue(extractedData.maxBuildableVolume as { value: number | null });
         checkValue(extractedData.maxHeight as { value: number | null });
+        checkValue(extractedData.maxFloors as { value: number | null });
         checkValue(extractedData.buildabilityIndex as { value: number | null });
         checkValue(extractedData.maxOccupation as { value: number | null });
+        checkValue(extractedData.maxBuiltSurface as { value: number | null });
         checkValue(extractedData.frontSetback as { value: number | null });
         checkValue(extractedData.sideSetback as { value: number | null });
         checkValue(extractedData.rearSetback as { value: number | null });
         checkValue(extractedData.minDistanceNeighbors as { value: number | null });
         checkValue(extractedData.minDistanceRoads as { value: number | null });
         checkValue(extractedData.minDistanceSlopes as { value: number | null });
+        checkValue(extractedData.minDistanceCemetery as { value: number | null });
+        checkValue(extractedData.minDistancePowerLines as { value: number | null });
+        checkValue(extractedData.minDistanceWaterCourses as { value: number | null });
+        checkValue(extractedData.minDistanceRailway as { value: number | null });
+        checkValue(extractedData.minDistancePipeline as { value: number | null });
+        checkValue(extractedData.fenceSetback as { value: number | null });
+        checkValue(extractedData.accessWidth as { value: number | null });
       }
 
       // Update the upload record with results
@@ -314,13 +357,70 @@ Deno.serve(async (req) => {
           updateData.min_distance_slopes = ed.minDistanceSlopes.value;
           updateData.min_distance_slopes_source = ed.minDistanceSlopes.source;
         }
+        // New sectoral restriction fields
+        if (ed.minDistanceCemetery?.value) {
+          updateData.min_distance_cemetery = ed.minDistanceCemetery.value;
+          updateData.min_distance_cemetery_source = ed.minDistanceCemetery.source;
+        }
+        if (ed.minDistancePowerLines?.value) {
+          updateData.min_distance_power_lines = ed.minDistancePowerLines.value;
+          updateData.min_distance_power_lines_source = ed.minDistancePowerLines.source;
+        }
+        if (ed.minDistanceWaterCourses?.value) {
+          updateData.min_distance_water_courses = ed.minDistanceWaterCourses.value;
+          updateData.min_distance_water_courses_source = ed.minDistanceWaterCourses.source;
+        }
+        if (ed.minDistanceRailway?.value) {
+          updateData.min_distance_railway = ed.minDistanceRailway.value;
+          updateData.min_distance_railway_source = ed.minDistanceRailway.source;
+        }
+        if (ed.minDistancePipeline?.value) {
+          updateData.min_distance_pipeline = ed.minDistancePipeline.value;
+          updateData.min_distance_pipeline_source = ed.minDistancePipeline.source;
+        }
+        if (ed.maxBuiltSurface?.value) {
+          updateData.max_built_surface = ed.maxBuiltSurface.value;
+          updateData.max_built_surface_source = ed.maxBuiltSurface.source;
+        }
+        if (ed.maxFloors?.value) {
+          updateData.max_floors = ed.maxFloors.value;
+          updateData.max_floors_source = ed.maxFloors.source;
+        }
+        if (ed.fenceSetback?.value) {
+          updateData.fence_setback = ed.fenceSetback.value;
+          updateData.fence_setback_source = ed.fenceSetback.source;
+        }
+        if (ed.accessWidth?.value) {
+          updateData.access_width = ed.accessWidth.value;
+          updateData.access_width_source = ed.accessWidth.source;
+        }
+        // Boolean fields - use proper type casting
+        const isDivisibleField = (extractedData as Record<string, { value?: boolean | null; source?: string }>).isDivisible;
+        if (typeof isDivisibleField?.value === 'boolean') {
+          updateData.is_divisible = isDivisibleField.value;
+          updateData.is_divisible_source = isDivisibleField.source;
+        }
+        const edAny = extractedData as Record<string, unknown>;
+        if (typeof edAny.affectedByPowerLines === 'boolean') {
+          updateData.affected_by_power_lines = edAny.affectedByPowerLines;
+        }
+        if (typeof edAny.affectedByCemetery === 'boolean') {
+          updateData.affected_by_cemetery = edAny.affectedByCemetery;
+        }
+        if (typeof edAny.affectedByWaterCourses === 'boolean') {
+          updateData.affected_by_water_courses = edAny.affectedByWaterCourses;
+        }
+        // Store sectoral restrictions as JSON
+        if (Array.isArray(edAny.sectoralRestrictions) && edAny.sectoralRestrictions.length > 0) {
+          updateData.sectoral_restrictions = edAny.sectoralRestrictions;
+        }
 
         if (Object.keys(updateData).length > 0) {
           updateData.analysis_status = 'pgou_loaded';
           updateData.last_analyzed_at = new Date().toISOString();
           
-          const additionalInfo = ed.additionalInfo as string || '';
-          const summary = ed.documentSummary as string || '';
+          const additionalInfo = edAny.additionalInfo as string || '';
+          const summary = edAny.documentSummary as string || '';
           if (additionalInfo || summary) {
             updateData.analysis_notes = [summary, additionalInfo].filter(Boolean).join('\n\n');
           }

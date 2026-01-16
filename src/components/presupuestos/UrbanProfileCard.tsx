@@ -31,7 +31,14 @@ import {
   Trash2,
   Upload,
   Map,
-  Globe
+  Globe,
+  Zap,
+  Droplets,
+  Train,
+  Fuel,
+  Cross,
+  Fence,
+  Car
 } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import * as pdfjsLib from 'pdfjs-dist';
@@ -67,6 +74,7 @@ interface UrbanProfile {
   max_height: number | null;
   max_height_source: string | null;
   max_floors: number | null;
+  max_floors_source: string | null;
   min_plot_area: number | null;
   front_setback: number | null;
   front_setback_source: string | null;
@@ -84,7 +92,7 @@ interface UrbanProfile {
   analysis_notes: string | null;
   last_analyzed_at: string | null;
   created_at: string;
-  // New fields
+  // Existing extended fields
   google_maps_lat: number | null;
   google_maps_lng: number | null;
   coordinates_source: string | null;
@@ -97,6 +105,29 @@ interface UrbanProfile {
   min_distance_slopes: number | null;
   min_distance_slopes_source: string | null;
   additional_restrictions: AdditionalRestriction[] | null;
+  // New sectoral restrictions fields
+  min_distance_cemetery: number | null;
+  min_distance_cemetery_source: string | null;
+  min_distance_power_lines: number | null;
+  min_distance_power_lines_source: string | null;
+  min_distance_water_courses: number | null;
+  min_distance_water_courses_source: string | null;
+  min_distance_railway: number | null;
+  min_distance_railway_source: string | null;
+  min_distance_pipeline: number | null;
+  min_distance_pipeline_source: string | null;
+  max_built_surface: number | null;
+  max_built_surface_source: string | null;
+  fence_setback: number | null;
+  fence_setback_source: string | null;
+  access_width: number | null;
+  access_width_source: string | null;
+  is_divisible: boolean | null;
+  is_divisible_source: string | null;
+  affected_by_power_lines: boolean | null;
+  affected_by_cemetery: boolean | null;
+  affected_by_water_courses: boolean | null;
+  sectoral_restrictions: Json | null;
 }
 
 interface CatastroData {
@@ -1304,6 +1335,132 @@ export function UrbanProfileCard({ budgetId, cadastralReference: initialRef, isA
                       unit="m"
                       icon={Mountain}
                       onSave={(value, source) => handleSaveField('min_distance_slopes', 'min_distance_slopes_source', value, source)}
+                    />
+                  </div>
+                </div>
+
+                {/* Sectoral Restrictions Section - Afecciones Sectoriales */}
+                <Separator />
+                <div className="space-y-3">
+                  <h4 className="font-medium flex items-center gap-2 text-sm">
+                    <AlertCircle className="h-4 w-4 text-amber-500" />
+                    Afecciones Sectoriales
+                  </h4>
+                  <p className="text-xs text-muted-foreground">
+                    Distancias mínimas a infraestructuras y elementos protegidos según legislación sectorial.
+                  </p>
+                  
+                  {/* Affected By Indicators */}
+                  <div className="flex flex-wrap gap-2">
+                    {profile.affected_by_power_lines && (
+                      <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-300 dark:bg-amber-900/20 dark:text-amber-400">
+                        <Zap className="h-3 w-3 mr-1" />
+                        Afectada por líneas eléctricas
+                      </Badge>
+                    )}
+                    {profile.affected_by_cemetery && (
+                      <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-300 dark:bg-purple-900/20 dark:text-purple-400">
+                        <Cross className="h-3 w-3 mr-1" />
+                        Próxima a cementerio
+                      </Badge>
+                    )}
+                    {profile.affected_by_water_courses && (
+                      <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-300 dark:bg-blue-900/20 dark:text-blue-400">
+                        <Droplets className="h-3 w-3 mr-1" />
+                        Próxima a cauce de agua
+                      </Badge>
+                    )}
+                    {profile.is_divisible === false && (
+                      <Badge variant="outline" className="bg-red-50 text-red-700 border-red-300 dark:bg-red-900/20 dark:text-red-400">
+                        Parcela indivisible
+                      </Badge>
+                    )}
+                    {profile.is_divisible === true && (
+                      <Badge variant="outline" className="bg-green-50 text-green-700 border-green-300 dark:bg-green-900/20 dark:text-green-400">
+                        Parcela divisible
+                      </Badge>
+                    )}
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {/* Distance to Cemetery */}
+                    <EditableFieldWithSource
+                      label="Distancia mínima a cementerio"
+                      value={profile.min_distance_cemetery}
+                      source={profile.min_distance_cemetery_source}
+                      unit="m"
+                      icon={Cross}
+                      onSave={(value, source) => handleSaveField('min_distance_cemetery', 'min_distance_cemetery_source', value, source)}
+                    />
+                    
+                    {/* Distance to Power Lines */}
+                    <EditableFieldWithSource
+                      label="Distancia mínima a líneas eléctricas"
+                      value={profile.min_distance_power_lines}
+                      source={profile.min_distance_power_lines_source}
+                      unit="m"
+                      icon={Zap}
+                      onSave={(value, source) => handleSaveField('min_distance_power_lines', 'min_distance_power_lines_source', value, source)}
+                    />
+                    
+                    {/* Distance to Water Courses */}
+                    <EditableFieldWithSource
+                      label="Distancia mínima a cauces de agua"
+                      value={profile.min_distance_water_courses}
+                      source={profile.min_distance_water_courses_source}
+                      unit="m"
+                      icon={Droplets}
+                      onSave={(value, source) => handleSaveField('min_distance_water_courses', 'min_distance_water_courses_source', value, source)}
+                    />
+                    
+                    {/* Distance to Railway */}
+                    <EditableFieldWithSource
+                      label="Distancia mínima a vía férrea"
+                      value={profile.min_distance_railway}
+                      source={profile.min_distance_railway_source}
+                      unit="m"
+                      icon={Train}
+                      onSave={(value, source) => handleSaveField('min_distance_railway', 'min_distance_railway_source', value, source)}
+                    />
+                    
+                    {/* Distance to Pipeline */}
+                    <EditableFieldWithSource
+                      label="Distancia mínima a gasoducto/oleoducto"
+                      value={profile.min_distance_pipeline}
+                      source={profile.min_distance_pipeline_source}
+                      unit="m"
+                      icon={Fuel}
+                      onSave={(value, source) => handleSaveField('min_distance_pipeline', 'min_distance_pipeline_source', value, source)}
+                    />
+                    
+                    {/* Max Built Surface */}
+                    <EditableFieldWithSource
+                      label="Superficie máxima construida"
+                      value={profile.max_built_surface}
+                      source={profile.max_built_surface_source}
+                      unit="m²"
+                      icon={Building2}
+                      onSave={(value, source) => handleSaveField('max_built_surface', 'max_built_surface_source', value, source)}
+                    />
+                    
+                    {/* Fence Setback */}
+                    <EditableFieldWithSource
+                      label="Retranqueo de cerramiento a viario"
+                      value={profile.fence_setback}
+                      source={profile.fence_setback_source}
+                      unit="m"
+                      icon={Fence}
+                      onSave={(value, source) => handleSaveField('fence_setback', 'fence_setback_source', value, source)}
+                    />
+                    
+                    {/* Access Width */}
+                    <EditableFieldWithSource
+                      label="Anchura mínima de acceso rodado"
+                      value={profile.access_width}
+                      source={profile.access_width_source}
+                      unit="m"
+                      icon={Car}
+                      onSave={(value, source) => handleSaveField('access_width', 'access_width_source', value, source)}
                     />
                   </div>
                 </div>

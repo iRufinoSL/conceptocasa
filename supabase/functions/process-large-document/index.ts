@@ -610,6 +610,25 @@ Deno.serve(async (req) => {
           updateData.min_distance_pipeline = ed.minDistancePipeline.value;
           updateData.min_distance_pipeline_source = ed.minDistancePipeline.source;
         }
+        // New sectoral affection fields (costas, montes, aeropuertos)
+        if (ed.minDistanceCoast?.value) {
+          updateData.min_distance_coast = ed.minDistanceCoast.value;
+          updateData.min_distance_coast_source = ed.minDistanceCoast.source;
+        }
+        if (ed.minDistanceForest?.value) {
+          updateData.min_distance_forest = ed.minDistanceForest.value;
+          updateData.min_distance_forest_source = ed.minDistanceForest.source;
+        }
+        if (ed.minDistanceAirport?.value) {
+          updateData.min_distance_airport = ed.minDistanceAirport.value;
+          updateData.min_distance_airport_source = ed.minDistanceAirport.source;
+        }
+        // Max height from airport restrictions (AESA)
+        const maxHeightAirportField = ed.maxHeightAirport as { value?: number; source?: string };
+        if (maxHeightAirportField?.value) {
+          updateData.max_height_airport = maxHeightAirportField.value;
+          updateData.max_height_airport_source = maxHeightAirportField.source;
+        }
         if (ed.maxBuiltSurface?.value) {
           updateData.max_built_surface = ed.maxBuiltSurface.value;
           updateData.max_built_surface_source = ed.maxBuiltSurface.source;
@@ -641,6 +660,22 @@ Deno.serve(async (req) => {
         }
         if (typeof edAny.affectedByWaterCourses === 'boolean') {
           updateData.affected_by_water_courses = edAny.affectedByWaterCourses;
+        }
+        // New sectoral affection booleans
+        if (typeof edAny.affectedByCoast === 'boolean') {
+          updateData.affected_by_coast = edAny.affectedByCoast;
+        }
+        if (typeof edAny.affectedByAirport === 'boolean') {
+          updateData.affected_by_airport = edAny.affectedByAirport;
+        }
+        if (typeof edAny.affectedByForest === 'boolean') {
+          updateData.affected_by_forest = edAny.affectedByForest;
+        }
+        if (typeof edAny.affectedByHeritage === 'boolean') {
+          updateData.affected_by_heritage = edAny.affectedByHeritage;
+        }
+        if (typeof edAny.affectedByLivestockRoute === 'boolean') {
+          updateData.affected_by_livestock_route = edAny.affectedByLivestockRoute;
         }
         // Sewage/Sanitation fields
         const hasMunicipalSewageField = (extractedData as Record<string, { value?: boolean | null; source?: string }>).hasMunicipalSewage;

@@ -3336,7 +3336,12 @@ export type Database = {
           access_width_source: string | null
           additional_restrictions: Json | null
           address: string | null
+          affected_by_airport: boolean | null
           affected_by_cemetery: boolean | null
+          affected_by_coast: boolean | null
+          affected_by_forest: boolean | null
+          affected_by_heritage: boolean | null
+          affected_by_livestock_route: boolean | null
           affected_by_power_lines: boolean | null
           affected_by_water_courses: boolean | null
           analysis_notes: string | null
@@ -3382,11 +3387,19 @@ export type Database = {
           max_floors: number | null
           max_floors_source: string | null
           max_height: number | null
+          max_height_airport: number | null
+          max_height_airport_source: string | null
           max_height_source: string | null
           max_occupation_percent: number | null
           max_occupation_source: string | null
+          min_distance_airport: number | null
+          min_distance_airport_source: string | null
           min_distance_cemetery: number | null
           min_distance_cemetery_source: string | null
+          min_distance_coast: number | null
+          min_distance_coast_source: string | null
+          min_distance_forest: number | null
+          min_distance_forest_source: string | null
           min_distance_neighbors: number | null
           min_distance_neighbors_source: string | null
           min_distance_pipeline: number | null
@@ -3426,7 +3439,12 @@ export type Database = {
           access_width_source?: string | null
           additional_restrictions?: Json | null
           address?: string | null
+          affected_by_airport?: boolean | null
           affected_by_cemetery?: boolean | null
+          affected_by_coast?: boolean | null
+          affected_by_forest?: boolean | null
+          affected_by_heritage?: boolean | null
+          affected_by_livestock_route?: boolean | null
           affected_by_power_lines?: boolean | null
           affected_by_water_courses?: boolean | null
           analysis_notes?: string | null
@@ -3472,11 +3490,19 @@ export type Database = {
           max_floors?: number | null
           max_floors_source?: string | null
           max_height?: number | null
+          max_height_airport?: number | null
+          max_height_airport_source?: string | null
           max_height_source?: string | null
           max_occupation_percent?: number | null
           max_occupation_source?: string | null
+          min_distance_airport?: number | null
+          min_distance_airport_source?: string | null
           min_distance_cemetery?: number | null
           min_distance_cemetery_source?: string | null
+          min_distance_coast?: number | null
+          min_distance_coast_source?: string | null
+          min_distance_forest?: number | null
+          min_distance_forest_source?: string | null
           min_distance_neighbors?: number | null
           min_distance_neighbors_source?: string | null
           min_distance_pipeline?: number | null
@@ -3516,7 +3542,12 @@ export type Database = {
           access_width_source?: string | null
           additional_restrictions?: Json | null
           address?: string | null
+          affected_by_airport?: boolean | null
           affected_by_cemetery?: boolean | null
+          affected_by_coast?: boolean | null
+          affected_by_forest?: boolean | null
+          affected_by_heritage?: boolean | null
+          affected_by_livestock_route?: boolean | null
           affected_by_power_lines?: boolean | null
           affected_by_water_courses?: boolean | null
           analysis_notes?: string | null
@@ -3562,11 +3593,19 @@ export type Database = {
           max_floors?: number | null
           max_floors_source?: string | null
           max_height?: number | null
+          max_height_airport?: number | null
+          max_height_airport_source?: string | null
           max_height_source?: string | null
           max_occupation_percent?: number | null
           max_occupation_source?: string | null
+          min_distance_airport?: number | null
+          min_distance_airport_source?: string | null
           min_distance_cemetery?: number | null
           min_distance_cemetery_source?: string | null
+          min_distance_coast?: number | null
+          min_distance_coast_source?: string | null
+          min_distance_forest?: number | null
+          min_distance_forest_source?: string | null
           min_distance_neighbors?: number | null
           min_distance_neighbors_source?: string | null
           min_distance_pipeline?: number | null

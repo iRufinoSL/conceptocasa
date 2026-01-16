@@ -3188,6 +3188,103 @@ export type Database = {
           },
         ]
       }
+      urban_document_uploads: {
+        Row: {
+          budget_id: string | null
+          created_at: string
+          created_by: string | null
+          document_type: string | null
+          error_message: string | null
+          external_url: string | null
+          extracted_data: Json | null
+          extracted_text: string | null
+          file_size_bytes: number | null
+          id: string
+          municipality: string | null
+          original_filename: string | null
+          pages_processed: number | null
+          processing_completed_at: string | null
+          processing_started_at: string | null
+          province: string | null
+          source_type: string
+          status: string
+          storage_path: string | null
+          total_pages: number | null
+          updated_at: string
+          urban_profile_id: string | null
+        }
+        Insert: {
+          budget_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          document_type?: string | null
+          error_message?: string | null
+          external_url?: string | null
+          extracted_data?: Json | null
+          extracted_text?: string | null
+          file_size_bytes?: number | null
+          id?: string
+          municipality?: string | null
+          original_filename?: string | null
+          pages_processed?: number | null
+          processing_completed_at?: string | null
+          processing_started_at?: string | null
+          province?: string | null
+          source_type: string
+          status?: string
+          storage_path?: string | null
+          total_pages?: number | null
+          updated_at?: string
+          urban_profile_id?: string | null
+        }
+        Update: {
+          budget_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          document_type?: string | null
+          error_message?: string | null
+          external_url?: string | null
+          extracted_data?: Json | null
+          extracted_text?: string | null
+          file_size_bytes?: number | null
+          id?: string
+          municipality?: string | null
+          original_filename?: string | null
+          pages_processed?: number | null
+          processing_completed_at?: string | null
+          processing_started_at?: string | null
+          province?: string | null
+          source_type?: string
+          status?: string
+          storage_path?: string | null
+          total_pages?: number | null
+          updated_at?: string
+          urban_profile_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "urban_document_uploads_budget_id_fkey"
+            columns: ["budget_id"]
+            isOneToOne: false
+            referencedRelation: "presupuestos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "urban_document_uploads_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "urban_document_uploads_urban_profile_id_fkey"
+            columns: ["urban_profile_id"]
+            isOneToOne: false
+            referencedRelation: "urban_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       urban_profile_regulations: {
         Row: {
           created_at: string

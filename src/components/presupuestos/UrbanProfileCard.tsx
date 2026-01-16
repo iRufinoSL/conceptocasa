@@ -36,6 +36,7 @@ import {
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import * as pdfjsLib from 'pdfjs-dist';
 import { openSafeUrl, isSafeUrl } from '@/lib/url-utils';
+import { LargeDocumentUploader } from './LargeDocumentUploader';
 
 interface AdditionalRestriction {
   id: string;
@@ -916,11 +917,21 @@ export function UrbanProfileCard({ budgetId, cadastralReference: initialRef, isA
                     ) : (
                       <>
                         <Upload className="h-4 w-4 mr-2" />
-                        Subir PDF del PGOU
+                        Subir PDF pequeño
                       </>
                     )}
                   </Button>
                 </div>
+              )}
+              
+              {/* Large Document Uploader - for files > 20MB or external URLs */}
+              {profile && profile.municipality && (
+                <LargeDocumentUploader
+                  budgetId={budgetId}
+                  municipality={profile.municipality}
+                  landClass={profile.land_class || undefined}
+                  onProcessingComplete={fetchProfile}
+                />
               )}
             </div>
 

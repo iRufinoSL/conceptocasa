@@ -10,8 +10,9 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { 
   Mail, Inbox, Send, ChevronDown, ChevronRight, Reply, Forward,
-  Paperclip, Eye, Clock, CheckCircle, XCircle
+  Paperclip, Eye, Clock, CheckCircle, XCircle, Trash2
 } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
 import type { Tables } from '@/integrations/supabase/types';
 import DOMPurify from 'dompurify';
 
@@ -28,6 +29,7 @@ interface BudgetEmailInboxProps {
 
 export function BudgetEmailInbox({ budgetId, onComposeReply, onComposeForward }: BudgetEmailInboxProps) {
   const queryClient = useQueryClient();
+  const { toast } = useToast();
   const [selectedEmail, setSelectedEmail] = useState<EmailMessage | null>(null);
   const [isInboxExpanded, setIsInboxExpanded] = useState(true);
   const [isOutboxExpanded, setIsOutboxExpanded] = useState(true);
@@ -78,6 +80,29 @@ export function BudgetEmailInbox({ budgetId, onComposeReply, onComposeForward }:
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['budget-emails', budgetId] });
+    },
+  });
+
+  // Soft delete email mutation (move to trash)
+  const deleteEmailMutation = useMutation({
+    mutationFn: async (emailId: string) => {
+      const { error } = await supabase
+        .from('email_messages')
+        .update({ deleted_at: new Date().toISOString() })
+        .eq('id', emailId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast({ title: 'Email movido a papelera' });
+      setSelectedEmail(null);
+      queryClient.invalidateQueries({ queryKey: ['budget-emails', budgetId] });
+    },
+    onError: (error: any) => {
+      toast({ 
+        title: 'Error al borrar email', 
+        description: error?.message || 'No se pudo borrar el email',
+        variant: 'destructive' 
+      });
     },
   });
 
@@ -192,6 +217,15 @@ export function BudgetEmailInbox({ budgetId, onComposeReply, onComposeForward }:
                   Reenviar
                 </Button>
               )}
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => deleteEmailMutation.mutate(email.id)}
+                className="text-destructive hover:text-destructive"
+              >
+                <Trash2 className="h-4 w-4 mr-1" />
+                Borrar
+              </Button>
             </div>
           </div>
         </CardHeader>

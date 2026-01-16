@@ -65,6 +65,7 @@ const SPANISH_PROVINCES = [
 ];
 
 const COUNTRIES = [
+  // Europa Occidental
   { value: 'ES', label: 'España' },
   { value: 'PT', label: 'Portugal' },
   { value: 'FR', label: 'Francia' },
@@ -73,6 +74,51 @@ const COUNTRIES = [
   { value: 'GB', label: 'Reino Unido' },
   { value: 'NL', label: 'Países Bajos' },
   { value: 'BE', label: 'Bélgica' },
+  { value: 'AT', label: 'Austria' },
+  { value: 'CH', label: 'Suiza' },
+  { value: 'LU', label: 'Luxemburgo' },
+  { value: 'IE', label: 'Irlanda' },
+  // Europa del Norte
+  { value: 'DK', label: 'Dinamarca' },
+  { value: 'SE', label: 'Suecia' },
+  { value: 'NO', label: 'Noruega' },
+  { value: 'FI', label: 'Finlandia' },
+  // Europa del Sur
+  { value: 'GR', label: 'Grecia' },
+  { value: 'MT', label: 'Malta' },
+  { value: 'CY', label: 'Chipre' },
+  // Europa del Este
+  { value: 'PL', label: 'Polonia' },
+  { value: 'CZ', label: 'República Checa' },
+  { value: 'HU', label: 'Hungría' },
+  { value: 'RO', label: 'Rumanía' },
+  { value: 'BG', label: 'Bulgaria' },
+  { value: 'SK', label: 'Eslovaquia' },
+  { value: 'SI', label: 'Eslovenia' },
+  { value: 'HR', label: 'Croacia' },
+  { value: 'EE', label: 'Estonia' },
+  { value: 'LV', label: 'Letonia' },
+  { value: 'LT', label: 'Lituania' },
+  // América
+  { value: 'US', label: 'Estados Unidos' },
+  { value: 'MX', label: 'México' },
+  { value: 'AR', label: 'Argentina' },
+  { value: 'CL', label: 'Chile' },
+  { value: 'CO', label: 'Colombia' },
+  { value: 'PE', label: 'Perú' },
+  { value: 'BR', label: 'Brasil' },
+  { value: 'CA', label: 'Canadá' },
+  // Asia y Oceanía
+  { value: 'CN', label: 'China' },
+  { value: 'JP', label: 'Japón' },
+  { value: 'KR', label: 'Corea del Sur' },
+  { value: 'IN', label: 'India' },
+  { value: 'TR', label: 'Turquía' },
+  { value: 'AE', label: 'Emiratos Árabes' },
+  { value: 'AU', label: 'Australia' },
+  // África
+  { value: 'MA', label: 'Marruecos' },
+  { value: 'ZA', label: 'Sudáfrica' },
 ];
 
 type GeoFilterType = 'none' | 'country' | 'province' | 'city' | 'radius';

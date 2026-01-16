@@ -19,6 +19,7 @@ import type { Tables } from '@/integrations/supabase/types';
 import { EmailInbox } from './EmailInbox';
 import { TicketsList } from './TicketsList';
 import { ComposeEmail } from './ComposeEmail';
+import { CRMWhatsAppCompose } from './CRMWhatsAppCompose';
 
 type Communication = Tables<'crm_communications'> & {
   crm_contacts?: { name: string; surname: string | null; email: string | null } | null;
@@ -297,7 +298,7 @@ export function CommunicationsTab() {
     <div className="space-y-4">
       {/* Sub-tabs navigation */}
       <Tabs value={activeSubTab} onValueChange={setActiveSubTab}>
-        <TabsList className="grid w-full max-w-xl grid-cols-4">
+        <TabsList className="grid w-full max-w-2xl grid-cols-5">
           <TabsTrigger value="inbox" className="gap-2">
             <Inbox className="h-4 w-4" />
             <span className="hidden sm:inline">Bandeja</span>
@@ -308,7 +309,11 @@ export function CommunicationsTab() {
           </TabsTrigger>
           <TabsTrigger value="compose" className="gap-2">
             <Send className="h-4 w-4" />
-            <span className="hidden sm:inline">Redactar</span>
+            <span className="hidden sm:inline">Email</span>
+          </TabsTrigger>
+          <TabsTrigger value="whatsapp" className="gap-2">
+            <MessageSquare className="h-4 w-4" />
+            <span className="hidden sm:inline">WhatsApp</span>
           </TabsTrigger>
           <TabsTrigger value="history" className="gap-2">
             <History className="h-4 w-4" />
@@ -326,7 +331,7 @@ export function CommunicationsTab() {
           <TicketsList />
         </TabsContent>
 
-        {/* Compose Tab */}
+        {/* Compose Email Tab */}
         <TabsContent value="compose" className="mt-4">
           <ComposeEmail 
             replyTo={replyToEmail} 
@@ -335,6 +340,11 @@ export function CommunicationsTab() {
               setActiveSubTab('inbox');
             }} 
           />
+        </TabsContent>
+
+        {/* WhatsApp Compose Tab */}
+        <TabsContent value="whatsapp" className="mt-4">
+          <CRMWhatsAppCompose />
         </TabsContent>
 
         {/* History Tab - Original CRM Communications */}

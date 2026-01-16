@@ -67,18 +67,19 @@ async function extractPdfTextAndFirstPagePreview(file: File): Promise<{
     fullText += pageText + '\n\n';
   }
 
-  // Render first page to an image for OCR fallback
+  // Render first page to an image for OCR fallback (keep it small to avoid huge payloads)
   let firstPageImageDataUrl: string | null = null;
   try {
     const firstPage = await pdf.getPage(1);
-    const viewport = firstPage.getViewport({ scale: 2 });
+    const viewport = firstPage.getViewport({ scale: 1.25 });
     const canvas = document.createElement('canvas');
     const context = canvas.getContext('2d');
     if (context) {
       canvas.width = Math.ceil(viewport.width);
       canvas.height = Math.ceil(viewport.height);
       await firstPage.render({ canvasContext: context as any, viewport } as any).promise;
-      firstPageImageDataUrl = canvas.toDataURL('image/png');
+      // JPEG is much smaller than PNG for scanned pages
+      firstPageImageDataUrl = canvas.toDataURL('image/jpeg', 0.7);
     }
   } catch {
     // If rendering fails, we still continue with text only.
@@ -174,24 +175,26 @@ export function LargeDocumentUploader({
       let pdfPageCount: number | undefined;
       let firstPageImageDataUrl: string | null | undefined;
 
-      if (selectedFile) {
-        try {
-          const extracted = await extractPdfTextAndFirstPagePreview(selectedFile);
-          pdfText = extracted.text;
-          pdfPageCount = extracted.pageCount;
-          firstPageImageDataUrl = extracted.firstPageImageDataUrl;
+       if (selectedFile) {
+         try {
+           const extracted = await extractPdfTextAndFirstPagePreview(selectedFile);
+           pdfText = extracted.text;
+           pdfPageCount = extracted.pageCount;
 
-          // If the PDF is scanned, text extraction will be near-empty; keep image for OCR.
-          if ((pdfText || '').trim().length < 100 && firstPageImageDataUrl) {
-            toast({
-              title: 'PDF escaneado detectado',
-              description: 'No hay texto seleccionable. Usaré OCR para extraer la información.',
-            });
-          }
-        } catch (e) {
-          console.warn('PDF text extraction failed, continuing with upload:', e);
-        }
-      }
+           // Only send an OCR image when text extraction is essentially empty.
+           // This avoids huge payloads and timeouts in the analysis backend.
+           firstPageImageDataUrl = (pdfText || '').trim().length < 200 ? extracted.firstPageImageDataUrl : null;
+
+           if ((pdfText || '').trim().length < 200 && firstPageImageDataUrl) {
+             toast({
+               title: 'PDF escaneado detectado',
+               description: 'No hay texto seleccionable. Usaré OCR para extraer la información.',
+             });
+           }
+         } catch (e) {
+           console.warn('PDF text extraction failed, continuing with upload:', e);
+         }
+       }
 
       if (selectedFile) {
         sourceType = 'storage';

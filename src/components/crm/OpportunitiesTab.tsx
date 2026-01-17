@@ -5,11 +5,13 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Target, User, Calendar, MoreVertical, Pencil, Trash2, ChevronDown } from 'lucide-react';
+import { Target, User, Calendar, MoreVertical, Pencil, Trash2, ChevronDown, MapPin } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { searchMatch } from '@/lib/search-utils';
 import type { Opportunity, Contact } from '@/pages/CRM';
+import { LandSearchCard } from '@/components/presupuestos/LandSearchCard';
+import { useToast } from '@/hooks/use-toast';
 
 interface OpportunitiesTabProps {
   opportunities: Opportunity[];
@@ -20,7 +22,9 @@ interface OpportunitiesTabProps {
 }
 
 export function OpportunitiesTab({ opportunities, contacts, searchTerm, onEdit, onDelete }: OpportunitiesTabProps) {
+  const { toast } = useToast();
   const [expandedDescriptions, setExpandedDescriptions] = useState<Set<string>>(new Set());
+  const [showLandSearch, setShowLandSearch] = useState(false);
 
   const filteredOpportunities = useMemo(() => {
     if (!searchTerm) return opportunities;
@@ -69,7 +73,49 @@ export function OpportunitiesTab({ opportunities, contacts, searchTerm, onEdit, 
   }
 
   return (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+    <div className="space-y-6">
+      {/* Marketing Actions Section */}
+      <Card className="border-primary/20">
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <MapPin className="h-5 w-5 text-primary" />
+              <CardTitle className="text-lg">Acciones de Marketing</CardTitle>
+            </div>
+          </div>
+          <CardDescription>
+            Herramientas para buscar terrenos y gestionar oportunidades comerciales
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant={showLandSearch ? "default" : "outline"}
+              onClick={() => setShowLandSearch(!showLandSearch)}
+              className="gap-2"
+            >
+              <MapPin className="h-4 w-4" />
+              Buscador de Terrenos en Venta
+            </Button>
+          </div>
+          
+          {showLandSearch && (
+            <LandSearchCard 
+              onSelectListing={(listing) => {
+                if (listing.cadastralReference) {
+                  toast({
+                    title: 'Terreno seleccionado',
+                    description: `Referencia catastral: ${listing.cadastralReference}. Puedes crear una nueva oportunidad con este terreno.`,
+                  });
+                }
+              }}
+            />
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Opportunities Grid */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
       {filteredOpportunities.map((opportunity) => {
         const contact = getContact(opportunity.contact_id);
         return (
@@ -179,6 +225,7 @@ export function OpportunitiesTab({ opportunities, contacts, searchTerm, onEdit, 
           </Card>
         );
       })}
+      </div>
     </div>
   );
 }

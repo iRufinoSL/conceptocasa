@@ -202,17 +202,18 @@ const handler = async (req: Request): Promise<Response> => {
 
     const toEmails = Array.isArray(to) ? to : [to];
     
-    // Get company settings for sender name and signature
+    // Get company settings for sender name, email and signature
     const { data: companySettings } = await supabase
       .from('company_settings')
-      .select('name, email_signature')
+      .select('name, email, email_signature')
       .single();
     
     const senderName = from_name || (companySettings as any)?.name || 'Concepto Casa';
+    const senderEmail = (companySettings as any)?.email || 'organiza@concepto.casa';
     const emailSignature = (companySettings as any)?.email_signature || '';
     
-    // Use verified domain email - must be verified in Resend
-    const fromEmail = `${senderName} <organiza@concepto.casa>`;
+    // Use email from company settings - must be verified in Resend
+    const fromEmail = `${senderName} <${senderEmail}>`;
 
     console.log("Sending email from:", fromEmail, "to:", toEmails);
 

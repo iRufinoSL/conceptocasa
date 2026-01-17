@@ -338,25 +338,72 @@ export function UrbanReportGenerator({ open, onOpenChange, budgetId, budgetName 
       const companyName = companySettings.name || 'Informe Urbanístico';
       const companyInitials = companyName.substring(0, 2).toUpperCase();
 
-      // Header
-      doc.setFillColor(37, 99, 235);
-      doc.roundedRect(margin, yPos, 20, 20, 2, 2, 'F');
-      doc.setTextColor(255);
-      doc.setFontSize(12);
-      doc.setFont('helvetica', 'bold');
-      doc.text(companyInitials, margin + 10, yPos + 13, { align: 'center' });
-      doc.setTextColor(0);
+      // Header - Try to load company logo, fallback to initials
+      let logoLoaded = false;
+      const logoUrl = companySettings.logo_signed_url || companySettings.logo_url;
+      
+      if (logoUrl) {
+        try {
+          const img = new Image();
+          img.crossOrigin = 'anonymous';
+          await new Promise<void>((resolve, reject) => {
+            img.onload = () => {
+              try {
+                // Calculate dimensions maintaining aspect ratio
+                const maxHeight = 20;
+                const maxWidth = 40;
+                let width = img.width;
+                let height = img.height;
+                
+                if (height > maxHeight) {
+                  width = (width * maxHeight) / height;
+                  height = maxHeight;
+                }
+                if (width > maxWidth) {
+                  height = (height * maxWidth) / width;
+                  width = maxWidth;
+                }
+                
+                doc.addImage(img, 'PNG', margin, yPos, width, height);
+                logoLoaded = true;
+                resolve();
+              } catch (e) {
+                console.error('Error adding logo to PDF:', e);
+                reject(e);
+              }
+            };
+            img.onerror = () => reject(new Error('Failed to load logo'));
+            img.src = logoUrl;
+          });
+        } catch (e) {
+          console.warn('Could not load company logo, using initials fallback');
+          logoLoaded = false;
+        }
+      }
+
+      // Fallback to initials if logo not loaded
+      if (!logoLoaded) {
+        doc.setFillColor(37, 99, 235);
+        doc.roundedRect(margin, yPos, 20, 20, 2, 2, 'F');
+        doc.setTextColor(255);
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'bold');
+        doc.text(companyInitials, margin + 10, yPos + 13, { align: 'center' });
+        doc.setTextColor(0);
+      }
+
+      const textXOffset = logoLoaded ? margin + 45 : margin + 25;
 
       doc.setFontSize(14);
       doc.setFont('helvetica', 'bold');
       doc.setTextColor(37, 99, 235);
-      doc.text(companyName, margin + 25, yPos + 8);
+      doc.text(companyName, textXOffset, yPos + 8);
       doc.setTextColor(100);
       doc.setFontSize(9);
       doc.setFont('helvetica', 'normal');
       const contactInfo = [companySettings.email, companySettings.phone].filter(Boolean).join(' | ');
-      if (contactInfo) doc.text(contactInfo, margin + 25, yPos + 14);
-      if (companySettings.address) doc.text(companySettings.address, margin + 25, yPos + 19);
+      if (contactInfo) doc.text(contactInfo, textXOffset, yPos + 14);
+      if (companySettings.address) doc.text(companySettings.address, textXOffset, yPos + 19);
       doc.setTextColor(0);
 
       yPos += 30;

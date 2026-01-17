@@ -33,6 +33,7 @@ interface BudgetGanttViewProps {
   budgetStartDate: string | null;
   budgetEndDate: string | null;
   onBudgetDatesChange?: (startDate: string, endDate: string) => void;
+  onPhaseClick?: (phase: BudgetPhase) => void;
 }
 
 const COLORS = [
@@ -59,7 +60,7 @@ const COLORS_BORDER = [
 
 type ZoomLevel = 'days' | 'weeks';
 
-export function BudgetGanttView({ budgetId, budgetStartDate, budgetEndDate, onBudgetDatesChange }: BudgetGanttViewProps) {
+export function BudgetGanttView({ budgetId, budgetStartDate, budgetEndDate, onBudgetDatesChange, onPhaseClick }: BudgetGanttViewProps) {
   const [phases, setPhases] = useState<BudgetPhase[]>([]);
   const [expandedPhases, setExpandedPhases] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(true);
@@ -172,20 +173,23 @@ export function BudgetGanttView({ budgetId, budgetStartDate, budgetEndDate, onBu
     const phaseMap = new Map(basicCalculatedPhases.map(p => [p.id, p]));
 
     // Second pass: adjust dates based on dependencies (depends_on_phase_id)
-    // and parent-child relationships (parent_id)
-    const adjustedPhases = basicCalculatedPhases.map(phase => {
+    // For parent-child: children should start AFTER parent ends (not during parent)
+    // We need multiple passes to handle cascading dependencies
+    
+    // Helper function to adjust a single phase
+    const adjustPhase = (phase: typeof basicCalculatedPhases[0], map: Map<string, typeof basicCalculatedPhases[0]>) => {
       let adjustedStartDate = phase.calculatedStartDate;
       let adjustedEndDate = phase.calculatedEndDate;
 
-      // Check dependency constraint (depends_on_phase_id)
+      // Check dependency constraint (depends_on_phase_id) - phase starts after dependency ends
       if (phase.depends_on_phase_id) {
-        const dependsOnPhase = phaseMap.get(phase.depends_on_phase_id);
-        if (dependsOnPhase?.calculatedEndDate && adjustedStartDate) {
+        const dependsOnPhase = map.get(phase.depends_on_phase_id);
+        if (dependsOnPhase?.calculatedEndDate) {
           const dependsOnEndDate = parseISO(dependsOnPhase.calculatedEndDate);
-          const currentStartDate = parseISO(adjustedStartDate);
+          const currentStartDate = adjustedStartDate ? parseISO(adjustedStartDate) : null;
           
-          // If current start is before dependency end, adjust it
-          if (currentStartDate < dependsOnEndDate) {
+          // Phase must start at or after dependency end
+          if (!currentStartDate || currentStartDate < dependsOnEndDate) {
             adjustedStartDate = format(dependsOnEndDate, 'yyyy-MM-dd');
             // Recalculate end date if we have duration
             if (phase.duration_days) {
@@ -195,20 +199,20 @@ export function BudgetGanttView({ budgetId, budgetStartDate, budgetEndDate, onBu
         }
       }
 
-      // Check parent constraint (parent_id) - child cannot start before parent starts
-      // and child should be visually within or after parent's timeframe
+      // Check parent constraint (parent_id) - children start AFTER parent ends
+      // This ensures children don't overlap with or appear before parent
       if (phase.parent_id) {
-        const parentPhase = phaseMap.get(phase.parent_id);
-        if (parentPhase?.calculatedStartDate && adjustedStartDate) {
-          const parentStartDate = parseISO(parentPhase.calculatedStartDate);
-          const currentStartDate = parseISO(adjustedStartDate);
+        const parentPhase = map.get(phase.parent_id);
+        if (parentPhase?.calculatedEndDate) {
+          const parentEndDate = parseISO(parentPhase.calculatedEndDate);
+          const currentStartDate = adjustedStartDate ? parseISO(adjustedStartDate) : null;
           
-          // Child cannot start before parent starts
-          if (currentStartDate < parentStartDate) {
-            adjustedStartDate = format(parentStartDate, 'yyyy-MM-dd');
+          // Child must start at or after parent ends
+          if (!currentStartDate || currentStartDate < parentEndDate) {
+            adjustedStartDate = format(parentEndDate, 'yyyy-MM-dd');
             // Recalculate end date if we have duration
             if (phase.duration_days) {
-              adjustedEndDate = format(addDays(parentStartDate, phase.duration_days), 'yyyy-MM-dd');
+              adjustedEndDate = format(addDays(parentEndDate, phase.duration_days), 'yyyy-MM-dd');
             }
           }
         }
@@ -219,7 +223,23 @@ export function BudgetGanttView({ budgetId, budgetStartDate, budgetEndDate, onBu
         calculatedStartDate: adjustedStartDate,
         calculatedEndDate: adjustedEndDate,
       };
-    });
+    };
+
+    // Multiple passes to handle cascading dependencies
+    let adjustedPhases = [...basicCalculatedPhases];
+    for (let pass = 0; pass < 5; pass++) {
+      const currentMap = new Map(adjustedPhases.map(p => [p.id, p]));
+      const newAdjusted = adjustedPhases.map(phase => adjustPhase(phase, currentMap));
+      
+      // Check if anything changed
+      const changed = newAdjusted.some((p, i) => 
+        p.calculatedStartDate !== adjustedPhases[i].calculatedStartDate ||
+        p.calculatedEndDate !== adjustedPhases[i].calculatedEndDate
+      );
+      
+      adjustedPhases = newAdjusted;
+      if (!changed) break;
+    }
 
     return adjustedPhases;
   }, [phases, budgetStartDate, budgetDuration]);
@@ -488,19 +508,27 @@ export function BudgetGanttView({ budgetId, budgetStartDate, budgetEndDate, onBu
             {/* Dependency arrow - uses depends_on_phase_id */}
             {phase.depends_on_phase_id && renderDependencyArrow(phase, dependsOnPhase, currentRowIndex, dependsOnRowIndex)}
             
-            {/* Phase bar */}
+            {/* Phase bar - clickable to open form */}
             {barStyle && (
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <div
                       className={cn(
-                        "absolute top-2 h-6 rounded shadow-sm",
+                        "absolute top-2 h-6 rounded shadow-sm cursor-pointer hover:opacity-100 transition-opacity flex items-center px-2 overflow-hidden",
                         colorClass,
                         depth > 0 ? "opacity-70" : "opacity-90"
                       )}
                       style={barStyle}
-                    />
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onPhaseClick?.(phase);
+                      }}
+                    >
+                      <span className="text-[10px] font-medium text-white truncate drop-shadow-sm">
+                        {phase.code ? `${phase.code}. ` : ''}{phase.name}
+                      </span>
+                    </div>
                   </TooltipTrigger>
                   <TooltipContent>
                     <p className="font-medium">{phase.name}</p>
@@ -527,6 +555,7 @@ export function BudgetGanttView({ budgetId, budgetStartDate, budgetEndDate, onBu
                         (Subfase)
                       </p>
                     )}
+                    <p className="text-xs text-primary mt-1">Clic para editar</p>
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
@@ -550,7 +579,7 @@ export function BudgetGanttView({ budgetId, budgetStartDate, budgetEndDate, onBu
           .map((child, idx) => renderPhaseRow(child, depth + 1, rowIndex + idx + 1))}
       </div>
     );
-  }, [phaseChildren, expandedPhases, getPhaseColorIndex, getBarStyle, phasesWithCalculatedDates, renderDependencyArrow]);
+  }, [phaseChildren, expandedPhases, getPhaseColorIndex, getBarStyle, phasesWithCalculatedDates, renderDependencyArrow, onPhaseClick]);
 
   if (isLoading) {
     return (

@@ -69,6 +69,7 @@ export default function PresupuestoDashboard() {
   const [cloneDialogOpen, setCloneDialogOpen] = useState(false);
   const [isRecalculating, setIsRecalculating] = useState(false);
   const [uploadingPortada, setUploadingPortada] = useState(false);
+  const [selectedPhaseId, setSelectedPhaseId] = useState<string | null>(null);
   const portadaInputRef = useRef<HTMLInputElement>(null);
 
   const isAdmin = roles.includes('administrador');
@@ -363,7 +364,13 @@ export default function PresupuestoDashboard() {
         </div>
 
         {/* Tabs */}
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <Tabs value={activeTab} onValueChange={(tab) => {
+          setActiveTab(tab);
+          // Clear selectedPhaseId when navigating away from fases tab so next navigation can work
+          if (tab !== 'fases') {
+            setSelectedPhaseId(null);
+          }
+        }} className="w-full">
           <div className="space-y-1">
             {/* Primera línea: Pestañas principales (preguntas) */}
             <TabsList className="flex flex-wrap h-auto gap-1 p-1 w-full justify-start">
@@ -508,6 +515,7 @@ export default function PresupuestoDashboard() {
               isAdmin={isAdmin}
               budgetStartDate={presupuesto.start_date}
               budgetEndDate={presupuesto.end_date}
+              initialPhaseId={selectedPhaseId}
             />
           </TabsContent>
 
@@ -556,6 +564,10 @@ export default function PresupuestoDashboard() {
               budgetEndDate={presupuesto.end_date}
               onBudgetDatesChange={(startDate, endDate) => {
                 setPresupuesto(prev => prev ? { ...prev, start_date: startDate, end_date: endDate } : null);
+              }}
+              onNavigateToPhases={(phaseId) => {
+                setSelectedPhaseId(phaseId || null);
+                setActiveTab('fases');
               }}
             />
           </TabsContent>

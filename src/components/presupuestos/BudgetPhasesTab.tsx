@@ -32,6 +32,7 @@ interface BudgetPhase {
   duration_days: number | null;
   estimated_end_date: string | null;
   time_percent: number | null;
+  parent_id: string | null;
 }
 
 interface BudgetActivity {
@@ -60,6 +61,7 @@ interface PhaseForm {
   start_date: string;
   duration_days: string;
   time_percent: string;
+  parent_id: string;
 }
 
 interface BudgetPhasesTabProps {
@@ -76,6 +78,7 @@ const emptyForm: PhaseForm = {
   start_date: '',
   duration_days: '',
   time_percent: '',
+  parent_id: '',
 };
 
 // Calculate budget duration in days
@@ -269,6 +272,7 @@ export function BudgetPhasesTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
       start_date: phase.start_date || '',
       duration_days: phase.duration_days?.toString() || '',
       time_percent: phase.time_percent?.toString() || '',
+      parent_id: (phase as any).parent_id || '',
     });
     setFormDialogOpen(true);
   };
@@ -303,6 +307,7 @@ export function BudgetPhasesTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
             start_date: finalStartDate,
             duration_days: form.duration_days ? parseInt(form.duration_days) : null,
             time_percent: timePercent,
+            parent_id: form.parent_id || null,
           })
           .eq('id', currentPhase.id);
 
@@ -317,6 +322,7 @@ export function BudgetPhasesTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
             start_date: finalStartDate,
             duration_days: form.duration_days ? parseInt(form.duration_days) : null,
             time_percent: timePercent,
+            parent_id: form.parent_id || null,
           })
           .select()
           .single();
@@ -955,6 +961,27 @@ export function BudgetPhasesTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
                 placeholder="Nombre de la fase"
               />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="parent_id">Depende de (Fase anterior)</Label>
+              <select
+                id="parent_id"
+                value={form.parent_id}
+                onChange={(e) => setForm({ ...form, parent_id: e.target.value })}
+                className="w-full h-10 px-3 py-2 border rounded-md bg-background text-sm"
+              >
+                <option value="">Sin dependencia</option>
+                {phases
+                  .filter(p => p.id !== currentPhase?.id)
+                  .map(p => (
+                    <option key={p.id} value={p.id}>
+                      {p.code ? `${p.code}. ` : ''}{p.name}
+                    </option>
+                  ))}
+              </select>
+              <p className="text-xs text-muted-foreground">
+                Esta fase comenzará después de la fase seleccionada
+              </p>
             </div>
             {/* Time Management Fields */}
             <div className="grid grid-cols-3 gap-4">

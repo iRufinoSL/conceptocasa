@@ -654,6 +654,7 @@ export type Database = {
           budget_id: string
           code: string | null
           created_at: string | null
+          depends_on_phase_id: string | null
           duration_days: number | null
           estimated_end_date: string | null
           id: string
@@ -668,6 +669,7 @@ export type Database = {
           budget_id: string
           code?: string | null
           created_at?: string | null
+          depends_on_phase_id?: string | null
           duration_days?: number | null
           estimated_end_date?: string | null
           id?: string
@@ -682,6 +684,7 @@ export type Database = {
           budget_id?: string
           code?: string | null
           created_at?: string | null
+          depends_on_phase_id?: string | null
           duration_days?: number | null
           estimated_end_date?: string | null
           id?: string
@@ -698,6 +701,13 @@ export type Database = {
             columns: ["budget_id"]
             isOneToOne: false
             referencedRelation: "presupuestos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budget_phases_depends_on_phase_id_fkey"
+            columns: ["depends_on_phase_id"]
+            isOneToOne: false
+            referencedRelation: "budget_phases"
             referencedColumns: ["id"]
           },
           {

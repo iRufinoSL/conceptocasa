@@ -71,6 +71,7 @@ interface BudgetPhasesTabProps {
   isAdmin: boolean;
   budgetStartDate?: string | null;
   budgetEndDate?: string | null;
+  initialPhaseId?: string | null;
 }
 
 const emptyForm: PhaseForm = {
@@ -145,7 +146,7 @@ const calculateResourceSubtotal = (resource: BudgetResource): number => {
   });
 };
 
-export function BudgetPhasesTab({ budgetId, isAdmin, budgetStartDate, budgetEndDate }: BudgetPhasesTabProps) {
+export function BudgetPhasesTab({ budgetId, isAdmin, budgetStartDate, budgetEndDate, initialPhaseId }: BudgetPhasesTabProps) {
   const [phases, setPhases] = useState<BudgetPhase[]>([]);
   const [activities, setActivities] = useState<BudgetActivity[]>([]);
   const [resources, setResources] = useState<BudgetResource[]>([]);
@@ -164,6 +165,7 @@ export function BudgetPhasesTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
   const [expandedOptions, setExpandedOptions] = useState<Set<string>>(new Set()); // collapsed by default
   const [editingTimeField, setEditingTimeField] = useState<{ phaseId: string; field: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const initialPhaseHandledRef = useRef<string | null>(null);
 
   const fetchData = async () => {
     setIsLoading(true);
@@ -211,6 +213,30 @@ export function BudgetPhasesTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
     window.addEventListener('budget-recalculated', handleRecalculated);
     return () => window.removeEventListener('budget-recalculated', handleRecalculated);
   }, []);
+
+  // Open phase form if initialPhaseId is provided
+  useEffect(() => {
+    if (initialPhaseId && phases.length > 0 && !isLoading && initialPhaseHandledRef.current !== initialPhaseId) {
+      const phase = phases.find(p => p.id === initialPhaseId);
+      if (phase) {
+        initialPhaseHandledRef.current = initialPhaseId;
+        // Get activities assigned to this phase
+        const phaseActivities = activities.filter(a => a.phase_id === phase.id).map(a => a.id);
+        setCurrentPhase(phase);
+        setForm({
+          name: phase.name,
+          code: phase.code || '',
+          selectedActivities: phaseActivities,
+          start_date: phase.start_date || '',
+          duration_days: phase.duration_days?.toString() || '',
+          time_percent: phase.time_percent?.toString() || '',
+          parent_id: phase.parent_id || '',
+          depends_on_phase_id: phase.depends_on_phase_id || '',
+        });
+        setFormDialogOpen(true);
+      }
+    }
+  }, [initialPhaseId, phases, activities, isLoading]);
 
   // Resources without activity_id are real budget resources but are not counted in activity-based views.
   // Treat them as "A+B+C" to keep totals consistent with CÓMO? (Recursos).

@@ -60,13 +60,14 @@ interface BudgetAgendaTabProps {
   isAdmin: boolean;
   budgetStartDate?: string | null;
   budgetEndDate?: string | null;
+  onBudgetDatesChange?: (startDate: string, endDate: string) => void;
 }
 
 type MainViewMode = 'agenda' | 'gantt';
 type ViewMode = 'month' | 'week' | 'day' | 'list';
 type FilterMode = 'all' | 'pendiente' | 'realizada';
 
-export function BudgetAgendaTab({ budgetId, isAdmin, budgetStartDate, budgetEndDate }: BudgetAgendaTabProps) {
+export function BudgetAgendaTab({ budgetId, isAdmin, budgetStartDate, budgetEndDate, onBudgetDatesChange }: BudgetAgendaTabProps) {
   const [tasks, setTasks] = useState<BudgetTask[]>([]);
   const [activities, setActivities] = useState<{ id: string; name: string; code: string; phase_code?: string | null }[]>([]);
   const [budgetName, setBudgetName] = useState<string>('');
@@ -573,6 +574,7 @@ export function BudgetAgendaTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
           budgetId={budgetId}
           budgetStartDate={budgetStartDate || null}
           budgetEndDate={budgetEndDate || null}
+          onBudgetDatesChange={onBudgetDatesChange}
         />
       )}
 

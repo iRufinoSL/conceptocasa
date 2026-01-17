@@ -554,6 +554,9 @@ export default function PresupuestoDashboard() {
               isAdmin={isAdmin}
               budgetStartDate={presupuesto.start_date}
               budgetEndDate={presupuesto.end_date}
+              onBudgetDatesChange={(startDate, endDate) => {
+                setPresupuesto(prev => prev ? { ...prev, start_date: startDate, end_date: endDate } : null);
+              }}
             />
           </TabsContent>
 

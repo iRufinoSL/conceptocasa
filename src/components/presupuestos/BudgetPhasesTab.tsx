@@ -33,6 +33,7 @@ interface BudgetPhase {
   estimated_end_date: string | null;
   time_percent: number | null;
   parent_id: string | null;
+  depends_on_phase_id: string | null;
 }
 
 interface BudgetActivity {
@@ -62,6 +63,7 @@ interface PhaseForm {
   duration_days: string;
   time_percent: string;
   parent_id: string;
+  depends_on_phase_id: string;
 }
 
 interface BudgetPhasesTabProps {
@@ -79,6 +81,7 @@ const emptyForm: PhaseForm = {
   duration_days: '',
   time_percent: '',
   parent_id: '',
+  depends_on_phase_id: '',
 };
 
 // Calculate budget duration in days
@@ -272,7 +275,8 @@ export function BudgetPhasesTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
       start_date: phase.start_date || '',
       duration_days: phase.duration_days?.toString() || '',
       time_percent: phase.time_percent?.toString() || '',
-      parent_id: (phase as any).parent_id || '',
+      parent_id: phase.parent_id || '',
+      depends_on_phase_id: phase.depends_on_phase_id || '',
     });
     setFormDialogOpen(true);
   };
@@ -308,6 +312,7 @@ export function BudgetPhasesTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
             duration_days: form.duration_days ? parseInt(form.duration_days) : null,
             time_percent: timePercent,
             parent_id: form.parent_id || null,
+            depends_on_phase_id: form.depends_on_phase_id || null,
           })
           .eq('id', currentPhase.id);
 
@@ -323,6 +328,7 @@ export function BudgetPhasesTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
             duration_days: form.duration_days ? parseInt(form.duration_days) : null,
             time_percent: timePercent,
             parent_id: form.parent_id || null,
+            depends_on_phase_id: form.depends_on_phase_id || null,
           })
           .select()
           .single();
@@ -963,11 +969,11 @@ export function BudgetPhasesTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="parent_id">Depende de (Fase anterior)</Label>
+              <Label htmlFor="depends_on_phase_id">Depende de (Secuencia)</Label>
               <select
-                id="parent_id"
-                value={form.parent_id}
-                onChange={(e) => setForm({ ...form, parent_id: e.target.value })}
+                id="depends_on_phase_id"
+                value={form.depends_on_phase_id}
+                onChange={(e) => setForm({ ...form, depends_on_phase_id: e.target.value })}
                 className="w-full h-10 px-3 py-2 border rounded-md bg-background text-sm"
               >
                 <option value="">Sin dependencia</option>
@@ -980,7 +986,7 @@ export function BudgetPhasesTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
                   ))}
               </select>
               <p className="text-xs text-muted-foreground">
-                Esta fase comenzará después de la fase seleccionada
+                Esta fase comenzará cuando termine la fase seleccionada (se muestra con flecha en Gantt)
               </p>
             </div>
             {/* Time Management Fields */}

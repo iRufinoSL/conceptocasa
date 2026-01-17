@@ -3,13 +3,17 @@ import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar as CalendarComponent } from '@/components/ui/calendar';
 import { format, differenceInDays, differenceInWeeks, addDays, parseISO, startOfWeek, endOfWeek, eachWeekOfInterval, eachDayOfInterval } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { ChevronDown, ChevronRight, Calendar, Clock, ZoomIn, ZoomOut, Link2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, Calendar, Clock, ZoomIn, ZoomOut, Link2, Pencil, ArrowRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 
 interface BudgetPhase {
   id: string;
@@ -20,6 +24,7 @@ interface BudgetPhase {
   estimated_end_date: string | null;
   time_percent: number | null;
   parent_id: string | null;
+  depends_on_phase_id: string | null;
   order_index: number | null;
 }
 
@@ -27,6 +32,7 @@ interface BudgetGanttViewProps {
   budgetId: string;
   budgetStartDate: string | null;
   budgetEndDate: string | null;
+  onBudgetDatesChange?: (startDate: string, endDate: string) => void;
 }
 
 const COLORS = [
@@ -53,11 +59,15 @@ const COLORS_BORDER = [
 
 type ZoomLevel = 'days' | 'weeks';
 
-export function BudgetGanttView({ budgetId, budgetStartDate, budgetEndDate }: BudgetGanttViewProps) {
+export function BudgetGanttView({ budgetId, budgetStartDate, budgetEndDate, onBudgetDatesChange }: BudgetGanttViewProps) {
   const [phases, setPhases] = useState<BudgetPhase[]>([]);
   const [expandedPhases, setExpandedPhases] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(true);
   const [zoomLevel, setZoomLevel] = useState<ZoomLevel>('weeks');
+  const [editingDates, setEditingDates] = useState(false);
+  const [tempStartDate, setTempStartDate] = useState<Date | undefined>(budgetStartDate ? parseISO(budgetStartDate) : undefined);
+  const [tempEndDate, setTempEndDate] = useState<Date | undefined>(budgetEndDate ? parseISO(budgetEndDate) : undefined);
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -65,7 +75,7 @@ export function BudgetGanttView({ budgetId, budgetStartDate, budgetEndDate }: Bu
       try {
         const { data, error } = await supabase
           .from('budget_phases')
-          .select('id, name, code, start_date, duration_days, estimated_end_date, time_percent, parent_id, order_index')
+          .select('id, name, code, start_date, duration_days, estimated_end_date, time_percent, parent_id, depends_on_phase_id, order_index')
           .eq('budget_id', budgetId)
           .order('order_index', { ascending: true, nullsFirst: false })
           .order('code', { ascending: true });
@@ -81,6 +91,48 @@ export function BudgetGanttView({ budgetId, budgetStartDate, budgetEndDate }: Bu
 
     fetchData();
   }, [budgetId]);
+
+  // Sync temp dates when props change
+  useEffect(() => {
+    setTempStartDate(budgetStartDate ? parseISO(budgetStartDate) : undefined);
+    setTempEndDate(budgetEndDate ? parseISO(budgetEndDate) : undefined);
+  }, [budgetStartDate, budgetEndDate]);
+
+  const handleSaveDates = async () => {
+    if (!tempStartDate || !tempEndDate) {
+      toast.error('Ambas fechas son requeridas');
+      return;
+    }
+    if (tempStartDate >= tempEndDate) {
+      toast.error('La fecha de fin debe ser posterior a la de inicio');
+      return;
+    }
+    
+    setIsSaving(true);
+    try {
+      const { error } = await supabase
+        .from('presupuestos')
+        .update({
+          start_date: format(tempStartDate, 'yyyy-MM-dd'),
+          end_date: format(tempEndDate, 'yyyy-MM-dd'),
+        })
+        .eq('id', budgetId);
+      
+      if (error) throw error;
+      
+      onBudgetDatesChange?.(
+        format(tempStartDate, 'yyyy-MM-dd'),
+        format(tempEndDate, 'yyyy-MM-dd')
+      );
+      setEditingDates(false);
+      toast.success('Fechas actualizadas');
+    } catch (err) {
+      console.error('Error updating dates:', err);
+      toast.error('Error al actualizar las fechas');
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   // Calculate budget duration in days
   const budgetDuration = useMemo(() => {
@@ -235,29 +287,61 @@ export function BudgetGanttView({ budgetId, budgetStartDate, budgetEndDate }: Bu
   const hasDateData = phasesWithCalculatedDates.some(p => p.calculatedStartDate);
   const hasBudgetDates = budgetStartDate && budgetEndDate;
 
-  // Render dependency arrows
-  const renderDependencyArrow = useCallback((phase: BudgetPhase & { calculatedStartDate: string | null; calculatedEndDate: string | null }, parentPhase: BudgetPhase & { calculatedStartDate: string | null; calculatedEndDate: string | null } | undefined) => {
-    if (!parentPhase || !parentPhase.calculatedEndDate || !phase.calculatedStartDate) return null;
+  // Render dependency arrows - uses depends_on_phase_id for sequence dependencies
+  const renderDependencyArrow = useCallback((
+    phase: BudgetPhase & { calculatedStartDate: string | null; calculatedEndDate: string | null }, 
+    dependsOnPhase: BudgetPhase & { calculatedStartDate: string | null; calculatedEndDate: string | null } | undefined
+  ) => {
+    if (!dependsOnPhase || !dependsOnPhase.calculatedEndDate || !phase.calculatedStartDate) return null;
 
-    const parentEnd = parseISO(parentPhase.calculatedEndDate);
-    const childStart = parseISO(phase.calculatedStartDate);
+    const dependsOnEnd = parseISO(dependsOnPhase.calculatedEndDate);
+    const phaseStart = parseISO(phase.calculatedStartDate);
     
-    const parentEndOffset = differenceInDays(parentEnd, timelineStart);
-    const childStartOffset = differenceInDays(childStart, timelineStart);
+    const dependsOnEndOffset = differenceInDays(dependsOnEnd, timelineStart);
+    const phaseStartOffset = differenceInDays(phaseStart, timelineStart);
     
     const dayWidth = zoomLevel === 'weeks' ? unitWidth / 7 : unitWidth;
-    const parentEndX = parentEndOffset * dayWidth;
-    const childStartX = childStartOffset * dayWidth;
+    const dependsOnEndX = dependsOnEndOffset * dayWidth;
+    const phaseStartX = phaseStartOffset * dayWidth;
 
-    if (childStartX <= parentEndX) return null; // Overlapping, no arrow needed
+    // Calculate the width (minimum 20px for visibility)
+    const arrowWidth = Math.max(phaseStartX - dependsOnEndX, 20);
+    
+    // If phases overlap, draw arrow going around
+    if (phaseStartX <= dependsOnEndX) {
+      return (
+        <svg
+          className="absolute pointer-events-none z-10"
+          style={{
+            left: `${dependsOnEndX - 10}px`,
+            top: '-8px',
+            width: `${phaseStartX - dependsOnEndX + 30}px`,
+            height: '36px',
+            overflow: 'visible'
+          }}
+        >
+          <path
+            d="M 10 26 L 10 8 L 24 8"
+            fill="none"
+            stroke="hsl(var(--primary))"
+            strokeWidth="2"
+            strokeDasharray="4,2"
+          />
+          <polygon
+            points="20,4 28,8 20,12"
+            fill="hsl(var(--primary))"
+          />
+        </svg>
+      );
+    }
 
     return (
       <svg
-        className="absolute pointer-events-none"
+        className="absolute pointer-events-none z-10"
         style={{
-          left: `${parentEndX}px`,
+          left: `${dependsOnEndX}px`,
           top: '50%',
-          width: `${childStartX - parentEndX}px`,
+          width: `${arrowWidth}px`,
           height: '20px',
           transform: 'translateY(-50%)',
           overflow: 'visible'
@@ -266,17 +350,15 @@ export function BudgetGanttView({ budgetId, budgetStartDate, budgetEndDate }: Bu
         <line
           x1="0"
           y1="10"
-          x2={childStartX - parentEndX - 6}
+          x2={arrowWidth - 8}
           y2="10"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          className="text-muted-foreground"
+          stroke="hsl(var(--primary))"
+          strokeWidth="2"
           strokeDasharray="4,2"
         />
         <polygon
-          points={`${childStartX - parentEndX - 6},6 ${childStartX - parentEndX},10 ${childStartX - parentEndX - 6},14`}
-          fill="currentColor"
-          className="text-muted-foreground"
+          points={`${arrowWidth - 8},6 ${arrowWidth},10 ${arrowWidth - 8},14`}
+          fill="hsl(var(--primary))"
         />
       </svg>
     );
@@ -294,9 +376,9 @@ export function BudgetGanttView({ budgetId, budgetStartDate, budgetEndDate }: Bu
     const borderClass = COLORS_BORDER[colorIdx % COLORS_BORDER.length];
     const barStyle = getBarStyle(phase.calculatedStartDate, phase.calculatedEndDate, phase.duration_days);
 
-    // Find parent phase for dependency arrow
-    const parentPhase = phase.parent_id 
-      ? phasesWithCalculatedDates.find(p => p.id === phase.parent_id)
+    // Find dependency phase (sequence dependency, not hierarchy)
+    const dependsOnPhase = phase.depends_on_phase_id 
+      ? phasesWithCalculatedDates.find(p => p.id === phase.depends_on_phase_id)
       : undefined;
 
     return (
@@ -321,13 +403,22 @@ export function BudgetGanttView({ budgetId, budgetStartDate, budgetEndDate }: Bu
             <span className="text-sm font-medium truncate">
               {phase.code ? `${phase.code}. ` : ''}{phase.name}
             </span>
-            {phase.parent_id && (
-              <Link2 className="h-3 w-3 text-muted-foreground shrink-0" />
+            {phase.depends_on_phase_id && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger>
+                    <ArrowRight className="h-3 w-3 text-primary shrink-0" />
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    Depende de: {dependsOnPhase?.name || 'Fase anterior'}
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             )}
           </div>
           <div className="relative flex-1 h-10">
-            {/* Dependency arrow */}
-            {phase.parent_id && renderDependencyArrow(phase, parentPhase)}
+            {/* Dependency arrow - uses depends_on_phase_id */}
+            {phase.depends_on_phase_id && renderDependencyArrow(phase, dependsOnPhase)}
             
             {/* Phase bar */}
             {barStyle && (
@@ -357,9 +448,10 @@ export function BudgetGanttView({ budgetId, budgetStartDate, budgetEndDate }: Bu
                     {phase.calculatedEndDate && (
                       <p className="text-xs">Fin: {format(parseISO(phase.calculatedEndDate), 'dd/MM/yyyy', { locale: es })}</p>
                     )}
-                    {phase.parent_id && parentPhase && (
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Depende de: {parentPhase.name}
+                    {phase.depends_on_phase_id && dependsOnPhase && (
+                      <p className="text-xs text-primary mt-1 flex items-center gap-1">
+                        <ArrowRight className="h-3 w-3" />
+                        Depende de: {dependsOnPhase.name}
                       </p>
                     )}
                   </TooltipContent>
@@ -433,28 +525,96 @@ export function BudgetGanttView({ budgetId, budgetStartDate, budgetEndDate }: Bu
         </div>
         
         {/* Project dates header */}
-        <div className="flex items-center gap-6 pt-2 text-sm">
-          <div className="flex items-center gap-2">
-            <Badge variant="outline" className="bg-green-50 text-green-700 border-green-300">
-              Inicio del Proyecto
-            </Badge>
-            <span className="font-medium">
-              {format(parseISO(budgetStartDate!), "d 'de' MMMM 'de' yyyy", { locale: es })}
-            </span>
-          </div>
-          <div className="flex items-center gap-2">
-            <Badge variant="outline" className="bg-red-50 text-red-700 border-red-300">
-              Fin del Proyecto
-            </Badge>
-            <span className="font-medium">
-              {format(parseISO(budgetEndDate!), "d 'de' MMMM 'de' yyyy", { locale: es })}
-            </span>
-          </div>
-          <div className="flex items-center gap-2">
-            <Badge variant="secondary">
-              Duración: {budgetDuration} días
-            </Badge>
-          </div>
+        <div className="flex flex-wrap items-center gap-4 pt-2 text-sm">
+          {editingDates ? (
+            <>
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className="bg-green-50 text-green-700 border-green-300">
+                  Inicio
+                </Badge>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" size="sm" className="h-8 text-xs">
+                      {tempStartDate ? format(tempStartDate, 'dd/MM/yyyy') : 'Seleccionar'}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <CalendarComponent
+                      mode="single"
+                      selected={tempStartDate}
+                      onSelect={setTempStartDate}
+                      locale={es}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className="bg-red-50 text-red-700 border-red-300">
+                  Fin
+                </Badge>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" size="sm" className="h-8 text-xs">
+                      {tempEndDate ? format(tempEndDate, 'dd/MM/yyyy') : 'Seleccionar'}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <CalendarComponent
+                      mode="single"
+                      selected={tempEndDate}
+                      onSelect={setTempEndDate}
+                      locale={es}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button size="sm" onClick={handleSaveDates} disabled={isSaving}>
+                  {isSaving ? 'Guardando...' : 'Guardar'}
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => {
+                  setEditingDates(false);
+                  setTempStartDate(budgetStartDate ? parseISO(budgetStartDate) : undefined);
+                  setTempEndDate(budgetEndDate ? parseISO(budgetEndDate) : undefined);
+                }}>
+                  Cancelar
+                </Button>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className="bg-green-50 text-green-700 border-green-300">
+                  Inicio del Proyecto
+                </Badge>
+                <span className="font-medium">
+                  {format(parseISO(budgetStartDate!), "d 'de' MMMM 'de' yyyy", { locale: es })}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className="bg-red-50 text-red-700 border-red-300">
+                  Fin del Proyecto
+                </Badge>
+                <span className="font-medium">
+                  {format(parseISO(budgetEndDate!), "d 'de' MMMM 'de' yyyy", { locale: es })}
+                </span>
+              </div>
+              <Badge variant="secondary">
+                Duración: {budgetDuration} días
+              </Badge>
+              <Button 
+                size="sm" 
+                variant="ghost" 
+                className="h-7 text-xs"
+                onClick={() => setEditingDates(true)}
+              >
+                <Pencil className="h-3 w-3 mr-1" />
+                Editar fechas
+              </Button>
+            </>
+          )}
         </div>
       </CardHeader>
       <CardContent>
@@ -511,16 +671,18 @@ export function BudgetGanttView({ budgetId, budgetStartDate, budgetEndDate }: Bu
             {rootPhases.map(phase => renderPhaseRow(phase as any))}
 
             {/* Legend */}
-            {phases.some(p => p.parent_id) && (
+            {phases.some(p => p.depends_on_phase_id) && (
               <div className="flex items-center gap-4 mt-4 pt-4 border-t text-xs text-muted-foreground">
                 <div className="flex items-center gap-1">
-                  <Link2 className="h-3 w-3" />
-                  <span>Indica dependencia de otra fase</span>
+                  <ArrowRight className="h-3 w-3 text-primary" />
+                  <span>Indica dependencia secuencial</span>
                 </div>
-                <div className="flex items-center gap-1">
-                  <div className="w-8 h-0.5 border-t border-dashed border-muted-foreground" />
-                  <span>→</span>
-                  <span>Conexión entre fases dependientes</span>
+                <div className="flex items-center gap-2">
+                  <svg width="40" height="10" className="shrink-0">
+                    <line x1="0" y1="5" x2="32" y2="5" stroke="hsl(var(--primary))" strokeWidth="2" strokeDasharray="4,2" />
+                    <polygon points="32,2 38,5 32,8" fill="hsl(var(--primary))" />
+                  </svg>
+                  <span>Conexión: esta fase empieza cuando termina la anterior</span>
                 </div>
               </div>
             )}

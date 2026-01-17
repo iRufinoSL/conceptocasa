@@ -12,7 +12,7 @@ import { Plus, Pencil, Trash2, Upload, X, Maximize2, FileImage, FileText, Layout
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import { UrbanProfileCard } from './UrbanProfileCard';
-import { LandSearchCard } from './LandSearchCard';
+
 
 interface BudgetPredesign {
   id: string;
@@ -425,19 +425,6 @@ export function BudgetPredesignTab({ budgetId, isAdmin }: BudgetPredesignTabProp
 
   return (
     <div className="space-y-6">
-      {/* Land Search Section - Find land for sale */}
-      <LandSearchCard 
-        onSelectListing={(listing) => {
-          // When a buildable land is selected, we can use its cadastral reference
-          if (listing.cadastralReference) {
-            toast({
-              title: 'Terreno seleccionado',
-              description: `Referencia catastral: ${listing.cadastralReference}. Puedes consultar sus datos urbanísticos a continuación.`,
-            });
-          }
-        }}
-      />
-
       {/* Urban Profile Section - Analyze specific land by cadastral reference */}
       <UrbanProfileCard 
         budgetId={budgetId} 

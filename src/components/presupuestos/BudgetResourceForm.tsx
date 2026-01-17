@@ -14,6 +14,7 @@ import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { formatCurrency, formatPercent } from '@/lib/format-utils';
 import { getActivityMeasurementUnits, syncActivityResourcesRelatedUnits } from '@/lib/budget-utils';
+import { ResourceSupplierSelect } from '@/components/ResourceSupplierSelect';
 
 interface BudgetResource {
   id: string;
@@ -28,6 +29,7 @@ interface BudgetResource {
   related_units: number | null;
   activity_id: string | null;
   description: string | null;
+  supplier_id: string | null;
 }
 
 interface Activity {
@@ -80,6 +82,7 @@ export function BudgetResourceForm({
     start_date: '',
     duration_days: 1,
     task_status: 'pendiente' as 'pendiente' | 'realizada',
+    supplier_id: null as string | null,
   });
 
   // Calculate end date for tasks
@@ -125,6 +128,7 @@ export function BudgetResourceForm({
           start_date: resourceWithTaskFields.start_date || '',
           duration_days: resourceWithTaskFields.duration_days || 1,
           task_status: (resourceWithTaskFields.task_status as 'pendiente' | 'realizada') || 'pendiente',
+          supplier_id: resource.supplier_id || null,
         });
         
         // If resource has an activity, recalculate related_units to ensure it's up-to-date
@@ -151,6 +155,7 @@ export function BudgetResourceForm({
           start_date: '',
           duration_days: 1,
           task_status: 'pendiente',
+          supplier_id: null,
         });
         
         // If preselected activity, fetch related_units
@@ -241,6 +246,7 @@ export function BudgetResourceForm({
         start_date: formData.resource_type === 'Tarea' ? (formData.start_date || null) : null,
         duration_days: formData.resource_type === 'Tarea' ? formData.duration_days : null,
         task_status: formData.resource_type === 'Tarea' ? formData.task_status : null,
+        supplier_id: formData.supplier_id,
       };
 
       if (resource) {
@@ -562,6 +568,18 @@ export function BudgetResourceForm({
                 className="bg-primary/10 font-bold text-primary"
               />
             </div>
+          </div>
+
+          {/* Row 6: Supplier */}
+          <div className="space-y-2">
+            <Label htmlFor="supplier_id">Suministrador / Proveedor</Label>
+            <ResourceSupplierSelect
+              value={formData.supplier_id}
+              onChange={(supplierId) => setFormData({ ...formData, supplier_id: supplierId })}
+            />
+            <p className="text-xs text-muted-foreground">
+              Seleccione el contacto proveedor de este recurso o cree uno nuevo
+            </p>
           </div>
 
           <DialogFooter>

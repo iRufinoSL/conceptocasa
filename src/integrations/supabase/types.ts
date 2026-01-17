@@ -375,6 +375,7 @@ export type Database = {
           safety_margin_percent: number | null
           sales_margin_percent: number | null
           start_date: string | null
+          supplier_id: string | null
           task_status: string | null
           unit: string | null
           updated_at: string | null
@@ -394,6 +395,7 @@ export type Database = {
           safety_margin_percent?: number | null
           sales_margin_percent?: number | null
           start_date?: string | null
+          supplier_id?: string | null
           task_status?: string | null
           unit?: string | null
           updated_at?: string | null
@@ -413,6 +415,7 @@ export type Database = {
           safety_margin_percent?: number | null
           sales_margin_percent?: number | null
           start_date?: string | null
+          supplier_id?: string | null
           task_status?: string | null
           unit?: string | null
           updated_at?: string | null
@@ -430,6 +433,13 @@ export type Database = {
             columns: ["budget_id"]
             isOneToOne: false
             referencedRelation: "presupuestos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budget_activity_resources_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contacts"
             referencedColumns: ["id"]
           },
         ]

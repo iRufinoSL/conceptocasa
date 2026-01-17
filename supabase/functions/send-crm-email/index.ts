@@ -284,11 +284,16 @@ const handler = async (req: Request): Promise<Response> => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     
     // Client with user auth for RLS-protected operations
+    // This client respects RLS policies and is used for all user-facing queries
     const supabase = createClient(supabaseUrl, supabaseAnonKey, {
       global: { headers: { Authorization: authHeader } }
     });
     
-    // Service role client for inserting attachments (bypasses RLS)
+    // SECURITY NOTE: Service role client for inserting email attachments only
+    // This bypasses RLS and is ONLY used after user authentication is verified above.
+    // Required because email_attachments table has RLS policies that need admin access
+    // for inserting records, while the user client is used for all other operations.
+    // The user must be authenticated (line 295-301) before any supabaseAdmin operations.
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
     // Verify user is authenticated

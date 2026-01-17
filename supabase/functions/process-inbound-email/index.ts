@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { Webhook } from "https://esm.sh/svix@1.15.0";
+import { Resend } from "https://esm.sh/resend@2.0.0";
 
 // No CORS headers - this is a server-to-server webhook endpoint
 const jsonHeaders = {
@@ -157,15 +158,16 @@ const handler = async (req: Request): Promise<Response> => {
     console.log("Processing email_id:", emailId);
     console.log("Webhook data - from:", webhookData.from, "subject:", webhookData.subject);
 
-    // Check for duplicate emails by external_id
+    // Check for duplicate emails by resend_email_id in metadata (more reliable than external_id)
     const { data: existingEmail } = await supabase
       .from("email_messages")
       .select("id")
-      .eq("external_id", emailId)
+      .or(`external_id.eq.${emailId},metadata->>resend_email_id.eq.${emailId}`)
+      .limit(1)
       .maybeSingle();
     
     if (existingEmail) {
-      console.log("Duplicate email detected, skipping. Email ID:", emailId);
+      console.log("Duplicate email detected, skipping. Resend Email ID:", emailId);
       return new Response(
         JSON.stringify({ 
           success: true, 
@@ -440,6 +442,56 @@ const handler = async (req: Request): Promise<Response> => {
       } else {
         console.log("Created notifications for", admins.length, "admins");
       }
+    }
+
+    // Send email notification to admins about new inbound email
+    try {
+      const resend = new Resend(resendApiKey);
+      
+      // Get admin emails
+      const { data: adminProfiles } = await supabase
+        .from("profiles")
+        .select("email, full_name")
+        .in("id", admins?.map(a => a.user_id) || []);
+
+      if (adminProfiles && adminProfiles.length > 0) {
+        const adminEmails = adminProfiles.filter(p => p.email).map(p => p.email);
+        
+        if (adminEmails.length > 0) {
+          const attachmentInfo = attachmentRecords.length > 0 
+            ? `<p><strong>Archivos adjuntos:</strong> ${attachmentRecords.length} archivo(s)</p><ul>${attachmentRecords.map(a => `<li>${a.file_name}</li>`).join('')}</ul>`
+            : '<p><em>Sin archivos adjuntos</em></p>';
+
+          const emailResult = await resend.emails.send({
+            from: "Concepto Casa <notificaciones@concepto.casa>",
+            to: adminEmails,
+            subject: `📬 Nuevo email: ${subjectField}`,
+            html: `
+              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                <h2 style="color: #333;">Nuevo email en la bandeja de entrada</h2>
+                <div style="background: #f5f5f5; padding: 15px; border-radius: 8px; margin: 15px 0;">
+                  <p><strong>De:</strong> ${fromName || fromEmail} &lt;${fromEmail}&gt;</p>
+                  <p><strong>Asunto:</strong> ${subjectField}</p>
+                  <p><strong>Fecha:</strong> ${new Date().toLocaleString('es-ES', { timeZone: 'Europe/Madrid' })}</p>
+                  ${attachmentInfo}
+                </div>
+                <p style="color: #666;">
+                  Accede a la aplicación para ver el contenido completo del email.
+                </p>
+                <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
+                <p style="font-size: 12px; color: #999;">
+                  Este es un mensaje automático de Concepto Casa.
+                </p>
+              </div>
+            `,
+          });
+          
+          console.log("Sent email notification to admins:", emailResult);
+        }
+      }
+    } catch (emailNotifError: any) {
+      console.error("Error sending email notification to admins:", emailNotifError);
+      // Don't fail the webhook if email notification fails
     }
 
     return new Response(

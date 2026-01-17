@@ -8,12 +8,15 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { supabase } from '@/integrations/supabase/client';
 import { useEmailService } from '@/hooks/useEmailService';
 import { useToast } from '@/hooks/use-toast';
 import { 
   Send, Mail, User, Paperclip, X, Plus, 
-  FileText, ChevronDown, Ticket as TicketIcon, File, Forward
+  FileText, ChevronDown, Ticket as TicketIcon, File, Forward, Search, ArrowLeft
 } from 'lucide-react';
 import type { Tables } from '@/integrations/supabase/types';
 
@@ -22,7 +25,7 @@ interface AttachmentFile {
   name: string;
   size: number;
   type: string;
-  isForwarded?: boolean; // Flag to identify forwarded attachments
+  isForwarded?: boolean;
 }
 
 type Contact = Tables<'crm_contacts'>;
@@ -46,9 +49,10 @@ interface ComposeEmailProps {
     originalBody?: string;
   };
   onSent?: () => void;
+  onCancel?: () => void;
 }
 
-export function ComposeEmail({ replyTo, onSent }: ComposeEmailProps) {
+export function ComposeEmail({ replyTo, onSent, onCancel }: ComposeEmailProps) {
   const { toast } = useToast();
   const { sendEmail, sending, cancelSend } = useEmailService();
 
@@ -83,6 +87,8 @@ export function ComposeEmail({ replyTo, onSent }: ComposeEmailProps) {
   const [selectedTemplate, setSelectedTemplate] = useState<string>('__none__');
   const [attachments, setAttachments] = useState<AttachmentFile[]>([]);
   const [loadingForwardAttachments, setLoadingForwardAttachments] = useState(false);
+  const [contactSearchOpen, setContactSearchOpen] = useState(false);
+  const [selectedRecipients, setSelectedRecipients] = useState<Array<{ id: string; email: string; name: string }>>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -302,15 +308,49 @@ export function ComposeEmail({ replyTo, onSent }: ComposeEmailProps) {
     }
   };
 
+  // Add a recipient from contact search
+  const addRecipient = (contact: { id: string; email: string | null; name: string; surname?: string | null }) => {
+    if (!contact.email) return;
+    const displayName = `${contact.name}${contact.surname ? ' ' + contact.surname : ''}`;
+    
+    // Check if already added
+    if (selectedRecipients.some(r => r.email === contact.email)) {
+      setContactSearchOpen(false);
+      return;
+    }
+    
+    setSelectedRecipients(prev => [...prev, { id: contact.id, email: contact.email!, name: displayName }]);
+    
+    // Update formData.to with comma-separated emails
+    const newEmails = [...selectedRecipients.map(r => r.email), contact.email].join(', ');
+    setFormData(prev => ({ ...prev, to: newEmails, contactId: selectedRecipients.length === 0 ? contact.id : prev.contactId }));
+    setContactSearchOpen(false);
+  };
+
+  // Remove a recipient
+  const removeRecipient = (email: string) => {
+    const newRecipients = selectedRecipients.filter(r => r.email !== email);
+    setSelectedRecipients(newRecipients);
+    setFormData(prev => ({ ...prev, to: newRecipients.map(r => r.email).join(', ') }));
+  };
+
   return (
-    <Card className="flex flex-col max-h-[calc(100vh-200px)]">
-      <CardHeader className="flex-shrink-0">
-        <CardTitle className="flex items-center gap-2">
-          <Mail className="h-5 w-5" />
-          Redactar Email
-        </CardTitle>
+    <Card className="flex flex-col h-full max-h-[calc(100dvh-120px)] min-h-0">
+      <CardHeader className="flex-shrink-0 pb-2">
+        <div className="flex items-center justify-between">
+          <CardTitle className="flex items-center gap-2">
+            <Mail className="h-5 w-5" />
+            Redactar Email
+          </CardTitle>
+          {onCancel && (
+            <Button type="button" variant="ghost" size="sm" onClick={onCancel} className="gap-2">
+              <ArrowLeft className="h-4 w-4" />
+              Volver
+            </Button>
+          )}
+        </div>
       </CardHeader>
-      <CardContent className="flex-1 overflow-y-auto">
+      <CardContent className="flex-1 overflow-y-auto min-h-0 pb-4">
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* Template selector */}
           <div className="flex items-center gap-3">
@@ -333,7 +373,7 @@ export function ComposeEmail({ replyTo, onSent }: ComposeEmailProps) {
             </Select>
           </div>
 
-          {/* To field with contact autocomplete */}
+          {/* To field with contact search */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <Label>Para *</Label>
@@ -348,27 +388,70 @@ export function ComposeEmail({ replyTo, onSent }: ComposeEmailProps) {
                 <ChevronDown className={`h-3 w-3 ml-1 transition-transform ${showCcBcc ? 'rotate-180' : ''}`} />
               </Button>
             </div>
-            <div className="relative">
-              <Input
-                type="email"
-                value={formData.to}
-                onChange={(e) => setFormData({ ...formData, to: e.target.value })}
-                placeholder="email@ejemplo.com"
-                list="contacts-list"
-              />
-              <datalist id="contacts-list">
-                {contacts.map((contact) => (
-                  <option key={contact.id} value={contact.email || ''}>
-                    {contact.name} {contact.surname}
-                  </option>
+            
+            {/* Selected recipients */}
+            {selectedRecipients.length > 0 && (
+              <div className="flex flex-wrap gap-1 mb-2">
+                {selectedRecipients.map((recipient) => (
+                  <Badge key={recipient.email} variant="secondary" className="gap-1 pr-1">
+                    <User className="h-3 w-3" />
+                    {recipient.name}
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => removeRecipient(recipient.email)}
+                      className="h-4 w-4 p-0 ml-1 hover:bg-destructive/20"
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </Badge>
                 ))}
-              </datalist>
-              {matchedContact && (
-                <Badge className="absolute right-2 top-1/2 -translate-y-1/2 gap-1" variant="secondary">
-                  <User className="h-3 w-3" />
-                  {matchedContact.name}
-                </Badge>
-              )}
+              </div>
+            )}
+            
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <Input
+                  type="text"
+                  value={formData.to}
+                  onChange={(e) => setFormData({ ...formData, to: e.target.value })}
+                  placeholder="email@ejemplo.com (o buscar contactos)"
+                />
+              </div>
+              <Popover open={contactSearchOpen} onOpenChange={setContactSearchOpen}>
+                <PopoverTrigger asChild>
+                  <Button type="button" variant="outline" size="icon">
+                    <Search className="h-4 w-4" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-80 p-0" align="end">
+                  <Command>
+                    <CommandInput placeholder="Buscar contacto..." />
+                    <CommandList>
+                      <CommandEmpty>No se encontraron contactos</CommandEmpty>
+                      <CommandGroup heading="Contactos">
+                        <ScrollArea className="h-60">
+                          {contacts.filter(c => c.email).map((contact) => (
+                            <CommandItem
+                              key={contact.id}
+                              value={`${contact.name} ${contact.surname || ''} ${contact.email}`}
+                              onSelect={() => addRecipient(contact)}
+                              className="cursor-pointer"
+                            >
+                              <User className="h-4 w-4 mr-2" />
+                              <div className="flex flex-col">
+                                <span>{contact.name} {contact.surname}</span>
+                                <span className="text-xs text-muted-foreground">{contact.email}</span>
+                              </div>
+                            </CommandItem>
+                          ))}
+                        </ScrollArea>
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             </div>
           </div>
 
@@ -525,49 +608,65 @@ export function ComposeEmail({ replyTo, onSent }: ComposeEmailProps) {
           </div>
 
           {/* Submit buttons */}
-          <div className="flex justify-end gap-3">
-            <Button 
-              type="button" 
-              variant="outline" 
-              onClick={() => {
-                if (sending) {
-                  cancelSend();
-                } else {
-                  // Reset form
-                  setFormData({
-                    to: '',
-                    cc: '',
-                    bcc: '',
-                    subject: '',
-                    body: '',
-                    contactId: '',
-                    ticketId: '',
-                    createTicket: false,
-                    ticketSubject: '',
-                    ticketPriority: 'medium',
-                  });
-                  setSelectedTemplate('__none__');
-                  setAttachments([]);
-                }
-              }}
-              className="gap-2"
-            >
-              <X className="h-4 w-4" />
-              {sending ? 'Cancelar envío' : 'Limpiar'}
-            </Button>
-            <Button type="submit" disabled={sending} className="gap-2">
-              {sending ? (
-                <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                  Enviando...
-                </>
-              ) : (
-                <>
-                  <Send className="h-4 w-4" />
-                  Enviar Email
-                </>
+          <div className="flex justify-between gap-3 pt-2 border-t mt-4">
+            <div className="flex gap-2">
+              {onCancel && (
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  onClick={onCancel}
+                  className="gap-2"
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                  Cancelar
+                </Button>
               )}
-            </Button>
+            </div>
+            <div className="flex gap-2">
+              <Button 
+                type="button" 
+                variant="outline" 
+                onClick={() => {
+                  if (sending) {
+                    cancelSend();
+                  } else {
+                    // Reset form
+                    setFormData({
+                      to: '',
+                      cc: '',
+                      bcc: '',
+                      subject: '',
+                      body: '',
+                      contactId: '',
+                      ticketId: '',
+                      createTicket: false,
+                      ticketSubject: '',
+                      ticketPriority: 'medium',
+                    });
+                    setSelectedTemplate('__none__');
+                    setAttachments([]);
+                    setSelectedRecipients([]);
+                  }
+                }}
+                className="gap-2"
+              >
+                <X className="h-4 w-4" />
+                {sending ? 'Cancelar envío' : 'Limpiar'}
+              </Button>
+              <Button type="submit" disabled={sending} className="gap-2">
+                {sending ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    Enviando...
+                  </>
+                ) : (
+                  <>
+                    <Send className="h-4 w-4" />
+                    Enviar Email
+                  </>
+                )}
+              </Button>
+            </div>
           </div>
         </form>
       </CardContent>

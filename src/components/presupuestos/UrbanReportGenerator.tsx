@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import type { Json } from '@/integrations/supabase/types';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
@@ -12,7 +12,6 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { 
   FileDown, 
-  Printer, 
   MapPin, 
   Building2, 
   FileText, 
@@ -21,8 +20,6 @@ import {
   XCircle,
   Ruler,
   Home,
-  Ban,
-  Check,
   Info,
   ExternalLink,
   Loader2
@@ -208,12 +205,13 @@ export function UrbanReportGenerator({ open, onOpenChange, budgetId, budgetName 
   const [additionalNotes, setAdditionalNotes] = useState('');
   const [selectedSections, setSelectedSections] = useState<string[]>([
     'identification',
-    'sources',
+    'applicable_regulations',
     'classification',
     'uses',
+    'housing_conditions',
     'building_conditions',
-    'implantation',
     'sectoral',
+    'other_considerations',
     'conclusion',
     'disclaimer'
   ]);
@@ -421,28 +419,42 @@ export function UrbanReportGenerator({ open, onOpenChange, budgetId, budgetName 
         yPos = (doc as any).lastAutoTable.finalY + 10;
       }
 
-      // 2. Consulted Sources
-      if (selectedSections.includes('sources')) {
+      // 2. Applicable Regulations (Normativa Urbanística Aplicable)
+      if (selectedSections.includes('applicable_regulations')) {
         doc.setFontSize(12);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(37, 99, 235);
-        doc.text('2. FUENTES CONSULTADAS', margin, yPos);
+        doc.text('2. NORMATIVA URBANÍSTICA APLICABLE', margin, yPos);
         doc.setTextColor(0);
-        yPos += 8;
-
-        const sources = getConsultedSources();
-        const sourcesData = sources.map(s => [s.name, s.type, s.date || '-']);
-
-        autoTable(doc, {
-          startY: yPos,
-          head: [['Fuente', 'Tipo', 'Fecha consulta']],
-          body: sourcesData,
-          theme: 'striped',
-          styles: { fontSize: 8, cellPadding: 2 },
-          headStyles: { fillColor: [37, 99, 235] },
-          margin: { left: margin, right: margin }
+        yPos += 6;
+        
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'normal');
+        
+        const regulations = [
+          'Decreto Legislativo 1/2004 - Texto Refundido de Ordenación del Territorio y Urbanismo (TROTU)',
+          'Real Decreto Legislativo 7/2015 - Texto Refundido de la Ley de Suelo y Rehabilitación Urbana (TRLSRU)',
+          `Plan General de Ordenación de ${profile.municipality || 'la localidad'} (PGMO)`,
+          'Normativa autonómica de ordenación del territorio aplicable'
+        ];
+        
+        regulations.forEach(reg => {
+          doc.text('• ' + reg, margin + 3, yPos);
+          yPos += 4;
         });
-        yPos = (doc as any).lastAutoTable.finalY + 10;
+        
+        // Add consulted sources
+        const sources = getConsultedSources();
+        yPos += 4;
+        doc.setFont('helvetica', 'bold');
+        doc.text('Fuentes consultadas:', margin, yPos);
+        doc.setFont('helvetica', 'normal');
+        yPos += 4;
+        sources.forEach(s => {
+          doc.text(`• ${s.name} (${s.type})`, margin + 3, yPos);
+          yPos += 4;
+        });
+        yPos += 6;
       }
 
       // 3. Soil Classification
@@ -529,7 +541,65 @@ export function UrbanReportGenerator({ open, onOpenChange, budgetId, budgetName 
         yPos += 12;
       }
 
-      // 5. Building Conditions
+      // 5. Housing Conditions (Condiciones de la vivienda) - based on Siero format
+      if (selectedSections.includes('housing_conditions')) {
+        if (yPos > pageHeight - 80) {
+          doc.addPage();
+          yPos = margin;
+        }
+
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(37, 99, 235);
+        doc.text('5. CONDICIONES DE LA VIVIENDA', margin, yPos);
+        doc.setTextColor(0);
+        yPos += 8;
+
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'normal');
+        
+        // Parcela mínima
+        doc.setFont('helvetica', 'bold');
+        doc.text('Parcela mínima edificable:', margin, yPos);
+        doc.setFont('helvetica', 'normal');
+        yPos += 4;
+        doc.text('Dentro del Núcleo Rural no existe parcela mínima edificable, pudiendo construir en la parcela', margin + 3, yPos);
+        yPos += 4;
+        doc.text('siempre que se cumplan las condiciones mínimas de retranqueos, ocupación y superficie mínima.', margin + 3, yPos);
+        yPos += 6;
+
+        // Ocupación máxima
+        doc.setFont('helvetica', 'bold');
+        doc.text('Ocupación máxima:', margin, yPos);
+        doc.setFont('helvetica', 'normal');
+        yPos += 4;
+        const ocupacion = profile.max_occupation_percent ? `${profile.max_occupation_percent}%` : '50%';
+        doc.text(`La ocupación máxima de las construcciones sobre el terreno se fija en ${ocupacion},`, margin + 3, yPos);
+        yPos += 4;
+        doc.text('incluyéndose indistintamente edificación principal y auxiliar.', margin + 3, yPos);
+        yPos += 6;
+
+        // Superficie máxima
+        doc.setFont('helvetica', 'bold');
+        doc.text('Superficie máxima construida:', margin, yPos);
+        doc.setFont('helvetica', 'normal');
+        yPos += 4;
+        const supMax = profile.max_built_surface ? `${profile.max_built_surface} m²` : '300 m²';
+        doc.text(`Se establece la superficie máxima de ${supMax} construidos sobre rasante para las edificaciones.`, margin + 3, yPos);
+        yPos += 8;
+
+        // Usos vinculados
+        doc.setFont('helvetica', 'bold');
+        doc.text('Usos vinculados a la vivienda:', margin, yPos);
+        doc.setFont('helvetica', 'normal');
+        yPos += 4;
+        doc.text('Dentro del programa normal de la vivienda familiar se incluyen los usos de almacenaje de', margin + 3, yPos);
+        yPos += 4;
+        doc.text('enseres domésticos y el encierro de vehículos, dentro de la edificación principal o anejos.', margin + 3, yPos);
+        yPos += 10;
+      }
+
+      // 6. Building Conditions
       if (selectedSections.includes('building_conditions')) {
         if (yPos > pageHeight - 100) {
           doc.addPage();
@@ -632,28 +702,6 @@ export function UrbanReportGenerator({ open, onOpenChange, budgetId, budgetName 
         yPos = (doc as any).lastAutoTable.finalY + 10;
       }
 
-      // 6. Implantation Conditions
-      if (selectedSections.includes('implantation')) {
-        if (yPos > pageHeight - 60) {
-          doc.addPage();
-          yPos = margin;
-        }
-
-        doc.setFontSize(12);
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(37, 99, 235);
-        doc.text('6. CONDICIONES DE IMPLANTACIÓN', margin, yPos);
-        doc.setTextColor(0);
-        yPos += 6;
-        doc.setFontSize(9);
-        doc.setFont('helvetica', 'normal');
-        const implantation = profile.implantation_conditions || 
-          'Las condiciones de implantación deberán ajustarse a lo establecido en la normativa urbanística municipal vigente, respetando los retranqueos, alturas y parámetros establecidos.';
-        const lines = doc.splitTextToSize(implantation, pageWidth - margin * 2);
-        doc.text(lines, margin, yPos);
-        yPos += lines.length * 4 + 10;
-      }
-
       // 7. Sectoral Restrictions
       if (selectedSections.includes('sectoral')) {
         if (yPos > pageHeight - 80) {
@@ -666,37 +714,104 @@ export function UrbanReportGenerator({ open, onOpenChange, budgetId, budgetName 
         doc.setTextColor(37, 99, 235);
         doc.text('7. AFECCIONES Y LIMITACIONES SECTORIALES', margin, yPos);
         doc.setTextColor(0);
-        yPos += 8;
+        yPos += 6;
+        
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'normal');
+        doc.text('Procede advertir de las siguientes afecciones sectoriales que podrían condicionar', margin, yPos);
+        yPos += 4;
+        doc.text('las posibilidades de edificación:', margin, yPos);
+        yPos += 6;
 
         const restrictions = getSectoralRestrictions();
         
         if (restrictions.length > 0) {
-          const restrictionData = restrictions.map(r => [
-            r.name,
-            r.affected === true ? 'SÍ' : r.affected === false ? 'NO' : 'Por verificar',
-            r.distance ? `${r.distance} m` : '-'
-          ]);
-
-          autoTable(doc, {
-            startY: yPos,
-            head: [['Afección', '¿Afectada?', 'Distancia mín.']],
-            body: restrictionData,
-            theme: 'striped',
-            styles: { fontSize: 8, cellPadding: 2 },
-            headStyles: { fillColor: [37, 99, 235] },
-            margin: { left: margin, right: margin }
+          restrictions.forEach(r => {
+            if (r.affected === true || r.distance) {
+              doc.setFont('helvetica', 'bold');
+              doc.text(`• ${r.name}:`, margin + 3, yPos);
+              doc.setFont('helvetica', 'normal');
+              yPos += 4;
+              if (r.distance) {
+                doc.text(`  Distancia mínima: ${r.distance} m. Deberán respetarse las limitaciones de la normativa sectorial.`, margin + 5, yPos);
+              } else {
+                doc.text(`  Afectada. Consultar con el organismo competente.`, margin + 5, yPos);
+              }
+              yPos += 5;
+            }
           });
-          yPos = (doc as any).lastAutoTable.finalY + 6;
+        } else {
+          doc.text('No se han identificado afecciones sectoriales significativas. No obstante, deberán', margin + 3, yPos);
+          yPos += 4;
+          doc.text('comprobarse mediante consultas sectoriales específicas en fase de proyecto.', margin + 3, yPos);
+          yPos += 5;
         }
 
+        yPos += 4;
         doc.setFontSize(8);
         doc.setTextColor(100);
-        doc.text('📌 Estas afecciones deberán comprobarse en fase de proyecto mediante consultas sectoriales específicas.', margin, yPos);
+        const sectoralNote = 'Organismos a consultar: Confederación Hidrográfica, Consejería de Infraestructuras, AESA, Consejería de Medio Ambiente, etc.';
+        doc.text(sectoralNote, margin, yPos);
         doc.setTextColor(0);
         yPos += 10;
       }
 
-      // 8. Conclusion
+      // 8. Other Considerations (Otras Consideraciones) - based on Siero format
+      if (selectedSections.includes('other_considerations')) {
+        if (yPos > pageHeight - 80) {
+          doc.addPage();
+          yPos = margin;
+        }
+
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(37, 99, 235);
+        doc.text('8. OTRAS CONSIDERACIONES', margin, yPos);
+        doc.setTextColor(0);
+        yPos += 6;
+
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'normal');
+        
+        // Servicios mínimos
+        doc.setFont('helvetica', 'bold');
+        doc.text('Servicios mínimos exigibles:', margin, yPos);
+        doc.setFont('helvetica', 'normal');
+        yPos += 4;
+        doc.text('Conforme a la normativa vigente, no podrá autorizarse ninguna clase de edificaciones si no', margin + 3, yPos);
+        yPos += 4;
+        doc.text('estuviera resuelta la disponibilidad de los servicios de: acceso rodado, saneamiento,', margin + 3, yPos);
+        yPos += 4;
+        doc.text('abastecimiento de agua y energía eléctrica.', margin + 3, yPos);
+        yPos += 6;
+
+        // Levantamiento topográfico
+        doc.setFont('helvetica', 'bold');
+        doc.text('Recomendación:', margin, yPos);
+        doc.setFont('helvetica', 'normal');
+        yPos += 4;
+        doc.text('Para comprobar la superficie de la parcela realmente apta para situar la edificación, se', margin + 3, yPos);
+        yPos += 4;
+        doc.text('recomienda la realización de un levantamiento topográfico donde se señalen todas las', margin + 3, yPos);
+        yPos += 4;
+        doc.text('servidumbres, de modo que pueda comprobarse que el espacio no afectado sea suficiente.', margin + 3, yPos);
+        yPos += 6;
+
+        // Additional notes
+        if (additionalNotes.trim()) {
+          yPos += 2;
+          doc.setFont('helvetica', 'bold');
+          doc.text('Observaciones adicionales:', margin, yPos);
+          doc.setFont('helvetica', 'normal');
+          yPos += 4;
+          const notesLines = doc.splitTextToSize(additionalNotes, pageWidth - margin * 2 - 5);
+          doc.text(notesLines, margin + 3, yPos);
+          yPos += notesLines.length * 4;
+        }
+        yPos += 10;
+      }
+
+      // 9. Conclusion
       if (selectedSections.includes('conclusion')) {
         if (yPos > pageHeight - 80) {
           doc.addPage();
@@ -706,7 +821,7 @@ export function UrbanReportGenerator({ open, onOpenChange, budgetId, budgetName 
         doc.setFontSize(12);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(37, 99, 235);
-        doc.text('8. CONCLUSIÓN URBANÍSTICA', margin, yPos);
+        doc.text('9. CONCLUSIÓN URBANÍSTICA', margin, yPos);
         doc.setTextColor(0);
         yPos += 8;
 
@@ -729,29 +844,41 @@ export function UrbanReportGenerator({ open, onOpenChange, budgetId, budgetName 
         doc.setFont('helvetica', 'normal');
         yPos += 14;
 
-        const conclusionText = isBuildable === true
-          ? `La parcela con referencia catastral ${profile.cadastral_reference} es EDIFICABLE, al encontrarse clasificada como ${profile.urban_classification || profile.land_class || 'suelo apto para edificación'}${profile.soil_category ? ` en categoría de ${profile.soil_category}` : ''}, siendo posible la construcción de una vivienda unifamiliar, siempre que el proyecto cumpla las condiciones de retranqueos, alturas, superficies y demás parámetros urbanísticos establecidos en el Plan General de Ordenación de ${profile.municipality || 'el municipio'} y en la normativa sectorial aplicable.`
-          : isBuildable === false
-          ? `La parcela con referencia catastral ${profile.cadastral_reference} NO es edificable según la información analizada. ${profile.is_buildable_source || ''}`
-          : `La edificabilidad de la parcela con referencia catastral ${profile.cadastral_reference} está pendiente de determinación. Se recomienda solicitar Certificado Urbanístico oficial al Ayuntamiento de ${profile.municipality || 'la localidad'}.`;
-
+        // Conclusion text following Siero format
         doc.setFontSize(9);
-        const conclusionLines = doc.splitTextToSize(conclusionText, pageWidth - margin * 2);
-        doc.text(conclusionLines, margin, yPos);
-        yPos += conclusionLines.length * 4 + 10;
-
-        // Additional notes
-        if (additionalNotes.trim()) {
-          doc.setFontSize(9);
-          doc.setFont('helvetica', 'italic');
-          const notesLines = doc.splitTextToSize(`Observaciones adicionales: ${additionalNotes}`, pageWidth - margin * 2);
-          doc.text(notesLines, margin, yPos);
-          yPos += notesLines.length * 4 + 10;
+        const municipality = profile.municipality || 'el municipio';
+        const classification = profile.urban_classification || profile.land_class || 'suelo apto para edificación';
+        const category = profile.soil_category ? ` en categoría de ${profile.soil_category}` : '';
+        
+        if (isBuildable === true) {
+          const conclusionText = `Siempre que no proceda de una parcelación ilegal, la parcela con referencia catastral ${profile.cadastral_reference} resultaría EDIFICABLE en las condiciones establecidas en el Plan General vigente, siendo su capacidad edificatoria la equivalente a una edificación destinada a uso residencial, vivienda familiar aislada, de superficie máxima construida ${profile.max_built_surface || 300}m², por razón de su clasificación como ${classification}${category}.`;
+          const conclusionLines = doc.splitTextToSize(conclusionText, pageWidth - margin * 2);
+          doc.text(conclusionLines, margin, yPos);
+          yPos += conclusionLines.length * 4 + 4;
+          
+          // Condicionantes
+          doc.setFont('helvetica', 'bold');
+          doc.text('Condicionantes:', margin, yPos);
           doc.setFont('helvetica', 'normal');
+          yPos += 4;
+          doc.text('• Las condiciones de edificabilidad quedan supeditadas a la disponibilidad de servicios.', margin + 3, yPos);
+          yPos += 4;
+          doc.text('• Los gastos de acometidas y conexiones correrán a cargo del solicitante de la licencia.', margin + 3, yPos);
+          yPos += 4;
+          doc.text('• Deberá cumplir con toda la normativa sectorial aplicable.', margin + 3, yPos);
+        } else if (isBuildable === false) {
+          const conclusionText = `La parcela con referencia catastral ${profile.cadastral_reference} NO resulta edificable según la información analizada. ${profile.is_buildable_source || ''}`;
+          const conclusionLines = doc.splitTextToSize(conclusionText, pageWidth - margin * 2);
+          doc.text(conclusionLines, margin, yPos);
+        } else {
+          const conclusionText = `La edificabilidad de la parcela con referencia catastral ${profile.cadastral_reference} está pendiente de determinación definitiva. Se recomienda solicitar Certificado Urbanístico oficial al Ayuntamiento de ${municipality} para confirmación.`;
+          const conclusionLines = doc.splitTextToSize(conclusionText, pageWidth - margin * 2);
+          doc.text(conclusionLines, margin, yPos);
         }
+        yPos += 10;
       }
 
-      // 9. Disclaimer
+      // 10. Disclaimer
       if (selectedSections.includes('disclaimer')) {
         if (yPos > pageHeight - 60) {
           doc.addPage();
@@ -761,7 +888,7 @@ export function UrbanReportGenerator({ open, onOpenChange, budgetId, budgetName 
         doc.setFontSize(12);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(37, 99, 235);
-        doc.text('9. CARÁCTER DEL INFORME', margin, yPos);
+        doc.text('10. CARÁCTER DEL INFORME', margin, yPos);
         doc.setTextColor(0);
         yPos += 8;
 
@@ -814,14 +941,15 @@ export function UrbanReportGenerator({ open, onOpenChange, budgetId, budgetName 
 
   const sectionOptions = [
     { id: 'identification', label: '1. Identificación de la parcela', icon: MapPin },
-    { id: 'sources', label: '2. Fuentes consultadas', icon: FileText },
-    { id: 'classification', label: '3. Clasificación del suelo', icon: Building2 },
-    { id: 'uses', label: '4. Usos urbanísticos', icon: Home },
-    { id: 'building_conditions', label: '5. Condiciones de edificación', icon: Ruler },
-    { id: 'implantation', label: '6. Condiciones de implantación', icon: Building2 },
+    { id: 'applicable_regulations', label: '2. Normativa urbanística aplicable', icon: FileText },
+    { id: 'classification', label: '3. Clasificación y calificación del suelo', icon: Building2 },
+    { id: 'uses', label: '4. Régimen de usos', icon: Home },
+    { id: 'housing_conditions', label: '5. Condiciones de la vivienda', icon: Home },
+    { id: 'building_conditions', label: '6. Condiciones de la edificación', icon: Ruler },
     { id: 'sectoral', label: '7. Afecciones sectoriales', icon: AlertTriangle },
-    { id: 'conclusion', label: '8. Conclusión urbanística', icon: CheckCircle2 },
-    { id: 'disclaimer', label: '9. Carácter del informe', icon: Info }
+    { id: 'other_considerations', label: '8. Otras consideraciones', icon: Info },
+    { id: 'conclusion', label: '9. Conclusión urbanística', icon: CheckCircle2 },
+    { id: 'disclaimer', label: '10. Carácter del informe', icon: Info }
   ];
 
   if (loading) {

@@ -13,7 +13,8 @@ import {
   Mail, MessageSquare, Smartphone, ChevronDown, ChevronRight, 
   Reply, Forward, Trash2, ArrowDownLeft, ArrowUpRight,
   Paperclip, Eye, Clock, CheckCircle, XCircle, Search, Inbox, Send,
-  ArrowLeft, Maximize2, FolderOpen, ClipboardList, Building2, FileText
+  ArrowLeft, Maximize2, FolderOpen, ClipboardList, Building2,
+  FileText, Image, File as FileIcon, Download, ExternalLink
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import type { Tables } from '@/integrations/supabase/types';
@@ -21,9 +22,17 @@ import DOMPurify from 'dompurify';
 import { CommunicationActionsDialog } from './CommunicationActionsDialog';
 
 // Types for unified communications
+type EmailAttachment = {
+  id: string;
+  file_name: string;
+  file_path?: string;
+  file_type?: string | null;
+  file_size?: number | null;
+};
+
 type EmailMessage = Tables<'email_messages'> & {
   crm_contacts?: { id: string; name: string; surname: string | null; email: string | null } | null;
-  email_attachments?: { id: string; file_name: string }[];
+  email_attachments?: EmailAttachment[];
 };
 
 type WhatsAppMessage = Tables<'whatsapp_messages'> & {
@@ -104,6 +113,80 @@ export function UnifiedCommunicationsList({
   const [actionsCommunication, setActionsCommunication] = useState<UnifiedCommunication | null>(null);
   const [communicationAssignments, setCommunicationAssignments] = useState<{budgetIds: string[], projectIds: string[]}>({budgetIds: [], projectIds: []});
 
+  const getEmailAttachmentDisplayName = (att: EmailAttachment) => {
+    const name = (att.file_name || '').trim();
+    if (name) return name;
+    return att.file_path?.split('/').pop() || 'adjunto';
+  };
+
+  const getEmailFileIcon = (fileType: string | null | undefined, fileName: string) => {
+    const type = (fileType || '').toLowerCase();
+    const name = fileName.toLowerCase();
+
+    if (type.includes('pdf') || name.endsWith('.pdf')) return <FileText className="h-4 w-4 text-primary" />;
+    if (type.includes('image') || name.match(/\.(jpg|jpeg|png|gif|webp|svg)$/)) return <Image className="h-4 w-4 text-primary" />;
+    return <FileIcon className="h-4 w-4 text-muted-foreground" />;
+  };
+
+  const formatFileSize = (size: number | null | undefined) => {
+    if (!size) return '';
+    return size > 1024 * 1024 ? `${(size / (1024 * 1024)).toFixed(1)} MB` : `${(size / 1024).toFixed(1)} KB`;
+  };
+
+  const previewEmailAttachment = async (att: EmailAttachment) => {
+    if (!att.file_path) {
+      toast({ title: 'Error', description: 'No se encuentra la ruta del archivo', variant: 'destructive' });
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase.storage
+        .from('email-attachments')
+        .createSignedUrl(att.file_path, 3600);
+      if (error) throw error;
+      window.open(data.signedUrl, '_blank');
+    } catch (error: any) {
+      console.error('Error previewing attachment:', error);
+      toast({
+        title: 'Error al abrir adjunto',
+        description: error?.message || 'No se pudo abrir el archivo',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const downloadEmailAttachment = async (att: EmailAttachment) => {
+    if (!att.file_path) {
+      toast({ title: 'Error', description: 'No se encuentra la ruta del archivo', variant: 'destructive' });
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase.storage
+        .from('email-attachments')
+        .download(att.file_path);
+      if (error) throw error;
+
+      const url = URL.createObjectURL(data);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = getEmailAttachmentDisplayName(att);
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      toast({ title: 'Descarga iniciada', description: getEmailAttachmentDisplayName(att) });
+    } catch (error: any) {
+      console.error('Error downloading attachment:', error);
+      toast({
+        title: 'Error al descargar adjunto',
+        description: error?.message || 'No se pudo descargar el archivo',
+        variant: 'destructive',
+      });
+    }
+  };
+
   // Fetch emails
   const { data: emails = [], isLoading: loadingEmails } = useQuery({
     queryKey: ['unified-emails', budgetId, projectId],
@@ -127,7 +210,7 @@ export function UnifiedCommunicationsList({
         .select(`
           *,
           crm_contacts (id, name, surname, email),
-          email_attachments (id, file_name)
+          email_attachments (id, file_name, file_path, file_type, file_size)
         `)
         .is('deleted_at', null)
         .order('created_at', { ascending: false });
@@ -641,10 +724,41 @@ export function UnifiedCommunicationsList({
 
           {comm.hasAttachments && (
             <div className="border-t pt-3">
-              <p className="text-xs text-muted-foreground flex items-center gap-1">
-                <Paperclip className="h-3 w-3" />
-                Este mensaje tiene adjuntos
-              </p>
+              {comm.type === 'email' ? (
+                <div className="space-y-2">
+                  <p className="text-xs text-muted-foreground flex items-center gap-1">
+                    <Paperclip className="h-3 w-3" />
+                    Adjuntos
+                  </p>
+                  {(((comm.originalData as EmailMessage).email_attachments) || []).map((att) => {
+                    const name = getEmailAttachmentDisplayName(att);
+                    return (
+                      <div key={att.id} className="flex items-center justify-between gap-2 p-2 bg-muted/50 rounded-md border">
+                        <div className="flex items-center gap-2 min-w-0">
+                          {getEmailFileIcon(att.file_type, name)}
+                          <span className="text-sm truncate max-w-[260px]" title={name}>{name}</span>
+                          {att.file_size ? (
+                            <span className="text-xs text-muted-foreground">({formatFileSize(att.file_size)})</span>
+                          ) : null}
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <Button variant="ghost" size="sm" onClick={() => previewEmailAttachment(att)} title="Ver">
+                            <ExternalLink className="h-4 w-4" />
+                          </Button>
+                          <Button variant="ghost" size="sm" onClick={() => downloadEmailAttachment(att)} title="Descargar">
+                            <Download className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground flex items-center gap-1">
+                  <Paperclip className="h-3 w-3" />
+                  Este mensaje tiene adjuntos
+                </p>
+              )}
             </div>
           )}
         </CardContent>

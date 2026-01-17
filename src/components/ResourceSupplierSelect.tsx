@@ -71,12 +71,31 @@ export function ResourceSupplierSelect({ value, onChange }: ResourceSupplierSele
   };
 
   const handleNewContactSaved = async (newContactId?: string) => {
-    await fetchContacts();
     setShowNewContactDialog(false);
-    // Select the newly created contact
-    if (newContactId) {
-      const newContact = contacts.find(c => c.id === newContactId);
-      onChange(newContactId, newContact);
+    
+    // Fetch updated contacts
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('crm_contacts')
+        .select('id, name, surname, email, phone, city, contact_type, status')
+        .order('name');
+
+      if (error) throw error;
+      const updatedContacts = data || [];
+      setContacts(updatedContacts);
+      
+      // Select the newly created contact from the fresh list
+      if (newContactId) {
+        const newContact = updatedContacts.find(c => c.id === newContactId);
+        if (newContact) {
+          onChange(newContactId, newContact);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching contacts:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -151,29 +170,53 @@ export function ResourceSupplierSelect({ value, onChange }: ResourceSupplierSele
                   </CommandItem>
                 )}
                 {/* Contact list */}
-                {contacts.map((contact) => (
-                  <CommandItem
-                    key={contact.id}
-                    value={`${contact.name} ${contact.surname || ''} ${contact.city || ''} ${contact.email || ''}`}
-                    onSelect={() => {
-                      onChange(contact.id, contact);
-                      setOpen(false);
-                    }}
-                  >
-                    <Check
-                      className={cn(
-                        "mr-2 h-4 w-4",
-                        value === contact.id ? "opacity-100" : "opacity-0"
-                      )}
-                    />
-                    <div className="flex flex-col">
-                      <span>{getContactLabel(contact)}</span>
-                      {contact.email && (
-                        <span className="text-xs text-muted-foreground">{contact.email}</span>
-                      )}
-                    </div>
-                  </CommandItem>
-                ))}
+                {loading ? (
+                  <div className="py-4 text-center text-sm text-muted-foreground">
+                    Cargando contactos...
+                  </div>
+                ) : contacts.length === 0 ? (
+                  <div className="py-4 text-center text-sm text-muted-foreground">
+                    No hay contactos registrados.
+                  </div>
+                ) : (
+                  contacts.map((contact) => {
+                    // Create a searchable string that includes all relevant fields
+                    const searchValue = [
+                      contact.name,
+                      contact.surname,
+                      contact.city,
+                      contact.email,
+                      contact.phone
+                    ].filter(Boolean).join(' ').toLowerCase();
+                    
+                    return (
+                      <CommandItem
+                        key={contact.id}
+                        value={searchValue}
+                        onSelect={() => {
+                          onChange(contact.id, contact);
+                          setOpen(false);
+                        }}
+                      >
+                        <Check
+                          className={cn(
+                            "mr-2 h-4 w-4",
+                            value === contact.id ? "opacity-100" : "opacity-0"
+                          )}
+                        />
+                        <div className="flex flex-col">
+                          <span>{getContactLabel(contact)}</span>
+                          {contact.email && (
+                            <span className="text-xs text-muted-foreground">{contact.email}</span>
+                          )}
+                          {contact.phone && !contact.email && (
+                            <span className="text-xs text-muted-foreground">{contact.phone}</span>
+                          )}
+                        </div>
+                      </CommandItem>
+                    );
+                  })
+                )}
               </CommandGroup>
             </CommandList>
           </Command>

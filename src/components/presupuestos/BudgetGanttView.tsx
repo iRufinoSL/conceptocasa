@@ -142,9 +142,10 @@ export function BudgetGanttView({ budgetId, budgetStartDate, budgetEndDate, onBu
     return differenceInDays(parseISO(budgetEndDate), parseISO(budgetStartDate));
   }, [budgetStartDate, budgetEndDate]);
 
-  // Calculate phase dates based on time_percent
+  // Calculate phase dates based on time_percent, respecting dependencies and parent-child relationships
   const phasesWithCalculatedDates = useMemo(() => {
-    return phases.map(phase => {
+    // First pass: calculate basic dates from time_percent
+    const basicCalculatedPhases = phases.map(phase => {
       let calculatedStartDate = phase.start_date;
       let calculatedEndDate = phase.estimated_end_date;
 
@@ -166,6 +167,61 @@ export function BudgetGanttView({ budgetId, budgetStartDate, budgetEndDate, onBu
         calculatedEndDate,
       };
     });
+
+    // Create a map for quick lookups
+    const phaseMap = new Map(basicCalculatedPhases.map(p => [p.id, p]));
+
+    // Second pass: adjust dates based on dependencies (depends_on_phase_id)
+    // and parent-child relationships (parent_id)
+    const adjustedPhases = basicCalculatedPhases.map(phase => {
+      let adjustedStartDate = phase.calculatedStartDate;
+      let adjustedEndDate = phase.calculatedEndDate;
+
+      // Check dependency constraint (depends_on_phase_id)
+      if (phase.depends_on_phase_id) {
+        const dependsOnPhase = phaseMap.get(phase.depends_on_phase_id);
+        if (dependsOnPhase?.calculatedEndDate && adjustedStartDate) {
+          const dependsOnEndDate = parseISO(dependsOnPhase.calculatedEndDate);
+          const currentStartDate = parseISO(adjustedStartDate);
+          
+          // If current start is before dependency end, adjust it
+          if (currentStartDate < dependsOnEndDate) {
+            adjustedStartDate = format(dependsOnEndDate, 'yyyy-MM-dd');
+            // Recalculate end date if we have duration
+            if (phase.duration_days) {
+              adjustedEndDate = format(addDays(dependsOnEndDate, phase.duration_days), 'yyyy-MM-dd');
+            }
+          }
+        }
+      }
+
+      // Check parent constraint (parent_id) - child cannot start before parent starts
+      // and child should be visually within or after parent's timeframe
+      if (phase.parent_id) {
+        const parentPhase = phaseMap.get(phase.parent_id);
+        if (parentPhase?.calculatedStartDate && adjustedStartDate) {
+          const parentStartDate = parseISO(parentPhase.calculatedStartDate);
+          const currentStartDate = parseISO(adjustedStartDate);
+          
+          // Child cannot start before parent starts
+          if (currentStartDate < parentStartDate) {
+            adjustedStartDate = format(parentStartDate, 'yyyy-MM-dd');
+            // Recalculate end date if we have duration
+            if (phase.duration_days) {
+              adjustedEndDate = format(addDays(parentStartDate, phase.duration_days), 'yyyy-MM-dd');
+            }
+          }
+        }
+      }
+
+      return {
+        ...phase,
+        calculatedStartDate: adjustedStartDate,
+        calculatedEndDate: adjustedEndDate,
+      };
+    });
+
+    return adjustedPhases;
   }, [phases, budgetStartDate, budgetDuration]);
 
   // Build parent-child relationships
@@ -315,9 +371,12 @@ export function BudgetGanttView({ budgetId, budgetStartDate, budgetEndDate, onBu
   const hasBudgetDates = budgetStartDate && budgetEndDate;
 
   // Render dependency arrows - uses depends_on_phase_id for sequence dependencies
+  // Arrow goes FROM the end of the dependency TO the start of the dependent phase
   const renderDependencyArrow = useCallback((
     phase: BudgetPhase & { calculatedStartDate: string | null; calculatedEndDate: string | null }, 
-    dependsOnPhase: BudgetPhase & { calculatedStartDate: string | null; calculatedEndDate: string | null } | undefined
+    dependsOnPhase: BudgetPhase & { calculatedStartDate: string | null; calculatedEndDate: string | null } | undefined,
+    rowIndex: number,
+    dependsOnRowIndex: number
   ) => {
     if (!dependsOnPhase || !dependsOnPhase.calculatedEndDate || !phase.calculatedStartDate) return null;
 
@@ -331,44 +390,18 @@ export function BudgetGanttView({ budgetId, budgetStartDate, budgetEndDate, onBu
     const dependsOnEndX = dependsOnEndOffset * dayWidth;
     const phaseStartX = phaseStartOffset * dayWidth;
 
-    // Calculate the width (minimum 20px for visibility)
-    const arrowWidth = Math.max(phaseStartX - dependsOnEndX, 20);
-    
-    // If phases overlap, draw arrow going around
-    if (phaseStartX <= dependsOnEndX) {
-      return (
-        <svg
-          className="absolute pointer-events-none z-10"
-          style={{
-            left: `${dependsOnEndX - 10}px`,
-            top: '-8px',
-            width: `${phaseStartX - dependsOnEndX + 30}px`,
-            height: '36px',
-            overflow: 'visible'
-          }}
-        >
-          <path
-            d="M 10 26 L 10 8 L 24 8"
-            fill="none"
-            stroke="hsl(var(--primary))"
-            strokeWidth="2"
-            strokeDasharray="4,2"
-          />
-          <polygon
-            points="20,4 28,8 20,12"
-            fill="hsl(var(--primary))"
-          />
-        </svg>
-      );
-    }
+    // Arrow always goes from dependency end to phase start
+    // Since the phases are visually adjusted, phaseStartX should always be >= dependsOnEndX
+    const arrowWidth = Math.max(phaseStartX - dependsOnEndX, 4);
 
+    // Simple horizontal arrow from dependency end to phase start
     return (
       <svg
         className="absolute pointer-events-none z-10"
         style={{
           left: `${dependsOnEndX}px`,
           top: '50%',
-          width: `${arrowWidth}px`,
+          width: `${arrowWidth + 8}px`,
           height: '20px',
           transform: 'translateY(-50%)',
           overflow: 'visible'
@@ -377,14 +410,14 @@ export function BudgetGanttView({ budgetId, budgetStartDate, budgetEndDate, onBu
         <line
           x1="0"
           y1="10"
-          x2={arrowWidth - 8}
+          x2={arrowWidth}
           y2="10"
           stroke="hsl(var(--primary))"
           strokeWidth="2"
           strokeDasharray="4,2"
         />
         <polygon
-          points={`${arrowWidth - 8},6 ${arrowWidth},10 ${arrowWidth - 8},14`}
+          points={`${arrowWidth},6 ${arrowWidth + 8},10 ${arrowWidth},14`}
           fill="hsl(var(--primary))"
         />
       </svg>
@@ -394,7 +427,8 @@ export function BudgetGanttView({ budgetId, budgetStartDate, budgetEndDate, onBu
   // Render phase row
   const renderPhaseRow = useCallback((
     phase: BudgetPhase & { calculatedStartDate: string | null; calculatedEndDate: string | null },
-    depth: number = 0
+    depth: number = 0,
+    rowIndex: number = 0
   ) => {
     const children = phaseChildren.get(phase.id) || [];
     const isExpanded = expandedPhases.has(phase.id);
@@ -407,6 +441,13 @@ export function BudgetGanttView({ budgetId, budgetStartDate, budgetEndDate, onBu
     const dependsOnPhase = phase.depends_on_phase_id 
       ? phasesWithCalculatedDates.find(p => p.id === phase.depends_on_phase_id)
       : undefined;
+
+    // Calculate row index for dependency arrow positioning
+    const allPhasesFlat = phasesWithCalculatedDates;
+    const currentRowIndex = allPhasesFlat.findIndex(p => p.id === phase.id);
+    const dependsOnRowIndex = dependsOnPhase 
+      ? allPhasesFlat.findIndex(p => p.id === dependsOnPhase.id)
+      : -1;
 
     return (
       <div key={phase.id}>
@@ -445,7 +486,7 @@ export function BudgetGanttView({ budgetId, budgetStartDate, budgetEndDate, onBu
           </div>
           <div className="relative flex-1 h-10">
             {/* Dependency arrow - uses depends_on_phase_id */}
-            {phase.depends_on_phase_id && renderDependencyArrow(phase, dependsOnPhase)}
+            {phase.depends_on_phase_id && renderDependencyArrow(phase, dependsOnPhase, currentRowIndex, dependsOnRowIndex)}
             
             {/* Phase bar */}
             {barStyle && (
@@ -481,6 +522,11 @@ export function BudgetGanttView({ budgetId, budgetStartDate, budgetEndDate, onBu
                         Depende de: {dependsOnPhase.name}
                       </p>
                     )}
+                    {phase.parent_id && (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        (Subfase)
+                      </p>
+                    )}
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
@@ -488,8 +534,20 @@ export function BudgetGanttView({ budgetId, budgetStartDate, budgetEndDate, onBu
           </div>
         </div>
 
-        {/* Children phases */}
-        {isExpanded && children.map(child => renderPhaseRow(child as any, depth + 1))}
+        {/* Children phases - sorted by their calculated start date */}
+        {isExpanded && children
+          .map(child => {
+            // Find the child in phasesWithCalculatedDates to get calculated dates
+            const childWithDates = phasesWithCalculatedDates.find(p => p.id === child.id);
+            return childWithDates || { ...child, calculatedStartDate: null, calculatedEndDate: null };
+          })
+          .sort((a, b) => {
+            if (a.calculatedStartDate && b.calculatedStartDate) {
+              return parseISO(a.calculatedStartDate).getTime() - parseISO(b.calculatedStartDate).getTime();
+            }
+            return (a.order_index ?? 0) - (b.order_index ?? 0);
+          })
+          .map((child, idx) => renderPhaseRow(child, depth + 1, rowIndex + idx + 1))}
       </div>
     );
   }, [phaseChildren, expandedPhases, getPhaseColorIndex, getBarStyle, phasesWithCalculatedDates, renderDependencyArrow]);

@@ -2544,7 +2544,18 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
                 <Label htmlFor="phase">Fase de Gestión</Label>
                 <Select 
                   value={form.phase_id || 'none'} 
-                  onValueChange={(value) => setForm({ ...form, phase_id: value === 'none' ? '' : value })}
+                  onValueChange={(value) => {
+                    const newPhaseId = value === 'none' ? '' : value;
+                    // Auto-set start_date from phase if not already set
+                    if (newPhaseId && !form.start_date) {
+                      const phase = phases.find(p => p.id === newPhaseId);
+                      if (phase?.start_date) {
+                        setForm({ ...form, phase_id: newPhaseId, start_date: phase.start_date });
+                        return;
+                      }
+                    }
+                    setForm({ ...form, phase_id: newPhaseId });
+                  }}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Seleccionar fase..." />

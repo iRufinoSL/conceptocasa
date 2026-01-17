@@ -1060,7 +1060,7 @@ export function BudgetPhasesTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
 
       {/* Form Dialog */}
       <Dialog open={formDialogOpen} onOpenChange={setFormDialogOpen}>
-        <DialogContent>
+        <DialogContent className="max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{currentPhase ? 'Editar Fase' : 'Nueva Fase'}</DialogTitle>
             <DialogDescription>

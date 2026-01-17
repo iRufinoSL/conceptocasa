@@ -1075,21 +1075,21 @@ export function UnifiedCommunicationsList({
 
       {/* Modal de vista previa de adjuntos */}
       <Dialog open={!!previewAttachment} onOpenChange={(open) => !open && setPreviewAttachment(null)}>
-        <DialogContent className="max-w-4xl max-h-[90vh] p-0 overflow-hidden">
-          <DialogHeader className="p-4 pb-2 flex flex-row items-center justify-between border-b">
-            <DialogTitle className="text-base font-medium truncate pr-8">
+        <DialogContent className="max-w-4xl max-h-[90vh] p-0 overflow-hidden [&>button]:hidden">
+          <div className="flex items-center justify-between p-4 border-b bg-background">
+            <DialogTitle className="text-base font-medium truncate flex-1 pr-4">
               {previewAttachment?.name}
             </DialogTitle>
             <Button
-              variant="ghost"
-              size="icon"
-              className="absolute right-4 top-4 h-8 w-8"
+              variant="outline"
+              size="sm"
               onClick={() => setPreviewAttachment(null)}
+              className="gap-2 shrink-0"
             >
               <X className="h-4 w-4" />
-              <span className="sr-only">Cerrar</span>
+              Cerrar
             </Button>
-          </DialogHeader>
+          </div>
           <div className="flex-1 overflow-auto p-4 bg-muted/30 min-h-[400px] max-h-[calc(90vh-80px)]">
             {previewAttachment && (
               <>

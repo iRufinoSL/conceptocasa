@@ -3350,10 +3350,14 @@ export type Database = {
           budget_id: string
           buildability_index: number | null
           buildability_index_source: string | null
+          building_typology: string | null
+          building_typology_source: string | null
           cadastral_reference: string
           cadastral_value: number | null
           climatic_zone: string | null
+          compatible_uses: Json | null
           construction_year: number | null
+          consulted_sources: Json | null
           coordinates_source: string | null
           created_at: string
           created_by: string | null
@@ -3371,7 +3375,11 @@ export type Database = {
           google_maps_lng: number | null
           has_municipal_sewage: boolean | null
           has_municipal_sewage_source: string | null
+          highway_setback: number | null
+          highway_setback_source: string | null
           id: string
+          implantation_conditions: string | null
+          implantation_conditions_source: string | null
           is_buildable: boolean | null
           is_buildable_source: string | null
           is_divisible: boolean | null
@@ -3415,11 +3423,19 @@ export type Database = {
           min_distance_water_courses: number | null
           min_distance_water_courses_source: string | null
           min_plot_area: number | null
+          municipal_road_setback: number | null
+          municipal_road_setback_source: string | null
           municipality: string | null
+          permitted_uses: Json | null
+          principal_use: string | null
+          principal_use_source: string | null
+          prohibited_uses: Json | null
           province: string | null
           rear_setback: number | null
           rear_setback_source: string | null
           requires_septic_tank: boolean | null
+          road_setback: number | null
+          road_setback_source: string | null
           sectoral_restrictions: Json | null
           seismic_zone: string | null
           septic_tank_min_distance: number | null
@@ -3428,6 +3444,8 @@ export type Database = {
           side_setback: number | null
           side_setback_source: string | null
           snow_zone: string | null
+          soil_category: string | null
+          soil_category_source: string | null
           surface_area: number | null
           updated_at: string
           urban_classification: string | null
@@ -3453,10 +3471,14 @@ export type Database = {
           budget_id: string
           buildability_index?: number | null
           buildability_index_source?: string | null
+          building_typology?: string | null
+          building_typology_source?: string | null
           cadastral_reference: string
           cadastral_value?: number | null
           climatic_zone?: string | null
+          compatible_uses?: Json | null
           construction_year?: number | null
+          consulted_sources?: Json | null
           coordinates_source?: string | null
           created_at?: string
           created_by?: string | null
@@ -3474,7 +3496,11 @@ export type Database = {
           google_maps_lng?: number | null
           has_municipal_sewage?: boolean | null
           has_municipal_sewage_source?: string | null
+          highway_setback?: number | null
+          highway_setback_source?: string | null
           id?: string
+          implantation_conditions?: string | null
+          implantation_conditions_source?: string | null
           is_buildable?: boolean | null
           is_buildable_source?: string | null
           is_divisible?: boolean | null
@@ -3518,11 +3544,19 @@ export type Database = {
           min_distance_water_courses?: number | null
           min_distance_water_courses_source?: string | null
           min_plot_area?: number | null
+          municipal_road_setback?: number | null
+          municipal_road_setback_source?: string | null
           municipality?: string | null
+          permitted_uses?: Json | null
+          principal_use?: string | null
+          principal_use_source?: string | null
+          prohibited_uses?: Json | null
           province?: string | null
           rear_setback?: number | null
           rear_setback_source?: string | null
           requires_septic_tank?: boolean | null
+          road_setback?: number | null
+          road_setback_source?: string | null
           sectoral_restrictions?: Json | null
           seismic_zone?: string | null
           septic_tank_min_distance?: number | null
@@ -3531,6 +3565,8 @@ export type Database = {
           side_setback?: number | null
           side_setback_source?: string | null
           snow_zone?: string | null
+          soil_category?: string | null
+          soil_category_source?: string | null
           surface_area?: number | null
           updated_at?: string
           urban_classification?: string | null
@@ -3556,10 +3592,14 @@ export type Database = {
           budget_id?: string
           buildability_index?: number | null
           buildability_index_source?: string | null
+          building_typology?: string | null
+          building_typology_source?: string | null
           cadastral_reference?: string
           cadastral_value?: number | null
           climatic_zone?: string | null
+          compatible_uses?: Json | null
           construction_year?: number | null
+          consulted_sources?: Json | null
           coordinates_source?: string | null
           created_at?: string
           created_by?: string | null
@@ -3577,7 +3617,11 @@ export type Database = {
           google_maps_lng?: number | null
           has_municipal_sewage?: boolean | null
           has_municipal_sewage_source?: string | null
+          highway_setback?: number | null
+          highway_setback_source?: string | null
           id?: string
+          implantation_conditions?: string | null
+          implantation_conditions_source?: string | null
           is_buildable?: boolean | null
           is_buildable_source?: string | null
           is_divisible?: boolean | null
@@ -3621,11 +3665,19 @@ export type Database = {
           min_distance_water_courses?: number | null
           min_distance_water_courses_source?: string | null
           min_plot_area?: number | null
+          municipal_road_setback?: number | null
+          municipal_road_setback_source?: string | null
           municipality?: string | null
+          permitted_uses?: Json | null
+          principal_use?: string | null
+          principal_use_source?: string | null
+          prohibited_uses?: Json | null
           province?: string | null
           rear_setback?: number | null
           rear_setback_source?: string | null
           requires_septic_tank?: boolean | null
+          road_setback?: number | null
+          road_setback_source?: string | null
           sectoral_restrictions?: Json | null
           seismic_zone?: string | null
           septic_tank_min_distance?: number | null
@@ -3634,6 +3686,8 @@ export type Database = {
           side_setback?: number | null
           side_setback_source?: string | null
           snow_zone?: string | null
+          soil_category?: string | null
+          soil_category_source?: string | null
           surface_area?: number | null
           updated_at?: string
           urban_classification?: string | null

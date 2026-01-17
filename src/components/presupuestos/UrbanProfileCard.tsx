@@ -46,6 +46,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import * as pdfjsLib from 'pdfjs-dist';
 import { openSafeUrl, isSafeUrl } from '@/lib/url-utils';
 import { LargeDocumentUploader } from './LargeDocumentUploader';
+import { UrbanReportGenerator } from './UrbanReportGenerator';
 
 interface AdditionalRestriction {
   id: string;
@@ -399,6 +400,7 @@ export function UrbanProfileCard({ budgetId, cadastralReference: initialRef, isA
   const [coordSource, setCoordSource] = useState('');
   const [isSavingCoords, setIsSavingCoords] = useState(false);
   const [isEditingCoords, setIsEditingCoords] = useState(false);
+  const [showReportGenerator, setShowReportGenerator] = useState(false);
 
   // Initialize PDF.js worker
   useEffect(() => {
@@ -856,6 +858,7 @@ export function UrbanProfileCard({ budgetId, cadastralReference: initialRef, isA
   const additionalRestrictions: AdditionalRestriction[] = profile?.additional_restrictions || [];
 
   return (
+    <>
     <Card className="border-primary/20">
       <Collapsible open={isExpanded} onOpenChange={setIsExpanded}>
         <CardHeader className="pb-3">
@@ -866,10 +869,21 @@ export function UrbanProfileCard({ budgetId, cadastralReference: initialRef, isA
             </div>
             <div className="flex items-center gap-2">
               {profile && (
-                <Badge className={statusInfo.color}>
-                  <StatusIcon className="h-3 w-3 mr-1" />
-                  {statusInfo.label}
-                </Badge>
+                <>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowReportGenerator(true)}
+                    className="text-xs"
+                  >
+                    <FileText className="h-3 w-3 mr-1" />
+                    Pre-Informe
+                  </Button>
+                  <Badge className={statusInfo.color}>
+                    <StatusIcon className="h-3 w-3 mr-1" />
+                    {statusInfo.label}
+                  </Badge>
+                </>
               )}
               <CollapsibleTrigger asChild>
                 <Button variant="ghost" size="sm">
@@ -1902,5 +1916,14 @@ export function UrbanProfileCard({ budgetId, cadastralReference: initialRef, isA
         </CollapsibleContent>
       </Collapsible>
     </Card>
+    
+    {/* Urban Report Generator Dialog */}
+    <UrbanReportGenerator
+      open={showReportGenerator}
+      onOpenChange={setShowReportGenerator}
+      budgetId={budgetId}
+      budgetName={profile?.municipality || 'Presupuesto'}
+    />
+    </>
   );
 }

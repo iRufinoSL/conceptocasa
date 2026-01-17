@@ -77,8 +77,10 @@ export function BudgetGanttView({ budgetId, budgetStartDate, budgetEndDate, onBu
           .from('budget_phases')
           .select('id, name, code, start_date, duration_days, estimated_end_date, time_percent, parent_id, depends_on_phase_id, order_index')
           .eq('budget_id', budgetId)
-          .order('order_index', { ascending: true, nullsFirst: false })
-          .order('code', { ascending: true });
+          .order('order_index', { ascending: true, nullsFirst: true })
+          .order('start_date', { ascending: true, nullsFirst: true })
+          .order('code', { ascending: true })
+          .order('created_at', { ascending: true });
 
         if (error) throw error;
         if (data) setPhases(data);
@@ -180,9 +182,34 @@ export function BudgetGanttView({ budgetId, budgetStartDate, budgetEndDate, onBu
     return map;
   }, [phasesWithCalculatedDates]);
 
-  // Root phases (no parent)
+  // Root phases (no parent) - sorted by start date for proper Gantt display
   const rootPhases = useMemo(() => {
-    return phasesWithCalculatedDates.filter(p => !p.parent_id);
+    const roots = phasesWithCalculatedDates.filter(p => !p.parent_id);
+    
+    // Sort by: order_index first, then start_date, then code
+    return roots.sort((a, b) => {
+      // First by order_index
+      const orderA = a.order_index ?? 999;
+      const orderB = b.order_index ?? 999;
+      if (orderA !== orderB) return orderA - orderB;
+      
+      // Then by calculated start date
+      if (a.calculatedStartDate && b.calculatedStartDate) {
+        const dateA = parseISO(a.calculatedStartDate);
+        const dateB = parseISO(b.calculatedStartDate);
+        if (dateA < dateB) return -1;
+        if (dateA > dateB) return 1;
+      } else if (a.calculatedStartDate) {
+        return -1;
+      } else if (b.calculatedStartDate) {
+        return 1;
+      }
+      
+      // Finally by code
+      const codeA = a.code || '';
+      const codeB = b.code || '';
+      return codeA.localeCompare(codeB, undefined, { numeric: true });
+    });
   }, [phasesWithCalculatedDates]);
 
   // Calculate timeline range
@@ -617,15 +644,15 @@ export function BudgetGanttView({ budgetId, budgetStartDate, budgetEndDate, onBu
           )}
         </div>
       </CardHeader>
-      <CardContent>
-        <ScrollArea className="w-full">
-          <div style={{ width: `${totalDays * dayWidth + 280}px`, minWidth: '100%' }}>
-            {/* Header with time units */}
-            <div className="flex border-b sticky top-0 bg-background z-10">
-              <div className="w-[280px] shrink-0 px-3 py-2 font-medium text-sm text-muted-foreground bg-muted/30">
-                Fase
-              </div>
-              <div className="relative flex-1 h-10 bg-muted/10">
+      <CardContent className="p-0">
+        <div className="relative">
+          {/* Fixed header */}
+          <div className="flex border-b sticky top-0 bg-background z-20">
+            <div className="w-[280px] shrink-0 px-3 py-2 font-medium text-sm text-muted-foreground bg-muted/30 border-r">
+              Fase
+            </div>
+            <ScrollArea className="flex-1">
+              <div className="relative h-10 bg-muted/10" style={{ width: `${totalDays * dayWidth}px` }}>
                 {timeUnits.map((unit, idx) => (
                   <div
                     key={idx}
@@ -639,56 +666,63 @@ export function BudgetGanttView({ budgetId, budgetStartDate, budgetEndDate, onBu
                   </div>
                 ))}
               </div>
-            </div>
-
-            {/* Budget range indicator */}
-            <div className="flex border-b bg-primary/5">
-              <div className="w-[280px] shrink-0 px-3 py-2 text-sm font-medium flex items-center gap-2">
-                <Badge variant="outline" className="text-xs">Presupuesto</Badge>
-              </div>
-              <div className="relative flex-1 h-8">
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <div
-                        className="absolute top-1 h-6 bg-primary/20 border-2 border-primary/40 rounded"
-                        style={getBarStyle(budgetStartDate, budgetEndDate, null) || undefined}
-                      />
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p className="font-medium">Rango del Presupuesto</p>
-                      <p className="text-xs text-muted-foreground">
-                        {format(parseISO(budgetStartDate!), 'dd/MM/yyyy', { locale: es })} - {format(parseISO(budgetEndDate!), 'dd/MM/yyyy', { locale: es })}
-                      </p>
-                      <p className="text-xs">{budgetDuration} días</p>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              </div>
-            </div>
-
-            {/* Phases */}
-            {rootPhases.map(phase => renderPhaseRow(phase as any))}
-
-            {/* Legend */}
-            {phases.some(p => p.depends_on_phase_id) && (
-              <div className="flex items-center gap-4 mt-4 pt-4 border-t text-xs text-muted-foreground">
-                <div className="flex items-center gap-1">
-                  <ArrowRight className="h-3 w-3 text-primary" />
-                  <span>Indica dependencia secuencial</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <svg width="40" height="10" className="shrink-0">
-                    <line x1="0" y1="5" x2="32" y2="5" stroke="hsl(var(--primary))" strokeWidth="2" strokeDasharray="4,2" />
-                    <polygon points="32,2 38,5 32,8" fill="hsl(var(--primary))" />
-                  </svg>
-                  <span>Conexión: esta fase empieza cuando termina la anterior</span>
-                </div>
-              </div>
-            )}
+              <ScrollBar orientation="horizontal" />
+            </ScrollArea>
           </div>
-          <ScrollBar orientation="horizontal" />
-        </ScrollArea>
+
+          {/* Scrollable content area - both horizontal and vertical */}
+          <ScrollArea className="h-[500px]">
+            <div style={{ width: `${totalDays * dayWidth + 280}px`, minWidth: '100%' }}>
+              {/* Budget range indicator */}
+              <div className="flex border-b bg-primary/5">
+                <div className="w-[280px] shrink-0 px-3 py-2 text-sm font-medium flex items-center gap-2">
+                  <Badge variant="outline" className="text-xs">Presupuesto</Badge>
+                </div>
+                <div className="relative flex-1 h-8">
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div
+                          className="absolute top-1 h-6 bg-primary/20 border-2 border-primary/40 rounded"
+                          style={getBarStyle(budgetStartDate, budgetEndDate, null) || undefined}
+                        />
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p className="font-medium">Rango del Presupuesto</p>
+                        <p className="text-xs text-muted-foreground">
+                          {format(parseISO(budgetStartDate!), 'dd/MM/yyyy', { locale: es })} - {format(parseISO(budgetEndDate!), 'dd/MM/yyyy', { locale: es })}
+                        </p>
+                        <p className="text-xs">{budgetDuration} días</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
+              </div>
+
+              {/* Phases */}
+              {rootPhases.map(phase => renderPhaseRow(phase as any))}
+
+              {/* Legend */}
+              {phases.some(p => p.depends_on_phase_id) && (
+                <div className="flex items-center gap-4 mt-4 pt-4 px-4 border-t text-xs text-muted-foreground">
+                  <div className="flex items-center gap-1">
+                    <ArrowRight className="h-3 w-3 text-primary" />
+                    <span>Indica dependencia secuencial</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <svg width="40" height="10" className="shrink-0">
+                      <line x1="0" y1="5" x2="32" y2="5" stroke="hsl(var(--primary))" strokeWidth="2" strokeDasharray="4,2" />
+                      <polygon points="32,2 38,5 32,8" fill="hsl(var(--primary))" />
+                    </svg>
+                    <span>Conexión: esta fase empieza cuando termina la anterior</span>
+                  </div>
+                </div>
+              )}
+            </div>
+            <ScrollBar orientation="horizontal" />
+            <ScrollBar orientation="vertical" />
+          </ScrollArea>
+        </div>
       </CardContent>
     </Card>
   );

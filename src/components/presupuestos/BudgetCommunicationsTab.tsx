@@ -66,11 +66,19 @@ export function BudgetCommunicationsTab({ budgetId, budgetName, projectId, isAdm
   const handleComposeReply = (communication: any) => {
     if (communication.type === 'email') {
       const email = communication.originalData;
+      // Build quoted original message
+      const originalBody = email.body_html || email.body_text || '';
+      const quotedMessage = originalBody 
+        ? `<br><br>---------- Mensaje original ----------<br>De: ${email.from_email}<br>Fecha: ${email.created_at}<br>Asunto: ${email.subject || ''}<br><br>${originalBody}`
+        : '';
+      
       setReplyToEmail({
         email: email.direction === 'inbound' ? email.from_email : email.to_emails?.[0],
         subject: email.subject,
         contactId: email.contact_id,
         ticketId: email.ticket_id,
+        forwardEmailId: email.id, // Include to load attachments
+        originalBody: quotedMessage,
       });
       setActiveSubTab('compose-email');
     }

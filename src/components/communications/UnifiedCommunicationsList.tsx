@@ -407,7 +407,7 @@ export function UnifiedCommunicationsList({
     );
   }, [unifiedCommunications, search]);
 
-  // Separate inbound and outbound (with optional unread filter for inbox)
+  // Separate inbound and outbound (with optional unread filter)
   const inboundCommunications = useMemo(() => {
     let comms = filteredCommunications.filter(c => c.direction === 'inbound');
     if (filterUnreadOnly) {
@@ -416,23 +416,34 @@ export function UnifiedCommunicationsList({
     return comms;
   }, [filteredCommunications, filterUnreadOnly]);
   
-  const outboundCommunications = filteredCommunications.filter(c => c.direction === 'outbound');
+  const outboundCommunications = useMemo(() => {
+    let comms = filteredCommunications.filter(c => c.direction === 'outbound');
+    if (filterUnreadOnly) {
+      comms = comms.filter(c => c.type === 'email' && !c.isRead);
+    }
+    return comms;
+  }, [filteredCommunications, filterUnreadOnly]);
   
-  // Get unread email IDs for "mark all as read" functionality
+  // Get unread email IDs for "mark all as read" functionality (all directions)
   const unreadEmailIds = useMemo(() => {
     return filteredCommunications
-      .filter(c => c.type === 'email' && !c.isRead && c.direction === 'inbound')
+      .filter(c => c.type === 'email' && !c.isRead)
       .map(c => c.id);
   }, [filteredCommunications]);
 
-  // Stats
+  // Stats - count unread emails from both directions
+  const unreadInbound = filteredCommunications.filter(c => c.type === 'email' && !c.isRead && c.direction === 'inbound').length;
+  const unreadOutbound = filteredCommunications.filter(c => c.type === 'email' && !c.isRead && c.direction === 'outbound').length;
+  
   const stats = {
     total: filteredCommunications.length,
     inbound: inboundCommunications.length,
     outbound: outboundCommunications.length,
     emails: filteredCommunications.filter(c => c.type === 'email').length,
     whatsapp: filteredCommunications.filter(c => c.type === 'whatsapp').length,
-    unread: filteredCommunications.filter(c => c.type === 'email' && !c.isRead).length,
+    unread: unreadInbound + unreadOutbound,
+    unreadInbound,
+    unreadOutbound,
   };
 
   const handleSelectCommunication = (comm: UnifiedCommunication) => {
@@ -817,7 +828,7 @@ export function UnifiedCommunicationsList({
             <FolderIcon className={`h-5 w-5 ${folderColor}`} />
             <h2 className="font-semibold text-lg">{folderLabel}</h2>
             <Badge variant="secondary">{communications.length}</Badge>
-            {filterUnreadOnly && isInbox && (
+            {filterUnreadOnly && (
               <Badge variant="outline" className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
                 Solo no leídos
               </Badge>
@@ -827,20 +838,18 @@ export function UnifiedCommunicationsList({
           {/* Actions */}
           <div className="flex items-center gap-2 ml-auto">
             {/* Toggle unread filter */}
-            {isInbox && (
-              <Button
-                variant={filterUnreadOnly ? "default" : "outline"}
-                size="sm"
-                onClick={() => setFilterUnreadOnly(!filterUnreadOnly)}
-                className="gap-1"
-              >
-                <Eye className="h-4 w-4" />
-                {filterUnreadOnly ? 'Mostrar todos' : 'Solo no leídos'}
-              </Button>
-            )}
+            <Button
+              variant={filterUnreadOnly ? "default" : "outline"}
+              size="sm"
+              onClick={() => setFilterUnreadOnly(!filterUnreadOnly)}
+              className="gap-1"
+            >
+              <Eye className="h-4 w-4" />
+              {filterUnreadOnly ? 'Mostrar todos' : 'Solo no leídos'}
+            </Button>
             
             {/* Mark all as read */}
-            {isInbox && unreadEmailIds.length > 0 && (
+            {unreadEmailIds.length > 0 && (
               <Button
                 variant="outline"
                 size="sm"
@@ -933,12 +942,26 @@ export function UnifiedCommunicationsList({
           onClick={() => {
             if (stats.unread > 0) {
               setFilterUnreadOnly(true);
-              setFullscreenFolder('inbox');
+              // Open the folder that has more unread emails
+              if (stats.unreadOutbound > stats.unreadInbound) {
+                setFullscreenFolder('outbox');
+              } else if (stats.unreadInbound > 0) {
+                setFullscreenFolder('inbox');
+              } else {
+                setFullscreenFolder('outbox');
+              }
             }
           }}
         >
           <div className="text-xl font-bold text-amber-600">{stats.unread}</div>
           <div className="text-xs text-muted-foreground">No leídos</div>
+          {stats.unread > 0 && (
+            <div className="text-xs text-muted-foreground mt-1">
+              {stats.unreadInbound > 0 && <span className="text-green-600">{stats.unreadInbound} entrada</span>}
+              {stats.unreadInbound > 0 && stats.unreadOutbound > 0 && ' • '}
+              {stats.unreadOutbound > 0 && <span className="text-blue-600">{stats.unreadOutbound} salida</span>}
+            </div>
+          )}
         </Card>
       </div>
 

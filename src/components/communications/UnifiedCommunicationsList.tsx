@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -14,7 +15,7 @@ import {
   Reply, Forward, Trash2, ArrowDownLeft, ArrowUpRight,
   Paperclip, Eye, Clock, CheckCircle, XCircle, Search, Inbox, Send,
   ArrowLeft, Maximize2, FolderOpen, ClipboardList, Building2,
-  FileText, Image, File as FileIcon, Download, ExternalLink
+  FileText, Image, File as FileIcon, Download, ExternalLink, X
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import type { Tables } from '@/integrations/supabase/types';
@@ -112,6 +113,8 @@ export function UnifiedCommunicationsList({
   const [actionsDialogOpen, setActionsDialogOpen] = useState(false);
   const [actionsCommunication, setActionsCommunication] = useState<UnifiedCommunication | null>(null);
   const [communicationAssignments, setCommunicationAssignments] = useState<{budgetIds: string[], projectIds: string[]}>({budgetIds: [], projectIds: []});
+  const [previewAttachment, setPreviewAttachment] = useState<{ url: string; name: string; type: string } | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
 
   const getEmailAttachmentDisplayName = (att: EmailAttachment) => {
     const name = (att.file_name || '').trim();
@@ -139,12 +142,21 @@ export function UnifiedCommunicationsList({
       return;
     }
 
+    setPreviewLoading(true);
     try {
       const { data, error } = await supabase.storage
         .from('email-attachments')
         .createSignedUrl(att.file_path, 3600);
       if (error) throw error;
-      window.open(data.signedUrl, '_blank');
+      
+      const fileType = att.file_type || '';
+      const fileName = getEmailAttachmentDisplayName(att);
+      
+      setPreviewAttachment({
+        url: data.signedUrl,
+        name: fileName,
+        type: fileType
+      });
     } catch (error: any) {
       console.error('Error previewing attachment:', error);
       toast({
@@ -152,6 +164,8 @@ export function UnifiedCommunicationsList({
         description: error?.message || 'No se pudo abrir el archivo',
         variant: 'destructive',
       });
+    } finally {
+      setPreviewLoading(false);
     }
   };
 
@@ -1058,6 +1072,57 @@ export function UnifiedCommunicationsList({
           currentProjectIds={communicationAssignments.projectIds}
         />
       )}
+
+      {/* Modal de vista previa de adjuntos */}
+      <Dialog open={!!previewAttachment} onOpenChange={(open) => !open && setPreviewAttachment(null)}>
+        <DialogContent className="max-w-4xl max-h-[90vh] p-0 overflow-hidden">
+          <DialogHeader className="p-4 pb-2 flex flex-row items-center justify-between border-b">
+            <DialogTitle className="text-base font-medium truncate pr-8">
+              {previewAttachment?.name}
+            </DialogTitle>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="absolute right-4 top-4 h-8 w-8"
+              onClick={() => setPreviewAttachment(null)}
+            >
+              <X className="h-4 w-4" />
+              <span className="sr-only">Cerrar</span>
+            </Button>
+          </DialogHeader>
+          <div className="flex-1 overflow-auto p-4 bg-muted/30 min-h-[400px] max-h-[calc(90vh-80px)]">
+            {previewAttachment && (
+              <>
+                {previewAttachment.type.includes('image') ? (
+                  <img 
+                    src={previewAttachment.url} 
+                    alt={previewAttachment.name}
+                    className="max-w-full h-auto mx-auto rounded-lg shadow-sm"
+                  />
+                ) : previewAttachment.type.includes('pdf') ? (
+                  <iframe
+                    src={previewAttachment.url}
+                    className="w-full h-full min-h-[500px] rounded-lg border"
+                    title={previewAttachment.name}
+                  />
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-full gap-4 text-muted-foreground">
+                    <FileIcon className="h-16 w-16" />
+                    <p>Vista previa no disponible para este tipo de archivo</p>
+                    <Button
+                      variant="outline"
+                      onClick={() => window.open(previewAttachment.url, '_blank')}
+                    >
+                      <ExternalLink className="h-4 w-4 mr-2" />
+                      Abrir en nueva pestaña
+                    </Button>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

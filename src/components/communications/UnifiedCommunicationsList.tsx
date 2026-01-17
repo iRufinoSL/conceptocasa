@@ -417,33 +417,24 @@ export function UnifiedCommunicationsList({
   }, [filteredCommunications, filterUnreadOnly]);
   
   const outboundCommunications = useMemo(() => {
-    let comms = filteredCommunications.filter(c => c.direction === 'outbound');
-    if (filterUnreadOnly) {
-      comms = comms.filter(c => c.type === 'email' && !c.isRead);
-    }
-    return comms;
-  }, [filteredCommunications, filterUnreadOnly]);
+    return filteredCommunications.filter(c => c.direction === 'outbound');
+  }, [filteredCommunications]);
   
-  // Get unread email IDs for "mark all as read" functionality (all directions)
+  // Get unread email IDs for "mark all as read" functionality (only inbound emails count as unread)
   const unreadEmailIds = useMemo(() => {
     return filteredCommunications
-      .filter(c => c.type === 'email' && !c.isRead)
+      .filter(c => c.type === 'email' && !c.isRead && c.direction === 'inbound')
       .map(c => c.id);
   }, [filteredCommunications]);
 
-  // Stats - count unread emails from both directions
-  const unreadInbound = filteredCommunications.filter(c => c.type === 'email' && !c.isRead && c.direction === 'inbound').length;
-  const unreadOutbound = filteredCommunications.filter(c => c.type === 'email' && !c.isRead && c.direction === 'outbound').length;
-  
+  // Stats - only count unread emails from inbound (outbound emails don't have "unread" concept)
   const stats = {
     total: filteredCommunications.length,
-    inbound: inboundCommunications.length,
+    inbound: filterUnreadOnly ? inboundCommunications.length : filteredCommunications.filter(c => c.direction === 'inbound').length,
     outbound: outboundCommunications.length,
     emails: filteredCommunications.filter(c => c.type === 'email').length,
     whatsapp: filteredCommunications.filter(c => c.type === 'whatsapp').length,
-    unread: unreadInbound + unreadOutbound,
-    unreadInbound,
-    unreadOutbound,
+    unread: unreadEmailIds.length,
   };
 
   const handleSelectCommunication = (comm: UnifiedCommunication) => {
@@ -942,26 +933,13 @@ export function UnifiedCommunicationsList({
           onClick={() => {
             if (stats.unread > 0) {
               setFilterUnreadOnly(true);
-              // Open the folder that has more unread emails
-              if (stats.unreadOutbound > stats.unreadInbound) {
-                setFullscreenFolder('outbox');
-              } else if (stats.unreadInbound > 0) {
-                setFullscreenFolder('inbox');
-              } else {
-                setFullscreenFolder('outbox');
-              }
+              // Unread emails are only in inbox (inbound)
+              setFullscreenFolder('inbox');
             }
           }}
         >
           <div className="text-xl font-bold text-amber-600">{stats.unread}</div>
           <div className="text-xs text-muted-foreground">No leídos</div>
-          {stats.unread > 0 && (
-            <div className="text-xs text-muted-foreground mt-1">
-              {stats.unreadInbound > 0 && <span className="text-green-600">{stats.unreadInbound} entrada</span>}
-              {stats.unreadInbound > 0 && stats.unreadOutbound > 0 && ' • '}
-              {stats.unreadOutbound > 0 && <span className="text-blue-600">{stats.unreadOutbound} salida</span>}
-            </div>
-          )}
         </Card>
       </div>
 

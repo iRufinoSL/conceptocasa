@@ -549,7 +549,12 @@ export default function PresupuestoDashboard() {
           </TabsContent>
 
           <TabsContent value="agenda" className="mt-6">
-            <BudgetAgendaTab budgetId={presupuesto.id} isAdmin={isAdmin} />
+            <BudgetAgendaTab 
+              budgetId={presupuesto.id} 
+              isAdmin={isAdmin}
+              budgetStartDate={presupuesto.start_date}
+              budgetEndDate={presupuesto.end_date}
+            />
           </TabsContent>
 
           <TabsContent value="comunicaciones" className="mt-6">

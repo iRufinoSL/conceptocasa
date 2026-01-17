@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Calendar, List, ChevronLeft, ChevronRight, FileText } from 'lucide-react';
+import { Plus, Calendar, List, ChevronLeft, ChevronRight, FileText, BarChart3 } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, addMonths, subMonths, addWeeks, subWeeks, addDays, subDays, eachDayOfInterval, isSameMonth, isSameDay, isToday } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { toast } from 'sonner';
@@ -13,6 +13,7 @@ import { TaskCard } from './TaskCard';
 import { TaskListView } from './TaskListView';
 import { exportTasksPdf } from './TasksPdfExport';
 import { useCompanySettings } from '@/hooks/useCompanySettings';
+import { BudgetGanttView } from './BudgetGanttView';
 
 // A Task is a resource with resource_type = 'Tarea'
 export interface BudgetTask {
@@ -57,16 +58,20 @@ export interface BudgetTask {
 interface BudgetAgendaTabProps {
   budgetId: string;
   isAdmin: boolean;
+  budgetStartDate?: string | null;
+  budgetEndDate?: string | null;
 }
 
+type MainViewMode = 'agenda' | 'gantt';
 type ViewMode = 'month' | 'week' | 'day' | 'list';
 type FilterMode = 'all' | 'pendiente' | 'realizada';
 
-export function BudgetAgendaTab({ budgetId, isAdmin }: BudgetAgendaTabProps) {
+export function BudgetAgendaTab({ budgetId, isAdmin, budgetStartDate, budgetEndDate }: BudgetAgendaTabProps) {
   const [tasks, setTasks] = useState<BudgetTask[]>([]);
   const [activities, setActivities] = useState<{ id: string; name: string; code: string; phase_code?: string | null }[]>([]);
   const [budgetName, setBudgetName] = useState<string>('');
   const [isLoading, setIsLoading] = useState(true);
+  const [mainViewMode, setMainViewMode] = useState<MainViewMode>('agenda');
   const [viewMode, setViewMode] = useState<ViewMode>('month');
   const [filterMode, setFilterMode] = useState<FilterMode>('all');
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -512,145 +517,176 @@ export function BudgetAgendaTab({ budgetId, isAdmin }: BudgetAgendaTabProps) {
 
   return (
     <div className="space-y-4">
-      {/* Header */}
+      {/* Main View Toggle - Agenda vs Gantt */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-4">
-          <h2 className="text-xl font-semibold">Agenda de Tareas</h2>
-          <div className="flex gap-2">
-            <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">
-              {pendingCount} pendientes
-            </Badge>
-            <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-              {completedCount} realizadas
-            </Badge>
+          <Tabs value={mainViewMode} onValueChange={(v) => setMainViewMode(v as MainViewMode)} className="w-auto">
+            <TabsList>
+              <TabsTrigger value="agenda" className="flex items-center gap-1.5">
+                <Calendar className="h-4 w-4" />
+                Agenda
+              </TabsTrigger>
+              <TabsTrigger value="gantt" className="flex items-center gap-1.5">
+                <BarChart3 className="h-4 w-4" />
+                Gantt
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+          
+          {mainViewMode === 'agenda' && (
+            <div className="flex gap-2">
+              <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">
+                {pendingCount} pendientes
+              </Badge>
+              <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                {completedCount} realizadas
+              </Badge>
+            </div>
+          )}
+        </div>
+        
+        {mainViewMode === 'agenda' && (
+          <div className="flex items-center gap-2">
+            {tasks.length > 0 && (
+              <Button 
+                variant="outline" 
+                onClick={() => exportTasksPdf(filteredTasks, budgetName || 'Presupuesto', companySettings)}
+                className="flex items-center gap-2"
+              >
+                <FileText className="h-4 w-4" />
+                Informe PDF
+              </Button>
+            )}
+            {isAdmin && (
+              <Button onClick={handleAddTask} className="flex items-center gap-2">
+                <Plus className="h-4 w-4" />
+                Nueva Tarea
+              </Button>
+            )}
           </div>
-        </div>
-        <div className="flex items-center gap-2">
-          {tasks.length > 0 && (
-            <Button 
-              variant="outline" 
-              onClick={() => exportTasksPdf(filteredTasks, budgetName || 'Presupuesto', companySettings)}
-              className="flex items-center gap-2"
-            >
-              <FileText className="h-4 w-4" />
-              Informe PDF
-            </Button>
-          )}
-          {isAdmin && (
-            <Button onClick={handleAddTask} className="flex items-center gap-2">
-              <Plus className="h-4 w-4" />
-              Nueva Tarea
-            </Button>
-          )}
-        </div>
+        )}
       </div>
 
-      {/* View Mode Tabs */}
-      <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as ViewMode)}>
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <TabsList>
-            <TabsTrigger value="month" className="flex items-center gap-1.5">
-              <Calendar className="h-4 w-4" />
-              Mes
-            </TabsTrigger>
-            <TabsTrigger value="week" className="flex items-center gap-1.5">
-              <Calendar className="h-4 w-4" />
-              Semana
-            </TabsTrigger>
-            <TabsTrigger value="day" className="flex items-center gap-1.5">
-              <Calendar className="h-4 w-4" />
-              Día
-            </TabsTrigger>
-            <TabsTrigger value="list" className="flex items-center gap-1.5">
-              <List className="h-4 w-4" />
-              Listado
-            </TabsTrigger>
-          </TabsList>
+      {/* Gantt View */}
+      {mainViewMode === 'gantt' && (
+        <BudgetGanttView
+          budgetId={budgetId}
+          budgetStartDate={budgetStartDate || null}
+          budgetEndDate={budgetEndDate || null}
+        />
+      )}
 
-          {viewMode !== 'list' && (
-            <div className="flex items-center gap-2">
-              <Button variant="outline" size="icon" onClick={navigatePrevious}>
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              <Button variant="outline" size="sm" onClick={goToToday}>
-                Hoy
-              </Button>
-              <span className="text-sm font-medium min-w-[180px] text-center">
-                {getDateRangeLabel()}
-              </span>
-              <Button variant="outline" size="icon" onClick={navigateNext}>
-                <ChevronRight className="h-4 w-4" />
-              </Button>
+      {/* Agenda View */}
+      {mainViewMode === 'agenda' && (
+        <>
+          {/* View Mode Tabs */}
+          <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as ViewMode)}>
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <TabsList>
+                <TabsTrigger value="month" className="flex items-center gap-1.5">
+                  <Calendar className="h-4 w-4" />
+                  Mes
+                </TabsTrigger>
+                <TabsTrigger value="week" className="flex items-center gap-1.5">
+                  <Calendar className="h-4 w-4" />
+                  Semana
+                </TabsTrigger>
+                <TabsTrigger value="day" className="flex items-center gap-1.5">
+                  <Calendar className="h-4 w-4" />
+                  Día
+                </TabsTrigger>
+                <TabsTrigger value="list" className="flex items-center gap-1.5">
+                  <List className="h-4 w-4" />
+                  Listado
+                </TabsTrigger>
+              </TabsList>
+
+              {viewMode !== 'list' && (
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="icon" onClick={navigatePrevious}>
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={goToToday}>
+                    Hoy
+                  </Button>
+                  <span className="text-sm font-medium min-w-[180px] text-center">
+                    {getDateRangeLabel()}
+                  </span>
+                  <Button variant="outline" size="icon" onClick={navigateNext}>
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              )}
+
+              {viewMode === 'list' && (
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant={filterMode === 'all' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setFilterMode('all')}
+                  >
+                    Todas
+                  </Button>
+                  <Button
+                    variant={filterMode === 'pendiente' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setFilterMode('pendiente')}
+                  >
+                    Pendientes
+                  </Button>
+                  <Button
+                    variant={filterMode === 'realizada' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setFilterMode('realizada')}
+                  >
+                    Realizadas
+                  </Button>
+                </div>
+              )}
             </div>
-          )}
 
-          {viewMode === 'list' && (
-            <div className="flex items-center gap-2">
-              <Button
-                variant={filterMode === 'all' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setFilterMode('all')}
-              >
-                Todas
-              </Button>
-              <Button
-                variant={filterMode === 'pendiente' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setFilterMode('pendiente')}
-              >
-                Pendientes
-              </Button>
-              <Button
-                variant={filterMode === 'realizada' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setFilterMode('realizada')}
-              >
-                Realizadas
-              </Button>
-            </div>
-          )}
-        </div>
+            <TabsContent value="month" className="mt-4">
+              <Card>
+                <CardContent className="pt-4">
+                  {renderMonthView()}
+                </CardContent>
+              </Card>
+            </TabsContent>
 
-        <TabsContent value="month" className="mt-4">
-          <Card>
-            <CardContent className="pt-4">
-              {renderMonthView()}
-            </CardContent>
-          </Card>
-        </TabsContent>
+            <TabsContent value="week" className="mt-4">
+              {renderWeekView()}
+            </TabsContent>
 
-        <TabsContent value="week" className="mt-4">
-          {renderWeekView()}
-        </TabsContent>
+            <TabsContent value="day" className="mt-4">
+              <Card>
+                <CardContent className="pt-4">
+                  {renderDayView()}
+                </CardContent>
+              </Card>
+            </TabsContent>
 
-        <TabsContent value="day" className="mt-4">
-          <Card>
-            <CardContent className="pt-4">
-              {renderDayView()}
-            </CardContent>
-          </Card>
-        </TabsContent>
+            <TabsContent value="list" className="mt-4">
+              <TaskListView
+                tasks={filteredTasks}
+                onEdit={handleEditTask}
+                onDelete={handleDeleteTask}
+                onToggleStatus={handleToggleStatus}
+                isAdmin={isAdmin}
+              />
+            </TabsContent>
+          </Tabs>
 
-        <TabsContent value="list" className="mt-4">
-          <TaskListView
-            tasks={filteredTasks}
-            onEdit={handleEditTask}
-            onDelete={handleDeleteTask}
-            onToggleStatus={handleToggleStatus}
-            isAdmin={isAdmin}
+          {/* Task Form Dialog */}
+          <TaskForm
+            open={showTaskForm}
+            onOpenChange={setShowTaskForm}
+            budgetId={budgetId}
+            activities={activities}
+            task={editingTask}
+            onSuccess={handleTaskSaved}
           />
-        </TabsContent>
-      </Tabs>
-
-      {/* Task Form Dialog */}
-      <TaskForm
-        open={showTaskForm}
-        onOpenChange={setShowTaskForm}
-        budgetId={budgetId}
-        activities={activities}
-        task={editingTask}
-        onSuccess={handleTaskSaved}
-      />
+        </>
+      )}
     </div>
   );
 }

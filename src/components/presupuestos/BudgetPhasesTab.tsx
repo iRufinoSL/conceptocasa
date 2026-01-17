@@ -103,6 +103,37 @@ const calculatePhaseStartDate = (budgetStartDate: string | null | undefined, bud
   return start.toISOString().split('T')[0];
 };
 
+// Calculate phase end date
+const calculatePhaseEndDate = (startDate: string | null, durationDays: number | null): string | null => {
+  if (!startDate || !durationDays) return null;
+  const start = parseISO(startDate);
+  if (!isValid(start)) return null;
+  const end = addDays(start, durationDays);
+  return format(end, 'yyyy-MM-dd');
+};
+
+// Calculate time_percent from start_date
+const calculateTimePercentFromDate = (
+  budgetStartDate: string | null | undefined, 
+  budgetEndDate: string | null | undefined, 
+  phaseStartDate: string
+): number | null => {
+  if (!budgetStartDate || !budgetEndDate) return null;
+  const budgetStart = parseISO(budgetStartDate);
+  const budgetEnd = parseISO(budgetEndDate);
+  const phaseStart = parseISO(phaseStartDate);
+  
+  if (!isValid(budgetStart) || !isValid(budgetEnd) || !isValid(phaseStart)) return null;
+  
+  const totalDays = (budgetEnd.getTime() - budgetStart.getTime()) / (1000 * 60 * 60 * 24);
+  if (totalDays <= 0) return null;
+  
+  const daysFromStart = (phaseStart.getTime() - budgetStart.getTime()) / (1000 * 60 * 60 * 24);
+  const percent = Math.round((daysFromStart / totalDays) * 100);
+  
+  return Math.max(0, Math.min(100, percent));
+};
+
 // Calculate subtotal for a resource
 const calculateResourceSubtotal = (resource: BudgetResource): number => {
   return calcResourceSubtotal({
@@ -296,11 +327,43 @@ export function BudgetPhasesTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
     try {
       let phaseId = currentPhase?.id;
       
-      // Calculate start_date from time_percent if provided
+      // Calculate start_date based on dependency or time_percent
       const budgetDuration = calculateBudgetDuration(budgetStartDate, budgetEndDate);
-      const timePercent = form.time_percent ? parseFloat(form.time_percent) : null;
-      const calculatedStartDate = calculatePhaseStartDate(budgetStartDate, budgetDuration, timePercent);
-      const finalStartDate = calculatedStartDate || (form.start_date || null);
+      let timePercent = form.time_percent ? parseFloat(form.time_percent) : null;
+      let finalStartDate: string | null = null;
+      
+      // If this phase depends on another, calculate start from dependency
+      if (form.depends_on_phase_id) {
+        const dependsOnPhase = phases.find(p => p.id === form.depends_on_phase_id);
+        if (dependsOnPhase) {
+          const dependsOnEndDate = calculatePhaseEndDate(
+            dependsOnPhase.start_date, 
+            dependsOnPhase.duration_days
+          );
+          
+          if (dependsOnEndDate) {
+            finalStartDate = dependsOnEndDate;
+            // Recalculate time_percent based on the new start date
+            const newTimePercent = calculateTimePercentFromDate(budgetStartDate, budgetEndDate, dependsOnEndDate);
+            if (newTimePercent !== null) {
+              timePercent = newTimePercent;
+            }
+          } else if (dependsOnPhase.start_date) {
+            // If dependent phase has no duration, use its start date as minimum
+            finalStartDate = dependsOnPhase.start_date;
+            const newTimePercent = calculateTimePercentFromDate(budgetStartDate, budgetEndDate, dependsOnPhase.start_date);
+            if (newTimePercent !== null) {
+              timePercent = newTimePercent;
+            }
+          }
+        }
+      }
+      
+      // If no dependency-based date, use time_percent calculation
+      if (!finalStartDate) {
+        const calculatedStartDate = calculatePhaseStartDate(budgetStartDate, budgetDuration, timePercent);
+        finalStartDate = calculatedStartDate || (form.start_date || null);
+      }
 
       if (currentPhase) {
         const { error } = await supabase
@@ -317,6 +380,9 @@ export function BudgetPhasesTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
           .eq('id', currentPhase.id);
 
         if (error) throw error;
+        
+        // Update dependent phases if this phase's dates changed
+        await updateDependentPhases(currentPhase.id, finalStartDate, form.duration_days ? parseInt(form.duration_days) : null);
       } else {
         const { data, error } = await supabase
           .from('budget_phases')
@@ -367,6 +433,32 @@ export function BudgetPhasesTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
       toast.error('Error al guardar la fase');
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  // Update phases that depend on a given phase when it changes
+  const updateDependentPhases = async (phaseId: string, newStartDate: string | null, newDurationDays: number | null) => {
+    const endDate = calculatePhaseEndDate(newStartDate, newDurationDays);
+    if (!endDate) return;
+    
+    // Find phases that depend on this one
+    const dependentPhases = phases.filter(p => p.depends_on_phase_id === phaseId);
+    
+    for (const depPhase of dependentPhases) {
+      const newTimePercent = calculateTimePercentFromDate(budgetStartDate, budgetEndDate, endDate);
+      
+      await supabase
+        .from('budget_phases')
+        .update({
+          start_date: endDate,
+          time_percent: newTimePercent,
+        })
+        .eq('id', depPhase.id);
+      
+      // Recursively update phases that depend on this dependent phase
+      if (depPhase.duration_days) {
+        await updateDependentPhases(depPhase.id, endDate, depPhase.duration_days);
+      }
     }
   };
 
@@ -970,21 +1062,59 @@ export function BudgetPhasesTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
             </div>
             <div className="space-y-2">
               <Label htmlFor="depends_on_phase_id">Depende de (Secuencia)</Label>
-              <select
-                id="depends_on_phase_id"
-                value={form.depends_on_phase_id}
-                onChange={(e) => setForm({ ...form, depends_on_phase_id: e.target.value })}
-                className="w-full h-10 px-3 py-2 border rounded-md bg-background text-sm"
-              >
-                <option value="">Sin dependencia</option>
-                {phases
-                  .filter(p => p.id !== currentPhase?.id)
-                  .map(p => (
-                    <option key={p.id} value={p.id}>
-                      {p.code ? `${p.code}. ` : ''}{p.name}
-                    </option>
-                  ))}
-              </select>
+              <div className="flex gap-2">
+                <select
+                  id="depends_on_phase_id"
+                  value={form.depends_on_phase_id}
+                  onChange={(e) => setForm({ ...form, depends_on_phase_id: e.target.value })}
+                  className="flex-1 h-10 px-3 py-2 border rounded-md bg-background text-sm"
+                >
+                  <option value="">Sin dependencia</option>
+                  {phases
+                    .filter(p => p.id !== currentPhase?.id)
+                    .map(p => (
+                      <option key={p.id} value={p.id}>
+                        {p.code ? `${p.code}. ` : ''}{p.name}
+                      </option>
+                    ))}
+                </select>
+                {form.depends_on_phase_id && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    onClick={() => setForm({ ...form, depends_on_phase_id: '' })}
+                    title="Quitar dependencia"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+              {form.depends_on_phase_id && (() => {
+                const dependsOnPhase = phases.find(p => p.id === form.depends_on_phase_id);
+                if (dependsOnPhase) {
+                  const endDate = calculatePhaseEndDate(dependsOnPhase.start_date, dependsOnPhase.duration_days);
+                  return (
+                    <div className="p-2 bg-blue-50 dark:bg-blue-950/30 rounded-md border border-blue-200 dark:border-blue-800">
+                      <p className="text-xs text-blue-700 dark:text-blue-300">
+                        <strong>Fase dependiente:</strong> {dependsOnPhase.code ? `${dependsOnPhase.code}. ` : ''}{dependsOnPhase.name}
+                        {dependsOnPhase.start_date && (
+                          <span className="block mt-1">
+                            Inicio: {format(parseISO(dependsOnPhase.start_date), 'dd/MM/yyyy', { locale: es })}
+                            {dependsOnPhase.duration_days && ` • Duración: ${dependsOnPhase.duration_days} días`}
+                            {endDate && (
+                              <span className="block font-semibold text-green-700 dark:text-green-400">
+                                → Esta fase iniciará el: {format(parseISO(endDate), 'dd/MM/yyyy', { locale: es })}
+                              </span>
+                            )}
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                  );
+                }
+                return null;
+              })()}
               <p className="text-xs text-muted-foreground">
                 Esta fase comenzará cuando termine la fase seleccionada (se muestra con flecha en Gantt)
               </p>
@@ -992,7 +1122,9 @@ export function BudgetPhasesTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
             {/* Time Management Fields */}
             <div className="grid grid-cols-3 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="time_percent">Tiempo % (0-100)</Label>
+                <Label htmlFor="time_percent" className={form.depends_on_phase_id ? 'text-muted-foreground' : ''}>
+                  Tiempo % (0-100)
+                </Label>
                 <Input
                   id="time_percent"
                   type="number"
@@ -1001,9 +1133,14 @@ export function BudgetPhasesTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
                   value={form.time_percent}
                   onChange={(e) => setForm({ ...form, time_percent: e.target.value })}
                   placeholder="0"
+                  disabled={!!form.depends_on_phase_id}
+                  className={form.depends_on_phase_id ? 'bg-muted/50' : ''}
                 />
                 <p className="text-xs text-muted-foreground">
-                  Posición en la línea temporal del presupuesto
+                  {form.depends_on_phase_id 
+                    ? 'Se calcula automáticamente por la dependencia'
+                    : 'Posición en la línea temporal del presupuesto'
+                  }
                 </p>
               </div>
               <div className="space-y-2">
@@ -1021,6 +1158,19 @@ export function BudgetPhasesTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
                 <Label className="text-muted-foreground">Fecha Inicio (calculada)</Label>
                 <div className="h-10 px-3 py-2 border rounded-md bg-muted/50 text-sm">
                   {(() => {
+                    // If depending on another phase, show calculated date from dependency
+                    if (form.depends_on_phase_id) {
+                      const dependsOnPhase = phases.find(p => p.id === form.depends_on_phase_id);
+                      if (dependsOnPhase) {
+                        const endDate = calculatePhaseEndDate(dependsOnPhase.start_date, dependsOnPhase.duration_days);
+                        if (endDate) {
+                          return format(parseISO(endDate), 'dd/MM/yyyy', { locale: es });
+                        } else if (dependsOnPhase.start_date) {
+                          return format(parseISO(dependsOnPhase.start_date), 'dd/MM/yyyy', { locale: es });
+                        }
+                      }
+                    }
+                    // Otherwise use time_percent calculation
                     const budgetDuration = calculateBudgetDuration(budgetStartDate, budgetEndDate);
                     const timePercent = form.time_percent ? parseFloat(form.time_percent) : null;
                     const calculatedDate = calculatePhaseStartDate(budgetStartDate, budgetDuration, timePercent);
@@ -1030,7 +1180,10 @@ export function BudgetPhasesTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
                   })()}
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Se calcula desde Tiempo% × Duración Presupuesto
+                  {form.depends_on_phase_id 
+                    ? 'Fecha de fin de la fase dependiente'
+                    : 'Se calcula desde Tiempo% × Duración Presupuesto'
+                  }
                 </p>
               </div>
             </div>

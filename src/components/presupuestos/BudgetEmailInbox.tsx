@@ -10,15 +10,23 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { 
   Mail, Inbox, Send, ChevronDown, ChevronRight, Reply, Forward,
-  Paperclip, Eye, Clock, CheckCircle, XCircle, Trash2
+  Paperclip, Eye, Clock, CheckCircle, XCircle, Trash2, Download, FileText, Image, File
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import type { Tables } from '@/integrations/supabase/types';
 import DOMPurify from 'dompurify';
 
+type EmailAttachment = {
+  id: string;
+  file_name: string;
+  file_path?: string;
+  file_size?: number | null;
+  file_type?: string | null;
+};
+
 type EmailMessage = Tables<'email_messages'> & {
   crm_contacts?: { name: string; surname: string | null; email: string | null } | null;
-  email_attachments?: { id: string; file_name: string }[];
+  email_attachments?: EmailAttachment[];
 };
 
 interface BudgetEmailInboxProps {
@@ -58,7 +66,7 @@ export function BudgetEmailInbox({ budgetId, onComposeReply, onComposeForward }:
         .select(`
           *,
           crm_contacts (name, surname, email),
-          email_attachments (id, file_name)
+          email_attachments (id, file_name, file_path, file_size, file_type)
         `)
         .in('id', emailIds)
         .is('deleted_at', null)
@@ -113,6 +121,83 @@ export function BudgetEmailInbox({ budgetId, onComposeReply, onComposeForward }:
     emails.filter(e => e.direction === 'outbound'), [emails]);
 
   const unreadCount = inboundEmails.filter(e => !e.is_read).length;
+
+  // Get file icon based on type
+  const getFileIcon = (fileType: string | null | undefined, fileName: string) => {
+    const type = fileType?.toLowerCase() || fileName.toLowerCase();
+    if (type.includes('pdf')) return <FileText className="h-4 w-4 text-red-500" />;
+    if (type.includes('image') || type.includes('jpg') || type.includes('png') || type.includes('jpeg')) 
+      return <Image className="h-4 w-4 text-blue-500" />;
+    return <File className="h-4 w-4 text-muted-foreground" />;
+  };
+
+  // Format file size
+  const formatFileSize = (size: number | null | undefined) => {
+    if (!size) return '';
+    if (size > 1024 * 1024) return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+    return `${(size / 1024).toFixed(1)} KB`;
+  };
+
+  // Download attachment
+  const downloadAttachment = async (attachment: EmailAttachment) => {
+    if (!attachment.file_path) {
+      toast({ title: 'Error', description: 'No se encuentra la ruta del archivo', variant: 'destructive' });
+      return;
+    }
+    
+    try {
+      const { data, error } = await supabase.storage
+        .from('email-attachments')
+        .download(attachment.file_path);
+
+      if (error) throw error;
+
+      // Create download link
+      const url = URL.createObjectURL(data);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = attachment.file_name;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      toast({ title: 'Descarga iniciada', description: attachment.file_name });
+    } catch (error: any) {
+      console.error('Error downloading attachment:', error);
+      toast({ 
+        title: 'Error al descargar', 
+        description: error?.message || 'No se pudo descargar el archivo',
+        variant: 'destructive' 
+      });
+    }
+  };
+
+  // Preview attachment (for images and PDFs)
+  const previewAttachment = async (attachment: EmailAttachment) => {
+    if (!attachment.file_path) {
+      toast({ title: 'Error', description: 'No se encuentra la ruta del archivo', variant: 'destructive' });
+      return;
+    }
+    
+    try {
+      const { data, error } = await supabase.storage
+        .from('email-attachments')
+        .createSignedUrl(attachment.file_path, 3600);
+
+      if (error) throw error;
+
+      // Open in new tab
+      window.open(data.signedUrl, '_blank');
+    } catch (error: any) {
+      console.error('Error previewing attachment:', error);
+      toast({ 
+        title: 'Error al abrir vista previa', 
+        description: error?.message || 'No se pudo abrir el archivo',
+        variant: 'destructive' 
+      });
+    }
+  };
 
   const handleSelectEmail = (email: EmailMessage) => {
     setSelectedEmail(email);
@@ -245,15 +330,46 @@ export function BudgetEmailInbox({ budgetId, onComposeReply, onComposeForward }:
           
           {email.email_attachments && email.email_attachments.length > 0 && (
             <div className="mt-4 pt-4 border-t">
-              <p className="text-sm font-medium mb-2 flex items-center gap-2">
+              <p className="text-sm font-medium mb-3 flex items-center gap-2">
                 <Paperclip className="h-4 w-4" />
                 Adjuntos ({email.email_attachments.length})
               </p>
-              <div className="flex flex-wrap gap-2">
+              <div className="space-y-2">
                 {email.email_attachments.map((att) => (
-                  <Badge key={att.id} variant="secondary" className="text-xs">
-                    {att.file_name}
-                  </Badge>
+                  <div 
+                    key={att.id} 
+                    className="flex items-center justify-between p-2 bg-muted/50 rounded-md border"
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      {getFileIcon(att.file_type, att.file_name)}
+                      <span className="text-sm truncate max-w-[200px]" title={att.file_name}>
+                        {att.file_name}
+                      </span>
+                      {att.file_size && (
+                        <span className="text-xs text-muted-foreground">
+                          ({formatFileSize(att.file_size)})
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex gap-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => previewAttachment(att)}
+                        title="Ver archivo"
+                      >
+                        <Eye className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => downloadAttachment(att)}
+                        title="Descargar"
+                      >
+                        <Download className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
                 ))}
               </div>
             </div>

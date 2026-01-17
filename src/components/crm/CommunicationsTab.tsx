@@ -129,7 +129,11 @@ export function CommunicationsTab() {
             onSent={() => {
               setReplyToEmail(null);
               setActiveSubTab('communications');
-            }} 
+            }}
+            onCancel={() => {
+              setReplyToEmail(null);
+              setActiveSubTab('communications');
+            }}
           />
         </TabsContent>
 

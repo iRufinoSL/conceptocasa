@@ -141,7 +141,11 @@ export function BudgetCommunicationsTab({ budgetId, budgetName, projectId, isAdm
             onSent={() => {
               setReplyToEmail(null);
               setActiveSubTab('communications');
-            }} 
+            }}
+            onCancel={() => {
+              setReplyToEmail(null);
+              setActiveSubTab('communications');
+            }}
           />
         </TabsContent>
 

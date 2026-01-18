@@ -5,12 +5,13 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { 
   Mail, Inbox, Send, ChevronDown, ChevronRight, Reply, Forward,
-  Paperclip, Eye, Clock, CheckCircle, XCircle, Trash2, Download, FileText, Image, File
+  Paperclip, Eye, Clock, CheckCircle, XCircle, Trash2, Download, FileText, Image, File, Maximize2
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import type { Tables } from '@/integrations/supabase/types';
@@ -41,6 +42,7 @@ export function BudgetEmailInbox({ budgetId, onComposeReply, onComposeForward }:
   const [selectedEmail, setSelectedEmail] = useState<EmailMessage | null>(null);
   const [isInboxExpanded, setIsInboxExpanded] = useState(true);
   const [isOutboxExpanded, setIsOutboxExpanded] = useState(true);
+  const [isFullscreenOpen, setIsFullscreenOpen] = useState(false);
 
   // Fetch emails related to this budget via junction table
   const { data: emails = [], isLoading } = useQuery({
@@ -259,7 +261,7 @@ export function BudgetEmailInbox({ budgetId, onComposeReply, onComposeForward }:
     );
   };
 
-  const EmailDetail = ({ email }: { email: EmailMessage }) => {
+  const EmailDetail = ({ email, isFullscreen = false }: { email: EmailMessage; isFullscreen?: boolean }) => {
     const sanitizedHtml = email.body_html 
       ? DOMPurify.sanitize(email.body_html, {
           ALLOWED_TAGS: ['p', 'br', 'b', 'i', 'u', 'strong', 'em', 'a', 'ul', 'ol', 'li', 'div', 'span', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'table', 'tr', 'td', 'th', 'thead', 'tbody', 'img'],
@@ -272,15 +274,15 @@ export function BudgetEmailInbox({ budgetId, onComposeReply, onComposeForward }:
         <CardHeader className="flex-shrink-0 pb-3">
           <div className="flex items-start justify-between gap-4">
             <div className="flex-1 min-w-0">
-              <CardTitle className="text-lg truncate">
+              <CardTitle className="text-lg break-words">
                 {email.subject || '(Sin asunto)'}
               </CardTitle>
               <div className="mt-2 space-y-1 text-sm text-muted-foreground">
-                <p>
+                <p className="break-all">
                   <span className="font-medium">De:</span> {email.from_name || email.from_email} 
                   {email.from_name && <span className="ml-1 text-xs">({email.from_email})</span>}
                 </p>
-                <p>
+                <p className="break-all">
                   <span className="font-medium">Para:</span> {email.to_emails?.join(', ')}
                 </p>
                 <p>
@@ -289,17 +291,27 @@ export function BudgetEmailInbox({ budgetId, onComposeReply, onComposeForward }:
                 </p>
               </div>
             </div>
-            <div className="flex gap-1 flex-shrink-0">
+            <div className="flex gap-1 flex-shrink-0 flex-wrap">
+              {!isFullscreen && (
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => setIsFullscreenOpen(true)}
+                  title="Ver a pantalla completa"
+                >
+                  <Maximize2 className="h-4 w-4" />
+                </Button>
+              )}
               {onComposeReply && (
                 <Button variant="outline" size="sm" onClick={() => onComposeReply(email)}>
                   <Reply className="h-4 w-4 mr-1" />
-                  Responder
+                  <span className="hidden sm:inline">Responder</span>
                 </Button>
               )}
               {onComposeForward && (
                 <Button variant="outline" size="sm" onClick={() => onComposeForward(email)}>
                   <Forward className="h-4 w-4 mr-1" />
-                  Reenviar
+                  <span className="hidden sm:inline">Reenviar</span>
                 </Button>
               )}
               <Button 
@@ -309,20 +321,21 @@ export function BudgetEmailInbox({ budgetId, onComposeReply, onComposeForward }:
                 className="text-destructive hover:text-destructive"
               >
                 <Trash2 className="h-4 w-4 mr-1" />
-                Borrar
+                <span className="hidden sm:inline">Borrar</span>
               </Button>
             </div>
           </div>
         </CardHeader>
         <CardContent className="flex-1 overflow-hidden">
-          <ScrollArea className="h-full max-h-[400px]">
+          <ScrollArea className={isFullscreen ? "h-full max-h-[70vh]" : "h-full max-h-[400px]"}>
             {sanitizedHtml ? (
               <div 
-                className="prose prose-sm dark:prose-invert max-w-none"
+                className="prose prose-sm dark:prose-invert max-w-none break-words [&_*]:break-words [&_*]:overflow-wrap-anywhere"
+                style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}
                 dangerouslySetInnerHTML={{ __html: sanitizedHtml }}
               />
             ) : (
-              <div className="whitespace-pre-wrap text-sm">
+              <div className="whitespace-pre-wrap text-sm break-words" style={{ wordBreak: 'break-word' }}>
                 {email.body_text || '(Sin contenido)'}
               </div>
             )}
@@ -484,6 +497,20 @@ export function BudgetEmailInbox({ budgetId, onComposeReply, onComposeForward }:
           </Card>
         )}
       </div>
+
+      {/* Fullscreen Email Dialog */}
+      <Dialog open={isFullscreenOpen} onOpenChange={setIsFullscreenOpen}>
+        <DialogContent className="max-w-[95vw] w-full max-h-[95vh] h-full flex flex-col p-0">
+          <DialogHeader className="p-4 pb-0 flex-shrink-0">
+            <DialogTitle className="break-words">
+              {selectedEmail?.subject || '(Sin asunto)'}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="flex-1 overflow-auto p-4">
+            {selectedEmail && <EmailDetail email={selectedEmail} isFullscreen />}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

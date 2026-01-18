@@ -8,6 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useBotProtection } from "@/hooks/useBotProtection";
 import { supabase } from "@/integrations/supabase/client";
 import HousingProfileForm from "@/components/landing/HousingProfileForm";
+import { useWebsiteTracking, getStoredUtmParams } from "@/hooks/useWebsiteTracking";
 import { 
   Mail, 
   Phone, 
@@ -51,6 +52,7 @@ const formatFileSize = (bytes: number): string => {
 const Landing = () => {
   const { toast } = useToast();
   const { honeypotProps, validateSubmission, recordSubmission, isBlocked, blockReason } = useBotProtection();
+  const { trackButtonClick, trackFormStart, trackFormSubmit } = useWebsiteTracking();
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -160,15 +162,25 @@ const Landing = () => {
       // Upload attachments first
       const attachmentPaths = await uploadAttachments();
       
+      // Get UTM params for tracking
+      const utmParams = getStoredUtmParams();
+      
       const { data, error } = await supabase.functions.invoke('send-contact-email', {
         body: {
           ...formData,
           attachmentPaths: attachmentPaths.length > 0 ? attachmentPaths : undefined,
           attachmentNames: attachments.length > 0 ? attachments.map(f => f.name) : undefined,
+          // Include UTM params for CRM tracking
+          utm_source: utmParams.utm_source,
+          utm_medium: utmParams.utm_medium,
+          utm_campaign: utmParams.utm_campaign,
         }
       });
 
       if (error) throw error;
+
+      // Track form submission
+      trackFormSubmit('contact_form');
 
       // Record successful submission for rate limiting
       recordSubmission();

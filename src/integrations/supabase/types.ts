@@ -1477,6 +1477,10 @@ export type Database = {
           created_at: string | null
           created_by: string | null
           email: string | null
+          first_session_id: string | null
+          first_utm_campaign: string | null
+          first_utm_medium: string | null
+          first_utm_source: string | null
           id: string
           logo_path: string | null
           name: string
@@ -1502,6 +1506,10 @@ export type Database = {
           created_at?: string | null
           created_by?: string | null
           email?: string | null
+          first_session_id?: string | null
+          first_utm_campaign?: string | null
+          first_utm_medium?: string | null
+          first_utm_source?: string | null
           id?: string
           logo_path?: string | null
           name: string
@@ -1527,6 +1535,10 @@ export type Database = {
           created_at?: string | null
           created_by?: string | null
           email?: string | null
+          first_session_id?: string | null
+          first_utm_campaign?: string | null
+          first_utm_medium?: string | null
+          first_utm_source?: string | null
           id?: string
           logo_path?: string | null
           name?: string
@@ -3904,6 +3916,74 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      website_events: {
+        Row: {
+          contact_id: string | null
+          created_at: string
+          event_type: string
+          id: string
+          metadata: Json | null
+          page_path: string | null
+          page_title: string | null
+          referrer: string | null
+          screen_height: number | null
+          screen_width: number | null
+          session_id: string
+          user_agent: string | null
+          utm_campaign: string | null
+          utm_content: string | null
+          utm_medium: string | null
+          utm_source: string | null
+          utm_term: string | null
+        }
+        Insert: {
+          contact_id?: string | null
+          created_at?: string
+          event_type: string
+          id?: string
+          metadata?: Json | null
+          page_path?: string | null
+          page_title?: string | null
+          referrer?: string | null
+          screen_height?: number | null
+          screen_width?: number | null
+          session_id: string
+          user_agent?: string | null
+          utm_campaign?: string | null
+          utm_content?: string | null
+          utm_medium?: string | null
+          utm_source?: string | null
+          utm_term?: string | null
+        }
+        Update: {
+          contact_id?: string | null
+          created_at?: string
+          event_type?: string
+          id?: string
+          metadata?: Json | null
+          page_path?: string | null
+          page_title?: string | null
+          referrer?: string | null
+          screen_height?: number | null
+          screen_width?: number | null
+          session_id?: string
+          user_agent?: string | null
+          utm_campaign?: string | null
+          utm_content?: string | null
+          utm_medium?: string | null
+          utm_source?: string | null
+          utm_term?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "website_events_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contacts"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       whatsapp_attachments: {
         Row: {

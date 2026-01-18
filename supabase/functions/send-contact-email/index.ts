@@ -60,6 +60,8 @@ interface ContactEmailRequest {
   garaje?: string;
   tieneTerreno?: string;
   poblacionProvincia?: string;
+  coordenadasGoogleMaps?: string;
+  googleMapsUrl?: string;
   presupuestoGlobal?: string;
   estiloConstructivo?: string[];
   fechaIdealFinalizacion?: string;
@@ -340,6 +342,8 @@ const handler = async (req: Request): Promise<Response> => {
           tiene_terreno: requestData.tieneTerreno || null,
           poblacion: poblacion || null,
           provincia: provincia || null,
+          coordenadas_google_maps: requestData.coordenadasGoogleMaps || null,
+          google_maps_url: requestData.googleMapsUrl || null,
           presupuesto_global: requestData.presupuestoGlobal || null,
           estilo_constructivo: requestData.estiloConstructivo || [],
           mensaje_adicional: requestData.message || null,
@@ -406,6 +410,8 @@ const handler = async (req: Request): Promise<Response> => {
 **Ubicación:**
 - Población: ${poblacion || 'No especificada'}
 - Provincia: ${provincia || 'No especificada'}
+- Coordenadas Google Maps: ${requestData.coordenadasGoogleMaps || 'No especificadas'}
+- URL Google Maps: ${requestData.googleMapsUrl || 'No especificada'}
 
 **Características de la vivienda:**
 - Número de plantas: ${requestData.numPlantas || 'No especificado'}

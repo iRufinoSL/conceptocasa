@@ -2793,12 +2793,14 @@ export type Database = {
           contact_name: string
           contact_phone: string | null
           contact_surname: string | null
+          coordenadas_google_maps: string | null
           created_at: string
           despensa: string | null
           estilo_constructivo: string[] | null
           fecha_ideal_finalizacion: string | null
           forma_geometrica: string | null
           garaje: string | null
+          google_maps_url: string | null
           id: string
           lavanderia: string | null
           m2_por_planta: string | null
@@ -2825,12 +2827,14 @@ export type Database = {
           contact_name: string
           contact_phone?: string | null
           contact_surname?: string | null
+          coordenadas_google_maps?: string | null
           created_at?: string
           despensa?: string | null
           estilo_constructivo?: string[] | null
           fecha_ideal_finalizacion?: string | null
           forma_geometrica?: string | null
           garaje?: string | null
+          google_maps_url?: string | null
           id?: string
           lavanderia?: string | null
           m2_por_planta?: string | null
@@ -2857,12 +2861,14 @@ export type Database = {
           contact_name?: string
           contact_phone?: string | null
           contact_surname?: string | null
+          coordenadas_google_maps?: string | null
           created_at?: string
           despensa?: string | null
           estilo_constructivo?: string[] | null
           fecha_ideal_finalizacion?: string | null
           forma_geometrica?: string | null
           garaje?: string | null
+          google_maps_url?: string | null
           id?: string
           lavanderia?: string | null
           m2_por_planta?: string | null

@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { supabase } from '@/integrations/supabase/client';
-import { Home, MapPin, Calendar, DollarSign, Users, Grid3X3, Palette, MessageSquare, Building2 } from 'lucide-react';
+import { Home, MapPin, Calendar, DollarSign, Users, Grid3X3, Palette, MessageSquare, Building2, ExternalLink } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 
@@ -32,6 +32,8 @@ interface ProjectProfile {
   tiene_terreno: string | null;
   poblacion: string | null;
   provincia: string | null;
+  coordenadas_google_maps: string | null;
+  google_maps_url: string | null;
   presupuesto_global: string | null;
   estilo_constructivo: string[] | null;
   mensaje_adicional: string | null;
@@ -56,12 +58,24 @@ const styleLabels: Record<string, string> = {
   otros: 'Otros'
 };
 
-function ProfileField({ label, value }: { label: string; value: string | null | undefined }) {
+function ProfileField({ label, value, isLink }: { label: string; value: string | null | undefined; isLink?: boolean }) {
   if (!value) return null;
   return (
     <div className="flex justify-between py-1.5 border-b border-muted/50 last:border-0">
       <span className="text-muted-foreground text-sm">{label}</span>
-      <span className="text-sm font-medium text-right max-w-[60%]">{value}</span>
+      {isLink ? (
+        <a 
+          href={value} 
+          target="_blank" 
+          rel="noopener noreferrer" 
+          className="text-sm font-medium text-primary hover:underline flex items-center gap-1 max-w-[60%] text-right"
+        >
+          <span className="truncate">{value}</span>
+          <ExternalLink className="h-3 w-3 flex-shrink-0" />
+        </a>
+      ) : (
+        <span className="text-sm font-medium text-right max-w-[60%]">{value}</span>
+      )}
     </div>
   );
 }
@@ -148,6 +162,8 @@ export function ProjectProfileViewer({ open, onOpenChange, projectId, projectNam
                 <CardContent className="space-y-0">
                   <ProfileField label="Población" value={profile.poblacion} />
                   <ProfileField label="Provincia" value={profile.provincia} />
+                  <ProfileField label="Coordenadas Google Maps" value={profile.coordenadas_google_maps} />
+                  <ProfileField label="URL Google Maps" value={profile.google_maps_url} isLink />
                   <ProfileField label="Presupuesto global" value={profile.presupuesto_global} />
                   <ProfileField 
                     label="Fecha ideal finalización" 

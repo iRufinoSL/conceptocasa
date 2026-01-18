@@ -899,12 +899,25 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
   };
 
   const handleDelete = (resource: BudgetResource) => {
+    // Prevent deletion of resources with signed_subtotal
+    if (resource.signed_subtotal !== null && resource.signed_subtotal !== undefined) {
+      toast.error('No se puede eliminar un recurso que pertenece a un presupuesto firmado');
+      return;
+    }
     setResourceToDelete(resource);
     setDeleteDialogOpen(true);
   };
 
   const confirmDelete = async () => {
     if (!resourceToDelete) return;
+    
+    // Double-check signed_subtotal before deletion
+    if (resourceToDelete.signed_subtotal !== null && resourceToDelete.signed_subtotal !== undefined) {
+      toast.error('No se puede eliminar un recurso que pertenece a un presupuesto firmado');
+      setDeleteDialogOpen(false);
+      setResourceToDelete(null);
+      return;
+    }
     
     try {
       const { error } = await supabase

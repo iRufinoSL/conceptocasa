@@ -30,6 +30,7 @@ interface BudgetResource {
   activity_id: string | null;
   description: string | null;
   supplier_id: string | null;
+  signed_subtotal: number | null;
 }
 
 interface Activity {
@@ -569,6 +570,42 @@ export function BudgetResourceForm({
               />
             </div>
           </div>
+
+          {/* Row 5.5: Signed Subtotal (read-only, only shown when exists) */}
+          {resource?.signed_subtotal !== null && resource?.signed_subtotal !== undefined && (
+            <div className="p-4 bg-amber-50 dark:bg-amber-950/30 rounded-lg border border-amber-200 dark:border-amber-800">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label className="text-amber-700 dark:text-amber-400 font-semibold">
+                    €Subtotal Firmado
+                  </Label>
+                  <Input
+                    value={formatCurrency(resource.signed_subtotal)}
+                    disabled
+                    className="bg-amber-100 dark:bg-amber-900/50 font-bold text-amber-700 dark:text-amber-400 border-amber-300 dark:border-amber-700"
+                  />
+                  <p className="text-xs text-amber-600 dark:text-amber-500">
+                    Este valor quedó fijado cuando se firmó el presupuesto y no puede modificarse
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-muted-foreground">Desviación</Label>
+                  <Input
+                    value={`${formatCurrency(subtotalSales - resource.signed_subtotal)} (${((subtotalSales - resource.signed_subtotal) / resource.signed_subtotal * 100).toFixed(1)}%)`}
+                    disabled
+                    className={cn(
+                      "font-semibold",
+                      subtotalSales > resource.signed_subtotal 
+                        ? "bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400" 
+                        : subtotalSales < resource.signed_subtotal
+                        ? "bg-green-50 dark:bg-green-950/30 text-green-600 dark:text-green-400"
+                        : "bg-muted"
+                    )}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Row 6: Supplier */}
           <div className="space-y-2">

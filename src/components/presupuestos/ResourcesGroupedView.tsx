@@ -343,12 +343,17 @@ export function ResourcesGroupedView({
           </span>
         </TableCell>
         
-        {/* 2. Uds calculadas */}
+        {/* 2. Tipo recurso */}
+        <TableCell>
+          {getResourceTypeBadge(resource.resource_type)}
+        </TableCell>
+        
+        {/* 3. Uds calculadas */}
         <TableCell className="text-right font-mono">
           {formatNumber(fields.calculatedUnits)}
         </TableCell>
         
-        {/* 3. Ud */}
+        {/* 4. Ud */}
         <TableCell className="text-center">
           {resource.unit || '-'}
         </TableCell>
@@ -412,7 +417,20 @@ export function ResourcesGroupedView({
   }
 
   // Calculate column count for colspan
-  const columnCount = 6 + (isAdmin ? 2 : 0); // 6 data columns + checkbox + actions if admin
+  const columnCount = 7 + (isAdmin ? 2 : 0); // 7 data columns + checkbox + actions if admin
+
+  // Resource type badge colors
+  const getResourceTypeBadge = (type: string | null) => {
+    const typeMap: Record<string, { label: string; variant: 'default' | 'secondary' | 'outline' }> = {
+      material: { label: 'Material', variant: 'default' },
+      mano_de_obra: { label: 'Mano de obra', variant: 'secondary' },
+      maquinaria: { label: 'Maquinaria', variant: 'outline' },
+      subcontrata: { label: 'Subcontrata', variant: 'default' },
+      otros: { label: 'Otros', variant: 'outline' },
+    };
+    const config = typeMap[type || ''] || { label: type || '-', variant: 'outline' as const };
+    return <Badge variant={config.variant} className="text-xs">{config.label}</Badge>;
+  };
 
   return (
     <div className="space-y-2">
@@ -439,6 +457,7 @@ export function ResourcesGroupedView({
                 </TableHead>
               )}
               <TableHead className="min-w-[180px]">Recurso</TableHead>
+              <TableHead className="min-w-[100px]">Tipo</TableHead>
               <TableHead className="text-right">Uds calc.</TableHead>
               <TableHead className="text-center">Ud</TableHead>
               <TableHead className="min-w-[140px]">Suministrador</TableHead>

@@ -16,6 +16,7 @@ import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import type { Contact } from '@/pages/CRM';
+import { validateContactData, sanitizeInput } from '@/lib/validation-utils';
 
 interface ProfessionalActivity {
   id: string;
@@ -383,36 +384,55 @@ export function ContactForm({ open, onOpenChange, contact, onSuccess }: ContactF
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!formData.name.trim()) {
-      toast({ title: 'Error', description: 'El nombre es obligatorio', variant: 'destructive' });
+    // Validate all contact data before submission
+    const validation = validateContactData({
+      name: formData.name,
+      surname: formData.surname,
+      email: formData.email,
+      phone: formData.phone,
+      secondary_phones: formData.secondary_phones,
+      secondary_emails: formData.secondary_emails,
+      nif_dni: formData.nif_dni,
+      postal_code: formData.postal_code,
+      website: formData.website,
+      address: formData.address,
+      city: formData.city,
+      province: formData.province,
+      country: formData.country,
+      observations: formData.observations
+    });
+
+    if (!validation.isValid) {
+      toast({ title: 'Error de validación', description: validation.error, variant: 'destructive' });
       return;
     }
 
     setIsLoading(true);
 
     try {
+      // Sanitize all inputs before saving
       const dataToSave = {
-        name: formData.name.trim(),
-        surname: formData.surname.trim() || null,
-        email: formData.email.trim() || null,
-        phone: formData.phone.trim() || null,
+        name: sanitizeInput(formData.name),
+        surname: sanitizeInput(formData.surname) || null,
+        email: sanitizeInput(formData.email) || null,
+        phone: sanitizeInput(formData.phone) || null,
         secondary_phones: formData.secondary_phones.filter(p => p.trim()).length > 0 
-          ? formData.secondary_phones.filter(p => p.trim()) 
+          ? formData.secondary_phones.filter(p => p.trim()).map(p => sanitizeInput(p)) 
           : [],
         secondary_emails: formData.secondary_emails.filter(e => e.trim()).length > 0 
-          ? formData.secondary_emails.filter(e => e.trim()) 
+          ? formData.secondary_emails.filter(e => e.trim()).map(e => sanitizeInput(e)) 
           : [],
         contact_type: formData.contact_type,
         status: formData.status,
-        address: formData.address.trim() || null,
-        city: formData.city.trim() || null,
-        province: formData.province.trim() || null,
-        postal_code: formData.postal_code.trim() || null,
-        country: formData.country.trim() || null,
-        nif_dni: formData.nif_dni.trim() || null,
-        website: formData.website.trim() || null,
-        observations: formData.observations.trim() || null,
-        tags: formData.tags.length > 0 ? formData.tags : null
+        address: sanitizeInput(formData.address) || null,
+        city: sanitizeInput(formData.city) || null,
+        province: sanitizeInput(formData.province) || null,
+        postal_code: sanitizeInput(formData.postal_code) || null,
+        country: sanitizeInput(formData.country) || null,
+        nif_dni: sanitizeInput(formData.nif_dni) || null,
+        website: sanitizeInput(formData.website) || null,
+        observations: sanitizeInput(formData.observations) || null,
+        tags: formData.tags.length > 0 ? formData.tags.map(t => sanitizeInput(t)) : null
       };
 
       let contactId = contact?.id;

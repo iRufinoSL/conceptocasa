@@ -1,5 +1,5 @@
-import React, { useMemo, useRef, useCallback } from 'react';
-import { ChevronDown, ChevronRight, FileText } from 'lucide-react';
+import React, { useMemo, useRef, useCallback, useState, useEffect } from 'react';
+import { ChevronDown, ChevronRight, FileText, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
@@ -9,10 +9,11 @@ import { Pencil, Trash2, Package, Wrench, Truck, Briefcase, CheckSquare } from '
 import { ResourceInlineEdit } from './ResourceInlineEdit';
 import { cn } from '@/lib/utils';
 import type { BudgetPermissions } from '@/hooks/usePermissions';
+import { supabase } from '@/integrations/supabase/client';
 
 // Define editable fields for tab navigation (in display order)
 const EDITABLE_FIELDS = [
-  'name', 'external_unit_cost', 'unit', 'resource_type', 'activity_id',
+  'name', 'external_unit_cost', 'unit', 'resource_type', 'supplier_id', 'activity_id',
   'related_units', 'manual_units', 'safety_margin_percent', 'sales_margin_percent'
 ] as const;
 type EditableField = typeof EDITABLE_FIELDS[number];
@@ -31,6 +32,13 @@ interface BudgetResource {
   activity_id: string | null;
   description: string | null;
   created_at: string | null;
+  supplier_id: string | null;
+}
+
+interface Contact {
+  id: string;
+  name: string;
+  surname: string | null;
 }
 
 interface Activity {
@@ -110,6 +118,29 @@ export function ResourcesActivityGroupedView({
   // Tab navigation refs
   const cellRefs = useRef<Map<string, HTMLElement | null>>(new Map());
   const getCellKey = (resourceId: string, field: EditableField) => `${resourceId}-${field}`;
+
+  // State for contacts (suppliers)
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  
+  // Fetch contacts for supplier selection
+  useEffect(() => {
+    const fetchContacts = async () => {
+      const { data } = await supabase
+        .from('crm_contacts')
+        .select('id, name, surname')
+        .order('name');
+      setContacts(data || []);
+    };
+    fetchContacts();
+  }, []);
+
+  // Get contact name by ID
+  const getContactName = useCallback((contactId: string | null) => {
+    if (!contactId) return null;
+    const contact = contacts.find(c => c.id === contactId);
+    if (!contact) return null;
+    return contact.surname ? `${contact.name} ${contact.surname}` : contact.name;
+  }, [contacts]);
 
   // Focus a specific cell
   const focusCell = useCallback((resourceId: string, field: EditableField) => {
@@ -348,7 +379,34 @@ export function ResourcesActivityGroupedView({
             />
           </span>
         </TableCell>
-        {/* 5. Uds relacionadas */}
+        {/* 5. Suministrador */}
+        <TableCell>
+          <span ref={registerRef('supplier_id')} tabIndex={-1}>
+            <ResourceInlineEdit
+              value={resource.supplier_id}
+              displayValue={
+                resource.supplier_id ? (
+                  <span className="flex items-center gap-1 text-sm">
+                    <User className="h-3 w-3 text-muted-foreground" />
+                    {getContactName(resource.supplier_id) || 'Cargando...'}
+                  </span>
+                ) : <span className="text-muted-foreground">-</span>
+              }
+              onSave={(v) => onInlineUpdate(resource.id, 'supplier_id', v === '__none__' ? null : v)}
+              type="select"
+              options={[
+                { value: '__none__', label: 'Sin suministrador' },
+                ...contacts.map(c => ({
+                  value: c.id,
+                  label: c.surname ? `${c.name} ${c.surname}` : c.name
+                }))
+              ]}
+              disabled={!canEdit}
+              {...createTabHandlers('supplier_id')}
+            />
+          </span>
+        </TableCell>
+        {/* 6. Uds relacionadas */}
         <TableCell className="text-right font-mono">
           <span ref={registerRef('related_units')} tabIndex={-1}>
             <ResourceInlineEdit
@@ -475,6 +533,7 @@ export function ResourcesActivityGroupedView({
               <TableHead className="text-right">€Coste ud ext.</TableHead>
               <TableHead>Ud</TableHead>
               <TableHead>Tipo</TableHead>
+              <TableHead className="min-w-[120px]">Suministrador</TableHead>
               <TableHead className="text-right">Uds rel.</TableHead>
               <TableHead className="text-right">Uds man.</TableHead>
               <TableHead className="text-right">€SubT</TableHead>
@@ -503,7 +562,7 @@ export function ResourcesActivityGroupedView({
                     className="bg-muted/20 hover:bg-muted/40 cursor-pointer"
                     onClick={() => toggleActivity(activityKey)}
                   >
-                    <TableCell colSpan={permissions.isAdmin ? 15 : 14}>
+                    <TableCell colSpan={permissions.isAdmin ? 17 : 16}>
                       <div className="flex items-center gap-2">
                         {isActivityExpanded ? (
                           <ChevronDown className="h-4 w-4" />

@@ -4241,11 +4241,19 @@ export type Database = {
         }
         Returns: boolean
       }
+      has_project_access: {
+        Args: { _project_id: string; _user_id: string }
+        Returns: boolean
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
           _user_id: string
         }
+        Returns: boolean
+      }
+      has_urban_profile_access: {
+        Args: { _profile_id: string; _user_id: string }
         Returns: boolean
       }
     }

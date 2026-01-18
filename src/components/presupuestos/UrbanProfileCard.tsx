@@ -48,6 +48,7 @@ import { openSafeUrl, isSafeUrl } from '@/lib/url-utils';
 import { LargeDocumentUploader } from './LargeDocumentUploader';
 import { UrbanReportGenerator } from './UrbanReportGenerator';
 import { CatastroMapViewer } from './CatastroMapViewer';
+import { MapMeasurementModal } from './MapMeasurementModal';
 
 interface AdditionalRestriction {
   id: string;
@@ -402,7 +403,7 @@ export function UrbanProfileCard({ budgetId, cadastralReference: initialRef, isA
   const [isSavingCoords, setIsSavingCoords] = useState(false);
   const [isEditingCoords, setIsEditingCoords] = useState(false);
   const [showReportGenerator, setShowReportGenerator] = useState(false);
-
+  const [showMeasurementModal, setShowMeasurementModal] = useState(false);
   // Initialize PDF.js worker
   useEffect(() => {
     pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
@@ -1159,19 +1160,30 @@ export function UrbanProfileCard({ budgetId, cadastralReference: initialRef, isA
                     
                     {/* Map Viewer - Show when coordinates are available */}
                     {coordLat && coordLng && (
-                      <CatastroMapViewer
-                        lat={coordLat}
-                        lng={coordLng}
-                        cadastralReference={profile.cadastral_reference}
-                        municipality={profile.municipality || undefined}
-                        province={profile.province || undefined}
-                        onCenterChange={(newLat, newLng) => {
-                          setCoordLat(newLat);
-                          setCoordLng(newLng);
-                          setIsEditingCoords(true);
-                        }}
-                        className="mt-3"
-                      />
+                      <>
+                        <CatastroMapViewer
+                          lat={coordLat}
+                          lng={coordLng}
+                          cadastralReference={profile.cadastral_reference}
+                          municipality={profile.municipality || undefined}
+                          province={profile.province || undefined}
+                          onCenterChange={(newLat, newLng) => {
+                            setCoordLat(newLat);
+                            setCoordLng(newLng);
+                            setIsEditingCoords(true);
+                          }}
+                          className="mt-3"
+                        />
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setShowMeasurementModal(true)}
+                          className="mt-3 w-full"
+                        >
+                          <Ruler className="h-4 w-4 mr-2" />
+                          Herramienta de Mediciones
+                        </Button>
+                      </>
                     )}
                   </div>
 

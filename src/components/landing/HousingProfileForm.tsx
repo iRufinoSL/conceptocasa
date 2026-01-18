@@ -72,6 +72,8 @@ const HousingProfileForm = ({ open, onOpenChange }: HousingProfileFormProps) => 
     garaje: "",
     tieneTerreno: "",
     poblacionProvincia: "",
+    coordenadasGoogleMaps: "",
+    googleMapsUrl: "",
     presupuestoGlobal: "",
     estiloConstructivo: [] as string[],
     fechaIdealFinalizacion: "",
@@ -205,6 +207,8 @@ ESPACIOS EXTERIORES:
 
 UBICACIÓN Y PRESUPUESTO:
 - Población/Provincia: ${formData.poblacionProvincia || "No especificado"}
+- Coordenadas Google Maps: ${formData.coordenadasGoogleMaps || "No especificado"}
+- URL Google Maps: ${formData.googleMapsUrl || "No especificado"}
 - Presupuesto global (incl. impuestos, licencias y proyecto): ${formData.presupuestoGlobal || "No especificado"}
 - Fecha ideal de finalización: ${formData.fechaIdealFinalizacion || "No especificado"}
 
@@ -254,6 +258,8 @@ ${formData.message || "Sin mensaje adicional"}
           garaje: formData.garaje,
           tieneTerreno: formData.tieneTerreno,
           poblacionProvincia: formData.poblacionProvincia,
+          coordenadasGoogleMaps: formData.coordenadasGoogleMaps,
+          googleMapsUrl: formData.googleMapsUrl,
           presupuestoGlobal: formData.presupuestoGlobal,
           estiloConstructivo: formData.estiloConstructivo,
           fechaIdealFinalizacion: formData.fechaIdealFinalizacion
@@ -292,6 +298,8 @@ ${formData.message || "Sin mensaje adicional"}
         garaje: "",
         tieneTerreno: "",
         poblacionProvincia: "",
+        coordenadasGoogleMaps: "",
+        googleMapsUrl: "",
         presupuestoGlobal: "",
         estiloConstructivo: [],
         fechaIdealFinalizacion: "",
@@ -618,7 +626,7 @@ ${formData.message || "Sin mensaje adicional"}
             {/* Ubicación y presupuesto */}
             <div className="space-y-4">
               <h3 className="text-lg font-semibold text-foreground border-b pb-2">Ubicación, Presupuesto y Plazo</h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="text-sm font-medium text-foreground">¿En qué población o provincia?</label>
                   <Input 
@@ -630,6 +638,32 @@ ${formData.message || "Sin mensaje adicional"}
                     maxLength={200}
                   />
                 </div>
+                <div>
+                  <label className="text-sm font-medium text-foreground">Coordenadas Google Maps</label>
+                  <Input 
+                    name="coordenadasGoogleMaps"
+                    value={formData.coordenadasGoogleMaps}
+                    onChange={handleInputChange}
+                    className="mt-1" 
+                    placeholder="Ej: 43.4623, -3.8099" 
+                    maxLength={100}
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-1 gap-4">
+                <div>
+                  <label className="text-sm font-medium text-foreground">URL Google Maps</label>
+                  <Input 
+                    name="googleMapsUrl"
+                    value={formData.googleMapsUrl}
+                    onChange={handleInputChange}
+                    className="mt-1" 
+                    placeholder="Ej: https://maps.app.goo.gl/8AdCwzRX1mNpCVPq8" 
+                    maxLength={500}
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="text-sm font-medium text-foreground">Presupuesto global (incl. impuestos, licencias y proyecto)</label>
                   <Input 

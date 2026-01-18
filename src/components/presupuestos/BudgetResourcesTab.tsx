@@ -431,6 +431,7 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
       : (resource.related_units || 0);
 
     const subtotalSales = calculatedUnits * salesCostUd;
+    const subtotalExternalCost = calculatedUnits * externalCost;
 
     return {
       safetyMarginUd,
@@ -439,6 +440,7 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
       salesCostUd,
       calculatedUnits,
       subtotalSales,
+      subtotalExternalCost,
     };
   }, []);
 

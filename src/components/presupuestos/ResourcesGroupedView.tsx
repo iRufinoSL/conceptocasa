@@ -1,22 +1,18 @@
-import React, { useMemo, useRef, useCallback } from 'react';
-import { ChevronDown, ChevronRight, Folder, FileText } from 'lucide-react';
+import React, { useMemo, useRef, useCallback, useState, useEffect } from 'react';
+import { ChevronDown, ChevronRight, Folder, FileText, User, Pencil } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { formatCurrency, formatNumber, formatPercent } from '@/lib/format-utils';
-import { Pencil, Trash2, Copy, Package, Wrench, Truck, Briefcase, CheckSquare } from 'lucide-react';
+import { formatCurrency, formatNumber } from '@/lib/format-utils';
 import { ResourceInlineEdit } from './ResourceInlineEdit';
 import { cn } from '@/lib/utils';
 import type { BudgetPermissions } from '@/hooks/usePermissions';
+import { supabase } from '@/integrations/supabase/client';
 
-// Define editable fields for tab navigation (in display order)
-// Note: cost/margin fields will be conditionally excluded based on permissions
-const ALL_EDITABLE_FIELDS = [
-  'name', 'external_unit_cost', 'unit', 'resource_type', 'activity_id',
-  'related_units', 'manual_units', 'safety_margin_percent', 'sales_margin_percent'
-] as const;
-type EditableField = typeof ALL_EDITABLE_FIELDS[number];
+// Define editable fields for tab navigation (simplified)
+const EDITABLE_FIELDS = ['name', 'supplier_id'] as const;
+type EditableField = typeof EDITABLE_FIELDS[number];
 
 interface BudgetResource {
   id: string;
@@ -30,6 +26,7 @@ interface BudgetResource {
   manual_units: number | null;
   related_units: number | null;
   activity_id: string | null;
+  supplier_id: string | null;
   description: string | null;
   created_at: string | null;
 }
@@ -45,6 +42,12 @@ interface Phase {
   id: string;
   code: string | null;
   name: string;
+}
+
+interface Contact {
+  id: string;
+  name: string;
+  surname: string | null;
 }
 
 interface ResourcesGroupedViewProps {
@@ -66,6 +69,7 @@ interface ResourcesGroupedViewProps {
     salesCostUd: number;
     calculatedUnits: number;
     subtotalSales: number;
+    subtotalExternalCost: number;
   };
   getActivityId: (activityId: string | null) => string;
   expandedPhases: Set<string>;
@@ -78,25 +82,6 @@ interface ResourcesGroupedViewProps {
   showActivitySubtotals?: boolean;
   hideUnassignedPhase?: boolean;
 }
-
-const resourceTypeIcons: Record<string, React.ReactNode> = {
-  'Producto': <Package className="h-4 w-4" />,
-  'Mano de obra': <Wrench className="h-4 w-4" />,
-  'Alquiler': <Truck className="h-4 w-4" />,
-  'Servicio': <Briefcase className="h-4 w-4" />,
-  'Tarea': <CheckSquare className="h-4 w-4" />,
-};
-
-const resourceTypeVariants: Record<string, string> = {
-  'Producto': 'default',
-  'Mano de obra': 'secondary',
-  'Alquiler': 'outline',
-  'Servicio': 'destructive',
-  'Tarea': 'default',
-};
-
-const RESOURCE_TYPES = ['Producto', 'Mano de obra', 'Alquiler', 'Servicio', 'Tarea'];
-const UNITS = ['m2', 'm3', 'ml', 'ud', 'h', 'día', 'mes', 'kg', 'l', 'km'];
 
 export function ResourcesGroupedView({
   resources,
@@ -122,24 +107,31 @@ export function ResourcesGroupedView({
   showActivitySubtotals = true,
   hideUnassignedPhase = false,
 }: ResourcesGroupedViewProps) {
-  // Destructure permissions for easier access
-  const { canViewCosts, canViewMargins, canViewCostDetails, canEdit, canDuplicate, canDelete, isAdmin } = permissions;
+  const { canEdit, isAdmin } = permissions;
+
+  // State for contacts (suppliers)
+  const [contacts, setContacts] = useState<Contact[]>([]);
   
-  // Define default columns if not specified
-  const defaultColumns = ['activityId', 'usesMeasurement', 'activity', 'phase', 'unit', 'relatedUnits', 'measurementId', 'subtotal', 'files', 'actions'];
-  const columnsToShow = visibleColumns || defaultColumns;
-  
-  // Helper function to check if a column should be visible
-  const isColumnVisible = (columnId: string) => columnsToShow.includes(columnId);
-  
-  // Build editable fields list based on permissions
-  const EDITABLE_FIELDS = useMemo(() => {
-    const fields: EditableField[] = ['name'];
-    if (canViewCosts) fields.push('external_unit_cost');
-    fields.push('unit', 'resource_type', 'activity_id', 'related_units', 'manual_units');
-    if (canViewMargins) fields.push('safety_margin_percent', 'sales_margin_percent');
-    return fields;
-  }, [canViewCosts, canViewMargins]);
+  // Fetch contacts for supplier selection
+  useEffect(() => {
+    const fetchContacts = async () => {
+      const { data } = await supabase
+        .from('crm_contacts')
+        .select('id, name, surname')
+        .order('name');
+      setContacts(data || []);
+    };
+    fetchContacts();
+  }, []);
+
+  // Get contact name by ID
+  const getContactName = useCallback((contactId: string | null) => {
+    if (!contactId) return null;
+    const contact = contacts.find(c => c.id === contactId);
+    if (!contact) return null;
+    return contact.surname ? `${contact.name} ${contact.surname}` : contact.name;
+  }, [contacts]);
+
   // Tab navigation refs
   const cellRefs = useRef<Map<string, HTMLElement | null>>(new Map());
   const getCellKey = (resourceId: string, field: EditableField) => `${resourceId}-${field}`;
@@ -229,7 +221,6 @@ export function ResourcesGroupedView({
   const flatResourceList = useMemo(() => {
     const result: BudgetResource[] = [];
     groupedData.forEach(([, phaseGroup]) => {
-      // Activities sorted
       const sortedActivities = Array.from(phaseGroup.activities.entries())
         .sort(([, a], [, b]) => (a.activity?.code || '').localeCompare(b.activity?.code || ''));
       
@@ -237,7 +228,6 @@ export function ResourcesGroupedView({
         result.push(...activityGroup.resources);
       });
       
-      // Unassigned resources
       result.push(...phaseGroup.unassignedResources);
     });
     return result;
@@ -267,7 +257,6 @@ export function ResourcesGroupedView({
       }
     }
 
-    // Check bounds
     if (nextRowIndex < 0 || nextRowIndex >= flatResourceList.length) return;
 
     const nextResource = flatResourceList[nextRowIndex];
@@ -310,40 +299,19 @@ export function ResourcesGroupedView({
     onExpandedActivitiesChange(new Set());
   };
 
+  // Helper to create tab navigation handlers for a field
+  const createTabHandlers = (resourceId: string, field: EditableField) => ({
+    onTabNext: () => navigateToField(resourceId, field, 'next'),
+    onTabPrev: () => navigateToField(resourceId, field, 'prev'),
+  });
+
+  // Helper to register cell ref
+  const registerRef = (resourceId: string, field: EditableField) => (el: HTMLElement | null) => {
+    cellRefs.current.set(getCellKey(resourceId, field), el);
+  };
+
   const renderResourceRow = (resource: BudgetResource, indent: number = 0) => {
     const fields = calculateFields(resource);
-    
-    const unitOptions = UNITS.map(u => ({ value: u, label: u }));
-    const typeOptions = RESOURCE_TYPES.map(t => ({ value: t, label: t }));
-    
-    // Activity options sorted alphabetically by ActividadID with searchContent for full-text search
-    const activityOptions = [
-      { value: '__none__', label: 'Sin actividad', searchContent: 'sin actividad' },
-      ...activities
-        .map(a => {
-          const phase = a.phase_id ? phases.find(p => p.id === a.phase_id) : null;
-          const actividadId = `${phase?.code || ''} ${a.code}.-${a.name}`;
-          // Include all searchable content: code, name, description, phase info
-          const searchContent = `${phase?.code || ''} ${phase?.name || ''} ${a.code} ${a.name}`.toLowerCase();
-          return {
-            value: a.id,
-            label: actividadId,
-            searchContent,
-          };
-        })
-        .sort((a, b) => a.label.localeCompare(b.label)),
-    ];
-
-    // Helper to create tab navigation handlers for a field
-    const createTabHandlers = (field: EditableField) => ({
-      onTabNext: () => navigateToField(resource.id, field, 'next'),
-      onTabPrev: () => navigateToField(resource.id, field, 'prev'),
-    });
-
-    // Helper to register cell ref
-    const registerRef = (field: EditableField) => (el: HTMLElement | null) => {
-      cellRefs.current.set(getCellKey(resource.id, field), el);
-    };
 
     return (
       <TableRow 
@@ -360,198 +328,75 @@ export function ResourcesGroupedView({
             />
           </TableCell>
         )}
+        
         {/* 1. Recurso */}
         <TableCell className="font-medium" style={{ paddingLeft: isAdmin ? undefined : `${indent * 16 + 8}px` }}>
-          <span ref={registerRef('name')} tabIndex={-1}>
+          <span ref={registerRef(resource.id, 'name')} tabIndex={-1}>
             <ResourceInlineEdit
               value={resource.name}
               displayValue={resource.name}
               onSave={(v) => onInlineUpdate(resource.id, 'name', v)}
               type="text"
               disabled={!canEdit}
-              {...createTabHandlers('name')}
+              {...createTabHandlers(resource.id, 'name')}
             />
           </span>
         </TableCell>
-        {/* 2. €Coste ud externa - only visible to those with canViewCosts */}
-        {canViewCosts && (
-          <TableCell className="text-right font-mono">
-            <span ref={registerRef('external_unit_cost')} tabIndex={-1}>
-              <ResourceInlineEdit
-                value={resource.external_unit_cost}
-                displayValue={formatCurrency(resource.external_unit_cost || 0)}
-                onSave={(v) => onInlineUpdate(resource.id, 'external_unit_cost', v)}
-                type="number"
-                decimals={2}
-                disabled={!canEdit}
-                {...createTabHandlers('external_unit_cost')}
-              />
-            </span>
-          </TableCell>
-        )}
-        {/* 3. Ud medida */}
-        <TableCell>
-          <span ref={registerRef('unit')} tabIndex={-1}>
-            <ResourceInlineEdit
-              value={resource.unit}
-              displayValue={resource.unit || '-'}
-              onSave={(v) => onInlineUpdate(resource.id, 'unit', v)}
-              type="select"
-              options={unitOptions}
-              disabled={!canEdit}
-              {...createTabHandlers('unit')}
-            />
-          </span>
-        </TableCell>
-        {/* 4. Tipo recurso */}
-        <TableCell>
-          <span ref={registerRef('resource_type')} tabIndex={-1}>
-            <ResourceInlineEdit
-              value={resource.resource_type}
-              displayValue={
-                resource.resource_type ? (
-                  <Badge variant={resourceTypeVariants[resource.resource_type] as any || 'secondary'}>
-                    {resourceTypeIcons[resource.resource_type]}
-                    <span className="ml-1">{resource.resource_type}</span>
-                  </Badge>
-                ) : '-'
-              }
-              onSave={(v) => onInlineUpdate(resource.id, 'resource_type', v)}
-              type="select"
-              options={typeOptions}
-              disabled={!canEdit}
-              {...createTabHandlers('resource_type')}
-            />
-          </span>
-        </TableCell>
-        {/* 5. Actividad relacionada */}
-        <TableCell>
-          <span ref={registerRef('activity_id')} tabIndex={-1}>
-            <ResourceInlineEdit
-              value={resource.activity_id || '__none__'}
-              displayValue={getActivityId(resource.activity_id) || 'Sin actividad'}
-              onSave={(v) => onInlineUpdate(resource.id, 'activity_id', v === '__none__' ? null : v)}
-              type="searchable-select"
-              options={activityOptions}
-              disabled={!canEdit}
-              {...createTabHandlers('activity_id')}
-            />
-          </span>
-        </TableCell>
-        {/* 6. Uds relacionadas */}
+        
+        {/* 2. Uds calculadas */}
         <TableCell className="text-right font-mono">
-          <span ref={registerRef('related_units')} tabIndex={-1}>
+          {formatNumber(fields.calculatedUnits)}
+        </TableCell>
+        
+        {/* 3. Ud */}
+        <TableCell className="text-center">
+          {resource.unit || '-'}
+        </TableCell>
+        
+        {/* 4. Suministrador */}
+        <TableCell>
+          <span ref={registerRef(resource.id, 'supplier_id')} tabIndex={-1}>
             <ResourceInlineEdit
-              value={resource.related_units}
-              displayValue={resource.related_units !== null ? formatNumber(resource.related_units) : '-'}
-              onSave={(v) => onInlineUpdate(resource.id, 'related_units', v)}
-              type="number"
-              decimals={2}
+              value={resource.supplier_id}
+              displayValue={
+                resource.supplier_id ? (
+                  <span className="flex items-center gap-1 text-sm">
+                    <User className="h-3 w-3 text-muted-foreground" />
+                    {getContactName(resource.supplier_id) || 'Cargando...'}
+                  </span>
+                ) : <span className="text-muted-foreground italic text-xs">-</span>
+              }
+              onSave={(v) => onInlineUpdate(resource.id, 'supplier_id', v === '__none__' ? null : v)}
+              type="select"
+              options={[
+                { value: '__none__', label: 'Sin suministrador' },
+                ...contacts.map(c => ({
+                  value: c.id,
+                  label: c.surname ? `${c.name} ${c.surname}` : c.name
+                }))
+              ]}
               disabled={!canEdit}
-              {...createTabHandlers('related_units')}
+              {...createTabHandlers(resource.id, 'supplier_id')}
             />
           </span>
         </TableCell>
-        {/* 7. Uds manual - conditionally visible */}
-        {isColumnVisible('manualUnits') && (
-          <TableCell className="text-right font-mono">
-            <span ref={registerRef('manual_units')} tabIndex={-1}>
-              <ResourceInlineEdit
-                value={resource.manual_units}
-                displayValue={resource.manual_units !== null ? formatNumber(resource.manual_units) : '-'}
-                onSave={(v) => onInlineUpdate(resource.id, 'manual_units', v)}
-                type="number"
-                decimals={2}
-                allowNull={true}
-                disabled={!canEdit}
-                {...createTabHandlers('manual_units')}
-              />
-            </span>
-          </TableCell>
-        )}
-        {/* 8. €SubTotal - conditionally visible */}
-        {isColumnVisible('subtotal') && (
-          <TableCell className="text-right font-mono font-bold text-primary">
-            {formatCurrency(fields.subtotalSales)}
-          </TableCell>
-        )}
-        {/* Margin columns - only visible to those with canViewMargins */}
-        {canViewMargins && (
-          <>
-            <TableCell className="text-right font-mono">
-              <span ref={registerRef('safety_margin_percent')} tabIndex={-1}>
-                <ResourceInlineEdit
-                  value={(resource.safety_margin_percent ?? 0.15) * 100}
-                  displayValue={formatPercent(resource.safety_margin_percent ?? 0.15)}
-                  onSave={(v) => onInlineUpdate(resource.id, 'safety_margin_percent', Math.max(0, v) / 100)}
-                  type="percent"
-                  decimals={1}
-                  disabled={!canEdit}
-                  {...createTabHandlers('safety_margin_percent')}
-                />
-              </span>
-            </TableCell>
-            {canViewCostDetails && (
-              <>
-                <TableCell className="text-right font-mono text-muted-foreground">
-                  {formatCurrency(fields.safetyMarginUd)}
-                </TableCell>
-                <TableCell className="text-right font-mono text-muted-foreground">
-                  {formatCurrency(fields.internalCostUd)}
-                </TableCell>
-              </>
-            )}
-            <TableCell className="text-right font-mono">
-              <span ref={registerRef('sales_margin_percent')} tabIndex={-1}>
-                <ResourceInlineEdit
-                  value={(resource.sales_margin_percent ?? 0.25) * 100}
-                  displayValue={formatPercent(resource.sales_margin_percent ?? 0.25)}
-                  onSave={(v) => onInlineUpdate(resource.id, 'sales_margin_percent', Math.max(0, v) / 100)}
-                  type="percent"
-                  decimals={1}
-                  disabled={!canEdit}
-                  {...createTabHandlers('sales_margin_percent')}
-                />
-              </span>
-            </TableCell>
-            {canViewCostDetails && (
-              <>
-                <TableCell className="text-right font-mono text-muted-foreground">
-                  {formatCurrency(fields.salesMarginUd)}
-                </TableCell>
-                <TableCell className="text-right font-mono font-semibold">
-                  {formatCurrency(fields.salesCostUd)}
-                </TableCell>
-              </>
-            )}
-          </>
-        )}
-        {/* Uds calculadas - conditionally visible */}
-        {isColumnVisible('calculatedUnits') && (
-          <TableCell className="text-right font-mono font-semibold">
-            {formatNumber(fields.calculatedUnits)}
-          </TableCell>
-        )}
-        {/* Actions column - based on permissions */}
-        {(canEdit || canDuplicate || canDelete) && (
+        
+        {/* 5. SubTotal coste externo */}
+        <TableCell className="text-right font-mono">
+          {formatCurrency(fields.subtotalExternalCost)}
+        </TableCell>
+        
+        {/* 6. SubTotal venta */}
+        <TableCell className="text-right font-mono font-bold text-primary">
+          {formatCurrency(fields.subtotalSales)}
+        </TableCell>
+        
+        {/* Acciones - solo editar para abrir formulario completo */}
+        {isAdmin && (
           <TableCell>
-            <div className="flex items-center gap-1">
-              {canEdit && (
-                <Button variant="ghost" size="icon" onClick={() => onEdit(resource)}>
-                  <Pencil className="h-4 w-4" />
-                </Button>
-              )}
-              {canDuplicate && onDuplicate && (
-                <Button variant="ghost" size="icon" onClick={() => onDuplicate(resource)}>
-                  <Copy className="h-4 w-4" />
-                </Button>
-              )}
-              {canDelete && (
-                <Button variant="ghost" size="icon" onClick={() => onDelete(resource)}>
-                  <Trash2 className="h-4 w-4 text-destructive" />
-                </Button>
-              )}
-            </div>
+            <Button variant="ghost" size="icon" onClick={() => onEdit(resource)}>
+              <Pencil className="h-4 w-4" />
+            </Button>
           </TableCell>
         )}
       </TableRow>
@@ -565,6 +410,9 @@ export function ResourcesGroupedView({
       </div>
     );
   }
+
+  // Calculate column count for colspan
+  const columnCount = 6 + (isAdmin ? 2 : 0); // 6 data columns + checkbox + actions if admin
 
   return (
     <div className="space-y-2">
@@ -590,34 +438,13 @@ export function ResourcesGroupedView({
                   />
                 </TableHead>
               )}
-              <TableHead className="min-w-[200px]">Recurso</TableHead>
-              {canViewCosts && <TableHead className="text-right">€Coste ud ext.</TableHead>}
-              <TableHead>Ud</TableHead>
-              <TableHead>Tipo</TableHead>
-              <TableHead className="min-w-[180px]">ActividadID</TableHead>
-              <TableHead className="text-right">Uds rel.</TableHead>
-              {isColumnVisible('manualUnits') && <TableHead className="text-right">Uds man.</TableHead>}
-              {isColumnVisible('subtotal') && <TableHead className="text-right">€SubT</TableHead>}
-              {canViewMargins && (
-                <>
-                  <TableHead className="text-right">%Seg.</TableHead>
-                  {canViewCostDetails && (
-                    <>
-                      <TableHead className="text-right">€Seg.</TableHead>
-                      <TableHead className="text-right">€Coste int.</TableHead>
-                    </>
-                  )}
-                  <TableHead className="text-right">%Venta</TableHead>
-                  {canViewCostDetails && (
-                    <>
-                      <TableHead className="text-right">€Venta</TableHead>
-                      <TableHead className="text-right">€Coste venta</TableHead>
-                    </>
-                  )}
-                </>
-              )}
-              {isColumnVisible('calculatedUnits') && <TableHead className="text-right">Uds calc.</TableHead>}
-              {(canEdit || canDuplicate || canDelete) && <TableHead className="w-[100px]">Acciones</TableHead>}
+              <TableHead className="min-w-[180px]">Recurso</TableHead>
+              <TableHead className="text-right">Uds calc.</TableHead>
+              <TableHead className="text-center">Ud</TableHead>
+              <TableHead className="min-w-[140px]">Suministrador</TableHead>
+              <TableHead className="text-right">SubT coste ext.</TableHead>
+              <TableHead className="text-right">SubT venta</TableHead>
+              {isAdmin && <TableHead className="w-[60px]">Acciones</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -628,10 +455,17 @@ export function ResourcesGroupedView({
                 Array.from(phaseGroup.activities.values()).reduce(
                   (sum, ag) => sum + ag.resources.length, 0
                 );
-              const phaseTotal = 
+              
+              // Calculate phase totals
+              const phaseTotalSales = 
                 phaseGroup.unassignedResources.reduce((sum, r) => sum + calculateFields(r).subtotalSales, 0) +
                 Array.from(phaseGroup.activities.values()).reduce(
                   (sum, ag) => sum + ag.resources.reduce((s, r) => s + calculateFields(r).subtotalSales, 0), 0
+                );
+              const phaseTotalCost = 
+                phaseGroup.unassignedResources.reduce((sum, r) => sum + calculateFields(r).subtotalExternalCost, 0) +
+                Array.from(phaseGroup.activities.values()).reduce(
+                  (sum, ag) => sum + ag.resources.reduce((s, r) => s + calculateFields(r).subtotalExternalCost, 0), 0
                 );
 
               const activitiesArray = Array.from(phaseGroup.activities.entries()).sort(
@@ -648,7 +482,7 @@ export function ResourcesGroupedView({
                       togglePhase(phaseKey);
                     }}
                   >
-                    <TableCell colSpan={isAdmin ? 16 : 15}>
+                    <TableCell colSpan={columnCount}>
                       <div className="flex items-center gap-2">
                         {isPhaseExpanded ? (
                           <ChevronDown className="h-4 w-4" />
@@ -664,9 +498,16 @@ export function ResourcesGroupedView({
                         <Badge variant="secondary" className="ml-2">
                           {phaseResourceCount} recursos
                         </Badge>
-                        <Badge variant="default" className="ml-1">
-                          {formatCurrency(phaseTotal)}
-                        </Badge>
+                        {showPhaseSubtotals && (
+                          <>
+                            <span className="ml-auto text-sm text-muted-foreground">
+                              Coste: {formatCurrency(phaseTotalCost)}
+                            </span>
+                            <Badge variant="default" className="ml-2">
+                              Venta: {formatCurrency(phaseTotalSales)}
+                            </Badge>
+                          </>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>
@@ -676,8 +517,11 @@ export function ResourcesGroupedView({
                     <>
                       {activitiesArray.map(([activityKey, activityGroup]) => {
                         const isActivityExpanded = expandedActivities.has(activityKey);
-                        const activityTotal = activityGroup.resources.reduce(
+                        const activityTotalSales = activityGroup.resources.reduce(
                           (sum, r) => sum + calculateFields(r).subtotalSales, 0
+                        );
+                        const activityTotalCost = activityGroup.resources.reduce(
+                          (sum, r) => sum + calculateFields(r).subtotalExternalCost, 0
                         );
                         const phase = activityGroup.activity?.phase_id 
                           ? phases.find(p => p.id === activityGroup.activity?.phase_id) 
@@ -696,7 +540,7 @@ export function ResourcesGroupedView({
                                 toggleActivity(activityKey);
                               }}
                             >
-                              <TableCell colSpan={isAdmin ? 16 : 15} style={{ paddingLeft: '32px' }}>
+                              <TableCell colSpan={columnCount} style={{ paddingLeft: '32px' }}>
                                 <div className="flex items-center gap-2">
                                   {isActivityExpanded ? (
                                     <ChevronDown className="h-4 w-4" />
@@ -708,9 +552,16 @@ export function ResourcesGroupedView({
                                   <Badge variant="outline" className="ml-2">
                                     {activityGroup.resources.length} recursos
                                   </Badge>
-                                  <Badge variant="secondary" className="ml-1">
-                                    {formatCurrency(activityTotal)}
-                                  </Badge>
+                                  {showActivitySubtotals && (
+                                    <>
+                                      <span className="ml-auto text-xs text-muted-foreground">
+                                        Coste: {formatCurrency(activityTotalCost)}
+                                      </span>
+                                      <Badge variant="secondary" className="ml-1">
+                                        Venta: {formatCurrency(activityTotalSales)}
+                                      </Badge>
+                                    </>
+                                  )}
                                 </div>
                               </TableCell>
                             </TableRow>
@@ -727,7 +578,7 @@ export function ResourcesGroupedView({
                       {phaseGroup.unassignedResources.length > 0 && (
                         <>
                           <TableRow className="bg-muted/10">
-                            <TableCell colSpan={isAdmin ? 16 : 15} style={{ paddingLeft: '32px' }}>
+                            <TableCell colSpan={columnCount} style={{ paddingLeft: '32px' }}>
                               <div className="flex items-center gap-2 text-muted-foreground">
                                 <FileText className="h-4 w-4" />
                                 <span className="text-sm italic">Sin Actividad</span>

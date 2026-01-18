@@ -1957,6 +1957,15 @@ export function UrbanProfileCard({ budgetId, cadastralReference: initialRef, isA
       budgetId={budgetId}
       budgetName={profile?.municipality || 'Presupuesto'}
     />
+    
+    {/* Map Measurement Modal */}
+    <MapMeasurementModal
+      open={showMeasurementModal}
+      onOpenChange={setShowMeasurementModal}
+      budgetId={budgetId}
+      initialLat={coordLat}
+      initialLng={coordLng}
+    />
     </>
   );
 }

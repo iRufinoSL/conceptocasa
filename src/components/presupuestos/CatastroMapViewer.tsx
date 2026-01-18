@@ -97,6 +97,7 @@ export function CatastroMapViewer({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [mapReady, setMapReady] = useState(false);
   const [currentZoom, setCurrentZoom] = useState(18);
+  const [layerErrors, setLayerErrors] = useState<Record<string, boolean>>({});
 
   // Initialize map
   useEffect(() => {
@@ -111,59 +112,90 @@ export function CatastroMapViewer({
     });
 
     // Add base layer (OpenStreetMap)
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    const baseLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
       maxZoom: 21,
-    }).addTo(map);
-
-    // Add WMS layers
-    // Catastro - Parcelas
-    const parcelasLayer = L.tileLayer.wms(WMS_LAYERS.catastro.url, {
-      layers: WMS_LAYERS.catastro.layers.parcelas.name,
-      format: 'image/png',
-      transparent: true,
-      version: '1.1.1',
-      opacity: 0.7,
-      attribution: '&copy; <a href="https://www.catastro.meh.es">Catastro</a>',
     });
+    
+    baseLayer.on('tileerror', () => {
+      console.warn('OpenStreetMap tile loading error');
+    });
+    
+    baseLayer.addTo(map);
+
+    // Create WMS layers with error handling
+    const createWmsLayer = (url: string, layerName: string, options: L.WMSOptions, layerKey: string) => {
+      const layer = L.tileLayer.wms(url, {
+        layers: layerName,
+        format: 'image/png',
+        transparent: true,
+        ...options,
+      });
+      
+      layer.on('tileerror', () => {
+        console.warn(`WMS layer ${layerKey} tile error`);
+        setLayerErrors(prev => ({ ...prev, [layerKey]: true }));
+      });
+      
+      layer.on('tileload', () => {
+        setLayerErrors(prev => ({ ...prev, [layerKey]: false }));
+      });
+      
+      return layer;
+    };
+
+    // Catastro - Parcelas
+    const parcelasLayer = createWmsLayer(
+      WMS_LAYERS.catastro.url,
+      WMS_LAYERS.catastro.layers.parcelas.name,
+      {
+        version: '1.1.1',
+        opacity: 0.7,
+        attribution: '&copy; <a href="https://www.catastro.meh.es">Catastro</a>',
+      },
+      'parcelas'
+    );
     wmsLayersRef.current['parcelas'] = parcelasLayer;
-    if (activeLayers.parcelas) parcelasLayer.addTo(map);
+    parcelasLayer.addTo(map); // Always add initially since parcelas starts active
 
     // Catastro - Edificios
-    const edificiosLayer = L.tileLayer.wms(WMS_LAYERS.catastro.url, {
-      layers: WMS_LAYERS.catastro.layers.edificios.name,
-      format: 'image/png',
-      transparent: true,
-      version: '1.1.1',
-      opacity: 0.6,
-      attribution: '&copy; <a href="https://www.catastro.meh.es">Catastro</a>',
-    });
+    const edificiosLayer = createWmsLayer(
+      WMS_LAYERS.catastro.url,
+      WMS_LAYERS.catastro.layers.edificios.name,
+      {
+        version: '1.1.1',
+        opacity: 0.6,
+        attribution: '&copy; <a href="https://www.catastro.meh.es">Catastro</a>',
+      },
+      'edificios'
+    );
     wmsLayersRef.current['edificios'] = edificiosLayer;
-    if (activeLayers.edificios) edificiosLayer.addTo(map);
 
     // PNOA - Ortofoto
-    const ortofotoLayer = L.tileLayer.wms(WMS_LAYERS.pnoa.url, {
-      layers: WMS_LAYERS.pnoa.layers.ortofoto.name,
-      format: 'image/png',
-      transparent: true,
-      version: '1.3.0',
-      opacity: 0.8,
-      attribution: '&copy; <a href="https://www.ign.es">IGN España</a>',
-    });
+    const ortofotoLayer = createWmsLayer(
+      WMS_LAYERS.pnoa.url,
+      WMS_LAYERS.pnoa.layers.ortofoto.name,
+      {
+        version: '1.3.0',
+        opacity: 0.8,
+        attribution: '&copy; <a href="https://www.ign.es">IGN España</a>',
+      },
+      'ortofoto'
+    );
     wmsLayersRef.current['ortofoto'] = ortofotoLayer;
-    if (activeLayers.ortofoto) ortofotoLayer.addTo(map);
 
     // IGN - Modelo Digital Terreno
-    const relieveLayer = L.tileLayer.wms(WMS_LAYERS.ign.url, {
-      layers: WMS_LAYERS.ign.layers.relieve.name,
-      format: 'image/png',
-      transparent: true,
-      version: '1.3.0',
-      opacity: 0.5,
-      attribution: '&copy; <a href="https://www.ign.es">IGN España</a>',
-    });
+    const relieveLayer = createWmsLayer(
+      WMS_LAYERS.ign.url,
+      WMS_LAYERS.ign.layers.relieve.name,
+      {
+        version: '1.3.0',
+        opacity: 0.5,
+        attribution: '&copy; <a href="https://www.ign.es">IGN España</a>',
+      },
+      'relieve'
+    );
     wmsLayersRef.current['relieve'] = relieveLayer;
-    if (activeLayers.relieve) relieveLayer.addTo(map);
 
     // Add marker for the parcel
     const customIcon = L.divIcon({
@@ -201,6 +233,11 @@ export function CatastroMapViewer({
 
     mapRef.current = map;
     setMapReady(true);
+
+    // Force a resize after mount to ensure proper rendering
+    setTimeout(() => {
+      map.invalidateSize();
+    }, 100);
 
     // Cleanup
     return () => {
@@ -341,16 +378,21 @@ export function CatastroMapViewer({
             {layerItems.map((layer) => {
               const Icon = layer.icon;
               const isActive = activeLayers[layer.key];
+              const hasError = layerErrors[layer.key];
               return (
                 <Button
                   key={layer.key}
                   variant={isActive ? 'secondary' : 'ghost'}
                   size="sm"
                   onClick={() => toggleLayer(layer.key)}
-                  className="w-full justify-start gap-2 h-7 text-xs"
+                  className={cn(
+                    "w-full justify-start gap-2 h-7 text-xs",
+                    hasError && isActive && "border border-destructive/50"
+                  )}
+                  title={hasError ? 'Error cargando esta capa - verifica tu conexión' : undefined}
                 >
                   {isActive ? (
-                    <Eye className={cn('h-3 w-3', layer.color)} />
+                    <Eye className={cn('h-3 w-3', hasError ? 'text-destructive' : layer.color)} />
                   ) : (
                     <EyeOff className="h-3 w-3 text-muted-foreground" />
                   )}

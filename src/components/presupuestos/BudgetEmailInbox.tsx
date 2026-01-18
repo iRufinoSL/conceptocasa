@@ -294,12 +294,14 @@ export function BudgetEmailInbox({ budgetId, onComposeReply, onComposeForward }:
             <div className="flex gap-1 flex-shrink-0 flex-wrap">
               {!isFullscreen && (
                 <Button 
-                  variant="outline" 
+                  variant="default" 
                   size="sm" 
                   onClick={() => setIsFullscreenOpen(true)}
                   title="Ver a pantalla completa"
+                  className="bg-primary text-primary-foreground"
                 >
-                  <Maximize2 className="h-4 w-4" />
+                  <Maximize2 className="h-4 w-4 mr-1" />
+                  Ampliar
                 </Button>
               )}
               {onComposeReply && (
@@ -326,19 +328,20 @@ export function BudgetEmailInbox({ budgetId, onComposeReply, onComposeForward }:
             </div>
           </div>
         </CardHeader>
-        <CardContent className="flex-1 overflow-hidden">
+        <CardContent className="flex-1 overflow-hidden overflow-x-hidden">
           <ScrollArea className={isFullscreen ? "h-full max-h-[70vh]" : "h-full max-h-[400px]"}>
-            {sanitizedHtml ? (
-              <div 
-                className="prose prose-sm dark:prose-invert max-w-none break-words [&_*]:break-words [&_*]:overflow-wrap-anywhere"
-                style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}
-                dangerouslySetInnerHTML={{ __html: sanitizedHtml }}
-              />
-            ) : (
-              <div className="whitespace-pre-wrap text-sm break-words" style={{ wordBreak: 'break-word' }}>
-                {email.body_text || '(Sin contenido)'}
-              </div>
-            )}
+            <div className="pr-4 overflow-x-hidden">
+              {sanitizedHtml ? (
+                <div 
+                  className="prose prose-sm dark:prose-invert max-w-none break-words overflow-hidden [word-break:break-word] [overflow-wrap:anywhere] [&_*]:max-w-full [&_*]:overflow-hidden [&_*]:break-words [&_img]:max-w-full [&_table]:max-w-full [&_table]:overflow-x-auto [&_table]:block [&_pre]:overflow-x-auto [&_pre]:max-w-full"
+                  dangerouslySetInnerHTML={{ __html: sanitizedHtml }}
+                />
+              ) : (
+                <div className="whitespace-pre-wrap text-sm break-words overflow-hidden" style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
+                  {email.body_text || '(Sin contenido)'}
+                </div>
+              )}
+            </div>
           </ScrollArea>
           
           {email.email_attachments && email.email_attachments.length > 0 && (

@@ -9,6 +9,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
 import { useBotProtection } from "@/hooks/useBotProtection";
 import { supabase } from "@/integrations/supabase/client";
+import { useWebsiteTracking, getStoredUtmParams } from "@/hooks/useWebsiteTracking";
 import { X, Check, Paperclip, File, Loader2 } from "lucide-react";
 import homeModern from "@/assets/home-modern.jpg";
 import homeClassic from "@/assets/home-classic.jpg";
@@ -44,6 +45,7 @@ const formatFileSize = (bytes: number): string => {
 const HousingProfileForm = ({ open, onOpenChange }: HousingProfileFormProps) => {
   const { toast } = useToast();
   const { honeypotProps, validateSubmission, recordSubmission, isBlocked, blockReason } = useBotProtection();
+  const { trackFormStart, trackFormSubmit } = useWebsiteTracking();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showStyleSelector, setShowStyleSelector] = useState(false);
   const [attachments, setAttachments] = useState<File[]>([]);
@@ -234,11 +236,17 @@ ${formData.message || "Sin mensaje adicional"}
     `.trim();
 
     try {
+      // Track form start
+      trackFormStart('housing_profile');
+      
       // Upload attachments first
       const attachmentPaths = await uploadAttachments();
       
       // Prepend +34 to phone if not already present
       const phoneWithPrefix = formData.phone.startsWith('+') ? formData.phone : `+34${formData.phone.replace(/\s/g, '')}`;
+      
+      // Get UTM params for CRM tracking
+      const utmParams = getStoredUtmParams();
       
       const { error } = await supabase.functions.invoke('send-contact-email', {
         body: {
@@ -252,6 +260,10 @@ ${formData.message || "Sin mensaje adicional"}
           // Attachments
           attachmentPaths: attachmentPaths.length > 0 ? attachmentPaths : undefined,
           attachmentNames: attachments.length > 0 ? attachments.map(f => f.name) : undefined,
+          // UTM params for CRM tracking
+          utm_source: utmParams.utm_source,
+          utm_medium: utmParams.utm_medium,
+          utm_campaign: utmParams.utm_campaign,
           // Send all form fields for database storage
           numPlantas: formData.numPlantas,
           m2Planta1: formData.m2Planta1,
@@ -281,6 +293,9 @@ ${formData.message || "Sin mensaje adicional"}
       });
 
       if (error) throw error;
+
+      // Track form submission
+      trackFormSubmit('housing_profile');
 
       // Record successful submission for rate limiting
       recordSubmission();

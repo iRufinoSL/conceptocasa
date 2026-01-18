@@ -5,7 +5,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowLeft, Search, Users, ClipboardList, Target, Plus, Mail, FileText } from 'lucide-react';
+import { ArrowLeft, Search, Users, ClipboardList, Target, Plus, Mail, FileText, BarChart3 } from 'lucide-react';
 import { ContactsTab } from '@/components/crm/ContactsTab';
 import { ManagementsTab } from '@/components/crm/ManagementsTab';
 import { OpportunitiesTab } from '@/components/crm/OpportunitiesTab';
@@ -15,6 +15,7 @@ import { ContactForm } from '@/components/crm/ContactForm';
 import { ManagementForm } from '@/components/crm/ManagementForm';
 import { OpportunityForm } from '@/components/crm/OpportunityForm';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
+import WebsiteAnalyticsTab from '@/components/crm/WebsiteAnalyticsTab';
 import { useToast } from '@/hooks/use-toast';
 import { AppNavDropdown } from '@/components/AppNavDropdown';
 import { BackupButton } from '@/components/BackupButton';
@@ -250,7 +251,7 @@ export default function CRM() {
 
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full max-w-2xl grid-cols-5">
+          <TabsList className="grid w-full max-w-3xl grid-cols-6">
             <TabsTrigger value="contacts" className="gap-2">
               <Users className="h-4 w-4" />
               <span className="hidden sm:inline">Contactos</span>
@@ -273,6 +274,10 @@ export default function CRM() {
             <TabsTrigger value="templates" className="gap-2">
               <FileText className="h-4 w-4" />
               <span className="hidden sm:inline">Plantillas</span>
+            </TabsTrigger>
+            <TabsTrigger value="analytics" className="gap-2">
+              <BarChart3 className="h-4 w-4" />
+              <span className="hidden sm:inline">Analíticas</span>
             </TabsTrigger>
           </TabsList>
 
@@ -310,6 +315,10 @@ export default function CRM() {
               onEdit={handleEditOpportunity}
               onDelete={handleDeleteOpportunity}
             />
+          </TabsContent>
+
+          <TabsContent value="analytics">
+            <WebsiteAnalyticsTab />
           </TabsContent>
         </Tabs>
       </main>

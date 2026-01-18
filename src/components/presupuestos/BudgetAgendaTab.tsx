@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Calendar, List, ChevronLeft, ChevronRight, FileText, BarChart3 } from 'lucide-react';
+import { Plus, Calendar, List, ChevronLeft, ChevronRight, FileText, BarChart3, ClipboardList } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, addMonths, subMonths, addWeeks, subWeeks, addDays, subDays, eachDayOfInterval, isSameMonth, isSameDay, isToday } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { toast } from 'sonner';
@@ -14,6 +14,7 @@ import { TaskListView } from './TaskListView';
 import { exportTasksPdf } from './TasksPdfExport';
 import { useCompanySettings } from '@/hooks/useCompanySettings';
 import { BudgetGanttView } from './BudgetGanttView';
+import { ResourcesGestionesView } from './ResourcesGestionesView';
 
 // A Task is a resource with resource_type = 'Tarea'
 export interface BudgetTask {
@@ -64,7 +65,7 @@ interface BudgetAgendaTabProps {
   onNavigateToPhases?: (phaseId?: string) => void;
 }
 
-type MainViewMode = 'agenda' | 'gantt';
+type MainViewMode = 'agenda' | 'gantt' | 'gestiones';
 type ViewMode = 'month' | 'week' | 'day' | 'list';
 type FilterMode = 'all' | 'pendiente' | 'realizada';
 
@@ -532,6 +533,10 @@ export function BudgetAgendaTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
                 <BarChart3 className="h-4 w-4" />
                 Gantt
               </TabsTrigger>
+              <TabsTrigger value="gestiones" className="flex items-center gap-1.5">
+                <ClipboardList className="h-4 w-4" />
+                Gestiones
+              </TabsTrigger>
             </TabsList>
           </Tabs>
           
@@ -584,6 +589,18 @@ export function BudgetAgendaTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
             }
           }}
         />
+      )}
+
+      {/* Gestiones View */}
+      {mainViewMode === 'gestiones' && (
+        <Card>
+          <CardContent className="pt-6">
+            <ResourcesGestionesView
+              budgetId={budgetId}
+              isAdmin={isAdmin}
+            />
+          </CardContent>
+        </Card>
       )}
 
       {/* Agenda View */}

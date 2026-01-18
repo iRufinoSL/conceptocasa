@@ -390,7 +390,7 @@ export function ResourcesActivityGroupedView({
                     <User className="h-3 w-3 text-muted-foreground" />
                     {getContactName(resource.supplier_id) || 'Cargando...'}
                   </span>
-                ) : <span className="text-muted-foreground">-</span>
+                ) : <span className="text-muted-foreground italic text-xs">No seleccionado</span>
               }
               onSave={(v) => onInlineUpdate(resource.id, 'supplier_id', v === '__none__' ? null : v)}
               type="select"

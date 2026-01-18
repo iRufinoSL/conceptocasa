@@ -656,6 +656,9 @@ export function UrbanProfileCard({ budgetId, cadastralReference: initialRef, isA
           province: profile.province,
           landClass: profile.land_class || 'Urbano',
           budgetId,
+          autonomousCommunity: profile.autonomous_community,
+          cadastralReference: profile.cadastral_reference,
+          surfaceArea: profile.surface_area,
         },
       });
 

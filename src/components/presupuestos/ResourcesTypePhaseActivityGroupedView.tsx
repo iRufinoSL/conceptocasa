@@ -21,6 +21,8 @@ interface BudgetResource {
   activity_id: string | null;
   description: string | null;
   created_at: string | null;
+  supplier_id: string | null;
+  signed_subtotal: number | null;
 }
 
 interface Activity {
@@ -43,6 +45,7 @@ interface CalculatedFields {
   salesCostUd: number;
   calculatedUnits: number;
   subtotalSales: number;
+  subtotalExternalCost: number;
 }
 
 interface ResourcesTypePhaseActivityGroupedViewProps {
@@ -292,6 +295,7 @@ export function ResourcesTypePhaseActivityGroupedView({
                 </TableHead>
               )}
               <TableHead className="min-w-[200px]">Recurso</TableHead>
+              <TableHead>Tipo</TableHead>
               <TableHead className="text-right">€Coste ud ext.</TableHead>
               <TableHead>Ud</TableHead>
               <TableHead className="text-right">%Seg.</TableHead>
@@ -302,6 +306,7 @@ export function ResourcesTypePhaseActivityGroupedView({
               <TableHead className="text-right">€Coste venta</TableHead>
               <TableHead className="text-right">Uds calc.</TableHead>
               <TableHead className="text-right">€Subtotal</TableHead>
+              <TableHead className="text-right">€Subtotal Firmado</TableHead>
               {isAdmin && <TableHead className="w-[80px]">Acciones</TableHead>}
             </TableRow>
           </TableHeader>
@@ -330,7 +335,7 @@ export function ResourcesTypePhaseActivityGroupedView({
                   <TableRow className="cursor-pointer hover:bg-muted/50 bg-muted/30">
                     {isAdmin && <TableCell className="py-2" />}
                     <TableCell 
-                      colSpan={isAdmin ? 11 : 12}
+                      colSpan={isAdmin ? 13 : 14}
                       className="py-2"
                       onClick={() => toggleType(type)}
                     >
@@ -381,7 +386,7 @@ export function ResourcesTypePhaseActivityGroupedView({
                         <TableRow className="cursor-pointer hover:bg-accent/50 bg-accent/20">
                           {isAdmin && <TableCell className="py-1.5" />}
                           <TableCell 
-                            colSpan={isAdmin ? 11 : 12}
+                            colSpan={isAdmin ? 13 : 14}
                             className="py-1.5 pl-12"
                             onClick={() => togglePhase(phaseKey)}
                           >
@@ -414,7 +419,7 @@ export function ResourcesTypePhaseActivityGroupedView({
                               <TableRow className="cursor-pointer hover:bg-primary/5 bg-primary/10">
                                 {isAdmin && <TableCell className="py-1" />}
                                 <TableCell 
-                                  colSpan={isAdmin ? 11 : 12}
+                                  colSpan={isAdmin ? 13 : 14}
                                   className="py-1 pl-20"
                                   onClick={() => toggleActivity(activityKey)}
                                 >
@@ -466,6 +471,11 @@ export function ResourcesTypePhaseActivityGroupedView({
                                         type="text"
                                         disabled={!canEdit}
                                       />
+                                    </TableCell>
+                                    <TableCell>
+                                      <Badge className={`${resourceTypeColors[resource.resource_type || 'Sin tipo']} text-xs`}>
+                                        {resource.resource_type || 'Sin tipo'}
+                                      </Badge>
                                     </TableCell>
                                     <TableCell className="text-right font-mono">
                                       <ResourceInlineEdit
@@ -523,6 +533,15 @@ export function ResourcesTypePhaseActivityGroupedView({
                                     <TableCell className="text-right font-mono font-semibold text-primary">
                                       {formatCurrency(fields.subtotalSales)}
                                     </TableCell>
+                                    <TableCell className="text-right font-mono">
+                                      {resource.signed_subtotal !== null ? (
+                                        <span className="text-amber-600 dark:text-amber-400 font-semibold">
+                                          {formatCurrency(resource.signed_subtotal)}
+                                        </span>
+                                      ) : (
+                                        <span className="text-muted-foreground">-</span>
+                                      )}
+                                    </TableCell>
                                     {isAdmin && (
                                       <TableCell>
                                         <div className="flex items-center gap-1">
@@ -559,7 +578,7 @@ export function ResourcesTypePhaseActivityGroupedView({
             })}
             {resources.length === 0 && (
               <TableRow>
-                <TableCell colSpan={isAdmin ? 13 : 12} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={isAdmin ? 15 : 14} className="text-center text-muted-foreground py-8">
                   No hay recursos. Añade uno nuevo o importa desde CSV/Excel.
                 </TableCell>
               </TableRow>

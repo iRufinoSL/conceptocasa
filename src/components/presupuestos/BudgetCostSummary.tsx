@@ -4,13 +4,16 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Calculator, Home, Euro, TrendingUp, Building2, Package, LayoutGrid, FileText } from 'lucide-react';
+import { Calculator, Home, Euro, TrendingUp, Building2, Package, LayoutGrid, FileText, FileSignature, Loader2 } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import { formatNumber, formatCurrency } from '@/lib/format-utils';
 import { calcResourceSubtotal } from '@/lib/budget-pricing';
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { getAllAvailableOptions, getDisplayOptions, OPTION_COLORS } from '@/lib/options-utils';
+import { toast } from 'sonner';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 
 interface BudgetCostSummaryProps {
   budgetId: string;
@@ -22,6 +25,8 @@ interface BudgetCostSummaryProps {
   comparativaOpciones: string | null;
   onComparativaOpcionesChange?: (value: string) => void;
   isAdmin: boolean;
+  isSigned?: boolean;
+  onSignedChange?: (signed: boolean) => Promise<void>;
 }
 
 interface Resource {
@@ -63,11 +68,15 @@ export function BudgetCostSummary({
   budgetProvince,
   comparativaOpciones,
   onComparativaOpcionesChange,
-  isAdmin
+  isAdmin,
+  isSigned = false,
+  onSignedChange
 }: BudgetCostSummaryProps) {
   const [resources, setResources] = useState<Resource[]>([]);
   const [spaces, setSpaces] = useState<Space[]>([]);
   const [loading, setLoading] = useState(true);
+  const [signingInProgress, setSigningInProgress] = useState(false);
+  const [confirmSignOpen, setConfirmSignOpen] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -551,6 +560,41 @@ export function BudgetCostSummary({
               </div>
             </div>
             
+            {/* Signed Status */}
+            {isAdmin && onSignedChange && (
+              <div className="mt-4 pt-4 border-t">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="budget-signed" className="flex items-center gap-2 text-sm font-medium">
+                    <FileSignature className="h-4 w-4" />
+                    Presupuesto Firmado
+                  </Label>
+                  <div className="flex items-center gap-3">
+                    {isSigned && (
+                      <Badge variant="outline" className="bg-amber-500/10 text-amber-700 border-amber-500/30">
+                        Firmado
+                      </Badge>
+                    )}
+                    <Switch
+                      id="budget-signed"
+                      checked={isSigned}
+                      onCheckedChange={(checked) => {
+                        if (checked && !isSigned) {
+                          setConfirmSignOpen(true);
+                        }
+                      }}
+                      disabled={isSigned || signingInProgress}
+                    />
+                    {signingInProgress && <Loader2 className="h-4 w-4 animate-spin" />}
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground mt-2">
+                  {isSigned 
+                    ? 'El presupuesto ha sido firmado. Los SubTotales firmados han quedado registrados y no se pueden modificar.'
+                    : 'Al marcar como firmado, se registrará el SubTotal actual de cada recurso como "SubTotal Firmado" de forma inmutable.'}
+                </p>
+              </div>
+            )}
+            
             {/* Comparativa Opciones Field */}
             <div className="mt-4 pt-4 border-t">
               <Label htmlFor="comparativa-opciones" className="flex items-center gap-2 text-sm font-medium mb-2">
@@ -852,6 +896,62 @@ export function BudgetCostSummary({
           </div>
         </CardContent>
       </Card>
+
+      {/* Confirmation Dialog for Signing */}
+      <AlertDialog open={confirmSignOpen} onOpenChange={setConfirmSignOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <FileSignature className="h-5 w-5" />
+              Confirmar firma del presupuesto
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2">
+              <p>
+                Al firmar el presupuesto, se registrará el <strong>SubTotal Venta</strong> actual de cada recurso 
+                como <strong>"SubTotal Firmado"</strong>.
+              </p>
+              <p className="text-amber-600 dark:text-amber-400 font-medium">
+                ⚠️ Esta acción es irreversible. Los SubTotales Firmados no podrán modificarse posteriormente.
+              </p>
+              <p>
+                Esto permite comparar los costes presupuestados originalmente con los costes finalmente ejecutados.
+              </p>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={signingInProgress}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={signingInProgress}
+              onClick={async (e) => {
+                e.preventDefault();
+                if (!onSignedChange) return;
+                
+                setSigningInProgress(true);
+                try {
+                  await onSignedChange(true);
+                  setConfirmSignOpen(false);
+                  toast.success('Presupuesto firmado correctamente');
+                } catch (error) {
+                  console.error('Error signing budget:', error);
+                  toast.error('Error al firmar el presupuesto');
+                } finally {
+                  setSigningInProgress(false);
+                }
+              }}
+              className="bg-amber-600 hover:bg-amber-700"
+            >
+              {signingInProgress ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Firmando...
+                </>
+              ) : (
+                'Confirmar firma'
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

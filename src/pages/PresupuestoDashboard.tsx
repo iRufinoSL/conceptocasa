@@ -49,6 +49,8 @@ interface Presupuesto {
   portada_text_position: string | null;
   portada_overlay_opacity: number | null;
   comparativa_opciones: string | null;
+  is_signed: boolean;
+  signed_at: string | null;
 }
 
 interface Project {
@@ -483,6 +485,67 @@ export default function PresupuestoDashboard() {
               budgetProvince={presupuesto.provincia}
               comparativaOpciones={presupuesto.comparativa_opciones}
               isAdmin={isAdmin}
+              isSigned={presupuesto.is_signed}
+              onSignedChange={async (signed) => {
+                if (!signed) return; // Cannot unsign
+                
+                // First, calculate and store signed_subtotal for all resources
+                const { data: resources, error: resourcesError } = await supabase
+                  .from('budget_activity_resources')
+                  .select('id, external_unit_cost, manual_units, related_units, safety_margin_percent, sales_margin_percent')
+                  .eq('budget_id', presupuesto.id);
+                
+                if (resourcesError) throw resourcesError;
+                
+                // Calculate and update signed_subtotal for each resource
+                for (const resource of resources || []) {
+                  const externalCost = resource.external_unit_cost || 0;
+                  const safetyRatio = resource.safety_margin_percent !== null 
+                    ? resource.safety_margin_percent 
+                    : 0.15;
+                  const salesRatio = resource.sales_margin_percent !== null 
+                    ? resource.sales_margin_percent 
+                    : 0.25;
+                  
+                  const safetyMarginUd = externalCost * safetyRatio;
+                  const internalCostUd = externalCost + safetyMarginUd;
+                  const salesMarginUd = internalCostUd * salesRatio;
+                  const salesCostUd = internalCostUd + salesMarginUd;
+                  
+                  const calculatedUnits = resource.manual_units !== null
+                    ? resource.manual_units
+                    : (resource.related_units || 0);
+                  
+                  const subtotalSales = calculatedUnits * salesCostUd;
+                  
+                  const { error: updateError } = await supabase
+                    .from('budget_activity_resources')
+                    .update({ signed_subtotal: subtotalSales })
+                    .eq('id', resource.id);
+                  
+                  if (updateError) {
+                    console.error('Error updating signed_subtotal for resource:', resource.id, updateError);
+                    throw updateError;
+                  }
+                }
+                
+                // Then mark the budget as signed
+                const { error } = await supabase
+                  .from('presupuestos')
+                  .update({ 
+                    is_signed: true,
+                    signed_at: new Date().toISOString()
+                  })
+                  .eq('id', presupuesto.id);
+                
+                if (error) throw error;
+                
+                setPresupuesto({ 
+                  ...presupuesto, 
+                  is_signed: true,
+                  signed_at: new Date().toISOString()
+                });
+              }}
               onComparativaOpcionesChange={async (value) => {
                 try {
                   const { error } = await supabase

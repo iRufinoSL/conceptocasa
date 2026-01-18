@@ -374,6 +374,7 @@ export type Database = {
           resource_type: string | null
           safety_margin_percent: number | null
           sales_margin_percent: number | null
+          signed_subtotal: number | null
           start_date: string | null
           supplier_id: string | null
           task_status: string | null
@@ -394,6 +395,7 @@ export type Database = {
           resource_type?: string | null
           safety_margin_percent?: number | null
           sales_margin_percent?: number | null
+          signed_subtotal?: number | null
           start_date?: string | null
           supplier_id?: string | null
           task_status?: string | null
@@ -414,6 +416,7 @@ export type Database = {
           resource_type?: string | null
           safety_margin_percent?: number | null
           sales_margin_percent?: number | null
+          signed_subtotal?: number | null
           start_date?: string | null
           supplier_id?: string | null
           task_status?: string | null
@@ -2488,6 +2491,7 @@ export type Database = {
           created_at: string | null
           end_date: string | null
           id: string
+          is_signed: boolean
           nombre: string
           poblacion: string
           portada_overlay_opacity: number | null
@@ -2496,6 +2500,7 @@ export type Database = {
           portada_url: string | null
           project_id: string | null
           provincia: string | null
+          signed_at: string | null
           start_date: string | null
           status: string
           updated_at: string | null
@@ -2510,6 +2515,7 @@ export type Database = {
           created_at?: string | null
           end_date?: string | null
           id?: string
+          is_signed?: boolean
           nombre: string
           poblacion: string
           portada_overlay_opacity?: number | null
@@ -2518,6 +2524,7 @@ export type Database = {
           portada_url?: string | null
           project_id?: string | null
           provincia?: string | null
+          signed_at?: string | null
           start_date?: string | null
           status?: string
           updated_at?: string | null
@@ -2532,6 +2539,7 @@ export type Database = {
           created_at?: string | null
           end_date?: string | null
           id?: string
+          is_signed?: boolean
           nombre?: string
           poblacion?: string
           portada_overlay_opacity?: number | null
@@ -2540,6 +2548,7 @@ export type Database = {
           portada_url?: string | null
           project_id?: string | null
           provincia?: string | null
+          signed_at?: string | null
           start_date?: string | null
           status?: string
           updated_at?: string | null

@@ -47,6 +47,7 @@ import * as pdfjsLib from 'pdfjs-dist';
 import { openSafeUrl, isSafeUrl } from '@/lib/url-utils';
 import { LargeDocumentUploader } from './LargeDocumentUploader';
 import { UrbanReportGenerator } from './UrbanReportGenerator';
+import { CatastroMapViewer } from './CatastroMapViewer';
 
 interface AdditionalRestriction {
   id: string;
@@ -1152,6 +1153,23 @@ export function UrbanProfileCard({ budgetId, cadastralReference: initialRef, isA
                         />
                       </div>
                     </div>
+                    
+                    {/* Map Viewer - Show when coordinates are available */}
+                    {coordLat && coordLng && (
+                      <CatastroMapViewer
+                        lat={coordLat}
+                        lng={coordLng}
+                        cadastralReference={profile.cadastral_reference}
+                        municipality={profile.municipality || undefined}
+                        province={profile.province || undefined}
+                        onCenterChange={(newLat, newLng) => {
+                          setCoordLat(newLat);
+                          setCoordLng(newLng);
+                          setIsEditingCoords(true);
+                        }}
+                        className="mt-3"
+                      />
+                    )}
                   </div>
 
                   {/* Land Section */}

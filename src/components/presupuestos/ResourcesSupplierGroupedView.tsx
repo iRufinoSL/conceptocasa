@@ -318,8 +318,10 @@ export function ResourcesSupplierGroupedView({
                           <TableCell className="text-right font-semibold text-primary">
                             {formatCurrency(fields.subtotalSales)}
                           </TableCell>
-                          <TableCell className="max-w-[200px] truncate">
-                            {getActivityId(resource.activity_id) || '-'}
+                          <TableCell className="max-w-[200px]">
+                            <span className="whitespace-normal break-words leading-tight text-sm">
+                              {getActivityId(resource.activity_id) || '-'}
+                            </span>
                           </TableCell>
                           {isAdmin && (
                             <TableCell>

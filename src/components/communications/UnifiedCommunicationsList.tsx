@@ -115,6 +115,7 @@ export function UnifiedCommunicationsList({
   const [communicationAssignments, setCommunicationAssignments] = useState<{budgetIds: string[], projectIds: string[]}>({budgetIds: [], projectIds: []});
   const [previewAttachment, setPreviewAttachment] = useState<{ url: string; name: string; type: string } | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
+  const [fullscreenCommunication, setFullscreenCommunication] = useState<UnifiedCommunication | null>(null);
 
   const getEmailAttachmentDisplayName = (att: EmailAttachment) => {
     const name = (att.file_name || '').trim();
@@ -545,21 +546,27 @@ export function UnifiedCommunicationsList({
   };
 
   // Communication detail component
-  const CommunicationDetail = ({ comm }: { comm: UnifiedCommunication }) => {
+  const CommunicationDetail = ({
+    comm,
+    isFullscreen = false,
+  }: {
+    comm: UnifiedCommunication;
+    isFullscreen?: boolean;
+  }) => {
     const TypeIcon = typeIcons[comm.type];
     const status = statusConfig[comm.status as keyof typeof statusConfig] || statusConfig.pending;
     const StatusIcon = status.icon;
-    
+
     // State for assigned budgets and projects
     const [assignedBudgets, setAssignedBudgets] = useState<{id: string, nombre: string}[]>([]);
     const [assignedProjects, setAssignedProjects] = useState<{id: string, project_number: number, name: string}[]>([]);
-    
+
     // Fetch assigned budgets and projects for this communication
     useEffect(() => {
       const fetchAssignments = async () => {
         let budgetIds: string[] = [];
         let projectIds: string[] = [];
-        
+
         if (comm.type === 'email') {
           const [budgetAssignments, projectAssignments] = await Promise.all([
             supabase.from('email_budget_assignments').select('budget_id').eq('email_id', comm.id),
@@ -575,7 +582,7 @@ export function UnifiedCommunicationsList({
           budgetIds = budgetAssignments.data?.map(a => a.budget_id) || [];
           projectIds = projectAssignments.data?.map(a => a.project_id) || [];
         }
-        
+
         // Fetch budget details
         if (budgetIds.length > 0) {
           const { data: budgets } = await supabase
@@ -586,7 +593,7 @@ export function UnifiedCommunicationsList({
         } else {
           setAssignedBudgets([]);
         }
-        
+
         // Fetch project details
         if (projectIds.length > 0) {
           const { data: projects } = await supabase
@@ -598,7 +605,7 @@ export function UnifiedCommunicationsList({
           setAssignedProjects([]);
         }
       };
-      
+
       fetchAssignments();
     }, [comm.id, comm.type]);
 
@@ -607,14 +614,21 @@ export function UnifiedCommunicationsList({
         const email = comm.originalData as EmailMessage;
         if (email.body_html) {
           return (
-            <div 
-              className="prose prose-sm dark:prose-invert max-w-none"
-              dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(email.body_html) }}
-            />
+            <div className="overflow-x-auto">
+              <div
+                className="prose prose-sm dark:prose-invert max-w-none break-words [word-break:break-word] [overflow-wrap:anywhere] [&_*]:max-w-full [&_*]:break-words [&_img]:max-w-full [&_table]:max-w-full [&_table]:block [&_table]:overflow-x-auto [&_pre]:max-w-full [&_pre]:overflow-x-auto"
+                dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(email.body_html) }}
+              />
+            </div>
           );
         }
       }
-      return <p className="whitespace-pre-wrap text-sm">{comm.content}</p>;
+
+      return (
+        <div className="text-sm whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
+          {comm.content}
+        </div>
+      );
     };
 
     return (
@@ -691,6 +705,19 @@ export function UnifiedCommunicationsList({
             </div>
             <div className="flex items-center gap-2 flex-wrap">
               {/* Action buttons for assign and task */}
+              {!isFullscreen && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setFullscreenCommunication(comm)}
+                  className="gap-1"
+                  title="Ver a pantalla completa"
+                >
+                  <Maximize2 className="h-4 w-4" />
+                  Ampliar
+                </Button>
+              )}
+
               <Button 
                 variant="outline" 
                 size="sm"
@@ -1073,6 +1100,22 @@ export function UnifiedCommunicationsList({
           currentProjectIds={communicationAssignments.projectIds}
         />
       )}
+
+      {/* Fullscreen communication dialog */}
+      <Dialog open={!!fullscreenCommunication} onOpenChange={(open) => !open && setFullscreenCommunication(null)}>
+        <DialogContent className="max-w-[95vw] w-full max-h-[95vh] h-full flex flex-col p-0">
+          <DialogHeader className="p-4 pb-0 flex-shrink-0">
+            <DialogTitle className="break-words">
+              {fullscreenCommunication?.subject || 'Comunicación'}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="flex-1 overflow-auto p-4">
+            {fullscreenCommunication && (
+              <CommunicationDetail comm={fullscreenCommunication} isFullscreen />
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Modal de vista previa de adjuntos */}
       <Dialog open={!!previewAttachment} onOpenChange={(open) => !open && setPreviewAttachment(null)}>

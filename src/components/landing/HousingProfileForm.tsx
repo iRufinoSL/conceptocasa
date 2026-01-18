@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
+import { useBotProtection } from "@/hooks/useBotProtection";
 import { supabase } from "@/integrations/supabase/client";
 import { X, Check, Paperclip, File, Loader2 } from "lucide-react";
 import homeModern from "@/assets/home-modern.jpg";
@@ -42,6 +43,7 @@ const formatFileSize = (bytes: number): string => {
 
 const HousingProfileForm = ({ open, onOpenChange }: HousingProfileFormProps) => {
   const { toast } = useToast();
+  const { honeypotProps, validateSubmission, recordSubmission, isBlocked, blockReason } = useBotProtection();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showStyleSelector, setShowStyleSelector] = useState(false);
   const [attachments, setAttachments] = useState<File[]>([]);
@@ -168,6 +170,18 @@ const HousingProfileForm = ({ open, onOpenChange }: HousingProfileFormProps) => 
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Bot protection validation
+    const validation = validateSubmission();
+    if (!validation.isValid) {
+      toast({
+        title: "Error de validación",
+        description: validation.error || "Por favor, inténtalo de nuevo.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsSubmitting(true);
 
     const estilosSeleccionados = formData.estiloConstructivo
@@ -268,6 +282,9 @@ ${formData.message || "Sin mensaje adicional"}
 
       if (error) throw error;
 
+      // Record successful submission for rate limiting
+      recordSubmission();
+
       toast({
         title: "¡Gracias por su información!",
         description: "Estaremos en contacto pronto.",
@@ -329,7 +346,15 @@ ${formData.message || "Sin mensaje adicional"}
         </DialogHeader>
         
         <ScrollArea className="max-h-[calc(90vh-100px)] px-6 pb-6">
+          {isBlocked ? (
+            <div className="text-center py-8">
+              <p className="text-destructive font-medium">{blockReason}</p>
+            </div>
+          ) : (
           <form onSubmit={handleSubmit} className="space-y-6 pt-4">
+            {/* Honeypot field for bot protection - hidden from users */}
+            <input {...honeypotProps} type="text" />
+            
             {/* Datos de contacto básicos */}
             <div className="space-y-4">
               <h3 className="text-lg font-semibold text-foreground border-b pb-2">Datos de Contacto</h3>
@@ -835,6 +860,7 @@ ${formData.message || "Sin mensaje adicional"}
               ) : "Enviar"}
             </Button>
           </form>
+          )}
         </ScrollArea>
       </DialogContent>
     </Dialog>

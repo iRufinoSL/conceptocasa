@@ -52,6 +52,7 @@ interface BudgetResource {
   description: string | null;
   created_at: string | null;
   supplier_id: string | null;
+  signed_subtotal: number | null;
 }
 
 interface Activity {

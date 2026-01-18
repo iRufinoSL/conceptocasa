@@ -4,6 +4,13 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const resend = new Resend(Deno.env.get("RESEND_API_KEY"));
 
+// Rate limiting configuration
+const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000; // 1 hour
+const MAX_EMAILS_PER_USER_PER_HOUR = 100;
+const MAX_RECIPIENTS_PER_EMAIL = 50;
+const MAX_ATTACHMENT_SIZE_BYTES = 10 * 1024 * 1024; // 10MB per attachment
+const MAX_TOTAL_ATTACHMENT_SIZE_BYTES = 25 * 1024 * 1024; // 25MB total
+
 // Allowed origins for CORS
 const ALLOWED_ORIGINS = [
   'https://concepto.casa',
@@ -100,6 +107,13 @@ function escapeHtml(text: string): string {
   return text.replace(/[&<>"']/g, (m) => map[m]);
 }
 
+// Calculate base64 decoded size (approximate)
+function getBase64DecodedSize(base64String: string): number {
+  // Base64 encoded data is ~33% larger than the original
+  const padding = (base64String.match(/=/g) || []).length;
+  return Math.floor((base64String.length * 3) / 4) - padding;
+}
+
 const handler = async (req: Request): Promise<Response> => {
   console.log("send-email function called");
   
@@ -125,9 +139,14 @@ const handler = async (req: Request): Promise<Response> => {
     // Create Supabase client
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    
     const supabase = createClient(supabaseUrl, supabaseKey, {
       global: { headers: { Authorization: authHeader } }
     });
+    
+    // Service role client for rate limiting check
+    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
     // Get the user
     const { data: { user }, error: userError } = await supabase.auth.getUser();
@@ -169,6 +188,32 @@ const handler = async (req: Request): Promise<Response> => {
 
     console.log("User role verified as staff");
 
+    // RATE LIMITING: Check emails sent in the last hour by this user
+    const oneHourAgo = new Date(Date.now() - RATE_LIMIT_WINDOW_MS).toISOString();
+    const { count: emailCount, error: countError } = await supabaseAdmin
+      .from('email_messages')
+      .select('*', { count: 'exact', head: true })
+      .eq('created_by', user.id)
+      .eq('direction', 'outbound')
+      .gte('created_at', oneHourAgo);
+
+    if (countError) {
+      console.error("Error checking rate limit:", countError);
+      // Don't block on rate limit check failure, log and continue
+    } else if (emailCount !== null && emailCount >= MAX_EMAILS_PER_USER_PER_HOUR) {
+      console.warn(`Rate limit exceeded for user ${user.id}: ${emailCount} emails in last hour`);
+      return new Response(
+        JSON.stringify({ 
+          error: "Rate limit exceeded", 
+          message: `Has alcanzado el límite de ${MAX_EMAILS_PER_USER_PER_HOUR} emails por hora. Por favor, inténtalo más tarde.`,
+          retry_after_seconds: 3600
+        }),
+        { status: 429, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
+
+    console.log(`Rate limit check passed: ${emailCount || 0}/${MAX_EMAILS_PER_USER_PER_HOUR} emails this hour`);
+
     const requestData: SendEmailRequest = await req.json();
     const { 
       to, 
@@ -201,6 +246,53 @@ const handler = async (req: Request): Promise<Response> => {
     }
 
     const toEmails = Array.isArray(to) ? to : [to];
+    const ccEmails = cc || [];
+    const bccEmails = bcc || [];
+    
+    // VALIDATION: Check total recipient count
+    const totalRecipients = toEmails.length + ccEmails.length + bccEmails.length;
+    if (totalRecipients > MAX_RECIPIENTS_PER_EMAIL) {
+      console.warn(`Too many recipients: ${totalRecipients} (max: ${MAX_RECIPIENTS_PER_EMAIL})`);
+      return new Response(
+        JSON.stringify({ 
+          error: "Too many recipients", 
+          message: `El número máximo de destinatarios es ${MAX_RECIPIENTS_PER_EMAIL}. Has indicado ${totalRecipients}.`
+        }),
+        { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
+
+    // VALIDATION: Check attachment sizes
+    if (attachments && attachments.length > 0) {
+      let totalAttachmentSize = 0;
+      for (const att of attachments) {
+        const attSize = getBase64DecodedSize(att.content);
+        if (attSize > MAX_ATTACHMENT_SIZE_BYTES) {
+          console.warn(`Attachment too large: ${att.filename} (${attSize} bytes)`);
+          return new Response(
+            JSON.stringify({ 
+              error: "Attachment too large", 
+              message: `El archivo "${att.filename}" excede el límite de 10MB por adjunto.`
+            }),
+            { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
+          );
+        }
+        totalAttachmentSize += attSize;
+      }
+      
+      if (totalAttachmentSize > MAX_TOTAL_ATTACHMENT_SIZE_BYTES) {
+        console.warn(`Total attachment size too large: ${totalAttachmentSize} bytes`);
+        return new Response(
+          JSON.stringify({ 
+            error: "Total attachments too large", 
+            message: `El tamaño total de adjuntos excede el límite de 25MB.`
+          }),
+          { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
+        );
+      }
+      
+      console.log(`Attachment validation passed: ${attachments.length} files, ${Math.round(totalAttachmentSize / 1024)}KB total`);
+    }
     
     // Get company settings for sender name, email and signature
     const { data: companySettings } = await supabase
@@ -215,7 +307,7 @@ const handler = async (req: Request): Promise<Response> => {
     // Use email from company settings - must be verified in Resend
     const fromEmail = `${senderName} <${senderEmail}>`;
 
-    console.log("Sending email from:", fromEmail, "to:", toEmails);
+    console.log("Sending email from:", fromEmail, "to:", toEmails, "recipients:", totalRecipients);
 
     // Create ticket if requested
     let createdTicketId = ticket_id;
@@ -249,8 +341,8 @@ const handler = async (req: Request): Promise<Response> => {
       subject: subject,
     };
     
-    if (cc && cc.length > 0) emailPayload.cc = cc;
-    if (bcc && bcc.length > 0) emailPayload.bcc = bcc;
+    if (ccEmails.length > 0) emailPayload.cc = ccEmails;
+    if (bccEmails.length > 0) emailPayload.bcc = bccEmails;
     
     // Add attachments if present
     if (attachments && attachments.length > 0) {
@@ -292,8 +384,8 @@ const handler = async (req: Request): Promise<Response> => {
         from_email: "organiza@concepto.casa",
         from_name: from_name,
         to_emails: toEmails,
-        cc_emails: cc,
-        bcc_emails: bcc,
+        cc_emails: ccEmails,
+        bcc_emails: bccEmails,
         subject: subject,
         body_html: body_html,
         body_text: body_text,
@@ -320,8 +412,8 @@ const handler = async (req: Request): Promise<Response> => {
         from_email: "organiza@concepto.casa",
         from_name: from_name,
         to_emails: toEmails,
-        cc_emails: cc,
-        bcc_emails: bcc,
+        cc_emails: ccEmails,
+        bcc_emails: bccEmails,
         subject: subject,
         body_html: body_html,
         body_text: body_text,

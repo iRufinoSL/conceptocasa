@@ -22,7 +22,10 @@ import {
   Home,
   Info,
   ExternalLink,
-  Loader2
+  Loader2,
+  HelpCircle,
+  Search as SearchIcon,
+  ClipboardList
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -36,6 +39,25 @@ interface ConsultedSource {
   type: string;
   url?: string;
   date?: string;
+  reliability?: 'high' | 'medium' | 'low';
+}
+
+// Information that requires manual verification
+interface PendingVerification {
+  field: string;
+  description: string;
+  source: string;
+  priority: 'critical' | 'important' | 'recommended';
+}
+
+// Tracked characteristic with source
+interface TrackedCharacteristic {
+  category: string;
+  field: string;
+  value: string;
+  source: string;
+  sourceType: 'official' | 'web_search' | 'manual' | 'catastro';
+  reliability: 'verified' | 'inferred' | 'pending';
 }
 
 interface UrbanProfile {
@@ -91,6 +113,7 @@ interface UrbanProfile {
   fence_setback_source: string | null;
   access_width: number | null;
   access_width_source: string | null;
+  min_plot_area: number | null;
   // Sectoral restrictions
   affected_by_power_lines: boolean | null;
   affected_by_cemetery: boolean | null;
@@ -109,13 +132,23 @@ interface UrbanProfile {
   min_distance_forest: number | null;
   min_distance_airport: number | null;
   max_height_airport: number | null;
+  // Services
+  has_municipal_sewage: boolean | null;
+  has_municipal_sewage_source: string | null;
+  requires_septic_tank: boolean | null;
+  distance_to_water_supply: number | null;
+  distance_to_sewage_network: number | null;
+  distance_to_electricity: number | null;
   // Coordinates
   google_maps_lat: number | null;
   google_maps_lng: number | null;
   // Buildability
   is_buildable: boolean | null;
   is_buildable_source: string | null;
+  is_divisible: boolean | null;
+  is_divisible_source: string | null;
   analysis_notes: string | null;
+  analysis_status: string | null;
 }
 
 interface UrbanReportGeneratorProps {
@@ -204,6 +237,9 @@ export function UrbanReportGenerator({ open, onOpenChange, budgetId, budgetName 
   const [generating, setGenerating] = useState(false);
   const [additionalNotes, setAdditionalNotes] = useState('');
   const [selectedSections, setSelectedSections] = useState<string[]>([
+    'buildability_summary',
+    'tracked_characteristics',
+    'pending_verifications',
     'identification',
     'applicable_regulations',
     'classification',
@@ -211,10 +247,209 @@ export function UrbanReportGenerator({ open, onOpenChange, budgetId, budgetName 
     'housing_conditions',
     'building_conditions',
     'sectoral',
+    'services',
     'other_considerations',
     'conclusion',
     'disclaimer'
   ]);
+
+  // Get tracked characteristics with their sources
+  const getTrackedCharacteristics = (): TrackedCharacteristic[] => {
+    if (!profile) return [];
+    
+    const characteristics: TrackedCharacteristic[] = [];
+    
+    // Helper to add a characteristic if value exists
+    const addIfExists = (
+      category: string,
+      field: string,
+      value: string | number | boolean | null | undefined,
+      source: string | null,
+      sourceType: 'official' | 'web_search' | 'manual' | 'catastro' = 'web_search'
+    ) => {
+      if (value !== null && value !== undefined && value !== '') {
+        const reliability = source ? (
+          source.toLowerCase().includes('art.') || 
+          source.toLowerCase().includes('pgou') || 
+          source.toLowerCase().includes('ordenanza') ? 'verified' : 'inferred'
+        ) : 'pending';
+        
+        characteristics.push({
+          category,
+          field,
+          value: typeof value === 'boolean' ? (value ? 'Sí' : 'No') : String(value),
+          source: source || 'Sin fuente especificada',
+          sourceType: source?.toLowerCase().includes('catastro') ? 'catastro' : sourceType,
+          reliability
+        });
+      }
+    };
+
+    // Classification
+    addIfExists('Clasificación', 'Clasificación del suelo', profile.urban_classification, 'Plan General');
+    addIfExists('Clasificación', 'Calificación urbanística', profile.urban_qualification, 'Plan General');
+    addIfExists('Clasificación', 'Categoría del suelo', profile.soil_category, profile.soil_category_source);
+    addIfExists('Clasificación', 'Uso característico (Catastro)', profile.land_use, 'Sede Electrónica del Catastro', 'catastro');
+
+    // Building parameters
+    addIfExists('Edificabilidad', 'Edificable', profile.is_buildable, profile.is_buildable_source);
+    addIfExists('Edificabilidad', 'Coeficiente de edificabilidad', profile.buildability_index ? `${profile.buildability_index} m²/m²` : null, profile.buildability_index_source);
+    addIfExists('Edificabilidad', 'Ocupación máxima', profile.max_occupation_percent ? `${profile.max_occupation_percent}%` : null, profile.max_occupation_source);
+    addIfExists('Edificabilidad', 'Superficie máxima construible', profile.max_built_surface ? `${profile.max_built_surface} m²` : null, profile.max_built_surface_source);
+    addIfExists('Edificabilidad', 'Parcela mínima', profile.min_plot_area ? `${profile.min_plot_area} m²` : null, 'Plan General');
+
+    // Heights
+    addIfExists('Alturas', 'Altura máxima', profile.max_height ? `${profile.max_height} m` : null, profile.max_height_source);
+    addIfExists('Alturas', 'Número máximo de plantas', profile.max_floors, profile.max_floors_source);
+
+    // Setbacks
+    addIfExists('Retranqueos', 'Retranqueo frontal', profile.front_setback ? `${profile.front_setback} m` : null, profile.front_setback_source);
+    addIfExists('Retranqueos', 'Retranqueo lateral', profile.side_setback ? `${profile.side_setback} m` : null, profile.side_setback_source);
+    addIfExists('Retranqueos', 'Retranqueo posterior', profile.rear_setback ? `${profile.rear_setback} m` : null, profile.rear_setback_source);
+    addIfExists('Retranqueos', 'Distancia a vecinos', profile.min_distance_neighbors ? `${profile.min_distance_neighbors} m` : null, profile.min_distance_neighbors_source);
+    addIfExists('Retranqueos', 'Distancia a carreteras', profile.road_setback ? `${profile.road_setback} m` : null, profile.road_setback_source);
+    addIfExists('Retranqueos', 'Distancia a vías municipales', profile.municipal_road_setback ? `${profile.municipal_road_setback} m` : null, profile.municipal_road_setback_source);
+    addIfExists('Retranqueos', 'Ancho mínimo de acceso', profile.access_width ? `${profile.access_width} m` : null, profile.access_width_source);
+
+    // Services
+    addIfExists('Servicios', 'Alcantarillado municipal', profile.has_municipal_sewage, profile.has_municipal_sewage_source);
+    addIfExists('Servicios', 'Requiere fosa séptica', profile.requires_septic_tank, 'Análisis de servicios');
+
+    // Divisibility
+    addIfExists('Parcelación', 'Parcela divisible', profile.is_divisible, profile.is_divisible_source);
+
+    return characteristics;
+  };
+
+  // Get pending verifications (information that needs manual check)
+  const getPendingVerifications = (): PendingVerification[] => {
+    if (!profile) return [];
+    
+    const pending: PendingVerification[] = [];
+
+    // Critical verifications
+    if (!profile.is_buildable_source || profile.is_buildable === null) {
+      pending.push({
+        field: 'Edificabilidad',
+        description: 'Confirmar si la parcela es edificable mediante Certificado Urbanístico oficial',
+        source: 'Ayuntamiento',
+        priority: 'critical'
+      });
+    }
+
+    if (!profile.urban_classification) {
+      pending.push({
+        field: 'Clasificación del suelo',
+        description: 'Obtener clasificación urbanística oficial del Plan General',
+        source: 'Ayuntamiento / PGOU',
+        priority: 'critical'
+      });
+    }
+
+    // Important verifications
+    if (!profile.front_setback && !profile.side_setback && !profile.rear_setback) {
+      pending.push({
+        field: 'Retranqueos',
+        description: 'Consultar distancias mínimas a linderos según normativa municipal',
+        source: 'Ordenanzas municipales',
+        priority: 'important'
+      });
+    }
+
+    if (!profile.max_height || !profile.max_floors) {
+      pending.push({
+        field: 'Altura edificatoria',
+        description: 'Verificar altura máxima y número de plantas permitidas',
+        source: 'PGOU / Ordenanzas de zona',
+        priority: 'important'
+      });
+    }
+
+    if (profile.has_municipal_sewage === null) {
+      pending.push({
+        field: 'Servicios de saneamiento',
+        description: 'Verificar disponibilidad de red de alcantarillado municipal',
+        source: 'Empresa de aguas / Ayuntamiento',
+        priority: 'important'
+      });
+    }
+
+    if (!profile.buildability_index) {
+      pending.push({
+        field: 'Coeficiente de edificabilidad',
+        description: 'Obtener índice de edificabilidad aplicable a la parcela',
+        source: 'PGOU',
+        priority: 'important'
+      });
+    }
+
+    // Recommended verifications
+    if (!profile.google_maps_lat || !profile.google_maps_lng) {
+      pending.push({
+        field: 'Coordenadas geográficas',
+        description: 'Obtener coordenadas precisas para análisis de servidumbres',
+        source: 'Catastro / Topografía',
+        priority: 'recommended'
+      });
+    }
+
+    if (profile.affected_by_water_courses === null) {
+      pending.push({
+        field: 'Afección por cauces',
+        description: 'Consultar afección por dominio público hidráulico',
+        source: 'Confederación Hidrográfica',
+        priority: 'recommended'
+      });
+    }
+
+    if (profile.affected_by_coast === null && profile.province?.toLowerCase().includes('asturias')) {
+      pending.push({
+        field: 'Ley de Costas',
+        description: 'Verificar posible afección por servidumbre de costas',
+        source: 'Demarcación de Costas',
+        priority: 'recommended'
+      });
+    }
+
+    if (profile.affected_by_airport === null) {
+      pending.push({
+        field: 'Servidumbres aeronáuticas',
+        description: 'Consultar posibles limitaciones de altura por proximidad a aeropuerto',
+        source: 'AESA',
+        priority: 'recommended'
+      });
+    }
+
+    if (profile.affected_by_heritage === null) {
+      pending.push({
+        field: 'Patrimonio histórico',
+        description: 'Verificar afección por bienes de interés cultural o yacimientos arqueológicos',
+        source: 'Consejería de Cultura',
+        priority: 'recommended'
+      });
+    }
+
+    // Always recommend topographic survey
+    pending.push({
+      field: 'Levantamiento topográfico',
+      description: 'Realizar levantamiento topográfico para verificar superficie real y servidumbres',
+      source: 'Topógrafo profesional',
+      priority: 'recommended'
+    });
+
+    return pending;
+  };
+
+  // Count characteristics by reliability
+  const getCharacteristicsStats = () => {
+    const chars = getTrackedCharacteristics();
+    return {
+      total: chars.length,
+      verified: chars.filter(c => c.reliability === 'verified').length,
+      inferred: chars.filter(c => c.reliability === 'inferred').length,
+      pending: chars.filter(c => c.reliability === 'pending').length
+    };
+  };
 
   useEffect(() => {
     if (open) {
@@ -423,8 +658,236 @@ export function UrbanReportGenerator({ open, onOpenChange, budgetId, budgetName 
       doc.setTextColor(0);
       yPos += 12;
 
+      // SECTION A: BUILDABILITY SUMMARY (Executive Summary)
+      if (selectedSections.includes('buildability_summary')) {
+        doc.setFontSize(14);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(37, 99, 235);
+        doc.text('A. RESUMEN EJECUTIVO DE EDIFICABILIDAD', margin, yPos);
+        doc.setTextColor(0);
+        yPos += 10;
+
+        // Big buildability badge
+        const isBuildable = profile.is_buildable;
+        if (isBuildable === true) {
+          doc.setFillColor(34, 197, 94);
+        } else if (isBuildable === false) {
+          doc.setFillColor(239, 68, 68);
+        } else {
+          doc.setFillColor(156, 163, 175);
+        }
+        doc.roundedRect(margin, yPos, 80, 12, 3, 3, 'F');
+        doc.setTextColor(255);
+        doc.setFontSize(11);
+        doc.setFont('helvetica', 'bold');
+        const buildableLabel = isBuildable === true ? 'PARCELA EDIFICABLE' : isBuildable === false ? 'PARCELA NO EDIFICABLE' : 'EDIFICABILIDAD POR DETERMINAR';
+        doc.text(buildableLabel, margin + 40, yPos + 8, { align: 'center' });
+        doc.setTextColor(0);
+        yPos += 18;
+
+        // Quick summary
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'normal');
+        
+        const summaryData = [
+          ['Referencia catastral', profile.cadastral_reference],
+          ['Municipio', profile.municipality || '-'],
+          ['Superficie de parcela', profile.surface_area ? `${profile.surface_area.toLocaleString('es-ES')} m²` : '-'],
+          ['Clasificación del suelo', profile.urban_classification || profile.land_class || 'Por determinar'],
+          ['Calificación urbanística', profile.urban_qualification || 'Por determinar'],
+          ['Edificabilidad máxima', profile.buildability_index ? `${profile.buildability_index} m²/m²` : 'Por determinar'],
+          ['Altura máxima', profile.max_height ? `${profile.max_height} m` : 'Por determinar'],
+          ['Ocupación máxima', profile.max_occupation_percent ? `${profile.max_occupation_percent}%` : 'Por determinar']
+        ];
+
+        autoTable(doc, {
+          startY: yPos,
+          head: [],
+          body: summaryData,
+          theme: 'striped',
+          styles: { fontSize: 9, cellPadding: 3 },
+          columnStyles: { 0: { fontStyle: 'bold', cellWidth: 55 } },
+          margin: { left: margin, right: margin }
+        });
+        yPos = (doc as any).lastAutoTable.finalY + 8;
+
+        // Justification of buildability
+        if (profile.is_buildable_source) {
+          doc.setFontSize(9);
+          doc.setFont('helvetica', 'bold');
+          doc.text('Justificación:', margin, yPos);
+          doc.setFont('helvetica', 'normal');
+          yPos += 4;
+          const justLines = doc.splitTextToSize(profile.is_buildable_source, pageWidth - margin * 2);
+          doc.text(justLines, margin, yPos);
+          yPos += justLines.length * 4;
+        }
+        yPos += 10;
+      }
+
+      // SECTION B: TRACKED CHARACTERISTICS WITH SOURCES
+      if (selectedSections.includes('tracked_characteristics')) {
+        if (yPos > pageHeight - 100) {
+          doc.addPage();
+          yPos = margin;
+        }
+
+        doc.setFontSize(14);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(37, 99, 235);
+        doc.text('B. CARACTERÍSTICAS URBANÍSTICAS RASTREADAS', margin, yPos);
+        doc.setTextColor(0);
+        yPos += 6;
+
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'italic');
+        doc.setTextColor(100);
+        doc.text('Información obtenida de fuentes oficiales y verificables', margin, yPos);
+        doc.setTextColor(0);
+        yPos += 8;
+
+        const characteristics = getTrackedCharacteristics();
+        const stats = getCharacteristicsStats();
+
+        // Stats bar
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'normal');
+        doc.text(`Total datos rastreados: ${stats.total} | Verificados: ${stats.verified} | Inferidos: ${stats.inferred} | Pendientes: ${stats.pending}`, margin, yPos);
+        yPos += 6;
+
+        // Group by category
+        const grouped = characteristics.reduce((acc, char) => {
+          if (!acc[char.category]) acc[char.category] = [];
+          acc[char.category].push(char);
+          return acc;
+        }, {} as Record<string, TrackedCharacteristic[]>);
+
+        for (const [category, chars] of Object.entries(grouped)) {
+          if (yPos > pageHeight - 50) {
+            doc.addPage();
+            yPos = margin;
+          }
+
+          doc.setFontSize(10);
+          doc.setFont('helvetica', 'bold');
+          doc.text(category, margin, yPos);
+          yPos += 5;
+
+          const tableData = chars.map(c => [
+            c.field,
+            c.value,
+            c.source,
+            c.reliability === 'verified' ? '✓' : c.reliability === 'inferred' ? '~' : '?'
+          ]);
+
+          autoTable(doc, {
+            startY: yPos,
+            head: [['Campo', 'Valor', 'Fuente', '']],
+            body: tableData,
+            theme: 'striped',
+            styles: { fontSize: 8, cellPadding: 2 },
+            headStyles: { fillColor: [37, 99, 235], fontSize: 8 },
+            columnStyles: { 
+              0: { cellWidth: 45 },
+              1: { cellWidth: 35 },
+              2: { cellWidth: 80 },
+              3: { cellWidth: 10, halign: 'center' }
+            },
+            margin: { left: margin, right: margin }
+          });
+          yPos = (doc as any).lastAutoTable.finalY + 6;
+        }
+
+        // Legend
+        doc.setFontSize(7);
+        doc.setTextColor(100);
+        doc.text('Leyenda: ✓ = Verificado en normativa oficial | ~ = Inferido de análisis | ? = Pendiente de confirmación', margin, yPos);
+        doc.setTextColor(0);
+        yPos += 10;
+      }
+
+      // SECTION C: PENDING VERIFICATIONS
+      if (selectedSections.includes('pending_verifications')) {
+        if (yPos > pageHeight - 80) {
+          doc.addPage();
+          yPos = margin;
+        }
+
+        doc.setFontSize(14);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(37, 99, 235);
+        doc.text('C. INFORMACIÓN PENDIENTE DE GESTIÓN', margin, yPos);
+        doc.setTextColor(0);
+        yPos += 6;
+
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'italic');
+        doc.setTextColor(100);
+        doc.text('Datos que requieren consulta manual o verificación con el Ayuntamiento', margin, yPos);
+        doc.setTextColor(0);
+        yPos += 8;
+
+        const pendingItems = getPendingVerifications();
+        
+        // Group by priority
+        const critical = pendingItems.filter(p => p.priority === 'critical');
+        const important = pendingItems.filter(p => p.priority === 'important');
+        const recommended = pendingItems.filter(p => p.priority === 'recommended');
+
+        const renderPendingGroup = (title: string, items: PendingVerification[], color: number[]) => {
+          if (items.length === 0) return;
+          
+          if (yPos > pageHeight - 40) {
+            doc.addPage();
+            yPos = margin;
+          }
+
+          doc.setFillColor(color[0], color[1], color[2]);
+          doc.roundedRect(margin, yPos, pageWidth - margin * 2, 6, 1, 1, 'F');
+          doc.setFontSize(9);
+          doc.setFont('helvetica', 'bold');
+          doc.setTextColor(255);
+          doc.text(title, margin + 3, yPos + 4.5);
+          doc.setTextColor(0);
+          yPos += 10;
+
+          const tableData = items.map(item => [
+            item.field,
+            item.description,
+            item.source
+          ]);
+
+          autoTable(doc, {
+            startY: yPos,
+            head: [['Campo', 'Acción requerida', 'Fuente a consultar']],
+            body: tableData,
+            theme: 'plain',
+            styles: { fontSize: 8, cellPadding: 2 },
+            headStyles: { fillColor: [240, 240, 240], textColor: [60, 60, 60], fontSize: 8 },
+            columnStyles: { 
+              0: { cellWidth: 35, fontStyle: 'bold' },
+              1: { cellWidth: 90 },
+              2: { cellWidth: 45 }
+            },
+            margin: { left: margin, right: margin }
+          });
+          yPos = (doc as any).lastAutoTable.finalY + 6;
+        };
+
+        renderPendingGroup('🔴 CRÍTICO - Imprescindible para decisión de compra', critical, [220, 38, 38]);
+        renderPendingGroup('🟠 IMPORTANTE - Necesario para proyecto de edificación', important, [234, 88, 12]);
+        renderPendingGroup('🟢 RECOMENDADO - Mejora la seguridad del proyecto', recommended, [22, 163, 74]);
+
+        yPos += 4;
+      }
+
       // 1. Identification
       if (selectedSections.includes('identification')) {
+        if (yPos > pageHeight - 80) {
+          doc.addPage();
+          yPos = margin;
+        }
+
         doc.setFontSize(12);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(37, 99, 235);
@@ -987,6 +1450,9 @@ export function UrbanReportGenerator({ open, onOpenChange, budgetId, budgetName 
   };
 
   const sectionOptions = [
+    { id: 'buildability_summary', label: 'A. Resumen ejecutivo de edificabilidad', icon: CheckCircle2 },
+    { id: 'tracked_characteristics', label: 'B. Características urbanísticas rastreadas', icon: SearchIcon },
+    { id: 'pending_verifications', label: 'C. Información pendiente de gestión', icon: ClipboardList },
     { id: 'identification', label: '1. Identificación de la parcela', icon: MapPin },
     { id: 'applicable_regulations', label: '2. Normativa urbanística aplicable', icon: FileText },
     { id: 'classification', label: '3. Clasificación y calificación del suelo', icon: Building2 },

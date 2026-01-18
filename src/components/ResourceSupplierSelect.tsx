@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Check, ChevronsUpDown, Plus, User } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { Check, ChevronsUpDown, Plus, User, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import {
@@ -39,6 +39,7 @@ export function ResourceSupplierSelect({ value, onChange }: ResourceSupplierSele
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [loading, setLoading] = useState(false);
   const [showNewContactDialog, setShowNewContactDialog] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const fetchContacts = async () => {
     setLoading(true);
@@ -61,6 +62,13 @@ export function ResourceSupplierSelect({ value, onChange }: ResourceSupplierSele
     fetchContacts();
   }, []);
 
+  // Reset search when popover closes
+  useEffect(() => {
+    if (!open) {
+      setSearchQuery('');
+    }
+  }, [open]);
+
   const selectedContact = contacts.find(c => c.id === value);
 
   const getContactLabel = (contact: Contact) => {
@@ -69,6 +77,24 @@ export function ResourceSupplierSelect({ value, onChange }: ResourceSupplierSele
       : contact.name;
     return contact.city ? `${fullName} (${contact.city})` : fullName;
   };
+
+  // Filter contacts based on search query
+  const filteredContacts = useMemo(() => {
+    if (!searchQuery.trim()) return contacts;
+    
+    const query = searchQuery.toLowerCase();
+    return contacts.filter(contact => {
+      const searchableText = [
+        contact.name,
+        contact.surname,
+        contact.city,
+        contact.email,
+        contact.phone
+      ].filter(Boolean).join(' ').toLowerCase();
+      
+      return searchableText.includes(query);
+    });
+  }, [contacts, searchQuery]);
 
   const handleNewContactSaved = async (newContactId?: string) => {
     setShowNewContactDialog(false);
@@ -121,42 +147,26 @@ export function ResourceSupplierSelect({ value, onChange }: ResourceSupplierSele
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-[400px] p-0 bg-popover z-50" align="start">
-          <Command className="bg-popover">
-            <CommandInput placeholder="Buscar contacto..." />
+          <Command className="bg-popover" shouldFilter={false}>
+            <CommandInput 
+              placeholder="Buscar contacto..." 
+              value={searchQuery}
+              onValueChange={setSearchQuery}
+            />
             <CommandList className="max-h-[300px]">
-              <CommandEmpty>
-                <div className="py-4 text-center">
-                  <p className="text-sm text-muted-foreground mb-3">
-                    No se encontraron contactos.
-                  </p>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      setOpen(false);
-                      setShowNewContactDialog(true);
-                    }}
-                    className="gap-2"
-                  >
-                    <Plus className="h-4 w-4" />
-                    Crear nuevo contacto
-                  </Button>
-                </div>
-              </CommandEmpty>
+              {/* Actions group - always visible at top */}
               <CommandGroup>
-                {/* New contact option - always visible at top */}
                 <CommandItem
                   value="__new_contact__"
                   onSelect={() => {
                     setOpen(false);
                     setShowNewContactDialog(true);
                   }}
-                  className="text-accent font-medium border-b border-border mb-1 rounded-none"
+                  className="text-accent font-medium"
                 >
                   <Plus className="mr-2 h-4 w-4" />
                   Crear nuevo contacto
                 </CommandItem>
-                {/* Option to clear selection */}
                 {value && (
                   <CommandItem
                     value="__clear__"
@@ -164,58 +174,71 @@ export function ResourceSupplierSelect({ value, onChange }: ResourceSupplierSele
                       onChange(null, null);
                       setOpen(false);
                     }}
-                    className="text-muted-foreground italic"
+                    className="text-muted-foreground"
                   >
+                    <X className="mr-2 h-4 w-4" />
                     Sin suministrador
                   </CommandItem>
                 )}
-                {/* Contact list */}
+              </CommandGroup>
+
+              {/* Contacts group - filtered results */}
+              <CommandGroup heading={searchQuery ? `Resultados (${filteredContacts.length})` : "Contactos"}>
                 {loading ? (
                   <div className="py-4 text-center text-sm text-muted-foreground">
                     Cargando contactos...
                   </div>
-                ) : contacts.length === 0 ? (
-                  <div className="py-4 text-center text-sm text-muted-foreground">
-                    No hay contactos registrados.
+                ) : filteredContacts.length === 0 ? (
+                  <div className="py-4 text-center">
+                    <p className="text-sm text-muted-foreground mb-3">
+                      {searchQuery ? 'No se encontraron contactos.' : 'No hay contactos registrados.'}
+                    </p>
+                    {searchQuery && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setOpen(false);
+                          setShowNewContactDialog(true);
+                        }}
+                        className="gap-2"
+                      >
+                        <Plus className="h-4 w-4" />
+                        Crear nuevo contacto
+                      </Button>
+                    )}
                   </div>
                 ) : (
-                  contacts.map((contact) => {
-                    // Create a searchable string that includes all relevant fields
-                    const searchValue = [
-                      contact.name,
-                      contact.surname,
-                      contact.city,
-                      contact.email,
-                      contact.phone
-                    ].filter(Boolean).join(' ').toLowerCase();
-                    
-                    return (
-                      <CommandItem
-                        key={contact.id}
-                        value={searchValue}
-                        onSelect={() => {
-                          onChange(contact.id, contact);
-                          setOpen(false);
-                        }}
-                      >
-                        <Check
-                          className={cn(
-                            "mr-2 h-4 w-4",
-                            value === contact.id ? "opacity-100" : "opacity-0"
-                          )}
-                        />
-                        <div className="flex flex-col">
-                          <span>{getContactLabel(contact)}</span>
-                          {contact.email && (
-                            <span className="text-xs text-muted-foreground">{contact.email}</span>
-                          )}
-                          {contact.phone && !contact.email && (
-                            <span className="text-xs text-muted-foreground">{contact.phone}</span>
-                          )}
-                        </div>
-                      </CommandItem>
-                    );
-                  })
+                  filteredContacts.map((contact, index) => (
+                    <CommandItem
+                      key={contact.id}
+                      value={contact.id}
+                      onSelect={() => {
+                        onChange(contact.id, contact);
+                        setOpen(false);
+                      }}
+                      className={cn(
+                        // Highlight first result when searching
+                        searchQuery && index === 0 && "bg-accent/50"
+                      )}
+                    >
+                      <Check
+                        className={cn(
+                          "mr-2 h-4 w-4",
+                          value === contact.id ? "opacity-100" : "opacity-0"
+                        )}
+                      />
+                      <div className="flex flex-col">
+                        <span>{getContactLabel(contact)}</span>
+                        {contact.email && (
+                          <span className="text-xs text-muted-foreground">{contact.email}</span>
+                        )}
+                        {contact.phone && !contact.email && (
+                          <span className="text-xs text-muted-foreground">{contact.phone}</span>
+                        )}
+                      </div>
+                    </CommandItem>
+                  ))
                 )}
               </CommandGroup>
             </CommandList>

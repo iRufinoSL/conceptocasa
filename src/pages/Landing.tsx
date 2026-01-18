@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import { useBotProtection } from "@/hooks/useBotProtection";
 import { supabase } from "@/integrations/supabase/client";
 import HousingProfileForm from "@/components/landing/HousingProfileForm";
 import { 
@@ -49,6 +50,7 @@ const formatFileSize = (bytes: number): string => {
 
 const Landing = () => {
   const { toast } = useToast();
+  const { honeypotProps, validateSubmission, recordSubmission, isBlocked, blockReason } = useBotProtection();
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -140,6 +142,18 @@ const Landing = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Bot protection validation
+    const validation = validateSubmission();
+    if (!validation.isValid) {
+      toast({
+        title: "Error de validación",
+        description: validation.error || "Por favor, inténtalo de nuevo.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
@@ -155,6 +169,9 @@ const Landing = () => {
       });
 
       if (error) throw error;
+
+      // Record successful submission for rate limiting
+      recordSubmission();
 
       toast({
         title: "¡Mensaje enviado!",
@@ -631,7 +648,15 @@ const Landing = () => {
 
             {/* Contact Form */}
             <Card className="p-6 md:p-8">
+              {isBlocked ? (
+                <div className="text-center py-8">
+                  <p className="text-destructive font-medium">{blockReason}</p>
+                </div>
+              ) : (
               <form onSubmit={handleSubmit} className="space-y-4">
+                {/* Honeypot field for bot protection - hidden from users */}
+                <input {...honeypotProps} type="text" />
+                
                 <div>
                   <label className="text-sm font-medium text-foreground">Nombre *</label>
                   <Input 
@@ -789,6 +814,7 @@ const Landing = () => {
                   </span>
                 </Button>
               </form>
+              )}
             </Card>
           </div>
         </div>

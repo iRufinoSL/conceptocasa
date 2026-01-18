@@ -321,7 +321,8 @@ Deno.serve(async (req) => {
         .eq('cadastral_reference', catastroData.cadastralReference)
         .single();
 
-      const profileData = {
+      // Base profile data - coordinates only added for new profiles
+      const profileData: Record<string, unknown> = {
         budget_id: budgetId,
         cadastral_reference: catastroData.cadastralReference,
         municipality: catastroData.municipality,
@@ -338,6 +339,14 @@ Deno.serve(async (req) => {
         analysis_status: 'catastro_loaded',
         last_analyzed_at: new Date().toISOString(),
       };
+      
+      // Only set coordinates from Catastro for NEW profiles (not updates)
+      // This preserves manually entered coordinates on existing profiles
+      if (!existingProfile && catastroData.coordinates) {
+        profileData.google_maps_lat = catastroData.coordinates.lat;
+        profileData.google_maps_lng = catastroData.coordinates.lng;
+        profileData.coordinates_source = 'Catastro (automático)';
+      }
 
       if (existingProfile) {
         // Update existing profile

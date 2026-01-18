@@ -224,6 +224,30 @@ const handler = async (req: Request): Promise<Response> => {
     console.log("Parsed from email:", fromEmail);
     console.log("Parsed from name:", fromName);
 
+    // SECURITY: Ignore notification emails sent by our own system to prevent infinite loops
+    // These are emails we send to admins about new inbound emails
+    const systemEmailDomains = ["concepto.casa", "resend.dev"];
+    const isSystemEmail = systemEmailDomains.some(domain => fromEmail.toLowerCase().includes(domain));
+    
+    // Also check if subject indicates this is a notification email from our system
+    const subjectField = webhookData.subject || "(Sin asunto)";
+    const isNotificationSubject = subjectField.includes("📬 Nuevo email:") || 
+                                   subjectField.includes("Nuevo email en la bandeja") ||
+                                   subjectField.includes("notificaciones@");
+    
+    if (isSystemEmail || isNotificationSubject) {
+      console.log("Ignoring system notification email to prevent loop - from:", fromEmail, "subject:", subjectField);
+      return new Response(
+        JSON.stringify({ 
+          success: true, 
+          message: "System notification email ignored to prevent loop",
+          from: fromEmail,
+          subject: subjectField
+        }),
+        { status: 200, headers: jsonHeaders }
+      );
+    }
+
     // Try to find existing contact by email
     const { data: existingContact } = await supabase
       .from("crm_contacts")
@@ -234,8 +258,7 @@ const handler = async (req: Request): Promise<Response> => {
     let contactId = existingContact?.id;
     console.log("Contact ID:", contactId || "not found (unknown sender)");
 
-    // Check if this is a reply to an existing ticket
-    const subjectField = webhookData.subject || "(Sin asunto)";
+    // Check if this is a reply to an existing ticket (subjectField already declared above)
     const ticketMatch = subjectField.match(/\[Ticket #(\d+)\]/);
     let ticketId: string | null = null;
 

@@ -1670,6 +1670,7 @@ export type Database = {
           description: string | null
           id: string
           name: string
+          project_id: string | null
           tags: string[] | null
           updated_at: string | null
         }
@@ -1680,6 +1681,7 @@ export type Database = {
           description?: string | null
           id?: string
           name: string
+          project_id?: string | null
           tags?: string[] | null
           updated_at?: string | null
         }
@@ -1690,6 +1692,7 @@ export type Database = {
           description?: string | null
           id?: string
           name?: string
+          project_id?: string | null
           tags?: string[] | null
           updated_at?: string | null
         }
@@ -1706,6 +1709,13 @@ export type Database = {
             columns: ["created_by"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "crm_opportunities_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
             referencedColumns: ["id"]
           },
         ]

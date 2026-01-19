@@ -5,13 +5,14 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Target, User, Calendar, MoreVertical, Pencil, Trash2, ChevronDown, MapPin } from 'lucide-react';
+import { Target, User, Calendar, MoreVertical, Pencil, Trash2, ChevronDown, MapPin, Home } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { searchMatch } from '@/lib/search-utils';
 import type { Opportunity, Contact } from '@/pages/CRM';
 import { LandSearchCard } from '@/components/presupuestos/LandSearchCard';
 import { useToast } from '@/hooks/use-toast';
+import { ProjectProfileViewer } from '@/components/projects/ProjectProfileViewer';
 
 interface OpportunitiesTabProps {
   opportunities: Opportunity[];
@@ -25,6 +26,8 @@ export function OpportunitiesTab({ opportunities, contacts, searchTerm, onEdit, 
   const { toast } = useToast();
   const [expandedDescriptions, setExpandedDescriptions] = useState<Set<string>>(new Set());
   const [showLandSearch, setShowLandSearch] = useState(false);
+  const [profileViewerOpen, setProfileViewerOpen] = useState(false);
+  const [selectedOpportunity, setSelectedOpportunity] = useState<{ projectId: string; name: string } | null>(null);
 
   const filteredOpportunities = useMemo(() => {
     if (!searchTerm) return opportunities;
@@ -164,31 +167,30 @@ export function OpportunitiesTab({ opportunities, contacts, searchTerm, onEdit, 
               <CardTitle className="text-base line-clamp-2 mt-2">
                 {opportunity.name}
               </CardTitle>
-              {opportunity.description && (
-                isHousingProfile(opportunity) ? (
-                  <Collapsible open={expandedDescriptions.has(opportunity.id)}>
-                    <CollapsibleTrigger asChild>
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        className="w-full justify-between mt-2 text-emerald-600 hover:text-emerald-700"
-                        onClick={(e) => { e.stopPropagation(); toggleDescription(opportunity.id); }}
-                      >
-                        Ver perfil de vivienda
-                        <ChevronDown className={`h-4 w-4 transition-transform ${expandedDescriptions.has(opportunity.id) ? 'rotate-180' : ''}`} />
-                      </Button>
-                    </CollapsibleTrigger>
-                    <CollapsibleContent className="mt-2">
-                      <div className="text-sm text-muted-foreground whitespace-pre-wrap bg-muted/50 p-3 rounded-md max-h-64 overflow-y-auto">
-                        {opportunity.description}
-                      </div>
-                    </CollapsibleContent>
-                  </Collapsible>
-                ) : (
-                  <CardDescription className="line-clamp-2">
-                    {opportunity.description}
-                  </CardDescription>
-                )
+              {isHousingProfile(opportunity) && opportunity.project_id && (
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="w-full mt-2 gap-2 text-emerald-600 hover:text-emerald-700 border-emerald-200 hover:border-emerald-300 hover:bg-emerald-50"
+                  onClick={(e) => { 
+                    e.stopPropagation(); 
+                    setSelectedOpportunity({ projectId: opportunity.project_id!, name: opportunity.name });
+                    setProfileViewerOpen(true);
+                  }}
+                >
+                  <Home className="h-4 w-4" />
+                  Ver Perfil de Vivienda
+                </Button>
+              )}
+              {opportunity.description && !isHousingProfile(opportunity) && (
+                <CardDescription className="line-clamp-2">
+                  {opportunity.description}
+                </CardDescription>
+              )}
+              {isHousingProfile(opportunity) && !opportunity.project_id && (
+                <div className="mt-2 text-xs text-amber-600 bg-amber-50 p-2 rounded-md">
+                  Esta oportunidad no tiene un perfil de proyecto asociado.
+                </div>
               )}
             </CardHeader>
             <CardContent className="space-y-3">
@@ -226,6 +228,16 @@ export function OpportunitiesTab({ opportunities, contacts, searchTerm, onEdit, 
         );
       })}
       </div>
+
+      {/* Profile Viewer Dialog */}
+      {selectedOpportunity && (
+        <ProjectProfileViewer
+          open={profileViewerOpen}
+          onOpenChange={setProfileViewerOpen}
+          projectId={selectedOpportunity.projectId}
+          projectName={selectedOpportunity.name}
+        />
+      )}
     </div>
   );
 }

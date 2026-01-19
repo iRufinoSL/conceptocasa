@@ -290,12 +290,12 @@ const handler = async (req: Request): Promise<Response> => {
       
       console.log("Creating project:", projectName);
       
-      // 1. Create project with status "prospecto"
+      // 1. Create project with status "oportunidad" (not "prospecto" until further processing)
       const { data: projectData, error: projectError } = await supabase
         .from('projects')
         .insert({
           name: projectName,
-          status: 'prospecto',
+          status: 'oportunidad',
           location: projectLocation,
           project_type: 'Vivienda unifamiliar',
           source: 'housing_profile_form',
@@ -454,6 +454,7 @@ ${requestData.message || 'Sin mensaje adicional'}
           .insert({
             name: opportunityName,
             contact_id: contactId,
+            project_id: projectId,
             description: profileDescription,
             tags: ['Perfil de vivienda']
           });
@@ -531,27 +532,84 @@ ${requestData.message || 'Sin mensaje adicional'}
               if ((notifType === 'email' || notifType === 'all') && notifEmail) {
                 console.log(`Sending housing profile notification to admin: ${notifEmail}`);
                 try {
+                  // Build the same detailed profile HTML for admins
+                  const styleLabels: Record<string, string> = {
+                    moderna: 'Moderna',
+                    clasica: 'Clásica',
+                    rustica: 'Rústica',
+                    madera: 'Madera',
+                    ecologica: 'Ecológica/Saludable',
+                    mediterranea: 'Mediterránea'
+                  };
+                  
+                  const estilos = requestData.estiloConstructivo?.map(e => styleLabels[e] || e).join(', ') || 'No especificado';
+                  
+                  const adminHousingProfileHtml = `
+                    <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                      <h2 style="color: #333; margin-bottom: 16px; border-bottom: 2px solid #ddd; padding-bottom: 8px;">📋 Perfil de Vivienda Recibido</h2>
+                      
+                      <h3 style="color: #555; margin-top: 16px;">👤 Datos de Contacto</h3>
+                      <p style="margin: 4px 0;"><strong>Nombre:</strong> ${safeName}</p>
+                      <p style="margin: 4px 0;"><strong>Email:</strong> ${safeEmail}</p>
+                      <p style="margin: 4px 0;"><strong>Teléfono:</strong> ${safePhone}</p>
+                      
+                      <h3 style="color: #555; margin-top: 16px;">📍 Ubicación</h3>
+                      <p style="margin: 4px 0;"><strong>Población:</strong> ${escapeHtml(poblacion || 'No especificado')}</p>
+                      <p style="margin: 4px 0;"><strong>Provincia:</strong> ${escapeHtml(provincia || 'No especificado')}</p>
+                      ${requestData.tieneTerreno ? `<p style="margin: 4px 0;"><strong>Dispone de terreno:</strong> ${escapeHtml(requestData.tieneTerreno)}</p>` : ''}
+                      ${requestData.coordenadasGoogleMaps ? `<p style="margin: 4px 0;"><strong>Coordenadas:</strong> ${escapeHtml(requestData.coordenadasGoogleMaps)}</p>` : ''}
+                      ${requestData.googleMapsUrl ? `<p style="margin: 4px 0;"><strong>URL Google Maps:</strong> <a href="${escapeHtml(requestData.googleMapsUrl)}">${escapeHtml(requestData.googleMapsUrl)}</a></p>` : ''}
+                      
+                      <h3 style="color: #555; margin-top: 16px;">🏗️ Estructura</h3>
+                      <p style="margin: 4px 0;"><strong>Número de plantas:</strong> ${escapeHtml(requestData.numPlantas || 'No especificado')}</p>
+                      ${requestData.m2Planta1 ? `<p style="margin: 4px 0;"><strong>M² planta 1:</strong> ${escapeHtml(requestData.m2Planta1)}</p>` : ''}
+                      ${requestData.m2Planta2 ? `<p style="margin: 4px 0;"><strong>M² planta 2:</strong> ${escapeHtml(requestData.m2Planta2)}</p>` : ''}
+                      ${requestData.m2Planta3 ? `<p style="margin: 4px 0;"><strong>M² planta 3:</strong> ${escapeHtml(requestData.m2Planta3)}</p>` : ''}
+                      <p style="margin: 4px 0;"><strong>Forma geométrica:</strong> ${escapeHtml(requestData.formaGeometrica || 'No especificado')}</p>
+                      <p style="margin: 4px 0;"><strong>Tipo de tejado:</strong> ${escapeHtml(requestData.tipoTejado || 'No especificado')}</p>
+                      
+                      <h3 style="color: #555; margin-top: 16px;">🛏️ Distribución</h3>
+                      <p style="margin: 4px 0;"><strong>Total habitaciones:</strong> ${escapeHtml(requestData.numHabitacionesTotal || 'No especificado')}</p>
+                      <p style="margin: 4px 0;"><strong>Habitaciones con baño:</strong> ${escapeHtml(requestData.numHabitacionesConBano || 'No especificado')}</p>
+                      <p style="margin: 4px 0;"><strong>Habitaciones con vestidor:</strong> ${escapeHtml(requestData.numHabitacionesConVestidor || 'No especificado')}</p>
+                      <p style="margin: 4px 0;"><strong>Total baños:</strong> ${escapeHtml(requestData.numBanosTotal || 'No especificado')}</p>
+                      <p style="margin: 4px 0;"><strong>Tipo de salón:</strong> ${escapeHtml(requestData.tipoSalon || 'No especificado')}</p>
+                      <p style="margin: 4px 0;"><strong>Tipo de cocina:</strong> ${escapeHtml(requestData.tipoCocina || 'No especificado')}</p>
+                      ${requestData.lavanderia ? `<p style="margin: 4px 0;"><strong>Lavandería:</strong> ${escapeHtml(requestData.lavanderia)}</p>` : ''}
+                      ${requestData.despensa ? `<p style="margin: 4px 0;"><strong>Despensa:</strong> ${escapeHtml(requestData.despensa)}</p>` : ''}
+                      
+                      <h3 style="color: #555; margin-top: 16px;">🌳 Espacios Exteriores</h3>
+                      ${requestData.porcheCubierto ? `<p style="margin: 4px 0;"><strong>Porche cubierto:</strong> ${escapeHtml(requestData.porcheCubierto)}</p>` : ''}
+                      ${requestData.patioDescubierto ? `<p style="margin: 4px 0;"><strong>Patio descubierto:</strong> ${escapeHtml(requestData.patioDescubierto)}</p>` : ''}
+                      ${requestData.garaje ? `<p style="margin: 4px 0;"><strong>Garaje:</strong> ${escapeHtml(requestData.garaje)}</p>` : ''}
+                      
+                      <h3 style="color: #555; margin-top: 16px;">🎨 Estilo y Presupuesto</h3>
+                      <p style="margin: 4px 0;"><strong>Estilos preferidos:</strong> ${escapeHtml(estilos)}</p>
+                      <p style="margin: 4px 0;"><strong>Presupuesto global:</strong> ${escapeHtml(requestData.presupuestoGlobal || 'No especificado')}</p>
+                      ${requestData.fechaIdealFinalizacion ? `<p style="margin: 4px 0;"><strong>Fecha ideal finalización:</strong> ${escapeHtml(requestData.fechaIdealFinalizacion)}</p>` : ''}
+                      
+                      ${requestData.message ? `
+                      <h3 style="color: #555; margin-top: 16px;">💬 Mensaje Adicional</h3>
+                      <p style="margin: 4px 0;">${safeMessage}</p>
+                      ` : ''}
+                    </div>
+                  `;
+                  
                   await resend.emails.send({
                     from: `${adminSenderName} <${adminSenderEmail}>`,
                     to: [notifEmail],
                     subject: `🏠 Nuevo Perfil de Vivienda: ${safeName} - ${poblacion || 'Sin ubicación'}`,
                     html: `
                       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                        <h2 style="color: #333;">🏠 Nuevo Perfil de Vivienda Recibido</h2>
+                        <h1 style="color: #333;">🏠 Nueva Oportunidad Recibida</h1>
                         <p>Hola ${admin.full_name || 'Administrador'},</p>
-                        <p>Se ha recibido un nuevo perfil de vivienda con los siguientes datos:</p>
+                        <p>Se ha recibido un nuevo perfil de vivienda. A continuación tienes todos los detalles:</p>
                         
-                        <div style="background-color: #f5f5f5; padding: 15px; border-radius: 8px; margin: 20px 0;">
-                          <p><strong>Nombre:</strong> ${safeName}</p>
-                          <p><strong>Email:</strong> ${safeEmail}</p>
-                          <p><strong>Teléfono:</strong> ${safePhone}</p>
-                          <p><strong>Ubicación:</strong> ${poblacion || 'No especificada'}, ${provincia || ''}</p>
-                          <p><strong>Presupuesto:</strong> ${requestData.presupuestoGlobal || 'No especificado'}</p>
-                        </div>
+                        ${adminHousingProfileHtml}
                         
-                        <p>
+                        <p style="margin-top: 20px;">
                           <a href="https://conceptocasa.lovable.app/crm?tab=oportunidades" 
-                             style="background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">
+                             style="background-color: #10b981; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: bold;">
                             Ver en Oportunidades
                           </a>
                         </p>

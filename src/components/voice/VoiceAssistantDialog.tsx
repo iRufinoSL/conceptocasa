@@ -7,7 +7,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Mic, MicOff, Send, Loader2, Volume2, VolumeX, Trash2 } from 'lucide-react';
+import { Mic, MicOff, Loader2, Volume2, VolumeX, Trash2, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useVoiceInput } from '@/hooks/useVoiceInput';
 import { supabase } from '@/integrations/supabase/client';
@@ -28,8 +28,8 @@ interface VoiceAssistantDialogProps {
 }
 
 export interface VoiceAction {
-  type: 'create_management' | 'create_entry' | 'search_contact' | 'general';
-  data?: Record<string, any>;
+  type: 'create_management' | 'create_entry' | 'create_payment_entry' | 'search_contact' | 'general';
+  data?: Record<string, unknown>;
   rawText: string;
 }
 
@@ -46,12 +46,12 @@ export function VoiceAssistantDialog({
   const [speechEnabled, setSpeechEnabled] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
   const speechSynthRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const lastProcessedRef = useRef<string>('');
 
   const {
     isListening,
     transcript,
-    finalTranscript,
-    error,
+    error: voiceError,
     isSupported,
     startListening,
     stopListening,
@@ -59,8 +59,11 @@ export function VoiceAssistantDialog({
   } = useVoiceInput({
     continuous: true,
     onFinalTranscript: (text) => {
-      if (text.trim() && !isProcessing) {
-        handleSendMessage(text.trim());
+      // Debounce: avoid processing the same text twice
+      const trimmedText = text.trim();
+      if (trimmedText && trimmedText !== lastProcessedRef.current && !isProcessing) {
+        lastProcessedRef.current = trimmedText;
+        handleSendMessage(trimmedText);
       }
     },
   });
@@ -70,7 +73,7 @@ export function VoiceAssistantDialog({
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messages]);
+  }, [messages, transcript]);
 
   // Cleanup on close
   useEffect(() => {
@@ -78,18 +81,36 @@ export function VoiceAssistantDialog({
       stopListening();
       stopSpeaking();
       resetTranscript();
+      lastProcessedRef.current = '';
     }
   }, [open, stopListening, resetTranscript]);
 
+  // Show welcome message on open
+  useEffect(() => {
+    if (open && messages.length === 0) {
+      const welcomeMessage = getWelcomeMessage(context);
+      if (welcomeMessage) {
+        setMessages([{
+          id: 'welcome',
+          role: 'assistant',
+          content: welcomeMessage,
+        }]);
+        if (speechEnabled) {
+          setTimeout(() => speak(welcomeMessage), 500);
+        }
+      }
+    }
+  }, [open, context, speechEnabled]);
+
   const stopSpeaking = useCallback(() => {
-    if (window.speechSynthesis) {
+    if (typeof window !== 'undefined' && window.speechSynthesis) {
       window.speechSynthesis.cancel();
       setIsSpeaking(false);
     }
   }, []);
 
   const speak = useCallback((text: string) => {
-    if (!speechEnabled || !window.speechSynthesis) return;
+    if (!speechEnabled || typeof window === 'undefined' || !window.speechSynthesis) return;
 
     stopSpeaking();
     
@@ -98,13 +119,28 @@ export function VoiceAssistantDialog({
     utterance.rate = 1.0;
     utterance.pitch = 1.0;
 
+    // Try to find a Spanish voice
+    const voices = window.speechSynthesis.getVoices();
+    const spanishVoice = voices.find(v => v.lang.startsWith('es'));
+    if (spanishVoice) {
+      utterance.voice = spanishVoice;
+    }
+
     utterance.onstart = () => setIsSpeaking(true);
-    utterance.onend = () => setIsSpeaking(false);
+    utterance.onend = () => {
+      setIsSpeaking(false);
+      // Auto-restart listening after speaking
+      if (open && !isProcessing) {
+        setTimeout(() => {
+          startListening();
+        }, 300);
+      }
+    };
     utterance.onerror = () => setIsSpeaking(false);
 
     speechSynthRef.current = utterance;
     window.speechSynthesis.speak(utterance);
-  }, [speechEnabled, stopSpeaking]);
+  }, [speechEnabled, stopSpeaking, open, isProcessing, startListening]);
 
   const handleSendMessage = async (text: string) => {
     if (!text.trim() || isProcessing) return;
@@ -123,15 +159,14 @@ export function VoiceAssistantDialog({
     setIsProcessing(true);
 
     try {
-      const contextPrompt = getContextPrompt(context, systemPrompt);
-      
       const { data, error } = await supabase.functions.invoke('voice-assistant', {
         body: {
           messages: [...messages, userMessage].map(m => ({
             role: m.role,
             content: m.content,
           })),
-          systemPrompt: contextPrompt,
+          systemPrompt,
+          context,
         },
       });
 
@@ -155,25 +190,21 @@ export function VoiceAssistantDialog({
           data: data.action.data,
           rawText: text,
         });
+        toast.success('Acción detectada: ' + data.action.type);
       }
 
-      // Auto-restart listening after response
-      setTimeout(() => {
-        if (open && !isSpeaking) {
-          startListening();
-        }
-      }, 500);
-
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Voice assistant error:', err);
-      toast.error('Error al procesar tu mensaje');
+      const errorMessage = err instanceof Error ? err.message : 'Error desconocido';
+      toast.error('Error: ' + errorMessage);
       
-      const errorMessage: Message = {
+      const errorResponse: Message = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
         content: 'Lo siento, hubo un error al procesar tu solicitud. Por favor, intenta de nuevo.',
       };
-      setMessages(prev => [...prev, errorMessage]);
+      setMessages(prev => [...prev, errorResponse]);
+      speak(errorResponse.content);
     } finally {
       setIsProcessing(false);
     }
@@ -183,6 +214,7 @@ export function VoiceAssistantDialog({
     setMessages([]);
     resetTranscript();
     stopSpeaking();
+    lastProcessedRef.current = '';
   };
 
   const toggleListening = () => {
@@ -190,6 +222,7 @@ export function VoiceAssistantDialog({
       stopListening();
     } else {
       resetTranscript();
+      lastProcessedRef.current = '';
       startListening();
     }
   };
@@ -201,6 +234,8 @@ export function VoiceAssistantDialog({
           <DialogTitle className="flex items-center gap-2">
             <Volume2 className="h-5 w-5" />
             Asistente de Voz
+            {context === 'accounting' && <span className="text-sm font-normal text-muted-foreground">- Contabilidad</span>}
+            {context === 'crm' && <span className="text-sm font-normal text-muted-foreground">- CRM</span>}
           </DialogTitle>
         </DialogHeader>
 
@@ -211,7 +246,9 @@ export function VoiceAssistantDialog({
                 <Mic className="h-12 w-12 mx-auto mb-4 opacity-20" />
                 <p>Pulsa el micrófono y habla para empezar</p>
                 <p className="text-sm mt-2">
-                  Puedo ayudarte a crear gestiones, registrar asientos contables y más.
+                  {context === 'accounting' 
+                    ? 'Di "Quiero abrir un asiento de pago" para empezar'
+                    : 'Puedo ayudarte a crear gestiones, registrar asientos y más.'}
                 </p>
               </div>
             )}
@@ -239,8 +276,9 @@ export function VoiceAssistantDialog({
 
             {isProcessing && (
               <div className="flex justify-start">
-                <div className="bg-muted rounded-lg px-4 py-2">
+                <div className="bg-muted rounded-lg px-4 py-2 flex items-center gap-2">
                   <Loader2 className="h-4 w-4 animate-spin" />
+                  <span className="text-sm">Procesando...</span>
                 </div>
               </div>
             )}
@@ -255,9 +293,17 @@ export function VoiceAssistantDialog({
           </div>
         </ScrollArea>
 
-        {error && (
-          <div className="text-sm text-destructive text-center py-2">
-            {error}
+        {voiceError && (
+          <div className="flex items-center gap-2 text-sm text-destructive bg-destructive/10 rounded-lg p-3">
+            <AlertCircle className="h-4 w-4 shrink-0" />
+            <span>{voiceError}</span>
+          </div>
+        )}
+
+        {!isSupported && (
+          <div className="flex items-center gap-2 text-sm text-amber-600 bg-amber-50 dark:bg-amber-900/20 rounded-lg p-3">
+            <AlertCircle className="h-4 w-4 shrink-0" />
+            <span>Tu navegador no soporta reconocimiento de voz. Prueba con Chrome o Edge.</span>
           </div>
         )}
 
@@ -267,6 +313,7 @@ export function VoiceAssistantDialog({
             size="icon"
             onClick={() => setSpeechEnabled(!speechEnabled)}
             className="shrink-0"
+            title={speechEnabled ? 'Desactivar respuestas de voz' : 'Activar respuestas de voz'}
           >
             {speechEnabled ? (
               <Volume2 className="h-4 w-4" />
@@ -281,8 +328,8 @@ export function VoiceAssistantDialog({
             onClick={toggleListening}
             disabled={!isSupported || isProcessing}
             className={cn(
-              'h-16 w-16 rounded-full relative',
-              isListening && 'animate-pulse'
+              'h-16 w-16 rounded-full relative transition-all',
+              isListening && 'animate-pulse shadow-lg shadow-destructive/50'
             )}
           >
             {isListening ? (
@@ -301,6 +348,7 @@ export function VoiceAssistantDialog({
             onClick={clearConversation}
             disabled={messages.length === 0}
             className="shrink-0"
+            title="Limpiar conversación"
           >
             <Trash2 className="h-4 w-4" />
           </Button>
@@ -308,40 +356,25 @@ export function VoiceAssistantDialog({
 
         <p className="text-xs text-center text-muted-foreground">
           {isListening 
-            ? 'Escuchando... Habla ahora' 
+            ? '🔴 Escuchando... Habla ahora' 
             : isProcessing 
-              ? 'Procesando...' 
-              : 'Pulsa el micrófono para hablar'}
+              ? '⏳ Procesando...' 
+              : isSpeaking
+                ? '🔊 Reproduciendo respuesta...'
+                : '🎤 Pulsa el micrófono para hablar'}
         </p>
       </DialogContent>
     </Dialog>
   );
 }
 
-function getContextPrompt(context: string, customPrompt?: string): string {
-  if (customPrompt) return customPrompt;
-
-  const prompts: Record<string, string> = {
-    crm: `Eres un asistente de voz para un CRM de construcción. Ayudas a:
-- Crear y gestionar contactos (clientes, proveedores)
-- Registrar gestiones (tareas, reuniones, llamadas, visitas)
-- Buscar información de contactos y oportunidades
-
-Cuando el usuario quiera crear una gestión, extrae: título, tipo (Tarea/Reunión/Llamada/Visita), fecha si la menciona, y descripción.
-Responde de forma concisa y en español.`,
-    
-    accounting: `Eres un asistente de voz para contabilidad de proyectos de construcción. Ayudas a:
-- Registrar asientos contables (compras, ventas, pagos, cobros)
-- Consultar el estado de cuentas
-- Crear facturas
-
-Cuando el usuario quiera crear un asiento, extrae: tipo de operación, importe, proveedor/cliente si lo menciona, y concepto.
-Responde de forma concisa y en español.`,
-    
-    general: `Eres un asistente de voz para una aplicación de gestión de proyectos de construcción. 
-Puedes ayudar con tareas generales, responder preguntas y guiar al usuario.
-Responde de forma concisa y en español.`,
-  };
-
-  return prompts[context] || prompts.general;
+function getWelcomeMessage(context: string): string {
+  switch (context) {
+    case 'accounting':
+      return '¡Hola! Soy tu asistente de contabilidad. Puedo ayudarte a registrar asientos de pago, cobro, compra o venta. ¿Qué necesitas?';
+    case 'crm':
+      return '¡Hola! Soy tu asistente de CRM. Puedo ayudarte a crear gestiones, contactos y más. ¿Qué necesitas?';
+    default:
+      return '';
+  }
 }

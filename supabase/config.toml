@@ -29,3 +29,6 @@ verify_jwt = true
 
 [functions.voice-assistant]
 verify_jwt = true
+
+[functions.send-pending-emails-reminder]
+verify_jwt = false

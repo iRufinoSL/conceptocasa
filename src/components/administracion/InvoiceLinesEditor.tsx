@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -6,12 +6,12 @@ import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
-import { Plus, Trash2, Save, Check, ChevronsUpDown } from 'lucide-react';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Plus, Trash2, Save, Check, ChevronsUpDown, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatCurrency } from '@/lib/format-utils';
 import { cn } from '@/lib/utils';
-
+import { normalizeSearchText, searchMatch } from '@/lib/search-utils';
 interface Invoice {
   id: string;
   invoice_number: number;
@@ -46,6 +46,132 @@ interface InvoiceLine {
 interface Props {
   invoice: Invoice;
   onClose: () => void;
+}
+
+// Component for activity selection with search
+function ActivitySelector({ 
+  activities, 
+  selectedActivityId, 
+  onSelect 
+}: { 
+  activities: Activity[]; 
+  selectedActivityId: string | null; 
+  onSelect: (activityId: string | null) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+
+  // Filter and sort activities based on search term
+  const filteredActivities = useMemo(() => {
+    if (!searchTerm.trim()) {
+      return activities; // Already sorted alphabetically from parent
+    }
+    
+    return activities.filter(activity => 
+      searchMatch(activity.activityId, searchTerm) ||
+      searchMatch(activity.code, searchTerm) ||
+      searchMatch(activity.name, searchTerm)
+    );
+  }, [activities, searchTerm]);
+
+  const selectedActivity = activities.find(a => a.id === selectedActivityId);
+
+  const handleSelect = (activityId: string | null) => {
+    onSelect(activityId);
+    setOpen(false);
+    setSearchTerm('');
+  };
+
+  return (
+    <TooltipProvider>
+      <Popover open={open} onOpenChange={(isOpen) => {
+        setOpen(isOpen);
+        if (!isOpen) setSearchTerm('');
+      }}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                role="combobox"
+                aria-expanded={open}
+                className="h-8 w-full justify-between text-xs font-normal"
+              >
+                <span className="truncate">
+                  {selectedActivity ? selectedActivity.activityId : 'Sin actividad'}
+                </span>
+                <ChevronsUpDown className="ml-1 h-3 w-3 shrink-0 opacity-50" />
+              </Button>
+            </PopoverTrigger>
+          </TooltipTrigger>
+          {selectedActivity && (
+            <TooltipContent side="top" className="max-w-md">
+              <p className="text-sm">{selectedActivity.activityId}</p>
+            </TooltipContent>
+          )}
+        </Tooltip>
+        <PopoverContent className="w-[500px] p-0" align="start" side="bottom" sideOffset={4}>
+          <div className="p-2 border-b">
+            <div className="relative">
+              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Buscar por ActividadID, código o nombre..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-8 h-9"
+                autoFocus
+              />
+            </div>
+          </div>
+          <ScrollArea className="h-[300px]">
+            <div className="p-1">
+              {/* Option for no activity */}
+              <button
+                onClick={() => handleSelect(null)}
+                className={cn(
+                  "flex items-center w-full px-2 py-1.5 text-sm rounded-sm hover:bg-accent cursor-pointer",
+                  !selectedActivityId && "bg-accent"
+                )}
+              >
+                <Check
+                  className={cn(
+                    "mr-2 h-4 w-4 shrink-0",
+                    !selectedActivityId ? "opacity-100" : "opacity-0"
+                  )}
+                />
+                <span className="italic text-muted-foreground">Sin actividad</span>
+              </button>
+
+              {filteredActivities.length === 0 ? (
+                <div className="py-6 text-center text-sm text-muted-foreground">
+                  No se encontraron actividades.
+                </div>
+              ) : (
+                filteredActivities.map((activity) => (
+                  <button
+                    key={activity.id}
+                    onClick={() => handleSelect(activity.id)}
+                    className={cn(
+                      "flex items-center w-full px-2 py-1.5 text-sm rounded-sm hover:bg-accent cursor-pointer text-left",
+                      selectedActivityId === activity.id && "bg-accent"
+                    )}
+                  >
+                    <Check
+                      className={cn(
+                        "mr-2 h-4 w-4 shrink-0",
+                        selectedActivityId === activity.id ? "opacity-100" : "opacity-0"
+                      )}
+                    />
+                    <span>{activity.activityId}</span>
+                  </button>
+                ))
+              )}
+            </div>
+          </ScrollArea>
+        </PopoverContent>
+      </Popover>
+    </TooltipProvider>
+  );
 }
 
 export function InvoiceLinesEditor({ invoice, onClose }: Props) {
@@ -333,77 +459,11 @@ export function InvoiceLinesEditor({ invoice, onClose }: Props) {
                       </TableCell>
                       <TableCell>
                         {activities.length > 0 ? (
-                          <TooltipProvider>
-                            <Popover>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <PopoverTrigger asChild>
-                                    <Button
-                                      variant="outline"
-                                      role="combobox"
-                                      className="h-8 w-full justify-between text-xs font-normal"
-                                    >
-                                      <span className="truncate">
-                                        {line.activity_id
-                                          ? (() => {
-                                              const activity = activities.find(a => a.id === line.activity_id);
-                                              return activity ? activity.activityId : 'Seleccionar...';
-                                            })()
-                                          : 'Sin actividad'}
-                                      </span>
-                                      <ChevronsUpDown className="ml-1 h-3 w-3 shrink-0 opacity-50" />
-                                    </Button>
-                                  </PopoverTrigger>
-                                </TooltipTrigger>
-                                {line.activity_id && (
-                                  <TooltipContent side="top" className="max-w-md">
-                                    <p className="text-sm">
-                                      {activities.find(a => a.id === line.activity_id)?.activityId || ''}
-                                    </p>
-                                  </TooltipContent>
-                                )}
-                              </Tooltip>
-                            <PopoverContent className="w-[500px] p-0" align="start" side="bottom" sideOffset={4}>
-                              <Command>
-                                <CommandInput placeholder="Buscar actividad..." className="h-10" />
-                                <CommandList className="max-h-[300px] overflow-y-auto">
-                                  <CommandEmpty>No se encontraron actividades.</CommandEmpty>
-                                  <CommandGroup>
-                                    <CommandItem
-                                      value="sin-actividad"
-                                      onSelect={() => updateLine(line.id, 'activity_id', null)}
-                                      className="cursor-pointer"
-                                    >
-                                      <Check
-                                        className={cn(
-                                          "mr-2 h-4 w-4 shrink-0",
-                                          !line.activity_id ? "opacity-100" : "opacity-0"
-                                        )}
-                                      />
-                                      Sin actividad
-                                    </CommandItem>
-                                    {activities.map((activity) => (
-                                      <CommandItem
-                                        key={activity.id}
-                                        value={activity.activityId}
-                                        onSelect={() => updateLine(line.id, 'activity_id', activity.id)}
-                                        className="cursor-pointer"
-                                      >
-                                        <Check
-                                          className={cn(
-                                            "mr-2 h-4 w-4 shrink-0",
-                                            line.activity_id === activity.id ? "opacity-100" : "opacity-0"
-                                          )}
-                                        />
-                                        <span className="text-sm">{activity.activityId}</span>
-                                      </CommandItem>
-                                    ))}
-                                  </CommandGroup>
-                                </CommandList>
-                              </Command>
-                            </PopoverContent>
-                            </Popover>
-                          </TooltipProvider>
+                          <ActivitySelector
+                            activities={activities}
+                            selectedActivityId={line.activity_id}
+                            onSelect={(activityId) => updateLine(line.id, 'activity_id', activityId)}
+                          />
                         ) : (
                           <span className="text-xs text-muted-foreground italic">
                             {invoice.budget_id ? 'Sin actividades' : 'Sin presupuesto'}

@@ -5,7 +5,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowLeft, Search, Users, ClipboardList, Target, Plus, Mail, FileText, BarChart3 } from 'lucide-react';
+import { ArrowLeft, Search, Users, ClipboardList, Target, Plus, Mail, FileText, BarChart3, Mic } from 'lucide-react';
 import { ContactsTab } from '@/components/crm/ContactsTab';
 import { ManagementsTab } from '@/components/crm/ManagementsTab';
 import { OpportunitiesTab } from '@/components/crm/OpportunitiesTab';
@@ -19,6 +19,7 @@ import WebsiteAnalyticsTab from '@/components/crm/WebsiteAnalyticsTab';
 import { useToast } from '@/hooks/use-toast';
 import { AppNavDropdown } from '@/components/AppNavDropdown';
 import { BackupButton } from '@/components/BackupButton';
+import { VoiceAssistantDialog, VoiceAction } from '@/components/voice/VoiceAssistantDialog';
 
 export interface Contact {
   id: string;
@@ -86,6 +87,9 @@ export default function CRM() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<{ type: string; item: any } | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  
+  // Voice assistant
+  const [voiceAssistantOpen, setVoiceAssistantOpen] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -223,6 +227,14 @@ export default function CRM() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => setVoiceAssistantOpen(true)}
+              title="Asistente de voz"
+            >
+              <Mic className="h-4 w-4" />
+            </Button>
             {canEdit && <BackupButton module="crm" variant="outline" />}
             {canEdit && (
               <Button onClick={handleAddNew} className="gap-2">
@@ -353,6 +365,19 @@ export default function CRM() {
         title="Confirmar eliminación"
         description={getDeleteMessage()}
         isDeleting={isDeleting}
+      />
+
+      {/* Voice Assistant */}
+      <VoiceAssistantDialog
+        open={voiceAssistantOpen}
+        onOpenChange={setVoiceAssistantOpen}
+        context="crm"
+        onActionDetected={(action) => {
+          if (action.type === 'create_management' && action.data) {
+            setEditingManagement(null);
+            setManagementFormOpen(true);
+          }
+        }}
       />
     </div>
   );

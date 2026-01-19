@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Wallet, ArrowLeft, BookOpen, Calculator, BarChart3, FileText, Receipt, Percent } from 'lucide-react';
+import { Wallet, ArrowLeft, BookOpen, Calculator, BarChart3, FileText, Receipt, Percent, Mic } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { AppNavDropdown } from '@/components/AppNavDropdown';
 import { AccountingEntriesTab } from '@/components/administracion/AccountingEntriesTab';
@@ -11,6 +11,7 @@ import { AccountingAccountsTab } from '@/components/administracion/AccountingAcc
 import { AccountingBalanceReport } from '@/components/administracion/AccountingBalanceReport';
 import { InvoicesTab } from '@/components/administracion/InvoicesTab';
 import { VATReportTab } from '@/components/administracion/VATReportTab';
+import { VoiceAssistantDialog } from '@/components/voice/VoiceAssistantDialog';
 
 export default function Administracion() {
   const navigate = useNavigate();
@@ -19,6 +20,7 @@ export default function Administracion() {
   const [activeTab, setActiveTab] = useState('invoices');
   const [highlightEntryCode, setHighlightEntryCode] = useState<string | null>(null);
   const [highlightAccountId, setHighlightAccountId] = useState<string | null>(null);
+  const [voiceAssistantOpen, setVoiceAssistantOpen] = useState(false);
 
   useEffect(() => {
     checkAuth();
@@ -80,22 +82,32 @@ export default function Administracion() {
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b bg-card/50 backdrop-blur-sm sticky top-0 z-10">
-        <div className="container mx-auto px-4 py-4 flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => navigate('/dashboard')}>
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <AppNavDropdown />
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-primary/10">
-              <Wallet className="h-6 w-6 text-primary" />
-            </div>
-            <div>
-              <h1 className="text-xl font-bold text-foreground">Administración</h1>
-              <p className="text-sm text-muted-foreground">
-                Contabilidad y facturación
-              </p>
+        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <Button variant="ghost" size="icon" onClick={() => navigate('/dashboard')}>
+              <ArrowLeft className="h-5 w-5" />
+            </Button>
+            <AppNavDropdown />
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-primary/10">
+                <Wallet className="h-6 w-6 text-primary" />
+              </div>
+              <div>
+                <h1 className="text-xl font-bold text-foreground">Administración</h1>
+                <p className="text-sm text-muted-foreground">
+                  Contabilidad y facturación
+                </p>
+              </div>
             </div>
           </div>
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => setVoiceAssistantOpen(true)}
+            title="Asistente de voz"
+          >
+            <Mic className="h-4 w-4" />
+          </Button>
         </div>
       </header>
       <main className="container mx-auto px-4 py-6">
@@ -161,6 +173,13 @@ export default function Administracion() {
             <VATReportTab />
           </TabsContent>
         </Tabs>
+
+        {/* Voice Assistant */}
+        <VoiceAssistantDialog
+          open={voiceAssistantOpen}
+          onOpenChange={setVoiceAssistantOpen}
+          context="accounting"
+        />
       </main>
     </div>
   );

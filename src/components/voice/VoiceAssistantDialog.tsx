@@ -129,12 +129,10 @@ export function VoiceAssistantDialog({
     utterance.onstart = () => setIsSpeaking(true);
     utterance.onend = () => {
       setIsSpeaking(false);
-      // Auto-restart listening after speaking
-      if (open && !isProcessing) {
-        setTimeout(() => {
-          startListening();
-        }, 300);
-      }
+      // Nota: NO auto-iniciamos el micrófono aquí porque en Safari/Chrome
+      // el reconocimiento suele requerir un gesto del usuario y puede "bloquearse"
+      // si intentamos arrancarlo automáticamente.
+      // El usuario debe pulsar el botón del micrófono para responder.
     };
     utterance.onerror = () => setIsSpeaking(false);
 
@@ -221,6 +219,8 @@ export function VoiceAssistantDialog({
     if (isListening) {
       stopListening();
     } else {
+      // Permitir "interrumpir" la locución para poder contestar.
+      stopSpeaking();
       resetTranscript();
       lastProcessedRef.current = '';
       startListening();

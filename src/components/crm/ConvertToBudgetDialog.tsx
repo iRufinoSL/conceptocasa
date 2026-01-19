@@ -292,6 +292,12 @@ ${profile.mensaje_adicional || 'Ninguno'}
 
     setCreating(true);
     try {
+      console.log('Starting clone with params:', {
+        sourceBudgetId: cloneSourceBudgetId,
+        cloneMode,
+        preserveMeasurementValues: cloneMode === 'complete',
+      });
+
       const result = await cloneBudget(
         cloneSourceBudgetId,
         {
@@ -306,8 +312,10 @@ ${profile.mensaje_adicional || 'Ninguno'}
         }
       );
 
+      console.log('Clone result:', result);
+
       if (!result.success) {
-        throw new Error(result.error);
+        throw new Error(result.error || 'Error desconocido al clonar el presupuesto');
       }
 
       // Create profile as predesign
@@ -328,14 +336,13 @@ ${profile.mensaje_adicional || 'Ninguno'}
     } catch (error: any) {
       console.error('Error cloning budget:', error);
       toast.error(error.message || 'Error al clonar el presupuesto');
-    } finally {
       setCreating(false);
     }
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Calculator className="h-5 w-5" />
@@ -351,7 +358,7 @@ ${profile.mensaje_adicional || 'Ninguno'}
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
           </div>
         ) : (
-          <div className="space-y-6 py-4">
+          <div className="space-y-6 py-4 overflow-y-auto flex-1">
             {/* Mode Selection */}
             <div className="grid grid-cols-2 gap-3">
               <Button

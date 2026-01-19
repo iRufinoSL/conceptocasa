@@ -83,19 +83,30 @@ function ProfileField({ label, value, isLink }: { label: string; value: string |
 export function ProjectProfileViewer({ open, onOpenChange, projectId, projectName }: ProjectProfileViewerProps) {
   const [profile, setProfile] = useState<ProjectProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchProfile = async () => {
       if (!open || !projectId) return;
       
       setIsLoading(true);
-      const { data, error } = await supabase
+      setError(null);
+      
+      console.log('Fetching profile for project:', projectId);
+      
+      const { data, error: fetchError } = await supabase
         .from('project_profiles')
         .select('*')
         .eq('project_id', projectId)
         .maybeSingle();
 
-      if (!error && data) {
+      console.log('Profile fetch result:', { data, error: fetchError });
+
+      if (fetchError) {
+        console.error('Error fetching profile:', fetchError);
+        setError(fetchError.message);
+        setProfile(null);
+      } else if (data) {
         setProfile(data);
       } else {
         setProfile(null);
@@ -121,11 +132,18 @@ export function ProjectProfileViewer({ open, onOpenChange, projectId, projectNam
           <div className="py-12 text-center">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
           </div>
+        ) : error ? (
+          <div className="py-12 text-center text-destructive">
+            <Home className="h-12 w-12 mx-auto mb-4 opacity-50" />
+            <p>Error al cargar el perfil de vivienda.</p>
+            <p className="text-sm mt-2">{error}</p>
+          </div>
         ) : !profile ? (
           <div className="py-12 text-center text-muted-foreground">
             <Home className="h-12 w-12 mx-auto mb-4 opacity-50" />
             <p>Este proyecto no tiene un perfil de vivienda asociado.</p>
             <p className="text-sm mt-2">Los perfiles se crean automáticamente cuando un cliente envía el formulario desde la landing page.</p>
+            <p className="text-xs mt-4 bg-muted p-2 rounded">Project ID: {projectId}</p>
           </div>
         ) : (
           <div className="space-y-6">

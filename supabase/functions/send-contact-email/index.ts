@@ -488,7 +488,7 @@ ${requestData.message || 'Sin mensaje adicional'}
           message: `${name} ha enviado un perfil de vivienda desde ${poblacion}`,
           related_id: projectId,
           related_type: 'project',
-          action_url: `/proyectos?highlight=${projectId}`,
+          action_url: `/crm?tab=oportunidades`,
           is_read: false
         });
       

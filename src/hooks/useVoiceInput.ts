@@ -34,62 +34,123 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}): UseVoiceInput
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const recognitionRef = useRef<any>(null);
   const shouldRestartRef = useRef(true);
+  const isInitializedRef = useRef(false);
+  const restartTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Check if Web Speech API is supported
   const isSupported = typeof window !== 'undefined' && 
     ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window);
 
-  useEffect(() => {
-    if (!isSupported) return;
+  // Cleanup function
+  const cleanup = useCallback(() => {
+    if (restartTimeoutRef.current) {
+      clearTimeout(restartTimeoutRef.current);
+      restartTimeoutRef.current = null;
+    }
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.abort();
+      } catch (e) {
+        // Ignore errors on cleanup
+      }
+    }
+  }, []);
 
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    const recognition = new SpeechRecognition();
+  useEffect(() => {
+    if (!isSupported || isInitializedRef.current) return;
+
+    const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognitionAPI) {
+      console.warn('Speech Recognition API not available');
+      return;
+    }
+
+    const recognition = new SpeechRecognitionAPI();
 
     recognition.continuous = continuous;
     recognition.interimResults = true;
     recognition.lang = language;
+    recognition.maxAlternatives = 1;
 
     recognition.onstart = () => {
-      console.log('Speech recognition started');
+      console.log('[VoiceInput] Recognition started successfully');
       setIsListening(true);
       setError(null);
     };
 
     recognition.onend = () => {
-      console.log('Speech recognition ended');
+      console.log('[VoiceInput] Recognition ended, shouldRestart:', shouldRestartRef.current);
       setIsListening(false);
-      // Auto-restart if continuous mode, no error, and not manually stopped
+      
+      // Auto-restart if in continuous mode and not manually stopped
       if (continuous && shouldRestartRef.current && recognitionRef.current) {
-        setTimeout(() => {
-          try {
-            recognitionRef.current?.start();
-          } catch (e) {
-            // Ignore if already started or other error
+        restartTimeoutRef.current = setTimeout(() => {
+          if (shouldRestartRef.current && recognitionRef.current) {
+            try {
+              console.log('[VoiceInput] Auto-restarting recognition...');
+              recognitionRef.current.start();
+            } catch (e) {
+              console.log('[VoiceInput] Could not auto-restart:', e);
+            }
           }
-        }, 100);
+        }, 200);
       }
     };
 
     recognition.onerror = (event: any) => {
-      console.error('Speech recognition error:', event.error);
-      // Don't show error for 'aborted' or 'no-speech' in continuous mode
-      if (event.error === 'aborted' || (event.error === 'no-speech' && continuous)) {
-        return;
+      console.log('[VoiceInput] Recognition error:', event.error, event.message);
+      
+      // Handle specific errors
+      switch (event.error) {
+        case 'aborted':
+          // Intentional abort, don't show error
+          break;
+        case 'no-speech':
+          // No speech detected - in continuous mode, just restart
+          if (continuous) {
+            console.log('[VoiceInput] No speech detected, will auto-restart');
+          } else {
+            setError('No se detectó voz. Habla más alto o acércate al micrófono.');
+          }
+          break;
+        case 'audio-capture':
+          setError('No se pudo acceder al micrófono. Verifica los permisos.');
+          shouldRestartRef.current = false;
+          break;
+        case 'not-allowed':
+          setError('Permiso de micrófono denegado. Permite el acceso en la configuración del navegador.');
+          shouldRestartRef.current = false;
+          break;
+        case 'network':
+          setError('Error de red. Verifica tu conexión a internet.');
+          break;
+        case 'service-not-allowed':
+          setError('El servicio de reconocimiento de voz no está disponible en este navegador.');
+          shouldRestartRef.current = false;
+          break;
+        default:
+          setError(`Error de reconocimiento: ${event.error}`);
       }
-      setError(getErrorMessage(event.error));
-      setIsListening(false);
+      
+      // Always update listening state on error
+      if (event.error !== 'aborted' && event.error !== 'no-speech') {
+        setIsListening(false);
+      }
     };
 
-    recognition.onresult = (event) => {
+    recognition.onresult = (event: any) => {
       let interimTranscript = '';
       let finalText = '';
 
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const result = event.results[i];
+        const transcriptText = result[0].transcript;
+        
         if (result.isFinal) {
-          finalText += result[0].transcript;
+          finalText += transcriptText;
+          console.log('[VoiceInput] Final result:', transcriptText, 'confidence:', result[0].confidence);
         } else {
-          interimTranscript += result[0].transcript;
+          interimTranscript += transcriptText;
         }
       }
 
@@ -107,31 +168,83 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}): UseVoiceInput
     };
 
     recognitionRef.current = recognition;
+    isInitializedRef.current = true;
 
     return () => {
-      recognition.abort();
+      cleanup();
+      isInitializedRef.current = false;
     };
-  }, [isSupported, continuous, language, onTranscript, onFinalTranscript, finalTranscript]);
+  }, [isSupported, continuous, language, onTranscript, onFinalTranscript, finalTranscript, cleanup]);
 
   const startListening = useCallback(() => {
     if (!isSupported) {
-      setError('El reconocimiento de voz no está soportado en este navegador');
+      setError('El reconocimiento de voz no está soportado en este navegador. Usa Chrome, Edge o Safari.');
       return;
+    }
+
+    // Clear any pending restart
+    if (restartTimeoutRef.current) {
+      clearTimeout(restartTimeoutRef.current);
+      restartTimeoutRef.current = null;
     }
 
     shouldRestartRef.current = true;
     setError(null);
-    try {
-      recognitionRef.current?.start();
-    } catch (e) {
-      // Recognition might already be started
-      console.warn('Recognition start error:', e);
+    
+    // Request microphone permission first
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+      navigator.mediaDevices.getUserMedia({ audio: true })
+        .then(() => {
+          console.log('[VoiceInput] Microphone permission granted');
+          try {
+            recognitionRef.current?.start();
+          } catch (e) {
+            console.warn('[VoiceInput] Recognition start error:', e);
+            // If already running, stop and restart
+            try {
+              recognitionRef.current?.stop();
+              setTimeout(() => {
+                try {
+                  recognitionRef.current?.start();
+                } catch (e2) {
+                  console.error('[VoiceInput] Failed to restart:', e2);
+                }
+              }, 100);
+            } catch (e2) {
+              console.error('[VoiceInput] Failed to stop:', e2);
+            }
+          }
+        })
+        .catch((err) => {
+          console.error('[VoiceInput] Microphone permission denied:', err);
+          setError('Permiso de micrófono denegado. Permite el acceso para usar el asistente de voz.');
+        });
+    } else {
+      // Fallback for browsers without getUserMedia
+      try {
+        recognitionRef.current?.start();
+      } catch (e) {
+        console.warn('[VoiceInput] Recognition start error:', e);
+      }
     }
   }, [isSupported]);
 
   const stopListening = useCallback(() => {
+    console.log('[VoiceInput] Stopping listening...');
     shouldRestartRef.current = false;
-    recognitionRef.current?.stop();
+    
+    if (restartTimeoutRef.current) {
+      clearTimeout(restartTimeoutRef.current);
+      restartTimeoutRef.current = null;
+    }
+    
+    try {
+      recognitionRef.current?.stop();
+    } catch (e) {
+      console.warn('[VoiceInput] Stop error:', e);
+    }
+    
+    setIsListening(false);
   }, []);
 
   const resetTranscript = useCallback(() => {
@@ -149,25 +262,6 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}): UseVoiceInput
     stopListening,
     resetTranscript,
   };
-}
-
-function getErrorMessage(error: string): string {
-  switch (error) {
-    case 'no-speech':
-      return 'No se detectó voz. Intente de nuevo.';
-    case 'audio-capture':
-      return 'No se pudo acceder al micrófono.';
-    case 'not-allowed':
-      return 'Permiso de micrófono denegado.';
-    case 'network':
-      return 'Error de red. Verifique su conexión.';
-    case 'aborted':
-      return 'Reconocimiento cancelado.';
-    case 'service-not-allowed':
-      return 'Servicio de reconocimiento no disponible.';
-    default:
-      return `Error: ${error}`;
-  }
 }
 
 // Type declarations for Web Speech API

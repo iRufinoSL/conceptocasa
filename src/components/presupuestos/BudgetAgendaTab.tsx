@@ -63,13 +63,14 @@ interface BudgetAgendaTabProps {
   budgetEndDate?: string | null;
   onBudgetDatesChange?: (startDate: string, endDate: string) => void;
   onNavigateToPhases?: (phaseId?: string) => void;
+  onNavigateToActivity?: (activityId: string) => void;
 }
 
 type MainViewMode = 'agenda' | 'gantt' | 'gestiones';
 type ViewMode = 'month' | 'week' | 'day' | 'list';
 type FilterMode = 'all' | 'pendiente' | 'realizada';
 
-export function BudgetAgendaTab({ budgetId, isAdmin, budgetStartDate, budgetEndDate, onBudgetDatesChange, onNavigateToPhases }: BudgetAgendaTabProps) {
+export function BudgetAgendaTab({ budgetId, isAdmin, budgetStartDate, budgetEndDate, onBudgetDatesChange, onNavigateToPhases, onNavigateToActivity }: BudgetAgendaTabProps) {
   const [tasks, setTasks] = useState<BudgetTask[]>([]);
   const [activities, setActivities] = useState<{ id: string; name: string; code: string; phase_code?: string | null }[]>([]);
   const [budgetName, setBudgetName] = useState<string>('');
@@ -598,6 +599,7 @@ export function BudgetAgendaTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
             <ResourcesGestionesView
               budgetId={budgetId}
               isAdmin={isAdmin}
+              onEditActivity={onNavigateToActivity}
             />
           </CardContent>
         </Card>

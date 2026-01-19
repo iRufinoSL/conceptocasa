@@ -4,8 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Target, User, Calendar, MoreVertical, Pencil, Trash2, ChevronDown, MapPin, Home } from 'lucide-react';
+import { Target, User, Calendar, MoreVertical, Pencil, Trash2, MapPin, Home, Calculator } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { searchMatch } from '@/lib/search-utils';
@@ -13,6 +12,7 @@ import type { Opportunity, Contact } from '@/pages/CRM';
 import { LandSearchCard } from '@/components/presupuestos/LandSearchCard';
 import { useToast } from '@/hooks/use-toast';
 import { ProjectProfileViewer } from '@/components/projects/ProjectProfileViewer';
+import { ConvertToBudgetDialog } from './ConvertToBudgetDialog';
 
 interface OpportunitiesTabProps {
   opportunities: Opportunity[];
@@ -24,10 +24,11 @@ interface OpportunitiesTabProps {
 
 export function OpportunitiesTab({ opportunities, contacts, searchTerm, onEdit, onDelete }: OpportunitiesTabProps) {
   const { toast } = useToast();
-  const [expandedDescriptions, setExpandedDescriptions] = useState<Set<string>>(new Set());
   const [showLandSearch, setShowLandSearch] = useState(false);
   const [profileViewerOpen, setProfileViewerOpen] = useState(false);
   const [selectedOpportunity, setSelectedOpportunity] = useState<{ projectId: string; name: string } | null>(null);
+  const [convertDialogOpen, setConvertDialogOpen] = useState(false);
+  const [opportunityToConvert, setOpportunityToConvert] = useState<{ id: string; name: string; projectId: string } | null>(null);
 
   const filteredOpportunities = useMemo(() => {
     if (!searchTerm) return opportunities;
@@ -44,18 +45,6 @@ export function OpportunitiesTab({ opportunities, contacts, searchTerm, onEdit, 
 
   const getInitials = (name: string) => {
     return name.slice(0, 2).toUpperCase();
-  };
-
-  const toggleDescription = (id: string) => {
-    setExpandedDescriptions(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(id)) {
-        newSet.delete(id);
-      } else {
-        newSet.add(id);
-      }
-      return newSet;
-    });
   };
 
   const isHousingProfile = (opp: Opportunity) => {
@@ -168,19 +157,38 @@ export function OpportunitiesTab({ opportunities, contacts, searchTerm, onEdit, 
                 {opportunity.name}
               </CardTitle>
               {isHousingProfile(opportunity) && opportunity.project_id && (
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  className="w-full mt-2 gap-2 text-emerald-600 hover:text-emerald-700 border-emerald-200 hover:border-emerald-300 hover:bg-emerald-50"
-                  onClick={(e) => { 
-                    e.stopPropagation(); 
-                    setSelectedOpportunity({ projectId: opportunity.project_id!, name: opportunity.name });
-                    setProfileViewerOpen(true);
-                  }}
-                >
-                  <Home className="h-4 w-4" />
-                  Ver Perfil de Vivienda
-                </Button>
+                <div className="mt-2 space-y-2">
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="w-full gap-2 text-emerald-600 hover:text-emerald-700 border-emerald-200 hover:border-emerald-300 hover:bg-emerald-50"
+                    onClick={(e) => { 
+                      e.stopPropagation(); 
+                      setSelectedOpportunity({ projectId: opportunity.project_id!, name: opportunity.name });
+                      setProfileViewerOpen(true);
+                    }}
+                  >
+                    <Home className="h-4 w-4" />
+                    Ver Perfil de Vivienda
+                  </Button>
+                  <Button 
+                    variant="default" 
+                    size="sm" 
+                    className="w-full gap-2"
+                    onClick={(e) => { 
+                      e.stopPropagation(); 
+                      setOpportunityToConvert({ 
+                        id: opportunity.id, 
+                        name: opportunity.name, 
+                        projectId: opportunity.project_id! 
+                      });
+                      setConvertDialogOpen(true);
+                    }}
+                  >
+                    <Calculator className="h-4 w-4" />
+                    Convertir en Presupuesto
+                  </Button>
+                </div>
               )}
               {opportunity.description && !isHousingProfile(opportunity) && (
                 <CardDescription className="line-clamp-2">
@@ -236,6 +244,23 @@ export function OpportunitiesTab({ opportunities, contacts, searchTerm, onEdit, 
           onOpenChange={setProfileViewerOpen}
           projectId={selectedOpportunity.projectId}
           projectName={selectedOpportunity.name}
+        />
+      )}
+
+      {/* Convert to Budget Dialog */}
+      {opportunityToConvert && (
+        <ConvertToBudgetDialog
+          open={convertDialogOpen}
+          onOpenChange={setConvertDialogOpen}
+          opportunityId={opportunityToConvert.id}
+          opportunityName={opportunityToConvert.name}
+          projectId={opportunityToConvert.projectId}
+          onSuccess={() => {
+            toast({
+              title: 'Oportunidad convertida',
+              description: 'Se ha creado el presupuesto y el proyecto está ahora activo.',
+            });
+          }}
         />
       )}
     </div>

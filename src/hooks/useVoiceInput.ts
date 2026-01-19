@@ -33,6 +33,7 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}): UseVoiceInput
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const recognitionRef = useRef<any>(null);
+  const shouldRestartRef = useRef(true);
 
   // Check if Web Speech API is supported
   const isSupported = typeof window !== 'undefined' && 
@@ -49,16 +50,32 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}): UseVoiceInput
     recognition.lang = language;
 
     recognition.onstart = () => {
+      console.log('Speech recognition started');
       setIsListening(true);
       setError(null);
     };
 
     recognition.onend = () => {
+      console.log('Speech recognition ended');
       setIsListening(false);
+      // Auto-restart if continuous mode, no error, and not manually stopped
+      if (continuous && shouldRestartRef.current && recognitionRef.current) {
+        setTimeout(() => {
+          try {
+            recognitionRef.current?.start();
+          } catch (e) {
+            // Ignore if already started or other error
+          }
+        }, 100);
+      }
     };
 
-    recognition.onerror = (event) => {
+    recognition.onerror = (event: any) => {
       console.error('Speech recognition error:', event.error);
+      // Don't show error for 'aborted' or 'no-speech' in continuous mode
+      if (event.error === 'aborted' || (event.error === 'no-speech' && continuous)) {
+        return;
+      }
       setError(getErrorMessage(event.error));
       setIsListening(false);
     };
@@ -102,6 +119,7 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}): UseVoiceInput
       return;
     }
 
+    shouldRestartRef.current = true;
     setError(null);
     try {
       recognitionRef.current?.start();
@@ -112,6 +130,7 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}): UseVoiceInput
   }, [isSupported]);
 
   const stopListening = useCallback(() => {
+    shouldRestartRef.current = false;
     recognitionRef.current?.stop();
   }, []);
 

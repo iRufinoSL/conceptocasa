@@ -72,6 +72,7 @@ export default function PresupuestoDashboard() {
   const [isRecalculating, setIsRecalculating] = useState(false);
   const [uploadingPortada, setUploadingPortada] = useState(false);
   const [selectedPhaseId, setSelectedPhaseId] = useState<string | null>(null);
+  const [selectedActivityId, setSelectedActivityId] = useState<string | null>(null);
   const portadaInputRef = useRef<HTMLInputElement>(null);
 
   const isAdmin = roles.includes('administrador');
@@ -569,6 +570,8 @@ export default function PresupuestoDashboard() {
               isAdmin={isAdmin}
               budgetStartDate={presupuesto.start_date}
               budgetEndDate={presupuesto.end_date}
+              initialActivityId={selectedActivityId}
+              onClearInitialActivityId={() => setSelectedActivityId(null)}
             />
           </TabsContent>
 
@@ -631,6 +634,10 @@ export default function PresupuestoDashboard() {
               onNavigateToPhases={(phaseId) => {
                 setSelectedPhaseId(phaseId || null);
                 setActiveTab('fases');
+              }}
+              onNavigateToActivity={(activityId) => {
+                setSelectedActivityId(activityId);
+                setActiveTab('actividades');
               }}
             />
           </TabsContent>

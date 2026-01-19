@@ -58,6 +58,7 @@ interface ResourcesGestionesViewProps {
   budgetId: string;
   isAdmin: boolean;
   onEdit?: (resource: BudgetResource) => void;
+  onEditActivity?: (activityId: string) => void;
 }
 
 const resourceTypeIcons: Record<string, React.ReactNode> = {
@@ -74,6 +75,7 @@ export function ResourcesGestionesView({
   budgetId,
   isAdmin,
   onEdit,
+  onEditActivity,
 }: ResourcesGestionesViewProps) {
   const [resources, setResources] = useState<BudgetResource[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
@@ -313,9 +315,17 @@ export function ResourcesGestionesView({
           </TableCell>
         )}
         <TableCell className="max-w-[200px]">
-          <span className="whitespace-normal break-words leading-tight text-sm">
-            {activityInfo ? `${activityInfo.code} - ${activityInfo.name}` : '-'}
-          </span>
+          {activityInfo ? (
+            <Button
+              variant="link"
+              className="p-0 h-auto font-medium text-primary hover:underline whitespace-normal break-words leading-tight text-sm text-left"
+              onClick={() => onEditActivity?.(activityInfo.id)}
+            >
+              {activityInfo.code}
+            </Button>
+          ) : (
+            <span className="text-muted-foreground">-</span>
+          )}
         </TableCell>
         <TableCell>
           {isEditingDate && isAdmin ? (
@@ -428,7 +438,7 @@ export function ResourcesGestionesView({
                 <TableHead>Recurso</TableHead>
                 <TableHead>Tipo</TableHead>
                 <TableHead>Suministrador</TableHead>
-                <TableHead>Actividad</TableHead>
+                <TableHead>ActividadID</TableHead>
                 <TableHead>
                   <div className="flex items-center gap-1">
                     <Calendar className="h-4 w-4" />
@@ -503,7 +513,7 @@ export function ResourcesGestionesView({
                     <TableRow>
                       <TableHead>Recurso</TableHead>
                       <TableHead>Tipo</TableHead>
-                      <TableHead>Actividad</TableHead>
+                      <TableHead>ActividadID</TableHead>
                       <TableHead>
                         <div className="flex items-center gap-1">
                           <Calendar className="h-4 w-4" />

@@ -134,6 +134,8 @@ interface BudgetActivitiesTabProps {
   isAdmin: boolean;
   budgetStartDate?: string | null;
   budgetEndDate?: string | null;
+  initialActivityId?: string | null;
+  onClearInitialActivityId?: () => void;
 }
 
 // Format for PDF (simpler format without symbols)
@@ -164,7 +166,7 @@ const emptyForm: ActivityForm = {
   work_area_ids: []
 };
 
-export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStartDate, budgetEndDate }: BudgetActivitiesTabProps) {
+export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStartDate, budgetEndDate, initialActivityId, onClearInitialActivityId }: BudgetActivitiesTabProps) {
   const { settings: companySettings } = useCompanySettings();
   const permissions = usePermissions(budgetId);
   const [activities, setActivities] = useState<BudgetActivity[]>([]);
@@ -485,6 +487,18 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
     window.addEventListener('edit-activity', handleEditActivity);
     return () => window.removeEventListener('edit-activity', handleEditActivity);
   }, [activities]);
+
+  // Handle initialActivityId - open activity form when navigating from another tab
+  useEffect(() => {
+    if (!initialActivityId || isLoading || activities.length === 0) return;
+    
+    const activity = activities.find(a => a.id === initialActivityId);
+    if (activity) {
+      handleEdit(activity);
+      // Clear the initialActivityId after opening the form
+      onClearInitialActivityId?.();
+    }
+  }, [initialActivityId, isLoading, activities, onClearInitialActivityId]);
 
   // Listen for budget recalculation events
   useEffect(() => {

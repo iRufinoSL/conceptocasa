@@ -1861,7 +1861,7 @@ export function UrbanReportGenerator({ open, onOpenChange, budgetId, budgetName 
                     </div>
                   </PopoverTrigger>
                   <PopoverContent className="w-[350px] p-0" align="start">
-                    <Command>
+                    <Command shouldFilter={false}>
                       <CommandInput 
                         placeholder="Buscar contacto..." 
                         value={emailTo}
@@ -1871,35 +1871,38 @@ export function UrbanReportGenerator({ open, onOpenChange, budgetId, budgetName 
                         }}
                       />
                       <CommandList className="max-h-[200px]">
-                        <CommandEmpty>
-                          <div className="py-3 text-center text-sm text-muted-foreground">
-                            {emailTo.includes('@') ? (
-                              <p>Se creará un nuevo contacto con este email</p>
-                            ) : (
-                              <p>No se encontraron contactos</p>
-                            )}
-                          </div>
-                        </CommandEmpty>
-                        <CommandGroup heading="Contactos CRM">
-                          {filteredContacts.slice(0, 10).map((contact) => (
-                            <CommandItem
-                              key={contact.id}
-                              value={`${contact.name} ${contact.surname || ''} ${contact.email}`}
-                              onSelect={() => handleContactSelect(contact)}
-                              className="cursor-pointer"
-                            >
-                              <User className="h-4 w-4 mr-2 text-muted-foreground" />
-                              <div className="flex flex-col">
-                                <span className="font-medium">
-                                  {contact.name} {contact.surname || ''}
-                                </span>
-                                <span className="text-xs text-muted-foreground">
-                                  {contact.email}
-                                </span>
-                              </div>
-                            </CommandItem>
-                          ))}
-                        </CommandGroup>
+                        {filteredContacts.length === 0 ? (
+                          <CommandEmpty>
+                            <div className="py-3 text-center text-sm text-muted-foreground">
+                              {emailTo.includes('@') ? (
+                                <p>Se creará un nuevo contacto con este email</p>
+                              ) : (
+                                <p>No se encontraron contactos</p>
+                              )}
+                            </div>
+                          </CommandEmpty>
+                        ) : (
+                          <CommandGroup heading="Contactos CRM">
+                            {filteredContacts.slice(0, 10).map((contact) => (
+                              <CommandItem
+                                key={contact.id}
+                                value={contact.id}
+                                onSelect={() => handleContactSelect(contact)}
+                                className="cursor-pointer"
+                              >
+                                <User className="h-4 w-4 mr-2 text-muted-foreground" />
+                                <div className="flex flex-col">
+                                  <span className="font-medium">
+                                    {contact.name} {contact.surname || ''}
+                                  </span>
+                                  <span className="text-xs text-muted-foreground">
+                                    {contact.email}
+                                  </span>
+                                </div>
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        )}
                       </CommandList>
                     </Command>
                   </PopoverContent>

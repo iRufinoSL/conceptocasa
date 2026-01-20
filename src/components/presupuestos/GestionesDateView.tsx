@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useEffect, useCallback } from 'react';
-import { ChevronDown, ChevronRight, Calendar, Clock, User, Mail, MessageSquare, Send, CheckSquare, Package, Wrench, Truck, Briefcase, Pencil, ExternalLink } from 'lucide-react';
+import { ChevronDown, ChevronRight, Calendar, Clock, User, Mail, MessageSquare, Send, CheckSquare, Package, Wrench, Truck, Briefcase, Pencil, ExternalLink, Plus, CheckCircle2, Filter } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -7,12 +7,15 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { format, parseISO, addDays, isToday, isTomorrow, isThisWeek, isBefore, startOfDay } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { formatActividadId } from '@/lib/activity-id';
+import { TaskForm } from './TaskForm';
+import type { BudgetTask } from './BudgetAgendaTab';
 
 interface Gestion {
   id: string;
@@ -38,8 +41,10 @@ interface GestionesDateViewProps {
   budgetId: string;
   budgetName: string;
   isAdmin: boolean;
+  activities: { id: string; name: string; code: string; phase_code?: string | null }[];
   onEditTask?: (taskId: string) => void;
   onEditActivity?: (activityId: string) => void;
+  onRefresh?: () => void;
 }
 
 const resourceTypeIcons: Record<string, React.ReactNode> = {
@@ -52,13 +57,16 @@ const resourceTypeIcons: Record<string, React.ReactNode> = {
 };
 
 type DateGroup = 'overdue' | 'today' | 'tomorrow' | 'this_week' | 'later' | 'no_date';
+type StatusFilter = 'pendientes' | 'todas';
 
 export function GestionesDateView({
   budgetId,
   budgetName,
   isAdmin,
+  activities,
   onEditTask,
   onEditActivity,
+  onRefresh,
 }: GestionesDateViewProps) {
   const [gestiones, setGestiones] = useState<Gestion[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -68,6 +76,9 @@ export function GestionesDateView({
   const [sendMode, setSendMode] = useState<'email' | 'whatsapp'>('email');
   const [customMessage, setCustomMessage] = useState('');
   const [isSending, setIsSending] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('pendientes');
+  const [taskFormOpen, setTaskFormOpen] = useState(false);
+  const [editingTask, setEditingTask] = useState<BudgetTask | null>(null);
 
   const fetchGestiones = useCallback(async () => {
     setIsLoading(true);
@@ -254,6 +265,12 @@ export function GestionesDateView({
     return 'later';
   };
 
+  // Filter gestiones by status
+  const filteredGestiones = useMemo(() => {
+    if (statusFilter === 'todas') return gestiones;
+    return gestiones.filter(g => g.task_status !== 'realizada');
+  }, [gestiones, statusFilter]);
+
   const groupedGestiones = useMemo(() => {
     const groups: Record<DateGroup, Gestion[]> = {
       overdue: [],
@@ -264,7 +281,7 @@ export function GestionesDateView({
       no_date: [],
     };
 
-    gestiones.forEach(g => {
+    filteredGestiones.forEach(g => {
       const group = getDateGroup(g.target_date);
       groups[group].push(g);
     });
@@ -279,7 +296,44 @@ export function GestionesDateView({
     });
 
     return groups;
-  }, [gestiones]);
+  }, [filteredGestiones]);
+
+  // Toggle task status
+  const handleToggleStatus = async (gestionId: string, currentStatus: string | null | undefined) => {
+    const newStatus = currentStatus === 'realizada' ? 'pendiente' : 'realizada';
+    try {
+      const { error } = await supabase
+        .from('budget_activity_resources')
+        .update({ task_status: newStatus })
+        .eq('id', gestionId);
+
+      if (error) throw error;
+      
+      // Update local state
+      setGestiones(prev => prev.map(g => 
+        g.id === gestionId ? { ...g, task_status: newStatus } : g
+      ));
+      
+      toast.success(newStatus === 'realizada' ? 'Marcada como realizada' : 'Marcada como pendiente');
+    } catch (error) {
+      console.error('Error updating status:', error);
+      toast.error('Error al actualizar estado');
+    }
+  };
+
+  // Handle creating new task
+  const handleNewTask = () => {
+    setEditingTask(null);
+    setTaskFormOpen(true);
+  };
+
+  // Handle task form success
+  const handleTaskFormSuccess = () => {
+    setTaskFormOpen(false);
+    setEditingTask(null);
+    fetchGestiones();
+    onRefresh?.();
+  };
 
   const groupLabels: Record<DateGroup, { label: string; color: string; bgColor: string }> = {
     overdue: { label: '⚠️ Vencidas', color: 'text-red-700', bgColor: 'bg-red-50 border-red-200' },
@@ -508,16 +562,32 @@ export function GestionesDateView({
           </div>
         </div>
 
-        {isAdmin && gestion.type === 'tarea' && onEditTask && (
+        <div className="flex items-center gap-1 shrink-0">
+          {/* Toggle realizada button */}
           <Button
             variant="ghost"
             size="icon"
-            className="shrink-0"
-            onClick={() => onEditTask(gestion.id)}
+            className={cn(
+              "shrink-0",
+              gestion.task_status === 'realizada' && "text-green-600"
+            )}
+            onClick={() => handleToggleStatus(gestion.id, gestion.task_status)}
+            title={gestion.task_status === 'realizada' ? 'Marcar como pendiente' : 'Marcar como realizada'}
           >
-            <Pencil className="h-4 w-4" />
+            <CheckCircle2 className="h-4 w-4" />
           </Button>
-        )}
+
+          {isAdmin && gestion.type === 'tarea' && onEditTask && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="shrink-0"
+              onClick={() => onEditTask(gestion.id)}
+            >
+              <Pencil className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
       </div>
     );
   };
@@ -530,18 +600,55 @@ export function GestionesDateView({
     );
   }
 
-  if (gestiones.length === 0) {
-    return (
-      <div className="text-center py-8 text-muted-foreground">
-        No hay gestiones programadas
-      </div>
-    );
-  }
+  // Count stats
+  const pendingCount = gestiones.filter(g => g.task_status !== 'realizada').length;
+  const completedCount = gestiones.filter(g => g.task_status === 'realizada').length;
 
   const orderedGroups: DateGroup[] = ['overdue', 'today', 'tomorrow', 'this_week', 'later', 'no_date'];
 
   return (
     <div className="space-y-4">
+      {/* Header with actions */}
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div className="flex items-center gap-3">
+          <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as StatusFilter)}>
+            <SelectTrigger className="w-[180px]">
+              <Filter className="h-4 w-4 mr-2" />
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="pendientes">
+                Pendientes ({pendingCount})
+              </SelectItem>
+              <SelectItem value="todas">
+                Todas ({gestiones.length})
+              </SelectItem>
+            </SelectContent>
+          </Select>
+          
+          {completedCount > 0 && statusFilter === 'pendientes' && (
+            <span className="text-xs text-muted-foreground">
+              {completedCount} realizada(s) oculta(s)
+            </span>
+          )}
+        </div>
+
+        {isAdmin && (
+          <Button onClick={handleNewTask} className="gap-1.5">
+            <Plus className="h-4 w-4" />
+            Nueva Tarea
+          </Button>
+        )}
+      </div>
+
+      {/* Empty state */}
+      {filteredGestiones.length === 0 && (
+        <div className="text-center py-8 text-muted-foreground">
+          {statusFilter === 'pendientes' && completedCount > 0
+            ? 'No hay gestiones pendientes. Cambia el filtro a "Todas" para ver las realizadas.'
+            : 'No hay gestiones programadas'}
+        </div>
+      )}
       {/* Selection actions */}
       {selectedGestiones.size > 0 && (
         <Card className="border-primary/50 bg-primary/5">
@@ -704,6 +811,16 @@ export function GestionesDateView({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Task Form Dialog */}
+      <TaskForm
+        budgetId={budgetId}
+        activities={activities}
+        task={editingTask}
+        open={taskFormOpen}
+        onOpenChange={setTaskFormOpen}
+        onSuccess={handleTaskFormSuccess}
+      />
     </div>
   );
 }

@@ -73,6 +73,8 @@ const resourceTypeIcons: Record<string, React.ReactNode> = {
   'Mano de obra': <Wrench className="h-4 w-4" />,
   'Alquiler': <Truck className="h-4 w-4" />,
   'Servicio': <Briefcase className="h-4 w-4" />,
+  'Herramienta': <Wrench className="h-4 w-4" />,
+  'Impuestos': <Package className="h-4 w-4" />,
   'Tarea': <CheckSquare className="h-4 w-4" />,
 };
 

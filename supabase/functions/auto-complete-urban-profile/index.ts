@@ -274,9 +274,9 @@ IMPORTANTE:
         // Only update if the current value is empty/null
         if (profile[dbField] === null || profile[dbField] === undefined || profile[dbField] === '') {
           updateData[dbField] = data.value;
-          if (data.source && data.source !== 'No encontrado') {
-            updateData[`${dbField}_source`] = data.source;
-            if (!sources.includes(data.source)) sources.push(data.source);
+          // Collect sources separately - don't try to write to non-existent _source columns
+          if (data.source && data.source !== 'No encontrado' && !sources.includes(data.source)) {
+            sources.push(data.source);
           }
           fieldsCompleted++;
           updatedFields.push(label);

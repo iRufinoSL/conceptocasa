@@ -42,6 +42,8 @@ export function TaskForm({ budgetId, activities, task, open, onOpenChange, onSuc
   const [activitySearchQuery, setActivitySearchQuery] = useState('');
   const [activityPopoverOpen, setActivityPopoverOpen] = useState(false);
   const [startDate, setStartDate] = useState('');
+  const [startTime, setStartTime] = useState('');
+  const [endTime, setEndTime] = useState('');
   const [durationDays, setDurationDays] = useState(1);
   const [taskStatus, setTaskStatus] = useState<'pendiente' | 'realizada'>('pendiente');
   const [selectedContacts, setSelectedContacts] = useState<string[]>([]);
@@ -85,6 +87,8 @@ export function TaskForm({ budgetId, activities, task, open, onOpenChange, onSuc
         setActivitySearchQuery('');
         setActivityPopoverOpen(false);
         setStartDate(task.start_date || '');
+        setStartTime(task.start_time || '');
+        setEndTime(task.end_time || '');
         setDurationDays(task.duration_days || 1);
         setTaskStatus(task.task_status);
         setSelectedContacts(task.contacts?.map(c => c.contact_id) || []);
@@ -102,6 +106,8 @@ export function TaskForm({ budgetId, activities, task, open, onOpenChange, onSuc
     setActivitySearchQuery('');
     setActivityPopoverOpen(false);
     setStartDate('');
+    setStartTime('');
+    setEndTime('');
     setDurationDays(1);
     setTaskStatus('pendiente');
     setSelectedContacts([]);
@@ -177,6 +183,8 @@ export function TaskForm({ budgetId, activities, task, open, onOpenChange, onSuc
             description: description.trim() || null,
             activity_id: activityId || null,
             start_date: startDate || null,
+            start_time: startTime || null,
+            end_time: endTime || null,
             duration_days: durationDays,
             task_status: taskStatus
           })
@@ -193,6 +201,8 @@ export function TaskForm({ budgetId, activities, task, open, onOpenChange, onSuc
             activity_id: activityId || null,
             resource_type: 'Tarea',
             start_date: startDate || null,
+            start_time: startTime || null,
+            end_time: endTime || null,
             duration_days: durationDays,
             task_status: taskStatus
           })
@@ -362,12 +372,24 @@ export function TaskForm({ budgetId, activities, task, open, onOpenChange, onSuc
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="startDate">Fecha de inicio</Label>
+              <Label htmlFor="startDate">Fecha objetivo *</Label>
               <Input
                 id="startDate"
                 type="date"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
+                required
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="startTime">Hora (opcional)</Label>
+              <Input
+                id="startTime"
+                type="time"
+                value={startTime}
+                onChange={(e) => setStartTime(e.target.value)}
+                placeholder="HH:MM"
               />
             </div>
 

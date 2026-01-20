@@ -10,6 +10,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Input } from '@/components/ui/input';
 import { 
   FileDown, 
   MapPin, 
@@ -25,7 +26,10 @@ import {
   Loader2,
   HelpCircle,
   Search as SearchIcon,
-  ClipboardList
+  ClipboardList,
+  Printer,
+  Mail,
+  Send
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -235,6 +239,11 @@ export function UrbanReportGenerator({ open, onOpenChange, budgetId, budgetName 
   const [profile, setProfile] = useState<UrbanProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
+  const [sendingEmail, setSendingEmail] = useState(false);
+  const [showEmailDialog, setShowEmailDialog] = useState(false);
+  const [emailTo, setEmailTo] = useState('');
+  const [emailSubject, setEmailSubject] = useState('');
+  const [emailMessage, setEmailMessage] = useState('');
   const [additionalNotes, setAdditionalNotes] = useState('');
   const [selectedSections, setSelectedSections] = useState<string[]>([
     'buildability_summary',
@@ -558,10 +567,9 @@ export function UrbanReportGenerator({ open, onOpenChange, budgetId, budgetName 
     return restrictions.filter(r => r.affected !== null || r.distance !== null);
   };
 
-  const generatePDF = async () => {
-    if (!profile) return;
+  const generatePDFDocument = async (): Promise<jsPDF> => {
+    if (!profile) throw new Error('No profile');
     
-    setGenerating(true);
     try {
       const doc = new jsPDF();
       const pageWidth = doc.internal.pageSize.getWidth();
@@ -1436,16 +1444,87 @@ export function UrbanReportGenerator({ open, onOpenChange, budgetId, budgetName 
         );
       }
 
-      // Save PDF
-      const fileName = `Pre-Informe_Urbanistico_${profile.cadastral_reference}_${format(new Date(), 'yyyyMMdd')}.pdf`;
-      doc.save(fileName);
-      
-      toast.success('Pre-informe urbanístico generado correctamente');
+      return doc;
     } catch (error) {
       console.error('Error generating PDF:', error);
+      throw error;
+    }
+  };
+
+  const handleDownloadPDF = async () => {
+    if (!profile) return;
+    setGenerating(true);
+    try {
+      const doc = await generatePDFDocument();
+      const fileName = `Pre-Informe_Urbanistico_${profile.cadastral_reference}_${format(new Date(), 'yyyyMMdd')}.pdf`;
+      doc.save(fileName);
+      toast.success('Pre-informe urbanístico descargado correctamente');
+    } catch (error) {
       toast.error('Error al generar el PDF');
     } finally {
       setGenerating(false);
+    }
+  };
+
+  const handlePrintPDF = async () => {
+    if (!profile) return;
+    setGenerating(true);
+    try {
+      const doc = await generatePDFDocument();
+      const pdfBlob = doc.output('blob');
+      const pdfUrl = URL.createObjectURL(pdfBlob);
+      const printWindow = window.open(pdfUrl);
+      if (printWindow) {
+        printWindow.onload = () => {
+          printWindow.print();
+        };
+      }
+      toast.success('Preparando para imprimir...');
+    } catch (error) {
+      toast.error('Error al preparar la impresión');
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const handlePrepareEmail = () => {
+    if (!profile) return;
+    setEmailSubject(`Pre-Informe Urbanístico - ${profile.cadastral_reference} - ${budgetName}`);
+    setEmailMessage(`Adjunto le envío el Pre-Informe Urbanístico correspondiente a la parcela con referencia catastral ${profile.cadastral_reference}.\n\nEste documento tiene carácter meramente informativo y no vinculante.\n\nQuedamos a su disposición para cualquier aclaración.`);
+    setShowEmailDialog(true);
+  };
+
+  const handleSendEmail = async () => {
+    if (!profile || !emailTo) return;
+    setSendingEmail(true);
+    try {
+      const doc = await generatePDFDocument();
+      const pdfBase64 = doc.output('datauristring').split(',')[1];
+      const fileName = `Pre-Informe_Urbanistico_${profile.cadastral_reference}_${format(new Date(), 'yyyyMMdd')}.pdf`;
+
+      const { error } = await supabase.functions.invoke('send-email', {
+        body: {
+          to: emailTo,
+          subject: emailSubject,
+          html: emailMessage.replace(/\n/g, '<br>'),
+          attachments: [{
+            filename: fileName,
+            content: pdfBase64,
+            encoding: 'base64',
+            contentType: 'application/pdf'
+          }]
+        }
+      });
+
+      if (error) throw error;
+      toast.success('Email enviado correctamente');
+      setShowEmailDialog(false);
+      setEmailTo('');
+    } catch (error) {
+      console.error('Error sending email:', error);
+      toast.error('Error al enviar el email');
+    } finally {
+      setSendingEmail(false);
     }
   };
 
@@ -1615,11 +1694,19 @@ export function UrbanReportGenerator({ open, onOpenChange, budgetId, budgetName 
 
         <Separator />
 
-        <DialogFooter>
+        <DialogFooter className="flex-wrap gap-2">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancelar
           </Button>
-          <Button onClick={generatePDF} disabled={generating}>
+          <Button variant="outline" onClick={handlePrintPDF} disabled={generating}>
+            <Printer className="h-4 w-4 mr-2" />
+            Imprimir
+          </Button>
+          <Button variant="outline" onClick={handlePrepareEmail} disabled={generating}>
+            <Mail className="h-4 w-4 mr-2" />
+            Enviar por Email
+          </Button>
+          <Button onClick={handleDownloadPDF} disabled={generating}>
             {generating ? (
               <>
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -1628,11 +1715,64 @@ export function UrbanReportGenerator({ open, onOpenChange, budgetId, budgetName 
             ) : (
               <>
                 <FileDown className="h-4 w-4 mr-2" />
-                Generar PDF
+                Descargar PDF
               </>
             )}
           </Button>
         </DialogFooter>
+
+        {/* Email Dialog */}
+        <Dialog open={showEmailDialog} onOpenChange={setShowEmailDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Enviar Informe por Email</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label>Destinatario</Label>
+                <Input
+                  type="email"
+                  value={emailTo}
+                  onChange={(e) => setEmailTo(e.target.value)}
+                  placeholder="email@ejemplo.com"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Asunto</Label>
+                <Input
+                  value={emailSubject}
+                  onChange={(e) => setEmailSubject(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Mensaje</Label>
+                <Textarea
+                  value={emailMessage}
+                  onChange={(e) => setEmailMessage(e.target.value)}
+                  rows={5}
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowEmailDialog(false)}>
+                Cancelar
+              </Button>
+              <Button onClick={handleSendEmail} disabled={sendingEmail || !emailTo}>
+                {sendingEmail ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Enviando...
+                  </>
+                ) : (
+                  <>
+                    <Send className="h-4 w-4 mr-2" />
+                    Enviar
+                  </>
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </DialogContent>
     </Dialog>
   );

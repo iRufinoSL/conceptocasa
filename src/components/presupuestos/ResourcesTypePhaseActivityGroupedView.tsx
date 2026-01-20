@@ -1,4 +1,4 @@
-import { useMemo, useState, Fragment } from 'react';
+import { useMemo, useState, Fragment, useEffect } from 'react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Button } from '@/components/ui/button';
@@ -157,6 +157,56 @@ export function ResourcesTypePhaseActivityGroupedView({
 
   // Use full hierarchical data (no implicit filtering)
   const filteredHierarchicalData = hierarchicalData;
+
+  // Default expansion behavior: show groups WITH assignment first/expanded,
+  // keep "Sin tipo" / "Sin fase" / "Sin actividad" collapsed unless the user expands them.
+  useEffect(() => {
+    if (resources.length === 0) return;
+
+    // Only initialize once per load (don't override user's manual toggles)
+    if (expandedPhases.size > 0 || expandedActivities.size > 0) return;
+
+    // Types that actually have resources
+    const typesWithResources = Object.entries(filteredHierarchicalData)
+      .filter(([, phasesById]) =>
+        Object.values(phasesById).some((activitiesById) =>
+          Object.values(activitiesById).some((list) => list.length > 0)
+        )
+      )
+      .map(([type]) => type);
+
+    const realTypes = typesWithResources.filter((t) => t !== 'Sin tipo');
+
+    // Expand all real types (including unknown/new types) by default.
+    const hasDefaultExpandedTypes =
+      expandedTypes.size === RESOURCE_TYPES.length &&
+      Array.from(expandedTypes).every((t) => RESOURCE_TYPES.includes(t));
+
+    if (hasDefaultExpandedTypes) {
+      setExpandedTypes(new Set(realTypes));
+    }
+
+    const phaseKeys: string[] = [];
+    const activityKeys: string[] = [];
+
+    realTypes.forEach((type) => {
+      const typePhases = filteredHierarchicalData[type] || {};
+
+      Object.keys(typePhases).forEach((phaseId) => {
+        if (phaseId === '__no_phase__') return;
+        phaseKeys.push(`${type}-${phaseId}`);
+
+        const phaseActivities = typePhases[phaseId] || {};
+        Object.keys(phaseActivities).forEach((activityId) => {
+          if (activityId === '__no_activity__') return;
+          activityKeys.push(`${type}-${phaseId}-${activityId}`);
+        });
+      });
+    });
+
+    setExpandedPhases(new Set(phaseKeys));
+    setExpandedActivities(new Set(activityKeys));
+  }, [resources.length, filteredHierarchicalData, expandedPhases.size, expandedActivities.size, expandedTypes]);
 
   // Calculate totals per type
   const typeTotals = useMemo(() => {

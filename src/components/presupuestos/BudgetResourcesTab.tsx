@@ -193,14 +193,20 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
   const [bulkEditValue, setBulkEditValue] = useState<string | number>('');
   const [isBulkUpdating, setIsBulkUpdating] = useState(false);
   
-  // Auto-expand all phases/activities - but keep "Sin fase" collapsed by default
+  // Auto-expand all phases/activities if configured (but keep "Sin fase" / "Sin actividad" collapsed by default)
   useEffect(() => {
-    if (phases.length > 0 && activities.length > 0) {
-      // Expand all real phases, but NOT __no_phase__ (sin fase)
-      setExpandedPhases(new Set(phases.map(p => p.id)));
-      setExpandedActivities(new Set(activities.map(a => a.id)));
+    if (phases.length === 0 || activities.length === 0) return;
+
+    if (recursosSettings?.expandAll) {
+      // Expand all REAL phases/activities, but not the synthetic "sin" groups
+      setExpandedPhases(new Set(phases.map((p) => p.id)));
+      setExpandedActivities(new Set(activities.map((a) => a.id)));
+    } else {
+      // Default collapsed
+      setExpandedPhases(new Set());
+      setExpandedActivities(new Set());
     }
-  }, [phases, activities]);
+  }, [recursosSettings?.expandAll, phases, activities]);
 
   const fetchData = async () => {
     try {

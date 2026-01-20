@@ -24,6 +24,8 @@ export interface BudgetTask {
   name: string;
   description: string | null;
   start_date: string | null;
+  start_time: string | null;
+  end_time: string | null;
   duration_days: number;
   task_status: 'pendiente' | 'realizada';
   created_at: string;
@@ -133,6 +135,8 @@ export function BudgetAgendaTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
             name,
             description,
             start_date,
+            start_time,
+            end_time,
             duration_days,
             task_status,
             created_at,
@@ -218,6 +222,8 @@ export function BudgetAgendaTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
         tasksWithRelations.push({
           ...task,
           duration_days: task.duration_days || 1,
+          start_time: task.start_time || null,
+          end_time: task.end_time || null,
           task_status: (task.task_status as 'pendiente' | 'realizada') || 'pendiente',
           activity,
           workAreas,

@@ -23,6 +23,8 @@ interface Gestion {
   description: string | null;
   target_date: string | null;
   start_date: string | null;
+  start_time: string | null;
+  end_time: string | null;
   type: 'tarea' | 'recurso';
   resource_type?: string | null;
   activity_id: string | null;
@@ -91,6 +93,8 @@ export function GestionesDateView({
           name,
           description,
           start_date,
+          start_time,
+          end_time,
           resource_type,
           activity_id,
           supplier_id,
@@ -109,6 +113,8 @@ export function GestionesDateView({
           name,
           description,
           start_date,
+          start_time,
+          end_time,
           resource_type,
           activity_id,
           supplier_id
@@ -190,7 +196,7 @@ export function GestionesDateView({
       // Map tasks to gestiones
       const gestionesList: Gestion[] = [];
 
-      (tasksData || []).forEach(task => {
+      (tasksData || []).forEach((task: any) => {
         const activity = task.activity_id ? activitiesMap[task.activity_id] : null;
         const supplier = task.supplier_id ? suppliersMap[task.supplier_id] : null;
 
@@ -200,6 +206,8 @@ export function GestionesDateView({
           description: task.description,
           target_date: task.start_date,
           start_date: task.start_date,
+          start_time: task.start_time || null,
+          end_time: task.end_time || null,
           type: 'tarea',
           resource_type: task.resource_type,
           activity_id: task.activity_id,
@@ -216,7 +224,7 @@ export function GestionesDateView({
       });
 
       // Map resources to gestiones (resources with start dates that represent scheduled items)
-      (resourcesData || []).forEach(resource => {
+      (resourcesData || []).forEach((resource: any) => {
         const activity = resource.activity_id ? activitiesMap[resource.activity_id] : null;
         const supplier = resource.supplier_id ? suppliersMap[resource.supplier_id] : null;
 
@@ -226,6 +234,8 @@ export function GestionesDateView({
           description: resource.description,
           target_date: resource.start_date,
           start_date: resource.start_date,
+          start_time: resource.start_time || null,
+          end_time: resource.end_time || null,
           type: 'recurso',
           resource_type: resource.resource_type,
           activity_id: resource.activity_id,
@@ -286,12 +296,17 @@ export function GestionesDateView({
       groups[group].push(g);
     });
 
-    // Sort each group by date
+    // Sort each group by date, then by time
     Object.keys(groups).forEach(key => {
       groups[key as DateGroup].sort((a, b) => {
         const dateA = a.target_date || '9999-12-31';
         const dateB = b.target_date || '9999-12-31';
-        return dateA.localeCompare(dateB);
+        const dateCompare = dateA.localeCompare(dateB);
+        if (dateCompare !== 0) return dateCompare;
+        // Sort by time within same date
+        const timeA = a.start_time || '23:59';
+        const timeB = b.start_time || '23:59';
+        return timeA.localeCompare(timeB);
       });
     });
 
@@ -325,6 +340,72 @@ export function GestionesDateView({
   const handleNewTask = () => {
     setEditingTask(null);
     setTaskFormOpen(true);
+  };
+
+  // Handle editing a task - load complete data
+  const handleEditTask = async (gestionId: string) => {
+    try {
+      // Fetch complete task data
+      const { data: taskData, error } = await supabase
+        .from('budget_activity_resources')
+        .select(`
+          id,
+          budget_id,
+          activity_id,
+          name,
+          description,
+          start_date,
+          start_time,
+          end_time,
+          duration_days,
+          task_status,
+          created_at,
+          updated_at
+        `)
+        .eq('id', gestionId)
+        .single();
+
+      if (error) throw error;
+
+      // Fetch contacts
+      const { data: contactsData } = await supabase
+        .from('budget_resource_contacts')
+        .select(`
+          id,
+          contact_id,
+          contact:crm_contacts(id, name, surname)
+        `)
+        .eq('resource_id', gestionId);
+
+      // Fetch images
+      const { data: imagesData } = await supabase
+        .from('budget_resource_images')
+        .select('id, file_name, file_path')
+        .eq('resource_id', gestionId);
+
+      const task: BudgetTask = {
+        id: taskData.id,
+        budget_id: taskData.budget_id,
+        activity_id: taskData.activity_id,
+        name: taskData.name,
+        description: taskData.description,
+        start_date: taskData.start_date,
+        start_time: taskData.start_time || null,
+        end_time: taskData.end_time || null,
+        duration_days: taskData.duration_days || 1,
+        task_status: (taskData.task_status as 'pendiente' | 'realizada') || 'pendiente',
+        created_at: taskData.created_at,
+        updated_at: taskData.updated_at,
+        contacts: contactsData || [],
+        images: imagesData || [],
+      };
+
+      setEditingTask(task);
+      setTaskFormOpen(true);
+    } catch (error) {
+      console.error('Error loading task:', error);
+      toast.error('Error al cargar la tarea');
+    }
   };
 
   // Handle task form success
@@ -421,7 +502,19 @@ export function GestionesDateView({
   }, [gestiones, selectedGestiones]);
 
   const generateMessageContent = () => {
-    const selectedItems = gestiones.filter(g => selectedGestiones.has(g.id));
+    const selectedItems = gestiones
+      .filter(g => selectedGestiones.has(g.id))
+      // Sort by date first, then by time
+      .sort((a, b) => {
+        const dateA = a.target_date || '9999-12-31';
+        const dateB = b.target_date || '9999-12-31';
+        const dateCompare = dateA.localeCompare(dateB);
+        if (dateCompare !== 0) return dateCompare;
+        // Sort by time within same date
+        const timeA = a.start_time || '23:59';
+        const timeB = b.start_time || '23:59';
+        return timeA.localeCompare(timeB);
+      });
     const today = format(new Date(), "EEEE, d 'de' MMMM 'de' yyyy", { locale: es });
     
     let message = `📋 *Gestiones - ${budgetName}*\n`;
@@ -429,12 +522,13 @@ export function GestionesDateView({
 
     selectedItems.forEach(g => {
       const dateStr = g.target_date ? format(parseISO(g.target_date), 'dd/MM/yyyy', { locale: es }) : 'Sin fecha';
+      const timeStr = g.start_time ? ` a las ${g.start_time}` : '';
       const activityLabel = g.activity_code 
         ? formatActividadId({ phaseCode: g.phase_code, activityCode: g.activity_code, name: g.activity_name || '' })
         : null;
 
       message += `• *${g.name}*\n`;
-      message += `  📅 ${dateStr}\n`;
+      message += `  📅 ${dateStr}${timeStr}\n`;
       if (activityLabel) message += `  🔗 ${activityLabel}\n`;
       if (g.description) message += `  📝 ${g.description}\n`;
       message += '\n';
@@ -534,6 +628,14 @@ export function GestionesDateView({
               </span>
             )}
             
+            {gestion.start_time && (
+              <span className="flex items-center gap-1">
+                <Clock className="h-3 w-3" />
+                {gestion.start_time}
+                {gestion.end_time && ` - ${gestion.end_time}`}
+              </span>
+            )}
+            
             {activityLabel && (
               <Button
                 variant="link"
@@ -577,12 +679,12 @@ export function GestionesDateView({
             <CheckCircle2 className="h-4 w-4" />
           </Button>
 
-          {isAdmin && gestion.type === 'tarea' && onEditTask && (
+          {isAdmin && gestion.type === 'tarea' && (
             <Button
               variant="ghost"
               size="icon"
               className="shrink-0"
-              onClick={() => onEditTask(gestion.id)}
+              onClick={() => handleEditTask(gestion.id)}
             >
               <Pencil className="h-4 w-4" />
             </Button>

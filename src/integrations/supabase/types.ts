@@ -366,6 +366,7 @@ export type Database = {
           created_at: string | null
           description: string | null
           duration_days: number | null
+          end_time: string | null
           external_unit_cost: number | null
           id: string
           manual_units: number | null
@@ -376,6 +377,7 @@ export type Database = {
           sales_margin_percent: number | null
           signed_subtotal: number | null
           start_date: string | null
+          start_time: string | null
           supplier_id: string | null
           task_status: string | null
           unit: string | null
@@ -387,6 +389,7 @@ export type Database = {
           created_at?: string | null
           description?: string | null
           duration_days?: number | null
+          end_time?: string | null
           external_unit_cost?: number | null
           id?: string
           manual_units?: number | null
@@ -397,6 +400,7 @@ export type Database = {
           sales_margin_percent?: number | null
           signed_subtotal?: number | null
           start_date?: string | null
+          start_time?: string | null
           supplier_id?: string | null
           task_status?: string | null
           unit?: string | null
@@ -408,6 +412,7 @@ export type Database = {
           created_at?: string | null
           description?: string | null
           duration_days?: number | null
+          end_time?: string | null
           external_unit_cost?: number | null
           id?: string
           manual_units?: number | null
@@ -418,6 +423,7 @@ export type Database = {
           sales_margin_percent?: number | null
           signed_subtotal?: number | null
           start_date?: string | null
+          start_time?: string | null
           supplier_id?: string | null
           task_status?: string | null
           unit?: string | null

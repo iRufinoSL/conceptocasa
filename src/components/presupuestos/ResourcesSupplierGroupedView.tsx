@@ -91,13 +91,18 @@ export function ResourcesSupplierGroupedView({
   calculateFields,
   getActivityId,
 }: ResourcesSupplierGroupedViewProps) {
-  const [expandedSuppliers, setExpandedSuppliers] = useState<Set<string>>(new Set());
   const [suppliers, setSuppliers] = useState<Contact[]>([]);
+  
+  // Get all unique supplier IDs from resources (excluding null/no supplier)
+  const supplierIds = useMemo(() => {
+    return [...new Set(resources.map(r => r.supplier_id).filter(Boolean))] as string[];
+  }, [resources]);
+  
+  // Initialize expanded suppliers to include all REAL suppliers (exclude __no_supplier__)
+  const [expandedSuppliers, setExpandedSuppliers] = useState<Set<string>>(new Set());
 
   // Fetch suppliers for all supplier_ids in resources
   useEffect(() => {
-    const supplierIds = [...new Set(resources.map(r => r.supplier_id).filter(Boolean))] as string[];
-    
     if (supplierIds.length === 0) {
       setSuppliers([]);
       return;
@@ -115,7 +120,14 @@ export function ResourcesSupplierGroupedView({
     };
 
     fetchSuppliers();
-  }, [resources]);
+  }, [supplierIds]);
+
+  // Auto-expand all REAL suppliers (exclude __no_supplier__) when data loads
+  useEffect(() => {
+    if (supplierIds.length > 0) {
+      setExpandedSuppliers(new Set(supplierIds));
+    }
+  }, [supplierIds]);
 
   // Group resources by supplier
   const groupedBySupplier = useMemo(() => {

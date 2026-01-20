@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useEffect, useCallback } from 'react';
-import { ChevronDown, ChevronRight, User, Users, ArrowUpDown, ArrowUp, ArrowDown, Calendar } from 'lucide-react';
+import { ChevronDown, ChevronRight, User, Users, Calendar, ClipboardList } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -11,7 +11,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { format, parseISO, addDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { toast } from 'sonner';
-
+import { GestionesDateView } from './GestionesDateView';
 interface BudgetResource {
   id: string;
   budget_id: string;
@@ -56,9 +56,11 @@ interface Contact {
 
 interface ResourcesGestionesViewProps {
   budgetId: string;
+  budgetName?: string;
   isAdmin: boolean;
   onEdit?: (resource: BudgetResource) => void;
   onEditActivity?: (activityId: string) => void;
+  onEditTask?: (taskId: string) => void;
 }
 
 const resourceTypeIcons: Record<string, React.ReactNode> = {
@@ -67,25 +69,27 @@ const resourceTypeIcons: Record<string, React.ReactNode> = {
   'Alquiler': <Truck className="h-4 w-4" />,
   'Servicio': <Briefcase className="h-4 w-4" />,
   'Tarea': <CheckSquare className="h-4 w-4" />,
+  'Herramienta': <Wrench className="h-4 w-4" />,
 };
 
-type SortMode = 'supplier' | 'activity_date';
+type SortMode = 'fecha_objetivo' | 'supplier' | 'activity_date';
 
 export function ResourcesGestionesView({
   budgetId,
+  budgetName = 'Presupuesto',
   isAdmin,
   onEdit,
   onEditActivity,
+  onEditTask,
 }: ResourcesGestionesViewProps) {
   const [resources, setResources] = useState<BudgetResource[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
   const [phases, setPhases] = useState<Phase[]>([]);
   const [suppliers, setSuppliers] = useState<Contact[]>([]);
   const [expandedSuppliers, setExpandedSuppliers] = useState<Set<string>>(new Set());
-  const [sortMode, setSortMode] = useState<SortMode>('supplier');
+  const [sortMode, setSortMode] = useState<SortMode>('fecha_objetivo');
   const [isLoading, setIsLoading] = useState(true);
   const [editingStartDate, setEditingStartDate] = useState<{ activityId: string; value: string } | null>(null);
-
   // Fetch all data
   const fetchData = useCallback(async () => {
     setIsLoading(true);
@@ -407,8 +411,17 @@ export function ResourcesGestionesView({
   return (
     <div className="space-y-4">
       {/* Sort Toggle */}
-      <div className="flex items-center gap-2">
-        <span className="text-sm text-muted-foreground">Ordenar por:</span>
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-sm text-muted-foreground">Vista:</span>
+        <Button
+          variant={sortMode === 'fecha_objetivo' ? 'default' : 'outline'}
+          size="sm"
+          onClick={() => setSortMode('fecha_objetivo')}
+          className="gap-1.5"
+        >
+          <ClipboardList className="h-4 w-4" />
+          Por Fecha Objetivo
+        </Button>
         <Button
           variant={sortMode === 'supplier' ? 'default' : 'outline'}
           size="sm"
@@ -416,7 +429,7 @@ export function ResourcesGestionesView({
           className="gap-1.5"
         >
           <Users className="h-4 w-4" />
-          Suministrador
+          Por Suministrador
         </Button>
         <Button
           variant={sortMode === 'activity_date' ? 'default' : 'outline'}
@@ -425,9 +438,20 @@ export function ResourcesGestionesView({
           className="gap-1.5"
         >
           <Calendar className="h-4 w-4" />
-          Fecha Inicio Actividad
+          Por Fecha Actividad
         </Button>
       </div>
+
+      {/* Fecha Objetivo View (new) */}
+      {sortMode === 'fecha_objetivo' && (
+        <GestionesDateView
+          budgetId={budgetId}
+          budgetName={budgetName}
+          isAdmin={isAdmin}
+          onEditTask={onEditTask}
+          onEditActivity={onEditActivity}
+        />
+      )}
 
       {/* Sorted by Activity Date View */}
       {sortMode === 'activity_date' && (

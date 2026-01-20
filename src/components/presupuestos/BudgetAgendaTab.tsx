@@ -598,8 +598,15 @@ export function BudgetAgendaTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
           <CardContent className="pt-6">
             <ResourcesGestionesView
               budgetId={budgetId}
+              budgetName={budgetName}
               isAdmin={isAdmin}
               onEditActivity={onNavigateToActivity}
+              onEditTask={(taskId) => {
+                const task = tasks.find(t => t.id === taskId);
+                if (task) {
+                  handleEditTask(task);
+                }
+              }}
             />
           </CardContent>
         </Card>

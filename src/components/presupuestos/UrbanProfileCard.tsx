@@ -40,7 +40,8 @@ import {
   Fence,
   Car,
   Container,
-  Waves
+  Waves,
+  Sparkles
 } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import * as pdfjsLib from 'pdfjs-dist';
@@ -404,6 +405,7 @@ export function UrbanProfileCard({ budgetId, cadastralReference: initialRef, isA
   const [isEditingCoords, setIsEditingCoords] = useState(false);
   const [showReportGenerator, setShowReportGenerator] = useState(false);
   const [showMeasurementModal, setShowMeasurementModal] = useState(false);
+  const [isAutoCompleting, setIsAutoCompleting] = useState(false);
   // Initialize PDF.js worker
   useEffect(() => {
     pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
@@ -708,6 +710,73 @@ export function UrbanProfileCard({ budgetId, cadastralReference: initialRef, isA
     }
   };
 
+  const handleAutoCompleteProfile = async () => {
+    if (!profile?.municipality || !profile?.province) {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Primero consulta el Catastro para obtener los datos básicos de la parcela',
+      });
+      return;
+    }
+
+    setIsAutoCompleting(true);
+    toast({
+      title: 'Auto-completando perfil...',
+      description: 'Buscando datos en normativas urbanísticas. Esto puede tardar unos segundos.',
+    });
+
+    try {
+      const { data, error } = await supabase.functions.invoke('auto-complete-urban-profile', {
+        body: {
+          budgetId,
+          municipality: profile.municipality,
+          province: profile.province,
+          autonomousCommunity: profile.autonomous_community,
+          landClass: profile.land_class,
+          cadastralReference: profile.cadastral_reference,
+        },
+      });
+
+      if (error) throw error;
+
+      if (data?.success) {
+        const { fieldsCompleted, updatedFields, consultedUrls } = data;
+        
+        if (fieldsCompleted > 0) {
+          toast({
+            title: '¡Perfil completado!',
+            description: `Se actualizaron ${fieldsCompleted} campos: ${updatedFields?.join(', ')}`,
+          });
+        } else {
+          toast({
+            title: 'Búsqueda completada',
+            description: data.message || 'No se encontraron datos adicionales para completar',
+          });
+        }
+        
+        // Show sources if available
+        if (consultedUrls && consultedUrls.length > 0) {
+          console.log('Fuentes consultadas:', consultedUrls);
+        }
+        
+        // Refresh profile
+        fetchProfile();
+      } else {
+        throw new Error(data?.error || 'Error desconocido');
+      }
+    } catch (error) {
+      console.error('Error auto-completing profile:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Error al auto-completar',
+        description: error instanceof Error ? error.message : 'No se pudo completar el perfil',
+      });
+    } finally {
+      setIsAutoCompleting(false);
+    }
+  };
+
   const handlePdfUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -875,6 +944,25 @@ export function UrbanProfileCard({ budgetId, cadastralReference: initialRef, isA
             <div className="flex items-center gap-2">
               {profile && (
                 <>
+                  <Button
+                    variant="default"
+                    size="sm"
+                    onClick={handleAutoCompleteProfile}
+                    disabled={isAutoCompleting}
+                    className="text-xs"
+                  >
+                    {isAutoCompleting ? (
+                      <>
+                        <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                        Buscando...
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="h-3 w-3 mr-1" />
+                        Auto-completar
+                      </>
+                    )}
+                  </Button>
                   <Button
                     variant="outline"
                     size="sm"

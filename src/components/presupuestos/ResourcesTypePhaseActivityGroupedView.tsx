@@ -64,7 +64,7 @@ interface ResourcesTypePhaseActivityGroupedViewProps {
   canEditResource: (resource: BudgetResource) => boolean;
 }
 
-const RESOURCE_TYPES = ['Producto', 'Mano de obra', 'Alquiler', 'Servicio', 'Impuestos', 'Tarea'];
+const RESOURCE_TYPES = ['Producto', 'Mano de obra', 'Alquiler', 'Servicio', 'Herramienta', 'Impuestos', 'Tarea'];
 const UNITS = ['m2', 'm3', 'ml', 'ud', 'h', 'día', 'mes', 'kg', 'l', 'km'];
 
 const resourceTypeIcons: Record<string, React.ReactNode> = {
@@ -72,6 +72,7 @@ const resourceTypeIcons: Record<string, React.ReactNode> = {
   'Mano de obra': <Wrench className="h-4 w-4" />,
   'Alquiler': <Truck className="h-4 w-4" />,
   'Servicio': <Briefcase className="h-4 w-4" />,
+  'Herramienta': <Wrench className="h-4 w-4" />,
   'Impuestos': <Package className="h-4 w-4" />,
   'Tarea': <CheckSquare className="h-4 w-4" />,
 };
@@ -81,6 +82,7 @@ const resourceTypeColors: Record<string, string> = {
   'Mano de obra': 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
   'Alquiler': 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300',
   'Servicio': 'bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-300',
+  'Herramienta': 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300',
   'Impuestos': 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300',
   'Tarea': 'bg-slate-100 text-slate-800 dark:bg-slate-900/30 dark:text-slate-300',
   'Sin tipo': 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-300',
@@ -271,13 +273,32 @@ export function ResourcesTypePhaseActivityGroupedView({
     return `${activity.code}.-${activity.name}`;
   };
 
-  // Order types: first the predefined ones, then "Sin tipo" if it has resources
+  // Order types: first the predefined ones, then any additional types found in data, then "Sin tipo"
   const orderedTypes = useMemo(() => {
-    const types = [...RESOURCE_TYPES];
-    if ((typeResourceCounts['Sin tipo'] || 0) > 0) {
-      types.push('Sin tipo');
+    // Get all types that have resources
+    const typesWithResources = Object.keys(typeResourceCounts).filter(type => (typeResourceCounts[type] || 0) > 0);
+    
+    // Start with predefined types that have resources
+    const result: string[] = [];
+    RESOURCE_TYPES.forEach(type => {
+      if (typesWithResources.includes(type)) {
+        result.push(type);
+      }
+    });
+    
+    // Add any additional types found in data (not in RESOURCE_TYPES) except 'Sin tipo'
+    typesWithResources.forEach(type => {
+      if (!RESOURCE_TYPES.includes(type) && type !== 'Sin tipo' && !result.includes(type)) {
+        result.push(type);
+      }
+    });
+    
+    // Add 'Sin tipo' at the end if it has resources
+    if (typesWithResources.includes('Sin tipo')) {
+      result.push('Sin tipo');
     }
-    return types.filter(type => (typeResourceCounts[type] || 0) > 0);
+    
+    return result;
   }, [typeResourceCounts]);
 
   return (

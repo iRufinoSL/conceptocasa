@@ -89,6 +89,8 @@ const resourceTypeIcons: Record<string, React.ReactNode> = {
   'Mano de obra': <Wrench className="h-4 w-4" />,
   'Alquiler': <Truck className="h-4 w-4" />,
   'Servicio': <Briefcase className="h-4 w-4" />,
+  'Herramienta': <Wrench className="h-4 w-4" />,
+  'Impuestos': <Package className="h-4 w-4" />,
   'Tarea': <CheckSquare className="h-4 w-4" />,
 };
 
@@ -97,6 +99,8 @@ const resourceTypeVariants: Record<string, string> = {
   'Mano de obra': 'secondary',
   'Alquiler': 'outline',
   'Servicio': 'destructive',
+  'Herramienta': 'secondary',
+  'Impuestos': 'outline',
   'Tarea': 'default',
 };
 
@@ -110,7 +114,7 @@ const BULK_EDIT_FIELDS = [
   { value: 'activity_id', label: 'Actividad' },
 ];
 
-const RESOURCE_TYPES = ['Producto', 'Mano de obra', 'Alquiler', 'Servicio', 'Tarea'];
+const RESOURCE_TYPES = ['Producto', 'Mano de obra', 'Alquiler', 'Servicio', 'Herramienta', 'Impuestos', 'Tarea'];
 const UNITS = ['m2', 'm3', 'ml', 'ud', 'h', 'día', 'mes', 'kg', 'l', 'km'];
 
 export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetResourcesTabProps) {

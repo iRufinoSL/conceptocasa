@@ -32,3 +32,6 @@ verify_jwt = true
 
 [functions.send-pending-emails-reminder]
 verify_jwt = false
+
+[functions.auto-complete-urban-profile]
+verify_jwt = true

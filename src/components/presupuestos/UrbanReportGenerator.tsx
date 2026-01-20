@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import type { Json } from '@/integrations/supabase/types';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
@@ -11,6 +11,8 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { 
   FileDown, 
   MapPin, 
@@ -29,7 +31,10 @@ import {
   ClipboardList,
   Printer,
   Mail,
-  Send
+  Send,
+  ChevronsUpDown,
+  User,
+  Plus
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -37,6 +42,7 @@ import { toast } from 'sonner';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { useCompanySettings } from '@/hooks/useCompanySettings';
+import { useQuery } from '@tanstack/react-query';
 
 interface ConsultedSource {
   name: string;
@@ -234,6 +240,14 @@ const PLANNING_REGISTRIES: Record<string, { name: string; url: string }> = {
   }
 };
 
+// Simple contact type for search
+interface EmailContact {
+  id: string;
+  name: string;
+  surname: string | null;
+  email: string | null;
+}
+
 export function UrbanReportGenerator({ open, onOpenChange, budgetId, budgetName }: UrbanReportGeneratorProps) {
   const { settings: companySettings } = useCompanySettings();
   const [profile, setProfile] = useState<UrbanProfile | null>(null);
@@ -245,6 +259,8 @@ export function UrbanReportGenerator({ open, onOpenChange, budgetId, budgetName 
   const [emailSubject, setEmailSubject] = useState('');
   const [emailMessage, setEmailMessage] = useState('');
   const [additionalNotes, setAdditionalNotes] = useState('');
+  const [selectedContactId, setSelectedContactId] = useState<string | null>(null);
+  const [contactSearchOpen, setContactSearchOpen] = useState(false);
   const [selectedSections, setSelectedSections] = useState<string[]>([
     'buildability_summary',
     'tracked_characteristics',
@@ -261,6 +277,44 @@ export function UrbanReportGenerator({ open, onOpenChange, budgetId, budgetName 
     'conclusion',
     'disclaimer'
   ]);
+
+  // Fetch CRM contacts for search
+  const { data: crmContacts = [] } = useQuery({
+    queryKey: ['crm-contacts-for-email'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('crm_contacts')
+        .select('id, name, surname, email')
+        .not('email', 'is', null)
+        .order('name');
+      if (error) throw error;
+      return (data || []) as EmailContact[];
+    }
+  });
+
+  // Filter contacts by search term (email input)
+  const filteredContacts = useMemo(() => {
+    if (!emailTo) return crmContacts;
+    const searchLower = emailTo.toLowerCase();
+    return crmContacts.filter(c => 
+      c.email?.toLowerCase().includes(searchLower) ||
+      c.name?.toLowerCase().includes(searchLower) ||
+      c.surname?.toLowerCase().includes(searchLower)
+    );
+  }, [crmContacts, emailTo]);
+
+  // Find matching contact by exact email
+  const matchedContact = useMemo(() => {
+    if (!emailTo) return null;
+    return crmContacts.find(c => c.email?.toLowerCase() === emailTo.toLowerCase());
+  }, [crmContacts, emailTo]);
+
+  // Handle contact selection
+  const handleContactSelect = (contact: EmailContact) => {
+    setEmailTo(contact.email || '');
+    setSelectedContactId(contact.id);
+    setContactSearchOpen(false);
+  };
 
   // Get tracked characteristics with their sources
   const getTrackedCharacteristics = (): TrackedCharacteristic[] => {
@@ -1491,6 +1545,8 @@ export function UrbanReportGenerator({ open, onOpenChange, budgetId, budgetName 
     if (!profile) return;
     setEmailSubject(`Pre-Informe Urbanístico - ${profile.cadastral_reference} - ${budgetName}`);
     setEmailMessage(`Adjunto le envío el Pre-Informe Urbanístico correspondiente a la parcela con referencia catastral ${profile.cadastral_reference}.\n\nEste documento tiene carácter meramente informativo y no vinculante.\n\nQuedamos a su disposición para cualquier aclaración.`);
+    setEmailTo('');
+    setSelectedContactId(null);
     setShowEmailDialog(true);
   };
 
@@ -1498,31 +1554,81 @@ export function UrbanReportGenerator({ open, onOpenChange, budgetId, budgetName 
     if (!profile || !emailTo) return;
     setSendingEmail(true);
     try {
+      // Step 1: Find or create contact
+      let contactId = selectedContactId || matchedContact?.id;
+      
+      if (!contactId) {
+        // No contact found, create one
+        const { data: newContact, error: createError } = await supabase
+          .from('crm_contacts')
+          .insert({
+            name: emailTo.split('@')[0], // Use email prefix as name
+            email: emailTo,
+            contact_type: 'lead',
+            status: 'active'
+          })
+          .select('id')
+          .single();
+        
+        if (createError) {
+          console.warn('Could not create contact:', createError);
+        } else {
+          contactId = newContact?.id;
+          toast.info('Nuevo contacto creado en CRM');
+        }
+      }
+
+      // Step 2: Generate PDF
       const doc = await generatePDFDocument();
       const pdfBase64 = doc.output('datauristring').split(',')[1];
       const fileName = `Pre-Informe_Urbanistico_${profile.cadastral_reference}_${format(new Date(), 'yyyyMMdd')}.pdf`;
 
-      const { error } = await supabase.functions.invoke('send-email', {
+      // Step 3: Send email with correct payload structure
+      const { data, error } = await supabase.functions.invoke('send-email', {
         body: {
           to: emailTo,
           subject: emailSubject,
-          html: emailMessage.replace(/\n/g, '<br>'),
+          body_html: emailMessage.replace(/\n/g, '<br>'),
+          body_text: emailMessage,
+          budget_id: budgetId,
+          contact_id: contactId,
           attachments: [{
             filename: fileName,
             content: pdfBase64,
-            encoding: 'base64',
-            contentType: 'application/pdf'
+            content_type: 'application/pdf'
           }]
         }
       });
 
       if (error) throw error;
+      
+      // Step 4: Also record in crm_communications for contact history
+      if (contactId) {
+        await supabase.from('crm_communications').insert({
+          contact_id: contactId,
+          communication_type: 'email',
+          direction: 'outbound',
+          subject: emailSubject,
+          content: emailMessage,
+          status: 'sent',
+          sent_at: new Date().toISOString(),
+          metadata: {
+            budget_id: budgetId,
+            budget_name: budgetName,
+            email_id: data?.email_id,
+            has_attachment: true,
+            attachment_name: fileName
+          }
+        });
+      }
+
       toast.success('Email enviado correctamente');
       setShowEmailDialog(false);
       setEmailTo('');
-    } catch (error) {
+      setSelectedContactId(null);
+    } catch (error: any) {
       console.error('Error sending email:', error);
-      toast.error('Error al enviar el email');
+      toast.error('Error de envío: ' + (error.message || 'Error desconocido'));
     } finally {
       setSendingEmail(false);
     }
@@ -1730,12 +1836,86 @@ export function UrbanReportGenerator({ open, onOpenChange, budgetId, budgetName 
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label>Destinatario</Label>
-                <Input
-                  type="email"
-                  value={emailTo}
-                  onChange={(e) => setEmailTo(e.target.value)}
-                  placeholder="email@ejemplo.com"
-                />
+                <Popover open={contactSearchOpen} onOpenChange={setContactSearchOpen}>
+                  <PopoverTrigger asChild>
+                    <div className="relative">
+                      <Input
+                        type="email"
+                        value={emailTo}
+                        onChange={(e) => {
+                          setEmailTo(e.target.value);
+                          setSelectedContactId(null);
+                          if (e.target.value.length >= 2) {
+                            setContactSearchOpen(true);
+                          }
+                        }}
+                        onFocus={() => {
+                          if (emailTo.length >= 2 || crmContacts.length > 0) {
+                            setContactSearchOpen(true);
+                          }
+                        }}
+                        placeholder="Buscar contacto o escribir email..."
+                        className="pr-10"
+                      />
+                      <ChevronsUpDown className="h-4 w-4 absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                    </div>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[350px] p-0" align="start">
+                    <Command>
+                      <CommandInput 
+                        placeholder="Buscar contacto..." 
+                        value={emailTo}
+                        onValueChange={(value) => {
+                          setEmailTo(value);
+                          setSelectedContactId(null);
+                        }}
+                      />
+                      <CommandList className="max-h-[200px]">
+                        <CommandEmpty>
+                          <div className="py-3 text-center text-sm text-muted-foreground">
+                            {emailTo.includes('@') ? (
+                              <p>Se creará un nuevo contacto con este email</p>
+                            ) : (
+                              <p>No se encontraron contactos</p>
+                            )}
+                          </div>
+                        </CommandEmpty>
+                        <CommandGroup heading="Contactos CRM">
+                          {filteredContacts.slice(0, 10).map((contact) => (
+                            <CommandItem
+                              key={contact.id}
+                              value={`${contact.name} ${contact.surname || ''} ${contact.email}`}
+                              onSelect={() => handleContactSelect(contact)}
+                              className="cursor-pointer"
+                            >
+                              <User className="h-4 w-4 mr-2 text-muted-foreground" />
+                              <div className="flex flex-col">
+                                <span className="font-medium">
+                                  {contact.name} {contact.surname || ''}
+                                </span>
+                                <span className="text-xs text-muted-foreground">
+                                  {contact.email}
+                                </span>
+                              </div>
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+                {(selectedContactId || matchedContact) && (
+                  <div className="flex items-center gap-2 text-sm text-primary">
+                    <CheckCircle2 className="h-4 w-4" />
+                    <span>Contacto encontrado en CRM</span>
+                  </div>
+                )}
+                {emailTo && !selectedContactId && !matchedContact && emailTo.includes('@') && (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Plus className="h-4 w-4" />
+                    <span>Se creará nuevo contacto en CRM</span>
+                  </div>
+                )}
               </div>
               <div className="space-y-2">
                 <Label>Asunto</Label>
@@ -1757,7 +1937,7 @@ export function UrbanReportGenerator({ open, onOpenChange, budgetId, budgetName 
               <Button variant="outline" onClick={() => setShowEmailDialog(false)}>
                 Cancelar
               </Button>
-              <Button onClick={handleSendEmail} disabled={sendingEmail || !emailTo}>
+              <Button onClick={handleSendEmail} disabled={sendingEmail || !emailTo || !emailTo.includes('@')}>
                 {sendingEmail ? (
                   <>
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />

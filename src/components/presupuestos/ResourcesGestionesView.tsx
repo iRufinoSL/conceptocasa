@@ -448,8 +448,18 @@ export function ResourcesGestionesView({
           budgetId={budgetId}
           budgetName={budgetName}
           isAdmin={isAdmin}
+          activities={activities.map(a => {
+            const phase = phases.find(p => p.id === a.phase_id);
+            return {
+              id: a.id,
+              name: a.name,
+              code: a.code,
+              phase_code: phase?.code || null
+            };
+          })}
           onEditTask={onEditTask}
           onEditActivity={onEditActivity}
+          onRefresh={fetchData}
         />
       )}
 

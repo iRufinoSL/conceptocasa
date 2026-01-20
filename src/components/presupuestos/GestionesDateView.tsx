@@ -735,12 +735,34 @@ export function GestionesDateView({
           )}
         </div>
 
-        {isAdmin && (
-          <Button onClick={handleNewTask} className="gap-1.5">
-            <Plus className="h-4 w-4" />
-            Nueva Tarea
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          {gestiones.length > 0 && (
+            <Button
+              variant="outline"
+              onClick={() => {
+                // If nothing selected, select all pending
+                if (selectedGestiones.size === 0) {
+                  const pendingIds = gestiones
+                    .filter(g => g.task_status !== 'realizada')
+                    .map(g => g.id);
+                  setSelectedGestiones(new Set(pendingIds));
+                }
+                setSendDialogOpen(true);
+              }}
+              className="gap-1.5"
+            >
+              <Send className="h-4 w-4" />
+              Enviar a Suministradores
+            </Button>
+          )}
+          
+          {isAdmin && (
+            <Button onClick={handleNewTask} className="gap-1.5">
+              <Plus className="h-4 w-4" />
+              Nueva Tarea
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Empty state */}

@@ -222,6 +222,178 @@ ${profile.mensaje_adicional || 'Ninguno'}
     }
   };
 
+  const createSpacesFromProfile = async (budgetId: string) => {
+    if (!profile) return;
+
+    const spaces: Array<{
+      budget_id: string;
+      name: string;
+      space_type: string;
+      level: string;
+      observations: string | null;
+      opciones: string[];
+    }> = [];
+
+    const numPlantas = parseInt(profile.num_plantas || '1') || 1;
+    
+    // Parse floor areas to determine m² distribution
+    const floorM2: Record<number, string> = {};
+    if (profile.m2_por_planta) {
+      const matches = profile.m2_por_planta.matchAll(/Planta\s*(\d+):\s*([\d,.]+)/gi);
+      for (const match of matches) {
+        floorM2[parseInt(match[1])] = match[2];
+      }
+      // If no structured format, try comma-separated
+      if (Object.keys(floorM2).length === 0) {
+        const values = profile.m2_por_planta.split(',').map(v => v.trim().replace(/[^\d,.]/g, ''));
+        values.forEach((v, i) => {
+          if (v) floorM2[i + 1] = v;
+        });
+      }
+    }
+
+    // Helper to determine which floor a space should be on
+    const getLevel = (index: number, total: number): string => {
+      if (numPlantas === 1) return 'Planta baja';
+      // Distribute rooms across floors (living areas on ground, bedrooms on upper)
+      return index < Math.ceil(total / 2) ? 'Planta 1' : 'Planta 2';
+    };
+
+    // Create bedrooms
+    const numHabitaciones = parseInt(profile.num_habitaciones_total || '0') || 0;
+    const numConBano = parseInt(profile.num_habitaciones_con_bano || '0') || 0;
+    const numConVestidor = parseInt(profile.num_habitaciones_con_vestidor || '0') || 0;
+
+    for (let i = 0; i < numHabitaciones; i++) {
+      const isPrincipal = i === 0;
+      const hasBano = i < numConBano;
+      const hasVestidor = i < numConVestidor;
+      
+      let observations = '';
+      if (hasBano && hasVestidor) observations = 'Con baño en suite y vestidor';
+      else if (hasBano) observations = 'Con baño en suite';
+      else if (hasVestidor) observations = 'Con vestidor';
+
+      spaces.push({
+        budget_id: budgetId,
+        name: isPrincipal ? 'Habitación principal' : `Habitación ${i + 1}`,
+        space_type: 'Habitación',
+        level: numPlantas > 1 ? 'Planta 1' : 'Planta baja',
+        observations: observations || null,
+        opciones: ['A'],
+      });
+    }
+
+    // Create bathrooms (excluding en-suite ones already counted)
+    const numBanosTotal = parseInt(profile.num_banos_total || '0') || 0;
+    const bañosAdicionales = Math.max(0, numBanosTotal - numConBano);
+    
+    for (let i = 0; i < bañosAdicionales; i++) {
+      spaces.push({
+        budget_id: budgetId,
+        name: bañosAdicionales === 1 ? 'Baño' : `Baño ${i + 1}`,
+        space_type: 'Baño',
+        level: i === 0 ? 'Planta baja' : (numPlantas > 1 ? 'Planta 1' : 'Planta baja'),
+        observations: null,
+        opciones: ['A'],
+      });
+    }
+
+    // Create living room
+    if (profile.tipo_salon) {
+      spaces.push({
+        budget_id: budgetId,
+        name: 'Salón',
+        space_type: 'Salón',
+        level: 'Planta baja',
+        observations: profile.tipo_salon !== 'Sí' ? profile.tipo_salon : null,
+        opciones: ['A'],
+      });
+    }
+
+    // Create kitchen
+    if (profile.tipo_cocina) {
+      spaces.push({
+        budget_id: budgetId,
+        name: 'Cocina',
+        space_type: 'Cocina',
+        level: 'Planta baja',
+        observations: profile.tipo_cocina !== 'Sí' ? profile.tipo_cocina : null,
+        opciones: ['A'],
+      });
+    }
+
+    // Create laundry
+    if (profile.lavanderia && profile.lavanderia.toLowerCase() !== 'no') {
+      spaces.push({
+        budget_id: budgetId,
+        name: 'Lavandería',
+        space_type: 'Lavandería',
+        level: 'Planta baja',
+        observations: profile.lavanderia !== 'Sí' ? profile.lavanderia : null,
+        opciones: ['A'],
+      });
+    }
+
+    // Create pantry
+    if (profile.despensa && profile.despensa.toLowerCase() !== 'no') {
+      spaces.push({
+        budget_id: budgetId,
+        name: 'Despensa',
+        space_type: 'Despensa',
+        level: 'Planta baja',
+        observations: profile.despensa !== 'Sí' ? profile.despensa : null,
+        opciones: ['A'],
+      });
+    }
+
+    // Create covered porch
+    if (profile.porche_cubierto && profile.porche_cubierto.toLowerCase() !== 'no') {
+      spaces.push({
+        budget_id: budgetId,
+        name: 'Porche cubierto',
+        space_type: 'Exterior',
+        level: 'Planta baja',
+        observations: profile.porche_cubierto !== 'Sí' ? profile.porche_cubierto : null,
+        opciones: ['A'],
+      });
+    }
+
+    // Create open patio
+    if (profile.patio_descubierto && profile.patio_descubierto.toLowerCase() !== 'no') {
+      spaces.push({
+        budget_id: budgetId,
+        name: 'Patio descubierto',
+        space_type: 'Exterior',
+        level: 'Planta baja',
+        observations: profile.patio_descubierto !== 'Sí' ? profile.patio_descubierto : null,
+        opciones: ['A'],
+      });
+    }
+
+    // Create garage
+    if (profile.garaje && profile.garaje.toLowerCase() !== 'no') {
+      spaces.push({
+        budget_id: budgetId,
+        name: 'Garaje',
+        space_type: 'Garaje',
+        level: 'Planta baja',
+        observations: profile.garaje !== 'Sí' ? profile.garaje : null,
+        opciones: ['A'],
+      });
+    }
+
+    // Insert all spaces
+    if (spaces.length > 0) {
+      const { error } = await supabase.from('budget_spaces').insert(spaces);
+      if (error) {
+        console.error('Error creating spaces from profile:', error);
+      } else {
+        console.log(`Created ${spaces.length} spaces from housing profile`);
+      }
+    }
+  };
+
   const updateProjectStatus = async () => {
     const { error } = await supabase
       .from('projects')
@@ -265,9 +437,10 @@ ${profile.mensaje_adicional || 'Ninguno'}
 
       if (error) throw error;
 
-      // Create profile as predesign
+      // Create profile as predesign and spaces
       if (profile && newBudget) {
         await createProfileAsPredesign(newBudget.id);
+        await createSpacesFromProfile(newBudget.id);
       }
 
       // Update project status to "activo"
@@ -318,9 +491,10 @@ ${profile.mensaje_adicional || 'Ninguno'}
         throw new Error(result.error || 'Error desconocido al clonar el presupuesto');
       }
 
-      // Create profile as predesign
+      // Create profile as predesign and spaces (only for new budgets, cloned ones keep their spaces)
       if (profile && result.newBudgetId) {
         await createProfileAsPredesign(result.newBudgetId);
+        // Note: For cloned budgets, we don't auto-create spaces since they come from the template
       }
 
       // Update project status to "activo"
@@ -511,7 +685,12 @@ ${profile.mensaje_adicional || 'Ninguno'}
                 <li>• Se creará el presupuesto vinculado al proyecto</li>
                 <li>• El proyecto pasará a estado <span className="font-medium text-primary">"Activo"</span></li>
                 {profile && (
-                  <li>• El perfil del cliente se guardará en el <span className="font-medium">Ante-proyecto</span> como "Perfil inicial"</li>
+                  <>
+                    <li>• El perfil del cliente se guardará en el <span className="font-medium">Ante-proyecto</span> como "Perfil inicial"</li>
+                    {createMode === 'new' && (
+                      <li>• Se crearán automáticamente los <span className="font-medium">Espacios/Estancias</span> según el perfil</li>
+                    )}
+                  </>
                 )}
               </ul>
             </div>

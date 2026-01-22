@@ -417,7 +417,19 @@ Deno.serve(async (req) => {
       try {
         // Prefer client-side extracted text (more reliable than Blob.text() for PDFs)
         if (typeof pdfText === 'string' && pdfText.trim().length > 0) {
-          extractedText = pdfText;
+          // CRITICAL: Limit extracted text to prevent memory overflow
+          // 29 million characters caused memory limit exceeded - cap at 500K
+          const MAX_TEXT_LENGTH = 500_000;
+          if (pdfText.length > MAX_TEXT_LENGTH) {
+            console.log(`Text too large (${pdfText.length} chars), truncating to ${MAX_TEXT_LENGTH}`);
+            // Take first 250K and last 250K to capture beginning and end of document
+            const halfLimit = MAX_TEXT_LENGTH / 2;
+            extractedText = pdfText.slice(0, halfLimit) + 
+              '\n\n... [DOCUMENTO TRUNCADO POR TAMAÑO] ...\n\n' + 
+              pdfText.slice(-halfLimit);
+          } else {
+            extractedText = pdfText;
+          }
           pageCount = typeof pdfPageCount === 'number' && pdfPageCount > 0 ? pdfPageCount : 1;
           console.log(`Using client-extracted PDF text (${extractedText.length} chars)`);
         } else if (sourceType === 'url' && externalUrl) {

@@ -4,6 +4,7 @@ import { useAuth } from './useAuth';
 import { toast } from 'sonner';
 
 const INACTIVITY_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes
+export const INACTIVITY_LOGOUT_KEY = 'inactivity_logout';
 
 export function useInactivityTimeout() {
   const { user, signOut } = useAuth();
@@ -16,6 +17,9 @@ export function useInactivityTimeout() {
     
     isLoggingOutRef.current = true;
     console.log('[useInactivityTimeout] Session expired due to inactivity');
+    
+    // Mark that we logged out due to inactivity - this will trigger a full reload on next login
+    sessionStorage.setItem(INACTIVITY_LOGOUT_KEY, 'true');
     
     toast.info('Sesión cerrada por inactividad', {
       description: 'Por seguridad, la sesión se ha cerrado tras 10 minutos de inactividad.',
@@ -46,6 +50,18 @@ export function useInactivityTimeout() {
         clearTimeout(timeoutRef.current);
         timeoutRef.current = null;
       }
+      return;
+    }
+
+    // Check if we're logging in after an inactivity logout - if so, force a full page reload
+    const wasInactivityLogout = sessionStorage.getItem(INACTIVITY_LOGOUT_KEY);
+    if (wasInactivityLogout === 'true') {
+      console.log('[useInactivityTimeout] Detected login after inactivity logout, forcing full reload');
+      sessionStorage.removeItem(INACTIVITY_LOGOUT_KEY);
+      // Use a small delay to ensure the auth state is fully settled before reload
+      setTimeout(() => {
+        window.location.reload();
+      }, 100);
       return;
     }
 

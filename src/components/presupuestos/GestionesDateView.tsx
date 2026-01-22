@@ -359,6 +359,7 @@ export function GestionesDateView({
           end_time,
           duration_days,
           task_status,
+          resource_type,
           created_at,
           updated_at
         `)
@@ -394,6 +395,7 @@ export function GestionesDateView({
         end_time: taskData.end_time || null,
         duration_days: taskData.duration_days || 1,
         task_status: (taskData.task_status as 'pendiente' | 'realizada') || 'pendiente',
+        resource_type: (taskData.resource_type as 'Tarea' | 'Cita') || 'Tarea',
         created_at: taskData.created_at,
         updated_at: taskData.updated_at,
         contacts: contactsData || [],

@@ -130,9 +130,34 @@ Deno.serve(async (req) => {
     }
 
     // Step 2: Search for regulations using Firecrawl (if available) or direct AI search
-    const landType = landClass === 'Rústico' ? 'suelo rústico núcleo rural' : 'suelo urbano';
+    const isRustico = landClass === 'Rústico' || landClass?.toLowerCase().includes('rústico');
+    const landType = isRustico ? 'suelo rústico núcleo rural' : 'suelo urbano';
     const region = autonomousCommunity || province;
     const currentUrbanClassification = urbanClassification || profile.urban_classification || '';
+    
+    // Define applicable regulations based on land type and region
+    const applicableRegulations: string[] = [];
+    
+    // National regulations always apply
+    applicableRegulations.push('Ley del Suelo y Rehabilitación Urbana (Real Decreto Legislativo 7/2015)');
+    applicableRegulations.push('Código Técnico de la Edificación (CTE)');
+    
+    // Regional regulations for Cantabria
+    if (region?.toLowerCase().includes('cantabria')) {
+      applicableRegulations.push('Ley de Cantabria 2/2001, de 25 de junio, de Ordenación Territorial y Régimen Urbanístico del Suelo');
+      applicableRegulations.push('Decreto 65/2010 - Reglamento de Disciplina Urbanística de Cantabria');
+      if (isRustico) {
+        applicableRegulations.push('Ley 4/2020 de 11 de noviembre - Suelo Rústico de Cantabria');
+        applicableRegulations.push('Plan Regional de Ordenación del Territorio (PROT) de Cantabria');
+        applicableRegulations.push('Normas Urbanísticas del PGOU/NSP de ' + municipality + ' - Capítulo Suelo No Urbanizable');
+      }
+    }
+    
+    // Municipal regulations
+    applicableRegulations.push(`Plan General de Ordenación Urbana (PGOU) de ${municipality}`);
+    applicableRegulations.push(`Normas Subsidiarias de Planeamiento (NSP) de ${municipality} (si aplica)`);
+    
+    console.log('Applicable regulations:', applicableRegulations);
     
     let documentContent = '';
     const consultedUrls: string[] = [];
@@ -147,6 +172,15 @@ Deno.serve(async (req) => {
           `${specificSearch} ${municipality} ordenanzas edificabilidad altura ocupación retranqueos`,
           `${specificSearch} ${municipality} ${province} normativa urbanística PDF`,
           `${specificSearch} parámetros urbanísticos edificación`
+        );
+      }
+      
+      // For rustic land in Cantabria, add specific queries
+      if (isRustico && region?.toLowerCase().includes('cantabria')) {
+        searchQueries.push(
+          `Ley 4/2020 suelo rústico Cantabria edificación vivienda unifamiliar`,
+          `PGOU ${municipality} Cantabria suelo no urbanizable condiciones edificación`,
+          `${municipality} Cantabria suelo rústico ordinario edificabilidad metros cuadrados`
         );
       }
       
@@ -226,7 +260,23 @@ Deno.serve(async (req) => {
       ? `\nCLASIFICACIÓN ACTUAL: ${currentUrbanClassification}\nBusca los parámetros específicos para esta clasificación/sector.`
       : '';
     
-    const analysisPrompt = `Eres un experto urbanista español especializado en normativa urbanística municipal y planes parciales. Analiza la documentación para encontrar los parámetros urbanísticos ESPECÍFICOS para esta parcela:
+    // Build rustic land specific context
+    const rusticContext = isRustico ? `
+NOTA IMPORTANTE - SUELO RÚSTICO:
+Este terreno está clasificado como SUELO RÚSTICO/NO URBANIZABLE. Las normativas aplicables son:
+${applicableRegulations.map(r => `- ${r}`).join('\n')}
+
+Para suelo rústico en Cantabria (Ley 4/2020), los parámetros típicos son:
+- Parcela mínima: 2.000 - 5.000 m² según municipio
+- Edificabilidad: 0,10 - 0,20 m²/m² 
+- Altura máxima: 7-9 metros / 2 plantas
+- Ocupación máxima: 10-20%
+- Retranqueos: 5-10 metros a linderos
+
+Busca los parámetros específicos del PGOU de ${municipality} para suelo no urbanizable.
+` : '';
+    
+    const analysisPrompt = `Eres un experto urbanista español especializado en normativa urbanística municipal y autonómica. Analiza la documentación para encontrar los parámetros urbanísticos ESPECÍFICOS para esta parcela:
 
 DATOS DE LA PARCELA:
 - Municipio: ${municipality}
@@ -236,25 +286,30 @@ DATOS DE LA PARCELA:
 - Referencia catastral: ${cadastralReference || 'No especificada'}
 ${planningContext}
 ${classificationContext}
+${rusticContext}
+
+NORMATIVAS APLICABLES A ESTA PARCELA:
+${applicableRegulations.map(r => `- ${r}`).join('\n')}
 
 CAMPOS QUE NECESITAMOS ENCONTRAR (valores numéricos precisos):
 ${missingFieldsList}
 
-${documentContent ? `\nDOCUMENTACIÓN ENCONTRADA:\n${documentContent.substring(0, 60000)}` : 'No se encontró documentación específica. Indica valores típicos de la normativa urbanística de Asturias para suelo urbanizable.'}
+${documentContent ? `\nDOCUMENTACIÓN ENCONTRADA:\n${documentContent.substring(0, 60000)}` : `No se encontró documentación específica online. Por favor indica los valores típicos según la normativa autonómica de ${region || province} para ${landType}.`}
 
 INSTRUCCIONES IMPORTANTES:
-1. Busca valores ESPECÍFICOS del plan parcial o sector mencionado (ej: SAU-5, Miramar, etc.)
-2. Para cada campo, busca el artículo o norma específica que lo regula
-3. Si encuentras rangos, indica el valor más restrictivo (menor ocupación, mayor retranqueo)
-4. Para edificabilidad: busca m²/m² o m³/m² según corresponda
-5. Para alturas: indica metros Y plantas si ambos están disponibles
-6. Para retranqueos: diferencia entre frontal/lateral/posterior si la norma lo hace
+1. Busca valores ESPECÍFICOS del municipio, PGOU o normativa autonómica
+2. Para cada campo, indica la fuente legal (Ley, PGOU, artículo específico)
+3. Si es suelo rústico, aplica la normativa autonómica correspondiente
+4. Si no encuentras valores exactos, indica valores orientativos de la normativa regional
+5. Para edificabilidad en rústico: suele ser 0,10-0,20 m²/m²
+6. Para alturas en rústico: suele ser 7-9m / 2 plantas
+7. Para retranqueos: diferencia entre frontal/lateral/posterior
 
 RESPONDE ÚNICAMENTE con este JSON (sin texto adicional):
 {
-  "is_buildable": { "value": true/false o null, "source": "Art. X del PGOU/Plan Parcial" },
-  "urban_classification": { "value": "texto" o null, "source": "fuente" },
-  "buildability_index": { "value": número (m²/m²) o null, "source": "Art. X - Ordenanzas" },
+  "is_buildable": { "value": true/false o null, "source": "Normativa y artículo específico" },
+  "urban_classification": { "value": "texto descriptivo del tipo de suelo" o null, "source": "fuente" },
+  "buildability_index": { "value": número (m²/m²) o null, "source": "Art. X - Normativa" },
   "max_height": { "value": número en metros o null, "source": "Art. X" },
   "max_floors": { "value": número o null, "source": "Art. X" },
   "max_occupation_percent": { "value": número (%) o null, "source": "Art. X" },
@@ -267,7 +322,7 @@ RESPONDE ÚNICAMENTE con este JSON (sin texto adicional):
   "building_typology": { "value": "texto" o null, "source": "fuente" },
   "permitted_uses": { "value": ["uso1", "uso2"] o null, "source": "fuente" },
   "min_plot_area": { "value": número en m² o null, "source": "Art. X" },
-  "additional_notes": "Resumen de la normativa aplicable con referencias a artículos específicos"
+  "additional_notes": "Resumen completo de: 1) Normativas aplicables, 2) Requisitos para edificar, 3) Limitaciones especiales, 4) Recomendaciones"
 }`;
 
     const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
@@ -408,6 +463,8 @@ RESPONDE ÚNICAMENTE con este JSON (sin texto adicional):
         updatedFields,
         sources,
         consultedUrls,
+        applicableRegulations, // Include applicable regulations in response
+        landType: isRustico ? 'Suelo Rústico' : 'Suelo Urbano',
         message: fieldsCompleted > 0 
           ? `Se completaron ${fieldsCompleted} campos: ${updatedFields.join(', ')}`
           : 'No se encontraron datos adicionales para completar'
@@ -417,10 +474,12 @@ RESPONDE ÚNICAMENTE con este JSON (sin texto adicional):
 
   } catch (error) {
     console.error('Error in auto-complete-urban-profile:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
     return new Response(
       JSON.stringify({
         success: false,
-        error: error instanceof Error ? error.message : 'Error al auto-completar el perfil',
+        error: `Error al auto-completar el perfil urbanístico: ${errorMessage}. Por favor, intente subir un documento PDF del PGOU o consulte directamente con el Ayuntamiento.`,
+        suggestion: 'Puede subir un PDF del PGOU o normas subsidiarias usando el botón "Subir PDF" para obtener mejores resultados.'
       }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );

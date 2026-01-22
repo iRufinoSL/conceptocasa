@@ -36,15 +36,15 @@ export function NotificationSettingsDialog({ open, onOpenChange }: NotificationS
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('notification_email, notification_phone, notification_type')
+        .select('personal_notification_email, personal_notification_phone, personal_notification_type')
         .eq('id', user.id)
         .single();
 
       if (error) throw error;
 
-      setNotificationEmail(data?.notification_email || '');
-      setNotificationPhone(data?.notification_phone || '');
-      setNotificationType(data?.notification_type || 'email');
+      setNotificationEmail(data?.personal_notification_email || '');
+      setNotificationPhone(data?.personal_notification_phone || '');
+      setNotificationType(data?.personal_notification_type || 'email');
     } catch (error) {
       console.error('Error loading notification settings:', error);
     } finally {
@@ -60,9 +60,9 @@ export function NotificationSettingsDialog({ open, onOpenChange }: NotificationS
       const { error } = await supabase
         .from('profiles')
         .update({
-          notification_email: notificationEmail || null,
-          notification_phone: notificationPhone || null,
-          notification_type: notificationType,
+          personal_notification_email: notificationEmail || null,
+          personal_notification_phone: notificationPhone || null,
+          personal_notification_type: notificationType,
         })
         .eq('id', user.id);
 

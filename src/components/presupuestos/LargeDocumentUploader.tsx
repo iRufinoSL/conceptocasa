@@ -331,15 +331,20 @@ export function LargeDocumentUploader({
 
       if (processResult?.success) {
         setUploadProgress(100);
+        
+        const summary = processResult.data?.summary;
+        const valuesFound = processResult.data?.valuesFound || 0;
+        
         setProcessingResult({
           status: 'success',
-          message: `Documento procesado correctamente`,
-          valuesFound: processResult.data?.valuesFound || 0,
+          message: summary?.message || `Documento procesado correctamente`,
+          valuesFound,
         });
 
         toast({
-          title: '¡Documento procesado!',
-          description: `Se encontraron ${processResult.data?.valuesFound || 0} parámetros urbanísticos`,
+          title: valuesFound > 0 ? '¡Parámetros encontrados!' : 'Documento analizado',
+          description: summary?.message || `Se encontraron ${valuesFound} parámetros urbanísticos`,
+          duration: 6000,
         });
 
         onProcessingComplete?.();
@@ -574,26 +579,36 @@ export function LargeDocumentUploader({
             {processingResult.status !== 'idle' && processingResult.status !== 'processing' && (
               <div className={`p-3 rounded-lg flex items-start gap-2 ${
                 processingResult.status === 'success'
-                  ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
+                  ? processingResult.valuesFound && processingResult.valuesFound > 0
+                    ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
+                    : 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300'
                   : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'
               }`}>
                 {processingResult.status === 'success' ? (
-                  <CheckCircle2 className="h-5 w-5 mt-0.5" />
+                  processingResult.valuesFound && processingResult.valuesFound > 0 ? (
+                    <CheckCircle2 className="h-5 w-5 mt-0.5" />
+                  ) : (
+                    <AlertCircle className="h-5 w-5 mt-0.5" />
+                  )
                 ) : (
                   <XCircle className="h-5 w-5 mt-0.5" />
                 )}
-                <div>
+                <div className="flex-1">
                   <p className="font-medium">
-                    {processingResult.status === 'success' ? 'Procesado correctamente' : 'Error'}
+                    {processingResult.status === 'success' 
+                      ? processingResult.valuesFound && processingResult.valuesFound > 0
+                        ? 'Parámetros extraídos'
+                        : 'Documento analizado - Sin parámetros numéricos'
+                      : 'Error'}
                   </p>
-                  <p className="text-sm">
+                  <p className="text-sm mt-1">
                     {processingResult.message}
-                    {processingResult.valuesFound !== undefined && processingResult.valuesFound > 0 && (
-                      <Badge variant="secondary" className="ml-2">
-                        {processingResult.valuesFound} valores encontrados
-                      </Badge>
-                    )}
                   </p>
+                  {processingResult.valuesFound !== undefined && processingResult.valuesFound > 0 && (
+                    <Badge variant="secondary" className="mt-2">
+                      {processingResult.valuesFound} valores numéricos
+                    </Badge>
+                  )}
                 </div>
               </div>
             )}

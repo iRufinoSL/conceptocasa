@@ -751,6 +751,25 @@ Deno.serve(async (req) => {
         }
       }
 
+      // Detailed categorization of what was found
+      const hasNotes = !!(extractedData as any)?.additionalInfo || !!(extractedData as any)?.documentSummary;
+      const hasClassification = !!(extractedData as any)?.urbanClassification?.value || 
+                                !!(extractedData as any)?.urbanQualification?.value;
+      const hasBuildabilityConclusion = (extractedData as any)?.isEdificable?.value !== null && 
+                                         (extractedData as any)?.isEdificable?.value !== undefined;
+      
+      const summary = {
+        numericValuesFound: valuesFound,
+        hasAnalysisNotes: hasNotes,
+        hasClassification,
+        hasBuildabilityConclusion,
+        message: valuesFound > 0 
+          ? `Se encontraron ${valuesFound} parámetros numéricos (edificabilidad, alturas, retranqueos, etc.)`
+          : hasNotes || hasClassification
+            ? 'El documento contiene información descriptiva pero no parámetros numéricos específicos. Puede ser necesario consultar documentos adicionales (Normas Subsidiarias, ordenanzas de zona).'
+            : 'No se pudieron extraer datos urbanísticos del documento.',
+      };
+
       return new Response(
         JSON.stringify({
           success: true,
@@ -759,6 +778,7 @@ Deno.serve(async (req) => {
             totalPages: pageCount,
             extractedData,
             valuesFound,
+            summary,
           }
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

@@ -9,6 +9,7 @@ import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
 import { Progress } from '@/components/ui/progress';
 import * as pdfjsLib from 'pdfjs-dist';
+import { ensurePdfjsWorker } from '@/lib/pdfjs-worker';
 import {
   Upload,
   Link,
@@ -73,6 +74,10 @@ async function extractPdfTextAndFirstPagePreview(file: File): Promise<{
   pageCount: number;
   firstPageImageDataUrl: string | null;
 }> {
+  // Cap to keep browser memory + backend payload under control.
+  // (Large PGOUs can produce tens of millions of chars.)
+  const MAX_EXTRACTED_CHARS = 600_000;
+
   const arrayBuffer = await file.arrayBuffer();
   const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
 
@@ -84,6 +89,12 @@ async function extractPdfTextAndFirstPagePreview(file: File): Promise<{
     const textContent = await page.getTextContent();
     const pageText = (textContent.items as any[]).map((item) => item.str).join(' ');
     fullText += pageText + '\n\n';
+
+    if (fullText.length >= MAX_EXTRACTED_CHARS) {
+      fullText = fullText.slice(0, MAX_EXTRACTED_CHARS) +
+        "\n\n... [TEXTO TRUNCADO EN CLIENTE POR TAMAÑO] ...\n\n";
+      break;
+    }
   }
 
   // Render first page to an image for OCR fallback (keep it small to avoid huge payloads)
@@ -121,8 +132,10 @@ export function LargeDocumentUploader({
 
   // Initialize PDF.js worker
   useEffect(() => {
-    pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+    ensurePdfjsWorker();
   }, []);
+
+  const [focusSearch, setFocusSearch] = useState('');
   
   // Upload state
   const [isUploading, setIsUploading] = useState(false);
@@ -306,6 +319,7 @@ export function LargeDocumentUploader({
           municipality,
           landClass: landClass || 'Urbano',
           budgetId,
+          focusSearch: focusSearch.trim() || undefined,
           // Improved extraction inputs
           pdfText,
           pdfPageCount,
@@ -468,6 +482,18 @@ export function LargeDocumentUploader({
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+
+            <div className="space-y-1">
+              <Label>Enfoque (opcional)</Label>
+              <Input
+                value={focusSearch}
+                onChange={(e) => setFocusSearch(e.target.value)}
+                placeholder='Ej: "Plan Parcial SAU-5 Miramar"'
+              />
+              <p className="text-xs text-muted-foreground">
+                Útil si el PDF es muy amplio: centra la extracción en el ámbito/ordenanza que te interesa.
+              </p>
             </div>
 
             {/* Upload Mode */}

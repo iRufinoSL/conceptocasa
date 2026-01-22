@@ -46,6 +46,7 @@ import {
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import * as pdfjsLib from 'pdfjs-dist';
 import { openSafeUrl, isSafeUrl } from '@/lib/url-utils';
+import { ensurePdfjsWorker } from '@/lib/pdfjs-worker';
 import { LargeDocumentUploader } from './LargeDocumentUploader';
 import { UrbanReportGenerator } from './UrbanReportGenerator';
 import { CatastroMapViewer } from './CatastroMapViewer';
@@ -408,7 +409,7 @@ export function UrbanProfileCard({ budgetId, cadastralReference: initialRef, isA
   const [isAutoCompleting, setIsAutoCompleting] = useState(false);
   // Initialize PDF.js worker
   useEffect(() => {
-    pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+    ensurePdfjsWorker();
   }, []);
 
   const fetchProfile = async () => {
@@ -806,6 +807,11 @@ export function UrbanProfileCard({ budgetId, cadastralReference: initialRef, isA
     });
 
     try {
+      ensurePdfjsWorker();
+
+      // Cap extracted text to avoid huge payloads.
+      const MAX_EXTRACTED_CHARS = 600_000;
+
       // Read the PDF file
       const arrayBuffer = await file.arrayBuffer();
       const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
@@ -825,6 +831,12 @@ export function UrbanProfileCard({ budgetId, cadastralReference: initialRef, isA
           .map((item: any) => item.str)
           .join(' ');
         fullText += pageText + '\n\n';
+
+        if (fullText.length >= MAX_EXTRACTED_CHARS) {
+          fullText = fullText.slice(0, MAX_EXTRACTED_CHARS) +
+            "\n\n... [TEXTO TRUNCADO EN CLIENTE POR TAMAÑO] ...\n\n";
+          break;
+        }
       }
 
       if (fullText.trim().length < 100) {

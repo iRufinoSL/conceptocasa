@@ -20,6 +20,7 @@ async function analyzeWithAI(
     municipality: string | null;
     landClass: string;
     firstPageImageDataUrl?: string | null;
+    focusSearch?: string | null;
   }
 ): Promise<Record<string, unknown>> {
   const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
@@ -27,7 +28,11 @@ async function analyzeWithAI(
     throw new Error('LOVABLE_API_KEY not configured');
   }
 
-  const systemPrompt = `Eres un experto en urbanismo español especializado en analizar documentos urbanísticos oficiales. Tu trabajo es extraer ABSOLUTAMENTE TODOS los datos urbanísticos del documento proporcionado.
+  const focusLine = input.focusSearch?.trim()
+    ? `\n\nENFOQUE ESPECÍFICO (prioritario): Busca y extrae, si existe, la normativa aplicable a: "${input.focusSearch.trim()}". Prioriza edificabilidad, alturas, retranqueos y ocupación.`
+    : '';
+
+  const systemPrompt = `Eres un experto en urbanismo español especializado en analizar documentos urbanísticos oficiales. Tu trabajo es extraer ABSOLUTAMENTE TODOS los datos urbanísticos del documento proporcionado.${focusLine}
 
 TIPOS DE DOCUMENTOS QUE PUEDES RECIBIR:
 1. **CERTIFICADO URBANÍSTICO / CÉDULA URBANÍSTICA** - Documento oficial del Ayuntamiento que certifica las condiciones urbanísticas de una parcela específica.
@@ -376,7 +381,7 @@ Deno.serve(async (req) => {
   }
 
     try {
-      const {
+       const {
         uploadId,
         sourceType,
         storagePath,
@@ -384,6 +389,7 @@ Deno.serve(async (req) => {
         municipality,
         landClass,
         budgetId,
+         focusSearch,
         pdfText,
         pdfPageCount,
         firstPageImageDataUrl,
@@ -452,6 +458,7 @@ Deno.serve(async (req) => {
           municipality: municipality ?? null,
           landClass: landClass || 'suelo urbano',
           firstPageImageDataUrl: typeof firstPageImageDataUrl === 'string' ? firstPageImageDataUrl : null,
+          focusSearch: typeof focusSearch === 'string' ? focusSearch : null,
         });
 
         // Heuristic correction for buildable / not buildable if the document clearly states it

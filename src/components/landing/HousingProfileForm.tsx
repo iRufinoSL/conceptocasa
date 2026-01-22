@@ -75,6 +75,7 @@ const HousingProfileForm = ({ open, onOpenChange }: HousingProfileFormProps) => 
     patioDescubierto: "",
     garaje: "",
     tieneTerreno: "",
+    inclinacionTerreno: "",
     poblacionProvincia: "",
     coordenadasGoogleMaps: "",
     googleMapsUrl: "",
@@ -221,6 +222,9 @@ ESPACIOS EXTERIORES:
 - Garaje: ${formData.garaje || "No especificado"}
 - Tiene terreno: ${formData.tieneTerreno || "No especificado"}
 
+PLANEIDAD DEL TERRENO:
+- Inclinación del terreno: ${formData.inclinacionTerreno || "No especificado"}
+
 UBICACIÓN Y PRESUPUESTO:
 - Población/Provincia: ${formData.poblacionProvincia || "No especificado"}
 - Coordenadas Google Maps: ${formData.coordenadasGoogleMaps || "No especificado"}
@@ -283,6 +287,7 @@ ${formData.message || "Sin mensaje adicional"}
           patioDescubierto: formData.patioDescubierto,
           garaje: formData.garaje,
           tieneTerreno: formData.tieneTerreno,
+          inclinacionTerreno: formData.inclinacionTerreno,
           poblacionProvincia: formData.poblacionProvincia,
           coordenadasGoogleMaps: formData.coordenadasGoogleMaps,
           googleMapsUrl: formData.googleMapsUrl,
@@ -329,6 +334,7 @@ ${formData.message || "Sin mensaje adicional"}
         patioDescubierto: "",
         garaje: "",
         tieneTerreno: "",
+        inclinacionTerreno: "",
         poblacionProvincia: "",
         coordenadasGoogleMaps: "",
         googleMapsUrl: "",
@@ -659,6 +665,26 @@ ${formData.message || "Sin mensaje adicional"}
                     placeholder="Ej: Sí, 500m²" 
                     maxLength={100}
                   />
+                </div>
+              </div>
+            </div>
+
+            {/* Planeidad del terreno */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold text-foreground border-b pb-2">Planeidad del Terreno</h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="text-sm font-medium text-foreground">Inclinación del terreno</label>
+                  <Select value={formData.inclinacionTerreno} onValueChange={(v) => handleSelectChange("inclinacionTerreno", v)}>
+                    <SelectTrigger className="mt-1">
+                      <SelectValue placeholder="Seleccionar..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="plano">Plano</SelectItem>
+                      <SelectItem value="inclinado">Inclinado</SelectItem>
+                      <SelectItem value="irregular">Irregular</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
             </div>

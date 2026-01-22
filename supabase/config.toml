@@ -35,3 +35,18 @@ verify_jwt = false
 
 [functions.auto-complete-urban-profile]
 verify_jwt = false
+
+[functions.check-email-deadlines]
+verify_jwt = false
+
+[functions.resend-webhook]
+verify_jwt = false
+
+[functions.catastro-lookup]
+verify_jwt = true
+
+[functions.search-land-listings]
+verify_jwt = true
+
+[functions.process-large-document]
+verify_jwt = true

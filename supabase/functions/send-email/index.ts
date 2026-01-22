@@ -60,6 +60,7 @@ interface SendEmailRequest {
   ticket_priority?: string;
   ticket_category?: string;
   attachments?: EmailAttachment[];
+  response_deadline?: string;
 }
 
 // Sanitize HTML content for email - whitelist-based approach
@@ -231,10 +232,11 @@ const handler = async (req: Request): Promise<Response> => {
       ticket_subject,
       ticket_priority,
       ticket_category,
-      attachments
+      attachments,
+      response_deadline
     } = requestData;
 
-    console.log("Email request - budget_id:", budget_id, "project_id:", project_id);
+    console.log("Email request - budget_id:", budget_id, "response_deadline:", response_deadline);
 
     // Validate required fields
     if (!to || !subject || (!body_html && !body_text)) {
@@ -418,13 +420,17 @@ const handler = async (req: Request): Promise<Response> => {
         body_html: body_html,
         body_text: body_text,
         status: "sent",
+        delivery_status: "sent",
+        delivery_updated_at: new Date().toISOString(),
         external_id: emailResponse.data?.id,
         contact_id: contact_id,
         ticket_id: createdTicketId,
         budget_id: budget_id,
         project_id: project_id,
         created_by: user.id,
-        sent_at: new Date().toISOString()
+        sent_at: new Date().toISOString(),
+        response_deadline: response_deadline || null,
+        response_received: false
       })
       .select()
       .single();

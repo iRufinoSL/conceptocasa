@@ -27,6 +27,7 @@ interface LargeDocumentUploaderProps {
   budgetId: string;
   municipality?: string;
   landClass?: string;
+  urbanClassification?: string;
   onProcessingComplete?: () => void;
 }
 
@@ -38,6 +39,24 @@ const DOCUMENT_TYPES = [
   { value: 'normativa_autonomica', label: 'Normativa Autonómica' },
   { value: 'otro', label: 'Otro documento urbanístico' },
 ];
+
+// Quick links for common municipalities
+const MUNICIPALITY_LINKS: Record<string, { label: string; url: string; type: string }[]> = {
+  'GOZON': [
+    { label: 'PGOU Gozón (PDF 25 MB)', url: 'https://www.ayto-gozon.org/plan-general-de-ordenacion', type: 'pgou' },
+    { label: 'Normas Subsidiarias 1996', url: 'https://www.ayto-gozon.org/plan-general-de-ordenacion', type: 'normas_subsidiarias' },
+    { label: 'Plan Parcial SAU-5 Miramar (BOPA)', url: 'https://www.asturias.es/bopa/disposiciones/repositorio/LEGISLACION27/66/1/001U002T630001.pdf', type: 'plan_parcial' },
+  ],
+  'AVILES': [
+    { label: 'PGOU Avilés', url: 'https://www.aviles.es/web/planificacion-urbanistica/plan-general-de-ordenacion-pgou-', type: 'pgou' },
+  ],
+  'GIJON': [
+    { label: 'PGOU Gijón', url: 'https://www.gijon.es/es/directorio/plan-general-de-ordenacion-urbana', type: 'pgou' },
+  ],
+  'OVIEDO': [
+    { label: 'PGOU Oviedo', url: 'https://www.oviedo.es/urbanismo/planeamiento-vigente', type: 'pgou' },
+  ],
+};
 
 function sanitizeStorageFileName(name: string) {
   // Storage keys should be URL-safe; remove accents and unsafe chars.
@@ -93,6 +112,7 @@ export function LargeDocumentUploader({
   budgetId,
   municipality,
   landClass,
+  urbanClassification,
   onProcessingComplete,
 }: LargeDocumentUploaderProps) {
   const { toast } = useToast();
@@ -349,12 +369,12 @@ export function LargeDocumentUploader({
   };
 
   return (
-    <Card className="border-amber-500/30 bg-amber-50/20 dark:bg-amber-950/10">
+    <Card className="border-primary/30 bg-primary/5">
       <Collapsible open={isExpanded} onOpenChange={setIsExpanded}>
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <FileText className="h-5 w-5 text-amber-600" />
+              <FileText className="h-5 w-5 text-primary" />
               <CardTitle className="text-lg">Analizar Documento Grande</CardTitle>
             </div>
             <CollapsibleTrigger asChild>
@@ -370,6 +390,40 @@ export function LargeDocumentUploader({
 
         <CollapsibleContent>
           <CardContent className="space-y-4">
+            {/* Quick Links for Municipality */}
+            {municipality && MUNICIPALITY_LINKS[municipality.toUpperCase()] && (
+              <div className="p-3 bg-primary/5 border border-primary/20 rounded-lg space-y-2">
+                <div className="flex items-center gap-2 text-sm font-medium text-primary">
+                  <ExternalLink className="h-4 w-4" />
+                  Enlaces rápidos para {municipality}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {MUNICIPALITY_LINKS[municipality.toUpperCase()].map((link, idx) => (
+                    <Button
+                      key={idx}
+                      variant="outline"
+                      size="sm"
+                      className="text-xs h-7"
+                      onClick={() => {
+                        window.open(link.url, '_blank');
+                        setDocumentType(link.type);
+                        toast({
+                          title: 'Descarga el PDF',
+                          description: 'Una vez descargado, súbelo aquí para analizarlo',
+                        });
+                      }}
+                    >
+                      <ExternalLink className="h-3 w-3 mr-1" />
+                      {link.label}
+                    </Button>
+                  ))}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Descarga el documento y luego súbelo aquí para extraer los parámetros urbanísticos
+                </p>
+              </div>
+            )}
+
             {/* Mode Toggle */}
             <div className="flex gap-2">
               <Button

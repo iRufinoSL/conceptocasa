@@ -1087,6 +1087,7 @@ export function UrbanProfileCard({ budgetId, cadastralReference: initialRef, isA
                   budgetId={budgetId}
                   municipality={profile.municipality}
                   landClass={profile.land_class || undefined}
+                  urbanClassification={profile.urban_classification || undefined}
                   onProcessingComplete={fetchProfile}
                 />
               )}

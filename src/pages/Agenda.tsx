@@ -99,7 +99,7 @@ export default function Agenda() {
       console.error('Error fetching budget_tasks:', tasksError);
     }
 
-    // Fetch from budget_activity_resources (Tarea type) - ALL tasks
+    // Fetch from budget_activity_resources (Tarea/Cita types) - ALL entries
     const { data: resourceTasks, error: resourceError } = await supabase
       .from('budget_activity_resources')
       .select(`
@@ -107,10 +107,13 @@ export default function Agenda() {
         name,
         description,
         start_date,
+        start_time,
+        end_time,
         task_status,
-        budget_id
+        budget_id,
+        resource_type
       `)
-      .eq('resource_type', 'Tarea')
+      .in('resource_type', ['Tarea', 'Cita'])
       .order('start_date', { ascending: true });
 
     if (resourceError) {
@@ -138,7 +141,7 @@ export default function Agenda() {
       });
     }
 
-    // Process resource tasks
+    // Process resource entries (Tarea/Cita)
     for (const task of resourceTasks || []) {
       let budgetName = null;
       if (task.budget_id) {
@@ -155,8 +158,8 @@ export default function Agenda() {
         description: task.description,
         target_date: task.start_date,
         start_date: task.start_date,
-        start_time: null,
-        end_time: null,
+        start_time: (task as any).start_time ?? null,
+        end_time: (task as any).end_time ?? null,
         status: task.task_status || 'pendiente',
         task_status: task.task_status,
         budget_id: task.budget_id,

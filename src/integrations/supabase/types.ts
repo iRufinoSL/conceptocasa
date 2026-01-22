@@ -1952,6 +1952,8 @@ export type Database = {
           created_at: string
           created_by: string | null
           deleted_at: string | null
+          delivery_status: string | null
+          delivery_updated_at: string | null
           direction: string
           error_message: string | null
           external_id: string | null
@@ -1963,6 +1965,9 @@ export type Database = {
           project_id: string | null
           read_at: string | null
           received_at: string | null
+          reminder_sent_at: string | null
+          response_deadline: string | null
+          response_received: boolean | null
           sent_at: string | null
           snoozed_until: string | null
           status: string
@@ -1981,6 +1986,8 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           deleted_at?: string | null
+          delivery_status?: string | null
+          delivery_updated_at?: string | null
           direction: string
           error_message?: string | null
           external_id?: string | null
@@ -1992,6 +1999,9 @@ export type Database = {
           project_id?: string | null
           read_at?: string | null
           received_at?: string | null
+          reminder_sent_at?: string | null
+          response_deadline?: string | null
+          response_received?: boolean | null
           sent_at?: string | null
           snoozed_until?: string | null
           status?: string
@@ -2010,6 +2020,8 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           deleted_at?: string | null
+          delivery_status?: string | null
+          delivery_updated_at?: string | null
           direction?: string
           error_message?: string | null
           external_id?: string | null
@@ -2021,6 +2033,9 @@ export type Database = {
           project_id?: string | null
           read_at?: string | null
           received_at?: string | null
+          reminder_sent_at?: string | null
+          response_deadline?: string | null
+          response_received?: boolean | null
           sent_at?: string | null
           snoozed_until?: string | null
           status?: string

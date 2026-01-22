@@ -10,12 +10,13 @@ import { Badge } from '@/components/ui/badge';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Switch } from '@/components/ui/switch';
 import { supabase } from '@/integrations/supabase/client';
 import { useEmailService } from '@/hooks/useEmailService';
 import { useToast } from '@/hooks/use-toast';
 import { 
   Send, Mail, User, Paperclip, X, Plus, 
-  FileText, ChevronDown, File, Forward, Users, FolderOpen, Loader2, Search, ArrowLeft
+  FileText, ChevronDown, File, Forward, Users, FolderOpen, Loader2, Search, ArrowLeft, Clock, Bell
 } from 'lucide-react';
 import type { Tables } from '@/integrations/supabase/types';
 import { DocumentAttachmentPicker } from './DocumentAttachmentPicker';
@@ -90,6 +91,11 @@ export function BudgetComposeEmail({ budgetId, projectId, budgetContacts, replyT
   const [contactSearchOpen, setContactSearchOpen] = useState(false);
   const [selectedRecipients, setSelectedRecipients] = useState<Array<{ id: string; email: string; name: string }>>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // Response deadline tracking
+  const [needsResponse, setNeedsResponse] = useState(false);
+  const [responseDeadlineDate, setResponseDeadlineDate] = useState('');
+  const [responseDeadlineTime, setResponseDeadlineTime] = useState('12:00');
 
   // Fetch all contacts for search
   const { data: allContacts = [] } = useQuery({
@@ -315,6 +321,13 @@ export function BudgetComposeEmail({ budgetId, projectId, budgetContacts, replyT
         })
       );
 
+      // Calculate response deadline if set
+      let responseDeadline: string | undefined;
+      if (needsResponse && responseDeadlineDate) {
+        const deadlineDateTime = new Date(`${responseDeadlineDate}T${responseDeadlineTime}:00`);
+        responseDeadline = deadlineDateTime.toISOString();
+      }
+
       await sendEmail({
         to: formData.to,
         subject: formData.subject,
@@ -325,6 +338,7 @@ export function BudgetComposeEmail({ budgetId, projectId, budgetContacts, replyT
         contact_id: formData.contactId || matchedContact?.id,
         budget_id: budgetId, // Link email to this budget
         attachments: attachmentData.length > 0 ? attachmentData : undefined,
+        response_deadline: responseDeadline,
       });
 
       toast({ 
@@ -343,6 +357,9 @@ export function BudgetComposeEmail({ budgetId, projectId, budgetContacts, replyT
       });
       setSelectedTemplate('__none__');
       setAttachments([]);
+      setNeedsResponse(false);
+      setResponseDeadlineDate('');
+      setResponseDeadlineTime('12:00');
       
       // Invalidate budget emails query
       queryClient.invalidateQueries({ queryKey: ['budget-emails', budgetId] });
@@ -576,6 +593,59 @@ export function BudgetComposeEmail({ budgetId, projectId, budgetContacts, replyT
               onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
               placeholder="Asunto del email"
             />
+          </div>
+
+          {/* Response deadline toggle */}
+          <div className="space-y-3 border rounded-lg p-4 bg-secondary/50">
+            <div className="flex items-center justify-between">
+              <Label className="flex items-center gap-2 cursor-pointer">
+                <Bell className="h-4 w-4 text-primary" />
+                <span>Requiere respuesta</span>
+              </Label>
+              <Switch
+                checked={needsResponse}
+                onCheckedChange={setNeedsResponse}
+              />
+            </div>
+            
+            {needsResponse && (
+              <div className="flex gap-3 items-end">
+                <div className="flex-1 space-y-1">
+                  <Label className="text-xs text-muted-foreground flex items-center gap-1">
+                    <Clock className="h-3 w-3" />
+                    Fecha límite
+                  </Label>
+                  <Input
+                    type="date"
+                    value={responseDeadlineDate}
+                    onChange={(e) => setResponseDeadlineDate(e.target.value)}
+                    min={new Date().toISOString().split('T')[0]}
+                    className="h-9"
+                  />
+                </div>
+                <div className="w-24 space-y-1">
+                  <Label className="text-xs text-muted-foreground">Hora</Label>
+                  <Input
+                    type="time"
+                    value={responseDeadlineTime}
+                    onChange={(e) => setResponseDeadlineTime(e.target.value)}
+                    className="h-9"
+                  />
+                </div>
+              </div>
+            )}
+            
+            {needsResponse && responseDeadlineDate && (
+              <p className="text-xs text-primary">
+                Recibirás un aviso si no hay respuesta antes del {new Date(`${responseDeadlineDate}T${responseDeadlineTime}`).toLocaleString('es-ES', { 
+                  weekday: 'long', 
+                  day: 'numeric', 
+                  month: 'long',
+                  hour: '2-digit',
+                  minute: '2-digit'
+                })}
+              </p>
+            )}
           </div>
 
           {/* Body */}

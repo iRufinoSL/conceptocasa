@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -11,7 +11,8 @@ import { AccountingAccountsTab } from '@/components/administracion/AccountingAcc
 import { AccountingBalanceReport } from '@/components/administracion/AccountingBalanceReport';
 import { InvoicesTab } from '@/components/administracion/InvoicesTab';
 import { VATReportTab } from '@/components/administracion/VATReportTab';
-import { VoiceAssistantDialog } from '@/components/voice/VoiceAssistantDialog';
+import { VoiceAssistantDialog, VoiceAction } from '@/components/voice/VoiceAssistantDialog';
+import { useVoiceAccountingEntry } from '@/hooks/useVoiceAccountingEntry';
 
 export default function Administracion() {
   const navigate = useNavigate();
@@ -21,6 +22,9 @@ export default function Administracion() {
   const [highlightEntryCode, setHighlightEntryCode] = useState<string | null>(null);
   const [highlightAccountId, setHighlightAccountId] = useState<string | null>(null);
   const [voiceAssistantOpen, setVoiceAssistantOpen] = useState(false);
+  const [entriesKey, setEntriesKey] = useState(0);
+  
+  const { createEntryFromVoice } = useVoiceAccountingEntry();
 
   useEffect(() => {
     checkAuth();
@@ -66,6 +70,39 @@ export default function Administracion() {
     setHighlightAccountId(accountId);
     setActiveTab('accounts');
   };
+
+  const handleVoiceAction = useCallback(async (action: VoiceAction) => {
+    if (action.type === 'create_payment_entry' && action.data) {
+      const data = action.data as {
+        entry_type?: string;
+        entry_date?: string;
+        amount?: number;
+        recipient_name?: string;
+        treasury_account?: string;
+        description?: string;
+        budget_name?: string;
+      };
+      
+      const result = await createEntryFromVoice({
+        entry_type: (data.entry_type as 'pago' | 'cobro' | 'compra' | 'venta') || 'pago',
+        entry_date: data.entry_date || new Date().toISOString().split('T')[0],
+        amount: data.amount || 0,
+        recipient_name: data.recipient_name || 'Desconocido',
+        treasury_account: data.treasury_account || 'Caja',
+        description: data.description || 'Asiento creado por voz',
+        budget_name: data.budget_name
+      });
+      
+      if (result.success) {
+        // Refresh entries tab and navigate to it
+        setEntriesKey(prev => prev + 1);
+        setActiveTab('entries');
+        if (result.entryCode) {
+          setHighlightEntryCode(result.entryCode);
+        }
+      }
+    }
+  }, [createEntryFromVoice]);
 
   if (loading) {
     return (
@@ -145,6 +182,7 @@ export default function Administracion() {
 
           <TabsContent value="entries">
             <AccountingEntriesTab 
+              key={entriesKey}
               highlightCode={highlightEntryCode}
               onHighlightHandled={() => setHighlightEntryCode(null)}
             />
@@ -179,6 +217,7 @@ export default function Administracion() {
           open={voiceAssistantOpen}
           onOpenChange={setVoiceAssistantOpen}
           context="accounting"
+          onActionDetected={handleVoiceAction}
         />
       </main>
     </div>

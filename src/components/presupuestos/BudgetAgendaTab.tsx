@@ -4,11 +4,11 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Calendar, List, ChevronLeft, ChevronRight, FileText, BarChart3, ClipboardList } from 'lucide-react';
+import { Plus, Calendar, List, ChevronLeft, ChevronRight, FileText, BarChart3, ClipboardList, CalendarClock } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, addMonths, subMonths, addWeeks, subWeeks, addDays, subDays, eachDayOfInterval, isSameMonth, isSameDay, isToday } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { toast } from 'sonner';
-import { TaskForm } from './TaskForm';
+import { TaskForm, type EntryType } from './TaskForm';
 import { TaskCard } from './TaskCard';
 import { TaskListView } from './TaskListView';
 import { exportTasksPdf } from './TasksPdfExport';
@@ -84,6 +84,7 @@ export function BudgetAgendaTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
   const [showTaskForm, setShowTaskForm] = useState(false);
   const [editingTask, setEditingTask] = useState<BudgetTask | null>(null);
   const [selectedDay, setSelectedDay] = useState<Date | null>(null);
+  const [newEntryType, setNewEntryType] = useState<EntryType>('Tarea');
   const { settings: companySettings } = useCompanySettings();
 
   // Fetch budget name
@@ -274,6 +275,13 @@ export function BudgetAgendaTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
   }, [tasksWithDates]);
 
   const handleAddTask = () => {
+    setNewEntryType('Tarea');
+    setEditingTask(null);
+    setShowTaskForm(true);
+  };
+
+  const handleAddCita = () => {
+    setNewEntryType('Cita');
     setEditingTask(null);
     setShowTaskForm(true);
   };
@@ -549,10 +557,10 @@ export function BudgetAgendaTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
           
           {mainViewMode === 'agenda' && (
             <div className="flex gap-2">
-              <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">
+              <Badge variant="outline" className="bg-secondary text-primary border-primary/20">
                 {pendingCount} pendientes
               </Badge>
-              <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+              <Badge variant="outline" className="bg-secondary text-muted-foreground border-border">
                 {completedCount} realizadas
               </Badge>
             </div>
@@ -572,10 +580,16 @@ export function BudgetAgendaTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
               </Button>
             )}
             {isAdmin && (
-              <Button onClick={handleAddTask} className="flex items-center gap-2">
-                <Plus className="h-4 w-4" />
-                Nueva Tarea
-              </Button>
+              <>
+                <Button onClick={handleAddCita} variant="outline" className="flex items-center gap-2">
+                  <CalendarClock className="h-4 w-4" />
+                  Nueva Cita
+                </Button>
+                <Button onClick={handleAddTask} className="flex items-center gap-2">
+                  <ClipboardList className="h-4 w-4" />
+                  Nueva Tarea
+                </Button>
+              </>
             )}
           </div>
         )}
@@ -726,6 +740,7 @@ export function BudgetAgendaTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
             activities={activities}
             task={editingTask}
             onSuccess={handleTaskSaved}
+            initialType={newEntryType}
           />
         </>
       )}

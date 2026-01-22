@@ -20,6 +20,8 @@ import { useSignedUrl } from '@/hooks/useSignedUrl';
 import { formatActividadId } from '@/lib/activity-id';
 import type { BudgetTask } from './BudgetAgendaTab';
 
+export type EntryType = 'Tarea' | 'Cita';
+
 interface TaskFormProps {
   budgetId: string;
   activities: { id: string; name: string; code: string; phase_code?: string | null }[];
@@ -27,6 +29,7 @@ interface TaskFormProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess: () => void;
+  initialType?: EntryType;
 }
 
 interface Contact {
@@ -35,7 +38,8 @@ interface Contact {
   surname: string | null;
 }
 
-export function TaskForm({ budgetId, activities, task, open, onOpenChange, onSuccess }: TaskFormProps) {
+export function TaskForm({ budgetId, activities, task, open, onOpenChange, onSuccess, initialType = 'Tarea' }: TaskFormProps) {
+  const [entryType, setEntryType] = useState<EntryType>(initialType);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [activityId, setActivityId] = useState('');
@@ -81,6 +85,8 @@ export function TaskForm({ budgetId, activities, task, open, onOpenChange, onSuc
     if (open) {
       fetchContacts();
       if (task) {
+        // Detect type from existing resource_type if available
+        setEntryType((task as any).resource_type === 'Cita' ? 'Cita' : 'Tarea');
         setName(task.name);
         setDescription(task.description || '');
         setActivityId(task.activity_id || '');
@@ -95,9 +101,10 @@ export function TaskForm({ budgetId, activities, task, open, onOpenChange, onSuc
         setExistingImages(task.images || []);
       } else {
         resetForm();
+        setEntryType(initialType);
       }
     }
-  }, [open, task]);
+  }, [open, task, initialType]);
 
   const resetForm = () => {
     setName('');
@@ -174,7 +181,7 @@ export function TaskForm({ budgetId, activities, task, open, onOpenChange, onSuc
     try {
       let resourceId = task?.id;
 
-      // Create or update task as a resource with type 'Tarea'
+      // Create or update task/cita as a resource
       if (task) {
         const { error } = await supabase
           .from('budget_activity_resources')
@@ -182,6 +189,7 @@ export function TaskForm({ budgetId, activities, task, open, onOpenChange, onSuc
             name: name.trim(),
             description: description.trim() || null,
             activity_id: activityId || null,
+            resource_type: entryType,
             start_date: startDate || null,
             start_time: startTime || null,
             end_time: endTime || null,
@@ -199,7 +207,7 @@ export function TaskForm({ budgetId, activities, task, open, onOpenChange, onSuc
             name: name.trim(),
             description: description.trim() || null,
             activity_id: activityId || null,
-            resource_type: 'Tarea',
+            resource_type: entryType,
             start_date: startDate || null,
             start_time: startTime || null,
             end_time: endTime || null,
@@ -268,32 +276,50 @@ export function TaskForm({ budgetId, activities, task, open, onOpenChange, onSuc
         });
       }
 
-      toast.success(task ? 'Tarea actualizada' : 'Tarea creada');
+      const typeLabel = entryType === 'Cita' ? 'Cita' : 'Tarea';
+      toast.success(task ? `${typeLabel} actualizada` : `${typeLabel} creada`);
       onSuccess();
     } catch (error) {
-      console.error('Error saving task:', error);
-      toast.error('Error al guardar la tarea');
+      console.error('Error saving:', error);
+      const typeLabel = entryType === 'Cita' ? 'cita' : 'tarea';
+      toast.error(`Error al guardar la ${typeLabel}`);
     } finally {
       setIsSaving(false);
     }
   };
 
+  const typeLabel = entryType === 'Cita' ? 'Cita' : 'Tarea';
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{task ? 'Editar Tarea' : 'Nueva Tarea'}</DialogTitle>
+          <DialogTitle>{task ? `Editar ${typeLabel}` : `Nueva ${typeLabel}`}</DialogTitle>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Type selector */}
+            <div className="space-y-2 md:col-span-2">
+              <Label>Tipo</Label>
+              <Select value={entryType} onValueChange={(v) => setEntryType(v as EntryType)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Tarea">Tarea</SelectItem>
+                  <SelectItem value="Cita">Cita</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
             <div className="space-y-2 md:col-span-2">
               <Label htmlFor="name">Nombre *</Label>
               <Input
                 id="name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="Nombre de la tarea"
+                placeholder={entryType === 'Cita' ? 'Nombre de la cita' : 'Nombre de la tarea'}
               />
             </div>
 

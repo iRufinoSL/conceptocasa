@@ -64,10 +64,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setRolesLoading(true);
 
       try {
+        console.log('[auth] Loading roles for user:', userId);
+        
         const { data: rolesData, error: rolesError } = await supabase
           .from('user_roles')
           .select('role')
           .eq('user_id', userId);
+
+        console.log('[auth] Roles response:', { rolesData, rolesError });
 
         if (!isMounted) return;
 
@@ -75,8 +79,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           console.error('[auth] Error fetching roles:', rolesError);
           setRoles([]);
         } else if (rolesData && rolesData.length > 0) {
-          setRoles(rolesData.map((r: UserRoleRow) => r.role));
+          const userRoles = rolesData.map((r: UserRoleRow) => r.role);
+          console.log('[auth] Setting roles:', userRoles);
+          setRoles(userRoles);
         } else {
+          console.log('[auth] No roles found for user');
           setRoles([]);
         }
 

@@ -24,7 +24,16 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { budgetId, municipality, province, autonomousCommunity, landClass, cadastralReference } = await req.json();
+    const { 
+      budgetId, 
+      municipality, 
+      province, 
+      autonomousCommunity, 
+      landClass, 
+      cadastralReference,
+      specificSearch,  // Optional: specific plan/sector to search for
+      urbanClassification // Optional: from existing profile
+    } = await req.json();
 
     if (!budgetId || !municipality) {
       return new Response(
@@ -47,6 +56,9 @@ Deno.serve(async (req) => {
     }
 
     console.log(`Auto-completing urban profile for ${municipality}, ${province} - Budget: ${budgetId}`);
+    if (specificSearch) {
+      console.log(`Specific search requested: ${specificSearch}`);
+    }
 
     // Step 1: Get current profile to identify missing fields
     const { data: profile, error: profileError } = await supabase
@@ -120,19 +132,47 @@ Deno.serve(async (req) => {
     // Step 2: Search for regulations using Firecrawl (if available) or direct AI search
     const landType = landClass === 'Rústico' ? 'suelo rústico núcleo rural' : 'suelo urbano';
     const region = autonomousCommunity || province;
+    const currentUrbanClassification = urbanClassification || profile.urban_classification || '';
     
     let documentContent = '';
     const consultedUrls: string[] = [];
 
     if (FIRECRAWL_API_KEY) {
-      // Search for PGOU and urban regulations documents
-      const searchQueries = [
-        `PGOU ${municipality} ${province} normativa urbanística PDF`,
-        `normas subsidiarias ${municipality} ordenanzas urbanísticas`,
+      // Build search queries - prioritize specific search if provided
+      const searchQueries: string[] = [];
+      
+      // If specific search is provided, make it the priority
+      if (specificSearch) {
+        searchQueries.push(
+          `${specificSearch} ${municipality} ordenanzas edificabilidad altura ocupación retranqueos`,
+          `${specificSearch} ${municipality} ${province} normativa urbanística PDF`,
+          `${specificSearch} parámetros urbanísticos edificación`
+        );
+      }
+      
+      // If we have urban classification info (like SAU-5), search for that
+      if (currentUrbanClassification) {
+        const sectorMatch = currentUrbanClassification.match(/SAU-?\d+|PP-?\d+|Plan Parcial|Sector/i);
+        if (sectorMatch) {
+          const sectorName = sectorMatch[0];
+          searchQueries.push(
+            `Plan Parcial ${sectorName} ${municipality} ordenanzas`,
+            `${sectorName} ${municipality} edificabilidad ocupación altura retranqueos`
+          );
+        }
+      }
+      
+      // Add general PGOU queries
+      searchQueries.push(
+        `PGOU ${municipality} ${province} normativa urbanística ordenanzas PDF`,
+        `normas subsidiarias ${municipality} ordenanzas urbanísticas edificación`,
         `${region} normativa ${landType} edificación vivienda unifamiliar`
-      ];
+      );
 
-      for (const query of searchQueries) {
+      // Remove duplicates
+      const uniqueQueries = [...new Set(searchQueries)];
+
+      for (const query of uniqueQueries) {
         try {
           console.log(`Searching: ${query}`);
           
@@ -144,7 +184,7 @@ Deno.serve(async (req) => {
             },
             body: JSON.stringify({
               query,
-              limit: 3,
+              limit: 5, // Increased limit for better coverage
               lang: 'es',
               country: 'ES',
               scrapeOptions: {
@@ -159,7 +199,7 @@ Deno.serve(async (req) => {
             
             for (const result of results) {
               if (result.markdown && result.markdown.length > 500) {
-                documentContent += `\n\n--- FUENTE: ${result.title || result.url} ---\n${result.markdown.substring(0, 15000)}`;
+                documentContent += `\n\n--- FUENTE: ${result.title || result.url} ---\n${result.markdown.substring(0, 20000)}`;
                 consultedUrls.push(result.url);
                 console.log(`Found content from: ${result.url} (${result.markdown.length} chars)`);
               }
@@ -169,49 +209,66 @@ Deno.serve(async (req) => {
           console.error(`Search error for "${query}":`, e);
         }
 
-        // Limit total content
-        if (documentContent.length > 50000) break;
+        // Limit total content (increased for better context)
+        if (documentContent.length > 80000) break;
       }
     }
 
     // Step 3: Use AI to extract the missing values
     const missingFieldsList = missingFields.map(f => `- ${f.label} (${f.field})`).join('\n');
     
-    const analysisPrompt = `Eres un experto urbanista español. Analiza la siguiente información para encontrar los parámetros urbanísticos que faltan para una parcela en:
+    // Build context about the specific planning instrument
+    const planningContext = specificSearch 
+      ? `\nBÚSQUEDA ESPECÍFICA: ${specificSearch}\nPRIORIZA la información del plan parcial o sector específico indicado.`
+      : '';
+    
+    const classificationContext = currentUrbanClassification 
+      ? `\nCLASIFICACIÓN ACTUAL: ${currentUrbanClassification}\nBusca los parámetros específicos para esta clasificación/sector.`
+      : '';
+    
+    const analysisPrompt = `Eres un experto urbanista español especializado en normativa urbanística municipal y planes parciales. Analiza la documentación para encontrar los parámetros urbanísticos ESPECÍFICOS para esta parcela:
+
+DATOS DE LA PARCELA:
 - Municipio: ${municipality}
 - Provincia: ${province}
 - Comunidad Autónoma: ${region || 'No especificada'}
 - Tipo de suelo: ${landClass || 'No especificado'}
 - Referencia catastral: ${cadastralReference || 'No especificada'}
+${planningContext}
+${classificationContext}
 
-CAMPOS QUE NECESITAMOS ENCONTRAR:
+CAMPOS QUE NECESITAMOS ENCONTRAR (valores numéricos precisos):
 ${missingFieldsList}
 
-${documentContent ? `DOCUMENTACIÓN ENCONTRADA:\n${documentContent.substring(0, 40000)}` : 'No se encontró documentación específica. Usa valores típicos de la normativa urbanística de la comunidad autónoma.'}
+${documentContent ? `\nDOCUMENTACIÓN ENCONTRADA:\n${documentContent.substring(0, 60000)}` : 'No se encontró documentación específica. Indica valores típicos de la normativa urbanística de Asturias para suelo urbanizable.'}
 
-RESPONDE EN JSON con esta estructura:
+INSTRUCCIONES IMPORTANTES:
+1. Busca valores ESPECÍFICOS del plan parcial o sector mencionado (ej: SAU-5, Miramar, etc.)
+2. Para cada campo, busca el artículo o norma específica que lo regula
+3. Si encuentras rangos, indica el valor más restrictivo (menor ocupación, mayor retranqueo)
+4. Para edificabilidad: busca m²/m² o m³/m² según corresponda
+5. Para alturas: indica metros Y plantas si ambos están disponibles
+6. Para retranqueos: diferencia entre frontal/lateral/posterior si la norma lo hace
+
+RESPONDE ÚNICAMENTE con este JSON (sin texto adicional):
 {
-  "is_buildable": { "value": true/false o null, "source": "fuente" },
+  "is_buildable": { "value": true/false o null, "source": "Art. X del PGOU/Plan Parcial" },
   "urban_classification": { "value": "texto" o null, "source": "fuente" },
-  "buildability_index": { "value": número o null, "source": "fuente" },
-  "max_height": { "value": número en metros o null, "source": "fuente" },
-  "max_floors": { "value": número o null, "source": "fuente" },
-  "max_occupation_percent": { "value": número (%) o null, "source": "fuente" },
-  "front_setback": { "value": número en metros o null, "source": "fuente" },
-  "side_setback": { "value": número en metros o null, "source": "fuente" },
-  "rear_setback": { "value": número en metros o null, "source": "fuente" },
-  "min_distance_neighbors": { "value": número en metros o null, "source": "fuente" },
-  "road_setback": { "value": número en metros o null, "source": "fuente" },
+  "buildability_index": { "value": número (m²/m²) o null, "source": "Art. X - Ordenanzas" },
+  "max_height": { "value": número en metros o null, "source": "Art. X" },
+  "max_floors": { "value": número o null, "source": "Art. X" },
+  "max_occupation_percent": { "value": número (%) o null, "source": "Art. X" },
+  "front_setback": { "value": número en metros o null, "source": "Art. X" },
+  "side_setback": { "value": número en metros o null, "source": "Art. X" },
+  "rear_setback": { "value": número en metros o null, "source": "Art. X" },
+  "min_distance_neighbors": { "value": número en metros o null, "source": "Art. X" },
+  "road_setback": { "value": número en metros o null, "source": "Art. X" },
   "has_municipal_sewage": { "value": true/false o null, "source": "fuente" },
   "building_typology": { "value": "texto" o null, "source": "fuente" },
   "permitted_uses": { "value": ["uso1", "uso2"] o null, "source": "fuente" },
-  "additional_notes": "Observaciones sobre la normativa aplicable"
-}
-
-IMPORTANTE:
-- Para núcleo rural/suelo rústico en Asturias, busca en BOPA y normativa autonómica
-- Si no encuentras un dato específico del municipio, indica valores típicos de la normativa autonómica
-- Indica siempre la fuente (artículo, normativa, etc.)`;
+  "min_plot_area": { "value": número en m² o null, "source": "Art. X" },
+  "additional_notes": "Resumen de la normativa aplicable con referencias a artículos específicos"
+}`;
 
     const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',

@@ -34,4 +34,4 @@ verify_jwt = true
 verify_jwt = false
 
 [functions.auto-complete-urban-profile]
-verify_jwt = true
+verify_jwt = false

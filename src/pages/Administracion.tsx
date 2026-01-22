@@ -2,7 +2,7 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Wallet, ArrowLeft, BookOpen, Calculator, BarChart3, FileText, Receipt, Percent, Mic } from 'lucide-react';
+import { Wallet, ArrowLeft, BookOpen, Calculator, BarChart3, FileText, Receipt, Percent, Mic, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { AppNavDropdown } from '@/components/AppNavDropdown';
 import { AccountingEntriesTab } from '@/components/administracion/AccountingEntriesTab';
@@ -11,9 +11,10 @@ import { AccountingAccountsTab } from '@/components/administracion/AccountingAcc
 import { AccountingBalanceReport } from '@/components/administracion/AccountingBalanceReport';
 import { InvoicesTab } from '@/components/administracion/InvoicesTab';
 import { VATReportTab } from '@/components/administracion/VATReportTab';
+import { ProvisionalAccountsAlerts } from '@/components/administracion/ProvisionalAccountsAlerts';
 import { VoiceAssistantDialog, VoiceAction } from '@/components/voice/VoiceAssistantDialog';
 import { useVoiceAccountingEntry } from '@/hooks/useVoiceAccountingEntry';
-
+import { Badge } from '@/components/ui/badge';
 export default function Administracion() {
   const navigate = useNavigate();
   const [isAdmin, setIsAdmin] = useState(false);
@@ -23,11 +24,13 @@ export default function Administracion() {
   const [highlightAccountId, setHighlightAccountId] = useState<string | null>(null);
   const [voiceAssistantOpen, setVoiceAssistantOpen] = useState(false);
   const [entriesKey, setEntriesKey] = useState(0);
+  const [provisionalCount, setProvisionalCount] = useState(0);
   
   const { createEntryFromVoice } = useVoiceAccountingEntry();
 
   useEffect(() => {
     checkAuth();
+    fetchProvisionalCount();
   }, []);
 
   const checkAuth = async () => {
@@ -58,6 +61,21 @@ export default function Administracion() {
       navigate('/auth');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchProvisionalCount = async () => {
+    try {
+      const { count, error } = await supabase
+        .from('accounting_entries')
+        .select('*', { count: 'exact', head: true })
+        .eq('has_provisional_account', true);
+
+      if (!error && count !== null) {
+        setProvisionalCount(count);
+      }
+    } catch (error) {
+      console.error('Error fetching provisional count:', error);
     }
   };
 
@@ -149,7 +167,16 @@ export default function Administracion() {
       </header>
       <main className="container mx-auto px-4 py-6">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList>
+          <TabsList className="flex-wrap">
+            {provisionalCount > 0 && (
+              <TabsTrigger value="alerts" className="gap-2 text-destructive">
+                <AlertTriangle className="h-4 w-4" />
+                Alertas
+                <Badge variant="destructive" className="ml-1 h-5 px-1.5">
+                  {provisionalCount}
+                </Badge>
+              </TabsTrigger>
+            )}
             <TabsTrigger value="invoices" className="gap-2">
               <Receipt className="h-4 w-4" />
               Facturas
@@ -175,6 +202,18 @@ export default function Administracion() {
               Informe IVA
             </TabsTrigger>
           </TabsList>
+
+          {provisionalCount > 0 && (
+            <TabsContent value="alerts">
+              <ProvisionalAccountsAlerts 
+                onEntryFixed={() => {
+                  fetchProvisionalCount();
+                  setEntriesKey(prev => prev + 1);
+                }}
+                onNavigateToEntry={handleNavigateToEntry}
+              />
+            </TabsContent>
+          )}
 
           <TabsContent value="invoices">
             <InvoicesTab />

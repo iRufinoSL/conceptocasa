@@ -14,7 +14,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Badge } from '@/components/ui/badge';
-import { Check, ChevronsUpDown, X, Upload, Loader2, Search, Image as ImageIcon } from 'lucide-react';
+import { Check, ChevronsUpDown, X, Upload, Loader2, Search, Image as ImageIcon, Bell, Car } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
 import { useSignedUrl } from '@/hooks/useSignedUrl';
 import { formatActividadId } from '@/lib/activity-id';
@@ -59,6 +60,11 @@ export function TaskForm({ budgetId, activities, task, open, onOpenChange, onSuc
   const [imagesToDelete, setImagesToDelete] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  
+  // Appointment reminder fields
+  const [reminderMinutes, setReminderMinutes] = useState(15);
+  const [hasTravelTime, setHasTravelTime] = useState(false);
+  const [travelTimeMinutes, setTravelTimeMinutes] = useState(0);
 
   const activityOptions = useMemo(() => {
     return activities
@@ -99,6 +105,10 @@ export function TaskForm({ budgetId, activities, task, open, onOpenChange, onSuc
         setTaskStatus(task.task_status);
         setSelectedContacts(task.contacts?.map(c => c.contact_id) || []);
         setExistingImages(task.images || []);
+        // Load reminder settings
+        setReminderMinutes((task as any).reminder_minutes ?? 15);
+        setHasTravelTime((task as any).has_travel_time ?? false);
+        setTravelTimeMinutes((task as any).travel_time_minutes ?? 0);
       } else {
         resetForm();
         setEntryType(initialType);
@@ -123,6 +133,31 @@ export function TaskForm({ budgetId, activities, task, open, onOpenChange, onSuc
     setExistingImages([]);
     setNewImages([]);
     setImagesToDelete([]);
+    // Reset reminder fields
+    setReminderMinutes(15);
+    setHasTravelTime(false);
+    setTravelTimeMinutes(0);
+  };
+  
+  // Calculate actual reminder time for display
+  const calculateReminderTime = () => {
+    if (!startTime) return null;
+    const totalMinutes = reminderMinutes + (hasTravelTime ? travelTimeMinutes : 0);
+    const [hours, mins] = startTime.split(':').map(Number);
+    const appointmentMinutes = hours * 60 + mins;
+    const reminderTotalMinutes = appointmentMinutes - totalMinutes;
+    
+    if (reminderTotalMinutes < 0) {
+      // Handle day before case
+      const adjustedMinutes = 24 * 60 + reminderTotalMinutes;
+      const reminderHours = Math.floor(adjustedMinutes / 60);
+      const reminderMins = adjustedMinutes % 60;
+      return `${reminderHours.toString().padStart(2, '0')}:${reminderMins.toString().padStart(2, '0')} (día anterior)`;
+    }
+    
+    const reminderHours = Math.floor(reminderTotalMinutes / 60);
+    const reminderMins = reminderTotalMinutes % 60;
+    return `${reminderHours.toString().padStart(2, '0')}:${reminderMins.toString().padStart(2, '0')}`;
   };
 
   const fetchContacts = async () => {
@@ -182,20 +217,26 @@ export function TaskForm({ budgetId, activities, task, open, onOpenChange, onSuc
       let resourceId = task?.id;
 
       // Create or update task/cita as a resource
+      const resourceData = {
+        name: name.trim(),
+        description: description.trim() || null,
+        activity_id: activityId || null,
+        resource_type: entryType,
+        start_date: startDate || null,
+        start_time: startTime || null,
+        end_time: endTime || null,
+        duration_days: durationDays,
+        task_status: taskStatus,
+        // Include reminder fields only for Citas
+        reminder_minutes: entryType === 'Cita' ? reminderMinutes : null,
+        has_travel_time: entryType === 'Cita' ? hasTravelTime : false,
+        travel_time_minutes: entryType === 'Cita' && hasTravelTime ? travelTimeMinutes : 0,
+      };
+
       if (task) {
         const { error } = await supabase
           .from('budget_activity_resources')
-          .update({
-            name: name.trim(),
-            description: description.trim() || null,
-            activity_id: activityId || null,
-            resource_type: entryType,
-            start_date: startDate || null,
-            start_time: startTime || null,
-            end_time: endTime || null,
-            duration_days: durationDays,
-            task_status: taskStatus
-          })
+          .update(resourceData)
           .eq('id', task.id);
 
         if (error) throw error;
@@ -204,15 +245,7 @@ export function TaskForm({ budgetId, activities, task, open, onOpenChange, onSuc
           .from('budget_activity_resources')
           .insert({
             budget_id: budgetId,
-            name: name.trim(),
-            description: description.trim() || null,
-            activity_id: activityId || null,
-            resource_type: entryType,
-            start_date: startDate || null,
-            start_time: startTime || null,
-            end_time: endTime || null,
-            duration_days: durationDays,
-            task_status: taskStatus
+            ...resourceData,
           })
           .select('id')
           .single();
@@ -418,6 +451,75 @@ export function TaskForm({ budgetId, activities, task, open, onOpenChange, onSuc
                 placeholder="HH:MM"
               />
             </div>
+
+            {/* Appointment Reminder Section - Only for Citas */}
+            {entryType === 'Cita' && (
+              <div className="md:col-span-2 p-4 border rounded-lg bg-muted/30 space-y-4">
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  <Bell className="h-4 w-4" />
+                  Configuración del aviso
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="reminderMinutes">Aviso previo (minutos)</Label>
+                    <Input
+                      id="reminderMinutes"
+                      type="number"
+                      min="0"
+                      value={reminderMinutes}
+                      onChange={(e) => setReminderMinutes(parseInt(e.target.value) || 0)}
+                      placeholder="15"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Recibirás un aviso este tiempo antes de la cita
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="hasTravelTime" className="flex items-center gap-2">
+                        <Car className="h-4 w-4" />
+                        Incluir tiempo de viaje
+                      </Label>
+                      <Switch
+                        id="hasTravelTime"
+                        checked={hasTravelTime}
+                        onCheckedChange={setHasTravelTime}
+                      />
+                    </div>
+                    {hasTravelTime && (
+                      <div className="space-y-2 pt-2">
+                        <Label htmlFor="travelTime">Tiempo de viaje (minutos)</Label>
+                        <Input
+                          id="travelTime"
+                          type="number"
+                          min="0"
+                          value={travelTimeMinutes}
+                          onChange={(e) => setTravelTimeMinutes(parseInt(e.target.value) || 0)}
+                          placeholder="30"
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Reminder time preview */}
+                {startTime && (
+                  <div className="p-3 bg-primary/10 rounded-md">
+                    <p className="text-sm">
+                      <span className="font-medium">Hora del aviso:</span>{' '}
+                      <span className="text-primary font-semibold">{calculateReminderTime()}</span>
+                      {hasTravelTime && travelTimeMinutes > 0 && (
+                        <span className="text-muted-foreground ml-2">
+                          ({reminderMinutes} min aviso + {travelTimeMinutes} min viaje)
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
 
             <div className="space-y-2">
               <Label htmlFor="duration">Duración (días)</Label>

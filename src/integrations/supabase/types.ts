@@ -371,10 +371,12 @@ export type Database = {
           duration_days: number | null
           end_time: string | null
           external_unit_cost: number | null
+          has_travel_time: boolean | null
           id: string
           manual_units: number | null
           name: string
           related_units: number | null
+          reminder_minutes: number | null
           resource_type: string | null
           safety_margin_percent: number | null
           sales_margin_percent: number | null
@@ -383,6 +385,7 @@ export type Database = {
           start_time: string | null
           supplier_id: string | null
           task_status: string | null
+          travel_time_minutes: number | null
           unit: string | null
           updated_at: string | null
         }
@@ -394,10 +397,12 @@ export type Database = {
           duration_days?: number | null
           end_time?: string | null
           external_unit_cost?: number | null
+          has_travel_time?: boolean | null
           id?: string
           manual_units?: number | null
           name: string
           related_units?: number | null
+          reminder_minutes?: number | null
           resource_type?: string | null
           safety_margin_percent?: number | null
           sales_margin_percent?: number | null
@@ -406,6 +411,7 @@ export type Database = {
           start_time?: string | null
           supplier_id?: string | null
           task_status?: string | null
+          travel_time_minutes?: number | null
           unit?: string | null
           updated_at?: string | null
         }
@@ -417,10 +423,12 @@ export type Database = {
           duration_days?: number | null
           end_time?: string | null
           external_unit_cost?: number | null
+          has_travel_time?: boolean | null
           id?: string
           manual_units?: number | null
           name?: string
           related_units?: number | null
+          reminder_minutes?: number | null
           resource_type?: string | null
           safety_margin_percent?: number | null
           sales_margin_percent?: number | null
@@ -429,6 +437,7 @@ export type Database = {
           start_time?: string | null
           supplier_id?: string | null
           task_status?: string | null
+          travel_time_minutes?: number | null
           unit?: string | null
           updated_at?: string | null
         }

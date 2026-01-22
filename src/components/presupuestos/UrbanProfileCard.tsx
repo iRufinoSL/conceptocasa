@@ -739,7 +739,7 @@ export function UrbanProfileCard({ budgetId, cadastralReference: initialRef, isA
     setIsAutoCompleting(true);
     toast({
       title: 'Auto-completando perfil...',
-      description: 'Buscando datos en normativas urbanísticas. Esto puede tardar unos segundos.',
+      description: `Buscando normativas urbanísticas de ${profile.municipality} (${profile.province}). Esto puede tardar unos segundos.`,
     });
 
     try {
@@ -757,7 +757,7 @@ export function UrbanProfileCard({ budgetId, cadastralReference: initialRef, isA
       if (error) throw error;
 
       if (data?.success) {
-        const { fieldsCompleted, updatedFields, consultedUrls } = data;
+        const { fieldsCompleted, updatedFields, consultedUrls, applicableRegulations, landType } = data;
         
         if (fieldsCompleted > 0) {
           toast({
@@ -771,6 +771,12 @@ export function UrbanProfileCard({ budgetId, cadastralReference: initialRef, isA
           });
         }
         
+        // Log applicable regulations
+        if (applicableRegulations && applicableRegulations.length > 0) {
+          console.log('Normativas aplicables:', applicableRegulations);
+          console.log('Tipo de suelo:', landType);
+        }
+        
         // Show sources if available
         if (consultedUrls && consultedUrls.length > 0) {
           console.log('Fuentes consultadas:', consultedUrls);
@@ -779,14 +785,19 @@ export function UrbanProfileCard({ budgetId, cadastralReference: initialRef, isA
         // Refresh profile
         fetchProfile();
       } else {
-        throw new Error(data?.error || 'Error desconocido');
+        // Show more detailed error with suggestion
+        const errorMsg = data?.error || 'Error desconocido';
+        const suggestion = data?.suggestion || '';
+        throw new Error(suggestion ? `${errorMsg}\n\n${suggestion}` : errorMsg);
       }
     } catch (error) {
       console.error('Error auto-completing profile:', error);
+      const errorMessage = error instanceof Error ? error.message : 'No se pudo completar el perfil';
       toast({
         variant: 'destructive',
         title: 'Error al auto-completar',
-        description: error instanceof Error ? error.message : 'No se pudo completar el perfil',
+        description: errorMessage,
+        duration: 10000, // Show longer for better readability
       });
     } finally {
       setIsAutoCompleting(false);

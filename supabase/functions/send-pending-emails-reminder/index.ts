@@ -44,27 +44,30 @@ const handler = async (req: Request): Promise<Response> => {
 
     const usersWithPendingEmails: UserWithPendingEmails[] = [];
 
-    // For each user, check if they have unread emails
-    for (const profile of profiles || []) {
-      // Count unread emails for this user
-      const { count, error: countError } = await supabase
-        .from("email_messages")
-        .select("*", { count: "exact", head: true })
-        .eq("direction", "inbound")
-        .eq("is_read", false)
-        .is("deleted_at", null);
+    // Count ALL unread inbound emails (not filtered by user since inbound emails don't have created_by)
+    // All admins should be notified about any unread email in the system
+    const { count: totalUnread, error: countError } = await supabase
+      .from("email_messages")
+      .select("*", { count: "exact", head: true })
+      .eq("direction", "inbound")
+      .eq("is_read", false)
+      .is("deleted_at", null);
 
-      if (countError) {
-        console.error(`Error counting emails for user ${profile.id}:`, countError);
-        continue;
-      }
+    if (countError) {
+      console.error("Error counting unread emails:", countError);
+      throw countError;
+    }
 
-      if (count && count > 0) {
+    console.log(`Total unread inbound emails: ${totalUnread || 0}`);
+
+    // If there are unread emails, notify all users with notification email configured
+    if (totalUnread && totalUnread > 0) {
+      for (const profile of profiles || []) {
         usersWithPendingEmails.push({
           user_id: profile.id,
           notification_email: profile.personal_notification_email,
           full_name: profile.full_name || "Usuario",
-          unread_count: count,
+          unread_count: totalUnread,
         });
       }
     }

@@ -1110,6 +1110,57 @@ export function UrbanProfileCard({ budgetId, cadastralReference: initialRef, isA
               <div className="space-y-4">
                 <Separator />
                 
+                {/* Data Completeness Summary */}
+                {(() => {
+                  // Count completed vs missing key fields
+                  const keyFields = [
+                    { name: 'Edificabilidad', value: profile.buildability_index },
+                    { name: 'Altura máxima', value: profile.max_height },
+                    { name: 'Plantas máximas', value: profile.max_floors },
+                    { name: 'Ocupación máxima', value: profile.max_occupation_percent },
+                    { name: 'Retranqueo frontal', value: profile.front_setback },
+                    { name: 'Retranqueo lateral', value: profile.side_setback },
+                    { name: 'Retranqueo trasero', value: profile.rear_setback },
+                    { name: 'Distancia a linderos', value: profile.min_distance_neighbors },
+                    { name: 'Volumen máximo', value: profile.max_buildable_volume },
+                    { name: 'Parcela mínima', value: profile.min_plot_area },
+                  ];
+                  
+                  const completed = keyFields.filter(f => f.value !== null && f.value !== undefined);
+                  const missing = keyFields.filter(f => f.value === null || f.value === undefined);
+                  const completionPercent = Math.round((completed.length / keyFields.length) * 100);
+                  
+                  return (
+                    <div className="p-3 rounded-lg border bg-muted/20">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <Building2 className="h-4 w-4 text-primary" />
+                          <span className="font-medium text-sm">Parámetros urbanísticos clave</span>
+                        </div>
+                        <Badge variant={completionPercent >= 70 ? 'default' : completionPercent >= 30 ? 'secondary' : 'outline'}>
+                          {completed.length}/{keyFields.length} completos ({completionPercent}%)
+                        </Badge>
+                      </div>
+                      
+                      {missing.length > 0 && (
+                        <div className="text-xs text-muted-foreground">
+                          <span className="font-medium">Faltan: </span>
+                          {missing.map(f => f.name).join(', ')}
+                        </div>
+                      )}
+                      
+                      {profile.analysis_notes && (
+                        <div className="mt-2 pt-2 border-t border-dashed">
+                          <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                            <AlertCircle className="h-3 w-3" />
+                            <span>Ver "Notas del análisis" abajo para más detalles sobre fuentes consultadas</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+                
                 {/* Location Section */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-3">

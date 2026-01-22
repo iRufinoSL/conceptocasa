@@ -399,20 +399,44 @@ export default function Usuarios() {
 
       if (profileError) throw profileError;
 
-      // Update role - first delete existing roles, then insert new one
-      await supabase
-        .from('user_roles')
-        .delete()
-        .eq('user_id', editingUser.id);
+      // Check if role actually needs to change
+      const currentRole = editingUser.roles[0];
+      if (currentRole !== editRole) {
+        // Use upsert to avoid the delete-then-insert race condition
+        // This ensures we never lose admin privileges mid-operation
+        const { error: roleError } = await supabase
+          .from('user_roles')
+          .upsert({
+            user_id: editingUser.id,
+            role: editRole
+          }, {
+            onConflict: 'user_id,role',
+            ignoreDuplicates: false
+          });
 
-      const { error: roleError } = await supabase
-        .from('user_roles')
-        .insert({
-          user_id: editingUser.id,
-          role: editRole
-        });
+        // If upsert fails due to unique constraint (different role exists), 
+        // we need to delete the old role first, then insert
+        if (roleError) {
+          // Delete only non-matching roles for this user
+          await supabase
+            .from('user_roles')
+            .delete()
+            .eq('user_id', editingUser.id)
+            .neq('role', editRole);
 
-      if (roleError) throw roleError;
+          // Now try to insert the new role
+          const { error: insertError } = await supabase
+            .from('user_roles')
+            .insert({
+              user_id: editingUser.id,
+              role: editRole
+            });
+
+          if (insertError && !insertError.message?.includes('duplicate')) {
+            throw insertError;
+          }
+        }
+      }
 
       toast.success('Usuario actualizado correctamente');
       setIsEditOpen(false);

@@ -127,6 +127,7 @@ export type Database = {
           entry_date: string
           entry_type: string | null
           expense_account_id: string | null
+          has_provisional_account: boolean | null
           id: string
           supplier_id: string | null
           total_amount: number
@@ -141,6 +142,7 @@ export type Database = {
           entry_date?: string
           entry_type?: string | null
           expense_account_id?: string | null
+          has_provisional_account?: boolean | null
           id?: string
           supplier_id?: string | null
           total_amount?: number
@@ -155,6 +157,7 @@ export type Database = {
           entry_date?: string
           entry_type?: string | null
           expense_account_id?: string | null
+          has_provisional_account?: boolean | null
           id?: string
           supplier_id?: string | null
           total_amount?: number

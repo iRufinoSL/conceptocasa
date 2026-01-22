@@ -45,6 +45,8 @@ interface AccountingEntry {
   total_debit?: number;
   total_credit?: number;
   is_balanced?: boolean;
+  has_provisional_account?: boolean;
+  entry_type?: string;
 }
 
 interface EntryForm {
@@ -59,6 +61,7 @@ interface Filters {
   dateFrom: string;
   dateTo: string;
   searchQuery: string;
+  onlyProvisional: boolean;
 }
 
 type SortField = 'code' | 'date';
@@ -75,7 +78,8 @@ const emptyFilters: Filters = {
   budgetId: '',
   dateFrom: '',
   dateTo: '',
-  searchQuery: ''
+  searchQuery: '',
+  onlyProvisional: false
 };
 
 interface Props {
@@ -408,6 +412,9 @@ export function AccountingEntriesTab({ highlightCode, onHighlightHandled }: Prop
       if (filters.dateTo && entry.entry_date > filters.dateTo) {
         return false;
       }
+      if (filters.onlyProvisional && !entry.has_provisional_account) {
+        return false;
+      }
       // Search in any field
       if (filters.searchQuery) {
         const query = filters.searchQuery;
@@ -470,7 +477,8 @@ export function AccountingEntriesTab({ highlightCode, onHighlightHandled }: Prop
     setExpandedYears(newExpanded);
   };
 
-  const hasActiveFilters = filters.budgetId || filters.dateFrom || filters.dateTo || filters.searchQuery;
+  const hasActiveFilters = filters.budgetId || filters.dateFrom || filters.dateTo || filters.searchQuery || filters.onlyProvisional;
+  const provisionalCount = entries.filter(e => e.has_provisional_account).length;
 
   const clearFilters = () => {
     setFilters(emptyFilters);
@@ -488,7 +496,7 @@ export function AccountingEntriesTab({ highlightCode, onHighlightHandled }: Prop
     <Card 
       key={entry.id} 
       id={`entry-${entry.id}`}
-      className={`${!entry.is_balanced ? 'border-destructive/50' : ''} ${highlightCode === entry.code ? 'ring-2 ring-primary' : ''}`}
+      className={`${entry.has_provisional_account ? 'border-destructive bg-destructive/5' : !entry.is_balanced ? 'border-destructive/50' : ''} ${highlightCode === entry.code ? 'ring-2 ring-primary' : ''}`}
     >
       <Collapsible
         open={expandedEntries.has(entry.id)}
@@ -504,18 +512,24 @@ export function AccountingEntriesTab({ highlightCode, onHighlightHandled }: Prop
                   <ChevronRight className="h-4 w-4 text-muted-foreground" />
                 )}
                 <div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-mono text-sm text-muted-foreground">
                       #{entry.code}
                     </span>
                     <CardTitle className="text-base">{entry.description}</CardTitle>
+                    {entry.has_provisional_account && (
+                      <Badge variant="destructive" className="gap-1">
+                        <AlertTriangle className="h-3 w-3" />
+                        Cuenta Pendiente
+                      </Badge>
+                    )}
                     {!entry.is_balanced ? (
                       <Badge variant="destructive" className="gap-1">
                         <AlertTriangle className="h-3 w-3" />
                         Descuadrado
                       </Badge>
                     ) : entry.lines_count && entry.lines_count > 0 ? (
-                      <Badge variant="outline" className="gap-1 text-green-600 border-green-600">
+                      <Badge variant="outline" className="gap-1 text-emerald-600 border-emerald-600 dark:text-emerald-400 dark:border-emerald-400">
                         <CheckCircle className="h-3 w-3" />
                         Cuadrado
                       </Badge>
@@ -598,6 +612,19 @@ export function AccountingEntriesTab({ highlightCode, onHighlightHandled }: Prop
             Registro de movimientos contables
             {hasActiveFilters && ` • Mostrando ${sortedAndFilteredEntries.length} de ${entries.length}`}
           </p>
+          {provisionalCount > 0 && (
+            <Button
+              variant="link"
+              size="sm"
+              className="h-auto p-0 text-destructive hover:text-destructive/80"
+              onClick={() => setFilters({ ...filters, onlyProvisional: !filters.onlyProvisional })}
+            >
+              <AlertTriangle className="h-3 w-3 mr-1" />
+              {filters.onlyProvisional 
+                ? 'Mostrar todos los asientos' 
+                : `${provisionalCount} asiento${provisionalCount > 1 ? 's' : ''} con cuentas pendientes`}
+            </Button>
+          )}
         </div>
         <div className="flex items-center gap-2">
           <div className="relative">

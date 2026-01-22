@@ -57,12 +57,22 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}): UseVoiceInput
   }, []);
 
   useEffect(() => {
-    if (!isSupported || isInitializedRef.current) return;
+    if (!isSupported) return;
 
+    // Always reinitialize when component mounts
     const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognitionAPI) {
       console.warn('Speech Recognition API not available');
       return;
+    }
+
+    // Clean up any existing recognition
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.abort();
+      } catch (e) {
+        // Ignore
+      }
     }
 
     const recognition = new SpeechRecognitionAPI();
@@ -93,7 +103,7 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}): UseVoiceInput
               console.log('[VoiceInput] Could not auto-restart:', e);
             }
           }
-        }, 200);
+        }, 300);
       }
     };
 
@@ -170,11 +180,20 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}): UseVoiceInput
     recognitionRef.current = recognition;
     isInitializedRef.current = true;
 
+    // Pre-warm the recognition by requesting mic permission early
+    if (navigator.mediaDevices?.getUserMedia) {
+      navigator.mediaDevices.getUserMedia({ audio: true }).catch(() => {
+        // Ignore - permission will be requested when user clicks
+      });
+    }
+
     return () => {
       cleanup();
       isInitializedRef.current = false;
     };
-  }, [isSupported, continuous, language, onTranscript, onFinalTranscript, finalTranscript, cleanup]);
+  // Only reinitialize when core settings change, not on every render
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isSupported, continuous, language]);
 
   const startListening = useCallback(() => {
     if (!isSupported) {

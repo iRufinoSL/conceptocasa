@@ -364,42 +364,40 @@ export function AccountingEntryWizard({ open, onOpenChange, onEntryCreated }: Pr
   const getTotalSteps = () => {
     // compra/venta: 7 steps (type, budget, description, date/amount, vat, contact, account)
     // compra_pago: 8 steps (type, budget, description, date/amount, vat, contact, account, treasury)
-    // cobro: 7 steps (type, budget, description, date/amount, contact, debit_account (tesorería), credit_account (cliente))
-    // pago: 7 steps (type, budget, description, date/amount, contact, debit_account (proveedor), credit_account (tesorería))
+    // cobro: 6 steps (type, budget, description, date/amount, debit_account (tesorería), credit_account (cliente))
+    // pago: 6 steps (type, budget, description, date/amount, debit_account (proveedor), credit_account (tesorería))
     if (formData.entry_type === 'compra_pago') return 8;
-    if (formData.entry_type === 'pago') return 7;
-    if (formData.entry_type === 'cobro') return 7;
+    if (formData.entry_type === 'pago') return 6;
+    if (formData.entry_type === 'cobro') return 6;
     return 7; // compra/venta
   };
 
   const canProceed = () => {
     switch (step) {
       case 1: return formData.entry_type !== '';
-      case 2: return true; // Budget is optional
+      case 2: return formData.budget_id !== null; // Budget is now required
       case 3: return formData.description.trim() !== '';
       case 4: return formData.total_amount !== '' && parseFloat(formData.total_amount) > 0;
       case 5:
-        if (formData.entry_type === 'pago') {
-          return formData.supplier_id !== ''; // Proveedor al que se paga
-        }
-        if (formData.entry_type === 'cobro') {
-          return formData.supplier_id !== ''; // Cliente del que se cobra
-        }
-        return true; // VAT step for compra/venta/compra_pago
-      case 6:
         if (formData.entry_type === 'pago') {
           return formData.debit_account_id !== ''; // Cuenta al Debe (proveedor)
         }
         if (formData.entry_type === 'cobro') {
           return formData.debit_account_id !== ''; // Cuenta al Debe (tesorería destino)
         }
-        return formData.supplier_id !== ''; // Contact for compra/venta/compra_pago
-      case 7:
+        return true; // VAT step for compra/venta/compra_pago
+      case 6:
         if (formData.entry_type === 'pago') {
           return formData.credit_account_id !== ''; // Cuenta al Haber (tesorería origen)
         }
         if (formData.entry_type === 'cobro') {
           return formData.credit_account_id !== ''; // Cuenta al Haber (cliente)
+        }
+        return formData.supplier_id !== ''; // Contact for compra/venta/compra_pago
+      case 7:
+        // For pago/cobro: this is the preview step (no validation needed)
+        if (['pago', 'cobro'].includes(formData.entry_type)) {
+          return true;
         }
         return formData.expense_account_id !== ''; // Account for compra/venta/compra_pago
       case 8:
@@ -812,7 +810,7 @@ export function AccountingEntryWizard({ open, onOpenChange, onEntryCreated }: Pr
         return (
           <div className="space-y-4">
             <h3 className="font-medium text-lg">2. Presupuesto Relacionado</h3>
-            <p className="text-sm text-muted-foreground">Selecciona el presupuesto asociado (opcional)</p>
+            <p className="text-sm text-muted-foreground">Selecciona el presupuesto asociado (obligatorio)</p>
             
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -836,14 +834,6 @@ export function AccountingEntryWizard({ open, onOpenChange, onEntryCreated }: Pr
 
             <ScrollArea className="h-[250px] border rounded-lg">
               <div className="p-2 space-y-1">
-                <div
-                  className={`p-3 rounded-md cursor-pointer transition-colors ${
-                    formData.budget_id === null ? 'bg-primary/10 border border-primary' : 'hover:bg-muted'
-                  }`}
-                  onClick={() => setFormData({ ...formData, budget_id: null })}
-                >
-                  <span className="text-muted-foreground italic">Sin presupuesto asociado</span>
-                </div>
                 {filteredBudgets.map((p) => (
                   <div
                     key={p.id}
@@ -859,6 +849,11 @@ export function AccountingEntryWizard({ open, onOpenChange, onEntryCreated }: Pr
                     </div>
                   </div>
                 ))}
+                {filteredBudgets.length === 0 && (
+                  <div className="p-4 text-center text-muted-foreground">
+                    No se encontraron presupuestos{budgetSearch && ` para "${budgetSearch}"`}
+                  </div>
+                )}
               </div>
             </ScrollArea>
           </div>
@@ -912,9 +907,12 @@ export function AccountingEntryWizard({ open, onOpenChange, onEntryCreated }: Pr
         );
 
       case 5:
-        // For cobro/pago, this is the contact step
+        // For pago/cobro, step 5 is already the first account step
         if (['cobro', 'pago'].includes(formData.entry_type)) {
-          return renderContactStep();
+          if (formData.entry_type === 'pago') {
+            return renderPaymentDebitAccountStep();
+          }
+          return renderCobroDebitAccountStep();
         }
         // For compra/venta, this is the VAT step
         return (
@@ -969,19 +967,17 @@ export function AccountingEntryWizard({ open, onOpenChange, onEntryCreated }: Pr
 
       case 6:
         if (formData.entry_type === 'pago') {
-          return renderPaymentDebitAccountStep();
-        }
-        if (formData.entry_type === 'cobro') {
-          return renderCobroDebitAccountStep();
-        }
-        return renderContactStep();
-
-      case 7:
-        if (formData.entry_type === 'pago') {
           return renderPaymentCreditAccountStep();
         }
         if (formData.entry_type === 'cobro') {
           return renderCobroCreditAccountStep();
+        }
+        return renderContactStep();
+
+      case 7:
+        // For pago/cobro, this would be the preview, but we handle save on last step
+        if (['pago', 'cobro'].includes(formData.entry_type)) {
+          return renderPreview();
         }
         return renderAccountStep();
 
@@ -1161,7 +1157,7 @@ export function AccountingEntryWizard({ open, onOpenChange, onEntryCreated }: Pr
 
   const renderPaymentDebitAccountStep = () => (
     <div className="space-y-4">
-      <h3 className="font-medium text-lg">6. Cuenta al Debe (Proveedor)</h3>
+      <h3 className="font-medium text-lg">5. Cuenta al Debe (Proveedor)</h3>
       <p className="text-sm text-muted-foreground">
         Selecciona la cuenta contable del proveedor a quien se realiza el pago
       </p>
@@ -1244,7 +1240,7 @@ export function AccountingEntryWizard({ open, onOpenChange, onEntryCreated }: Pr
 
   const renderPaymentCreditAccountStep = () => (
     <div className="space-y-4">
-      <h3 className="font-medium text-lg">7. Cuenta al Haber (Tesorería)</h3>
+      <h3 className="font-medium text-lg">6. Cuenta al Haber (Tesorería)</h3>
       <p className="text-sm text-muted-foreground">
         Selecciona la cuenta de tesorería desde la que se realiza el pago (caja, banco, etc.)
       </p>
@@ -1328,7 +1324,7 @@ export function AccountingEntryWizard({ open, onOpenChange, onEntryCreated }: Pr
   // Cobro: Step 6 - Account at Debit (Tesorería - where money goes)
   const renderCobroDebitAccountStep = () => (
     <div className="space-y-4">
-      <h3 className="font-medium text-lg">6. Cuenta al Debe (Tesorería)</h3>
+      <h3 className="font-medium text-lg">5. Cuenta al Debe (Tesorería)</h3>
       <p className="text-sm text-muted-foreground">
         Selecciona la cuenta de tesorería donde entra el cobro (caja, banco, etc.)
       </p>
@@ -1412,7 +1408,7 @@ export function AccountingEntryWizard({ open, onOpenChange, onEntryCreated }: Pr
   // Cobro: Step 7 - Account at Credit (Cliente - from whom money comes)
   const renderCobroCreditAccountStep = () => (
     <div className="space-y-4">
-      <h3 className="font-medium text-lg">7. Cuenta al Haber (Cliente)</h3>
+      <h3 className="font-medium text-lg">6. Cuenta al Haber (Cliente)</h3>
       <p className="text-sm text-muted-foreground">
         Selecciona la cuenta contable del cliente del que se recibe el cobro
       </p>

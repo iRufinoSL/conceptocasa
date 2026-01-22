@@ -16,7 +16,7 @@ import { useCompanySettings } from '@/hooks/useCompanySettings';
 import { BudgetGanttView } from './BudgetGanttView';
 import { ResourcesGestionesView } from './ResourcesGestionesView';
 
-// A Task is a resource with resource_type = 'Tarea'
+// A Task is a resource with resource_type = 'Tarea' or 'Cita'
 export interface BudgetTask {
   id: string;
   budget_id: string;
@@ -28,6 +28,7 @@ export interface BudgetTask {
   end_time: string | null;
   duration_days: number;
   task_status: 'pendiente' | 'realizada';
+  resource_type: 'Tarea' | 'Cita';
   created_at: string;
   updated_at: string;
   activity?: {
@@ -125,7 +126,7 @@ export function BudgetAgendaTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
   const fetchTasks = useCallback(async () => {
     setIsLoading(true);
     try {
-      // Fetch resources with type 'Tarea' for this budget
+      // Fetch resources with type 'Tarea' or 'Cita' for this budget
       const [tasksRes, workAreasRes, workAreaLinksRes] = await Promise.all([
         supabase
           .from('budget_activity_resources')
@@ -140,11 +141,12 @@ export function BudgetAgendaTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
             end_time,
             duration_days,
             task_status,
+            resource_type,
             created_at,
             updated_at
           `)
           .eq('budget_id', budgetId)
-          .eq('resource_type', 'Tarea')
+          .in('resource_type', ['Tarea', 'Cita'])
           .order('start_date', { ascending: true, nullsFirst: false }),
         supabase
           .from('budget_work_areas')
@@ -226,6 +228,7 @@ export function BudgetAgendaTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
           start_time: task.start_time || null,
           end_time: task.end_time || null,
           task_status: (task.task_status as 'pendiente' | 'realizada') || 'pendiente',
+          resource_type: (task.resource_type as 'Tarea' | 'Cita') || 'Tarea',
           activity,
           workAreas,
           contacts: contactsData || [],

@@ -701,9 +701,9 @@ const Landing = () => {
         <div className="container mx-auto px-4">
           <div className="text-center mb-16">
             <span className="text-sm text-primary font-medium uppercase tracking-wide">Portafolio</span>
-            <h2 className="text-3xl md:text-4xl font-bold text-foreground mt-2">Proyectos Factibles</h2>
+            <h2 className="text-3xl md:text-4xl font-bold text-foreground mt-2">Proyectos Factibles con cualquiera de los Sistemas Constructivos anteriores</h2>
             <p className="text-muted-foreground mt-4 max-w-2xl mx-auto">
-              Todos los proyectos son distintos, te ayudamos personalizando el tuyo, dinos qué estilo te gusta y lo hacemos posible.
+              Todos los proyectos son distintos, te ayudamos personalizando el tuyo, dinos qué estilo te gusta y lo hacemos posible. <span className="font-semibold text-primary">U=0,20</span>
             </p>
           </div>
 

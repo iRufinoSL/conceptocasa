@@ -517,6 +517,68 @@ const Landing = () => {
               </Card>
             </div>
           </div>
+
+          {/* LSF Section */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center mt-16">
+            <div className="relative group">
+              <img 
+                src="https://img.youtube.com/vi/fIE6vP2w51A/maxresdefault.jpg" 
+                alt="Sistema LSF - Light Steel Frame" 
+                className="w-full rounded-xl shadow-lg"
+              />
+              <div className="absolute inset-0 bg-foreground/40 rounded-xl flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                <a 
+                  href="https://www.youtube.com/watch?v=fIE6vP2w51A" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="w-16 h-16 bg-primary rounded-full flex items-center justify-center hover:scale-110 transition-transform"
+                >
+                  <Play className="w-8 h-8 text-primary-foreground ml-1" />
+                </a>
+              </div>
+              <div className="mt-4">
+                <h3 className="text-xl font-semibold text-foreground">Ejemplo de trabajo con LSF</h3>
+              </div>
+            </div>
+
+            <div className="space-y-6">
+              <Card className="p-6 border-l-4 border-l-primary">
+                <div className="flex items-start gap-4">
+                  <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <Zap className="w-5 h-5 text-primary" />
+                  </div>
+                  <div>
+                    <h4 className="text-lg font-semibold text-foreground">Rapidez de Montaje</h4>
+                    <p className="text-sm text-muted-foreground mt-1">Construcción en seco con tiempos reducidos</p>
+                  </div>
+                </div>
+              </Card>
+
+              <Card className="p-6 border-l-4 border-l-primary">
+                <div className="flex items-start gap-4">
+                  <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <TrendingDown className="w-5 h-5 text-primary" />
+                  </div>
+                  <div>
+                    <h4 className="text-lg font-semibold text-foreground">Ligereza Estructural</h4>
+                    <p className="text-sm text-muted-foreground mt-1">Menor carga sobre cimentación</p>
+                  </div>
+                </div>
+              </Card>
+
+              <Card className="p-6 border-l-4 border-l-primary">
+                <div className="flex items-start gap-4">
+                  <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <Leaf className="w-5 h-5 text-primary" />
+                  </div>
+                  <div>
+                    <h4 className="text-lg font-semibold text-foreground">Precisión Industrial</h4>
+                    <p className="text-sm text-muted-foreground mt-1">Perfiles fabricados con alta exactitud</p>
+                  </div>
+                </div>
+              </Card>
+            </div>
+          </div>
         </div>
       </section>
 

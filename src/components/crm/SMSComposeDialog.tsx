@@ -4,10 +4,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { MessageSquare, Copy, ExternalLink, Check } from 'lucide-react';
-
+import { MessageSquare, Copy, ExternalLink, Check, Calendar, Clock } from 'lucide-react';
+import { format, addDays } from 'date-fns';
 interface SMSComposeDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -33,6 +35,12 @@ export function SMSComposeDialog({
   const [message, setMessage] = useState('');
   const [isCopied, setIsCopied] = useState(false);
   const [isRegistering, setIsRegistering] = useState(false);
+  
+  // Follow-up task state
+  const [createFollowUp, setCreateFollowUp] = useState(true);
+  const [followUpName, setFollowUpName] = useState('');
+  const [followUpDate, setFollowUpDate] = useState(format(addDays(new Date(), 1), 'yyyy-MM-dd'));
+  const [followUpTime, setFollowUpTime] = useState('10:00');
 
   const normalizePhone = (phone: string | null | undefined): string | null => {
     if (!phone) return null;
@@ -86,6 +94,7 @@ export function SMSComposeDialog({
 
       // Register SMS in crm_communications as "sent" (manual)
       const { data: userData } = await supabase.auth.getUser();
+      const contactFullName = `${contact.name}${contact.surname ? ' ' + contact.surname : ''}`;
       
       await supabase.from('crm_communications').insert({
         communication_type: 'sms',
@@ -102,9 +111,41 @@ export function SMSComposeDialog({
         },
       });
 
+      // Create follow-up task/management if enabled
+      if (createFollowUp) {
+        const taskTitle = followUpName.trim() || `Seguimiento SMS - ${contactFullName}`;
+        const taskDescription = `Seguimiento del SMS enviado a ${contactFullName} (${phoneNumber}).\n\nContenido del mensaje:\n"${message.trim()}"`;
+        
+        const { data: management, error: managementError } = await supabase
+          .from('crm_managements')
+          .insert({
+            title: taskTitle,
+            description: taskDescription,
+            management_type: 'Tarea',
+            status: 'Pendiente',
+            target_date: followUpDate,
+            start_time: followUpTime,
+            created_by: userData.user?.id || null,
+          })
+          .select()
+          .single();
+        
+        if (!managementError && management) {
+          // Link contact to the management
+          await supabase.from('crm_management_contacts').insert({
+            management_id: management.id,
+            contact_id: contact.id,
+          });
+          
+          console.log('Follow-up task created:', management.id);
+        }
+      }
+
       toast({
         title: 'Mensaje copiado',
-        description: 'Abriendo app de SMS. Pega el mensaje y envíalo.',
+        description: createFollowUp 
+          ? 'SMS registrado con seguimiento en Agenda. Pega el mensaje en tu app de SMS.'
+          : 'Abriendo app de SMS. Pega el mensaje y envíalo.',
       });
 
       // Open native SMS app with the phone number
@@ -116,6 +157,9 @@ export function SMSComposeDialog({
       setTimeout(() => {
         setIsCopied(false);
         setMessage('');
+        setFollowUpName('');
+        setFollowUpDate(format(addDays(new Date(), 1), 'yyyy-MM-dd'));
+        setFollowUpTime('10:00');
         onOpenChange(false);
         onSuccess?.();
 
@@ -123,6 +167,7 @@ export function SMSComposeDialog({
         queryClient.invalidateQueries({ queryKey: ['unified-sms'] });
         queryClient.invalidateQueries({ queryKey: ['crm-communications'] });
         queryClient.invalidateQueries({ queryKey: ['contact-communications'] });
+        queryClient.invalidateQueries({ queryKey: ['crm-managements'] });
       }, 500);
 
     } catch (error: any) {
@@ -188,6 +233,64 @@ export function SMSComposeDialog({
             <p className="text-xs text-muted-foreground text-right">
               {charCount} caracteres • {smsCount} SMS
             </p>
+          </div>
+
+          {/* Follow-up task section */}
+          <div className="border rounded-lg p-3 space-y-3 bg-muted/30">
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="create-followup"
+                checked={createFollowUp}
+                onCheckedChange={(checked) => setCreateFollowUp(checked === true)}
+              />
+              <Label htmlFor="create-followup" className="text-sm font-medium cursor-pointer flex items-center gap-1.5">
+                <Calendar className="h-4 w-4 text-muted-foreground" />
+                Crear seguimiento en Agenda
+              </Label>
+            </div>
+            
+            {createFollowUp && (
+              <div className="space-y-3 pl-6">
+                <div className="space-y-1.5">
+                  <Label htmlFor="followup-name" className="text-xs">Nombre del seguimiento (opcional)</Label>
+                  <Input
+                    id="followup-name"
+                    placeholder={`Seguimiento SMS - ${contactName}`}
+                    value={followUpName}
+                    onChange={(e) => setFollowUpName(e.target.value)}
+                    disabled={isRegistering}
+                    className="h-8 text-sm"
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <div className="flex-1 space-y-1.5">
+                    <Label htmlFor="followup-date" className="text-xs">Fecha</Label>
+                    <Input
+                      id="followup-date"
+                      type="date"
+                      value={followUpDate}
+                      onChange={(e) => setFollowUpDate(e.target.value)}
+                      disabled={isRegistering}
+                      className="h-8 text-sm"
+                    />
+                  </div>
+                  <div className="w-24 space-y-1.5">
+                    <Label htmlFor="followup-time" className="text-xs flex items-center gap-1">
+                      <Clock className="h-3 w-3" />
+                      Hora
+                    </Label>
+                    <Input
+                      id="followup-time"
+                      type="time"
+                      value={followUpTime}
+                      onChange={(e) => setFollowUpTime(e.target.value)}
+                      disabled={isRegistering}
+                      className="h-8 text-sm"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="flex justify-end gap-2">

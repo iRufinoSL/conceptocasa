@@ -469,7 +469,7 @@ const Landing = () => {
                 />
               </div>
               <div className="mt-4">
-                <h3 className="text-xl font-semibold text-foreground">Ejemplo de bloque sólido: de hormigón celular o perlita</h3>
+                <h3 className="text-xl font-semibold text-foreground">Ejemplo de construcción con bloque sólido: de hormigón celular o perlita</h3>
               </div>
             </div>
 
@@ -525,7 +525,7 @@ const Landing = () => {
                 />
               </div>
               <div className="mt-4">
-                <h3 className="text-xl font-semibold text-foreground">Ejemplo de trabajo con LSF</h3>
+                <h3 className="text-xl font-semibold text-foreground">Ejemplo de construcción con LSF</h3>
               </div>
             </div>
 
@@ -562,6 +562,62 @@ const Landing = () => {
                   <div>
                     <h4 className="text-lg font-semibold text-foreground">Precisión Industrial</h4>
                     <p className="text-sm text-muted-foreground mt-1">Perfiles fabricados con alta exactitud</p>
+                  </div>
+                </div>
+              </Card>
+            </div>
+          </div>
+
+          {/* SIP Section */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center mt-16">
+            <div>
+              <div className="relative w-full aspect-video rounded-xl shadow-lg overflow-hidden">
+                <iframe
+                  src="https://www.youtube.com/embed/YOUR_SIP_VIDEO_ID"
+                  title="Sistema SIP - Structural Insulation Panel"
+                  className="absolute inset-0 w-full h-full"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                />
+              </div>
+              <div className="mt-4">
+                <h3 className="text-xl font-semibold text-foreground">Ejemplo de construcción con SIP</h3>
+              </div>
+            </div>
+
+            <div className="space-y-6">
+              <Card className="p-6 border-l-4 border-l-primary">
+                <div className="flex items-start gap-4">
+                  <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <Zap className="w-5 h-5 text-primary" />
+                  </div>
+                  <div>
+                    <h4 className="text-lg font-semibold text-foreground">Aislamiento Superior</h4>
+                    <p className="text-sm text-muted-foreground mt-1">Paneles con núcleo aislante de alta eficiencia térmica</p>
+                  </div>
+                </div>
+              </Card>
+
+              <Card className="p-6 border-l-4 border-l-primary">
+                <div className="flex items-start gap-4">
+                  <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <TrendingDown className="w-5 h-5 text-primary" />
+                  </div>
+                  <div>
+                    <h4 className="text-lg font-semibold text-foreground">Construcción Rápida</h4>
+                    <p className="text-sm text-muted-foreground mt-1">Montaje acelerado con paneles prefabricados</p>
+                  </div>
+                </div>
+              </Card>
+
+              <Card className="p-6 border-l-4 border-l-primary">
+                <div className="flex items-start gap-4">
+                  <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <Leaf className="w-5 h-5 text-primary" />
+                  </div>
+                  <div>
+                    <h4 className="text-lg font-semibold text-foreground">Resistencia Estructural</h4>
+                    <p className="text-sm text-muted-foreground mt-1">Alta capacidad portante con mínimo espesor</p>
                   </div>
                 </div>
               </Card>

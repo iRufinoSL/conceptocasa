@@ -50,3 +50,6 @@ verify_jwt = true
 
 [functions.process-large-document]
 verify_jwt = true
+
+[functions.bird-webhook]
+verify_jwt = false

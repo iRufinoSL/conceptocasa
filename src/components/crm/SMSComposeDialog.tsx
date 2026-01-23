@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -52,6 +53,7 @@ export function SMSComposeDialog({
   onSuccess,
 }: SMSComposeDialogProps) {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [message, setMessage] = useState('');
   const [isSending, setIsSending] = useState(false);
 
@@ -111,6 +113,9 @@ export function SMSComposeDialog({
       });
 
       if (error) throw error;
+      if (data?.success === false) {
+        throw new Error(data?.error || 'No se pudo enviar el mensaje');
+      }
       if (data?.error) throw new Error(data.error);
 
       toast({
@@ -121,6 +126,11 @@ export function SMSComposeDialog({
       setMessage('');
       onOpenChange(false);
       onSuccess?.();
+
+      // refrescar seguimiento unificado
+      queryClient.invalidateQueries({ queryKey: ['unified-sms'] });
+      queryClient.invalidateQueries({ queryKey: ['unified-emails'] });
+      queryClient.invalidateQueries({ queryKey: ['unified-whatsapp'] });
     } catch (error: any) {
       console.error('Error sending SMS:', error);
       toast({
@@ -132,6 +142,8 @@ export function SMSComposeDialog({
       // Aun cuando falla, el backend registra el intento en el seguimiento (estado: failed).
       // Forzamos refresh del historial para que el usuario pueda comprobarlo.
       onSuccess?.();
+
+      queryClient.invalidateQueries({ queryKey: ['unified-sms'] });
     } finally {
       setIsSending(false);
     }

@@ -6,11 +6,12 @@ import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Mail, Phone, MapPin, Users, MoreVertical, Pencil, Trash2, LayoutGrid, List, FolderOpen, ChevronRight, Send, MessageCircle } from 'lucide-react';
+import { Mail, Phone, MapPin, Users, MoreVertical, Pencil, Trash2, LayoutGrid, List, FolderOpen, ChevronRight, Send, MessageCircle, Smartphone } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { ContactDetailDialog } from './ContactDetailDialog';
 import { SendEmailDialog } from './SendEmailDialog';
 import { WhatsAppComposeDialog } from './WhatsAppComposeDialog';
+import { SMSComposeDialog } from './SMSComposeDialog';
 import { searchMatch } from '@/lib/search-utils';
 import type { Contact } from '@/pages/CRM';
 
@@ -35,6 +36,8 @@ export function ContactsTab({ contacts, searchTerm, onEdit, onDelete }: Contacts
   const [emailContact, setEmailContact] = useState<Contact | null>(null);
   const [whatsappDialogOpen, setWhatsappDialogOpen] = useState(false);
   const [whatsappContact, setWhatsappContact] = useState<Contact | null>(null);
+  const [smsDialogOpen, setSmsDialogOpen] = useState(false);
+  const [smsContact, setSmsContact] = useState<Contact | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
     return (localStorage.getItem('crm-contacts-view') as ViewMode) || 'cards';
   });
@@ -205,6 +208,12 @@ export function ContactsTab({ contacts, searchTerm, onEdit, onDelete }: Contacts
     setWhatsappDialogOpen(true);
   };
 
+  const handleSendSMS = (contact: Contact) => {
+    if (!contact.phone) return;
+    setSmsContact(contact);
+    setSmsDialogOpen(true);
+  };
+
   if (filteredContacts.length === 0) {
     return (
       <Card className="py-16">
@@ -271,6 +280,14 @@ export function ContactsTab({ contacts, searchTerm, onEdit, onDelete }: Contacts
         onOpenChange={setWhatsappDialogOpen}
         contact={whatsappContact}
       />
+
+      {/* SMS Compose Dialog */}
+      <SMSComposeDialog
+        open={smsDialogOpen}
+        onOpenChange={setSmsDialogOpen}
+        contact={smsContact}
+      />
+
       {viewMode === 'cards' && (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {filteredContacts.map((contact) => (
@@ -281,6 +298,7 @@ export function ContactsTab({ contacts, searchTerm, onEdit, onDelete }: Contacts
               onDelete={onDelete}
               onSendEmail={handleSendEmail}
               onSendWhatsApp={handleSendWhatsApp}
+              onSendSMS={handleSendSMS}
               onViewDetail={(c) => {
                 setSelectedContact(c);
                 setDetailOpen(true);
@@ -386,10 +404,16 @@ export function ContactsTab({ contacts, searchTerm, onEdit, onDelete }: Contacts
                           </DropdownMenuItem>
                         )}
                         {contact.phone && (
-                          <DropdownMenuItem onClick={() => handleSendWhatsApp(contact)}>
-                            <MessageCircle className="h-4 w-4 mr-2" />
-                            Enviar WhatsApp
-                          </DropdownMenuItem>
+                          <>
+                            <DropdownMenuItem onClick={() => handleSendWhatsApp(contact)}>
+                              <MessageCircle className="h-4 w-4 mr-2" />
+                              Enviar WhatsApp
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleSendSMS(contact)}>
+                              <Smartphone className="h-4 w-4 mr-2" />
+                              Enviar SMS
+                            </DropdownMenuItem>
+                          </>
                         )}
                         {(contact.email || contact.phone) && <DropdownMenuSeparator />}
                         <DropdownMenuItem onClick={() => onEdit(contact)}>
@@ -506,10 +530,16 @@ export function ContactsTab({ contacts, searchTerm, onEdit, onDelete }: Contacts
                                     </DropdownMenuItem>
                                   )}
                                   {contact.phone && (
-                                    <DropdownMenuItem onClick={() => handleSendWhatsApp(contact)}>
-                                      <MessageCircle className="h-4 w-4 mr-2" />
-                                      Enviar WhatsApp
-                                    </DropdownMenuItem>
+                                    <>
+                                      <DropdownMenuItem onClick={() => handleSendWhatsApp(contact)}>
+                                        <MessageCircle className="h-4 w-4 mr-2" />
+                                        Enviar WhatsApp
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem onClick={() => handleSendSMS(contact)}>
+                                        <Smartphone className="h-4 w-4 mr-2" />
+                                        Enviar SMS
+                                      </DropdownMenuItem>
+                                    </>
                                   )}
                                   {(contact.email || contact.phone) && <DropdownMenuSeparator />}
                                   <DropdownMenuItem onClick={() => onEdit(contact)}>
@@ -545,6 +575,7 @@ function ContactCard({
   onDelete,
   onSendEmail,
   onSendWhatsApp,
+  onSendSMS,
   onViewDetail,
   getInitials,
   getTypeVariant,
@@ -556,6 +587,7 @@ function ContactCard({
   onDelete: (contact: Contact) => void;
   onSendEmail: (contact: Contact) => void;
   onSendWhatsApp: (contact: Contact) => void;
+  onSendSMS: (contact: Contact) => void;
   onViewDetail: (contact: Contact) => void;
   getInitials: (name: string, surname?: string | null) => string;
   getTypeVariant: (type: string) => "default" | "outline";
@@ -600,10 +632,16 @@ function ContactCard({
                     </DropdownMenuItem>
                   )}
                   {contact.phone && (
-                    <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onSendWhatsApp(contact); }}>
-                      <MessageCircle className="h-4 w-4 mr-2" />
-                      Enviar WhatsApp
-                    </DropdownMenuItem>
+                    <>
+                      <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onSendWhatsApp(contact); }}>
+                        <MessageCircle className="h-4 w-4 mr-2" />
+                        Enviar WhatsApp
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onSendSMS(contact); }}>
+                        <Smartphone className="h-4 w-4 mr-2" />
+                        Enviar SMS
+                      </DropdownMenuItem>
+                    </>
                   )}
                   {(contact.email || contact.phone) && <DropdownMenuSeparator />}
                   <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onEdit(contact); }}>

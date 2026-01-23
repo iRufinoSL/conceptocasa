@@ -15,7 +15,7 @@ import {
   Reply, Forward, Trash2, ArrowDownLeft, ArrowUpRight,
   Paperclip, Eye, Clock, CheckCircle, XCircle, Search, Inbox, Send,
   ArrowLeft, Maximize2, FolderOpen, ClipboardList, Building2,
-  FileText, Image, File as FileIcon, Download, ExternalLink, X
+  FileText, Image, File as FileIcon, Download, ExternalLink, X, RefreshCw, Loader2
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import type { Tables } from '@/integrations/supabase/types';
@@ -342,6 +342,50 @@ export function UnifiedCommunicationsList({
       toast({ title: 'Todos los emails marcados como leídos' });
       queryClient.invalidateQueries({ queryKey: ['unified-emails'] });
       setFilterUnreadOnly(false);
+    },
+  });
+
+  // Resend email mutation
+  const resendEmailMutation = useMutation({
+    mutationFn: async (emailId: string) => {
+      // Fetch the original email
+      const { data: originalEmail, error: fetchError } = await supabase
+        .from('email_messages')
+        .select('*')
+        .eq('id', emailId)
+        .single();
+      
+      if (fetchError) throw fetchError;
+      if (!originalEmail) throw new Error('Email no encontrado');
+
+      // Call the send-crm-email edge function
+      const { data, error } = await supabase.functions.invoke('send-crm-email', {
+        body: {
+          to: originalEmail.to_emails,
+          cc: originalEmail.cc_emails || [],
+          bcc: originalEmail.bcc_emails || [],
+          subject: originalEmail.subject || '(Sin asunto)',
+          html: originalEmail.body_html || originalEmail.body_text || '',
+          contact_id: originalEmail.contact_id,
+          budget_id: originalEmail.budget_id,
+        },
+      });
+
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      
+      return data;
+    },
+    onSuccess: () => {
+      toast({ title: 'Email reenviado correctamente' });
+      queryClient.invalidateQueries({ queryKey: ['unified-emails'] });
+    },
+    onError: (error: any) => {
+      toast({ 
+        title: 'Error al reenviar email', 
+        description: error.message || 'No se pudo reenviar el email',
+        variant: 'destructive' 
+      });
     },
   });
 
@@ -741,6 +785,22 @@ export function UnifiedCommunicationsList({
                     </Button>
                   )}
                 </>
+              )}
+              {/* Resend button for outbound emails */}
+              {comm.type === 'email' && comm.direction === 'outbound' && (
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => resendEmailMutation.mutate(comm.id)}
+                  disabled={resendEmailMutation.isPending}
+                >
+                  {resendEmailMutation.isPending ? (
+                    <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                  ) : (
+                    <RefreshCw className="h-4 w-4 mr-1" />
+                  )}
+                  Volver a enviar
+                </Button>
               )}
               {isAdmin && (
                 <Button 

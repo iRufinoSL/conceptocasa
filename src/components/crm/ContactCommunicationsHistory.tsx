@@ -15,7 +15,7 @@ import { es } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { 
   Mail, MessageSquare, Search, ArrowUpRight, ArrowDownLeft, 
-  Phone, Calendar, Clock, Eye, Plus, Maximize2, X
+  Phone, Calendar, Clock, Eye, Plus, Maximize2, X, Smartphone
 } from 'lucide-react';
 
 interface ContactCommunicationsHistoryProps {
@@ -45,6 +45,17 @@ interface WhatsAppMessage {
   status: string;
   notes: string | null;
   created_at: string;
+}
+
+interface SmsMessage {
+  id: string;
+  direction: string;
+  subject: string | null;
+  content: string;
+  status: string;
+  error_message: string | null;
+  created_at: string;
+  metadata: any;
 }
 
 export function ContactCommunicationsHistory({ contactId, contactPhone }: ContactCommunicationsHistoryProps) {
@@ -86,6 +97,22 @@ export function ContactCommunicationsHistory({ contactId, contactPhone }: Contac
     },
   });
 
+  // Fetch SMS communications for this contact (stored in crm_communications)
+  const { data: smsMessages = [], isLoading: loadingSms } = useQuery({
+    queryKey: ['contact-sms', contactId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('crm_communications')
+        .select('id, direction, subject, content, status, error_message, created_at, metadata')
+        .eq('contact_id', contactId)
+        .eq('communication_type', 'sms')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      return (data || []) as SmsMessage[];
+    },
+  });
+
   // Mutation to save received WhatsApp
   const saveReceivedWhatsApp = useMutation({
     mutationFn: async () => {
@@ -117,7 +144,7 @@ export function ContactCommunicationsHistory({ contactId, contactPhone }: Contac
     },
   });
 
-  const isLoading = loadingEmails || loadingWhatsApp;
+  const isLoading = loadingEmails || loadingWhatsApp || loadingSms;
 
   // Filter messages based on search
   const filteredEmails = emails.filter(email => {
@@ -140,17 +167,34 @@ export function ContactCommunicationsHistory({ contactId, contactPhone }: Contac
     );
   });
 
+  const filteredSms = smsMessages.filter((sms) => {
+    if (!search) return true;
+    const searchLower = search.toLowerCase();
+    const metaTo = sms?.metadata?.to_phone ? String(sms.metadata.to_phone) : '';
+    const metaFrom = sms?.metadata?.from_phone ? String(sms.metadata.from_phone) : '';
+    return (
+      (sms.subject || '').toLowerCase().includes(searchLower) ||
+      (sms.content || '').toLowerCase().includes(searchLower) ||
+      metaTo.includes(searchLower) ||
+      metaFrom.includes(searchLower) ||
+      (sms.error_message || '').toLowerCase().includes(searchLower)
+    );
+  });
+
   // Combine all messages for timeline view
   const allMessages = [
     ...filteredEmails.map(e => ({ ...e, type: 'email' as const })),
     ...filteredWhatsApp.map(w => ({ ...w, type: 'whatsapp' as const })),
+    ...filteredSms.map(s => ({ ...s, type: 'sms' as const })),
   ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
   const filteredAll = activeTab === 'all' 
     ? allMessages 
     : activeTab === 'email' 
       ? allMessages.filter(m => m.type === 'email')
-      : allMessages.filter(m => m.type === 'whatsapp');
+      : activeTab === 'whatsapp'
+        ? allMessages.filter(m => m.type === 'whatsapp')
+        : allMessages.filter(m => m.type === 'sms');
 
   // Stats
   const stats = {
@@ -160,6 +204,9 @@ export function ContactCommunicationsHistory({ contactId, contactPhone }: Contac
     totalWhatsApp: whatsappMessages.length,
     sentWhatsApp: whatsappMessages.filter(w => w.direction === 'outbound').length,
     receivedWhatsApp: whatsappMessages.filter(w => w.direction === 'inbound').length,
+    totalSms: smsMessages.length,
+    sentSms: smsMessages.filter(s => s.direction === 'outbound').length,
+    receivedSms: smsMessages.filter(s => s.direction === 'inbound').length,
   };
 
   const getStatusColor = (status: string) => {
@@ -216,7 +263,7 @@ export function ContactCommunicationsHistory({ contactId, contactPhone }: Contac
         </CardHeader>
         <CardContent className="space-y-4 py-0 pb-4">
           {/* Stats */}
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-3 gap-2">
             <div className="p-2 rounded-lg bg-blue-50 dark:bg-blue-950/20 text-center">
               <div className="flex items-center justify-center gap-1 text-blue-600">
                 <Mail className="h-3 w-3" />
@@ -237,6 +284,16 @@ export function ContactCommunicationsHistory({ contactId, contactPhone }: Contac
                 ↑{stats.sentWhatsApp} ↓{stats.receivedWhatsApp}
               </p>
             </div>
+            <div className="p-2 rounded-lg bg-purple-50 dark:bg-purple-950/20 text-center">
+              <div className="flex items-center justify-center gap-1 text-purple-600">
+                <Smartphone className="h-3 w-3" />
+                <span className="text-sm font-bold">{stats.totalSms}</span>
+              </div>
+              <p className="text-xs text-muted-foreground">SMS</p>
+              <p className="text-xs text-muted-foreground">
+                ↑{stats.sentSms} ↓{stats.receivedSms}
+              </p>
+            </div>
           </div>
 
           {/* Search */}
@@ -252,13 +309,16 @@ export function ContactCommunicationsHistory({ contactId, contactPhone }: Contac
 
           {/* Tabs */}
           <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="grid w-full grid-cols-3 h-8">
+            <TabsList className="grid w-full grid-cols-4 h-8">
               <TabsTrigger value="all" className="text-xs">Todo ({allMessages.length})</TabsTrigger>
               <TabsTrigger value="email" className="text-xs gap-1">
                 <Mail className="h-3 w-3" /> Email
               </TabsTrigger>
               <TabsTrigger value="whatsapp" className="text-xs gap-1">
                 <MessageSquare className="h-3 w-3" /> WA
+              </TabsTrigger>
+              <TabsTrigger value="sms" className="text-xs gap-1">
+                <Smartphone className="h-3 w-3" /> SMS
               </TabsTrigger>
             </TabsList>
           </Tabs>
@@ -273,7 +333,26 @@ export function ContactCommunicationsHistory({ contactId, contactPhone }: Contac
               ) : (
                 filteredAll.map((item) => {
                   const isEmail = item.type === 'email';
+                  const isSms = item.type === 'sms';
                   const isInbound = item.direction === 'inbound';
+
+                  const itemStatus = (item as any).status;
+                  const itemCreatedAt = (item as any).created_at;
+                  const messageText = isEmail
+                    ? ((item as EmailMessage).subject || '(Sin asunto)')
+                    : isSms
+                      ? ((item as SmsMessage).content || '')
+                      : ((item as WhatsAppMessage).message || '');
+                  const notesText = !isEmail && !isSms ? (item as WhatsAppMessage).notes : null;
+                  const errorText = isSms ? (item as SmsMessage).error_message : null;
+                  const typeIconBg = isEmail
+                    ? 'bg-blue-100 dark:bg-blue-900/30'
+                    : isSms
+                      ? 'bg-purple-100 dark:bg-purple-900/30'
+                      : 'bg-green-100 dark:bg-green-900/30';
+
+                  const TypeIcon = isEmail ? Mail : isSms ? Smartphone : MessageSquare;
+                  const typeIconColor = isEmail ? 'text-blue-600' : isSms ? 'text-purple-600' : 'text-green-600';
                   
                   return (
                     <div
@@ -281,12 +360,8 @@ export function ContactCommunicationsHistory({ contactId, contactPhone }: Contac
                       className={`p-2 rounded-lg border ${isInbound ? 'border-l-2 border-l-green-500' : 'border-l-2 border-l-blue-500'} bg-card`}
                     >
                       <div className="flex items-start gap-2">
-                        <div className={`p-1.5 rounded-full ${isEmail ? 'bg-blue-100 dark:bg-blue-900/30' : 'bg-green-100 dark:bg-green-900/30'}`}>
-                          {isEmail ? (
-                            <Mail className="h-3 w-3 text-blue-600" />
-                          ) : (
-                            <MessageSquare className="h-3 w-3 text-green-600" />
-                          )}
+                        <div className={`p-1.5 rounded-full ${typeIconBg}`}>
+                          <TypeIcon className={`h-3 w-3 ${typeIconColor}`} />
                         </div>
                         
                         <div className="flex-1 min-w-0">
@@ -299,23 +374,24 @@ export function ContactCommunicationsHistory({ contactId, contactPhone }: Contac
                             <span className="text-xs font-medium">
                               {isInbound ? 'Recibido' : 'Enviado'}
                             </span>
-                            <Badge className={`text-[10px] h-4 ${getStatusColor(item.status)}`}>
-                              {item.status}
+                            <Badge className={`text-[10px] h-4 ${getStatusColor(itemStatus)}`}>
+                              {itemStatus}
                             </Badge>
                           </div>
                           
                           {isEmail ? (
-                            <p className="text-xs mt-1 truncate font-medium">
-                              {(item as EmailMessage).subject || '(Sin asunto)'}
-                            </p>
+                            <p className="text-xs mt-1 truncate font-medium">{messageText}</p>
                           ) : (
                             <>
-                              <p className="text-xs mt-1 line-clamp-2">
-                                {(item as WhatsAppMessage).message}
-                              </p>
-                              {(item as WhatsAppMessage).notes && (
+                              <p className="text-xs mt-1 line-clamp-2">{messageText}</p>
+                              {notesText && (
                                 <p className="text-[10px] mt-1 text-muted-foreground italic">
-                                  📝 {(item as WhatsAppMessage).notes}
+                                  📝 {notesText}
+                                </p>
+                              )}
+                              {errorText && itemStatus === 'failed' && (
+                                <p className="text-[10px] mt-1 text-destructive">
+                                  {errorText}
                                 </p>
                               )}
                             </>
@@ -324,11 +400,11 @@ export function ContactCommunicationsHistory({ contactId, contactPhone }: Contac
                           <div className="flex items-center gap-2 mt-1 text-[10px] text-muted-foreground">
                             <span className="flex items-center gap-0.5">
                               <Calendar className="h-2.5 w-2.5" />
-                              {format(new Date(item.created_at), 'd MMM yy', { locale: es })}
+                              {format(new Date(itemCreatedAt), 'd MMM yy', { locale: es })}
                             </span>
                             <span className="flex items-center gap-0.5">
                               <Clock className="h-2.5 w-2.5" />
-                              {format(new Date(item.created_at), 'HH:mm')}
+                              {format(new Date(itemCreatedAt), 'HH:mm')}
                             </span>
                             {isEmail && (item as EmailMessage).is_read && (
                               <Eye className="h-2.5 w-2.5" />

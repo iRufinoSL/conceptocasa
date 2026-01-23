@@ -228,16 +228,16 @@ export function ContactDetailDialog({ contact, open, onOpenChange }: ContactDeta
               </a>
               <Button
                 type="button"
-                variant="ghost"
-                size="icon"
-                className="h-6 w-6"
+                variant="outline"
+                size="sm"
+                className="h-7 px-2 gap-1 text-xs"
                 onClick={(e) => {
                   e.stopPropagation();
                   setSmsDialogOpen(true);
                 }}
-                title="Enviar SMS"
               >
                 <MessageSquare className="h-3.5 w-3.5" />
+                SMS
               </Button>
             </div>
           );

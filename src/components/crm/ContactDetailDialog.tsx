@@ -7,7 +7,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
 import { 
   Mail, Phone, MapPin, Globe, Building2, User, 
-  Calendar, FileText, Tag, Briefcase, ClipboardList, Plus
+  Calendar, FileText, Tag, Briefcase, ClipboardList, Plus, MessageSquare
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
@@ -15,6 +15,7 @@ import { es } from 'date-fns/locale';
 import { SendEmailDialog } from './SendEmailDialog';
 import { ManagementForm } from './ManagementForm';
 import { ContactCommunicationsHistory } from './ContactCommunicationsHistory';
+import { SMSComposeDialog } from './SMSComposeDialog';
 import type { Contact } from '@/pages/CRM';
 
 interface Management {
@@ -53,6 +54,7 @@ export function ContactDetailDialog({ contact, open, onOpenChange }: ContactDeta
   const [relatedContacts, setRelatedContacts] = useState<RelatedContact[]>([]);
   const [loading, setLoading] = useState(false);
   const [emailDialogOpen, setEmailDialogOpen] = useState(false);
+  const [smsDialogOpen, setSmsDialogOpen] = useState(false);
   const [managementFormOpen, setManagementFormOpen] = useState(false);
 
   const fetchManagements = async () => {
@@ -216,13 +218,28 @@ export function ContactDetailDialog({ contact, open, onOpenChange }: ContactDeta
           );
         case 'phone':
           return (
-            <a 
-              href={`tel:${value.replace(/[^\d+]/g, '')}`}
-              className="text-sm break-words hover:underline hover:text-primary transition-colors"
-              onClick={(e) => e.stopPropagation()}
-            >
-              {value}
-            </a>
+            <div className="flex items-center gap-2">
+              <a 
+                href={`tel:${value.replace(/[^\d+]/g, '')}`}
+                className="text-sm break-words hover:underline hover:text-primary transition-colors"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {value}
+              </a>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSmsDialogOpen(true);
+                }}
+                title="Enviar SMS"
+              >
+                <MessageSquare className="h-3.5 w-3.5" />
+              </Button>
+            </div>
           );
         case 'website':
           const fullUrl = value.startsWith('http') ? value : `https://${value}`;
@@ -259,6 +276,11 @@ export function ContactDetailDialog({ contact, open, onOpenChange }: ContactDeta
         open={emailDialogOpen}
         onOpenChange={setEmailDialogOpen}
         contact={{ id: contact.id, name: contact.name, surname: contact.surname, email: contact.email }}
+      />
+      <SMSComposeDialog
+        open={smsDialogOpen}
+        onOpenChange={setSmsDialogOpen}
+        contact={{ id: contact.id, name: contact.name, surname: contact.surname, phone: contact.phone }}
       />
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="max-w-2xl max-h-[90vh] p-0 overflow-hidden">

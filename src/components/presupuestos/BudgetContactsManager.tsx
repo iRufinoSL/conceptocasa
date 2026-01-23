@@ -10,10 +10,11 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { Plus, Trash2, Users, Building2, UserPlus, ChevronDown, List, FolderOpen, Search, X, Mail, Pencil, MessageCircle } from 'lucide-react';
+import { Plus, Trash2, Users, Building2, UserPlus, ChevronDown, List, FolderOpen, Search, X, Mail, Pencil, MessageCircle, Smartphone } from 'lucide-react';
 import { ContactForm } from '@/components/crm/ContactForm';
 import { SendEmailDialog } from '@/components/crm/SendEmailDialog';
 import { WhatsAppComposeDialog } from '@/components/crm/WhatsAppComposeDialog';
+import { SMSComposeDialog } from '@/components/crm/SMSComposeDialog';
 
 interface ProfessionalActivity {
   id: string;
@@ -63,6 +64,8 @@ export function BudgetContactsManager({ budgetId, isAdmin }: BudgetContactsManag
   const [emailContact, setEmailContact] = useState<Contact | null>(null);
   const [whatsappDialogOpen, setWhatsappDialogOpen] = useState(false);
   const [whatsappContact, setWhatsappContact] = useState<Contact | null>(null);
+  const [smsDialogOpen, setSmsDialogOpen] = useState(false);
+  const [smsContact, setSmsContact] = useState<Contact | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editContact, setEditContact] = useState<Contact | null>(null);
 
@@ -255,6 +258,12 @@ export function BudgetContactsManager({ budgetId, isAdmin }: BudgetContactsManag
     setWhatsappDialogOpen(true);
   };
 
+  const handleSendSMS = (contact: Contact) => {
+    if (!contact.phone) return;
+    setSmsContact(contact);
+    setSmsDialogOpen(true);
+  };
+
   const clients = budgetContacts.filter(bc => bc.contact_role === 'cliente');
   const providers = budgetContacts.filter(bc => bc.contact_role === 'proveedor');
   const others = budgetContacts.filter(bc => bc.contact_role === 'otros');
@@ -368,20 +377,36 @@ export function BudgetContactsManager({ budgetId, isAdmin }: BudgetContactsManag
       </div>
       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
         {bc.contact?.phone && (
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8 text-green-600 hover:text-green-700"
-            onClick={(e) => {
-              e.stopPropagation();
-              if (bc.contact) {
-                handleSendWhatsApp(bc.contact);
-              }
-            }}
-            title="Enviar WhatsApp"
-          >
-            <MessageCircle className="h-4 w-4" />
-          </Button>
+          <>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-green-600 hover:text-green-700"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (bc.contact) {
+                  handleSendWhatsApp(bc.contact);
+                }
+              }}
+              title="Enviar WhatsApp"
+            >
+              <MessageCircle className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-purple-600 hover:text-purple-700"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (bc.contact) {
+                  handleSendSMS(bc.contact);
+                }
+              }}
+              title="Enviar SMS"
+            >
+              <Smartphone className="h-4 w-4" />
+            </Button>
+          </>
         )}
         {bc.contact?.email && (
           <Button
@@ -766,6 +791,14 @@ export function BudgetContactsManager({ budgetId, isAdmin }: BudgetContactsManag
         open={whatsappDialogOpen}
         onOpenChange={setWhatsappDialogOpen}
         contact={whatsappContact}
+        budgetId={budgetId}
+      />
+
+      {/* SMS Compose Dialog */}
+      <SMSComposeDialog
+        open={smsDialogOpen}
+        onOpenChange={setSmsDialogOpen}
+        contact={smsContact}
         budgetId={budgetId}
       />
     </>

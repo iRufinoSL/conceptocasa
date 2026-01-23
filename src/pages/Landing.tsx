@@ -631,21 +631,23 @@ const Landing = () => {
       {/* Complementary Elements Section - Fire Resistant Panels */}
       <section className="py-16 bg-secondary/30">
         <div className="container mx-auto px-4">
-          <div className="max-w-4xl mx-auto">
-            <div className="relative w-full aspect-video rounded-xl shadow-lg overflow-hidden">
-              <iframe
-                src="https://www.youtube.com/embed/bmJpOS-XEGY"
-                title="Paneles de óxido de magnesio - Resistencia al fuego"
-                className="absolute inset-0 w-full h-full"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                allowFullScreen
-              />
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
+            <div>
+              <div className="relative w-full aspect-video rounded-xl shadow-lg overflow-hidden">
+                <iframe
+                  src="https://www.youtube.com/embed/bmJpOS-XEGY"
+                  title="Paneles de óxido de magnesio - Resistencia al fuego"
+                  className="absolute inset-0 w-full h-full"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                />
+              </div>
+              <div className="mt-4">
+                <h3 className="text-xl font-semibold text-foreground">Elementos complementarios: paneles de altísima resistencia al fuego</h3>
+              </div>
             </div>
-            <p className="text-center text-muted-foreground mt-6 text-lg">
-              Elementos complementarios: paneles de altísima resistencia al fuego
-            </p>
 
-            <div className="grid grid-cols-1 gap-4 mt-8">
+            <div className="space-y-6">
               <Card className="p-6 border-l-4 border-l-primary">
                 <div className="flex items-start gap-4">
                   <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center flex-shrink-0">
@@ -659,35 +661,33 @@ const Landing = () => {
               </Card>
             </div>
           </div>
-        </div>
-      </section>
 
-      {/* Complementary Elements Section - Liquid Mortars */}
-      <section className="py-16 bg-background">
-        <div className="container mx-auto px-4">
-          <div className="max-w-4xl mx-auto">
-            <div className="relative w-full aspect-video rounded-xl shadow-lg overflow-hidden">
-              <iframe
-                src="https://www.youtube.com/embed/qF7bFGjQxvY"
-                title="Politerm Blu - Mortero líquido con aislamiento"
-                className="absolute inset-0 w-full h-full"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                allowFullScreen
-              />
+          {/* Liquid Mortars Sub-section */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center mt-16">
+            <div>
+              <div className="relative w-full aspect-video rounded-xl shadow-lg overflow-hidden">
+                <iframe
+                  src="https://www.youtube.com/embed/o2Dms6KpscA"
+                  title="Politerm Blu - Mortero líquido con aislamiento"
+                  className="absolute inset-0 w-full h-full"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                />
+              </div>
+              <div className="mt-4">
+                <h3 className="text-xl font-semibold text-foreground">Elementos complementarios: morteros líquidos con aislamiento incorporado</h3>
+              </div>
             </div>
-            <p className="text-center text-muted-foreground mt-6 text-lg">
-              Elementos complementarios: morteros líquidos con aislamiento incorporado
-            </p>
 
-            <div className="grid grid-cols-1 gap-4 mt-8">
+            <div className="space-y-6">
               <Card className="p-6 border-l-4 border-l-primary">
                 <div className="flex items-start gap-4">
                   <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center flex-shrink-0">
                     <Droplets className="w-5 h-5 text-primary" />
                   </div>
                   <div>
-                    <h4 className="text-lg font-semibold text-foreground">Rellena Cualquier Espacio o Volumen</h4>
-                    <p className="text-sm text-muted-foreground mt-1">Aportando grandes estándares de aislamiento térmico y acústico</p>
+                    <h4 className="text-lg font-semibold text-foreground">Hormigones Aditivados</h4>
+                    <p className="text-sm text-muted-foreground mt-1">Aportan grandes estándares de aislamiento térmico y acústico</p>
                   </div>
                 </div>
               </Card>

@@ -29,7 +29,9 @@ import {
   FileText,
   Paperclip,
   File,
-  Loader2
+  Loader2,
+  Flame,
+  Droplets
 } from "lucide-react";
 import homeModern from "@/assets/home-modern.jpg";
 import homeClassic from "@/assets/home-classic.jpg";
@@ -626,7 +628,7 @@ const Landing = () => {
         </div>
       </section>
 
-      {/* Complementary Elements Section */}
+      {/* Complementary Elements Section - Fire Resistant Panels */}
       <section className="py-16 bg-secondary/30">
         <div className="container mx-auto px-4">
           <div className="max-w-4xl mx-auto">
@@ -642,6 +644,54 @@ const Landing = () => {
             <p className="text-center text-muted-foreground mt-6 text-lg">
               Elementos complementarios: paneles de altísima resistencia al fuego
             </p>
+
+            <div className="grid grid-cols-1 gap-4 mt-8">
+              <Card className="p-6 border-l-4 border-l-primary">
+                <div className="flex items-start gap-4">
+                  <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <Flame className="w-5 h-5 text-primary" />
+                  </div>
+                  <div>
+                    <h4 className="text-lg font-semibold text-foreground">Altísima Resistencia al Fuego</h4>
+                    <p className="text-sm text-muted-foreground mt-1">Paneles de óxido de magnesio que soportan temperaturas extremas sin degradarse</p>
+                  </div>
+                </div>
+              </Card>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Complementary Elements Section - Liquid Mortars */}
+      <section className="py-16 bg-background">
+        <div className="container mx-auto px-4">
+          <div className="max-w-4xl mx-auto">
+            <div className="relative w-full aspect-video rounded-xl shadow-lg overflow-hidden">
+              <iframe
+                src="https://www.youtube.com/embed/qF7bFGjQxvY"
+                title="Politerm Blu - Mortero líquido con aislamiento"
+                className="absolute inset-0 w-full h-full"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+              />
+            </div>
+            <p className="text-center text-muted-foreground mt-6 text-lg">
+              Elementos complementarios: morteros líquidos con aislamiento incorporado
+            </p>
+
+            <div className="grid grid-cols-1 gap-4 mt-8">
+              <Card className="p-6 border-l-4 border-l-primary">
+                <div className="flex items-start gap-4">
+                  <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <Droplets className="w-5 h-5 text-primary" />
+                  </div>
+                  <div>
+                    <h4 className="text-lg font-semibold text-foreground">Rellena Cualquier Espacio o Volumen</h4>
+                    <p className="text-sm text-muted-foreground mt-1">Aportando grandes estándares de aislamiento térmico y acústico</p>
+                  </div>
+                </div>
+              </Card>
+            </div>
           </div>
         </div>
       </section>

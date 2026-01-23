@@ -128,11 +128,13 @@ Deno.serve(async (req: Request) => {
     const birdData = await birdResponse.json();
     console.log('Bird API response:', JSON.stringify(birdData, null, 2));
 
-    if (!birdResponse.ok) {
-      console.error('Bird API error:', birdData);
-      
-      // Store failed communication
-      await adminClient.from('crm_communications').insert({
+     if (!birdResponse.ok) {
+       console.error('Bird API error:', birdData);
+
+       // Store failed communication
+       const { data: failedComm } = await adminClient
+         .from('crm_communications')
+         .insert({
         contact_id: contact_id || null,
         communication_type: 'sms',
         direction: 'outbound',
@@ -147,15 +149,24 @@ Deno.serve(async (req: Request) => {
           budget_id: budget_id,
           error_response: birdData,
         },
-      });
+         })
+         .select()
+         .single();
 
-      return new Response(JSON.stringify({ 
-        error: 'Failed to send SMS', 
-        details: birdData 
-      }), {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+       // IMPORTANT: return 200 so the client can read the actual error payload
+       // and still show/update the tracking entry.
+       return new Response(
+         JSON.stringify({
+           success: false,
+           error: birdData.errors?.[0]?.message || birdData.message || birdData.code || 'Error sending SMS',
+           details: birdData,
+           communication_id: failedComm?.id,
+         }),
+         {
+           status: 200,
+           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+         }
+       );
     }
 
     // Store successful communication
@@ -187,13 +198,16 @@ Deno.serve(async (req: Request) => {
 
     console.log('SMS sent successfully:', birdData.id);
 
-    return new Response(JSON.stringify({ 
-      success: true, 
-      message_id: birdData.id,
-      communication_id: communication?.id 
-    }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+     return new Response(
+       JSON.stringify({
+         success: true,
+         message_id: birdData.id,
+         communication_id: communication?.id,
+       }),
+       {
+         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+       }
+     );
 
   } catch (error) {
     console.error('Error sending SMS:', error);

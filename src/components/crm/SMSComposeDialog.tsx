@@ -7,6 +7,30 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { MessageSquare, Send, Loader2 } from 'lucide-react';
 
+function extractEdgeFunctionError(err: any): string {
+  // supabase-js wraps non-2xx function responses in a FunctionsHttpError.
+  // The useful payload is typically in err.context (may be string or object).
+  try {
+    const ctx = err?.context;
+    const body = ctx?.body ?? ctx;
+    if (typeof body === 'string') {
+      try {
+        const parsed = JSON.parse(body);
+        return parsed?.error || parsed?.message || parsed?.details?.message || body;
+      } catch {
+        return body;
+      }
+    }
+    if (body && typeof body === 'object') {
+      return body?.error || body?.message || body?.details?.message || err?.message || 'Error desconocido';
+    }
+  } catch {
+    // ignore
+  }
+
+  return err?.message || 'No se pudo enviar el mensaje';
+}
+
 interface SMSComposeDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -87,10 +111,7 @@ export function SMSComposeDialog({
       });
 
       if (error) throw error;
-
-      if (data?.error) {
-        throw new Error(data.error);
-      }
+      if (data?.error) throw new Error(data.error);
 
       toast({
         title: 'SMS enviado',
@@ -104,9 +125,13 @@ export function SMSComposeDialog({
       console.error('Error sending SMS:', error);
       toast({
         title: 'Error al enviar SMS',
-        description: error.message || 'No se pudo enviar el mensaje',
+        description: extractEdgeFunctionError(error),
         variant: 'destructive',
       });
+
+      // Aun cuando falla, el backend registra el intento en el seguimiento (estado: failed).
+      // Forzamos refresh del historial para que el usuario pueda comprobarlo.
+      onSuccess?.();
     } finally {
       setIsSending(false);
     }

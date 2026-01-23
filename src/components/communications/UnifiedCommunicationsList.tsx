@@ -41,6 +41,10 @@ type WhatsAppMessage = Tables<'whatsapp_messages'> & {
   whatsapp_attachments?: { id: string; file_name: string }[];
 };
 
+type SmsCommunication = Tables<'crm_communications'> & {
+  crm_contacts?: { id: string; name: string; surname: string | null; phone: string | null } | null;
+};
+
 interface UnifiedCommunication {
   id: string;
   type: 'email' | 'whatsapp' | 'sms';
@@ -283,6 +287,33 @@ export function UnifiedCommunicationsList({
     },
   });
 
+  // Fetch SMS communications (tracked in crm_communications)
+  const { data: smsCommunications = [], isLoading: loadingSms } = useQuery({
+    queryKey: ['unified-sms', budgetId, projectId],
+    queryFn: async () => {
+      let query = supabase
+        .from('crm_communications')
+        .select(`
+          *,
+          crm_contacts (id, name, surname, phone)
+        `)
+        .eq('communication_type', 'sms')
+        .order('created_at', { ascending: false });
+
+      // If we are inside a budget context, try to filter by metadata.budget_id
+      if (budgetId) {
+        // PostgREST JSON operator filter
+        query = query.eq('metadata->>budget_id', budgetId);
+      } else if (!projectId) {
+        query = query.limit(500);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+      return (data || []) as SmsCommunication[];
+    },
+  });
+
   // Mark email as read mutation
   const markAsReadMutation = useMutation({
     mutationFn: async (emailId: string) => {
@@ -435,9 +466,34 @@ export function UnifiedCommunicationsList({
       });
     });
 
+    // Add SMS communications
+    smsCommunications.forEach(sms => {
+      const meta: any = sms.metadata || {};
+      const toPhone = meta?.to_phone || undefined;
+      const fromPhone = meta?.from_phone || undefined;
+
+      communications.push({
+        id: sms.id,
+        type: 'sms',
+        direction: (sms.direction as 'inbound' | 'outbound') || 'outbound',
+        subject: sms.subject,
+        content: sms.content || '',
+        contactName: sms.crm_contacts
+          ? `${sms.crm_contacts.name} ${sms.crm_contacts.surname || ''}`.trim()
+          : 'Contacto',
+        phoneNumber: toPhone || fromPhone,
+        status: sms.status,
+        createdAt: new Date(sms.created_at),
+        hasAttachments: false,
+        budgetId: (meta?.budget_id as string | null) ?? null,
+        projectId: null,
+        originalData: sms as any,
+      });
+    });
+
     // Sort by date, most recent first
     return communications.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-  }, [emails, whatsappMessages]);
+  }, [emails, whatsappMessages, smsCommunications]);
 
   // Filter by search
   const filteredCommunications = useMemo(() => {
@@ -479,6 +535,7 @@ export function UnifiedCommunicationsList({
     outbound: outboundCommunications.length,
     emails: filteredCommunications.filter(c => c.type === 'email').length,
     whatsapp: filteredCommunications.filter(c => c.type === 'whatsapp').length,
+    sms: filteredCommunications.filter(c => c.type === 'sms').length,
     unread: unreadEmailIds.length,
   };
 

@@ -6,31 +6,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { MessageSquare, Send, Loader2 } from 'lucide-react';
-
-function extractEdgeFunctionError(err: any): string {
-  // supabase-js wraps non-2xx function responses in a FunctionsHttpError.
-  // The useful payload is typically in err.context (may be string or object).
-  try {
-    const ctx = err?.context;
-    const body = ctx?.body ?? ctx;
-    if (typeof body === 'string') {
-      try {
-        const parsed = JSON.parse(body);
-        return parsed?.error || parsed?.message || parsed?.details?.message || body;
-      } catch {
-        return body;
-      }
-    }
-    if (body && typeof body === 'object') {
-      return body?.error || body?.message || body?.details?.message || err?.message || 'Error desconocido';
-    }
-  } catch {
-    // ignore
-  }
-
-  return err?.message || 'No se pudo enviar el mensaje';
-}
+import { MessageSquare, Copy, ExternalLink, Check } from 'lucide-react';
 
 interface SMSComposeDialogProps {
   open: boolean;
@@ -55,7 +31,8 @@ export function SMSComposeDialog({
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [message, setMessage] = useState('');
-  const [isSending, setIsSending] = useState(false);
+  const [isCopied, setIsCopied] = useState(false);
+  const [isRegistering, setIsRegistering] = useState(false);
 
   const normalizePhone = (phone: string | null | undefined): string | null => {
     if (!phone) return null;
@@ -80,7 +57,7 @@ export function SMSComposeDialog({
     return clean.startsWith('+') ? clean : null;
   };
 
-  const handleSend = async () => {
+  const handleCopyAndOpen = async () => {
     if (!contact?.phone || !message.trim()) {
       toast({
         title: 'Error',
@@ -100,58 +77,70 @@ export function SMSComposeDialog({
       return;
     }
 
-    setIsSending(true);
+    setIsRegistering(true);
 
     try {
-      const { data, error } = await supabase.functions.invoke('send-sms', {
-        body: {
-          to: phoneNumber,
-          message: message.trim(),
-          contact_id: contact.id,
-          budget_id: budgetId || undefined,
+      // Copy message to clipboard
+      await navigator.clipboard.writeText(message.trim());
+      setIsCopied(true);
+
+      // Register SMS in crm_communications as "sent" (manual)
+      const { data: userData } = await supabase.auth.getUser();
+      
+      await supabase.from('crm_communications').insert({
+        communication_type: 'sms',
+        contact_id: contact.id,
+        content: message.trim(),
+        direction: 'outbound',
+        status: 'sent',
+        sent_at: new Date().toISOString(),
+        created_by: userData.user?.id || null,
+        metadata: {
+          phone: phoneNumber,
+          budget_id: budgetId || null,
+          manual_send: true,
         },
       });
 
-      if (error) throw error;
-      if (data?.success === false) {
-        throw new Error(data?.error || 'No se pudo enviar el mensaje');
-      }
-      if (data?.error) throw new Error(data.error);
-
       toast({
-        title: 'SMS enviado',
-        description: `Mensaje enviado a ${contact.name}${contact.surname ? ' ' + contact.surname : ''}`,
+        title: 'Mensaje copiado',
+        description: 'Abriendo app de SMS. Pega el mensaje y envíalo.',
       });
 
-      setMessage('');
-      onOpenChange(false);
-      onSuccess?.();
+      // Open native SMS app with the phone number
+      // Remove + for sms: URL scheme compatibility
+      const smsPhone = phoneNumber.replace('+', '');
+      window.open(`sms:${smsPhone}`, '_blank');
 
-      // refrescar seguimiento unificado
-      queryClient.invalidateQueries({ queryKey: ['unified-sms'] });
-      queryClient.invalidateQueries({ queryKey: ['unified-emails'] });
-      queryClient.invalidateQueries({ queryKey: ['unified-whatsapp'] });
+      // Reset after a short delay
+      setTimeout(() => {
+        setIsCopied(false);
+        setMessage('');
+        onOpenChange(false);
+        onSuccess?.();
+
+        // Refresh tracking queries
+        queryClient.invalidateQueries({ queryKey: ['unified-sms'] });
+        queryClient.invalidateQueries({ queryKey: ['crm-communications'] });
+        queryClient.invalidateQueries({ queryKey: ['contact-communications'] });
+      }, 500);
+
     } catch (error: any) {
-      console.error('Error sending SMS:', error);
+      console.error('Error registering SMS:', error);
       toast({
-        title: 'Error al enviar SMS',
-        description: extractEdgeFunctionError(error),
+        title: 'Error',
+        description: 'No se pudo copiar el mensaje o registrar el SMS',
         variant: 'destructive',
       });
-
-      // Aun cuando falla, el backend registra el intento en el seguimiento (estado: failed).
-      // Forzamos refresh del historial para que el usuario pueda comprobarlo.
-      onSuccess?.();
-
-      queryClient.invalidateQueries({ queryKey: ['unified-sms'] });
     } finally {
-      setIsSending(false);
+      setIsRegistering(false);
     }
   };
 
   const handleClose = () => {
-    if (!isSending) {
+    if (!isRegistering) {
       setMessage('');
+      setIsCopied(false);
       onOpenChange(false);
     }
   };
@@ -173,7 +162,7 @@ export function SMSComposeDialog({
           </DialogTitle>
           <DialogDescription>
             {contact?.phone ? (
-              <>Enviar SMS a <strong>{contactName}</strong> ({contact.phone})</>
+              <>Preparar SMS para <strong>{contactName}</strong> ({contact.phone})</>
             ) : (
               'El contacto no tiene teléfono configurado'
             )}
@@ -181,6 +170,10 @@ export function SMSComposeDialog({
         </DialogHeader>
 
         <div className="space-y-4">
+          <div className="rounded-lg bg-muted/50 p-3 text-sm text-muted-foreground">
+            <p>📋 El mensaje se copiará al portapapeles y se abrirá tu app de SMS para que lo pegues y envíes.</p>
+          </div>
+
           <div className="space-y-2">
             <Label htmlFor="sms-message">Mensaje</Label>
             <Textarea
@@ -189,7 +182,7 @@ export function SMSComposeDialog({
               value={message}
               onChange={(e) => setMessage(e.target.value)}
               rows={4}
-              disabled={isSending}
+              disabled={isRegistering}
               className="resize-none"
             />
             <p className="text-xs text-muted-foreground text-right">
@@ -198,22 +191,23 @@ export function SMSComposeDialog({
           </div>
 
           <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={handleClose} disabled={isSending}>
+            <Button variant="outline" onClick={handleClose} disabled={isRegistering}>
               Cancelar
             </Button>
             <Button
-              onClick={handleSend}
-              disabled={!message.trim() || !contact?.phone || isSending}
+              onClick={handleCopyAndOpen}
+              disabled={!message.trim() || !contact?.phone || isRegistering}
             >
-              {isSending ? (
+              {isCopied ? (
                 <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Enviando...
+                  <Check className="h-4 w-4 mr-2" />
+                  ¡Copiado!
                 </>
               ) : (
                 <>
-                  <Send className="h-4 w-4 mr-2" />
-                  Enviar SMS
+                  <Copy className="h-4 w-4 mr-2" />
+                  Copiar y abrir SMS
+                  <ExternalLink className="h-3 w-3 ml-1" />
                 </>
               )}
             </Button>

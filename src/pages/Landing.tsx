@@ -626,6 +626,26 @@ const Landing = () => {
         </div>
       </section>
 
+      {/* Complementary Elements Section */}
+      <section className="py-16 bg-secondary/30">
+        <div className="container mx-auto px-4">
+          <div className="max-w-4xl mx-auto">
+            <div className="relative w-full aspect-video rounded-xl shadow-lg overflow-hidden">
+              <iframe
+                src="https://www.youtube.com/embed/bmJpOS-XEGY"
+                title="Paneles de óxido de magnesio - Resistencia al fuego"
+                className="absolute inset-0 w-full h-full"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+              />
+            </div>
+            <p className="text-center text-muted-foreground mt-6 text-lg">
+              Elementos complementarios: paneles de altísima resistencia al fuego
+            </p>
+          </div>
+        </div>
+      </section>
+
       {/* Projects Section */}
       <section id="proyectos" className="py-20 bg-secondary/30">
         <div className="container mx-auto px-4">

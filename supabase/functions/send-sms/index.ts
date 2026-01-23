@@ -65,15 +65,28 @@ Deno.serve(async (req: Request) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    const { data: companySettings } = await adminClient
+    const { data: companySettings, error: settingsError } = await adminClient
       .from('company_settings')
       .select('whatsapp_phone, name')
       .single();
 
+    if (settingsError) {
+      console.error('Error fetching company settings:', settingsError);
+    }
+
     const fromPhone = companySettings?.whatsapp_phone || Deno.env.get('BIRD_SENDER_PHONE');
     
+    console.log('Company settings:', { 
+      whatsapp_phone: companySettings?.whatsapp_phone, 
+      bird_sender_env: Deno.env.get('BIRD_SENDER_PHONE') ? 'set' : 'not set',
+      fromPhone 
+    });
+    
     if (!fromPhone) {
-      return new Response(JSON.stringify({ error: 'No sender phone configured' }), {
+      console.error('No sender phone configured - check company_settings.whatsapp_phone or BIRD_SENDER_PHONE env var');
+      return new Response(JSON.stringify({ 
+        error: 'No hay teléfono de remitente configurado. Ve a Configuración > Empresa y configura el teléfono de WhatsApp/SMS.' 
+      }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });

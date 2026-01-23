@@ -452,6 +452,9 @@ const Landing = () => {
             <p className="text-muted-foreground mt-4 max-w-2xl mx-auto">
               Descubre los sistemas constructivos más innovadores y eficientes para tu proyecto
             </p>
+            <p className="text-primary font-semibold mt-4 text-lg">
+              Tenemos experiencia con estos Sistemas constructivos
+            </p>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
@@ -472,10 +475,7 @@ const Landing = () => {
                 </a>
               </div>
               <div className="mt-4">
-                <h3 className="text-xl font-semibold text-foreground">Ejemplo de bloque sólido</h3>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Sistema constructivo con bloques sólidos de alta eficiencia térmica y acústica
-                </p>
+                <h3 className="text-xl font-semibold text-foreground">Ejemplo de bloque sólido: de hormigón celular o perlita</h3>
               </div>
             </div>
 

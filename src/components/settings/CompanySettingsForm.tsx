@@ -15,6 +15,7 @@ interface CompanySettings {
   email: string | null;
   phone: string | null;
   whatsapp_phone: string | null;
+  sms_sender_phone: string | null;
   address: string | null;
   website: string | null;
   logo_url: string | null;
@@ -32,6 +33,7 @@ export function CompanySettingsForm() {
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [whatsappPhone, setWhatsappPhone] = useState('');
+  const [smsSenderPhone, setSmsSenderPhone] = useState('');
   const [address, setAddress] = useState('');
   const [website, setWebsite] = useState('');
   const [logoPath, setLogoPath] = useState<string | null>(null);
@@ -62,6 +64,7 @@ export function CompanySettingsForm() {
         setEmail(data.email || '');
         setPhone(data.phone || '');
         setWhatsappPhone((data as any).whatsapp_phone || '');
+        setSmsSenderPhone((data as any).sms_sender_phone || '');
         setAddress(data.address || '');
         setWebsite(data.website || '');
         // Extract file path from stored URL or use as-is if already a path
@@ -146,6 +149,7 @@ export function CompanySettingsForm() {
         email: email.trim() || null,
         phone: phone.trim() || null,
         whatsapp_phone: whatsappPhone.trim() || null,
+        sms_sender_phone: smsSenderPhone.trim() || null,
         address: address.trim() || null,
         website: website.trim() || null,
         logo_url: logoPath || null, // Store file path, not URL
@@ -312,7 +316,23 @@ export function CompanySettingsForm() {
               placeholder="+34 600 000 000"
             />
             <p className="text-xs text-muted-foreground">
-              Este número se mostrará como origen de los WhatsApp enviados.
+              Este número se usa para enviar WhatsApp desde la aplicación.
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="company-sms-sender" className="flex items-center gap-2">
+              <Phone className="h-4 w-4 text-purple-600" />
+              Teléfono remitente SMS
+            </Label>
+            <Input
+              id="company-sms-sender"
+              value={smsSenderPhone}
+              onChange={(e) => setSmsSenderPhone(e.target.value)}
+              placeholder="+34 600 000 000"
+            />
+            <p className="text-xs text-muted-foreground">
+              Este número aparecerá como remitente en los SMS enviados. Debe estar registrado en Bird.
             </p>
           </div>
 

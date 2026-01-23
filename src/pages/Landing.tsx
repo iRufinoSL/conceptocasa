@@ -573,8 +573,8 @@ const Landing = () => {
             <div>
               <div className="relative w-full aspect-video rounded-xl shadow-lg overflow-hidden">
                 <iframe
-                  src="https://www.youtube.com/embed/YOUR_SIP_VIDEO_ID"
-                  title="Sistema SIP - Structural Insulation Panel"
+                  src="https://www.youtube.com/embed/kuz7g6jrZWA"
+                  title="Sistema SIP - Structural Insulated Panel"
                   className="absolute inset-0 w-full h-full"
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                   allowFullScreen
@@ -592,8 +592,8 @@ const Landing = () => {
                     <Zap className="w-5 h-5 text-primary" />
                   </div>
                   <div>
-                    <h4 className="text-lg font-semibold text-foreground">Aislamiento Superior</h4>
-                    <p className="text-sm text-muted-foreground mt-1">Paneles con núcleo aislante de alta eficiencia térmica</p>
+                    <h4 className="text-lg font-semibold text-foreground">Madera Estructural</h4>
+                    <p className="text-sm text-muted-foreground mt-1">Entramado de madera que aporta rigidez y estabilidad</p>
                   </div>
                 </div>
               </Card>
@@ -604,8 +604,8 @@ const Landing = () => {
                     <TrendingDown className="w-5 h-5 text-primary" />
                   </div>
                   <div>
-                    <h4 className="text-lg font-semibold text-foreground">Construcción Rápida</h4>
-                    <p className="text-sm text-muted-foreground mt-1">Montaje acelerado con paneles prefabricados</p>
+                    <h4 className="text-lg font-semibold text-foreground">Aislantes de Alta Densidad</h4>
+                    <p className="text-sm text-muted-foreground mt-1">Núcleo con excelente eficiencia térmica y acústica</p>
                   </div>
                 </div>
               </Card>
@@ -616,8 +616,8 @@ const Landing = () => {
                     <Leaf className="w-5 h-5 text-primary" />
                   </div>
                   <div>
-                    <h4 className="text-lg font-semibold text-foreground">Resistencia Estructural</h4>
-                    <p className="text-sm text-muted-foreground mt-1">Alta capacidad portante con mínimo espesor</p>
+                    <h4 className="text-lg font-semibold text-foreground">Tablero Estructural OSB</h4>
+                    <p className="text-sm text-muted-foreground mt-1">Revestimiento resistente que cierra el panel sándwich</p>
                   </div>
                 </div>
               </Card>

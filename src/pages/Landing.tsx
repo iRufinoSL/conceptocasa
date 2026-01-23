@@ -458,21 +458,15 @@ const Landing = () => {
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
-            <div className="relative group">
-              <img 
-                src="https://img.youtube.com/vi/jekNJ7-Ij-0/maxresdefault.jpg" 
-                alt="Sistema constructivo" 
-                className="w-full rounded-xl shadow-lg"
-              />
-              <div className="absolute inset-0 bg-foreground/40 rounded-xl flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                <a 
-                  href="https://www.youtube.com/watch?v=jekNJ7-Ij-0" 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="w-16 h-16 bg-primary rounded-full flex items-center justify-center hover:scale-110 transition-transform"
-                >
-                  <Play className="w-8 h-8 text-primary-foreground ml-1" />
-                </a>
+            <div>
+              <div className="relative w-full aspect-video rounded-xl shadow-lg overflow-hidden">
+                <iframe
+                  src="https://www.youtube.com/embed/jekNJ7-Ij-0"
+                  title="Sistema constructivo - Bloque sólido"
+                  className="absolute inset-0 w-full h-full"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                />
               </div>
               <div className="mt-4">
                 <h3 className="text-xl font-semibold text-foreground">Ejemplo de bloque sólido: de hormigón celular o perlita</h3>
@@ -520,21 +514,15 @@ const Landing = () => {
 
           {/* LSF Section */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center mt-16">
-            <div className="relative group">
-              <img 
-                src="https://img.youtube.com/vi/fIE6vP2w51A/maxresdefault.jpg" 
-                alt="Sistema LSF - Light Steel Frame" 
-                className="w-full rounded-xl shadow-lg"
-              />
-              <div className="absolute inset-0 bg-foreground/40 rounded-xl flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                <a 
-                  href="https://www.youtube.com/watch?v=fIE6vP2w51A&t=1" 
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="w-16 h-16 bg-primary rounded-full flex items-center justify-center hover:scale-110 transition-transform"
-                >
-                  <Play className="w-8 h-8 text-primary-foreground ml-1" />
-                </a>
+            <div>
+              <div className="relative w-full aspect-video rounded-xl shadow-lg overflow-hidden">
+                <iframe
+                  src="https://www.youtube.com/embed/fIE6vP2w51A?start=1"
+                  title="Sistema LSF - Light Steel Frame"
+                  className="absolute inset-0 w-full h-full"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                />
               </div>
               <div className="mt-4">
                 <h3 className="text-xl font-semibold text-foreground">Ejemplo de trabajo con LSF</h3>

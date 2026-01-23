@@ -1227,6 +1227,7 @@ export type Database = {
           logo_url: string | null
           name: string
           phone: string | null
+          sms_sender_phone: string | null
           updated_at: string
           website: string | null
           whatsapp_phone: string | null
@@ -1240,6 +1241,7 @@ export type Database = {
           logo_url?: string | null
           name?: string
           phone?: string | null
+          sms_sender_phone?: string | null
           updated_at?: string
           website?: string | null
           whatsapp_phone?: string | null
@@ -1253,6 +1255,7 @@ export type Database = {
           logo_url?: string | null
           name?: string
           phone?: string | null
+          sms_sender_phone?: string | null
           updated_at?: string
           website?: string | null
           whatsapp_phone?: string | null

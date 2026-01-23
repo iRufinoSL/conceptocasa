@@ -7,7 +7,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
 import { 
   Mail, Phone, MapPin, Globe, Building2, User, 
-  Calendar, FileText, Tag, Briefcase, ClipboardList, Plus, MessageSquare
+  Calendar, FileText, Tag, Briefcase, ClipboardList, Plus, MessageSquare, Send
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
@@ -16,6 +16,7 @@ import { SendEmailDialog } from './SendEmailDialog';
 import { ManagementForm } from './ManagementForm';
 import { ContactCommunicationsHistory } from './ContactCommunicationsHistory';
 import { SMSComposeDialog } from './SMSComposeDialog';
+import { WhatsAppComposeDialog } from './WhatsAppComposeDialog';
 import type { Contact } from '@/pages/CRM';
 
 interface Management {
@@ -55,6 +56,7 @@ export function ContactDetailDialog({ contact, open, onOpenChange }: ContactDeta
   const [loading, setLoading] = useState(false);
   const [emailDialogOpen, setEmailDialogOpen] = useState(false);
   const [smsDialogOpen, setSmsDialogOpen] = useState(false);
+  const [whatsappDialogOpen, setWhatsappDialogOpen] = useState(false);
   const [managementFormOpen, setManagementFormOpen] = useState(false);
 
   const fetchManagements = async () => {
@@ -218,28 +220,13 @@ export function ContactDetailDialog({ contact, open, onOpenChange }: ContactDeta
           );
         case 'phone':
           return (
-            <div className="flex items-center gap-2">
-              <a 
-                href={`tel:${value.replace(/[^\d+]/g, '')}`}
-                className="text-sm break-words hover:underline hover:text-primary transition-colors"
-                onClick={(e) => e.stopPropagation()}
-              >
-                {value}
-              </a>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-7 px-2 gap-1 text-xs"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setSmsDialogOpen(true);
-                }}
-              >
-                <MessageSquare className="h-3.5 w-3.5" />
-                SMS
-              </Button>
-            </div>
+            <a 
+              href={`tel:${value.replace(/[^\d+]/g, '')}`}
+              className="text-sm break-words hover:underline hover:text-primary transition-colors"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {value}
+            </a>
           );
         case 'website':
           const fullUrl = value.startsWith('http') ? value : `https://${value}`;
@@ -282,6 +269,11 @@ export function ContactDetailDialog({ contact, open, onOpenChange }: ContactDeta
         onOpenChange={setSmsDialogOpen}
         contact={{ id: contact.id, name: contact.name, surname: contact.surname, phone: contact.phone }}
       />
+      <WhatsAppComposeDialog
+        open={whatsappDialogOpen}
+        onOpenChange={setWhatsappDialogOpen}
+        contact={{ id: contact.id, name: contact.name, surname: contact.surname, phone: contact.phone }}
+      />
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="max-w-2xl max-h-[90vh] p-0 overflow-hidden">
           <DialogHeader className="px-6 pt-6 pb-4 border-b bg-muted/30">
@@ -312,7 +304,44 @@ export function ContactDetailDialog({ contact, open, onOpenChange }: ContactDeta
           </div>
         </DialogHeader>
 
-        <ScrollArea className="max-h-[calc(90vh-180px)]">
+        {/* Action Buttons Bar */}
+        <div className="px-6 py-3 border-b bg-background flex flex-wrap gap-2">
+          {contact.email && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2"
+              onClick={() => setEmailDialogOpen(true)}
+            >
+              <Mail className="h-4 w-4" />
+              Email
+            </Button>
+          )}
+          {contact.phone && (
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-2"
+                onClick={() => setSmsDialogOpen(true)}
+              >
+                <MessageSquare className="h-4 w-4" />
+                SMS
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-2 border-accent text-accent-foreground hover:bg-accent/10"
+                onClick={() => setWhatsappDialogOpen(true)}
+              >
+                <Send className="h-4 w-4" />
+                WhatsApp
+              </Button>
+            </>
+          )}
+        </div>
+
+        <ScrollArea className="max-h-[calc(90vh-240px)]">
           <div className="p-6 space-y-6">
             {/* Contact Information */}
             <div className="grid gap-6 md:grid-cols-2">

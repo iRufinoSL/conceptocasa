@@ -12,6 +12,7 @@ import { Plus, Pencil, Trash2, Upload, X, Maximize2, FileImage, FileText, Layout
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import { UrbanProfileCard } from './UrbanProfileCard';
+import { PreliminaryUrbanReportsManager } from './PreliminaryUrbanReportsManager';
 
 
 interface BudgetPredesign {
@@ -430,6 +431,12 @@ export function BudgetPredesignTab({ budgetId, isAdmin }: BudgetPredesignTabProp
         budgetId={budgetId} 
         cadastralReference={cadastralReference}
         isAdmin={isAdmin} 
+      />
+
+      {/* Preliminary Urban Reports - Non-binding reports for buildability analysis */}
+      <PreliminaryUrbanReportsManager 
+        budgetId={budgetId}
+        isAdmin={isAdmin}
       />
 
       <div className="flex items-center justify-between flex-wrap gap-4">

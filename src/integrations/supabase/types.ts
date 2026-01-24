@@ -3475,10 +3475,14 @@ export type Database = {
           affected_by_water_courses: boolean | null
           analysis_notes: string | null
           analysis_status: string | null
+          authorizing_body: string | null
+          authorizing_body_name: string | null
           autonomous_community: string | null
           budget_id: string
+          buildability_assessment: string | null
           buildability_index: number | null
           buildability_index_source: string | null
+          buildability_requirements: Json | null
           building_typology: string | null
           building_typology_source: string | null
           cadastral_reference: string
@@ -3494,6 +3498,8 @@ export type Database = {
           distance_to_electricity_source: string | null
           distance_to_sewage_network: number | null
           distance_to_sewage_network_source: string | null
+          distance_to_urban_nucleus: number | null
+          distance_to_urban_nucleus_source: string | null
           distance_to_water_supply: number | null
           distance_to_water_supply_source: string | null
           fence_setback: number | null
@@ -3555,6 +3561,7 @@ export type Database = {
           municipal_road_setback: number | null
           municipal_road_setback_source: string | null
           municipality: string | null
+          nearest_urban_nucleus: string | null
           permitted_uses: Json | null
           principal_use: string | null
           principal_use_source: string | null
@@ -3565,6 +3572,8 @@ export type Database = {
           requires_septic_tank: boolean | null
           road_setback: number | null
           road_setback_source: string | null
+          rustic_land_use: string | null
+          rustic_land_use_source: string | null
           sectoral_restrictions: Json | null
           seismic_zone: string | null
           septic_tank_min_distance: number | null
@@ -3596,10 +3605,14 @@ export type Database = {
           affected_by_water_courses?: boolean | null
           analysis_notes?: string | null
           analysis_status?: string | null
+          authorizing_body?: string | null
+          authorizing_body_name?: string | null
           autonomous_community?: string | null
           budget_id: string
+          buildability_assessment?: string | null
           buildability_index?: number | null
           buildability_index_source?: string | null
+          buildability_requirements?: Json | null
           building_typology?: string | null
           building_typology_source?: string | null
           cadastral_reference: string
@@ -3615,6 +3628,8 @@ export type Database = {
           distance_to_electricity_source?: string | null
           distance_to_sewage_network?: number | null
           distance_to_sewage_network_source?: string | null
+          distance_to_urban_nucleus?: number | null
+          distance_to_urban_nucleus_source?: string | null
           distance_to_water_supply?: number | null
           distance_to_water_supply_source?: string | null
           fence_setback?: number | null
@@ -3676,6 +3691,7 @@ export type Database = {
           municipal_road_setback?: number | null
           municipal_road_setback_source?: string | null
           municipality?: string | null
+          nearest_urban_nucleus?: string | null
           permitted_uses?: Json | null
           principal_use?: string | null
           principal_use_source?: string | null
@@ -3686,6 +3702,8 @@ export type Database = {
           requires_septic_tank?: boolean | null
           road_setback?: number | null
           road_setback_source?: string | null
+          rustic_land_use?: string | null
+          rustic_land_use_source?: string | null
           sectoral_restrictions?: Json | null
           seismic_zone?: string | null
           septic_tank_min_distance?: number | null
@@ -3717,10 +3735,14 @@ export type Database = {
           affected_by_water_courses?: boolean | null
           analysis_notes?: string | null
           analysis_status?: string | null
+          authorizing_body?: string | null
+          authorizing_body_name?: string | null
           autonomous_community?: string | null
           budget_id?: string
+          buildability_assessment?: string | null
           buildability_index?: number | null
           buildability_index_source?: string | null
+          buildability_requirements?: Json | null
           building_typology?: string | null
           building_typology_source?: string | null
           cadastral_reference?: string
@@ -3736,6 +3758,8 @@ export type Database = {
           distance_to_electricity_source?: string | null
           distance_to_sewage_network?: number | null
           distance_to_sewage_network_source?: string | null
+          distance_to_urban_nucleus?: number | null
+          distance_to_urban_nucleus_source?: string | null
           distance_to_water_supply?: number | null
           distance_to_water_supply_source?: string | null
           fence_setback?: number | null
@@ -3797,6 +3821,7 @@ export type Database = {
           municipal_road_setback?: number | null
           municipal_road_setback_source?: string | null
           municipality?: string | null
+          nearest_urban_nucleus?: string | null
           permitted_uses?: Json | null
           principal_use?: string | null
           principal_use_source?: string | null
@@ -3807,6 +3832,8 @@ export type Database = {
           requires_septic_tank?: boolean | null
           road_setback?: number | null
           road_setback_source?: string | null
+          rustic_land_use?: string | null
+          rustic_land_use_source?: string | null
           sectoral_restrictions?: Json | null
           seismic_zone?: string | null
           septic_tank_min_distance?: number | null

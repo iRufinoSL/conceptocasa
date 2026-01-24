@@ -22,6 +22,14 @@ interface InlineEditProps {
   onTabNext?: () => void;
   onTabPrev?: () => void;
   allowNull?: boolean;
+  /**
+   * For numeric/percent fields only:
+   * - 'formatted': uses NumericInput (auto thousands/decimals while typing)
+   * - 'raw': uses plain text input, keeps exactly what user types; parses only on save
+   */
+  numericInputMode?: 'formatted' | 'raw';
+  /** When entering edit mode, clear the input instead of pre-filling current value */
+  clearOnEdit?: boolean;
 }
 
 // Global counter to track active saves across all instances
@@ -60,6 +68,8 @@ export function ResourceInlineEdit({
   onTabNext,
   onTabPrev,
   allowNull = false,
+  numericInputMode = 'formatted',
+  clearOnEdit = false,
 }: InlineEditProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState<string | number | null>(value ?? '');
@@ -337,6 +347,9 @@ export function ResourceInlineEdit({
             e.preventDefault();
             e.stopPropagation();
             e.nativeEvent.stopImmediatePropagation();
+            if (clearOnEdit) {
+              setEditValue('');
+            }
             setIsEditing(true);
           }}
           onMouseDown={(e) => {
@@ -346,6 +359,9 @@ export function ResourceInlineEdit({
             if (e.key === 'Enter' || e.key === ' ') {
               e.preventDefault();
               e.stopPropagation();
+              if (clearOnEdit) {
+                setEditValue('');
+              }
               setIsEditing(true);
             }
           }}
@@ -491,6 +507,40 @@ export function ResourceInlineEdit({
   }
 
   if (type === 'number' || type === 'percent') {
+    // Raw mode: keep string exactly as typed; parse only on save (Enter/Tab)
+    if (numericInputMode === 'raw') {
+      const handleRawNumericBlur = () => {
+        // Cancel editing and restore original value
+        setEditValue(value ?? '');
+        setIsEditing(false);
+      };
+
+      return (
+        <EditWrapper>
+          <div
+            className="animate-scale-in"
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <Input
+              ref={inputRef}
+              type="text"
+              inputMode="decimal"
+              value={editValue === null || editValue === undefined ? '' : String(editValue)}
+              onChange={(e) => setEditValue(e.target.value)}
+              className={cn(
+                'h-7 w-24 text-xs text-right ring-2 ring-primary ring-offset-1 bg-primary/5 transition-all duration-200',
+                className
+              )}
+              onBlur={handleRawNumericBlur}
+              onKeyDown={handleKeyDown}
+              placeholder=""
+            />
+          </div>
+        </EditWrapper>
+      );
+    }
+
     // IMPORTANT: while editing, the input must be controlled by local state (editValue)
     // otherwise it will "snap back" to the prop value on each render.
     const numericValue =
@@ -523,7 +573,10 @@ export function ResourceInlineEdit({
             onChange={(v) => setEditValue(v as number | null)}
             decimals={decimals}
             allowNull={allowNull}
-            className="h-7 w-24 text-xs ring-2 ring-primary ring-offset-1 bg-primary/5 transition-all duration-200"
+            className={cn(
+              'h-7 w-24 text-xs ring-2 ring-primary ring-offset-1 bg-primary/5 transition-all duration-200',
+              className
+            )}
             onBlur={handleNumericBlur}
             onKeyDown={handleKeyDown}
           />

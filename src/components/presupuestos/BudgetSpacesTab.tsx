@@ -379,6 +379,8 @@ export function BudgetSpacesTab({ budgetId, isAdmin }: BudgetSpacesTabProps) {
           type="number"
           decimals={2}
           allowNull={true}
+          numericInputMode="raw"
+          clearOnEdit={true}
           displayValue={formatNumber(space.m2_built || 0)}
           className="text-right"
         />
@@ -390,6 +392,8 @@ export function BudgetSpacesTab({ budgetId, isAdmin }: BudgetSpacesTabProps) {
           type="number"
           decimals={2}
           allowNull={true}
+          numericInputMode="raw"
+          clearOnEdit={true}
           displayValue={formatNumber(space.m2_livable || 0)}
           className="text-right"
         />

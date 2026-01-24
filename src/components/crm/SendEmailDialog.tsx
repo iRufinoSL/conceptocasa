@@ -6,11 +6,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ScrollArea } from '@/components/ui/scroll-area';
+import { Checkbox } from '@/components/ui/checkbox';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { Mail, Send, FileText, Paperclip, X, Plus, File, ChevronDown } from 'lucide-react';
+import { Mail, Send, FileText, Paperclip, X, Plus, File, ChevronDown, Calendar, Clock } from 'lucide-react';
 import type { Tables } from '@/integrations/supabase/types';
+import { format, addDays } from 'date-fns';
 
 type EmailTemplate = Tables<'email_templates'>;
 
@@ -46,6 +47,13 @@ export function SendEmailDialog({ open, onOpenChange, contact, contacts, budgetI
   const fileInputRef = useRef<HTMLInputElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [showScrollIndicator, setShowScrollIndicator] = useState(false);
+  
+  // Follow-up task state - enabled by default
+  const [createFollowUp, setCreateFollowUp] = useState(true);
+  const [followUpName, setFollowUpName] = useState('');
+  const currentTime = format(new Date(), 'HH:mm');
+  const [followUpDate, setFollowUpDate] = useState(format(addDays(new Date(), 1), 'yyyy-MM-dd'));
+  const [followUpTime, setFollowUpTime] = useState(currentTime);
   
 
   const recipients = contacts || (contact ? [contact] : []);
@@ -161,16 +169,52 @@ export function SendEmailDialog({ open, onOpenChange, contact, contacts, budgetI
           templateId: selectedTemplate || undefined,
           variables,
           attachments: attachmentData.length > 0 ? attachmentData : undefined,
-          budgetId: budgetId || undefined, // Pass budget_id to link email to budget
+          budgetId: budgetId || undefined,
         },
       });
 
       if (response.error) throw response.error;
+      
+      // Create follow-up task if enabled
+      if (createFollowUp) {
+        const recipientNames = recipients
+          .filter(c => c.email)
+          .map(c => `${c.name}${c.surname ? ' ' + c.surname : ''}`)
+          .join(', ');
+        
+        const taskTitle = followUpName.trim() || `Seguimiento Email - ${recipientNames}`;
+        const taskDescription = `Seguimiento del email "${subject}" enviado a ${recipientNames}.\n\nContenido:\n${content.substring(0, 500)}${content.length > 500 ? '...' : ''}`;
+        
+        const { data: management, error: managementError } = await supabase
+          .from('crm_managements')
+          .insert({
+            title: taskTitle,
+            description: taskDescription,
+            management_type: 'Tarea',
+            status: 'Pendiente',
+            target_date: followUpDate,
+            start_time: followUpTime,
+            created_by: session.user.id,
+          })
+          .select()
+          .single();
+        
+        if (!managementError && management && contactIds.length === 1) {
+          // Link contact to the management (only for single recipient)
+          await supabase.from('crm_management_contacts').insert({
+            management_id: management.id,
+            contact_id: contactIds[0],
+          });
+        }
+      }
+      
       return response.data;
     },
     onSuccess: (data) => {
-      toast.success(data.message || 'Email(s) enviado(s) correctamente');
+      const followUpMsg = createFollowUp ? ' Se ha creado seguimiento en Agenda.' : '';
+      toast.success((data.message || 'Email(s) enviado(s) correctamente') + followUpMsg);
       queryClient.invalidateQueries({ queryKey: ['crm-communications'] });
+      queryClient.invalidateQueries({ queryKey: ['crm-managements'] });
       onOpenChange(false);
       resetForm();
     },
@@ -186,6 +230,9 @@ export function SendEmailDialog({ open, onOpenChange, contact, contacts, budgetI
     setSelectedTemplate('');
     setVariables({});
     setAttachments([]);
+    setFollowUpName('');
+    setFollowUpDate(format(addDays(new Date(), 1), 'yyyy-MM-dd'));
+    setFollowUpTime(format(new Date(), 'HH:mm'));
   };
 
   const handleTemplateChange = (templateId: string) => {
@@ -381,6 +428,61 @@ export function SendEmailDialog({ open, onOpenChange, contact, contacts, budgetI
               <p className="text-xs text-muted-foreground">
                 Puedes usar HTML para dar formato. Variables disponibles: {'{{nombre}}'}, {'{{email}}'}, {'{{empresa_nombre}}'}
               </p>
+            </div>
+
+            {/* Follow-up task section */}
+            <div className="border rounded-lg p-3 space-y-3 bg-muted/30">
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="create-followup-email"
+                  checked={createFollowUp}
+                  onCheckedChange={(checked) => setCreateFollowUp(checked === true)}
+                />
+                <Label htmlFor="create-followup-email" className="text-sm font-medium cursor-pointer flex items-center gap-1.5">
+                  <Calendar className="h-4 w-4 text-muted-foreground" />
+                  Crear seguimiento en Agenda
+                </Label>
+              </div>
+              
+              {createFollowUp && (
+                <div className="space-y-3 pl-6">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="followup-name-email" className="text-xs">Nombre del seguimiento (opcional)</Label>
+                    <Input
+                      id="followup-name-email"
+                      placeholder={`Seguimiento Email - ${recipients[0]?.name || 'Contacto'}`}
+                      value={followUpName}
+                      onChange={(e) => setFollowUpName(e.target.value)}
+                      className="h-8 text-sm"
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <div className="flex-1 space-y-1.5">
+                      <Label htmlFor="followup-date-email" className="text-xs">Fecha</Label>
+                      <Input
+                        id="followup-date-email"
+                        type="date"
+                        value={followUpDate}
+                        onChange={(e) => setFollowUpDate(e.target.value)}
+                        className="h-8 text-sm"
+                      />
+                    </div>
+                    <div className="w-24 space-y-1.5">
+                      <Label htmlFor="followup-time-email" className="text-xs flex items-center gap-1">
+                        <Clock className="h-3 w-3" />
+                        Hora
+                      </Label>
+                      <Input
+                        id="followup-time-email"
+                        type="time"
+                        value={followUpTime}
+                        onChange={(e) => setFollowUpTime(e.target.value)}
+                        className="h-8 text-sm"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>

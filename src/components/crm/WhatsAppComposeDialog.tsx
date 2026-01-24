@@ -12,7 +12,7 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { MessageCircle, Save, Send, CheckCircle2, CalendarIcon, Clock, Repeat } from 'lucide-react';
-import { format } from 'date-fns';
+import { format, addDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 
@@ -39,10 +39,12 @@ export function WhatsAppComposeDialog({
   const { toast } = useToast();
   const { user } = useAuth();
   const [message, setMessage] = useState('');
-  const [createTask, setCreateTask] = useState(false);
+  // Follow-up enabled by default with next day same time
+  const currentTime = format(new Date(), 'HH:mm');
+  const [createTask, setCreateTask] = useState(true);
   const [taskName, setTaskName] = useState('');
-  const [taskDate, setTaskDate] = useState<Date | undefined>(undefined);
-  const [taskTime, setTaskTime] = useState('');
+  const [taskDate, setTaskDate] = useState<Date | undefined>(addDays(new Date(), 1));
+  const [taskTime, setTaskTime] = useState(currentTime);
   const [taskRepeatDaily, setTaskRepeatDaily] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [savedMessageId, setSavedMessageId] = useState<string | null>(null);
@@ -62,10 +64,12 @@ export function WhatsAppComposeDialog({
   useEffect(() => {
     if (open) {
       setMessage('');
-      setCreateTask(false);
+      // Keep follow-up enabled by default
+      setCreateTask(true);
       setTaskName('');
-      setTaskDate(undefined);
-      setTaskTime('');
+      // Default to next day, same time
+      setTaskDate(addDays(new Date(), 1));
+      setTaskTime(format(new Date(), 'HH:mm'));
       setTaskRepeatDaily(false);
       setSavedMessageId(null);
       setMessageCopied(false);
@@ -134,41 +138,52 @@ export function WhatsAppComposeDialog({
 
       if (msgError) throw msgError;
 
-      // Create task if requested
-      if (createTask && taskName.trim()) {
-        // Prepare task data
-        const taskData: any = {
-          name: taskName.trim(),
-          description: `Seguimiento de WhatsApp enviado a ${contact.name}${contact.surname ? ' ' + contact.surname : ''}${taskRepeatDaily ? '\n🔄 Repetir diariamente hasta completar' : ''}`,
-          budget_id: budgetId || null,
-          status: 'pending',
+      // Create follow-up task in crm_managements (for Agenda visibility)
+      if (createTask) {
+        const contactFullName = `${contact.name}${contact.surname ? ' ' + contact.surname : ''}`;
+        const taskTitle = taskName.trim() || `Seguimiento WhatsApp - ${contactFullName}`;
+        const taskDescription = `Seguimiento del WhatsApp enviado a ${contactFullName}.\n\nMensaje:\n"${message.trim()}"${taskRepeatDaily ? '\n\n🔄 Repetir diariamente hasta completar' : ''}`;
+        
+        const managementData: any = {
+          title: taskTitle,
+          description: taskDescription,
+          management_type: 'Tarea',
+          status: 'Pendiente',
           created_by: user?.id
         };
 
         // Add date if specified
         if (taskDate) {
-          taskData.target_date = format(taskDate, 'yyyy-MM-dd');
-          taskData.start_date = format(taskDate, 'yyyy-MM-dd');
+          managementData.target_date = format(taskDate, 'yyyy-MM-dd');
         }
 
         // Add time if specified
         if (taskTime) {
-          taskData.start_time = taskTime;
+          managementData.start_time = taskTime;
         }
 
-        const { error: taskError } = await supabase
-          .from('budget_tasks')
-          .insert(taskData);
+        const { data: management, error: taskError } = await supabase
+          .from('crm_managements')
+          .insert(managementData)
+          .select()
+          .single();
 
         if (taskError) {
           console.error('Error creating task:', taskError);
+        } else if (management) {
+          // Link contact to the management
+          await supabase.from('crm_management_contacts').insert({
+            management_id: management.id,
+            contact_id: contact.id,
+          });
         }
       }
 
       setSavedMessageId(msgData.id);
+      const followUpMsg = createTask ? ' Se ha creado seguimiento en Agenda.' : '';
       toast({
         title: 'Mensaje guardado',
-        description: 'El mensaje ha sido registrado. Ahora puedes enviarlo por WhatsApp.',
+        description: 'El mensaje ha sido registrado.' + followUpMsg + ' Ahora puedes enviarlo por WhatsApp.',
       });
     } catch (error: any) {
       console.error('Error saving message:', error);

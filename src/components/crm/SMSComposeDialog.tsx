@@ -36,11 +36,12 @@ export function SMSComposeDialog({
   const [isCopied, setIsCopied] = useState(false);
   const [isRegistering, setIsRegistering] = useState(false);
   
-  // Follow-up task state
+  // Follow-up task state - enabled by default with next day same time
+  const currentTime = format(new Date(), 'HH:mm');
   const [createFollowUp, setCreateFollowUp] = useState(true);
   const [followUpName, setFollowUpName] = useState('');
   const [followUpDate, setFollowUpDate] = useState(format(addDays(new Date(), 1), 'yyyy-MM-dd'));
-  const [followUpTime, setFollowUpTime] = useState('10:00');
+  const [followUpTime, setFollowUpTime] = useState(currentTime);
 
   const normalizePhone = (phone: string | null | undefined): string | null => {
     if (!phone) return null;
@@ -159,7 +160,7 @@ export function SMSComposeDialog({
         setMessage('');
         setFollowUpName('');
         setFollowUpDate(format(addDays(new Date(), 1), 'yyyy-MM-dd'));
-        setFollowUpTime('10:00');
+        setFollowUpTime(format(new Date(), 'HH:mm'));
         onOpenChange(false);
         onSuccess?.();
 

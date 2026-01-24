@@ -80,10 +80,15 @@ const handler = async (req: Request): Promise<Response> => {
       try {
         console.log(`Sending reminder to ${user.notification_email} (${user.unread_count} unread emails)`);
 
+        // URL de la aplicación publicada
+        const appUrl = "https://conceptocasa.lovable.app";
+        const inboxUrl = `${appUrl}/crm?tab=comunicaciones`;
+        const dashboardUrl = `${appUrl}/dashboard`;
+
         const emailResponse = await resend.emails.send({
           from: "ConceptoCasa <avisos@conceptocasa.com>",
           to: [user.notification_email],
-          subject: `📬 Tienes ${user.unread_count} email${user.unread_count > 1 ? "s" : ""} pendiente${user.unread_count > 1 ? "s" : ""} de abrir`,
+          subject: `📬 Tienes ${user.unread_count} email${user.unread_count > 1 ? "s" : ""} pendiente${user.unread_count > 1 ? "s" : ""} de leer`,
           html: `
             <!DOCTYPE html>
             <html>
@@ -91,40 +96,150 @@ const handler = async (req: Request): Promise<Response> => {
               <meta charset="utf-8">
               <meta name="viewport" content="width=device-width, initial-scale=1.0">
               <style>
-                body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; background-color: #f5f5f5; }
+                body { 
+                  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; 
+                  line-height: 1.6; 
+                  color: #333; 
+                  margin: 0; 
+                  padding: 0; 
+                  background-color: #f5f5f5; 
+                  -webkit-text-size-adjust: 100%;
+                }
                 .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-                .card { background: white; border-radius: 12px; padding: 32px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+                .card { 
+                  background: white; 
+                  border-radius: 16px; 
+                  padding: 32px; 
+                  box-shadow: 0 4px 12px rgba(0,0,0,0.1); 
+                }
                 .header { text-align: center; margin-bottom: 24px; }
-                .icon { font-size: 48px; margin-bottom: 16px; }
-                h1 { color: #1a1a1a; font-size: 24px; margin: 0 0 8px 0; }
-                .subtitle { color: #666; font-size: 14px; margin: 0; }
-                .content { text-align: center; margin: 24px 0; }
-                .count { font-size: 48px; font-weight: bold; color: #3b82f6; }
-                .count-label { color: #666; font-size: 14px; }
-                .button { display: inline-block; background: #3b82f6; color: white; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; margin-top: 24px; }
-                .button:hover { background: #2563eb; }
-                .footer { text-align: center; margin-top: 24px; color: #999; font-size: 12px; }
+                .logo { 
+                  width: 60px; 
+                  height: 60px; 
+                  background: linear-gradient(135deg, #3b82f6, #1d4ed8); 
+                  border-radius: 16px; 
+                  display: inline-flex; 
+                  align-items: center; 
+                  justify-content: center; 
+                  margin-bottom: 16px;
+                }
+                .logo-icon { font-size: 32px; }
+                h1 { color: #1a1a1a; font-size: 22px; margin: 0 0 8px 0; font-weight: 600; }
+                .subtitle { color: #666; font-size: 15px; margin: 0; }
+                .content { text-align: center; margin: 28px 0; }
+                .count-box {
+                  background: linear-gradient(135deg, #eff6ff, #dbeafe);
+                  border-radius: 16px;
+                  padding: 24px;
+                  margin-bottom: 24px;
+                }
+                .count { font-size: 56px; font-weight: 700; color: #1d4ed8; line-height: 1; }
+                .count-label { color: #3b82f6; font-size: 16px; font-weight: 500; margin-top: 8px; }
+                .button-primary { 
+                  display: block; 
+                  background: linear-gradient(135deg, #3b82f6, #1d4ed8); 
+                  color: white !important; 
+                  padding: 18px 32px; 
+                  border-radius: 12px; 
+                  text-decoration: none; 
+                  font-weight: 600; 
+                  font-size: 17px;
+                  margin: 16px 0;
+                  text-align: center;
+                  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+                }
+                .button-secondary { 
+                  display: block; 
+                  background: #f1f5f9; 
+                  color: #475569 !important; 
+                  padding: 14px 24px; 
+                  border-radius: 10px; 
+                  text-decoration: none; 
+                  font-weight: 500; 
+                  font-size: 15px;
+                  margin: 12px 0;
+                  text-align: center;
+                }
+                .quick-links { 
+                  margin-top: 24px; 
+                  padding-top: 20px; 
+                  border-top: 1px solid #e2e8f0; 
+                }
+                .quick-links-title { 
+                  font-size: 13px; 
+                  color: #94a3b8; 
+                  text-transform: uppercase; 
+                  letter-spacing: 0.5px; 
+                  margin-bottom: 12px; 
+                }
+                .quick-link { 
+                  display: inline-block; 
+                  background: #f8fafc; 
+                  color: #64748b !important; 
+                  padding: 10px 16px; 
+                  border-radius: 8px; 
+                  text-decoration: none; 
+                  font-size: 14px;
+                  margin: 4px;
+                  border: 1px solid #e2e8f0;
+                }
+                .footer { 
+                  text-align: center; 
+                  margin-top: 28px; 
+                  color: #94a3b8; 
+                  font-size: 13px; 
+                }
+                .footer a { color: #64748b; }
+                
+                /* Optimización móvil */
+                @media only screen and (max-width: 480px) {
+                  .container { padding: 12px; }
+                  .card { padding: 24px 20px; border-radius: 12px; }
+                  h1 { font-size: 20px; }
+                  .count { font-size: 48px; }
+                  .button-primary { padding: 16px 24px; font-size: 16px; }
+                }
               </style>
             </head>
             <body>
               <div class="container">
                 <div class="card">
                   <div class="header">
-                    <div class="icon">📬</div>
+                    <div class="logo">
+                      <span class="logo-icon">🏠</span>
+                    </div>
                     <h1>¡Hola ${user.full_name}!</h1>
-                    <p class="subtitle">Tienes emails pendientes de revisar</p>
+                    <p class="subtitle">Tienes correos pendientes de revisar</p>
                   </div>
+                  
                   <div class="content">
-                    <div class="count">${user.unread_count}</div>
-                    <div class="count-label">email${user.unread_count > 1 ? "s" : ""} sin leer</div>
-                    <a href="https://conceptocasa.lovable.app/crm?tab=comunicaciones" class="button">
-                      Ver Bandeja de Entrada
+                    <div class="count-box">
+                      <div class="count">${user.unread_count}</div>
+                      <div class="count-label">email${user.unread_count > 1 ? "s" : ""} sin leer</div>
+                    </div>
+                    
+                    <a href="${inboxUrl}" class="button-primary">
+                      📬 Abrir Bandeja de Entrada
+                    </a>
+                    
+                    <a href="${dashboardUrl}" class="button-secondary">
+                      📊 Ir al Panel Principal
                     </a>
                   </div>
+                  
+                  <div class="quick-links">
+                    <div class="quick-links-title">Accesos rápidos</div>
+                    <a href="${appUrl}/presupuestos" class="quick-link">📋 Presupuestos</a>
+                    <a href="${appUrl}/agenda" class="quick-link">📅 Agenda</a>
+                    <a href="${appUrl}/crm" class="quick-link">👥 CRM</a>
+                  </div>
                 </div>
+                
                 <div class="footer">
-                  <p>Este es un recordatorio automático de ConceptoCasa.</p>
-                  <p>Puedes configurar tus preferencias de notificación en tu perfil.</p>
+                  <p>Este es un aviso automático de <strong>ConceptoCasa</strong></p>
+                  <p>
+                    <a href="${appUrl}/configuracion">⚙️ Configurar notificaciones</a>
+                  </p>
                 </div>
               </div>
             </body>

@@ -167,6 +167,16 @@ interface UrbanProfile {
   // Buildability conclusion
   is_buildable: boolean | null;
   is_buildable_source: string | null;
+  // Rustic land analysis fields
+  rustic_land_use: string | null;
+  rustic_land_use_source: string | null;
+  distance_to_urban_nucleus: number | null;
+  distance_to_urban_nucleus_source: string | null;
+  nearest_urban_nucleus: string | null;
+  authorizing_body: string | null;
+  authorizing_body_name: string | null;
+  buildability_assessment: string | null;
+  buildability_requirements: string[] | null;
 }
 
 interface CatastroData {
@@ -439,12 +449,15 @@ export function UrbanProfileCard({ budgetId, cadastralReference: initialRef, isA
 
       if (error) throw error;
       
-      // Cast to handle the additional_restrictions field - parse JSONB
+      // Cast to handle the additional_restrictions and buildability_requirements fields - parse JSONB
       if (data) {
         const profileData: UrbanProfile = {
           ...data,
           additional_restrictions: Array.isArray(data.additional_restrictions) 
             ? data.additional_restrictions as unknown as AdditionalRestriction[]
+            : null,
+          buildability_requirements: Array.isArray(data.buildability_requirements)
+            ? data.buildability_requirements as unknown as string[]
             : null,
         };
         setProfile(profileData);
@@ -1367,6 +1380,112 @@ export function UrbanProfileCard({ budgetId, cadastralReference: initialRef, isA
                           <span>Fuente: Catastro - Sede Electrónica del Catastro (SEC)</span>
                         </div>
                       </div>
+
+                      {/* Rustic Land Analysis Section - Only show for rustic land */}
+                      {(profile.land_class === 'Rústico' || profile.land_class === 'No Urbanizable') && (
+                        <div className="p-3 rounded-lg bg-amber-50/50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 space-y-3">
+                          <h5 className="font-semibold text-sm flex items-center gap-2">
+                            <Mountain className="h-4 w-4 text-amber-600" />
+                            Análisis de Suelo Rústico
+                          </h5>
+                          
+                          {/* Rustic Land Use Type */}
+                          <div className="grid grid-cols-2 gap-3 text-sm">
+                            <div>
+                              <span className="text-muted-foreground">Uso específico:</span>
+                              <Badge 
+                                variant="outline" 
+                                className={`ml-2 ${
+                                  profile.rustic_land_use?.toLowerCase().includes('ordinario') ? 'border-green-500 text-green-700 dark:text-green-400' :
+                                  profile.rustic_land_use?.toLowerCase().includes('especial') ? 'border-red-500 text-red-700 dark:text-red-400' :
+                                  ''
+                                }`}
+                              >
+                                {profile.rustic_land_use || 'Por determinar'}
+                              </Badge>
+                            </div>
+                            
+                            {/* Distance to Urban Nucleus */}
+                            <div>
+                              <span className="text-muted-foreground">Distancia a núcleo urbano:</span>
+                              <span className={`ml-2 font-medium ${
+                                profile.distance_to_urban_nucleus && profile.distance_to_urban_nucleus <= 200 
+                                  ? 'text-green-600' 
+                                  : 'text-foreground'
+                              }`}>
+                                {profile.distance_to_urban_nucleus 
+                                  ? `${profile.distance_to_urban_nucleus} m` 
+                                  : 'Por determinar'}
+                              </span>
+                              {profile.distance_to_urban_nucleus && profile.distance_to_urban_nucleus <= 200 && (
+                                <Badge variant="outline" className="ml-2 border-green-500 text-green-700 text-xs">
+                                  &lt;200m ✓
+                                </Badge>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Nearest Urban Nucleus */}
+                          {profile.nearest_urban_nucleus && (
+                            <div className="text-sm">
+                              <span className="text-muted-foreground">Núcleo urbano más cercano:</span>
+                              <span className="ml-2 font-medium">{profile.nearest_urban_nucleus}</span>
+                            </div>
+                          )}
+
+                          {/* Authorizing Body */}
+                          {profile.authorizing_body && (
+                            <div className="text-sm p-2 rounded bg-muted/50">
+                              <span className="text-muted-foreground">Organismo autorizador:</span>
+                              <div className="flex items-center gap-2 mt-1">
+                                <Badge variant="secondary" className="font-mono">
+                                  {profile.authorizing_body}
+                                </Badge>
+                                <span className="text-xs text-muted-foreground">
+                                  {profile.authorizing_body_name}
+                                </span>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Buildability Assessment */}
+                          {profile.buildability_assessment && (
+                            <div className="text-sm">
+                              <span className="text-muted-foreground">Evaluación de viabilidad:</span>
+                              <p className={`mt-1 font-medium ${
+                                profile.buildability_assessment.toLowerCase().includes('edificable') 
+                                  ? 'text-green-600' 
+                                  : profile.buildability_assessment.toLowerCase().includes('no edificable')
+                                    ? 'text-red-600'
+                                    : 'text-amber-600'
+                              }`}>
+                                {profile.buildability_assessment}
+                              </p>
+                            </div>
+                          )}
+
+                          {/* Buildability Requirements */}
+                          {profile.buildability_requirements && profile.buildability_requirements.length > 0 && (
+                            <div className="text-sm">
+                              <span className="text-muted-foreground">Requisitos para edificar:</span>
+                              <ul className="mt-1 space-y-1">
+                                {profile.buildability_requirements.map((req, idx) => (
+                                  <li key={idx} className="flex items-start gap-2 text-xs">
+                                    <span className="text-primary">•</span>
+                                    <span>{req}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+
+                          {/* Info about <200m rule */}
+                          <div className="text-xs text-muted-foreground border-t pt-2 mt-2">
+                            <strong>Nota:</strong> En suelo rústico de protección ordinaria, si la parcela está a menos de 200m del núcleo urbano, 
+                            puede ser edificable con autorización del {profile.authorizing_body || 'organismo autonómico correspondiente'}.
+                          </div>
+                        </div>
+                      )}
                       
                       <div className="grid grid-cols-2 gap-2">
                         <div>

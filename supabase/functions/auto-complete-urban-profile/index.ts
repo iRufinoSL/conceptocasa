@@ -142,15 +142,45 @@ Deno.serve(async (req) => {
     applicableRegulations.push('Ley del Suelo y Rehabilitación Urbana (Real Decreto Legislativo 7/2015)');
     applicableRegulations.push('Código Técnico de la Edificación (CTE)');
     
-    // Regional regulations for Cantabria
-    if (region?.toLowerCase().includes('cantabria')) {
+    // Determine authorizing body based on autonomous community
+    let authorizingBody = '';
+    let authorizingBodyName = '';
+    
+    // Regional regulations based on autonomous community
+    const regionLower = region?.toLowerCase() || '';
+    
+    if (regionLower.includes('cantabria')) {
       applicableRegulations.push('Ley de Cantabria 2/2001, de 25 de junio, de Ordenación Territorial y Régimen Urbanístico del Suelo');
       applicableRegulations.push('Decreto 65/2010 - Reglamento de Disciplina Urbanística de Cantabria');
+      authorizingBody = 'CROTU';
+      authorizingBodyName = 'Comisión Regional de Ordenación del Territorio y Urbanismo de Cantabria';
       if (isRustico) {
         applicableRegulations.push('Ley 4/2020 de 11 de noviembre - Suelo Rústico de Cantabria');
         applicableRegulations.push('Plan Regional de Ordenación del Territorio (PROT) de Cantabria');
         applicableRegulations.push('Normas Urbanísticas del PGOU/NSP de ' + municipality + ' - Capítulo Suelo No Urbanizable');
       }
+    } else if (regionLower.includes('asturias')) {
+      applicableRegulations.push('Decreto Legislativo 1/2004 - Texto Refundido de Ordenación del Territorio y Urbanismo de Asturias');
+      authorizingBody = 'CUOTA';
+      authorizingBodyName = 'Comisión de Urbanismo y Ordenación del Territorio de Asturias';
+      if (isRustico) {
+        applicableRegulations.push('Decreto 278/2007 - Reglamento de Ordenación del Territorio y Urbanismo del Principado de Asturias');
+      }
+    } else if (regionLower.includes('galicia')) {
+      applicableRegulations.push('Ley 2/2016, de 10 de febrero, del suelo de Galicia');
+      authorizingBody = 'CPTOPT';
+      authorizingBodyName = 'Comisión Superior de Urbanismo de Galicia';
+      if (isRustico) {
+        applicableRegulations.push('Decreto 143/2016 - Reglamento de la Ley del Suelo de Galicia');
+      }
+    } else if (regionLower.includes('país vasco') || regionLower.includes('euskadi')) {
+      applicableRegulations.push('Ley 2/2006, de 30 de junio, de Suelo y Urbanismo del País Vasco');
+      authorizingBody = 'CTU';
+      authorizingBodyName = 'Comisión de Ordenación del Territorio del País Vasco';
+    } else if (regionLower.includes('castilla y león')) {
+      applicableRegulations.push('Ley 5/1999 de Urbanismo de Castilla y León');
+      authorizingBody = 'CTU';
+      authorizingBodyName = 'Comisión Territorial de Urbanismo';
     }
     
     // Municipal regulations
@@ -158,6 +188,7 @@ Deno.serve(async (req) => {
     applicableRegulations.push(`Normas Subsidiarias de Planeamiento (NSP) de ${municipality} (si aplica)`);
     
     console.log('Applicable regulations:', applicableRegulations);
+    console.log('Authorizing body:', authorizingBody, '-', authorizingBodyName);
     
     let documentContent = '';
     const consultedUrls: string[] = [];
@@ -260,13 +291,23 @@ Deno.serve(async (req) => {
       ? `\nCLASIFICACIÓN ACTUAL: ${currentUrbanClassification}\nBusca los parámetros específicos para esta clasificación/sector.`
       : '';
     
-    // Build rustic land specific context
+    // Build rustic land specific context with authorizing body info
     const rusticContext = isRustico ? `
 NOTA IMPORTANTE - SUELO RÚSTICO:
 Este terreno está clasificado como SUELO RÚSTICO/NO URBANIZABLE. Las normativas aplicables son:
 ${applicableRegulations.map(r => `- ${r}`).join('\n')}
 
-Para suelo rústico en Cantabria (Ley 4/2020), los parámetros típicos son:
+ORGANISMO AUTORIZADOR: ${authorizingBody} (${authorizingBodyName})
+En suelo rústico, la edificación de vivienda unifamiliar aislada normalmente requiere:
+1. Informe favorable del Ayuntamiento
+2. Autorización del organismo autonómico (${authorizingBody || 'Comisión Territorial de Urbanismo'})
+
+CRITERIOS DE EDIFICABILIDAD EN SUELO RÚSTICO:
+- Si la parcela está a MENOS DE 200m del núcleo urbano más próximo, puede tener condiciones más favorables
+- Si es "Rústico de Protección Ordinaria" (no especial), puede ser edificable con autorización
+- Las categorías de protección especial (Agropecuario, Forestal, Paisajístico, Costas) tienen restricciones adicionales
+
+Para suelo rústico típico, los parámetros suelen ser:
 - Parcela mínima: 2.000 - 5.000 m² según municipio
 - Edificabilidad: 0,10 - 0,20 m²/m² 
 - Altura máxima: 7-9 metros / 2 plantas
@@ -304,11 +345,19 @@ INSTRUCCIONES IMPORTANTES:
 5. Para edificabilidad en rústico: suele ser 0,10-0,20 m²/m²
 6. Para alturas en rústico: suele ser 7-9m / 2 plantas
 7. Para retranqueos: diferencia entre frontal/lateral/posterior
+8. IMPORTANTE: Determina el USO ESPECÍFICO del suelo rústico (ordinario, agropecuario, forestal, etc.)
+9. IMPORTANTE: Indica la distancia estimada al núcleo urbano más próximo si es posible determinarla
+10. Evalúa si el terreno podría ser EDIFICABLE y qué requisitos necesitaría
 
 RESPONDE ÚNICAMENTE con este JSON (sin texto adicional):
 {
   "is_buildable": { "value": true/false o null, "source": "Normativa y artículo específico" },
-  "urban_classification": { "value": "texto descriptivo del tipo de suelo" o null, "source": "fuente" },
+  "urban_classification": { "value": "texto descriptivo del tipo de suelo (Urbano/Urbanizable/Rústico)" o null, "source": "fuente" },
+  "rustic_land_use": { "value": "uso específico: Ordinario, Agropecuario, Forestal, Especial Protección, etc." o null, "source": "fuente" },
+  "distance_to_urban_nucleus": { "value": número en metros o null, "source": "fuente o estimación" },
+  "nearest_urban_nucleus": { "value": "nombre del núcleo urbano más cercano" o null, "source": "fuente" },
+  "buildability_assessment": { "value": "evaluación de viabilidad: Edificable directo / Edificable con autorización CROTU / No edificable / Requiere estudio" o null, "source": "fuente" },
+  "buildability_requirements": { "value": ["requisito1", "requisito2"] o null, "source": "fuente" },
   "buildability_index": { "value": número (m²/m²) o null, "source": "Art. X - Normativa" },
   "max_height": { "value": número en metros o null, "source": "Art. X" },
   "max_floors": { "value": número o null, "source": "Art. X" },
@@ -322,7 +371,7 @@ RESPONDE ÚNICAMENTE con este JSON (sin texto adicional):
   "building_typology": { "value": "texto" o null, "source": "fuente" },
   "permitted_uses": { "value": ["uso1", "uso2"] o null, "source": "fuente" },
   "min_plot_area": { "value": número en m² o null, "source": "Art. X" },
-  "additional_notes": "Resumen completo de: 1) Normativas aplicables, 2) Requisitos para edificar, 3) Limitaciones especiales, 4) Recomendaciones"
+  "additional_notes": "Resumen completo de: 1) Clasificación exacta del suelo, 2) Uso rústico específico, 3) Distancia al núcleo urbano, 4) Organismo autorizador, 5) Requisitos para edificar, 6) Limitaciones especiales, 7) Recomendaciones de viabilidad"
 }`;
 
     const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
@@ -409,8 +458,31 @@ RESPONDE ÚNICAMENTE con este JSON (sin texto adicional):
     updateField('road_setback', extractedData.road_setback, 'Distancia carreteras');
     updateField('has_municipal_sewage', extractedData.has_municipal_sewage, 'Alcantarillado');
     updateField('building_typology', extractedData.building_typology, 'Tipología edificatoria');
+    
+    // New rustic land analysis fields
+    updateField('rustic_land_use', extractedData.rustic_land_use, 'Uso suelo rústico');
+    updateField('distance_to_urban_nucleus', extractedData.distance_to_urban_nucleus, 'Distancia núcleo urbano');
+    updateField('nearest_urban_nucleus', extractedData.nearest_urban_nucleus, 'Núcleo urbano cercano');
+    updateField('buildability_assessment', extractedData.buildability_assessment, 'Evaluación edificabilidad');
+    
+    // Always set authorizing body for rustic land
+    if (isRustico && authorizingBody && !profile.authorizing_body) {
+      updateData.authorizing_body = authorizingBody;
+      updateData.authorizing_body_name = authorizingBodyName;
+      fieldsCompleted++;
+      updatedFields.push('Organismo autorizador');
+    }
+    
+    // Handle buildability requirements array
+    if (extractedData.buildability_requirements?.value && Array.isArray(extractedData.buildability_requirements.value)) {
+      if (!profile.buildability_requirements) {
+        updateData.buildability_requirements = extractedData.buildability_requirements.value;
+        fieldsCompleted++;
+        updatedFields.push('Requisitos edificabilidad');
+      }
+    }
 
-    // Handle arrays
+    // Handle permitted_uses arrays
     if (extractedData.permitted_uses?.value && Array.isArray(extractedData.permitted_uses.value)) {
       if (!profile.permitted_uses || (Array.isArray(profile.permitted_uses) && profile.permitted_uses.length === 0)) {
         updateData.permitted_uses = extractedData.permitted_uses.value;

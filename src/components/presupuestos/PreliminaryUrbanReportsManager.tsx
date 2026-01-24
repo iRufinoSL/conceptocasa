@@ -338,6 +338,7 @@ export function PreliminaryUrbanReportsManager({
           pdfText: textContent || undefined,
           pdfPageCount: 1,
           sourceType: sourceType,
+          storageBucket: hasFile ? 'preliminary-reports' : undefined,
           storagePath: hasFile ? report.file_path : undefined,
           municipality: null,
           landClass: 'suelo urbano'

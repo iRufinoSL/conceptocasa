@@ -34,14 +34,16 @@ async function analyzeWithAI(
 
   const systemPrompt = `Eres un experto en urbanismo español especializado en analizar documentos urbanísticos oficiales. Tu trabajo es extraer ABSOLUTAMENTE TODOS los datos urbanísticos del documento proporcionado.${focusLine}
 
-TIPOS DE DOCUMENTOS QUE PUEDES RECIBIR:
-1. **CERTIFICADO URBANÍSTICO / CÉDULA URBANÍSTICA** - Documento oficial del Ayuntamiento que certifica las condiciones urbanísticas de una parcela específica.
-2. **PGOU / NORMATIVA URBANÍSTICA** - Plan General de Ordenación Urbana con artículos, ordenanzas y parámetros de edificación por zonas.
-3. **NORMAS SUBSIDIARIAS / NORMAS COMPLEMENTARIAS** - Regulación urbanística municipal.
+TIPOS DE DOCUMENTOS QUE PUEDES RECIBIR (TODOS SON FUENTES OFICIALES VINCULANTES):
+1. **INFORME URBANÍSTICO / CERTIFICADO URBANÍSTICO / CÉDULA URBANÍSTICA** - Documento oficial emitido por el Ayuntamiento que certifica las condiciones urbanísticas de una parcela específica. ES LA FUENTE MÁS FIABLE Y VINCULANTE.
+2. **CERTIFICADO DE COMPATIBILIDAD URBANÍSTICA** - Documento del Ayuntamiento que informa sobre la compatibilidad de un uso con el planeamiento vigente.
+3. **PGOU / PGMO / NORMATIVA URBANÍSTICA** - Plan General de Ordenación Urbana/Municipal con artículos, ordenanzas y parámetros de edificación por zonas.
+4. **NORMAS SUBSIDIARIAS / NORMAS COMPLEMENTARIAS** - Regulación urbanística municipal.
+5. **INFORME TÉCNICO MUNICIPAL** - Informes emitidos por técnicos del Ayuntamiento sobre condiciones de parcelas.
 
 INSTRUCCIONES CRÍTICAS:
 1. Lee con máxima atención TODO el documento. Los datos pueden estar en cualquier parte (tablas, artículos, anexos).
-2. Si es un Certificado Urbanístico, normalmente contiene la respuesta explícita.
+2. Si es un Informe/Certificado Urbanístico del Ayuntamiento, SU CONCLUSIÓN ES VINCULANTE - respeta la calificación que indique.
 3. Si es PGOU/Normativa, busca las ORDENANZAS DE ZONA, los artículos sobre edificabilidad, alturas, retranqueos.
 4. Extrae valores numéricos exactos.
 5. Incluye siempre la fuente exacta (sección/artículo/página) cuando sea posible.
@@ -62,12 +64,14 @@ AFECCIONES SECTORIALES A DETECTAR (MUY IMPORTANTE):
 - **ELECTRICIDAD**: Busca "línea de alta tensión", "servidumbre eléctrica", "pasillo eléctrico", "REE".
 
 CONCLUSIÓN EDIFICABLE (MUY IMPORTANTE):
-- Si el documento dice explícitamente "edificable" o "no edificable", respeta esa conclusión.
-- Si hay contradicción, prioriza el texto literal más claro (p.ej. "SE CERTIFICA: ... edificable").
+- Si el documento es un INFORME/CERTIFICADO URBANÍSTICO del Ayuntamiento, SU CONCLUSIÓN ES LA DEFINITIVA.
+- Valores posibles para isEdificable.value: true (SI EDIFICABLE), false (NO EDIFICABLE), "condicionado" (EDIFICABLE CON CONDICIONES).
+- Si el documento menciona "EDIFICABLE" pero con condiciones, requisitos previos, o "sujeto a...", usa "condicionado".
+- Busca frases como: "sujeto a autorización", "previa autorización", "condicionado a", "cumpliendo con", "requiere informe", "con carácter previo".
 
-RESPONDE SOLO en formato JSON con esta estructura exacta:
+RESPONDE SOLO en formato JSON válido con esta estructura exacta (NO añadas comentarios, NO uses "o", solo valores concretos):
 {
-  "isEdificable": { "value": true o false o null, "source": "texto literal del documento o sección" },
+  "isEdificable": { "value": true, "source": "texto literal del documento o sección" },
   "urbanClassification": { "value": "clasificación encontrada o null", "source": "sección o artículo" },
   "urbanQualification": { "value": "calificación/zona encontrada o null", "source": "sección o artículo" },
   "maxBuildableVolume": { "value": null o número, "source": "artículo o sección" },
@@ -122,10 +126,22 @@ RESPONDE SOLO en formato JSON con esta estructura exacta:
 
   // Extended keyword list for better extraction from large normative documents
   const keywords = [
+    // Informes Urbanísticos Municipales (fuente oficial vinculante)
+    'INFORME URBANÍSTICO',
+    'INFORME TÉCNICO',
+    'CERTIFICADO URBANÍSTICO',
+    'CÉDULA URBANÍSTICA',
+    'COMPATIBILIDAD URBANÍSTICA',
+    'SE INFORMA',
     'SE CERTIFICA',
     'CERTIFICA',
     'EDIFICABLE',
     'NO EDIFICABLE',
+    'EDIFICABLE CONDICIONADO',
+    'CONDICIONADO A',
+    'SUJETO A',
+    'PREVIA AUTORIZACIÓN',
+    'CON CARÁCTER PREVIO',
     'APTO PARA EDIFICAR',
     'CLASIFICACIÓN',
     'CALIFICACIÓN',
@@ -283,10 +299,73 @@ RESPONDE SOLO en formato JSON con esta estructura exacta:
   const data = await response.json();
   const content = data.choices?.[0]?.message?.content || '';
 
-  // Parse JSON from response
+  // Parse JSON from response with robust error handling
   const jsonMatch = content.match(/\{[\s\S]*\}/);
   if (jsonMatch) {
-    return JSON.parse(jsonMatch[0]);
+    let jsonStr = jsonMatch[0];
+    
+    // Attempt to repair common JSON issues from AI responses
+    try {
+      return JSON.parse(jsonStr);
+    } catch (parseError) {
+      console.warn('Initial JSON parse failed, attempting repair:', parseError);
+      
+      // Common repairs for AI-generated JSON:
+      // 1. Remove trailing commas before } or ]
+      jsonStr = jsonStr.replace(/,\s*([}\]])/g, '$1');
+      
+      // 2. Replace "o" with null (common AI pattern like "true o false")
+      jsonStr = jsonStr.replace(/:\s*true\s+o\s+false\s+o\s+null/gi, ': null');
+      jsonStr = jsonStr.replace(/:\s*true\s+o\s+false/gi, ': null');
+      jsonStr = jsonStr.replace(/:\s*null\s+o\s+número[^,}]*/gi, ': null');
+      jsonStr = jsonStr.replace(/:\s*null\s+o\s+true\s+o\s+false/gi, ': null');
+      jsonStr = jsonStr.replace(/:\s*null\s+o\s+"[^"]*"/gi, ': null');
+      
+      // 3. Fix unquoted string values that should be quoted
+      jsonStr = jsonStr.replace(/:\s*([a-zA-ZáéíóúñÁÉÍÓÚÑ][a-zA-ZáéíóúñÁÉÍÓÚÑ\s]+)([,}])/g, ': "$1"$2');
+      
+      // 4. Remove control characters
+      jsonStr = jsonStr.replace(/[\x00-\x1F\x7F]/g, ' ');
+      
+      // 5. Try to fix truncated JSON by closing brackets
+      const openBraces = (jsonStr.match(/\{/g) || []).length;
+      const closeBraces = (jsonStr.match(/\}/g) || []).length;
+      const openBrackets = (jsonStr.match(/\[/g) || []).length;
+      const closeBrackets = (jsonStr.match(/\]/g) || []).length;
+      
+      // Close missing brackets/braces
+      for (let i = 0; i < openBrackets - closeBrackets; i++) {
+        jsonStr += ']';
+      }
+      for (let i = 0; i < openBraces - closeBraces; i++) {
+        jsonStr += '}';
+      }
+      
+      try {
+        return JSON.parse(jsonStr);
+      } catch (repairError) {
+        console.error('JSON repair also failed:', repairError);
+        console.error('Problematic JSON (first 2000 chars):', jsonStr.slice(0, 2000));
+        
+        // Return partial data we can extract manually
+        const partialData: Record<string, unknown> = { 
+          parseError: true, 
+          rawResponse: content.slice(0, 3000) 
+        };
+        
+        // Try to extract key fields even from malformed JSON
+        const edificableMatch = content.match(/"isEdificable"\s*:\s*\{\s*"value"\s*:\s*(true|false|"condicionado"|null)/i);
+        if (edificableMatch) {
+          const val = edificableMatch[1];
+          partialData.isEdificable = { 
+            value: val === 'true' ? true : val === 'false' ? false : val === '"condicionado"' ? 'condicionado' : null,
+            source: 'Extraído de respuesta parcial'
+          };
+        }
+        
+        return partialData;
+      }
+    }
   }
 
   return { rawResponse: content, parseError: true };

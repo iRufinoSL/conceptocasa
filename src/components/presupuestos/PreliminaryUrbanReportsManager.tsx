@@ -272,36 +272,105 @@ export function PreliminaryUrbanReportsManager({
     setIsAnalyzing(report.id);
     
     try {
-      // Get the file URL if exists
-      let fileUrl: string | undefined;
-      if (report.file_path && fileUrls[report.file_path]) {
-        fileUrl = fileUrls[report.file_path];
+      // For PDF files, we need to get the text content from storage
+      let textContent = report.content_text || '';
+      
+      // If it's a PDF file and no text content, try to download and extract
+      if (report.file_path && !textContent) {
+        // Get signed URL for the file
+        const { data: urlData, error: urlError } = await supabase.storage
+          .from('preliminary-reports')
+          .createSignedUrl(report.file_path, 3600);
+        
+        if (urlError) {
+          console.error('Error getting signed URL:', urlError);
+          throw new Error('No se pudo acceder al archivo PDF');
+        }
+        
+        // For PDFs, we need to inform the user that text extraction from client is not possible
+        // Instead, we'll use basic analysis with what we have
+        if (report.file_type?.includes('pdf')) {
+          toast({
+            title: 'Procesando PDF',
+            description: 'Analizando contenido del documento...'
+          });
+        }
+      }
+      
+      // If still no content, throw error
+      if (!textContent && !report.file_path) {
+        throw new Error('No hay contenido para analizar. Añade texto o sube un archivo.');
       }
 
-      // Call the process-large-document edge function with the report content
+      // Create a temporary upload record to satisfy the edge function requirements
+      const tempUploadId = crypto.randomUUID();
+      
+      // Insert temporary record in urban_document_uploads
+      const { error: insertError } = await supabase
+        .from('urban_document_uploads')
+        .insert({
+          id: tempUploadId,
+          budget_id: budgetId,
+          document_name: report.title,
+          document_type: 'preliminary_report',
+          source_type: textContent ? 'text' : 'storage',
+          storage_path: report.file_path || null,
+          status: 'pending'
+        });
+
+      if (insertError) {
+        console.error('Error creating temp upload record:', insertError);
+        throw new Error('Error preparando el análisis');
+      }
+
+      // Call the process-large-document edge function with proper parameters
       const { data, error } = await supabase.functions.invoke('process-large-document', {
         body: {
+          uploadId: tempUploadId,
           budgetId,
-          pdfText: report.content_text || undefined,
-          documentType: 'preliminary_report',
-          reportTitle: report.title,
-          fileUrl: fileUrl
+          pdfText: textContent || undefined,
+          pdfPageCount: 1,
+          sourceType: textContent ? 'text' : 'storage',
+          storagePath: report.file_path || undefined,
+          municipality: null,
+          landClass: 'suelo urbano'
         }
       });
 
-      if (error) throw error;
+      if (error) {
+        // Clean up temp record on error
+        await supabase.from('urban_document_uploads').delete().eq('id', tempUploadId);
+        throw error;
+      }
 
-      // Update the report with analysis results
+      // Parse the result - the edge function returns extractedData
+      const extractedData = data?.extractedData || data;
+      
+      // Determine buildability status
+      let buildableStatus: string | undefined;
+      const isEdificable = extractedData?.isEdificable;
+      if (isEdificable) {
+        if (typeof isEdificable === 'object' && 'value' in isEdificable) {
+          if (isEdificable.value === true) buildableStatus = 'SI_EDIFICABLE';
+          else if (isEdificable.value === false) buildableStatus = 'NO_EDIFICABLE';
+          else if (isEdificable.value === 'condicionado') buildableStatus = 'EDIFICABLE_CONDICIONADO';
+        } else if (isEdificable === true) {
+          buildableStatus = 'SI_EDIFICABLE';
+        } else if (isEdificable === false) {
+          buildableStatus = 'NO_EDIFICABLE';
+        }
+      }
+
+      // Build analysis result
       const analysisResult = {
-        buildable: data?.isEdificable ? 
-          (data.isEdificable === 'condicionado' ? 'EDIFICABLE_CONDICIONADO' : 
-           data.isEdificable ? 'SI_EDIFICABLE' : 'NO_EDIFICABLE') : undefined,
-        classification: data?.urbanClassification,
-        summary: data?.extractedData?.summary || data?.notes,
-        conditions: data?.extractedData?.conditions || []
+        buildable: buildableStatus,
+        classification: extractedData?.urbanClassification?.value || extractedData?.urbanClassification,
+        summary: extractedData?.documentSummary || extractedData?.additionalInfo,
+        conditions: extractedData?.sectoralRestrictions?.map((r: any) => r.description) || []
       };
 
-      await supabase
+      // Update the preliminary report with analysis results
+      const { error: updateError } = await supabase
         .from('preliminary_urban_reports')
         .update({
           is_analyzed: true,
@@ -309,18 +378,28 @@ export function PreliminaryUrbanReportsManager({
         })
         .eq('id', report.id);
 
+      if (updateError) {
+        console.error('Error updating report:', updateError);
+      }
+
+      // Clean up the temporary upload record
+      await supabase.from('urban_document_uploads').delete().eq('id', tempUploadId);
+
       toast({
         title: 'Análisis completado',
-        description: `Resultado: ${analysisResult.buildable || 'Sin determinar'}`
+        description: buildableStatus 
+          ? `Resultado: ${buildableStatus === 'SI_EDIFICABLE' ? 'Edificable' : 
+              buildableStatus === 'NO_EDIFICABLE' ? 'No edificable' : 'Condicionado'}`
+          : 'Análisis completado sin resultado definitivo'
       });
       
       fetchReports();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error analyzing report:', error);
       toast({
         variant: 'destructive',
         title: 'Error en el análisis',
-        description: 'No se pudo analizar el informe urbanístico'
+        description: error?.message || 'No se pudo analizar el documento'
       });
     } finally {
       setIsAnalyzing(null);

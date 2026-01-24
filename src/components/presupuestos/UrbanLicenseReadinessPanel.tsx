@@ -24,11 +24,15 @@ import {
   Fence,
   Cross,
   Plane,
-  Fuel
+  Fuel,
+  ExternalLink
 } from 'lucide-react';
 import { useState } from 'react';
 
 type ReadinessStatus = 'complete' | 'partial' | 'missing' | 'warning';
+
+// Clasificación tripartita de edificabilidad
+type BuildabilityClassification = 'SI_EDIFICABLE' | 'NO_EDIFICABLE' | 'EDIFICABLE_CONDICIONADO' | 'PENDIENTE';
 
 interface LicenseRequirement {
   id: string;
@@ -49,6 +53,16 @@ interface SectoralAffection {
   source?: string;
   icon: React.ElementType;
   regulations?: string;
+  regulatoryBody?: string; // Organismo regulador
+  legalReference?: string; // Referencia legal (Ley, Decreto, etc.)
+}
+
+interface ConsultedSource {
+  name: string;
+  url?: string;
+  type: string;
+  phase?: number;
+  date?: string;
 }
 
 interface UrbanProfileData {
@@ -106,12 +120,21 @@ interface UrbanProfileData {
   affected_by_livestock_route: boolean | null;
   min_distance_cemetery: number | null;
   min_distance_cemetery_source: string | null;
+  affected_by_cemetery: boolean | null;
   min_distance_railway: number | null;
   min_distance_railway_source: string | null;
   min_distance_pipeline: number | null;
   min_distance_pipeline_source: string | null;
   min_distance_roads: number | null;
   min_distance_roads_source: string | null;
+  // Fuentes consultadas
+  consulted_sources?: ConsultedSource[] | null;
+  // Requisitos de edificación
+  buildable_requirements?: string[] | null;
+  // Notas de análisis
+  analysis_notes?: string | null;
+  // Estado de análisis
+  analysis_status?: string | null;
 }
 
 interface UrbanLicenseReadinessPanelProps {
@@ -144,15 +167,82 @@ function getStatusBadge(status: ReadinessStatus) {
   }
 }
 
+// Determina la clasificación tripartita de edificabilidad
+function getBuildabilityClassification(profile: UrbanProfileData): BuildabilityClassification {
+  const hasConclusion = profile.is_buildable !== null;
+  const isBuildable = profile.is_buildable === true;
+  const isNotBuildable = profile.is_buildable === false;
+  
+  // Verificar si hay condiciones que afecten
+  const hasActiveAffections = [
+    profile.affected_by_coast,
+    profile.affected_by_water_courses,
+    profile.affected_by_airport,
+    profile.affected_by_heritage,
+    profile.affected_by_cemetery,
+    profile.affected_by_livestock_route
+  ].some(v => v === true);
+  
+  const hasRequirements = profile.buildable_requirements && profile.buildable_requirements.length > 0;
+  
+  if (!hasConclusion) return 'PENDIENTE';
+  
+  if (isNotBuildable) return 'NO_EDIFICABLE';
+  
+  if (isBuildable) {
+    // Si es edificable pero tiene afecciones activas o requisitos especiales
+    if (hasActiveAffections || hasRequirements) {
+      return 'EDIFICABLE_CONDICIONADO';
+    }
+    return 'SI_EDIFICABLE';
+  }
+  
+  return 'PENDIENTE';
+}
+
+function getClassificationBadge(classification: BuildabilityClassification) {
+  switch (classification) {
+    case 'SI_EDIFICABLE':
+      return (
+        <Badge className="bg-emerald-600 hover:bg-emerald-700 text-white text-sm px-4 py-1.5 font-semibold">
+          ✓ SÍ, EDIFICABLE
+        </Badge>
+      );
+    case 'NO_EDIFICABLE':
+      return (
+        <Badge className="bg-red-600 hover:bg-red-700 text-white text-sm px-4 py-1.5 font-semibold">
+          ✗ NO EDIFICABLE
+        </Badge>
+      );
+    case 'EDIFICABLE_CONDICIONADO':
+      return (
+        <Badge className="bg-amber-500 hover:bg-amber-600 text-white text-sm px-4 py-1.5 font-semibold">
+          ⚠ EDIFICABLE CONDICIONADO
+        </Badge>
+      );
+    case 'PENDIENTE':
+    default:
+      return (
+        <Badge variant="outline" className="text-sm px-4 py-1.5 font-semibold">
+          ? PENDIENTE DE ANÁLISIS
+        </Badge>
+      );
+  }
+}
+
 export function UrbanLicenseReadinessPanel({ profile }: UrbanLicenseReadinessPanelProps) {
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
     buildability: true,
-    affections: true
+    affections: true,
+    sources: false
   });
 
   const toggleSection = (id: string) => {
     setExpandedSections(prev => ({ ...prev, [id]: !prev[id] }));
   };
+
+  // Clasificación principal
+  const buildabilityClassification = getBuildabilityClassification(profile);
 
   // 1. EDIFICABILIDAD - ¿Se puede construir?
   const getBuildabilityStatus = (): LicenseRequirement => {
@@ -166,16 +256,33 @@ export function UrbanLicenseReadinessPanel({ profile }: UrbanLicenseReadinessPan
     const details: string[] = [];
     
     if (hasConclusion) {
-      status = isBuildable ? 'complete' : 'warning';
-      value = isBuildable ? 'SÍ - Edificable' : 'NO - No edificable';
+      if (buildabilityClassification === 'SI_EDIFICABLE') {
+        status = 'complete';
+        value = 'SÍ EDIFICABLE - Cumple requisitos para licencia';
+      } else if (buildabilityClassification === 'NO_EDIFICABLE') {
+        status = 'warning';
+        value = 'NO EDIFICABLE - No cumple requisitos';
+      } else if (buildabilityClassification === 'EDIFICABLE_CONDICIONADO') {
+        status = 'partial';
+        value = 'EDIFICABLE CON CONDICIONES - Requiere autorizaciones';
+      }
     } else if (hasLandClass || hasClassification) {
       status = 'partial';
-      value = 'Datos parciales - Requiere verificación';
+      value = 'Datos parciales - Requiere verificación completa';
     }
     
     if (profile.land_class) details.push(`Calificación: ${profile.land_class}`);
     if (profile.urban_classification) details.push(`Clasificación: ${profile.urban_classification}`);
     if (profile.urban_qualification) details.push(`Zona: ${profile.urban_qualification}`);
+    
+    // Añadir requisitos si existen
+    if (profile.buildable_requirements && profile.buildable_requirements.length > 0) {
+      details.push('');
+      details.push('📋 Requisitos especiales:');
+      profile.buildable_requirements.forEach(req => {
+        details.push(`  • ${req}`);
+      });
+    }
     
     return {
       id: 'buildability',
@@ -326,7 +433,9 @@ export function UrbanLicenseReadinessPanel({ profile }: UrbanLicenseReadinessPan
         distance: profile.min_distance_coast,
         source: profile.min_distance_coast_source || undefined,
         icon: Waves,
-        regulations: 'Servidumbre de protección (100m), tránsito (6m), zona de influencia (500m)'
+        regulations: 'Servidumbre de protección (100m), tránsito (6m), zona de influencia (500m)',
+        regulatoryBody: 'Dirección General de Sostenibilidad de la Costa y del Mar',
+        legalReference: 'Ley 22/1988 de Costas y RD 876/2014'
       },
       {
         id: 'water',
@@ -335,7 +444,9 @@ export function UrbanLicenseReadinessPanel({ profile }: UrbanLicenseReadinessPan
         distance: profile.min_distance_water_courses,
         source: profile.min_distance_water_courses_source || undefined,
         icon: Droplets,
-        regulations: 'Dominio público hidráulico, zona de policía (100m), servidumbre (5m)'
+        regulations: 'Dominio público hidráulico, zona de policía (100m), servidumbre (5m)',
+        regulatoryBody: 'Confederación Hidrográfica correspondiente',
+        legalReference: 'RD Legislativo 1/2001 (TRLA) y RD 849/1986'
       },
       {
         id: 'power',
@@ -344,7 +455,9 @@ export function UrbanLicenseReadinessPanel({ profile }: UrbanLicenseReadinessPan
         distance: profile.min_distance_power_lines,
         source: profile.min_distance_power_lines_source || undefined,
         icon: Zap,
-        regulations: 'Servidumbre de paso según tensión (alta/media/baja)'
+        regulations: 'Servidumbre de paso según tensión (alta/media/baja)',
+        regulatoryBody: 'Ministerio para la Transición Ecológica',
+        legalReference: 'RD 223/2008 Reglamento de líneas de alta tensión'
       },
       {
         id: 'forest',
@@ -353,7 +466,9 @@ export function UrbanLicenseReadinessPanel({ profile }: UrbanLicenseReadinessPan
         distance: profile.min_distance_forest,
         source: profile.min_distance_forest_source || undefined,
         icon: TreePine,
-        regulations: 'Franja de protección contra incendios (25-50m)'
+        regulations: 'Franja de protección contra incendios (25-50m)',
+        regulatoryBody: 'Consejería de Medio Ambiente autonómica',
+        legalReference: 'Ley 43/2003 de Montes y normativa autonómica'
       },
       {
         id: 'airport',
@@ -362,48 +477,60 @@ export function UrbanLicenseReadinessPanel({ profile }: UrbanLicenseReadinessPan
         distance: profile.min_distance_airport,
         source: profile.min_distance_airport_source || undefined,
         icon: Plane,
-        regulations: 'Superficies limitadoras, altura máxima según AESA'
+        regulations: 'Superficies limitadoras, altura máxima según AESA',
+        regulatoryBody: 'AESA - Agencia Estatal de Seguridad Aérea',
+        legalReference: 'Ley 48/1960 de Navegación Aérea y RD 297/2013'
       },
       {
         id: 'heritage',
         name: 'Patrimonio histórico',
         affected: profile.affected_by_heritage,
         icon: Landmark,
-        regulations: 'BIC, entorno de protección, zona arqueológica'
+        regulations: 'BIC, entorno de protección, zona arqueológica',
+        regulatoryBody: 'Consejería de Cultura autonómica',
+        legalReference: 'Ley 16/1985 de Patrimonio Histórico Español'
       },
       {
         id: 'livestock',
         name: 'Vías pecuarias',
         affected: profile.affected_by_livestock_route,
         icon: Fence,
-        regulations: 'Cañada (75m), cordel (37.5m), vereda (20m)'
+        regulations: 'Cañada (75m), cordel (37.5m), vereda (20m)',
+        regulatoryBody: 'Consejería de Agricultura autonómica',
+        legalReference: 'Ley 3/1995 de Vías Pecuarias'
       },
       {
         id: 'cemetery',
-        name: 'Cementerios',
-        affected: profile.min_distance_cemetery !== null,
+        name: 'Cementerios (Policía Sanitaria Mortuoria)',
+        affected: profile.affected_by_cemetery ?? (profile.min_distance_cemetery !== null && profile.min_distance_cemetery < 200),
         distance: profile.min_distance_cemetery,
         source: profile.min_distance_cemetery_source || undefined,
         icon: Cross,
-        regulations: 'Zona sanitaria (50-200m según normativa autonómica)'
+        regulations: 'Distancia mínima 50-200m según CCAA. Asturias: 50m (Dec. 72/2018). Cantabria: 200m (Dec. 1/2007). Castilla y León: 200m (Dec. 16/2005)',
+        regulatoryBody: 'Consejería de Sanidad autonómica',
+        legalReference: 'Reglamento de Policía Sanitaria Mortuoria de cada CCAA'
       },
       {
         id: 'railway',
         name: 'Ferrocarril',
-        affected: profile.min_distance_railway !== null,
+        affected: profile.min_distance_railway !== null && profile.min_distance_railway < 70,
         distance: profile.min_distance_railway,
         source: profile.min_distance_railway_source || undefined,
         icon: Train,
-        regulations: 'Zona de dominio público, línea de edificación'
+        regulations: 'Zona de dominio público (8m), zona de protección (8-70m)',
+        regulatoryBody: 'ADIF / Ministerio de Transportes',
+        legalReference: 'Ley 38/2015 del Sector Ferroviario'
       },
       {
         id: 'pipeline',
         name: 'Gasoducto/Oleoducto',
-        affected: profile.min_distance_pipeline !== null,
+        affected: profile.min_distance_pipeline !== null && profile.min_distance_pipeline < 200,
         distance: profile.min_distance_pipeline,
         source: profile.min_distance_pipeline_source || undefined,
         icon: Fuel,
-        regulations: 'Franja de seguridad, servidumbre de paso'
+        regulations: 'Franja de seguridad 200m, servidumbre de paso 2m',
+        regulatoryBody: 'Ministerio para la Transición Ecológica',
+        legalReference: 'RD 1434/2002 (gas) y RD 2913/1973 (hidrocarburos)'
       }
     ];
   };
@@ -489,25 +616,37 @@ export function UrbanLicenseReadinessPanel({ profile }: UrbanLicenseReadinessPan
               )}
             </div>
             <div>
-              <CardTitle className="text-lg">Preparación para Licencia Constructiva</CardTitle>
+              <CardTitle className="text-lg">Análisis de Edificabilidad</CardTitle>
               <CardDescription>
                 {completedCount}/5 requisitos verificados
                 {warningCount > 0 && ` • ${warningCount} requiere(n) atención`}
               </CardDescription>
             </div>
           </div>
-          <Badge 
-            variant={overallStatus === 'complete' ? 'default' : 'outline'}
-            className={`text-sm px-3 py-1 ${
-              overallStatus === 'complete' ? 'bg-green-600 hover:bg-green-700' :
-              overallStatus === 'warning' ? 'bg-orange-100 text-orange-800 border-orange-300' :
-              ''
-            }`}
-          >
-            {overallStatus === 'complete' ? '✓ APTO PARA LICENCIA' : 
-             overallStatus === 'warning' ? '⚠️ REVISAR AFECCIONES' : 
-             'EN PROCESO'}
-          </Badge>
+          {getClassificationBadge(buildabilityClassification)}
+        </div>
+        
+        {/* Resumen de clasificación */}
+        <div className={`mt-3 p-3 rounded-lg border-2 ${
+          buildabilityClassification === 'SI_EDIFICABLE' ? 'bg-emerald-50 border-emerald-300 dark:bg-emerald-950/30 dark:border-emerald-700' :
+          buildabilityClassification === 'NO_EDIFICABLE' ? 'bg-red-50 border-red-300 dark:bg-red-950/30 dark:border-red-700' :
+          buildabilityClassification === 'EDIFICABLE_CONDICIONADO' ? 'bg-amber-50 border-amber-300 dark:bg-amber-950/30 dark:border-amber-700' :
+          'bg-muted/50 border-border'
+        }`}>
+          <div className="text-sm">
+            {buildabilityClassification === 'SI_EDIFICABLE' && (
+              <p>✅ La parcela cumple los requisitos urbanísticos para obtener licencia de construcción según el planeamiento vigente.</p>
+            )}
+            {buildabilityClassification === 'NO_EDIFICABLE' && (
+              <p>❌ La parcela NO es edificable según la normativa urbanística actual. Consulte las alternativas o posibles excepciones.</p>
+            )}
+            {buildabilityClassification === 'EDIFICABLE_CONDICIONADO' && (
+              <p>⚠️ La parcela es edificable BAJO CONDICIONES. Existen afecciones o requisitos especiales que deben cumplirse antes de la licencia.</p>
+            )}
+            {buildabilityClassification === 'PENDIENTE' && (
+              <p>❓ Análisis pendiente. Execute las fases de análisis para determinar la edificabilidad de la parcela.</p>
+            )}
+          </div>
         </div>
       </CardHeader>
       
@@ -652,10 +791,112 @@ export function UrbanLicenseReadinessPanel({ profile }: UrbanLicenseReadinessPan
                 <li>AESA (servidumbres aeronáuticas)</li>
                 <li>Dirección General de Costas</li>
                 <li>Consejería de Patrimonio (BIC)</li>
+                <li>Normativa de Policía Sanitaria Mortuoria (cementerios)</li>
               </ul>
             </div>
           </CollapsibleContent>
         </Collapsible>
+
+        {/* Fuentes Consultadas en el Análisis */}
+        {profile.consulted_sources && profile.consulted_sources.length > 0 && (
+          <>
+            <Separator />
+            <Collapsible 
+              open={expandedSections['sources']}
+              onOpenChange={() => toggleSection('sources')}
+            >
+              <CollapsibleTrigger asChild>
+                <div className="flex items-center justify-between cursor-pointer hover:opacity-80 transition-opacity py-2">
+                  <div className="flex items-center gap-2">
+                    <FileText className="h-4 w-4 text-primary" />
+                    <span className="font-medium text-sm">Fuentes Consultadas ({profile.consulted_sources.length})</span>
+                  </div>
+                  {expandedSections['sources'] ? (
+                    <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                  ) : (
+                    <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                  )}
+                </div>
+              </CollapsibleTrigger>
+              
+              <CollapsibleContent className="mt-2">
+                <div className="space-y-2">
+                  {/* Agrupar por fase */}
+                  {[1, 2, 3, 4].map(phase => {
+                    const phaseSources = profile.consulted_sources?.filter(s => s.phase === phase) || [];
+                    if (phaseSources.length === 0) return null;
+                    
+                    const phaseNames: Record<number, string> = {
+                      1: 'Fase 1: Catastro + Municipal',
+                      2: 'Fase 2: Normativa Autonómica',
+                      3: 'Fase 3: Afecciones Sectoriales',
+                      4: 'Fase 4: CTE y Construcción'
+                    };
+                    
+                    return (
+                      <div key={phase} className="border rounded-lg p-2">
+                        <p className="text-xs font-medium text-muted-foreground mb-1">{phaseNames[phase]}</p>
+                        <ul className="space-y-1">
+                          {phaseSources.map((source, idx) => (
+                            <li key={idx} className="text-xs flex items-start gap-2">
+                              <span className="w-1 h-1 rounded-full bg-primary mt-1.5 flex-shrink-0" />
+                              <div className="flex-1">
+                                <span className="font-medium">{source.name}</span>
+                                {source.type && <span className="text-muted-foreground"> ({source.type})</span>}
+                                {source.url && (
+                                  <a 
+                                    href={source.url} 
+                                    target="_blank" 
+                                    rel="noopener noreferrer"
+                                    className="ml-1 inline-flex items-center gap-0.5 text-primary hover:underline"
+                                  >
+                                    <ExternalLink className="h-3 w-3" />
+                                  </a>
+                                )}
+                                {source.date && <span className="text-muted-foreground text-[10px] ml-1">{source.date}</span>}
+                              </div>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    );
+                  })}
+                  
+                  {/* Fuentes sin fase asignada */}
+                  {(() => {
+                    const unassigned = profile.consulted_sources?.filter(s => !s.phase) || [];
+                    if (unassigned.length === 0) return null;
+                    return (
+                      <div className="border rounded-lg p-2">
+                        <p className="text-xs font-medium text-muted-foreground mb-1">Otras fuentes</p>
+                        <ul className="space-y-1">
+                          {unassigned.map((source, idx) => (
+                            <li key={idx} className="text-xs flex items-start gap-2">
+                              <span className="w-1 h-1 rounded-full bg-muted-foreground mt-1.5 flex-shrink-0" />
+                              <div className="flex-1">
+                                <span className="font-medium">{source.name}</span>
+                                {source.url && (
+                                  <a 
+                                    href={source.url} 
+                                    target="_blank" 
+                                    rel="noopener noreferrer"
+                                    className="ml-1 inline-flex items-center gap-0.5 text-primary hover:underline"
+                                  >
+                                    <ExternalLink className="h-3 w-3" />
+                                  </a>
+                                )}
+                              </div>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    );
+                  })()}
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
+          </>
+        )}
       </CardContent>
     </Card>
   );

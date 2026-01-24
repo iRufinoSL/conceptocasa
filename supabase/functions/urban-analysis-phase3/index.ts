@@ -15,6 +15,9 @@ const corsHeaders = {
  * - Patrimonio histórico
  * - Montes/Forestal
  * - Vías pecuarias
+ * - CEMENTERIOS / Policía Sanitaria Mortuoria (NUEVO - importante)
+ * - Líneas eléctricas
+ * - Gasoductos/Oleoductos
  */
 
 interface SearchResult {
@@ -79,12 +82,14 @@ Deno.serve(async (req) => {
     let documentContent = '';
     const consultedUrls: string[] = [];
 
-    // Search for sectoral affections
+    // Search for sectoral affections - including cemetery/mortuary police
     if (FIRECRAWL_API_KEY) {
       const queries = [
         `afecciones sectoriales ${municipality} ${province} aeropuerto costas ríos`,
         `servidumbres aeronáuticas AESA ${province}`,
-        `zona inundable confederación hidrográfica ${province}`
+        `zona inundable confederación hidrográfica ${province}`,
+        `cementerio ${municipality} policía sanitaria mortuoria distancia edificación`,
+        `reglamento policía sanitaria mortuoria ${autonomousCommunity || province} distancia mínima viviendas`
       ];
 
       for (const query of queries) {
@@ -166,7 +171,18 @@ OBJETIVO FASE 3: Identificar todas las AFECCIONES SECTORIALES que pueden afectar
 7. VÍAS PECUARIAS:
    - ¿Existe alguna vía pecuaria que atraviese o colinde?
 
-8. OTROS:
+8. CEMENTERIOS / POLICÍA SANITARIA MORTUORIA (MUY IMPORTANTE):
+   - ¿Hay cementerios cerca de la parcela?
+   - ¿Cuál es la distancia mínima requerida según la normativa autonómica?
+   - REFERENCIAS NORMATIVAS POR CCAA:
+     * ASTURIAS: Decreto 72/2018 (50m para nuevas construcciones)
+     * CANTABRIA: Decreto 1/2007 (200m para viviendas)
+     * CASTILLA Y LEÓN: Decreto 16/2005 (200m)
+     * GALICIA: Decreto 134/1998 (50m)
+     * PAÍS VASCO: Decreto 18/2016 (50m)
+     * OTROS: Generalmente 200m según RD 2263/1974
+
+9. OTROS:
    - Líneas eléctricas alta tensión
    - Gasoductos/Oleoductos
    - Cementerios
@@ -242,8 +258,12 @@ RESPONDE ÚNICAMENTE con este JSON:
     },
     "cemetery": {
       "affected": true/false,
-      "distance_m": número o null,
-      "source": "fuente"
+      "cemetery_name": "nombre del cementerio o null",
+      "distance_m": número en metros o null,
+      "min_required_distance_m": número según normativa autonómica (50 a 200m),
+      "source": "Normativa específica (ej: Decreto 72/2018 Asturias)",
+      "regulatory_body": "Consejería de Sanidad correspondiente",
+      "notes": "Observaciones sobre la afección"
     }
   },
   "total_affections": número,

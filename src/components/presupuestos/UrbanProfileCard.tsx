@@ -53,6 +53,7 @@ import { LargeDocumentUploader } from './LargeDocumentUploader';
 import { UrbanReportGenerator } from './UrbanReportGenerator';
 import { UrbanLicenseReadinessPanel } from './UrbanLicenseReadinessPanel';
 import { CatastroMapViewer } from './CatastroMapViewer';
+import { UrbanAnalysisPhases } from './UrbanAnalysisPhases';
 import { MapMeasurementModal } from './MapMeasurementModal';
 
 interface AdditionalRestriction {

@@ -8,8 +8,15 @@ const corsHeaders = {
 /**
  * FASE 1: Análisis Catastro + Normativa Municipal
  * - Consulta datos del Catastro
- * - Busca PGOU/Normas Subsidiarias del Ayuntamiento
+ * - Busca PGOU/PGMO/Normas Subsidiarias del Ayuntamiento
+ * - Detecta Núcleos Rurales (clave para edificabilidad en rústico)
  * - Determina clasificación del suelo y edificabilidad básica
+ * 
+ * METODOLOGÍA BASADA EN INFORME AYUNTAMIENTO DE SIERO:
+ * 1. Identificar si la parcela está dentro de un Núcleo Rural delimitado
+ * 2. Si está en NR, aplican parámetros especiales (sin parcela mínima)
+ * 3. Buscar la zona específica en los planos del PGOU/PGMO
+ * 4. Extraer artículos y normas aplicables
  */
 
 interface SearchResult {
@@ -31,7 +38,8 @@ Deno.serve(async (req) => {
       province, 
       landClass, 
       cadastralReference,
-      surfaceArea
+      surfaceArea,
+      coordinates
     } = await req.json();
 
     if (!budgetId || !municipality) {
@@ -76,11 +84,32 @@ Deno.serve(async (req) => {
     let documentContent = '';
     const consultedUrls: string[] = [];
 
-    // Search municipal regulations with Firecrawl
+    // Extract polygon/parcel from cadastral reference for specific searches
+    let polygonParcel = '';
+    if (cadastralReference && cadastralReference.length >= 14) {
+      // Format: 33066A162000020000EA -> Polígono 162, Parcela 2
+      const refCode = cadastralReference.substring(5, 14);
+      if (refCode.startsWith('A') || refCode.match(/^\d/)) {
+        const polyMatch = cadastralReference.match(/A(\d{3})/);
+        const parcelMatch = cadastralReference.match(/A\d{3}(\d{5})/);
+        if (polyMatch && parcelMatch) {
+          const poly = parseInt(polyMatch[1]);
+          const parcel = parseInt(parcelMatch[1]);
+          polygonParcel = `Polígono ${poly} Parcela ${parcel}`;
+        }
+      }
+    }
+
+    // Search municipal regulations with Firecrawl - ENHANCED SEARCHES
     if (FIRECRAWL_API_KEY) {
+      // Priority queries based on Siero methodology
       const queries = [
-        `PGOU ${municipality} ${province} ordenanzas urbanísticas edificación`,
-        `Normas Subsidiarias ${municipality} ${isRustico ? 'suelo rústico no urbanizable' : 'suelo urbano'} edificabilidad`
+        // 1. CRITICAL: Search for Núcleo Rural delimitation - KEY for rustic buildability
+        `PGOU ${municipality} núcleo rural delimitación ${isRustico ? 'suelo no urbanizable' : ''}`,
+        // 2. Specific municipal planning documents
+        `PGMO ${municipality} ordenanzas urbanísticas zonificación ${province}`,
+        // 3. If we have polygon/parcel info, search specifically
+        polygonParcel ? `${municipality} ${polygonParcel} clasificación suelo` : `normas subsidiarias ${municipality} edificación vivienda unifamiliar`
       ];
 
       for (const query of queries) {
@@ -95,7 +124,7 @@ Deno.serve(async (req) => {
             },
             body: JSON.stringify({
               query,
-              limit: 3,
+              limit: 2, // Reduced for performance
               lang: 'es',
               country: 'ES',
               scrapeOptions: { formats: ['markdown'] }
@@ -108,7 +137,7 @@ Deno.serve(async (req) => {
             
             for (const result of results) {
               if (result.markdown && result.markdown.length > 500) {
-                documentContent += `\n\n--- FUENTE MUNICIPAL: ${result.title || result.url} ---\n${result.markdown.substring(0, 10000)}`;
+                documentContent += `\n\n--- FUENTE MUNICIPAL: ${result.title || result.url} ---\n${result.markdown.substring(0, 8000)}`;
                 consultedUrls.push(result.url);
               }
             }
@@ -117,46 +146,76 @@ Deno.serve(async (req) => {
           console.error(`[FASE 1] Error búsqueda: ${e}`);
         }
 
-        if (documentContent.length > 25000) break;
+        // Limit total content to prevent timeouts
+        if (documentContent.length > 20000) break;
       }
     }
 
-    // AI Analysis for Phase 1
+    // AI Analysis for Phase 1 - ENHANCED PROMPT with Núcleo Rural detection
     const analysisPrompt = `Eres un experto urbanista español. Analiza FASE 1: Catastro y Normativa Municipal.
 
 DATOS DE LA PARCELA:
 - Municipio: ${municipality}
 - Provincia: ${province}
 - Referencia Catastral: ${cadastralReference || 'N/A'}
+- ${polygonParcel ? `Ubicación: ${polygonParcel}` : ''}
 - Tipo de suelo según Catastro: ${landClass || 'No especificado'}
 - Superficie: ${surfaceArea ? `${surfaceArea} m²` : 'No especificada'}
+${coordinates ? `- Coordenadas: ${coordinates.lat}, ${coordinates.lng}` : ''}
 
-${documentContent ? `DOCUMENTACIÓN MUNICIPAL ENCONTRADA:\n${documentContent.substring(0, 30000)}` : 'No se encontró documentación municipal online.'}
+${documentContent ? `DOCUMENTACIÓN MUNICIPAL ENCONTRADA:\n${documentContent.substring(0, 25000)}` : 'No se encontró documentación municipal online.'}
 
-OBJETIVO FASE 1: Determinar la clasificación del suelo y edificabilidad básica según:
-1. Datos del Catastro (ya proporcionados)
-2. PGOU o Normas Subsidiarias del Ayuntamiento de ${municipality}
+OBJETIVO FASE 1 (Metodología tipo Ayuntamiento de Siero):
+
+🔑 PASO CRÍTICO: DETECTAR NÚCLEO RURAL
+En suelo rústico, la clave es determinar si la parcela está dentro de un NÚCLEO RURAL delimitado:
+- Si SÍ está en Núcleo Rural → Generalmente NO hay parcela mínima → ES EDIFICABLE (con condiciones)
+- Si NO está en Núcleo Rural → Aplican las parcelas mínimas generales de suelo rústico (5.000-15.000 m²)
+
+1. ¿Está la parcela incluida en un Núcleo Rural delimitado por el PGOU/PGMO?
+2. Si es NR, ¿qué código de zona tiene? (ej: NR-1, 22.02 NR Carbayín)
+3. ¿Qué artículos del PGOU regulan esa zona?
+4. ¿Cuáles son los parámetros edificatorios específicos de esa zona?
 
 RESPONDE ÚNICAMENTE con este JSON:
 {
   "phase": 1,
   "phase_name": "Catastro + Normativa Municipal",
+  "is_in_nucleo_rural": {
+    "value": true/false/null,
+    "nucleo_name": "Nombre del núcleo si aplica (ej: NR Carbayín)",
+    "zone_code": "Código de zona si aplica (ej: 22.02 NR)",
+    "source": "Art. X PGOU/PGMO ${municipality}"
+  },
   "is_buildable_phase1": {
     "value": true/false/null,
     "confidence": "alta/media/baja",
-    "reason": "Explicación basada en clasificación catastral y PGOU municipal"
+    "reason": "Explicación. Si está en NR: 'Parcela dentro de Núcleo Rural delimitado, no aplica parcela mínima'. Si no: explicar según clasificación"
   },
   "urban_classification": {
-    "value": "Suelo Urbano / Suelo Urbanizable / Suelo No Urbanizable / Rústico Común / etc.",
-    "source": "Catastro / PGOU ${municipality}"
+    "value": "Suelo Urbano / Suelo Urbanizable / Suelo No Urbanizable - Núcleo Rural / Suelo No Urbanizable - Común / Rústico Especial Protección / etc.",
+    "category": "Urbano / Urbanizable / No Urbanizable",
+    "subcategory": "Núcleo Rural / Común / Protección / etc. si aplica",
+    "source": "Catastro / Art. X PGOU ${municipality}"
   },
   "urban_qualification": {
-    "value": "Residencial / Industrial / Agrícola / etc. si se encuentra",
-    "source": "fuente"
+    "value": "Residencial Unifamiliar / Agrícola / Industrial / Mixto / etc.",
+    "zone_name": "Nombre completo de la zona (ej: Zona 22.02 NR Carbayín)",
+    "source": "Art. X PGOU"
   },
   "min_plot_area": {
     "value": número en m² o null,
+    "applies_in_nucleo_rural": true/false,
+    "note": "En Núcleos Rurales suele no existir parcela mínima",
     "source": "Art. X PGOU ${municipality}"
+  },
+  "max_built_surface": {
+    "value": número m² o null,
+    "source": "Art. X"
+  },
+  "max_occupation_percent": {
+    "value": número % o null,
+    "source": "Art. X"
   },
   "buildability_index": {
     "value": número m²/m² o null,
@@ -164,14 +223,12 @@ RESPONDE ÚNICAMENTE con este JSON:
   },
   "max_height": {
     "value": número metros o null,
+    "reference_point": "al alero / a cumbrera / sobre rasante",
     "source": "Art. X"
   },
   "max_floors": {
     "value": número o null,
-    "source": "Art. X"
-  },
-  "max_occupation_percent": {
-    "value": número % o null,
+    "note": "B+1, B+2, etc.",
     "source": "Art. X"
   },
   "front_setback": {
@@ -186,9 +243,18 @@ RESPONDE ÚNICAMENTE con este JSON:
     "value": número metros o null,
     "source": "Art. X"
   },
-  "analysis_notes": "Resumen del análisis de Fase 1: qué se ha determinado, qué falta por verificar, recomendaciones para siguientes fases",
+  "allowed_uses": ["Vivienda unifamiliar", "Agrícola", etc.],
+  "prohibited_uses": ["Vivienda colectiva", "Industrial", etc.],
+  "applicable_articles": [
+    {
+      "article": "Art. 4.116",
+      "title": "Título del artículo",
+      "summary": "Resumen de lo que regula"
+    }
+  ],
+  "analysis_notes": "Resumen técnico del análisis de Fase 1: clasificación, si está en NR, parámetros clave, qué falta por verificar. Incluir referencias a artículos específicos.",
   "requires_phase2": true/false,
-  "phase2_reason": "Motivo por el que se necesita analizar normativa autonómica"
+  "phase2_reason": "Motivo por el que se necesita analizar normativa autonómica (ej: verificar TROTU/ROTU para suelo rústico, autorización CUOTA, etc.)"
 }`;
 
     const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
@@ -201,7 +267,7 @@ RESPONDE ÚNICAMENTE con este JSON:
         model: 'google/gemini-2.5-flash',
         messages: [{ role: 'user', content: analysisPrompt }],
         temperature: 0.1,
-        max_tokens: 2500,
+        max_tokens: 3000,
       }),
     });
 
@@ -259,17 +325,58 @@ RESPONDE ÚNICAMENTE con este JSON:
       }
     };
 
-    // Determine buildability from phase 1
+    // CRITICAL: Detect Núcleo Rural
+    const isInNucleoRural = extractedData.is_in_nucleo_rural?.value === true;
+    
+    // Determine buildability - Special handling for Núcleo Rural
     if (extractedData.is_buildable_phase1?.value !== null) {
-      // Only set if high confidence, otherwise wait for more phases
-      if (extractedData.is_buildable_phase1.confidence === 'alta') {
+      // In Núcleo Rural, we can be more confident even with small plots
+      const confidence = extractedData.is_buildable_phase1.confidence;
+      if (confidence === 'alta' || (isInNucleoRural && confidence === 'media')) {
         updateField('is_buildable', { value: extractedData.is_buildable_phase1.value }, 'Edificabilidad');
       }
     }
 
-    updateField('urban_classification', extractedData.urban_classification, 'Clasificación suelo');
-    updateField('urban_qualification', extractedData.urban_qualification, 'Calificación urbanística');
-    updateField('min_plot_area', extractedData.min_plot_area, 'Parcela mínima');
+    // Urban classification with enhanced info
+    if (extractedData.urban_classification?.value) {
+      let classificationValue = extractedData.urban_classification.value;
+      // If in Núcleo Rural, make it explicit in classification
+      if (isInNucleoRural && !classificationValue.toLowerCase().includes('núcleo rural')) {
+        classificationValue = `${classificationValue} - Núcleo Rural`;
+      }
+      updateField('urban_classification', { 
+        value: classificationValue, 
+        source: extractedData.urban_classification.source 
+      }, 'Clasificación suelo');
+    }
+
+    // Urban qualification with zone info
+    if (extractedData.urban_qualification?.value) {
+      let qualificationValue = extractedData.urban_qualification.value;
+      if (extractedData.urban_qualification.zone_name) {
+        qualificationValue = `${qualificationValue} (${extractedData.urban_qualification.zone_name})`;
+      }
+      updateField('urban_qualification', { 
+        value: qualificationValue, 
+        source: extractedData.urban_qualification.source 
+      }, 'Calificación urbanística');
+    }
+
+    // Min plot area - special handling for Núcleo Rural
+    if (extractedData.min_plot_area?.value !== null && extractedData.min_plot_area?.value !== undefined) {
+      // In Núcleo Rural, there's often no minimum plot
+      if (isInNucleoRural && extractedData.min_plot_area.applies_in_nucleo_rural === false) {
+        // Don't set a minimum, or set to 0 to indicate no minimum
+        updateData.min_plot_area = 0;
+        updateData.min_plot_area_source = `${extractedData.min_plot_area.source} - Sin parcela mínima en Núcleo Rural`;
+        fieldsCompleted++;
+        updatedFields.push('Parcela mínima (N/A en NR)');
+      } else {
+        updateField('min_plot_area', extractedData.min_plot_area, 'Parcela mínima');
+      }
+    }
+
+    updateField('max_built_surface', extractedData.max_built_surface, 'Superficie máx. construida');
     updateField('buildability_index', extractedData.buildability_index, 'Índice edificabilidad');
     updateField('max_height', extractedData.max_height, 'Altura máxima');
     updateField('max_floors', extractedData.max_floors, 'Plantas máximas');
@@ -278,8 +385,34 @@ RESPONDE ÚNICAMENTE con este JSON:
     updateField('side_setback', extractedData.side_setback, 'Retranqueo lateral');
     updateField('rear_setback', extractedData.rear_setback, 'Retranqueo posterior');
 
-    // Add phase notes
-    const phaseNotes = extractedData.analysis_notes || '';
+    // Save Núcleo Rural info in buildable requirements
+    const requirements: string[] = [];
+    if (isInNucleoRural) {
+      const nucleoName = extractedData.is_in_nucleo_rural.nucleo_name || 'Núcleo Rural';
+      const zoneCode = extractedData.is_in_nucleo_rural.zone_code || '';
+      requirements.push(`✓ Parcela incluida en ${nucleoName}${zoneCode ? ` (${zoneCode})` : ''}`);
+      requirements.push('✓ Sin parcela mínima edificable dentro del Núcleo Rural');
+    }
+    if (extractedData.allowed_uses && extractedData.allowed_uses.length > 0) {
+      requirements.push(`Usos permitidos: ${extractedData.allowed_uses.join(', ')}`);
+    }
+    if (extractedData.prohibited_uses && extractedData.prohibited_uses.length > 0) {
+      requirements.push(`Usos prohibidos: ${extractedData.prohibited_uses.join(', ')}`);
+    }
+    if (requirements.length > 0) {
+      const existing = profile.buildable_requirements || [];
+      updateData.buildable_requirements = [...new Set([...existing, ...requirements])];
+    }
+
+    // Add applicable articles to notes
+    let phaseNotes = extractedData.analysis_notes || '';
+    if (extractedData.applicable_articles && extractedData.applicable_articles.length > 0) {
+      phaseNotes += '\n\n📋 Artículos aplicables del PGOU/PGMO:';
+      for (const art of extractedData.applicable_articles) {
+        phaseNotes += `\n• ${art.article}: ${art.title || ''} - ${art.summary || ''}`;
+      }
+    }
+
     const existingNotes = profile.analysis_notes || '';
     updateData.analysis_notes = existingNotes 
       ? `${existingNotes}\n\n--- FASE 1: Catastro + Municipal (${new Date().toLocaleDateString('es-ES')}) ---\n${phaseNotes}`
@@ -288,12 +421,12 @@ RESPONDE ÚNICAMENTE con este JSON:
     // Update analysis status
     updateData.analysis_status = 'phase1_complete';
 
-    // Save consulted sources
+    // Save consulted sources with more detail
     const existingSources = Array.isArray(profile.consulted_sources) ? profile.consulted_sources : [];
     const newSources = consultedUrls.map(url => ({
-      name: 'Normativa Municipal',
+      name: `PGOU/PGMO ${municipality}`,
       url,
-      type: 'PGOU/NSP',
+      type: 'Normativa Municipal',
       phase: 1,
       date: new Date().toISOString().split('T')[0]
     }));
@@ -323,13 +456,19 @@ RESPONDE ÚNICAMENTE con este JSON:
         fieldsCompleted,
         updatedFields,
         consultedUrls,
+        isInNucleoRural,
+        nucleoRuralInfo: extractedData.is_in_nucleo_rural,
         buildabilityResult: extractedData.is_buildable_phase1,
+        urbanClassification: extractedData.urban_classification,
+        applicableArticles: extractedData.applicable_articles,
         requiresPhase2: extractedData.requires_phase2 !== false,
-        phase2Reason: extractedData.phase2_reason || 'Verificar normativa autonómica',
+        phase2Reason: extractedData.phase2_reason || 'Verificar normativa autonómica (TROTU/ROTU)',
         analysisNotes: phaseNotes,
-        message: fieldsCompleted > 0 
-          ? `Fase 1 completada: ${updatedFields.join(', ')}`
-          : 'Fase 1 completada sin nuevos datos'
+        message: isInNucleoRural 
+          ? `Fase 1 completada: Parcela en Núcleo Rural - ${updatedFields.join(', ')}`
+          : fieldsCompleted > 0 
+            ? `Fase 1 completada: ${updatedFields.join(', ')}`
+            : 'Fase 1 completada sin nuevos datos'
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );

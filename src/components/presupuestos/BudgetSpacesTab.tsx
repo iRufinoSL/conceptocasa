@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,6 +18,7 @@ import { searchMatch } from '@/lib/search-utils';
 import { NumericInput } from '@/components/ui/numeric-input';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import { getAllAvailableOptions, getDisplayOptions, OPTION_COLORS, DEFAULT_OPTIONS } from '@/lib/options-utils';
+import { ResourceInlineEdit } from './ResourceInlineEdit';
 
 interface BudgetSpace {
   id: string;
@@ -328,6 +329,25 @@ export function BudgetSpacesTab({ budgetId, isAdmin }: BudgetSpacesTabProps) {
     }
   };
 
+  // Inline save function for m2 fields
+  const handleInlineSave = useCallback(async (
+    spaceId: string, 
+    field: 'm2_built' | 'm2_livable', 
+    newValue: number | null
+  ) => {
+    const { error } = await supabase
+      .from('budget_spaces')
+      .update({ [field]: newValue })
+      .eq('id', spaceId);
+
+    if (error) throw error;
+
+    // Update local state
+    setSpaces(prev => prev.map(s => 
+      s.id === spaceId ? { ...s, [field]: newValue } : s
+    ));
+  }, []);
+
   const renderSpaceRow = (space: BudgetSpace) => (
     <TableRow key={space.id}>
       <TableCell className="font-medium">{space.name}</TableCell>
@@ -352,8 +372,28 @@ export function BudgetSpacesTab({ budgetId, isAdmin }: BudgetSpacesTabProps) {
           ))}
         </div>
       </TableCell>
-      <TableCell className="text-right">{formatNumber(space.m2_built || 0)}</TableCell>
-      <TableCell className="text-right">{formatNumber(space.m2_livable || 0)}</TableCell>
+      <TableCell className="text-right p-1">
+        <ResourceInlineEdit
+          value={space.m2_built}
+          onSave={(val) => handleInlineSave(space.id, 'm2_built', val)}
+          type="number"
+          decimals={2}
+          allowNull={true}
+          displayValue={formatNumber(space.m2_built || 0)}
+          className="text-right"
+        />
+      </TableCell>
+      <TableCell className="text-right p-1">
+        <ResourceInlineEdit
+          value={space.m2_livable}
+          onSave={(val) => handleInlineSave(space.id, 'm2_livable', val)}
+          type="number"
+          decimals={2}
+          allowNull={true}
+          displayValue={formatNumber(space.m2_livable || 0)}
+          className="text-right"
+        />
+      </TableCell>
       <TableCell className="text-right">{formatNumber(getM2Construction(space))}</TableCell>
       <TableCell className="max-w-[200px] truncate">{space.observations || '-'}</TableCell>
       {isAdmin && (

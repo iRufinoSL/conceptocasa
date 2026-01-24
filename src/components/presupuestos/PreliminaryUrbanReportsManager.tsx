@@ -305,16 +305,23 @@ export function PreliminaryUrbanReportsManager({
       // Create a temporary upload record to satisfy the edge function requirements
       const tempUploadId = crypto.randomUUID();
       
-      // Insert temporary record in urban_document_uploads
+      // Determine source type - must be 'storage' or 'url', never 'text'
+      // For text content without file, we use 'url' as placeholder but pass text via pdfText
+      const hasFile = !!report.file_path;
+      const sourceType = hasFile ? 'storage' : 'url';
+      
+      // Insert temporary record in urban_document_uploads with correct column names
       const { error: insertError } = await supabase
         .from('urban_document_uploads')
         .insert({
           id: tempUploadId,
           budget_id: budgetId,
-          document_name: report.title,
-          document_type: 'preliminary_report',
-          source_type: textContent ? 'text' : 'storage',
-          storage_path: report.file_path || null,
+          original_filename: report.title || 'informe_preliminar.txt',
+          document_type: 'pgou', // default value accepted by the table
+          source_type: sourceType,
+          storage_path: hasFile ? report.file_path : null,
+          external_url: !hasFile ? 'text://inline' : null, // placeholder for text-only
+          file_size_bytes: report.file_size || (textContent?.length || 0),
           status: 'pending'
         });
 
@@ -330,8 +337,8 @@ export function PreliminaryUrbanReportsManager({
           budgetId,
           pdfText: textContent || undefined,
           pdfPageCount: 1,
-          sourceType: textContent ? 'text' : 'storage',
-          storagePath: report.file_path || undefined,
+          sourceType: sourceType,
+          storagePath: hasFile ? report.file_path : undefined,
           municipality: null,
           landClass: 'suelo urbano'
         }

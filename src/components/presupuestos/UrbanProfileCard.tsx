@@ -1155,6 +1155,24 @@ export function UrbanProfileCard({ budgetId, cadastralReference: initialRef, isA
                 {/* NEW: License Readiness Panel - 5 Key Requirements for Construction License */}
                 <UrbanLicenseReadinessPanel profile={profile} />
                 
+                {/* NEW: Phase-based Analysis Panel */}
+                <UrbanAnalysisPhases 
+                  profile={{
+                    id: profile.id,
+                    budget_id: profile.budget_id,
+                    municipality: profile.municipality,
+                    province: profile.province,
+                    autonomous_community: profile.autonomous_community,
+                    land_class: profile.land_class,
+                    cadastral_reference: profile.cadastral_reference,
+                    surface_area: profile.surface_area,
+                    analysis_status: profile.analysis_status,
+                    google_maps_lat: profile.google_maps_lat,
+                    google_maps_lng: profile.google_maps_lng
+                  }}
+                  onComplete={fetchProfile}
+                />
+                
                 {/* Location Section */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-3">

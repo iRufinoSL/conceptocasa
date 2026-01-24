@@ -502,6 +502,14 @@ export function ResourceInlineEdit({
             ? editValue
             : parseEuropeanNumber(String(editValue));
 
+    // Handle blur: just cancel editing, don't save automatically
+    // User must press Enter or Tab to save
+    const handleNumericBlur = () => {
+      // Cancel editing and restore original value
+      setEditValue(value ?? '');
+      setIsEditing(false);
+    };
+
     return (
       <EditWrapper>
         <div
@@ -516,7 +524,7 @@ export function ResourceInlineEdit({
             decimals={decimals}
             allowNull={allowNull}
             className="h-7 w-24 text-xs ring-2 ring-primary ring-offset-1 bg-primary/5 transition-all duration-200"
-            onBlur={handleSave}
+            onBlur={handleNumericBlur}
             onKeyDown={handleKeyDown}
           />
         </div>

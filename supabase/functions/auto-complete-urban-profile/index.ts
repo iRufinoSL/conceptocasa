@@ -194,50 +194,23 @@ Deno.serve(async (req) => {
     const consultedUrls: string[] = [];
 
     if (FIRECRAWL_API_KEY) {
-      // Build search queries - prioritize specific search if provided
+      // Build search queries - OPTIMIZED: max 2 queries to avoid timeout
       const searchQueries: string[] = [];
       
-      // If specific search is provided, make it the priority
+      // Priority 1: Specific search or urban classification
       if (specificSearch) {
-        searchQueries.push(
-          `${specificSearch} ${municipality} ordenanzas edificabilidad altura ocupación retranqueos`,
-          `${specificSearch} ${municipality} ${province} normativa urbanística PDF`,
-          `${specificSearch} parámetros urbanísticos edificación`
-        );
+        searchQueries.push(`${specificSearch} ${municipality} ${province} ordenanzas edificabilidad retranqueos`);
+      } else if (currentUrbanClassification) {
+        searchQueries.push(`${currentUrbanClassification} ${municipality} ${province} normativa urbanística`);
       }
       
-      // For rustic land in Cantabria, add specific queries
-      if (isRustico && region?.toLowerCase().includes('cantabria')) {
-        searchQueries.push(
-          `Ley 4/2020 suelo rústico Cantabria edificación vivienda unifamiliar`,
-          `PGOU ${municipality} Cantabria suelo no urbanizable condiciones edificación`,
-          `${municipality} Cantabria suelo rústico ordinario edificabilidad metros cuadrados`
-        );
-      }
+      // Priority 2: Main PGOU/NSP query - always include
+      searchQueries.push(`PGOU ${municipality} ${province} ${isRustico ? 'suelo rústico no urbanizable' : 'ordenanzas'} edificación`);
       
-      // If we have urban classification info (like SAU-5), search for that
-      if (currentUrbanClassification) {
-        const sectorMatch = currentUrbanClassification.match(/SAU-?\d+|PP-?\d+|Plan Parcial|Sector/i);
-        if (sectorMatch) {
-          const sectorName = sectorMatch[0];
-          searchQueries.push(
-            `Plan Parcial ${sectorName} ${municipality} ordenanzas`,
-            `${sectorName} ${municipality} edificabilidad ocupación altura retranqueos`
-          );
-        }
-      }
-      
-      // Add general PGOU queries
-      searchQueries.push(
-        `PGOU ${municipality} ${province} normativa urbanística ordenanzas PDF`,
-        `normas subsidiarias ${municipality} ordenanzas urbanísticas edificación`,
-        `${region} normativa ${landType} edificación vivienda unifamiliar`
-      );
+      // Limit to 2 queries to avoid timeout
+      const queriesToRun = searchQueries.slice(0, 2);
 
-      // Remove duplicates
-      const uniqueQueries = [...new Set(searchQueries)];
-
-      for (const query of uniqueQueries) {
+      for (const query of queriesToRun) {
         try {
           console.log(`Searching: ${query}`);
           
@@ -249,7 +222,7 @@ Deno.serve(async (req) => {
             },
             body: JSON.stringify({
               query,
-              limit: 5, // Increased limit for better coverage
+              limit: 3, // Reduced from 5
               lang: 'es',
               country: 'ES',
               scrapeOptions: {
@@ -264,7 +237,8 @@ Deno.serve(async (req) => {
             
             for (const result of results) {
               if (result.markdown && result.markdown.length > 500) {
-                documentContent += `\n\n--- FUENTE: ${result.title || result.url} ---\n${result.markdown.substring(0, 20000)}`;
+                // Limit each document to 8000 chars (reduced from 20000)
+                documentContent += `\n\n--- FUENTE: ${result.title || result.url} ---\n${result.markdown.substring(0, 8000)}`;
                 consultedUrls.push(result.url);
                 console.log(`Found content from: ${result.url} (${result.markdown.length} chars)`);
               }
@@ -274,8 +248,8 @@ Deno.serve(async (req) => {
           console.error(`Search error for "${query}":`, e);
         }
 
-        // Limit total content (increased for better context)
-        if (documentContent.length > 80000) break;
+        // Limit total content to 30000 chars (reduced from 80000)
+        if (documentContent.length > 30000) break;
       }
     }
 
@@ -317,25 +291,16 @@ Para suelo rústico típico, los parámetros suelen ser:
 Busca los parámetros específicos del PGOU de ${municipality} para suelo no urbanizable.
 ` : '';
     
-    const analysisPrompt = `Eres un experto urbanista español especializado en normativa urbanística municipal y autonómica. Analiza la documentación para encontrar los parámetros urbanísticos ESPECÍFICOS para esta parcela:
+    // Build a concise prompt to avoid timeout
+    const analysisPrompt = `Eres un experto urbanista español. Extrae parámetros urbanísticos para esta parcela:
 
-DATOS DE LA PARCELA:
-- Municipio: ${municipality}
-- Provincia: ${province}
-- Comunidad Autónoma: ${region || 'No especificada'}
-- Tipo de suelo: ${landClass || 'No especificado'}
-- Referencia catastral: ${cadastralReference || 'No especificada'}
-${planningContext}
-${classificationContext}
-${rusticContext}
+PARCELA: ${municipality}, ${province} (${region || 'España'})
+TIPO: ${landClass || 'No especificado'}
+REF CATASTRAL: ${cadastralReference || 'N/A'}
+${currentUrbanClassification ? `CLASIFICACIÓN: ${currentUrbanClassification}` : ''}
+${isRustico ? `ORGANISMO: ${authorizingBody} (${authorizingBodyName})` : ''}
 
-NORMATIVAS APLICABLES A ESTA PARCELA:
-${applicableRegulations.map(r => `- ${r}`).join('\n')}
-
-CAMPOS QUE NECESITAMOS ENCONTRAR (valores numéricos precisos):
-${missingFieldsList}
-
-${documentContent ? `\nDOCUMENTACIÓN ENCONTRADA:\n${documentContent.substring(0, 60000)}` : `No se encontró documentación específica online. Por favor indica los valores típicos según la normativa autonómica de ${region || province} para ${landType}.`}
+${documentContent ? `DOCUMENTACIÓN (extracto):\n${documentContent.substring(0, 25000)}` : 'Sin documentación online. Indica valores típicos de la normativa regional.'}
 
 INSTRUCCIONES IMPORTANTES:
 1. Busca valores ESPECÍFICOS del municipio, PGOU o normativa autonómica
@@ -381,11 +346,12 @@ RESPONDE ÚNICAMENTE con este JSON (sin texto adicional):
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'google/gemini-2.5-flash',
+        model: 'google/gemini-2.5-flash-lite', // Use faster model to avoid timeout
         messages: [
           { role: 'user', content: analysisPrompt }
         ],
         temperature: 0.1,
+        max_tokens: 2000, // Limit response size
       }),
     });
 

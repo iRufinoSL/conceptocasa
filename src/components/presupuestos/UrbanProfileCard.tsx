@@ -41,7 +41,9 @@ import {
   Car,
   Container,
   Waves,
-  Sparkles
+  Sparkles,
+  Plane,
+  Trees
 } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import * as pdfjsLib from 'pdfjs-dist';
@@ -1685,6 +1687,30 @@ export function UrbanProfileCard({ budgetId, cadastralReference: initialRef, isA
                   
                   {/* Affected By Indicators */}
                   <div className="flex flex-wrap gap-2">
+                    {profile.affected_by_airport && (
+                      <Badge variant="outline" className="bg-sky-50 text-sky-700 border-sky-300 dark:bg-sky-900/20 dark:text-sky-400">
+                        <Plane className="h-3 w-3 mr-1" />
+                        Afectada por servidumbre aeronáutica (AESA)
+                      </Badge>
+                    )}
+                    {profile.affected_by_coast && (
+                      <Badge variant="outline" className="bg-cyan-50 text-cyan-700 border-cyan-300 dark:bg-cyan-900/20 dark:text-cyan-400">
+                        <Waves className="h-3 w-3 mr-1" />
+                        Afectada por Ley de Costas
+                      </Badge>
+                    )}
+                    {profile.affected_by_forest && (
+                      <Badge variant="outline" className="bg-green-50 text-green-700 border-green-300 dark:bg-green-900/20 dark:text-green-400">
+                        <Trees className="h-3 w-3 mr-1" />
+                        Afectada por zona forestal
+                      </Badge>
+                    )}
+                    {profile.affected_by_heritage && (
+                      <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-300 dark:bg-amber-900/20 dark:text-amber-400">
+                        <Landmark className="h-3 w-3 mr-1" />
+                        Afectada por patrimonio histórico
+                      </Badge>
+                    )}
                     {profile.affected_by_power_lines && (
                       <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-300 dark:bg-amber-900/20 dark:text-amber-400">
                         <Zap className="h-3 w-3 mr-1" />
@@ -1716,6 +1742,26 @@ export function UrbanProfileCard({ budgetId, cadastralReference: initialRef, isA
                   </div>
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {/* AESA - Airport Distance */}
+                    <EditableFieldWithSource
+                      label="Distancia mínima a aeropuerto (AESA)"
+                      value={profile.min_distance_airport}
+                      source={profile.min_distance_airport_source}
+                      unit="m"
+                      icon={Plane}
+                      onSave={(value, source) => handleSaveField('min_distance_airport', 'min_distance_airport_source', value, source)}
+                    />
+                    
+                    {/* AESA - Max Height Airport */}
+                    <EditableFieldWithSource
+                      label="Altura máxima por servidumbre aérea"
+                      value={profile.max_height_airport}
+                      source={profile.max_height_airport_source}
+                      unit="m"
+                      icon={Plane}
+                      onSave={(value, source) => handleSaveField('max_height_airport', 'max_height_airport_source', value, source)}
+                    />
+                    
                     {/* Distance to Cemetery */}
                     <EditableFieldWithSource
                       label="Distancia mínima a cementerio"

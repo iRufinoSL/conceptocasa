@@ -80,17 +80,10 @@ export function CloneBudgetDialog({
   const fetchBudgets = async () => {
     setIsLoading(true);
     try {
-      let query = supabase
+      const { data, error } = await supabase
         .from('presupuestos')
         .select('id, nombre, codigo_correlativo, version, poblacion, provincia')
         .order('nombre');
-      
-      // Only exclude currentBudgetId if provided
-      if (currentBudgetId) {
-        query = query.neq('id', currentBudgetId);
-      }
-
-      const { data, error } = await query;
 
       if (error) throw error;
       setBudgets(data || []);
@@ -175,7 +168,12 @@ export function CloneBudgetDialog({
     return `${p.nombre} (${p.codigo_correlativo}/${p.version}): ${p.poblacion}`;
   };
 
-  // Filter budgets for target selection (exclude source budget)
+  // Filter budgets for source selection (exclude current budget if provided)
+  const availableSourceBudgets = currentBudgetId 
+    ? budgets.filter(b => b.id !== currentBudgetId) 
+    : budgets;
+  
+  // Filter budgets for target selection (exclude source budget, but include current budget)
   const availableTargetBudgets = budgets.filter(b => b.id !== selectedBudgetId);
 
   const canClone = cloneTarget === 'existing' 
@@ -204,7 +202,7 @@ export function CloneBudgetDialog({
                 <div className="flex items-center justify-center py-4">
                   <Loader2 className="h-5 w-5 animate-spin" />
                 </div>
-              ) : budgets.length === 0 ? (
+              ) : availableSourceBudgets.length === 0 ? (
                 <p className="text-sm text-muted-foreground py-2">
                   No hay otros presupuestos disponibles para clonar
                 </p>
@@ -214,7 +212,7 @@ export function CloneBudgetDialog({
                     <SelectValue placeholder="Selecciona un presupuesto..." />
                   </SelectTrigger>
                   <SelectContent>
-                    {budgets.map((budget) => (
+                    {availableSourceBudgets.map((budget) => (
                       <SelectItem key={budget.id} value={budget.id}>
                         {generatePresupuestoId(budget)}
                       </SelectItem>

@@ -429,14 +429,15 @@ async function fetchAndExtractFromUrl(url: string): Promise<{ text: string; page
 async function processFromStorage(
   supabaseUrl: string,
   supabaseKey: string,
-  storagePath: string
+  storagePath: string,
+  storageBucket = 'pgou-documents'
 ): Promise<{ text: string; pageCount: number }> {
-  console.log('Processing document from storage:', storagePath);
+  console.log('Processing document from storage:', storageBucket, storagePath);
   
   const supabase = createClient(supabaseUrl, supabaseKey);
   // Download the file
   const { data, error } = await supabase.storage
-    .from('pgou-documents')
+    .from(storageBucket)
     .download(storagePath);
 
   if (error) {
@@ -464,6 +465,7 @@ Deno.serve(async (req) => {
         uploadId,
         sourceType,
         storagePath,
+         storageBucket,
         externalUrl,
         municipality,
         landClass,
@@ -522,7 +524,12 @@ Deno.serve(async (req) => {
           extractedText = result.text;
           pageCount = result.pageCount;
         } else if (sourceType === 'storage' && storagePath) {
-          const result = await processFromStorage(supabaseUrl, supabaseServiceKey, storagePath);
+          const result = await processFromStorage(
+            supabaseUrl,
+            supabaseServiceKey,
+            storagePath,
+            typeof storageBucket === 'string' && storageBucket.trim() ? storageBucket.trim() : 'pgou-documents'
+          );
           extractedText = result.text;
           pageCount = result.pageCount;
         } else {

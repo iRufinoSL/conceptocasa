@@ -2527,6 +2527,74 @@ export type Database = {
           },
         ]
       }
+      preliminary_urban_reports: {
+        Row: {
+          analysis_result: Json | null
+          budget_id: string
+          content_text: string | null
+          created_at: string
+          description: string | null
+          file_name: string | null
+          file_path: string | null
+          file_size: number | null
+          file_type: string | null
+          id: string
+          is_analyzed: boolean | null
+          report_date: string | null
+          report_type: string
+          source: string | null
+          title: string
+          updated_at: string
+          uploaded_by: string | null
+        }
+        Insert: {
+          analysis_result?: Json | null
+          budget_id: string
+          content_text?: string | null
+          created_at?: string
+          description?: string | null
+          file_name?: string | null
+          file_path?: string | null
+          file_size?: number | null
+          file_type?: string | null
+          id?: string
+          is_analyzed?: boolean | null
+          report_date?: string | null
+          report_type?: string
+          source?: string | null
+          title: string
+          updated_at?: string
+          uploaded_by?: string | null
+        }
+        Update: {
+          analysis_result?: Json | null
+          budget_id?: string
+          content_text?: string | null
+          created_at?: string
+          description?: string | null
+          file_name?: string | null
+          file_path?: string | null
+          file_size?: number | null
+          file_type?: string | null
+          id?: string
+          is_analyzed?: boolean | null
+          report_date?: string | null
+          report_type?: string
+          source?: string | null
+          title?: string
+          updated_at?: string
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "preliminary_urban_reports_budget_id_fkey"
+            columns: ["budget_id"]
+            isOneToOne: false
+            referencedRelation: "presupuestos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       presupuestos: {
         Row: {
           archived: boolean

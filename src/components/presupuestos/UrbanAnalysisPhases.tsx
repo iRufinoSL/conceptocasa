@@ -106,6 +106,47 @@ function getPhaseStatus(analysisStatus: string | null, phaseId: number): 'pendin
   return 'pending';
 }
 
+function getEffectiveCompletedPhases(
+  analysisStatus: string | null,
+  phaseResults: Record<number, PhaseResult>
+): number {
+  const statusMap: Record<string, number> = {
+    pending: 0,
+    phase1_complete: 1,
+    phase2_complete: 2,
+    phase3_complete: 3,
+    complete: 4
+  };
+
+  const baseCompleted = statusMap[analysisStatus ?? 'pending'] ?? 0;
+
+  // Advance sequentially using either persisted status OR local successful results.
+  let completed = 0;
+  for (let i = 1; i <= PHASES.length; i++) {
+    const persistedComplete = i <= baseCompleted;
+    const localComplete = phaseResults[i]?.success === true;
+    if (persistedComplete || localComplete) {
+      completed = i;
+      continue;
+    }
+    break;
+  }
+
+  return completed;
+}
+
+function getPhaseStatusEffective(
+  analysisStatus: string | null,
+  phaseId: number,
+  phaseResults: Record<number, PhaseResult>
+): 'pending' | 'complete' | 'current' {
+  const completedPhases = getEffectiveCompletedPhases(analysisStatus, phaseResults);
+
+  if (phaseId <= completedPhases) return 'complete';
+  if (phaseId === completedPhases + 1) return 'current';
+  return 'pending';
+}
+
 export function UrbanAnalysisPhases({ profile, onComplete }: UrbanAnalysisPhasesProps) {
   const { toast } = useToast();
   const [runningPhase, setRunningPhase] = useState<number | null>(null);
@@ -175,6 +216,13 @@ export function UrbanAnalysisPhases({ profile, onComplete }: UrbanAnalysisPhases
       return errorResult;
     } finally {
       setRunningPhase(null);
+      // Refresh profile so the persisted analysis_status is reflected in the UI.
+      // (fetchProfile is async in practice; we don't rely on its return type here)
+      try {
+        onComplete();
+      } catch {
+        // ignore
+      }
     }
   };
 
@@ -209,12 +257,16 @@ export function UrbanAnalysisPhases({ profile, onComplete }: UrbanAnalysisPhases
     }
 
     setIsRunningAll(false);
-    onComplete();
+    // Ensure we refresh even if we stopped due to an error.
+    try {
+      onComplete();
+    } catch {
+      // ignore
+    }
   };
 
-  const completedPhases = PHASES.filter(p => 
-    getPhaseStatus(profile.analysis_status, p.id) === 'complete'
-  ).length;
+  const effectiveCompletedPhases = getEffectiveCompletedPhases(profile.analysis_status, phaseResults);
+  const completedPhases = effectiveCompletedPhases;
   
   const progressPercent = (completedPhases / PHASES.length) * 100;
 
@@ -261,7 +313,7 @@ export function UrbanAnalysisPhases({ profile, onComplete }: UrbanAnalysisPhases
 
       <CardContent className="space-y-3">
         {PHASES.map((phase, index) => {
-          const status = getPhaseStatus(profile.analysis_status, phase.id);
+          const status = getPhaseStatusEffective(profile.analysis_status, phase.id, phaseResults);
           const result = phaseResults[phase.id];
           const isRunning = runningPhase === phase.id;
           const Icon = phase.icon;

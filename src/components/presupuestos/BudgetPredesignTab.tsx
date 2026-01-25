@@ -8,12 +8,12 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Pencil, Trash2, Upload, X, Maximize2, FileImage, FileText, LayoutGrid, Layers, ChevronDown, ChevronRight } from 'lucide-react';
+import { Plus, Pencil, Trash2, Upload, X, Maximize2, FileImage, FileText, LayoutGrid, Layers, ChevronDown, ChevronRight, Sparkles } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import { UrbanProfileCard } from './UrbanProfileCard';
 import { PreliminaryUrbanReportsManager } from './PreliminaryUrbanReportsManager';
-
+import { Generate3DVisualization } from './Generate3DVisualization';
 
 interface BudgetPredesign {
   id: string;
@@ -57,6 +57,12 @@ export function BudgetPredesignTab({ budgetId, isAdmin }: BudgetPredesignTabProp
     return (localStorage.getItem('predesign-view-mode') as ViewMode) || 'alphabetical';
   });
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
+  const [generate3DOpen, setGenerate3DOpen] = useState(false);
+  const [urbanProfileData, setUrbanProfileData] = useState<{
+    area?: number;
+    address?: string;
+    municipality?: string;
+  } | null>(null);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -143,6 +149,30 @@ export function BudgetPredesignTab({ budgetId, isAdmin }: BudgetPredesignTabProp
 
   useEffect(() => {
     fetchPredesigns();
+  }, [budgetId]);
+
+  // Fetch urban profile data for 3D visualization context
+  useEffect(() => {
+    const fetchUrbanProfile = async () => {
+      try {
+        const { data } = await supabase
+          .from('urban_profiles')
+          .select('surface_area, address, municipality')
+          .eq('budget_id', budgetId)
+          .maybeSingle();
+        
+        if (data) {
+          setUrbanProfileData({
+            area: data.surface_area ?? undefined,
+            address: data.address ?? undefined,
+            municipality: data.municipality ?? undefined
+          });
+        }
+      } catch (error) {
+        console.error('Error fetching urban profile:', error);
+      }
+    };
+    fetchUrbanProfile();
   }, [budgetId]);
 
   const handleNew = () => {
@@ -469,10 +499,16 @@ export function BudgetPredesignTab({ budgetId, isAdmin }: BudgetPredesignTabProp
             </Button>
           </div>
           {isAdmin && (
-            <Button onClick={handleNew}>
-              <Plus className="h-4 w-4 mr-2" />
-              Nuevo Elemento
-            </Button>
+            <>
+              <Button variant="outline" onClick={() => setGenerate3DOpen(true)}>
+                <Sparkles className="h-4 w-4 mr-2" />
+                Visualización 3D
+              </Button>
+              <Button onClick={handleNew}>
+                <Plus className="h-4 w-4 mr-2" />
+                Nuevo Elemento
+              </Button>
+            </>
           )}
         </div>
       </div>
@@ -679,6 +715,15 @@ export function BudgetPredesignTab({ budgetId, isAdmin }: BudgetPredesignTabProp
         onConfirm={handleDelete}
         title="Eliminar elemento"
         description={`¿Estás seguro de que deseas eliminar "${itemToDelete?.content}"? Esta acción no se puede deshacer.`}
+      />
+
+      {/* 3D Visualization Generator */}
+      <Generate3DVisualization
+        budgetId={budgetId}
+        open={generate3DOpen}
+        onOpenChange={setGenerate3DOpen}
+        onGenerated={fetchPredesigns}
+        parcelData={urbanProfileData ?? undefined}
       />
     </div>
   );

@@ -12,7 +12,7 @@ serve(async (req) => {
   }
 
   try {
-    const { imageBase64, prompt, budgetId } = await req.json();
+    const { imageBase64, terrainImageBase64, prompt, budgetId } = await req.json();
 
     if (!imageBase64 || !budgetId) {
       return new Response(
@@ -27,7 +27,43 @@ serve(async (req) => {
     }
 
     console.log("Generating 3D visualization for budget:", budgetId);
+    console.log("Has terrain image:", !!terrainImageBase64);
     console.log("Prompt:", prompt);
+
+    // Build the message content based on whether we have a terrain image
+    let messageContent: Array<{type: string; text?: string; image_url?: {url: string}}>;
+    let finalPrompt: string;
+
+    if (terrainImageBase64) {
+      // We have both building and terrain images - instruct AI to composite them
+      finalPrompt = `${prompt}
+
+INSTRUCCIONES IMPORTANTES:
+- La primera imagen es la IMAGEN SATELITAL REAL del terreno/parcela donde se ubicará el edificio.
+- La segunda imagen es el EDIFICIO/VIVIENDA que debe integrarse en ese terreno.
+- Genera una vista aérea 3D realista donde el edificio aparezca ubicado naturalmente sobre el terreno de la imagen satelital.
+- Mantén los detalles del terreno real (vegetación, caminos, parcelas vecinas) visibles alrededor del edificio.
+- El resultado debe parecer una foto aérea real con el edificio ya construido en la parcela.`;
+
+      messageContent = [
+        { type: "text", text: finalPrompt },
+        { type: "image_url", image_url: { url: terrainImageBase64 } },
+        { type: "image_url", image_url: { url: imageBase64 } }
+      ];
+    } else {
+      // Only building image - generate with generic environment
+      finalPrompt = `${prompt}
+
+INSTRUCCIONES:
+- Genera una vista aérea/isométrica 3D del edificio de la imagen.
+- Añade un entorno genérico apropiado (jardín, vegetación, accesos).
+- Estilo de render arquitectónico profesional fotorrealista.`;
+
+      messageContent = [
+        { type: "text", text: finalPrompt },
+        { type: "image_url", image_url: { url: imageBase64 } }
+      ];
+    }
 
     // Call AI gateway to edit/transform the image
     const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
@@ -41,18 +77,7 @@ serve(async (req) => {
         messages: [
           {
             role: "user",
-            content: [
-              {
-                type: "text",
-                text: prompt
-              },
-              {
-                type: "image_url",
-                image_url: {
-                  url: imageBase64
-                }
-              }
-            ]
+            content: messageContent
           }
         ],
         modalities: ["image", "text"]
@@ -116,13 +141,17 @@ serve(async (req) => {
 
     console.log("Image uploaded to storage:", fileName);
 
-    // Create predesign record
+    // Create predesign record with appropriate description
+    const description = terrainImageBase64 
+      ? "Vista aérea 3D sobre terreno real (imagen satelital)" 
+      : "Vista aérea 3D generada con IA";
+
     const { error: insertError } = await supabase
       .from("budget_predesigns")
       .insert({
         budget_id: budgetId,
         content: `Visualización 3D - ${new Date().toLocaleDateString('es-ES')}`,
-        description: "Vista aérea generada con IA",
+        description,
         content_type: "Visualización 3D",
         file_path: fileName,
         file_name: `3d-visualization-${Date.now()}.png`,

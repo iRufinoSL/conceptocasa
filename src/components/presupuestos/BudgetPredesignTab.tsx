@@ -62,6 +62,8 @@ export function BudgetPredesignTab({ budgetId, isAdmin }: BudgetPredesignTabProp
     area?: number;
     address?: string;
     municipality?: string;
+    lat?: number;
+    lng?: number;
   } | null>(null);
 
   // Form state
@@ -157,7 +159,7 @@ export function BudgetPredesignTab({ budgetId, isAdmin }: BudgetPredesignTabProp
       try {
         const { data } = await supabase
           .from('urban_profiles')
-          .select('surface_area, address, municipality')
+          .select('surface_area, address, municipality, google_maps_lat, google_maps_lng')
           .eq('budget_id', budgetId)
           .maybeSingle();
         
@@ -165,7 +167,9 @@ export function BudgetPredesignTab({ budgetId, isAdmin }: BudgetPredesignTabProp
           setUrbanProfileData({
             area: data.surface_area ?? undefined,
             address: data.address ?? undefined,
-            municipality: data.municipality ?? undefined
+            municipality: data.municipality ?? undefined,
+            lat: data.google_maps_lat ? Number(data.google_maps_lat) : undefined,
+            lng: data.google_maps_lng ? Number(data.google_maps_lng) : undefined
           });
         }
       } catch (error) {

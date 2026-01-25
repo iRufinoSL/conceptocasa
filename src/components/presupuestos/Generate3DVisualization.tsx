@@ -83,6 +83,7 @@ export function Generate3DVisualization({
       return;
     }
 
+    // Longer delay to ensure dialog is fully rendered
     const timer = setTimeout(() => {
       if (mapRef.current) {
         mapRef.current.remove();
@@ -91,58 +92,76 @@ export function Generate3DVisualization({
 
       if (!mapContainerRef.current) return;
 
-      const map = L.map(mapContainerRef.current, {
-        center: [parcelData.lat!, parcelData.lng!],
-        zoom: 18,
-        zoomControl: true,
-        attributionControl: false,
-      });
+      try {
+        const map = L.map(mapContainerRef.current, {
+          center: [parcelData.lat!, parcelData.lng!],
+          zoom: 18,
+          zoomControl: true,
+          attributionControl: false,
+        });
 
-      // Add PNOA orthophoto layer for preview
-      L.tileLayer.wms('https://www.ign.es/wms-inspire/pnoa-ma', {
-        layers: 'OI.OrthoimageCoverage',
-        format: 'image/png',
-        transparent: true,
-        version: '1.3.0',
-        opacity: 1,
-      }).addTo(map);
-
-      // Add parcel center marker (red, fixed)
-      L.marker([parcelData.lat!, parcelData.lng!], {
-        icon: L.divIcon({
-          className: 'parcel-center-marker',
-          html: '<div class="w-3 h-3 bg-red-500 rounded-full border-2 border-white shadow-lg"></div>',
-          iconSize: [12, 12],
-          iconAnchor: [6, 6],
-        })
-      }).addTo(map);
-
-      // Click handler to place the building
-      map.on('click', (e: L.LeafletMouseEvent) => {
-        const clickLat = e.latlng.lat;
-        const clickLng = e.latlng.lng;
+        // Add PNOA orthophoto layer for preview
+        const wmsLayer = L.tileLayer.wms('https://www.ign.es/wms-inspire/pnoa-ma', {
+          layers: 'OI.OrthoimageCoverage',
+          format: 'image/png',
+          transparent: true,
+          version: '1.3.0',
+          opacity: 1,
+        });
         
-        setPlacementOffset({ lat: clickLat, lng: clickLng });
+        wmsLayer.on('tileerror', (e) => {
+          console.warn('WMS tile error:', e);
+        });
         
-        // Update or create placement marker (green)
-        if (markerRef.current) {
-          markerRef.current.setLatLng([clickLat, clickLng]);
-        } else {
-          const marker = L.marker([clickLat, clickLng], {
-            icon: L.divIcon({
-              className: 'building-placement-marker',
-              html: '<div class="w-5 h-5 bg-green-500 rounded border-2 border-white shadow-lg flex items-center justify-center text-white text-xs font-bold">🏠</div>',
-              iconSize: [20, 20],
-              iconAnchor: [10, 10],
-            })
-          }).addTo(map);
-          markerRef.current = marker;
-        }
-      });
+        wmsLayer.addTo(map);
 
-      mapRef.current = map;
-      setMapReady(true);
-    }, 100);
+        // Add parcel center marker (red, fixed)
+        L.marker([parcelData.lat!, parcelData.lng!], {
+          icon: L.divIcon({
+            className: 'parcel-center-marker',
+            html: '<div style="width:12px;height:12px;background:#ef4444;border-radius:50%;border:2px solid white;box-shadow:0 2px 4px rgba(0,0,0,0.3);"></div>',
+            iconSize: [12, 12],
+            iconAnchor: [6, 6],
+          })
+        }).addTo(map);
+
+        // Click handler to place the building
+        map.on('click', (e: L.LeafletMouseEvent) => {
+          const clickLat = e.latlng.lat;
+          const clickLng = e.latlng.lng;
+          
+          setPlacementOffset({ lat: clickLat, lng: clickLng });
+          
+          // Update or create placement marker (green)
+          if (markerRef.current) {
+            markerRef.current.setLatLng([clickLat, clickLng]);
+          } else {
+            const marker = L.marker([clickLat, clickLng], {
+              icon: L.divIcon({
+                className: 'building-placement-marker',
+                html: '<div style="width:20px;height:20px;background:#22c55e;border-radius:4px;border:2px solid white;box-shadow:0 2px 4px rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center;font-size:10px;">🏠</div>',
+                iconSize: [20, 20],
+                iconAnchor: [10, 10],
+              })
+            }).addTo(map);
+            markerRef.current = marker;
+          }
+        });
+
+        mapRef.current = map;
+        setMapReady(true);
+        
+        // Force resize after a short delay to ensure proper rendering
+        setTimeout(() => {
+          if (mapRef.current) {
+            mapRef.current.invalidateSize();
+          }
+        }, 200);
+        
+      } catch (err) {
+        console.error('Error initializing map:', err);
+      }
+    }, 300); // Increased delay for dialog animation
 
     return () => {
       clearTimeout(timer);

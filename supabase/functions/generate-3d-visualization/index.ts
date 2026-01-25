@@ -6,13 +6,90 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Fetch satellite image from PNOA WMS service (server-side, no CORS issues)
+async function fetchPNOASatelliteImage(lat: number, lng: number): Promise<string | null> {
+  try {
+    console.log(`Fetching PNOA satellite image for coordinates: ${lat}, ${lng}`);
+    
+    // Calculate bounding box for the area (approximately 200m x 200m at the parcel location)
+    const metersPerDegLat = 111320;
+    const metersPerDegLng = 111320 * Math.cos(lat * Math.PI / 180);
+    const halfSizeMeters = 120; // 120m in each direction = 240m x 240m area
+    
+    const minLat = lat - (halfSizeMeters / metersPerDegLat);
+    const maxLat = lat + (halfSizeMeters / metersPerDegLat);
+    const minLng = lng - (halfSizeMeters / metersPerDegLng);
+    const maxLng = lng + (halfSizeMeters / metersPerDegLng);
+
+    // Use PNOA WMS GetMap - BBOX format for CRS:EPSG:4326 is minLat,minLng,maxLat,maxLng
+    const width = 1024;
+    const height = 1024;
+    // For WMS 1.3.0 with EPSG:4326, BBOX is lat,lng order (minY,minX,maxY,maxX)
+    const bbox = `${minLat},${minLng},${maxLat},${maxLng}`;
+    
+    // PNOA orthophoto WMS service with correct parameters
+    const wmsUrl = `https://www.ign.es/wms-inspire/pnoa-ma?` +
+      `SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap` +
+      `&LAYERS=OI.OrthoimageCoverage` +
+      `&STYLES=` +
+      `&CRS=EPSG:4326` +
+      `&BBOX=${bbox}` +
+      `&WIDTH=${width}&HEIGHT=${height}` +
+      `&FORMAT=image/jpeg`;
+
+    console.log("PNOA WMS URL:", wmsUrl);
+
+    const response = await fetch(wmsUrl);
+    
+    if (!response.ok) {
+      console.error(`PNOA WMS request failed: ${response.status} ${response.statusText}`);
+      return null;
+    }
+
+    const contentType = response.headers.get("content-type");
+    console.log("PNOA response content-type:", contentType);
+    
+    // Check if we got an image
+    if (!contentType?.includes("image")) {
+      const text = await response.text();
+      console.error("PNOA returned non-image response:", text.substring(0, 500));
+      return null;
+    }
+
+    const arrayBuffer = await response.arrayBuffer();
+    const bytes = new Uint8Array(arrayBuffer);
+    
+    // Convert to base64
+    let binary = '';
+    for (let i = 0; i < bytes.byteLength; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    const base64 = btoa(binary);
+    
+    console.log(`PNOA image fetched successfully, size: ${bytes.byteLength} bytes`);
+    
+    return `data:image/jpeg;base64,${base64}`;
+  } catch (error) {
+    console.error("Error fetching PNOA satellite image:", error);
+    return null;
+  }
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const { imageBase64, terrainImageBase64, prompt, budgetId, parcelAreaM2, buildingFootprintM2 } = await req.json();
+    const { 
+      imageBase64, 
+      prompt, 
+      budgetId, 
+      parcelAreaM2, 
+      buildingFootprintM2,
+      parcelLat,
+      parcelLng
+    } = await req.json();
 
     if (!imageBase64 || !budgetId) {
       return new Response(
@@ -27,10 +104,17 @@ serve(async (req) => {
     }
 
     console.log("Generating 3D visualization for budget:", budgetId);
-    console.log("Has terrain image:", !!terrainImageBase64);
+    console.log("Parcel coordinates:", parcelLat, parcelLng);
     console.log("Parcel area:", parcelAreaM2, "m²");
     console.log("Building footprint:", buildingFootprintM2, "m²");
     console.log("Prompt:", prompt);
+
+    // Fetch PNOA satellite image server-side (no CORS issues)
+    let terrainImageBase64: string | null = null;
+    if (parcelLat && parcelLng) {
+      terrainImageBase64 = await fetchPNOASatelliteImage(parcelLat, parcelLng);
+      console.log("Terrain image fetched:", !!terrainImageBase64);
+    }
 
     // Calculate scale ratio if both areas are provided
     let scaleInstruction = "";
@@ -55,18 +139,22 @@ ${scaleInstruction}
 
 INSTRUCCIONES CRÍTICAS - LEE CON ATENCIÓN:
 
-1. IMAGEN SATELITAL (primera imagen): Es una FOTOGRAFÍA REAL cenital del terreno/parcela tomada del servicio PNOA del IGN de España. Esta imagen muestra la ubicación REAL donde se construirá el edificio.
+1. IMAGEN SATELITAL (primera imagen): Es una FOTOGRAFÍA REAL cenital del terreno/parcela tomada del servicio PNOA del IGN de España. Esta imagen muestra la ubicación REAL donde se construirá el edificio. Puedes ver edificaciones existentes, caminos, vegetación y la parcela objetivo.
 
 2. IMAGEN DEL EDIFICIO (segunda imagen): Es el plano de planta, render o perspectiva de la vivienda que el cliente quiere construir. DEBES RESPETAR ESTA IMAGEN EXACTAMENTE - no la reinterpretes ni cambies su diseño.
 
 3. TU TAREA: Crear una vista aérea 3D fotorrealista donde:
-   - El terreno de fondo sea la imagen satelital real (primera imagen)
+   - El terreno de fondo sea la imagen satelital real (primera imagen) - CONSERVA los edificios vecinos, caminos y vegetación existentes
    - El edificio aparezca ubicado SOBRE ese terreno respetando la ESCALA proporcional indicada
    - El edificio debe mantener su diseño original tal como aparece en la segunda imagen
-   - Añade sombras y vegetación para integrar el edificio naturalmente en el terreno
-   - El resultado debe parecer una foto aérea de un dron mostrando la casa ya construida
+   - Añade sombras realistas y ajusta la iluminación para que coincida con la foto satelital
+   - El resultado debe parecer una foto aérea de un dron mostrando la casa ya construida en ese entorno REAL
 
-4. NO HAGAS: No modifiques el diseño del edificio, no inventes elementos que no estén en la imagen original, no cambies la forma ni estructura de la vivienda.`;
+4. NO HAGAS: 
+   - No modifiques el diseño del edificio
+   - No elimines los edificios vecinos que aparecen en la foto satelital
+   - No inventes un terreno diferente - usa la foto satelital real como fondo
+   - No cambies la forma ni estructura de la vivienda`;
 
       messageContent = [
         { type: "text", text: finalPrompt },
@@ -199,7 +287,11 @@ INSTRUCCIONES:
     console.log("Predesign record created successfully");
 
     return new Response(
-      JSON.stringify({ success: true, filePath: fileName }),
+      JSON.stringify({ 
+        success: true, 
+        filePath: fileName,
+        usedTerrainImage: !!terrainImageBase64 
+      }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
 

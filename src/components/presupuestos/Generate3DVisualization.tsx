@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
@@ -6,7 +6,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { Loader2, Upload, Image as ImageIcon, Sparkles, X, MapPin, RefreshCw, Ruler } from 'lucide-react';
+import { Loader2, Upload, Image as ImageIcon, Sparkles, X, MapPin, Ruler, CheckCircle } from 'lucide-react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
@@ -39,13 +39,10 @@ export function Generate3DVisualization({
   const [buildingFootprint, setBuildingFootprint] = useState<number | undefined>(undefined);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
-  // Map capture state
+  // Map preview state (just for visual reference - satellite fetch happens server-side)
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const [mapReady, setMapReady] = useState(false);
-  const [isCapturing, setIsCapturing] = useState(false);
-  const [capturedMapImage, setCapturedMapImage] = useState<string | null>(null);
-  const [mapZoom, setMapZoom] = useState(18);
 
   const hasCoordinates = parcelData?.lat && parcelData?.lng;
 
@@ -60,69 +57,7 @@ export function Generate3DVisualization({
     };
   };
 
-  // Capture satellite image directly using WMS GetMap request (no CORS issues with static image)
-  const captureStaticSatelliteImage = useCallback(async () => {
-    if (!hasCoordinates || !parcelData?.lat || !parcelData?.lng) return null;
-
-    setIsCapturing(true);
-    try {
-      const lat = parcelData.lat;
-      const lng = parcelData.lng;
-      
-      // Calculate bounding box for the area (approximately 200m x 200m at the parcel location)
-      const metersPerDegLat = 111320;
-      const metersPerDegLng = 111320 * Math.cos(lat * Math.PI / 180);
-      const halfSizeMeters = 150; // 150m in each direction = 300m x 300m area
-      
-      const minLat = lat - (halfSizeMeters / metersPerDegLat);
-      const maxLat = lat + (halfSizeMeters / metersPerDegLat);
-      const minLng = lng - (halfSizeMeters / metersPerDegLng);
-      const maxLng = lng + (halfSizeMeters / metersPerDegLng);
-
-      // Use PNOA WMS GetMap to get a static image
-      const width = 800;
-      const height = 800;
-      const bbox = `${minLng},${minLat},${maxLng},${maxLat}`;
-      
-      // PNOA orthophoto WMS service
-      const wmsUrl = `https://www.ign.es/wms-inspire/pnoa-ma?` +
-        `SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap` +
-        `&LAYERS=OI.OrthoimageCoverage` +
-        `&STYLES=` +
-        `&CRS=EPSG:4326` +
-        `&BBOX=${bbox}` +
-        `&WIDTH=${width}&HEIGHT=${height}` +
-        `&FORMAT=image/png`;
-
-      console.log('Fetching satellite image from:', wmsUrl);
-
-      // Fetch the image and convert to base64
-      const response = await fetch(wmsUrl);
-      if (!response.ok) {
-        throw new Error(`WMS request failed: ${response.status}`);
-      }
-
-      const blob = await response.blob();
-      
-      return new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => {
-          const base64 = reader.result as string;
-          resolve(base64);
-        };
-        reader.onerror = reject;
-        reader.readAsDataURL(blob);
-      });
-
-    } catch (error) {
-      console.error('Error fetching satellite image:', error);
-      return null;
-    } finally {
-      setIsCapturing(false);
-    }
-  }, [hasCoordinates, parcelData?.lat, parcelData?.lng]);
-
-  // Initialize map for preview when dialog opens
+  // Initialize map for preview when dialog opens (visual reference only)
   useEffect(() => {
     if (!open || !hasCoordinates || !mapContainerRef.current) {
       return;
@@ -138,7 +73,7 @@ export function Generate3DVisualization({
 
       const map = L.map(mapContainerRef.current, {
         center: [parcelData.lat!, parcelData.lng!],
-        zoom: mapZoom,
+        zoom: 18,
         zoomControl: true,
         attributionControl: false,
       });
@@ -162,19 +97,8 @@ export function Generate3DVisualization({
         })
       }).addTo(map);
 
-      map.on('zoomend', () => {
-        setMapZoom(map.getZoom());
-      });
-
       mapRef.current = map;
       setMapReady(true);
-
-      // Auto-capture satellite image
-      captureStaticSatelliteImage().then(img => {
-        if (img) {
-          setCapturedMapImage(img);
-        }
-      });
     }, 100);
 
     return () => {
@@ -185,24 +109,7 @@ export function Generate3DVisualization({
         setMapReady(false);
       }
     };
-  }, [open, hasCoordinates, parcelData?.lat, parcelData?.lng, mapZoom, captureStaticSatelliteImage]);
-
-  const handleRecapture = async () => {
-    const img = await captureStaticSatelliteImage();
-    if (img) {
-      setCapturedMapImage(img);
-      toast({
-        title: 'Imagen capturada',
-        description: 'Se ha actualizado la imagen satelital del terreno'
-      });
-    } else {
-      toast({
-        variant: 'destructive',
-        title: 'Error',
-        description: 'No se pudo capturar la imagen satelital'
-      });
-    }
-  };
+  }, [open, hasCoordinates, parcelData?.lat, parcelData?.lng]);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -279,14 +186,16 @@ export function Generate3DVisualization({
         contextPrompt += ` ${additionalContext.trim()}`;
       }
 
+      // Send coordinates so server can fetch PNOA image directly (avoiding CORS)
       const { data, error } = await supabase.functions.invoke('generate-3d-visualization', {
         body: {
           imageBase64: base64Image,
-          terrainImageBase64: capturedMapImage || undefined,
           prompt: contextPrompt,
           budgetId,
           parcelAreaM2: parcelData?.area,
-          buildingFootprintM2: buildingFootprint
+          buildingFootprintM2: buildingFootprint,
+          parcelLat: parcelData?.lat,
+          parcelLng: parcelData?.lng
         }
       });
 
@@ -298,7 +207,9 @@ export function Generate3DVisualization({
 
       toast({
         title: 'Visualización generada',
-        description: 'La imagen 3D se ha guardado en el ante-proyecto'
+        description: data?.usedTerrainImage 
+          ? 'La imagen 3D se ha generado sobre el terreno real de la parcela'
+          : 'La imagen 3D se ha guardado en el ante-proyecto'
       });
 
       onGenerated();
@@ -306,7 +217,6 @@ export function Generate3DVisualization({
       
       clearImage();
       setAdditionalContext('');
-      setCapturedMapImage(null);
       setBuildingFootprint(undefined);
 
     } catch (error) {
@@ -335,70 +245,31 @@ export function Generate3DVisualization({
         </DialogHeader>
 
         <div className="space-y-4 py-4">
-          {/* Map and satellite image section */}
+          {/* Map preview section - shows where the image will be fetched from */}
           {hasCoordinates ? (
             <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label className="flex items-center gap-2">
-                  <MapPin className="h-4 w-4" />
-                  Imagen satelital del terreno (PNOA)
-                </Label>
-                {mapReady && (
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={handleRecapture}
-                    disabled={isCapturing}
-                  >
-                    {isCapturing ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <RefreshCw className="h-4 w-4" />
-                    )}
-                    <span className="ml-1">Recapturar</span>
-                  </Button>
-                )}
-              </div>
+              <Label className="flex items-center gap-2">
+                <MapPin className="h-4 w-4" />
+                Vista previa de la ubicación (PNOA)
+              </Label>
               
-              <div className="grid grid-cols-2 gap-4">
-                {/* Live map for preview */}
-                <div className="space-y-1">
-                  <p className="text-xs text-muted-foreground">Vista del mapa (solo referencia)</p>
-                  <div 
-                    ref={mapContainerRef}
-                    className="h-40 rounded-lg border overflow-hidden"
-                    style={{ minHeight: '160px' }}
-                  />
-                </div>
-                
-                {/* Captured static satellite image */}
-                <div className="space-y-1">
-                  <p className="text-xs text-muted-foreground">Imagen satelital capturada</p>
-                  <div className="h-40 rounded-lg border bg-muted flex items-center justify-center overflow-hidden">
-                    {capturedMapImage ? (
-                      <img 
-                        src={capturedMapImage} 
-                        alt="Terreno capturado" 
-                        className="w-full h-full object-cover"
-                      />
-                    ) : isCapturing ? (
-                      <div className="text-center text-muted-foreground">
-                        <Loader2 className="h-6 w-6 mx-auto animate-spin mb-1" />
-                        <p className="text-xs">Descargando imagen satelital...</p>
-                      </div>
-                    ) : (
-                      <p className="text-xs text-muted-foreground text-center px-2">
-                        Esperando imagen del servicio PNOA...
-                      </p>
-                    )}
-                  </div>
-                </div>
-              </div>
+              <div 
+                ref={mapContainerRef}
+                className="h-48 rounded-lg border overflow-hidden"
+                style={{ minHeight: '192px' }}
+              />
               
-              <p className="text-xs text-muted-foreground">
-                Coordenadas: {parcelData?.lat?.toFixed(6)}, {parcelData?.lng?.toFixed(6)} 
-                {parcelData?.municipality && ` — ${parcelData.municipality}`}
-              </p>
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <CheckCircle className="h-3 w-3 text-green-500" />
+                <span>
+                  La imagen satelital se obtendrá automáticamente de estas coordenadas: {parcelData?.lat?.toFixed(6)}, {parcelData?.lng?.toFixed(6)}
+                </span>
+              </div>
+              {parcelData?.municipality && (
+                <p className="text-xs text-muted-foreground">
+                  Municipio: {parcelData.municipality}
+                </p>
+              )}
             </div>
           ) : (
             <div className="p-4 bg-muted/50 rounded-lg text-center">

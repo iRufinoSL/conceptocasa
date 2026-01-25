@@ -546,6 +546,9 @@ export function ResourcesTypePhaseActivityGroupedView({
                                         onSave={(v) => onInlineUpdate(resource.id, 'external_unit_cost', v)}
                                         type="number"
                                         decimals={2}
+                                        numericInputMode="raw"
+                                        clearOnEdit={true}
+                                        allowNull={true}
                                         disabled={!canEdit}
                                       />
                                     </TableCell>
@@ -565,6 +568,8 @@ export function ResourcesTypePhaseActivityGroupedView({
                                         displayValue={formatPercent(resource.safety_margin_percent ?? 0.15)}
                                         onSave={(v) => onInlineUpdate(resource.id, 'safety_margin_percent', v)}
                                         type="percent"
+                                        numericInputMode="raw"
+                                        clearOnEdit={true}
                                         disabled={!canEdit}
                                       />
                                     </TableCell>
@@ -577,6 +582,8 @@ export function ResourcesTypePhaseActivityGroupedView({
                                         displayValue={formatPercent(resource.sales_margin_percent ?? 0.25)}
                                         onSave={(v) => onInlineUpdate(resource.id, 'sales_margin_percent', v)}
                                         type="percent"
+                                        numericInputMode="raw"
+                                        clearOnEdit={true}
                                         disabled={!canEdit}
                                       />
                                     </TableCell>

@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
+import { useState, useRef, useEffect, useMemo, useCallback, useLayoutEffect } from 'react';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { NumericInput, parseEuropeanNumber } from '@/components/ui/numeric-input';
@@ -80,6 +80,11 @@ export function ResourceInlineEdit({
   const inputRef = useRef<HTMLInputElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
+  // For raw numeric inputs: keep caret stable across controlled re-renders.
+  // Some browsers/IME keyboard combos can reset the caret to the start after the
+  // first character when the input is controlled.
+  const rawCaretPosRef = useRef<number | null>(null);
+
   useEffect(() => {
     if (isEditing && inputRef.current) {
       inputRef.current.focus();
@@ -99,6 +104,25 @@ export function ResourceInlineEdit({
       }
     }
   }, [isEditing, clearOnEdit, numericInputMode, type]);
+
+  useLayoutEffect(() => {
+    if (!isEditing) return;
+    if (numericInputMode !== 'raw') return;
+    if (type !== 'number' && type !== 'percent') return;
+
+    const pos = rawCaretPosRef.current;
+    const el = inputRef.current;
+    if (!el || pos === null) return;
+
+    // Clamp to current value length
+    const len = el.value.length;
+    const clamped = Math.max(0, Math.min(pos, len));
+    try {
+      el.setSelectionRange(clamped, clamped);
+    } catch {
+      // Some input types / browsers may throw; ignore.
+    }
+  }, [editValue, isEditing, numericInputMode, type]);
 
   // Only update editValue from props when NOT editing
   // This prevents the value from resetting during save operations
@@ -544,7 +568,11 @@ export function ResourceInlineEdit({
               type="text"
               inputMode="decimal"
               value={editValue === null || editValue === undefined ? '' : String(editValue)}
-              onChange={(e) => setEditValue(e.target.value)}
+              onChange={(e) => {
+                // Capture caret BEFORE state update so we can restore it after render.
+                rawCaretPosRef.current = e.currentTarget.selectionStart;
+                setEditValue(e.target.value);
+              }}
               className={cn(
                 'h-7 w-24 text-xs text-right ring-2 ring-primary ring-offset-1 bg-primary/5 transition-all duration-200',
                 className

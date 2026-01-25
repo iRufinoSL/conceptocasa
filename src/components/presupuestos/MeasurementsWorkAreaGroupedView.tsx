@@ -6,6 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { formatNumber } from '@/lib/format-utils';
 import { MoreHorizontal } from 'lucide-react';
+import { ResourceInlineEdit } from '@/components/presupuestos/ResourceInlineEdit';
 
 const LEVELS = [
   'Cota 0 terreno',
@@ -63,6 +64,8 @@ interface MeasurementsWorkAreaGroupedViewProps {
   onEdit: (measurement: Measurement) => void;
   onDuplicate: (measurement: Measurement) => void;
   onDelete: (measurement: Measurement) => void;
+  /** Optional inline update for manual_units (used to enable safe inline editing) */
+  onUpdateManualUnits?: (measurementId: string, newValue: number | null) => Promise<void>;
   getRelatedUnits: (measurementId: string) => number;
   getCalculatedUnits: (measurement: Measurement) => number;
   getRelatedMeasurements: (measurementId: string) => Measurement[];
@@ -80,6 +83,7 @@ export function MeasurementsWorkAreaGroupedView({
   onEdit,
   onDuplicate,
   onDelete,
+  onUpdateManualUnits,
   getRelatedUnits,
   getCalculatedUnits,
   getRelatedMeasurements,
@@ -322,7 +326,27 @@ export function MeasurementsWorkAreaGroupedView({
                                           {measurement.name}
                                         </TableCell>
                                         <TableCell className="text-right">
-                                          {measurement.manual_units !== null ? formatNumber(measurement.manual_units) : '-'}
+                                          {isAdmin && onUpdateManualUnits ? (
+                                            <ResourceInlineEdit
+                                              value={measurement.manual_units}
+                                              onSave={(val) => onUpdateManualUnits(measurement.id, val)}
+                                              type="number"
+                                              decimals={2}
+                                              allowNull={true}
+                                              numericInputMode="raw"
+                                              clearOnEdit={true}
+                                              displayValue={
+                                                measurement.manual_units !== null
+                                                  ? formatNumber(measurement.manual_units)
+                                                  : '-'
+                                              }
+                                              className="text-right"
+                                            />
+                                          ) : (
+                                            measurement.manual_units !== null
+                                              ? formatNumber(measurement.manual_units)
+                                              : '-'
+                                          )}
                                         </TableCell>
                                         <TableCell>
                                           <Badge variant="outline">

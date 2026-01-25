@@ -509,10 +509,14 @@ export function ResourceInlineEdit({
   if (type === 'number' || type === 'percent') {
     // Raw mode: keep string exactly as typed; parse only on save (Enter/Tab)
     if (numericInputMode === 'raw') {
+      // IMPORTANT:
+      // Do NOT auto-cancel on blur.
+      // On some devices/keyboards the act of switching to "," / decimal keyboard can
+      // momentarily blur the input, which would prematurely exit edit mode and show
+      // the formatted display value (e.g. 5,00 / 5,40) before the user finishes typing.
+      // We only commit (and exit) on Enter/Tab, or cancel on Escape.
       const handleRawNumericBlur = () => {
-        // Cancel editing and restore original value
-        setEditValue(value ?? '');
-        setIsEditing(false);
+        // Intentionally no-op
       };
 
       return (

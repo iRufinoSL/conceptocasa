@@ -19,6 +19,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { MeasurementMultiSelect } from '@/components/presupuestos/MeasurementMultiSelect';
 import { MeasurementsWorkAreaGroupedView } from '@/components/presupuestos/MeasurementsWorkAreaGroupedView';
 import { syncAllAffectedResources, syncResourcesRelatedUnits } from '@/lib/budget-utils';
+import { ResourceInlineEdit } from '@/components/presupuestos/ResourceInlineEdit';
 import { 
   readExcelFile, 
   writeExcelFile, 
@@ -402,6 +403,27 @@ export function BudgetMeasurementsTab({ budgetId, isAdmin }: BudgetMeasurementsT
       toast.error('Error al eliminar la medición');
     }
   };
+
+  // Inline save for manual units (safe raw typing; save only on Enter/Tab)
+  const handleInlineManualUnitsSave = useCallback(
+    async (measurementId: string, newValue: number | null) => {
+      const { error } = await supabase
+        .from('budget_measurements')
+        .update({ manual_units: newValue })
+        .eq('id', measurementId);
+
+      if (error) throw error;
+
+      // Update local state
+      setMeasurements((prev) =>
+        prev.map((m) => (m.id === measurementId ? { ...m, manual_units: newValue } : m))
+      );
+
+      // Keep downstream totals/resources consistent
+      await syncAllAffectedResources(measurementId);
+    },
+    []
+  );
 
   // Duplicate measurement with relations and activities
   const handleDuplicate = async (measurement: Measurement) => {
@@ -884,6 +906,7 @@ export function BudgetMeasurementsTab({ budgetId, isAdmin }: BudgetMeasurementsT
                 setMeasurementToDelete(m);
                 setDeleteDialogOpen(true);
               }}
+              onUpdateManualUnits={isAdmin ? handleInlineManualUnitsSave : undefined}
               getRelatedUnits={getRelatedUnits}
               getCalculatedUnits={getCalculatedUnits}
               getRelatedMeasurements={getRelatedMeasurements}
@@ -931,9 +954,29 @@ export function BudgetMeasurementsTab({ budgetId, isAdmin }: BudgetMeasurementsT
                           </button>
                         </TableCell>
                         <TableCell className="text-right">
-                          <span className="text-sm">
-                            {measurement.manual_units !== null ? formatNumber(measurement.manual_units) : '-'}
-                          </span>
+                          {isAdmin ? (
+                            <ResourceInlineEdit
+                              value={measurement.manual_units}
+                              onSave={(val) => handleInlineManualUnitsSave(measurement.id, val)}
+                              type="number"
+                              decimals={2}
+                              allowNull={true}
+                              numericInputMode="raw"
+                              clearOnEdit={true}
+                              displayValue={
+                                measurement.manual_units !== null
+                                  ? formatNumber(measurement.manual_units)
+                                  : '-'
+                              }
+                              className="text-right"
+                            />
+                          ) : (
+                            <span className="text-sm">
+                              {measurement.manual_units !== null
+                                ? formatNumber(measurement.manual_units)
+                                : '-'}
+                            </span>
+                          )}
                         </TableCell>
                         <TableCell>
                           <span className="text-sm">{measurement.measurement_unit || 'ud'}</span>

@@ -154,22 +154,60 @@ export function BudgetPredesignTab({ budgetId, isAdmin }: BudgetPredesignTabProp
   }, [budgetId]);
 
   // Fetch urban profile data for 3D visualization context
+  // If no coordinates but has cadastral reference, fetch from Catastro
   useEffect(() => {
     const fetchUrbanProfile = async () => {
       try {
         const { data } = await supabase
           .from('urban_profiles')
-          .select('surface_area, address, municipality, google_maps_lat, google_maps_lng')
+          .select('id, surface_area, address, municipality, google_maps_lat, google_maps_lng, cadastral_reference')
           .eq('budget_id', budgetId)
           .maybeSingle();
         
         if (data) {
+          let lat = data.google_maps_lat ? Number(data.google_maps_lat) : undefined;
+          let lng = data.google_maps_lng ? Number(data.google_maps_lng) : undefined;
+          
+          // If no coordinates but has cadastral reference, fetch from Catastro
+          if ((!lat || !lng) && data.cadastral_reference) {
+            console.log('No coordinates found, fetching from Catastro for:', data.cadastral_reference);
+            try {
+              const { data: catastroResult, error: catastroError } = await supabase.functions.invoke('catastro-lookup', {
+                body: { 
+                  cadastralReference: data.cadastral_reference,
+                  budgetId: budgetId,
+                  saveToProfile: false // Don't save, we'll update manually with coordinates only
+                }
+              });
+              
+              if (!catastroError && catastroResult?.success && catastroResult?.data?.coordinates) {
+                const coords = catastroResult.data.coordinates;
+                lat = coords.lat;
+                lng = coords.lng;
+                
+                // Update the urban profile with the new coordinates
+                await supabase
+                  .from('urban_profiles')
+                  .update({
+                    google_maps_lat: coords.lat,
+                    google_maps_lng: coords.lng,
+                    coordinates_source: 'Catastro (automático desde referencia catastral)'
+                  })
+                  .eq('id', data.id);
+                
+                console.log('Coordinates fetched and saved:', coords);
+              }
+            } catch (catastroFetchError) {
+              console.error('Error fetching coordinates from Catastro:', catastroFetchError);
+            }
+          }
+          
           setUrbanProfileData({
             area: data.surface_area ?? undefined,
             address: data.address ?? undefined,
             municipality: data.municipality ?? undefined,
-            lat: data.google_maps_lat ? Number(data.google_maps_lat) : undefined,
-            lng: data.google_maps_lng ? Number(data.google_maps_lng) : undefined
+            lat,
+            lng
           });
         }
       } catch (error) {

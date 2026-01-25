@@ -79,28 +79,44 @@ export function Generate3DVisualization({
 
   // Initialize map for preview and placement when dialog opens
   useEffect(() => {
-    if (!open || !hasCoordinates || !mapContainerRef.current) {
+    if (!open || !hasCoordinates) {
       return;
     }
 
-    // Longer delay to ensure dialog is fully rendered
+    // Use longer delay and check for container existence inside
     const timer = setTimeout(() => {
+      // Clean up previous map instance
       if (mapRef.current) {
         mapRef.current.remove();
         mapRef.current = null;
+        markerRef.current = null;
       }
 
-      if (!mapContainerRef.current) return;
+      const container = mapContainerRef.current;
+      if (!container) {
+        console.error('Map container not found');
+        return;
+      }
+
+      // Ensure container has dimensions
+      container.style.width = '100%';
+      container.style.height = '224px';
 
       try {
-        const map = L.map(mapContainerRef.current, {
+        const map = L.map(container, {
           center: [parcelData.lat!, parcelData.lng!],
           zoom: 18,
           zoomControl: true,
           attributionControl: false,
         });
 
-        // Add PNOA orthophoto layer for preview
+        // Add OpenStreetMap as fallback base layer first
+        const osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          maxZoom: 19,
+        });
+        osmLayer.addTo(map);
+
+        // Add PNOA orthophoto layer on top
         const wmsLayer = L.tileLayer.wms('https://www.ign.es/wms-inspire/pnoa-ma', {
           layers: 'OI.OrthoimageCoverage',
           format: 'image/png',
@@ -110,7 +126,11 @@ export function Generate3DVisualization({
         });
         
         wmsLayer.on('tileerror', (e) => {
-          console.warn('WMS tile error:', e);
+          console.warn('WMS tile error, falling back to OSM:', e);
+        });
+        
+        wmsLayer.on('load', () => {
+          console.log('WMS layer loaded successfully');
         });
         
         wmsLayer.addTo(map);
@@ -118,10 +138,10 @@ export function Generate3DVisualization({
         // Add parcel center marker (red, fixed)
         L.marker([parcelData.lat!, parcelData.lng!], {
           icon: L.divIcon({
-            className: 'parcel-center-marker',
-            html: '<div style="width:12px;height:12px;background:#ef4444;border-radius:50%;border:2px solid white;box-shadow:0 2px 4px rgba(0,0,0,0.3);"></div>',
-            iconSize: [12, 12],
-            iconAnchor: [6, 6],
+            className: '',
+            html: '<div style="width:14px;height:14px;background:#ef4444;border-radius:50%;border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.4);"></div>',
+            iconSize: [14, 14],
+            iconAnchor: [7, 7],
           })
         }).addTo(map);
 
@@ -138,10 +158,10 @@ export function Generate3DVisualization({
           } else {
             const marker = L.marker([clickLat, clickLng], {
               icon: L.divIcon({
-                className: 'building-placement-marker',
-                html: '<div style="width:20px;height:20px;background:#22c55e;border-radius:4px;border:2px solid white;box-shadow:0 2px 4px rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center;font-size:10px;">🏠</div>',
-                iconSize: [20, 20],
-                iconAnchor: [10, 10],
+                className: '',
+                html: '<div style="width:24px;height:24px;background:#22c55e;border-radius:6px;border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center;font-size:12px;">🏠</div>',
+                iconSize: [24, 24],
+                iconAnchor: [12, 12],
               })
             }).addTo(map);
             markerRef.current = marker;
@@ -151,17 +171,23 @@ export function Generate3DVisualization({
         mapRef.current = map;
         setMapReady(true);
         
-        // Force resize after a short delay to ensure proper rendering
+        // Force multiple resize calls to ensure proper rendering
         setTimeout(() => {
           if (mapRef.current) {
             mapRef.current.invalidateSize();
           }
-        }, 200);
+        }, 100);
+        
+        setTimeout(() => {
+          if (mapRef.current) {
+            mapRef.current.invalidateSize();
+          }
+        }, 500);
         
       } catch (err) {
         console.error('Error initializing map:', err);
       }
-    }, 300); // Increased delay for dialog animation
+    }, 400); // Longer delay for dialog animation
 
     return () => {
       clearTimeout(timer);
@@ -351,8 +377,15 @@ export function Generate3DVisualization({
               
               <div 
                 ref={mapContainerRef}
-                className="h-56 rounded-lg border overflow-hidden cursor-crosshair"
-                style={{ minHeight: '224px' }}
+                id="placement-map-container"
+                className="rounded-lg border overflow-hidden cursor-crosshair bg-muted"
+                style={{ 
+                  width: '100%', 
+                  height: '224px', 
+                  minHeight: '224px',
+                  position: 'relative',
+                  zIndex: 0
+                }}
               />
               
               <div className="flex items-center justify-between text-xs text-muted-foreground">

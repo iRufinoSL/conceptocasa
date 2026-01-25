@@ -1,10 +1,11 @@
 import { useState, useMemo } from 'react';
-import { ExternalResource, getResourceComposition, ResourceType } from '@/types/resource';
-import { useTrades, Trade } from '@/hooks/useTrades';
+import { ExternalResource, getResourceComposition, ResourceType, RESOURCE_TYPES } from '@/types/resource';
+import { useTrades } from '@/hooks/useTrades';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ChevronDown, ChevronRight, Pencil, Trash2, Copy, HardHat, Package, Users, Clock, Wrench, Boxes, Cog, Layers, Square, ExternalLink } from 'lucide-react';
 import { formatCurrency } from '@/lib/format-utils';
 import { format } from 'date-fns';
@@ -16,6 +17,7 @@ interface ResourceTradeGroupedListProps {
   onDelete: (id: string) => void;
   onDuplicate: (id: string) => void;
   getEffectiveCost: (resource: ExternalResource) => number;
+  onUpdateResourceType?: (resourceId: string, newType: ResourceType) => void;
 }
 
 const resourceTypeVariants: Record<ResourceType, "producto" | "manoDeObra" | "alquiler" | "servicio" | "material" | "equipo"> = {
@@ -41,7 +43,8 @@ export function ResourceTradeGroupedList({
   onEdit, 
   onDelete, 
   onDuplicate, 
-  getEffectiveCost 
+  getEffectiveCost,
+  onUpdateResourceType
 }: ResourceTradeGroupedListProps) {
   const { trades } = useTrades();
   const [expandedTrades, setExpandedTrades] = useState<Set<string>>(new Set(['sin-oficio']));
@@ -208,10 +211,36 @@ export function ResourceTradeGroupedList({
                             </p>
                           </TableCell>
                           <TableCell>
-                            <Badge variant={resourceTypeVariants[resource.resourceType]} className="gap-1 whitespace-nowrap text-xs">
-                              {resourceTypeIcons[resource.resourceType]}
-                              <span className="hidden xl:inline">{resource.resourceType}</span>
-                            </Badge>
+                            {onUpdateResourceType ? (
+                              <Select
+                                value={resource.resourceType}
+                                onValueChange={(value: ResourceType) => onUpdateResourceType(resource.id, value)}
+                              >
+                                <SelectTrigger className="h-7 w-[130px] text-xs border-transparent hover:border-input bg-transparent">
+                                  <SelectValue>
+                                    <div className="flex items-center gap-1.5">
+                                      {resourceTypeIcons[resource.resourceType]}
+                                      <span className="hidden xl:inline">{resource.resourceType}</span>
+                                    </div>
+                                  </SelectValue>
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {RESOURCE_TYPES.map((type) => (
+                                    <SelectItem key={type} value={type} className="text-xs">
+                                      <div className="flex items-center gap-2">
+                                        {resourceTypeIcons[type]}
+                                        {type}
+                                      </div>
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            ) : (
+                              <Badge variant={resourceTypeVariants[resource.resourceType]} className="gap-1 whitespace-nowrap text-xs">
+                                {resourceTypeIcons[resource.resourceType]}
+                                <span className="hidden xl:inline">{resource.resourceType}</span>
+                              </Badge>
+                            )}
                           </TableCell>
                           <TableCell>
                             <Badge variant={isComposite ? "default" : "secondary"} className="gap-1 whitespace-nowrap text-xs">

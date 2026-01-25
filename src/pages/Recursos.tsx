@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useResources } from '@/hooks/useResources';
-import { ExternalResource } from '@/types/resource';
+import { ExternalResource, ResourceType } from '@/types/resource';
 import { StatsCards } from '@/components/StatsCards';
 import { ResourceFilters } from '@/components/ResourceFilters';
 import { ResourceCard } from '@/components/ResourceCard';
@@ -116,6 +116,14 @@ export default function Recursos() {
     toast({
       title: 'Recurso actualizado',
       description: 'Los cambios han sido guardados correctamente.',
+    });
+  };
+
+  const handleUpdateResourceType = (resourceId: string, newType: ResourceType) => {
+    updateResource(resourceId, { resourceType: newType });
+    toast({
+      title: 'Tipo actualizado',
+      description: `El tipo de recurso ha sido cambiado a "${newType}".`,
     });
   };
 
@@ -271,6 +279,7 @@ export default function Recursos() {
               onDelete={handleDeleteClick}
               onDuplicate={handleDuplicate}
               getEffectiveCost={getEffectiveCost}
+              onUpdateResourceType={handleUpdateResourceType}
             />
           )
         ) : (

@@ -127,10 +127,11 @@ export function ResourceTradeSelect({ value, onChange }: ResourceTradeSelectProp
                 ))}
               </CommandGroup>
               <CommandSeparator />
-              <CommandGroup>
+              <CommandGroup forceMount>
                 <CommandItem
                   onSelect={() => setShowCreate(true)}
-                  className="text-accent"
+                  className="text-primary cursor-pointer"
+                  forceMount
                 >
                   <Plus className="mr-2 h-4 w-4" />
                   Crear nuevo oficio/sector

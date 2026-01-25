@@ -8,13 +8,13 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Pencil, Trash2, Upload, X, Maximize2, FileImage, FileText, LayoutGrid, Layers, ChevronDown, ChevronRight, Sparkles } from 'lucide-react';
+import { Plus, Pencil, Trash2, Upload, X, Maximize2, FileImage, FileText, LayoutGrid, Layers, ChevronDown, ChevronRight, Sparkles, Move } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import { UrbanProfileCard } from './UrbanProfileCard';
 import { PreliminaryUrbanReportsManager } from './PreliminaryUrbanReportsManager';
 import { Generate3DVisualization } from './Generate3DVisualization';
-
+import { VisualizationAdjustmentViewer } from './VisualizationAdjustmentViewer';
 interface BudgetPredesign {
   id: string;
   budget_id: string;
@@ -58,6 +58,8 @@ export function BudgetPredesignTab({ budgetId, isAdmin }: BudgetPredesignTabProp
   });
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
   const [generate3DOpen, setGenerate3DOpen] = useState(false);
+  const [adjustmentViewerOpen, setAdjustmentViewerOpen] = useState(false);
+  const [adjustmentItem, setAdjustmentItem] = useState<BudgetPredesign | null>(null);
   const [urbanProfileData, setUrbanProfileData] = useState<{
     area?: number;
     address?: string;
@@ -477,7 +479,21 @@ export function BudgetPredesignTab({ budgetId, isAdmin }: BudgetPredesignTabProp
       </CardHeader>
       {isAdmin && (
         <CardContent className="pt-0">
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
+            {/* Show adjust button for 3D visualizations */}
+            {item.content_type === 'Visualización 3D' && isImageFile(item.file_type) && urbanProfileData?.lat && urbanProfileData?.lng && (
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => {
+                  setAdjustmentItem(item);
+                  setAdjustmentViewerOpen(true);
+                }}
+              >
+                <Move className="h-3 w-3 mr-1" />
+                Ajustar
+              </Button>
+            )}
             <Button variant="outline" size="sm" onClick={() => handleEdit(item)}>
               <Pencil className="h-3 w-3 mr-1" />
               Editar
@@ -767,6 +783,27 @@ export function BudgetPredesignTab({ budgetId, isAdmin }: BudgetPredesignTabProp
         onGenerated={fetchPredesigns}
         parcelData={urbanProfileData ?? undefined}
       />
+
+      {/* 3D Visualization Adjustment Viewer */}
+      {adjustmentItem && (
+        <VisualizationAdjustmentViewer
+          open={adjustmentViewerOpen}
+          onOpenChange={(open) => {
+            setAdjustmentViewerOpen(open);
+            if (!open) setAdjustmentItem(null);
+          }}
+          generatedImageUrl={adjustmentItem.file_path ? getFileUrl(adjustmentItem.file_path) : ''}
+          parcelData={{
+            lat: urbanProfileData?.lat,
+            lng: urbanProfileData?.lng,
+            area: urbanProfileData?.area
+          }}
+          predesignId={adjustmentItem.id}
+          onSave={() => {
+            fetchPredesigns();
+          }}
+        />
+      )}
     </div>
   );
 }

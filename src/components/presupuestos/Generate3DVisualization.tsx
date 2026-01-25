@@ -3,12 +3,12 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { Loader2, Upload, Image as ImageIcon, Sparkles, X, MapPin, RefreshCw } from 'lucide-react';
+import { Loader2, Upload, Image as ImageIcon, Sparkles, X, MapPin, RefreshCw, Ruler } from 'lucide-react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import html2canvas from 'html2canvas';
 
 interface Generate3DVisualizationProps {
   budgetId: string;
@@ -36,6 +36,7 @@ export function Generate3DVisualization({
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [additionalContext, setAdditionalContext] = useState('');
+  const [buildingFootprint, setBuildingFootprint] = useState<number | undefined>(undefined);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   // Map capture state
@@ -44,16 +45,89 @@ export function Generate3DVisualization({
   const [mapReady, setMapReady] = useState(false);
   const [isCapturing, setIsCapturing] = useState(false);
   const [capturedMapImage, setCapturedMapImage] = useState<string | null>(null);
+  const [mapZoom, setMapZoom] = useState(18);
 
   const hasCoordinates = parcelData?.lat && parcelData?.lng;
 
-  // Initialize map when dialog opens and coordinates are available
+  // Calculate the scale ratio for proportional placement
+  const getScaleInfo = () => {
+    if (!parcelData?.area || !buildingFootprint) return null;
+    const ratio = (buildingFootprint / parcelData.area) * 100;
+    return {
+      parcelArea: parcelData.area,
+      buildingArea: buildingFootprint,
+      ratio: ratio.toFixed(1)
+    };
+  };
+
+  // Capture satellite image directly using WMS GetMap request (no CORS issues with static image)
+  const captureStaticSatelliteImage = useCallback(async () => {
+    if (!hasCoordinates || !parcelData?.lat || !parcelData?.lng) return null;
+
+    setIsCapturing(true);
+    try {
+      const lat = parcelData.lat;
+      const lng = parcelData.lng;
+      
+      // Calculate bounding box for the area (approximately 200m x 200m at the parcel location)
+      const metersPerDegLat = 111320;
+      const metersPerDegLng = 111320 * Math.cos(lat * Math.PI / 180);
+      const halfSizeMeters = 150; // 150m in each direction = 300m x 300m area
+      
+      const minLat = lat - (halfSizeMeters / metersPerDegLat);
+      const maxLat = lat + (halfSizeMeters / metersPerDegLat);
+      const minLng = lng - (halfSizeMeters / metersPerDegLng);
+      const maxLng = lng + (halfSizeMeters / metersPerDegLng);
+
+      // Use PNOA WMS GetMap to get a static image
+      const width = 800;
+      const height = 800;
+      const bbox = `${minLng},${minLat},${maxLng},${maxLat}`;
+      
+      // PNOA orthophoto WMS service
+      const wmsUrl = `https://www.ign.es/wms-inspire/pnoa-ma?` +
+        `SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap` +
+        `&LAYERS=OI.OrthoimageCoverage` +
+        `&STYLES=` +
+        `&CRS=EPSG:4326` +
+        `&BBOX=${bbox}` +
+        `&WIDTH=${width}&HEIGHT=${height}` +
+        `&FORMAT=image/png`;
+
+      console.log('Fetching satellite image from:', wmsUrl);
+
+      // Fetch the image and convert to base64
+      const response = await fetch(wmsUrl);
+      if (!response.ok) {
+        throw new Error(`WMS request failed: ${response.status}`);
+      }
+
+      const blob = await response.blob();
+      
+      return new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const base64 = reader.result as string;
+          resolve(base64);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+
+    } catch (error) {
+      console.error('Error fetching satellite image:', error);
+      return null;
+    } finally {
+      setIsCapturing(false);
+    }
+  }, [hasCoordinates, parcelData?.lat, parcelData?.lng]);
+
+  // Initialize map for preview when dialog opens
   useEffect(() => {
     if (!open || !hasCoordinates || !mapContainerRef.current) {
       return;
     }
 
-    // Small delay to ensure container is rendered
     const timer = setTimeout(() => {
       if (mapRef.current) {
         mapRef.current.remove();
@@ -64,12 +138,12 @@ export function Generate3DVisualization({
 
       const map = L.map(mapContainerRef.current, {
         center: [parcelData.lat!, parcelData.lng!],
-        zoom: 18,
+        zoom: mapZoom,
         zoomControl: true,
         attributionControl: false,
       });
 
-      // Add PNOA orthophoto layer (satellite imagery)
+      // Add PNOA orthophoto layer for preview
       L.tileLayer.wms('https://www.ign.es/wms-inspire/pnoa-ma', {
         layers: 'OI.OrthoimageCoverage',
         format: 'image/png',
@@ -82,19 +156,25 @@ export function Generate3DVisualization({
       L.marker([parcelData.lat!, parcelData.lng!], {
         icon: L.divIcon({
           className: 'custom-marker',
-          html: '<div class="w-4 h-4 bg-primary rounded-full border-2 border-white shadow-lg"></div>',
+          html: '<div class="w-4 h-4 bg-red-500 rounded-full border-2 border-white shadow-lg animate-pulse"></div>',
           iconSize: [16, 16],
           iconAnchor: [8, 8],
         })
       }).addTo(map);
 
+      map.on('zoomend', () => {
+        setMapZoom(map.getZoom());
+      });
+
       mapRef.current = map;
       setMapReady(true);
 
-      // Auto-capture after map loads
-      setTimeout(async () => {
-        await captureMap();
-      }, 1500);
+      // Auto-capture satellite image
+      captureStaticSatelliteImage().then(img => {
+        if (img) {
+          setCapturedMapImage(img);
+        }
+      });
     }, 100);
 
     return () => {
@@ -105,36 +185,24 @@ export function Generate3DVisualization({
         setMapReady(false);
       }
     };
-  }, [open, hasCoordinates, parcelData?.lat, parcelData?.lng]);
+  }, [open, hasCoordinates, parcelData?.lat, parcelData?.lng, mapZoom, captureStaticSatelliteImage]);
 
-  const captureMap = useCallback(async () => {
-    if (!mapContainerRef.current) return;
-
-    setIsCapturing(true);
-    try {
-      // Wait for tiles to load
-      await new Promise(resolve => setTimeout(resolve, 500));
-
-      const canvas = await html2canvas(mapContainerRef.current, {
-        useCORS: true,
-        allowTaint: true,
-        scale: 2,
-        logging: false,
+  const handleRecapture = async () => {
+    const img = await captureStaticSatelliteImage();
+    if (img) {
+      setCapturedMapImage(img);
+      toast({
+        title: 'Imagen capturada',
+        description: 'Se ha actualizado la imagen satelital del terreno'
       });
-
-      const dataUrl = canvas.toDataURL('image/png');
-      setCapturedMapImage(dataUrl);
-    } catch (error) {
-      console.error('Error capturing map:', error);
+    } else {
       toast({
         variant: 'destructive',
         title: 'Error',
-        description: 'No se pudo capturar la imagen del mapa'
+        description: 'No se pudo capturar la imagen satelital'
       });
-    } finally {
-      setIsCapturing(false);
     }
-  }, [toast]);
+  };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -151,7 +219,6 @@ export function Generate3DVisualization({
 
     setSelectedImage(file);
     
-    // Create preview
     const reader = new FileReader();
     reader.onload = (e) => {
       setImagePreview(e.target?.result as string);
@@ -180,7 +247,6 @@ export function Generate3DVisualization({
     setIsGenerating(true);
 
     try {
-      // Convert image to base64
       const reader = new FileReader();
       const base64Promise = new Promise<string>((resolve, reject) => {
         reader.onload = () => resolve(reader.result as string);
@@ -190,12 +256,19 @@ export function Generate3DVisualization({
       
       const base64Image = await base64Promise;
 
-      // Build context prompt
-      let contextPrompt = 'Genera una vista aérea 3D realista de este edificio/vivienda integrado en el terreno real.';
+      // Build context prompt with scale information
+      let contextPrompt = 'Genera una vista aérea 3D donde el edificio esté integrado en el terreno real.';
       
       if (parcelData?.area) {
         contextPrompt += ` La parcela tiene ${parcelData.area} m² de superficie.`;
       }
+      
+      // Add building footprint for scale calculation
+      const scaleInfo = getScaleInfo();
+      if (scaleInfo) {
+        contextPrompt += ` El edificio ocupa aproximadamente ${scaleInfo.buildingArea} m² de huella (${scaleInfo.ratio}% de la parcela).`;
+      }
+      
       if (parcelData?.address) {
         contextPrompt += ` Ubicación: ${parcelData.address}.`;
       }
@@ -206,15 +279,14 @@ export function Generate3DVisualization({
         contextPrompt += ` ${additionalContext.trim()}`;
       }
 
-      contextPrompt += ' Combina el edificio con la imagen satelital del terreno de forma realista, manteniendo la perspectiva aérea/isométrica. El edificio debe aparecer integrado naturalmente en la parcela visible en la imagen satelital.';
-
-      // Call edge function to generate the visualization
       const { data, error } = await supabase.functions.invoke('generate-3d-visualization', {
         body: {
           imageBase64: base64Image,
           terrainImageBase64: capturedMapImage || undefined,
           prompt: contextPrompt,
-          budgetId
+          budgetId,
+          parcelAreaM2: parcelData?.area,
+          buildingFootprintM2: buildingFootprint
         }
       });
 
@@ -232,10 +304,10 @@ export function Generate3DVisualization({
       onGenerated();
       onOpenChange(false);
       
-      // Reset form
       clearImage();
       setAdditionalContext('');
       setCapturedMapImage(null);
+      setBuildingFootprint(undefined);
 
     } catch (error) {
       console.error('Error generating 3D visualization:', error);
@@ -258,24 +330,24 @@ export function Generate3DVisualization({
             Generar Visualización 3D en Terreno Real
           </DialogTitle>
           <DialogDescription>
-            Sube una imagen del edificio y se combinará con la imagen satelital real de la parcela.
+            La vivienda se ubicará proporcionalmente sobre la imagen satelital real de la parcela.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-4">
-          {/* Map capture section */}
+          {/* Map and satellite image section */}
           {hasCoordinates ? (
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label className="flex items-center gap-2">
                   <MapPin className="h-4 w-4" />
-                  Imagen satelital del terreno
+                  Imagen satelital del terreno (PNOA)
                 </Label>
                 {mapReady && (
                   <Button 
                     variant="outline" 
                     size="sm" 
-                    onClick={captureMap}
+                    onClick={handleRecapture}
                     disabled={isCapturing}
                   >
                     {isCapturing ? (
@@ -289,9 +361,9 @@ export function Generate3DVisualization({
               </div>
               
               <div className="grid grid-cols-2 gap-4">
-                {/* Live map for positioning */}
+                {/* Live map for preview */}
                 <div className="space-y-1">
-                  <p className="text-xs text-muted-foreground">Vista del mapa (ajusta el zoom)</p>
+                  <p className="text-xs text-muted-foreground">Vista del mapa (solo referencia)</p>
                   <div 
                     ref={mapContainerRef}
                     className="h-40 rounded-lg border overflow-hidden"
@@ -299,9 +371,9 @@ export function Generate3DVisualization({
                   />
                 </div>
                 
-                {/* Captured image preview */}
+                {/* Captured static satellite image */}
                 <div className="space-y-1">
-                  <p className="text-xs text-muted-foreground">Imagen capturada</p>
+                  <p className="text-xs text-muted-foreground">Imagen satelital capturada</p>
                   <div className="h-40 rounded-lg border bg-muted flex items-center justify-center overflow-hidden">
                     {capturedMapImage ? (
                       <img 
@@ -312,16 +384,21 @@ export function Generate3DVisualization({
                     ) : isCapturing ? (
                       <div className="text-center text-muted-foreground">
                         <Loader2 className="h-6 w-6 mx-auto animate-spin mb-1" />
-                        <p className="text-xs">Capturando...</p>
+                        <p className="text-xs">Descargando imagen satelital...</p>
                       </div>
                     ) : (
-                      <p className="text-xs text-muted-foreground">
-                        Esperando captura...
+                      <p className="text-xs text-muted-foreground text-center px-2">
+                        Esperando imagen del servicio PNOA...
                       </p>
                     )}
                   </div>
                 </div>
               </div>
+              
+              <p className="text-xs text-muted-foreground">
+                Coordenadas: {parcelData?.lat?.toFixed(6)}, {parcelData?.lng?.toFixed(6)} 
+                {parcelData?.municipality && ` — ${parcelData.municipality}`}
+              </p>
             </div>
           ) : (
             <div className="p-4 bg-muted/50 rounded-lg text-center">
@@ -337,7 +414,7 @@ export function Generate3DVisualization({
 
           {/* Image upload */}
           <div className="space-y-2">
-            <Label>Imagen del edificio *</Label>
+            <Label>Imagen del edificio (planta, render, perspectiva) *</Label>
             <input
               ref={fileInputRef}
               type="file"
@@ -351,7 +428,7 @@ export function Generate3DVisualization({
                 <img 
                   src={imagePreview} 
                   alt="Preview" 
-                  className="w-full h-48 object-cover rounded-lg border"
+                  className="w-full h-48 object-contain rounded-lg border bg-muted"
                 />
                 <Button
                   variant="destructive"
@@ -372,20 +449,39 @@ export function Generate3DVisualization({
                   Haz clic para subir una imagen del edificio
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Render, maqueta, perspectiva 3D...
+                  Plano de planta, render 3D, perspectiva de ChiefArchitect...
                 </p>
               </div>
             )}
           </div>
 
+          {/* Building footprint for scale */}
+          <div className="space-y-2">
+            <Label htmlFor="footprint" className="flex items-center gap-2">
+              <Ruler className="h-4 w-4" />
+              Superficie de la vivienda (m²) — para escala proporcional
+            </Label>
+            <Input
+              id="footprint"
+              type="number"
+              min={0}
+              placeholder="Ej: 180"
+              value={buildingFootprint || ''}
+              onChange={(e) => setBuildingFootprint(e.target.value ? Number(e.target.value) : undefined)}
+            />
+            {getScaleInfo() && (
+              <p className="text-xs text-muted-foreground">
+                La vivienda ocupará aproximadamente el <strong>{getScaleInfo()!.ratio}%</strong> de la parcela ({getScaleInfo()!.buildingArea} m² de {getScaleInfo()!.parcelArea} m²)
+              </p>
+            )}
+          </div>
+
           {/* Parcel info display */}
-          {parcelData && (parcelData.area || parcelData.address) && (
+          {parcelData && parcelData.area && (
             <div className="p-3 bg-muted/50 rounded-lg text-sm">
               <p className="font-medium mb-1">Datos de la parcela:</p>
-              {parcelData.area && <p>• Superficie: {parcelData.area.toLocaleString('es-ES')} m²</p>}
+              <p>• Superficie parcela: {parcelData.area.toLocaleString('es-ES')} m²</p>
               {parcelData.address && <p>• Dirección: {parcelData.address}</p>}
-              {parcelData.municipality && <p>• Municipio: {parcelData.municipality}</p>}
-              {hasCoordinates && <p>• Coordenadas: {parcelData.lat?.toFixed(6)}, {parcelData.lng?.toFixed(6)}</p>}
             </div>
           )}
 
@@ -396,7 +492,7 @@ export function Generate3DVisualization({
               id="context"
               value={additionalContext}
               onChange={(e) => setAdditionalContext(e.target.value)}
-              placeholder="Ej: Vivienda unifamiliar de 2 plantas, estilo mediterráneo, con piscina..."
+              placeholder="Ej: Vivienda unifamiliar de 2 plantas, estilo mediterráneo, orientación sur..."
               rows={2}
             />
           </div>

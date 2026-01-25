@@ -12,7 +12,7 @@ serve(async (req) => {
   }
 
   try {
-    const { imageBase64, terrainImageBase64, prompt, budgetId } = await req.json();
+    const { imageBase64, terrainImageBase64, prompt, budgetId, parcelAreaM2, buildingFootprintM2 } = await req.json();
 
     if (!imageBase64 || !budgetId) {
       return new Response(
@@ -28,7 +28,21 @@ serve(async (req) => {
 
     console.log("Generating 3D visualization for budget:", budgetId);
     console.log("Has terrain image:", !!terrainImageBase64);
+    console.log("Parcel area:", parcelAreaM2, "m²");
+    console.log("Building footprint:", buildingFootprintM2, "m²");
     console.log("Prompt:", prompt);
+
+    // Calculate scale ratio if both areas are provided
+    let scaleInstruction = "";
+    if (parcelAreaM2 && buildingFootprintM2) {
+      const ratio = (buildingFootprintM2 / parcelAreaM2) * 100;
+      scaleInstruction = `
+ESCALA PROPORCIONAL CRÍTICA:
+- La parcela mide ${parcelAreaM2} m² en total.
+- La vivienda ocupa ${buildingFootprintM2} m² de huella.
+- Por tanto, la vivienda debe ocupar aproximadamente el ${ratio.toFixed(1)}% del área visible de la parcela.
+- Es CRÍTICO respetar esta proporción para que el resultado sea realista.`;
+    }
 
     // Build the message content based on whether we have a terrain image
     let messageContent: Array<{type: string; text?: string; image_url?: {url: string}}>;
@@ -37,13 +51,22 @@ serve(async (req) => {
     if (terrainImageBase64) {
       // We have both building and terrain images - instruct AI to composite them
       finalPrompt = `${prompt}
+${scaleInstruction}
 
-INSTRUCCIONES IMPORTANTES:
-- La primera imagen es la IMAGEN SATELITAL REAL del terreno/parcela donde se ubicará el edificio.
-- La segunda imagen es el EDIFICIO/VIVIENDA que debe integrarse en ese terreno.
-- Genera una vista aérea 3D realista donde el edificio aparezca ubicado naturalmente sobre el terreno de la imagen satelital.
-- Mantén los detalles del terreno real (vegetación, caminos, parcelas vecinas) visibles alrededor del edificio.
-- El resultado debe parecer una foto aérea real con el edificio ya construido en la parcela.`;
+INSTRUCCIONES CRÍTICAS - LEE CON ATENCIÓN:
+
+1. IMAGEN SATELITAL (primera imagen): Es una FOTOGRAFÍA REAL cenital del terreno/parcela tomada del servicio PNOA del IGN de España. Esta imagen muestra la ubicación REAL donde se construirá el edificio.
+
+2. IMAGEN DEL EDIFICIO (segunda imagen): Es el plano de planta, render o perspectiva de la vivienda que el cliente quiere construir. DEBES RESPETAR ESTA IMAGEN EXACTAMENTE - no la reinterpretes ni cambies su diseño.
+
+3. TU TAREA: Crear una vista aérea 3D fotorrealista donde:
+   - El terreno de fondo sea la imagen satelital real (primera imagen)
+   - El edificio aparezca ubicado SOBRE ese terreno respetando la ESCALA proporcional indicada
+   - El edificio debe mantener su diseño original tal como aparece en la segunda imagen
+   - Añade sombras y vegetación para integrar el edificio naturalmente en el terreno
+   - El resultado debe parecer una foto aérea de un dron mostrando la casa ya construida
+
+4. NO HAGAS: No modifiques el diseño del edificio, no inventes elementos que no estén en la imagen original, no cambies la forma ni estructura de la vivienda.`;
 
       messageContent = [
         { type: "text", text: finalPrompt },
@@ -53,11 +76,14 @@ INSTRUCCIONES IMPORTANTES:
     } else {
       // Only building image - generate with generic environment
       finalPrompt = `${prompt}
+${scaleInstruction}
 
 INSTRUCCIONES:
 - Genera una vista aérea/isométrica 3D del edificio de la imagen.
+- RESPETA el diseño exacto del edificio - no lo reinterpretes.
 - Añade un entorno genérico apropiado (jardín, vegetación, accesos).
-- Estilo de render arquitectónico profesional fotorrealista.`;
+- Estilo de render arquitectónico profesional fotorrealista.
+- NO modifiques el diseño original del edificio.`;
 
       messageContent = [
         { type: "text", text: finalPrompt },
@@ -141,10 +167,14 @@ INSTRUCCIONES:
 
     console.log("Image uploaded to storage:", fileName);
 
-    // Create predesign record with appropriate description
-    const description = terrainImageBase64 
-      ? "Vista aérea 3D sobre terreno real (imagen satelital)" 
+    // Create predesign record with scale info
+    let description = terrainImageBase64 
+      ? "Vista aérea 3D sobre terreno real (PNOA)" 
       : "Vista aérea 3D generada con IA";
+    
+    if (parcelAreaM2 && buildingFootprintM2) {
+      description += ` — Escala: ${buildingFootprintM2}m² sobre parcela de ${parcelAreaM2}m²`;
+    }
 
     const { error: insertError } = await supabase
       .from("budget_predesigns")

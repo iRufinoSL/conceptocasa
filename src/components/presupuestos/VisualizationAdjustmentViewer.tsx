@@ -5,7 +5,7 @@ import { Slider } from '@/components/ui/slider';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { Move, ZoomIn, ZoomOut, RotateCcw, Save, Loader2, Hand } from 'lucide-react';
+import { Move, ZoomIn, ZoomOut, RotateCcw, Save, Loader2, Hand, AlertCircle } from 'lucide-react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
@@ -41,11 +41,39 @@ export function VisualizationAdjustmentViewer({
   const [position, setPosition] = useState({ lat: 0, lng: 0 });
   const [isSaving, setIsSaving] = useState(false);
   const [isMapReady, setIsMapReady] = useState(false);
+  const [imageLoaded, setImageLoaded] = useState(false);
+  const [imageError, setImageError] = useState<string | null>(null);
   
   // Image dimensions in meters (estimated based on view)
   const baseImageSizeMeters = 50; // Base size of the overlay in meters
 
   const hasCoordinates = parcelData?.lat && parcelData?.lng;
+
+  // Pre-load image to verify it's accessible
+  useEffect(() => {
+    if (!open || !generatedImageUrl) return;
+    
+    setImageLoaded(false);
+    setImageError(null);
+    
+    console.log('Loading image for adjustment:', generatedImageUrl);
+    
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    
+    img.onload = () => {
+      console.log('Image loaded successfully:', img.width, 'x', img.height);
+      setImageLoaded(true);
+      setImageError(null);
+    };
+    
+    img.onerror = (e) => {
+      console.error('Error loading image:', e);
+      setImageError('No se pudo cargar la imagen. Verifica que la URL sea accesible.');
+    };
+    
+    img.src = generatedImageUrl;
+  }, [open, generatedImageUrl]);
 
   // Calculate bounds for the image overlay
   const calculateBounds = useCallback((centerLat: number, centerLng: number, sizeMeters: number) => {
@@ -88,9 +116,9 @@ export function VisualizationAdjustmentViewer({
     }
   }, [open, parcelData?.lat, parcelData?.lng]);
 
-  // Initialize map
+  // Initialize map only after image is loaded
   useEffect(() => {
-    if (!open || !hasCoordinates) return;
+    if (!open || !hasCoordinates || !imageLoaded) return;
 
     const timer = setTimeout(() => {
       if (mapRef.current) {
@@ -134,22 +162,36 @@ export function VisualizationAdjustmentViewer({
         L.marker([centerLat, centerLng], {
           icon: L.divIcon({
             className: '',
-            html: '<div style="width:10px;height:10px;background:hsl(var(--destructive));border-radius:50%;border:2px solid white;box-shadow:0 2px 4px rgba(0,0,0,0.4);"></div>',
-            iconSize: [10, 10],
-            iconAnchor: [5, 5],
+            html: '<div style="width:12px;height:12px;background:#ef4444;border-radius:50%;border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.5);"></div>',
+            iconSize: [12, 12],
+            iconAnchor: [6, 6],
           })
-        }).addTo(map);
+        }).addTo(map).bindTooltip('Centro parcela', { permanent: false });
 
         // Create image overlay at initial position
         const initialBounds = calculateBounds(centerLat, centerLng, baseImageSizeMeters);
+        
+        console.log('Creating image overlay with URL:', generatedImageUrl);
+        console.log('Initial bounds:', initialBounds.toBBoxString());
+        
         const imageOverlay = L.imageOverlay(generatedImageUrl, initialBounds, {
-          opacity: 0.9,
+          opacity: 0.85,
           interactive: false,
-          className: 'visualization-overlay'
+          className: 'visualization-overlay',
+          crossOrigin: 'anonymous'
         }).addTo(map);
+
+        // Monitor overlay loading
+        const overlayElement = imageOverlay.getElement();
+        if (overlayElement) {
+          overlayElement.style.border = '3px solid #3b82f6';
+          overlayElement.style.boxShadow = '0 4px 12px rgba(0,0,0,0.3)';
+          console.log('Overlay element created:', overlayElement);
+        }
 
         // Handle click on map to move the image
         map.on('click', (e: L.LeafletMouseEvent) => {
+          console.log('Map clicked at:', e.latlng);
           setPosition({ lat: e.latlng.lat, lng: e.latlng.lng });
         });
 
@@ -159,11 +201,13 @@ export function VisualizationAdjustmentViewer({
 
         setTimeout(() => map.invalidateSize(), 100);
         setTimeout(() => map.invalidateSize(), 300);
+        setTimeout(() => map.invalidateSize(), 600);
 
       } catch (err) {
         console.error('Error initializing adjustment map:', err);
+        setImageError('Error al inicializar el mapa');
       }
-    }, 300);
+    }, 400);
 
     return () => {
       clearTimeout(timer);
@@ -174,7 +218,7 @@ export function VisualizationAdjustmentViewer({
         setIsMapReady(false);
       }
     };
-  }, [open, hasCoordinates, parcelData?.lat, parcelData?.lng, generatedImageUrl, calculateBounds]);
+  }, [open, hasCoordinates, parcelData?.lat, parcelData?.lng, generatedImageUrl, calculateBounds, imageLoaded]);
 
   // Update overlay when adjustments change
   useEffect(() => {
@@ -238,6 +282,32 @@ export function VisualizationAdjustmentViewer({
         </DialogHeader>
 
         <div className="space-y-4 py-4">
+          {/* Image preview */}
+          <div className="space-y-2">
+            <Label>Vista previa de la imagen a posicionar:</Label>
+            <div className="relative h-32 bg-muted rounded-lg overflow-hidden border">
+              {!imageLoaded && !imageError && (
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                  <span className="ml-2 text-sm text-muted-foreground">Cargando imagen...</span>
+                </div>
+              )}
+              {imageError && (
+                <div className="absolute inset-0 flex items-center justify-center text-destructive">
+                  <AlertCircle className="h-6 w-6 mr-2" />
+                  <span className="text-sm">{imageError}</span>
+                </div>
+              )}
+              {imageLoaded && (
+                <img 
+                  src={generatedImageUrl} 
+                  alt="Visualización 3D" 
+                  className="w-full h-full object-contain"
+                />
+              )}
+            </div>
+          </div>
+
           {/* Map viewer */}
           {hasCoordinates ? (
             <div className="space-y-2">
@@ -246,24 +316,37 @@ export function VisualizationAdjustmentViewer({
                 Haz clic en el mapa para mover la imagen
               </Label>
               
-              <div 
-                ref={mapContainerRef}
-                className="rounded-lg border overflow-hidden bg-muted cursor-crosshair"
-                style={{ 
-                  width: '100%', 
-                  height: '400px',
-                  position: 'relative',
-                  zIndex: 0
-                }}
-              />
+              {!imageLoaded ? (
+                <div className="rounded-lg border bg-muted flex items-center justify-center" style={{ height: '400px' }}>
+                  <div className="text-center">
+                    <Loader2 className="h-8 w-8 animate-spin mx-auto text-muted-foreground mb-2" />
+                    <p className="text-sm text-muted-foreground">Esperando a que cargue la imagen...</p>
+                  </div>
+                </div>
+              ) : (
+                <div 
+                  ref={mapContainerRef}
+                  className="rounded-lg border overflow-hidden bg-muted cursor-crosshair"
+                  style={{ 
+                    width: '100%', 
+                    height: '400px',
+                    position: 'relative',
+                    zIndex: 0
+                  }}
+                />
+              )}
               
-              <div className="flex items-center gap-4 text-xs text-muted-foreground">
+              <div className="flex items-center gap-4 text-xs text-muted-foreground flex-wrap">
                 <div className="flex items-center gap-1">
-                  <div className="w-3 h-3 bg-destructive rounded-full border border-white"></div>
+                  <div className="w-3 h-3 bg-destructive rounded-full border border-white shadow"></div>
                   <span>Centro parcela</span>
                 </div>
+                <div className="flex items-center gap-1">
+                  <div className="w-3 h-3 bg-blue-500 border-2 border-blue-500"></div>
+                  <span>Imagen vivienda</span>
+                </div>
                 <span className="text-primary font-medium">
-                  📍 Posición actual: {position.lat.toFixed(5)}, {position.lng.toFixed(5)}
+                  📍 Posición: {position.lat.toFixed(5)}, {position.lng.toFixed(5)}
                 </span>
               </div>
             </div>
@@ -287,6 +370,7 @@ export function VisualizationAdjustmentViewer({
                 size="icon"
                 className="h-8 w-8"
                 onClick={() => setScale(Math.max(20, scale - 10))}
+                disabled={!imageLoaded}
               >
                 <ZoomOut className="h-4 w-4" />
               </Button>
@@ -297,12 +381,14 @@ export function VisualizationAdjustmentViewer({
                 max={200}
                 step={5}
                 className="flex-1"
+                disabled={!imageLoaded}
               />
               <Button
                 variant="outline"
                 size="icon"
                 className="h-8 w-8"
                 onClick={() => setScale(Math.min(200, scale + 10))}
+                disabled={!imageLoaded}
               >
                 <ZoomIn className="h-4 w-4" />
               </Button>
@@ -325,6 +411,7 @@ export function VisualizationAdjustmentViewer({
               max={360}
               step={5}
               className="w-full"
+              disabled={!imageLoaded}
             />
             <p className="text-xs text-muted-foreground">
               Gira la vivienda para alinearla con el terreno
@@ -333,7 +420,7 @@ export function VisualizationAdjustmentViewer({
         </div>
 
         <DialogFooter className="flex-col sm:flex-row gap-2">
-          <Button variant="outline" onClick={handleReset}>
+          <Button variant="outline" onClick={handleReset} disabled={!imageLoaded}>
             <RotateCcw className="h-4 w-4 mr-2" />
             Reiniciar
           </Button>
@@ -341,7 +428,7 @@ export function VisualizationAdjustmentViewer({
             <Button variant="outline" onClick={() => onOpenChange(false)}>
               Cancelar
             </Button>
-            <Button onClick={handleSave} disabled={isSaving}>
+            <Button onClick={handleSave} disabled={isSaving || !imageLoaded}>
               {isSaving ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />

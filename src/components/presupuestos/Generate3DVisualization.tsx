@@ -4,9 +4,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
+import { Slider } from '@/components/ui/slider';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { Loader2, Upload, Image as ImageIcon, Sparkles, X, MapPin, Ruler, CheckCircle } from 'lucide-react';
+import { Loader2, Upload, Image as ImageIcon, Sparkles, X, MapPin, Ruler, CheckCircle, RotateCcw, Move, Percent } from 'lucide-react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
@@ -39,25 +40,44 @@ export function Generate3DVisualization({
   const [buildingFootprint, setBuildingFootprint] = useState<number | undefined>(undefined);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
-  // Map preview state (just for visual reference - satellite fetch happens server-side)
+  // Map preview state
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
+  const markerRef = useRef<L.Marker | null>(null);
   const [mapReady, setMapReady] = useState(false);
+  
+  // Manual placement state
+  const [placementOffset, setPlacementOffset] = useState<{ lat: number; lng: number } | null>(null);
+  const [rotation, setRotation] = useState<number>(0); // degrees
+  const [scaleAdjustment, setScaleAdjustment] = useState<number>(100); // percentage (100 = no change)
 
   const hasCoordinates = parcelData?.lat && parcelData?.lng;
 
   // Calculate the scale ratio for proportional placement
   const getScaleInfo = () => {
     if (!parcelData?.area || !buildingFootprint) return null;
-    const ratio = (buildingFootprint / parcelData.area) * 100;
+    // Apply scale adjustment
+    const adjustedFootprint = buildingFootprint * (scaleAdjustment / 100);
+    const ratio = (adjustedFootprint / parcelData.area) * 100;
     return {
       parcelArea: parcelData.area,
-      buildingArea: buildingFootprint,
-      ratio: ratio.toFixed(1)
+      buildingArea: adjustedFootprint,
+      originalBuildingArea: buildingFootprint,
+      ratio: ratio.toFixed(1),
+      scalePercent: scaleAdjustment
     };
   };
 
-  // Initialize map for preview when dialog opens (visual reference only)
+  // Reset placement when dialog opens
+  useEffect(() => {
+    if (open) {
+      setPlacementOffset(null);
+      setRotation(0);
+      setScaleAdjustment(100);
+    }
+  }, [open]);
+
+  // Initialize map for preview and placement when dialog opens
   useEffect(() => {
     if (!open || !hasCoordinates || !mapContainerRef.current) {
       return;
@@ -87,15 +107,38 @@ export function Generate3DVisualization({
         opacity: 1,
       }).addTo(map);
 
-      // Add parcel marker
+      // Add parcel center marker (red, fixed)
       L.marker([parcelData.lat!, parcelData.lng!], {
         icon: L.divIcon({
-          className: 'custom-marker',
-          html: '<div class="w-4 h-4 bg-red-500 rounded-full border-2 border-white shadow-lg animate-pulse"></div>',
-          iconSize: [16, 16],
-          iconAnchor: [8, 8],
+          className: 'parcel-center-marker',
+          html: '<div class="w-3 h-3 bg-red-500 rounded-full border-2 border-white shadow-lg"></div>',
+          iconSize: [12, 12],
+          iconAnchor: [6, 6],
         })
       }).addTo(map);
+
+      // Click handler to place the building
+      map.on('click', (e: L.LeafletMouseEvent) => {
+        const clickLat = e.latlng.lat;
+        const clickLng = e.latlng.lng;
+        
+        setPlacementOffset({ lat: clickLat, lng: clickLng });
+        
+        // Update or create placement marker (green)
+        if (markerRef.current) {
+          markerRef.current.setLatLng([clickLat, clickLng]);
+        } else {
+          const marker = L.marker([clickLat, clickLng], {
+            icon: L.divIcon({
+              className: 'building-placement-marker',
+              html: '<div class="w-5 h-5 bg-green-500 rounded border-2 border-white shadow-lg flex items-center justify-center text-white text-xs font-bold">🏠</div>',
+              iconSize: [20, 20],
+              iconAnchor: [10, 10],
+            })
+          }).addTo(map);
+          markerRef.current = marker;
+        }
+      });
 
       mapRef.current = map;
       setMapReady(true);
@@ -106,6 +149,7 @@ export function Generate3DVisualization({
       if (mapRef.current) {
         mapRef.current.remove();
         mapRef.current = null;
+        markerRef.current = null;
         setMapReady(false);
       }
     };
@@ -141,6 +185,16 @@ export function Generate3DVisualization({
     }
   };
 
+  const resetPlacement = () => {
+    setPlacementOffset(null);
+    setRotation(0);
+    setScaleAdjustment(100);
+    if (markerRef.current && mapRef.current) {
+      mapRef.current.removeLayer(markerRef.current);
+      markerRef.current = null;
+    }
+  };
+
   const handleGenerate = async () => {
     if (!selectedImage) {
       toast({
@@ -173,7 +227,7 @@ export function Generate3DVisualization({
       // Add building footprint for scale calculation
       const scaleInfo = getScaleInfo();
       if (scaleInfo) {
-        contextPrompt += ` El edificio ocupa aproximadamente ${scaleInfo.buildingArea} m² de huella (${scaleInfo.ratio}% de la parcela).`;
+        contextPrompt += ` El edificio ocupa aproximadamente ${scaleInfo.buildingArea.toFixed(0)} m² de huella (${scaleInfo.ratio}% de la parcela).`;
       }
       
       if (parcelData?.address) {
@@ -186,16 +240,38 @@ export function Generate3DVisualization({
         contextPrompt += ` ${additionalContext.trim()}`;
       }
 
-      // Send coordinates so server can fetch PNOA image directly (avoiding CORS)
+      // Calculate placement offset relative to parcel center
+      let placementOffsetData = null;
+      if (placementOffset && parcelData?.lat && parcelData?.lng) {
+        // Calculate offset in meters from parcel center
+        const metersPerDegLat = 111320;
+        const metersPerDegLng = 111320 * Math.cos(parcelData.lat * Math.PI / 180);
+        
+        const offsetMetersX = (placementOffset.lng - parcelData.lng) * metersPerDegLng;
+        const offsetMetersY = (placementOffset.lat - parcelData.lat) * metersPerDegLat;
+        
+        placementOffsetData = {
+          offsetMetersX,
+          offsetMetersY,
+          targetLat: placementOffset.lat,
+          targetLng: placementOffset.lng
+        };
+      }
+
+      // Send coordinates and placement data
       const { data, error } = await supabase.functions.invoke('generate-3d-visualization', {
         body: {
           imageBase64: base64Image,
           prompt: contextPrompt,
           budgetId,
           parcelAreaM2: parcelData?.area,
-          buildingFootprintM2: buildingFootprint,
+          buildingFootprintM2: buildingFootprint ? buildingFootprint * (scaleAdjustment / 100) : undefined,
           parcelLat: parcelData?.lat,
-          parcelLng: parcelData?.lng
+          parcelLng: parcelData?.lng,
+          // New placement parameters
+          placementOffset: placementOffsetData,
+          rotationDegrees: rotation,
+          scaleAdjustmentPercent: scaleAdjustment
         }
       });
 
@@ -218,6 +294,7 @@ export function Generate3DVisualization({
       clearImage();
       setAdditionalContext('');
       setBuildingFootprint(undefined);
+      resetPlacement();
 
     } catch (error) {
       console.error('Error generating 3D visualization:', error);
@@ -240,34 +317,48 @@ export function Generate3DVisualization({
             Generar Visualización 3D en Terreno Real
           </DialogTitle>
           <DialogDescription>
-            La vivienda se ubicará proporcionalmente sobre la imagen satelital real de la parcela.
+            Haz clic en el mapa para posicionar exactamente dónde colocar la vivienda.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-4">
-          {/* Map preview section - shows where the image will be fetched from */}
+          {/* Map preview section with click-to-place */}
           {hasCoordinates ? (
             <div className="space-y-2">
               <Label className="flex items-center gap-2">
                 <MapPin className="h-4 w-4" />
-                Vista previa de la ubicación (PNOA)
+                Haz clic en el mapa para posicionar la vivienda
               </Label>
               
               <div 
                 ref={mapContainerRef}
-                className="h-48 rounded-lg border overflow-hidden"
-                style={{ minHeight: '192px' }}
+                className="h-56 rounded-lg border overflow-hidden cursor-crosshair"
+                style={{ minHeight: '224px' }}
               />
               
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <CheckCircle className="h-3 w-3 text-green-500" />
-                <span>
-                  La imagen satelital se obtendrá automáticamente de estas coordenadas: {parcelData?.lat?.toFixed(6)}, {parcelData?.lng?.toFixed(6)}
-                </span>
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 bg-red-500 rounded-full border border-white"></div>
+                  <span>Centro parcela</span>
+                  {placementOffset && (
+                    <>
+                      <span className="mx-2">|</span>
+                      <div className="w-4 h-4 bg-green-500 rounded border border-white flex items-center justify-center text-[8px]">🏠</div>
+                      <span className="text-green-600 font-medium">Posición seleccionada</span>
+                    </>
+                  )}
+                </div>
+                {placementOffset && (
+                  <Button variant="ghost" size="sm" onClick={resetPlacement} className="h-6 text-xs">
+                    <RotateCcw className="h-3 w-3 mr-1" />
+                    Reiniciar
+                  </Button>
+                )}
               </div>
-              {parcelData?.municipality && (
-                <p className="text-xs text-muted-foreground">
-                  Municipio: {parcelData.municipality}
+              
+              {!placementOffset && (
+                <p className="text-xs text-amber-600 bg-amber-50 p-2 rounded">
+                  ⚠️ Haz clic en el mapa para indicar el punto exacto donde colocar la vivienda
                 </p>
               )}
             </div>
@@ -285,7 +376,7 @@ export function Generate3DVisualization({
 
           {/* Image upload */}
           <div className="space-y-2">
-            <Label>Imagen del edificio (planta, render, perspectiva) *</Label>
+            <Label>Imagen del edificio (render, perspectiva, planta) *</Label>
             <input
               ref={fileInputRef}
               type="file"
@@ -320,7 +411,7 @@ export function Generate3DVisualization({
                   Haz clic para subir una imagen del edificio
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Plano de planta, render 3D, perspectiva de ChiefArchitect...
+                  Render 3D, perspectiva de ChiefArchitect, plano de planta...
                 </p>
               </div>
             )}
@@ -330,25 +421,73 @@ export function Generate3DVisualization({
           <div className="space-y-2">
             <Label htmlFor="footprint" className="flex items-center gap-2">
               <Ruler className="h-4 w-4" />
-              Superficie de la vivienda (m²) — para escala proporcional
+              Superficie de la vivienda (m²)
             </Label>
             <Input
               id="footprint"
               type="number"
               min={0}
-              placeholder="Ej: 180"
+              placeholder="Ej: 125"
               value={buildingFootprint || ''}
               onChange={(e) => setBuildingFootprint(e.target.value ? Number(e.target.value) : undefined)}
             />
-            {getScaleInfo() && (
-              <p className="text-xs text-muted-foreground">
-                La vivienda ocupará aproximadamente el <strong>{getScaleInfo()!.ratio}%</strong> de la parcela ({getScaleInfo()!.buildingArea} m² de {getScaleInfo()!.parcelArea} m²)
-              </p>
-            )}
           </div>
 
+          {/* Scale adjustment slider */}
+          {buildingFootprint && (
+            <div className="space-y-2">
+              <Label className="flex items-center gap-2">
+                <Percent className="h-4 w-4" />
+                Ajuste de escala: {scaleAdjustment}%
+              </Label>
+              <Slider
+                value={[scaleAdjustment]}
+                onValueChange={(val) => setScaleAdjustment(val[0])}
+                min={50}
+                max={150}
+                step={5}
+                className="w-full"
+              />
+              <p className="text-xs text-muted-foreground">
+                Ajusta si la vivienda aparece demasiado grande o pequeña respecto a la parcela
+              </p>
+            </div>
+          )}
+
+          {/* Rotation control */}
+          <div className="space-y-2">
+            <Label className="flex items-center gap-2">
+              <Move className="h-4 w-4" />
+              Rotación: {rotation}°
+            </Label>
+            <Slider
+              value={[rotation]}
+              onValueChange={(val) => setRotation(val[0])}
+              min={0}
+              max={360}
+              step={15}
+              className="w-full"
+            />
+            <p className="text-xs text-muted-foreground">
+              Gira la vivienda para alinearla con el camino o parcela
+            </p>
+          </div>
+
+          {/* Scale info display */}
+          {getScaleInfo() && (
+            <div className="p-3 bg-primary/5 rounded-lg text-sm border border-primary/20">
+              <p className="font-medium mb-1 flex items-center gap-2">
+                <CheckCircle className="h-4 w-4 text-green-500" />
+                Proporción calculada:
+              </p>
+              <p>• Vivienda: {getScaleInfo()!.buildingArea.toFixed(0)} m² ({getScaleInfo()!.scalePercent}% de {getScaleInfo()!.originalBuildingArea} m² original)</p>
+              <p>• Parcela: {getScaleInfo()!.parcelArea.toLocaleString('es-ES')} m²</p>
+              <p>• Ocupación: <strong>{getScaleInfo()!.ratio}%</strong> de la parcela</p>
+            </div>
+          )}
+
           {/* Parcel info display */}
-          {parcelData && parcelData.area && (
+          {parcelData && parcelData.area && !getScaleInfo() && (
             <div className="p-3 bg-muted/50 rounded-lg text-sm">
               <p className="font-medium mb-1">Datos de la parcela:</p>
               <p>• Superficie parcela: {parcelData.area.toLocaleString('es-ES')} m²</p>

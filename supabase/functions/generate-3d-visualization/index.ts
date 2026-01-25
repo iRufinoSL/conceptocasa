@@ -7,24 +7,33 @@ const corsHeaders = {
 };
 
 // Fetch satellite image from PNOA WMS service (server-side, no CORS issues)
-async function fetchPNOASatelliteImage(lat: number, lng: number): Promise<string | null> {
+// If placementOffset is provided, center the image on that location instead of parcel center
+async function fetchPNOASatelliteImage(
+  parcelLat: number, 
+  parcelLng: number,
+  targetLat?: number,
+  targetLng?: number
+): Promise<string | null> {
   try {
-    console.log(`Fetching PNOA satellite image for coordinates: ${lat}, ${lng}`);
+    // Use target coordinates if provided (user clicked position), otherwise use parcel center
+    const centerLat = targetLat ?? parcelLat;
+    const centerLng = targetLng ?? parcelLng;
     
-    // Calculate bounding box for the area (approximately 200m x 200m at the parcel location)
+    console.log(`Fetching PNOA satellite image centered at: ${centerLat}, ${centerLng}`);
+    
+    // Calculate bounding box for the area (approximately 200m x 200m)
     const metersPerDegLat = 111320;
-    const metersPerDegLng = 111320 * Math.cos(lat * Math.PI / 180);
+    const metersPerDegLng = 111320 * Math.cos(centerLat * Math.PI / 180);
     const halfSizeMeters = 120; // 120m in each direction = 240m x 240m area
     
-    const minLat = lat - (halfSizeMeters / metersPerDegLat);
-    const maxLat = lat + (halfSizeMeters / metersPerDegLat);
-    const minLng = lng - (halfSizeMeters / metersPerDegLng);
-    const maxLng = lng + (halfSizeMeters / metersPerDegLng);
+    const minLat = centerLat - (halfSizeMeters / metersPerDegLat);
+    const maxLat = centerLat + (halfSizeMeters / metersPerDegLat);
+    const minLng = centerLng - (halfSizeMeters / metersPerDegLng);
+    const maxLng = centerLng + (halfSizeMeters / metersPerDegLng);
 
     // Use PNOA WMS GetMap - BBOX format for CRS:EPSG:4326 is minLat,minLng,maxLat,maxLng
     const width = 1024;
     const height = 1024;
-    // For WMS 1.3.0 with EPSG:4326, BBOX is lat,lng order (minY,minX,maxY,maxX)
     const bbox = `${minLat},${minLng},${maxLat},${maxLng}`;
     
     // PNOA orthophoto WMS service with correct parameters
@@ -88,7 +97,11 @@ serve(async (req) => {
       parcelAreaM2, 
       buildingFootprintM2,
       parcelLat,
-      parcelLng
+      parcelLng,
+      // New placement parameters
+      placementOffset,
+      rotationDegrees,
+      scaleAdjustmentPercent
     } = await req.json();
 
     if (!imageBase64 || !budgetId) {
@@ -103,29 +116,63 @@ serve(async (req) => {
       throw new Error("LOVABLE_API_KEY is not configured");
     }
 
-    console.log("Generating 3D visualization for budget:", budgetId);
+    console.log("=== Generating 3D visualization ===");
+    console.log("Budget ID:", budgetId);
     console.log("Parcel coordinates:", parcelLat, parcelLng);
     console.log("Parcel area:", parcelAreaM2, "m²");
     console.log("Building footprint:", buildingFootprintM2, "m²");
+    console.log("Placement offset:", placementOffset);
+    console.log("Rotation:", rotationDegrees, "degrees");
+    console.log("Scale adjustment:", scaleAdjustmentPercent, "%");
     console.log("Prompt:", prompt);
 
-    // Fetch PNOA satellite image server-side (no CORS issues)
+    // Fetch PNOA satellite image server-side, centered on placement target if provided
     let terrainImageBase64: string | null = null;
     if (parcelLat && parcelLng) {
-      terrainImageBase64 = await fetchPNOASatelliteImage(parcelLat, parcelLng);
+      terrainImageBase64 = await fetchPNOASatelliteImage(
+        parcelLat, 
+        parcelLng,
+        placementOffset?.targetLat,
+        placementOffset?.targetLng
+      );
       console.log("Terrain image fetched:", !!terrainImageBase64);
     }
 
-    // Calculate scale ratio if both areas are provided
+    // Build scale instruction
     let scaleInstruction = "";
     if (parcelAreaM2 && buildingFootprintM2) {
       const ratio = (buildingFootprintM2 / parcelAreaM2) * 100;
       scaleInstruction = `
 ESCALA PROPORCIONAL CRÍTICA:
-- La parcela mide ${parcelAreaM2} m² en total.
-- La vivienda ocupa ${buildingFootprintM2} m² de huella.
-- Por tanto, la vivienda debe ocupar aproximadamente el ${ratio.toFixed(1)}% del área visible de la parcela.
-- Es CRÍTICO respetar esta proporción para que el resultado sea realista.`;
+- La parcela visible mide aproximadamente ${parcelAreaM2} m² en total.
+- La vivienda debe ocupar ${buildingFootprintM2.toFixed(0)} m² de huella.
+- Esto significa que la vivienda debe ocupar aproximadamente el ${ratio.toFixed(1)}% del área visible.
+- Es ABSOLUTAMENTE CRÍTICO respetar esta proporción exacta.`;
+    }
+
+    // Build placement instruction
+    let placementInstruction = "";
+    if (placementOffset) {
+      placementInstruction = `
+POSICIÓN EXACTA DE COLOCACIÓN:
+- El usuario ha seleccionado manualmente la posición donde colocar la vivienda.
+- La vivienda debe colocarse EN EL CENTRO de la imagen satelital (porque la imagen está centrada en ese punto).
+- NO coloques la vivienda sobre edificaciones existentes visibles en la imagen.`;
+    } else {
+      placementInstruction = `
+POSICIÓN DE COLOCACIÓN:
+- Coloca la vivienda en un área libre visible en la imagen satelital.
+- EVITA colocar la vivienda sobre edificaciones existentes que se vean en la foto.
+- Busca el espacio vacío más apropiado dentro de la parcela.`;
+    }
+
+    // Build rotation instruction
+    let rotationInstruction = "";
+    if (rotationDegrees && rotationDegrees !== 0) {
+      rotationInstruction = `
+ROTACIÓN:
+- La vivienda debe estar rotada ${rotationDegrees} grados respecto a su orientación original.
+- Mantén esta rotación para alinear con caminos o la geometría de la parcela.`;
     }
 
     // Build the message content based on whether we have a terrain image
@@ -133,28 +180,49 @@ ESCALA PROPORCIONAL CRÍTICA:
     let finalPrompt: string;
 
     if (terrainImageBase64) {
-      // We have both building and terrain images - instruct AI to composite them
+      // We have both building and terrain images
       finalPrompt = `${prompt}
 ${scaleInstruction}
+${placementInstruction}
+${rotationInstruction}
 
-INSTRUCCIONES CRÍTICAS - LEE CON ATENCIÓN:
+═══════════════════════════════════════════════════════════════
+INSTRUCCIONES CRÍTICAS - LEE CON MÁXIMA ATENCIÓN:
+═══════════════════════════════════════════════════════════════
 
-1. IMAGEN SATELITAL (primera imagen): Es una FOTOGRAFÍA REAL cenital del terreno/parcela tomada del servicio PNOA del IGN de España. Esta imagen muestra la ubicación REAL donde se construirá el edificio. Puedes ver edificaciones existentes, caminos, vegetación y la parcela objetivo.
+Tienes DOS imágenes:
 
-2. IMAGEN DEL EDIFICIO (segunda imagen): Es el plano de planta, render o perspectiva de la vivienda que el cliente quiere construir. DEBES RESPETAR ESTA IMAGEN EXACTAMENTE - no la reinterpretes ni cambies su diseño.
+1️⃣ IMAGEN SATELITAL (primera imagen): 
+   - Es una FOTOGRAFÍA REAL cenital del terreno tomada del servicio PNOA del IGN de España.
+   - Muestra la ubicación REAL con edificaciones EXISTENTES, caminos, vegetación, etc.
+   - DEBES CONSERVAR TODO lo que aparece en esta imagen: casas vecinas, caminos, árboles, etc.
+   - Esta imagen ES EL FONDO y NO debe modificarse salvo para añadir la nueva vivienda.
 
-3. TU TAREA: Crear una vista aérea 3D fotorrealista donde:
-   - El terreno de fondo sea la imagen satelital real (primera imagen) - CONSERVA los edificios vecinos, caminos y vegetación existentes
-   - El edificio aparezca ubicado SOBRE ese terreno respetando la ESCALA proporcional indicada
-   - El edificio debe mantener su diseño original tal como aparece en la segunda imagen
-   - Añade sombras realistas y ajusta la iluminación para que coincida con la foto satelital
-   - El resultado debe parecer una foto aérea de un dron mostrando la casa ya construida en ese entorno REAL
+2️⃣ IMAGEN DEL EDIFICIO (segunda imagen):
+   - Es un render/perspectiva/planta de la vivienda que el cliente quiere construir.
+   - ⚠️ DEBES RESPETAR ESTE DISEÑO EXACTAMENTE ⚠️
+   - NO reinterpretes, NO cambies colores, NO cambies forma, NO inventes otra vivienda.
+   - Usa ESTA vivienda exacta y colócala en el terreno.
 
-4. NO HAGAS: 
-   - No modifiques el diseño del edificio
-   - No elimines los edificios vecinos que aparecen en la foto satelital
-   - No inventes un terreno diferente - usa la foto satelital real como fondo
-   - No cambies la forma ni estructura de la vivienda`;
+TU TAREA ESPECÍFICA:
+1. Usa la imagen satelital como FONDO (conservando TODO lo que hay en ella)
+2. Toma la vivienda de la segunda imagen SIN MODIFICARLA
+3. Coloca esa vivienda EXACTA sobre el terreno respetando la ESCALA indicada
+4. Añade sombras realistas coherentes con la iluminación de la foto satelital
+5. El resultado debe parecer una foto aérea de dron mostrando la casa YA CONSTRUIDA
+
+❌ ESTÁ PROHIBIDO:
+- Inventar una casa diferente a la de la imagen subida
+- Modificar el diseño, forma, colores o estilo de la vivienda
+- Eliminar edificios/casas vecinas que aparecen en la foto satelital
+- Colocar la vivienda encima de edificaciones ya existentes
+- Cambiar el tamaño de la vivienda (respetar la escala indicada)
+- Crear un terreno inventado diferente a la foto real
+
+✅ RESULTADO ESPERADO:
+- Foto aérea realista donde se ve la vivienda del render colocada en el terreno real
+- Casas vecinas y entorno VISIBLES tal como están en la foto satelital
+- Proporción correcta entre vivienda y parcela`;
 
       messageContent = [
         { type: "text", text: finalPrompt },
@@ -168,10 +236,13 @@ ${scaleInstruction}
 
 INSTRUCCIONES:
 - Genera una vista aérea/isométrica 3D del edificio de la imagen.
-- RESPETA el diseño exacto del edificio - no lo reinterpretes.
+- ⚠️ RESPETA el diseño EXACTO del edificio - NO lo reinterpretes ⚠️
+- NO cambies colores, formas ni estructura.
 - Añade un entorno genérico apropiado (jardín, vegetación, accesos).
 - Estilo de render arquitectónico profesional fotorrealista.
-- NO modifiques el diseño original del edificio.`;
+
+❌ PROHIBIDO: modificar el diseño original del edificio.
+✅ PERMITIDO: añadir entorno, sombras y vegetación alrededor.`;
 
       messageContent = [
         { type: "text", text: finalPrompt },
@@ -255,13 +326,19 @@ INSTRUCCIONES:
 
     console.log("Image uploaded to storage:", fileName);
 
-    // Create predesign record with scale info
+    // Create predesign record with placement info
     let description = terrainImageBase64 
       ? "Vista aérea 3D sobre terreno real (PNOA)" 
       : "Vista aérea 3D generada con IA";
     
     if (parcelAreaM2 && buildingFootprintM2) {
-      description += ` — Escala: ${buildingFootprintM2}m² sobre parcela de ${parcelAreaM2}m²`;
+      description += ` — Escala: ${buildingFootprintM2.toFixed(0)}m² sobre parcela de ${parcelAreaM2}m²`;
+    }
+    if (rotationDegrees && rotationDegrees !== 0) {
+      description += ` — Rotación: ${rotationDegrees}°`;
+    }
+    if (placementOffset) {
+      description += ` — Posición manual`;
     }
 
     const { error: insertError } = await supabase

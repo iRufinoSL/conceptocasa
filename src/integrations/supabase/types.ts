@@ -2274,6 +2274,7 @@ export type Database = {
           registration_date: string | null
           resource_type: string | null
           supplier_id: string | null
+          trade_id: string | null
           unit_cost: number | null
           unit_measure: string | null
           updated_at: string | null
@@ -2288,6 +2289,7 @@ export type Database = {
           registration_date?: string | null
           resource_type?: string | null
           supplier_id?: string | null
+          trade_id?: string | null
           unit_cost?: number | null
           unit_measure?: string | null
           updated_at?: string | null
@@ -2302,6 +2304,7 @@ export type Database = {
           registration_date?: string | null
           resource_type?: string | null
           supplier_id?: string | null
+          trade_id?: string | null
           unit_cost?: number | null
           unit_measure?: string | null
           updated_at?: string | null
@@ -2313,6 +2316,13 @@ export type Database = {
             columns: ["supplier_id"]
             isOneToOne: false
             referencedRelation: "crm_contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "external_resources_trade_id_fkey"
+            columns: ["trade_id"]
+            isOneToOne: false
+            referencedRelation: "resource_trades"
             referencedColumns: ["id"]
           },
         ]
@@ -3239,6 +3249,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      resource_trades: {
+        Row: {
+          created_at: string | null
+          id: string
+          name: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          name: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          name?: string
+        }
+        Relationships: []
       }
       system_alerts: {
         Row: {

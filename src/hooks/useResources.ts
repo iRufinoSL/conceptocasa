@@ -15,6 +15,7 @@ interface DBResource {
   website: string | null;
   registration_date: string | null;
   supplier_id: string | null;
+  trade_id: string | null;
   created_at: string | null;
   updated_at: string | null;
   supplier?: {
@@ -24,6 +25,10 @@ interface DBResource {
     email: string | null;
     phone: string | null;
     city: string | null;
+  } | null;
+  trade?: {
+    id: string;
+    name: string;
   } | null;
 }
 
@@ -48,6 +53,8 @@ function mapDBToResource(dbResource: DBResource, relations: DBRelation[], files:
     updatedAt: dbResource.updated_at ? new Date(dbResource.updated_at) : new Date(),
     supplierId: dbResource.supplier_id,
     supplier: dbResource.supplier || null,
+    tradeId: dbResource.trade_id,
+    trade: dbResource.trade || null,
     relatedResources: relations
       .filter(r => r.resource_id === dbResource.id)
       .map(r => ({ resourceId: r.related_resource_id, quantity: Number(r.quantity) || 1 })),
@@ -73,7 +80,8 @@ export function useResources() {
           .from('external_resources')
           .select(`
             *,
-            supplier:crm_contacts!external_resources_supplier_id_fkey(id, name, surname, email, phone, city)
+            supplier:crm_contacts!external_resources_supplier_id_fkey(id, name, surname, email, phone, city),
+            trade:resource_trades(id, name)
           `)
           .order('name'),
         supabase
@@ -157,6 +165,7 @@ export function useResources() {
           website: resourceData.website || null,
           registration_date: resourceData.registrationDate.toISOString().split('T')[0],
           supplier_id: resourceData.supplierId || null,
+          trade_id: resourceData.tradeId || null,
         })
         .select()
         .single();
@@ -222,6 +231,7 @@ export function useResources() {
           : updates.registrationDate;
       }
       if (updates.supplierId !== undefined) updateData.supplier_id = updates.supplierId || null;
+      if (updates.tradeId !== undefined) updateData.trade_id = updates.tradeId || null;
 
       const { error } = await supabase
         .from('external_resources')

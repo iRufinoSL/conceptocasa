@@ -12,6 +12,7 @@ import { Plus, Trash2 } from 'lucide-react';
 import { formatCurrency } from '@/lib/format-utils';
 import { ResourceSupplierSelect } from './ResourceSupplierSelect';
 import { ResourceFileManager } from './ResourceFileManager';
+import { ResourceTradeSelect } from './ResourceTradeSelect';
 
 interface ResourceFormProps {
   open: boolean;
@@ -36,6 +37,7 @@ const initialFormState = {
   relatedResources: [] as RelatedResource[],
   registrationDate: new Date().toISOString().split('T')[0],
   supplierId: null as string | null,
+  tradeId: null as string | null,
 };
 
 export function ResourceForm({ 
@@ -70,6 +72,7 @@ export function ResourceForm({
         relatedResources: resource.relatedResources || [],
         registrationDate: regDate,
         supplierId: resource.supplierId || null,
+        tradeId: resource.tradeId || null,
       });
     } else {
       setFormData({
@@ -230,6 +233,18 @@ export function ResourceForm({
                 ))}
               </SelectContent>
             </Select>
+          </div>
+
+          {/* Trade/Sector Section */}
+          <div className="space-y-2">
+            <Label>Oficio/Sector</Label>
+            <ResourceTradeSelect
+              value={formData.tradeId}
+              onChange={(value) => setFormData({ ...formData, tradeId: value })}
+            />
+            <p className="text-xs text-muted-foreground">
+              Clasifica el recurso por oficio o sector (electricidad, fontanería, etc.)
+            </p>
           </div>
 
           {/* Supplier Section */}

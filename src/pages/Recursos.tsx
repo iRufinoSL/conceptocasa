@@ -7,16 +7,17 @@ import { StatsCards } from '@/components/StatsCards';
 import { ResourceFilters } from '@/components/ResourceFilters';
 import { ResourceCard } from '@/components/ResourceCard';
 import { ResourceList } from '@/components/ResourceList';
+import { ResourceTradeGroupedList } from '@/components/ResourceTradeGroupedList';
 import { ResourceForm } from '@/components/ResourceForm';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import { WebSearchDialog } from '@/components/recursos/WebSearchDialog';
 import { Button } from '@/components/ui/button';
-import { Plus, FolderOpen, LayoutGrid, List, ArrowLeft, Package, Globe } from 'lucide-react';
+import { Plus, FolderOpen, LayoutGrid, List, ArrowLeft, Package, Globe, HardHat } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { AppNavDropdown } from '@/components/AppNavDropdown';
 import { BackupButton } from '@/components/BackupButton';
 
-type ViewMode = 'cards' | 'list';
+type ViewMode = 'cards' | 'list' | 'trades';
 
 export default function Recursos() {
   const navigate = useNavigate();
@@ -228,6 +229,15 @@ export default function Recursos() {
               <List className="h-4 w-4" />
               <span className="hidden sm:inline">Lista</span>
             </Button>
+            <Button
+              variant={viewMode === 'trades' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => setViewMode('trades')}
+              className="gap-2"
+            >
+              <HardHat className="h-4 w-4" />
+              <span className="hidden sm:inline">Oficios</span>
+            </Button>
           </div>
         </div>
 
@@ -246,8 +256,16 @@ export default function Recursos() {
                 />
               ))}
             </div>
-          ) : (
+          ) : viewMode === 'list' ? (
             <ResourceList
+              resources={resources}
+              onEdit={handleEdit}
+              onDelete={handleDeleteClick}
+              onDuplicate={handleDuplicate}
+              getEffectiveCost={getEffectiveCost}
+            />
+          ) : (
+            <ResourceTradeGroupedList
               resources={resources}
               onEdit={handleEdit}
               onDelete={handleDeleteClick}

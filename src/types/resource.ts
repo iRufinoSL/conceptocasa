@@ -43,6 +43,11 @@ export interface ExternalResource {
     city?: string | null;
   } | null;
   files?: ResourceFile[];
+  tradeId?: string | null;
+  trade?: {
+    id: string;
+    name: string;
+  } | null;
 }
 
 export const UNIT_MEASURES: UnitMeasure[] = ['m2', 'm3', 'ml', 'mes', 'ud', 'kg', 'hora', 'día'];

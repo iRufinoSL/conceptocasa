@@ -365,18 +365,16 @@ export function ResourcesTypePhaseActivityGroupedView({
                   />
                 </TableHead>
               )}
-              <TableHead className="min-w-[200px]">Recurso</TableHead>
-              <TableHead className="text-right">€Coste ud ext.</TableHead>
-              <TableHead>Ud</TableHead>
-              <TableHead className="text-right">%Seg.</TableHead>
-              <TableHead className="text-right">€Seg.</TableHead>
-              <TableHead className="text-right">€Coste int.</TableHead>
-              <TableHead className="text-right">%Venta</TableHead>
-              <TableHead className="text-right">€Venta</TableHead>
-              <TableHead className="text-right">€Coste venta</TableHead>
-              <TableHead className="text-right">Uds calc.</TableHead>
-              <TableHead className="text-right">€Subtotal</TableHead>
-              {isAdmin && <TableHead className="w-[80px]">Acciones</TableHead>}
+              <TableHead className="min-w-[180px]">Recurso</TableHead>
+              <TableHead className="text-right w-[90px]">€Coste ud</TableHead>
+              <TableHead className="w-[50px]">Ud</TableHead>
+              <TableHead className="text-right w-[55px]">%Seg.</TableHead>
+              <TableHead className="text-right w-[75px]">€Coste int.</TableHead>
+              <TableHead className="text-right w-[55px]">%Venta</TableHead>
+              <TableHead className="text-right w-[90px]">€Coste venta</TableHead>
+              <TableHead className="text-right w-[70px]">Uds calc.</TableHead>
+              <TableHead className="text-right w-[100px]">€Subtotal</TableHead>
+              {isAdmin && <TableHead className="w-[70px]">Acciones</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -404,7 +402,7 @@ export function ResourcesTypePhaseActivityGroupedView({
                   <TableRow className="cursor-pointer hover:bg-muted/50 bg-muted/30">
                     {isAdmin && <TableCell className="py-2" />}
                     <TableCell 
-                      colSpan={isAdmin ? 11 : 12}
+                      colSpan={isAdmin ? 9 : 10}
                       className="py-2"
                       onClick={() => toggleType(type)}
                     >
@@ -455,7 +453,7 @@ export function ResourcesTypePhaseActivityGroupedView({
                         <TableRow className="cursor-pointer hover:bg-accent/50 bg-accent/20">
                           {isAdmin && <TableCell className="py-1.5" />}
                           <TableCell 
-                            colSpan={isAdmin ? 11 : 12}
+                            colSpan={isAdmin ? 9 : 10}
                             className="py-1.5 pl-12"
                             onClick={() => togglePhase(phaseKey)}
                           >
@@ -487,8 +485,8 @@ export function ResourcesTypePhaseActivityGroupedView({
                               {/* Activity Header Row */}
                               <TableRow className="cursor-pointer hover:bg-primary/5 bg-primary/10">
                                 {isAdmin && <TableCell className="py-1" />}
-                                    <TableCell 
-                                      colSpan={isAdmin ? 11 : 12}
+                                <TableCell 
+                                  colSpan={isAdmin ? 9 : 10}
                                   className="py-1 pl-20"
                                   onClick={() => toggleActivity(activityKey)}
                                 >
@@ -571,9 +569,6 @@ export function ResourcesTypePhaseActivityGroupedView({
                                       />
                                     </TableCell>
                                     <TableCell className="text-right font-mono text-muted-foreground">
-                                      {formatCurrency(fields.safetyMarginUd)}
-                                    </TableCell>
-                                    <TableCell className="text-right font-mono text-muted-foreground">
                                       {formatCurrency(fields.internalCostUd)}
                                     </TableCell>
                                     <TableCell className="text-right font-mono">
@@ -584,9 +579,6 @@ export function ResourcesTypePhaseActivityGroupedView({
                                         type="percent"
                                         disabled={!canEdit}
                                       />
-                                    </TableCell>
-                                    <TableCell className="text-right font-mono text-muted-foreground">
-                                      {formatCurrency(fields.salesMarginUd)}
                                     </TableCell>
                                     <TableCell className="text-right font-mono font-semibold">
                                       {formatCurrency(fields.salesCostUd)}
@@ -633,7 +625,7 @@ export function ResourcesTypePhaseActivityGroupedView({
             })}
             {resources.length === 0 && (
               <TableRow>
-                <TableCell colSpan={isAdmin ? 13 : 12} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={isAdmin ? 11 : 10} className="text-center text-muted-foreground py-8">
                   No hay recursos. Añade uno nuevo o importa desde CSV/Excel.
                 </TableCell>
               </TableRow>

@@ -83,9 +83,22 @@ export function ResourceInlineEdit({
   useEffect(() => {
     if (isEditing && inputRef.current) {
       inputRef.current.focus();
-      inputRef.current.select();
+
+      // IMPORTANT (inline numeric safety):
+      // In raw numeric mode we must not auto-select the content because some browsers/
+      // virtual keyboards can trigger focus/selection behavior that resets the caret.
+      // This makes typing multi-digit numbers painful (e.g. typing "125" ends up
+      // selecting/resetting after "1").
+      //
+      // Also, when clearOnEdit is enabled, selecting is unnecessary and can interfere
+      // with caret placement.
+      const isRawNumeric = (type === 'number' || type === 'percent') && numericInputMode === 'raw';
+      const shouldSelect = !clearOnEdit && !isRawNumeric;
+      if (shouldSelect) {
+        inputRef.current.select();
+      }
     }
-  }, [isEditing]);
+  }, [isEditing, clearOnEdit, numericInputMode, type]);
 
   // Only update editValue from props when NOT editing
   // This prevents the value from resetting during save operations

@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Calendar, List, ChevronLeft, ChevronRight, FileText, BarChart3, ClipboardList, CalendarClock } from 'lucide-react';
+import { Plus, Calendar, List, ChevronLeft, ChevronRight, FileText, BarChart3, ClipboardList, CalendarClock, Hammer } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, addMonths, subMonths, addWeeks, subWeeks, addDays, subDays, eachDayOfInterval, isSameMonth, isSameDay, isToday } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { toast } from 'sonner';
@@ -15,6 +15,7 @@ import { exportTasksPdf } from './TasksPdfExport';
 import { useCompanySettings } from '@/hooks/useCompanySettings';
 import { BudgetGanttView } from './BudgetGanttView';
 import { ResourcesGestionesView } from './ResourcesGestionesView';
+import { WorkReportsList } from './WorkReportsList';
 
 // A Task is a resource with resource_type = 'Tarea' or 'Cita'
 export interface BudgetTask {
@@ -69,7 +70,7 @@ interface BudgetAgendaTabProps {
   onNavigateToActivity?: (activityId: string) => void;
 }
 
-type MainViewMode = 'agenda' | 'gantt' | 'gestiones';
+type MainViewMode = 'agenda' | 'gantt' | 'gestiones' | 'partes';
 type ViewMode = 'month' | 'week' | 'day' | 'list';
 type FilterMode = 'all' | 'pendiente' | 'realizada';
 
@@ -555,6 +556,10 @@ export function BudgetAgendaTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
                 <ClipboardList className="h-4 w-4" />
                 Gestiones
               </TabsTrigger>
+              <TabsTrigger value="partes" className="flex items-center gap-1.5">
+                <Hammer className="h-4 w-4" />
+                Partes
+              </TabsTrigger>
             </TabsList>
           </Tabs>
           
@@ -631,6 +636,15 @@ export function BudgetAgendaTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
                 }
               }}
             />
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Partes de Trabajo View */}
+      {mainViewMode === 'partes' && (
+        <Card>
+          <CardContent className="pt-6">
+            <WorkReportsList budgetId={budgetId} isAdmin={isAdmin} />
           </CardContent>
         </Card>
       )}

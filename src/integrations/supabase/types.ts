@@ -4427,6 +4427,174 @@ export type Database = {
           },
         ]
       }
+      work_report_entries: {
+        Row: {
+          activity_id: string | null
+          created_at: string | null
+          description: string
+          id: string
+          work_report_id: string
+        }
+        Insert: {
+          activity_id?: string | null
+          created_at?: string | null
+          description: string
+          id?: string
+          work_report_id: string
+        }
+        Update: {
+          activity_id?: string | null
+          created_at?: string | null
+          description?: string
+          id?: string
+          work_report_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "work_report_entries_activity_id_fkey"
+            columns: ["activity_id"]
+            isOneToOne: false
+            referencedRelation: "budget_activities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "work_report_entries_work_report_id_fkey"
+            columns: ["work_report_id"]
+            isOneToOne: false
+            referencedRelation: "work_reports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      work_report_entry_images: {
+        Row: {
+          created_at: string | null
+          entry_id: string
+          file_name: string
+          file_path: string
+          file_size: number | null
+          file_type: string | null
+          id: string
+          uploaded_by: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          entry_id: string
+          file_name: string
+          file_path: string
+          file_size?: number | null
+          file_type?: string | null
+          id?: string
+          uploaded_by?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          entry_id?: string
+          file_name?: string
+          file_path?: string
+          file_size?: number | null
+          file_type?: string | null
+          id?: string
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "work_report_entry_images_entry_id_fkey"
+            columns: ["entry_id"]
+            isOneToOne: false
+            referencedRelation: "work_report_entries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "work_report_entry_images_uploaded_by_fkey"
+            columns: ["uploaded_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      work_report_workers: {
+        Row: {
+          created_at: string | null
+          id: string
+          profile_id: string
+          work_report_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          profile_id: string
+          work_report_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          profile_id?: string
+          work_report_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "work_report_workers_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "work_report_workers_work_report_id_fkey"
+            columns: ["work_report_id"]
+            isOneToOne: false
+            referencedRelation: "work_reports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      work_reports: {
+        Row: {
+          budget_id: string
+          created_at: string | null
+          created_by: string | null
+          id: string
+          report_date: string
+          title: string
+          updated_at: string | null
+        }
+        Insert: {
+          budget_id: string
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          report_date?: string
+          title: string
+          updated_at?: string | null
+        }
+        Update: {
+          budget_id?: string
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          report_date?: string
+          title?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "work_reports_budget_id_fkey"
+            columns: ["budget_id"]
+            isOneToOne: false
+            referencedRelation: "presupuestos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "work_reports_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never

@@ -20,6 +20,7 @@ import Configuracion from "./pages/Configuracion";
 import Administracion from "./pages/Administracion";
 import Setup from "./pages/Setup";
 import Auth from "./pages/Auth";
+import Install from "./pages/Install";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -37,6 +38,7 @@ const App = () => (
             <Route path="/" element={<Landing />} />
             <Route path="/auth" element={<Auth />} />
             <Route path="/setup" element={<Setup />} />
+            <Route path="/install" element={<Install />} />
             
             {/* Protected routes - require authentication */}
             <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />

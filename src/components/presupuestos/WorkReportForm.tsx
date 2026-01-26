@@ -15,6 +15,7 @@ import { toast } from 'sonner';
 import { useAuth } from '@/hooks/useAuth';
 import { WorkReportWorkerSelect } from './WorkReportWorkerSelect';
 import { WorkReportEntryForm, type WorkReportEntryData } from './WorkReportEntryForm';
+import { WorkerHoursInput } from './WorkerHoursInput';
 
 interface WorkReportFormProps {
   budgetId: string;
@@ -33,7 +34,12 @@ export interface WorkReport {
   created_by: string | null;
   created_at: string;
   updated_at: string;
-  workers?: { profile_id: string }[];
+  workers?: { 
+    profile_id: string;
+    hours_worked?: number;
+    hourly_rate_override?: number | null;
+    notes?: string | null;
+  }[];
   entries?: {
     id: string;
     description: string;
@@ -62,6 +68,7 @@ export function WorkReportForm({
   const [title, setTitle] = useState('');
   const [reportDate, setReportDate] = useState('');
   const [selectedWorkers, setSelectedWorkers] = useState<string[]>([]);
+  const [workersHours, setWorkersHours] = useState<Map<string, { hours: number; rate: number | null; notes: string }>>(new Map());
   const [entries, setEntries] = useState<WorkReportEntryData[]>([createEmptyEntry()]);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -72,6 +79,17 @@ export function WorkReportForm({
         setTitle(report.title);
         setReportDate(report.report_date);
         setSelectedWorkers(report.workers?.map(w => w.profile_id) || []);
+        
+        // Load hours data
+        const hoursMap = new Map<string, { hours: number; rate: number | null; notes: string }>();
+        for (const w of report.workers || []) {
+          hoursMap.set(w.profile_id, {
+            hours: w.hours_worked || 0,
+            rate: w.hourly_rate_override || null,
+            notes: w.notes || '',
+          });
+        }
+        setWorkersHours(hoursMap);
         
         if (report.entries && report.entries.length > 0) {
           setEntries(report.entries.map(e => ({
@@ -96,6 +114,7 @@ export function WorkReportForm({
     setTitle('');
     setReportDate(new Date().toISOString().split('T')[0]);
     setSelectedWorkers([]);
+    setWorkersHours(new Map());
     setEntries([createEmptyEntry()]);
   };
 
@@ -176,10 +195,16 @@ export function WorkReportForm({
       }
 
       if (selectedWorkers.length > 0) {
-        const workerInserts = selectedWorkers.map(profileId => ({
-          work_report_id: workReportId,
-          profile_id: profileId,
-        }));
+        const workerInserts = selectedWorkers.map(profileId => {
+          const hoursData = workersHours.get(profileId) || { hours: 0, rate: null, notes: '' };
+          return {
+            work_report_id: workReportId,
+            profile_id: profileId,
+            hours_worked: hoursData.hours,
+            hourly_rate_override: hoursData.rate,
+            notes: hoursData.notes || null,
+          };
+        });
 
         const { error: workersError } = await supabase
           .from('work_report_workers')
@@ -330,6 +355,13 @@ export function WorkReportForm({
           <WorkReportWorkerSelect
             selectedWorkers={selectedWorkers}
             onWorkersChange={setSelectedWorkers}
+          />
+
+          {/* Worker hours input */}
+          <WorkerHoursInput
+            selectedWorkers={selectedWorkers}
+            workersWithHours={workersHours}
+            onWorkersHoursChange={setWorkersHours}
           />
 
           {/* Entries section */}

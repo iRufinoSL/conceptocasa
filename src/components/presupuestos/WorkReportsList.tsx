@@ -3,11 +3,13 @@ import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Plus, FileText, Search } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Plus, FileText, Search, BarChart3 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 import { WorkReportForm, type WorkReport } from './WorkReportForm';
 import { WorkReportCard } from './WorkReportCard';
+import { ProductivityReport } from './ProductivityReport';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -25,6 +27,7 @@ interface WorkReportsListProps {
 }
 
 export function WorkReportsList({ budgetId, isAdmin }: WorkReportsListProps) {
+  const [activeTab, setActiveTab] = useState<'partes' | 'productividad'>('partes');
   const [reports, setReports] = useState<WorkReport[]>([]);
   const [activities, setActivities] = useState<{ id: string; name: string; code: string; phase_code?: string | null }[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -82,7 +85,7 @@ export function WorkReportsList({ budgetId, isAdmin }: WorkReportsListProps) {
         // Fetch workers
         const { data: workersData } = await supabase
           .from('work_report_workers')
-          .select('profile_id')
+          .select('profile_id, hours_worked, hourly_rate_override, notes')
           .eq('work_report_id', report.id);
 
         // Fetch entries with images
@@ -203,69 +206,84 @@ export function WorkReportsList({ budgetId, isAdmin }: WorkReportsListProps) {
 
   return (
     <div className="space-y-4">
-      {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-2">
-          <FileText className="h-5 w-5 text-primary" />
-          <h3 className="text-lg font-medium">Partes de Trabajo</h3>
-          <span className="text-muted-foreground">({reports.length})</span>
-        </div>
+      {/* Tabs for Partes vs Productividad */}
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'partes' | 'productividad')}>
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <TabsList>
+            <TabsTrigger value="partes" className="flex items-center gap-1.5">
+              <FileText className="h-4 w-4" />
+              Partes ({reports.length})
+            </TabsTrigger>
+            <TabsTrigger value="productividad" className="flex items-center gap-1.5">
+              <BarChart3 className="h-4 w-4" />
+              Productividad
+            </TabsTrigger>
+          </TabsList>
 
-        <div className="flex items-center gap-2">
-          {reports.length > 0 && (
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Buscar partes..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9 w-[200px]"
-              />
+          {activeTab === 'partes' && (
+            <div className="flex items-center gap-2">
+              {reports.length > 0 && (
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Buscar partes..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-9 w-[200px]"
+                  />
+                </div>
+              )}
+              
+              {isAdmin && (
+                <Button onClick={handleAddReport}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Nuevo Parte
+                </Button>
+              )}
             </div>
           )}
-          
-          {isAdmin && (
-            <Button onClick={handleAddReport}>
-              <Plus className="h-4 w-4 mr-2" />
-              Nuevo Parte
-            </Button>
-          )}
         </div>
-      </div>
 
-      {/* Reports list */}
-      {filteredReports.length === 0 ? (
-        <Card>
-          <CardContent className="py-12 text-center">
-            <FileText className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
-            <p className="text-muted-foreground">
-              {reports.length === 0 
-                ? 'No hay partes de trabajo registrados'
-                : 'No se encontraron partes que coincidan con la búsqueda'
-              }
-            </p>
-            {isAdmin && reports.length === 0 && (
-              <Button onClick={handleAddReport} variant="outline" className="mt-4">
-                <Plus className="h-4 w-4 mr-2" />
-                Crear primer parte
-              </Button>
-            )}
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="space-y-4">
-          {filteredReports.map(report => (
-            <WorkReportCard
-              key={report.id}
-              report={report}
-              activities={activities}
-              onEdit={() => handleEditReport(report)}
-              onDelete={() => setDeleteId(report.id)}
-              isAdmin={isAdmin}
-            />
-          ))}
-        </div>
-      )}
+        <TabsContent value="partes" className="mt-4">
+          {/* Reports list */}
+          {filteredReports.length === 0 ? (
+            <Card>
+              <CardContent className="py-12 text-center">
+                <FileText className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
+                <p className="text-muted-foreground">
+                  {reports.length === 0 
+                    ? 'No hay partes de trabajo registrados'
+                    : 'No se encontraron partes que coincidan con la búsqueda'
+                  }
+                </p>
+                {isAdmin && reports.length === 0 && (
+                  <Button onClick={handleAddReport} variant="outline" className="mt-4">
+                    <Plus className="h-4 w-4 mr-2" />
+                    Crear primer parte
+                  </Button>
+                )}
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-4">
+              {filteredReports.map(report => (
+                <WorkReportCard
+                  key={report.id}
+                  report={report}
+                  activities={activities}
+                  onEdit={() => handleEditReport(report)}
+                  onDelete={() => setDeleteId(report.id)}
+                  isAdmin={isAdmin}
+                />
+              ))}
+            </div>
+          )}
+        </TabsContent>
+
+        <TabsContent value="productividad" className="mt-4">
+          <ProductivityReport budgetId={budgetId} />
+        </TabsContent>
+      </Tabs>
 
       {/* Form dialog */}
       <WorkReportForm

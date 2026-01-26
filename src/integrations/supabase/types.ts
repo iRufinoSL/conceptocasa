@@ -2693,6 +2693,7 @@ export type Database = {
           created_at: string | null
           email: string
           full_name: string | null
+          hourly_rate: number | null
           id: string
           notification_email: string | null
           notification_phone: string | null
@@ -2709,6 +2710,7 @@ export type Database = {
           created_at?: string | null
           email: string
           full_name?: string | null
+          hourly_rate?: number | null
           id: string
           notification_email?: string | null
           notification_phone?: string | null
@@ -2725,6 +2727,7 @@ export type Database = {
           created_at?: string | null
           email?: string
           full_name?: string | null
+          hourly_rate?: number | null
           id?: string
           notification_email?: string | null
           notification_phone?: string | null
@@ -4517,19 +4520,28 @@ export type Database = {
       work_report_workers: {
         Row: {
           created_at: string | null
+          hourly_rate_override: number | null
+          hours_worked: number | null
           id: string
+          notes: string | null
           profile_id: string
           work_report_id: string
         }
         Insert: {
           created_at?: string | null
+          hourly_rate_override?: number | null
+          hours_worked?: number | null
           id?: string
+          notes?: string | null
           profile_id: string
           work_report_id: string
         }
         Update: {
           created_at?: string | null
+          hourly_rate_override?: number | null
+          hours_worked?: number | null
           id?: string
+          notes?: string | null
           profile_id?: string
           work_report_id?: string
         }
@@ -4589,6 +4601,57 @@ export type Database = {
           {
             foreignKeyName: "work_reports_created_by_fkey"
             columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      worker_monthly_summary: {
+        Row: {
+          budget_id: string
+          created_at: string | null
+          id: string
+          profile_id: string
+          total_cost: number | null
+          total_hours: number | null
+          updated_at: string | null
+          work_days: number | null
+          year_month: string
+        }
+        Insert: {
+          budget_id: string
+          created_at?: string | null
+          id?: string
+          profile_id: string
+          total_cost?: number | null
+          total_hours?: number | null
+          updated_at?: string | null
+          work_days?: number | null
+          year_month: string
+        }
+        Update: {
+          budget_id?: string
+          created_at?: string | null
+          id?: string
+          profile_id?: string
+          total_cost?: number | null
+          total_hours?: number | null
+          updated_at?: string | null
+          work_days?: number | null
+          year_month?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "worker_monthly_summary_budget_id_fkey"
+            columns: ["budget_id"]
+            isOneToOne: false
+            referencedRelation: "presupuestos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "worker_monthly_summary_profile_id_fkey"
+            columns: ["profile_id"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]

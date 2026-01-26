@@ -38,6 +38,7 @@ interface AuthContextValue {
   signUp: (email: string, password: string, fullName?: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<{ error: Error | null }>;
   updatePassword: (newPassword: string) => Promise<{ error: Error | null }>;
+  resetPasswordForEmail: (email: string) => Promise<{ error: Error | null }>;
   hasRole: (role: AppRole) => boolean;
   isAdmin: () => boolean;
   isColaborador: () => boolean;
@@ -209,6 +210,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return { error: (error as unknown as Error) ?? null };
   };
 
+  const resetPasswordForEmail = async (email: string) => {
+    const redirectUrl = `${window.location.origin}/auth?reset=true`;
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: redirectUrl,
+    });
+    return { error: (error as unknown as Error) ?? null };
+  };
+
   const value = useMemo<AuthContextValue>(() => {
     const hasRole = (role: AppRole) => roles.includes(role);
     const isAdmin = () => hasRole('administrador');
@@ -237,6 +246,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       signUp,
       signOut,
       updatePassword,
+      resetPasswordForEmail,
       hasRole,
       isAdmin,
       isColaborador,

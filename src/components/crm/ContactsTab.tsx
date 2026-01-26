@@ -6,12 +6,13 @@ import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Mail, Phone, MapPin, Users, MoreVertical, Pencil, Trash2, LayoutGrid, List, FolderOpen, ChevronRight, Send, MessageCircle, Smartphone } from 'lucide-react';
+import { Mail, Phone, MapPin, Users, MoreVertical, Pencil, Trash2, LayoutGrid, List, FolderOpen, ChevronRight, Send, MessageCircle, Smartphone, Download } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { ContactDetailDialog } from './ContactDetailDialog';
 import { SendEmailDialog } from './SendEmailDialog';
 import { WhatsAppComposeDialog } from './WhatsAppComposeDialog';
 import { SMSComposeDialog } from './SMSComposeDialog';
+import { ExportContactsDialog } from './ExportContactsDialog';
 import { searchMatch } from '@/lib/search-utils';
 import type { Contact } from '@/pages/CRM';
 
@@ -44,6 +45,7 @@ export function ContactsTab({ contacts, searchTerm, onEdit, onDelete }: Contacts
   const [activities, setActivities] = useState<ProfessionalActivity[]>([]);
   const [contactActivitiesMap, setContactActivitiesMap] = useState<Record<string, string[]>>({});
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
 
   useEffect(() => {
     localStorage.setItem('crm-contacts-view', viewMode);
@@ -229,36 +231,55 @@ export function ContactsTab({ contacts, searchTerm, onEdit, onDelete }: Contacts
 
   return (
     <div className="space-y-4">
-      {/* View Mode Toggle */}
-      <div className="flex justify-end gap-1">
+      {/* View Mode Toggle and Actions */}
+      <div className="flex items-center justify-between gap-2">
         <Button
-          variant={viewMode === 'cards' ? 'default' : 'outline'}
+          variant="outline"
           size="sm"
-          onClick={() => setViewMode('cards')}
+          onClick={() => setExportDialogOpen(true)}
           className="gap-2"
         >
-          <LayoutGrid className="h-4 w-4" />
-          <span className="hidden sm:inline">Tarjetas</span>
+          <Download className="h-4 w-4" />
+          <span className="hidden sm:inline">Exportar a iPhone</span>
         </Button>
-        <Button
-          variant={viewMode === 'list' ? 'default' : 'outline'}
-          size="sm"
-          onClick={() => setViewMode('list')}
-          className="gap-2"
-        >
-          <List className="h-4 w-4" />
-          <span className="hidden sm:inline">Lista</span>
-        </Button>
-        <Button
-          variant={viewMode === 'grouped' ? 'default' : 'outline'}
-          size="sm"
-          onClick={() => setViewMode('grouped')}
-          className="gap-2"
-        >
-          <FolderOpen className="h-4 w-4" />
-          <span className="hidden sm:inline">Por Actividad</span>
-        </Button>
+        
+        <div className="flex gap-1">
+          <Button
+            variant={viewMode === 'cards' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setViewMode('cards')}
+            className="gap-2"
+          >
+            <LayoutGrid className="h-4 w-4" />
+            <span className="hidden sm:inline">Tarjetas</span>
+          </Button>
+          <Button
+            variant={viewMode === 'list' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setViewMode('list')}
+            className="gap-2"
+          >
+            <List className="h-4 w-4" />
+            <span className="hidden sm:inline">Lista</span>
+          </Button>
+          <Button
+            variant={viewMode === 'grouped' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setViewMode('grouped')}
+            className="gap-2"
+          >
+            <FolderOpen className="h-4 w-4" />
+            <span className="hidden sm:inline">Por Actividad</span>
+          </Button>
+        </div>
       </div>
+
+      {/* Export Contacts Dialog */}
+      <ExportContactsDialog
+        open={exportDialogOpen}
+        onOpenChange={setExportDialogOpen}
+        contacts={contacts}
+      />
 
       {/* Contact Detail Dialog */}
       <ContactDetailDialog

@@ -1,7 +1,7 @@
 import { useState, useMemo, useRef, forwardRef, useImperativeHandle, useEffect } from 'react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
-import { Check, CheckCircle2, MapPin } from 'lucide-react';
+import { Check, CheckCircle2, MapPin, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { searchMatch } from '@/lib/search-utils';
 import { Badge } from '@/components/ui/badge';
@@ -58,13 +58,6 @@ export const WorkAreaInlineSelect = forwardRef<WorkAreaInlineSelectHandle, WorkA
         .map(r => r.work_area_id);
     }, [workAreaRelations, activityId]);
 
-    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set(currentWorkAreaIds));
-
-    // Sync with external state when relations change
-    useEffect(() => {
-      setSelectedIds(new Set(currentWorkAreaIds));
-    }, [currentWorkAreaIds]);
-
     useImperativeHandle(ref, () => ({
       focus: () => triggerRef.current?.focus(),
       click: () => triggerRef.current?.click()
@@ -75,15 +68,19 @@ export const WorkAreaInlineSelect = forwardRef<WorkAreaInlineSelectHandle, WorkA
       setTimeout(() => setShowSuccess(false), 1200);
     };
 
+    // Get selected work areas for display
+    const selectedWorkAreas = useMemo(() => {
+      return workAreas.filter(wa => currentWorkAreaIds.includes(wa.id));
+    }, [currentWorkAreaIds, workAreas]);
+
     // Get display value
     const displayValue = useMemo(() => {
-      if (selectedIds.size === 0) return '-';
-      const selected = workAreas.filter(wa => selectedIds.has(wa.id));
-      if (selected.length === 1) {
-        return selected[0].area_id;
+      if (selectedWorkAreas.length === 0) return '-';
+      if (selectedWorkAreas.length === 1) {
+        return selectedWorkAreas[0].area_id;
       }
-      return `${selected.length} áreas`;
-    }, [selectedIds, workAreas]);
+      return `${selectedWorkAreas.length} áreas`;
+    }, [selectedWorkAreas]);
 
     const filteredWorkAreas = useMemo(() => {
       return workAreas
@@ -96,28 +93,23 @@ export const WorkAreaInlineSelect = forwardRef<WorkAreaInlineSelectHandle, WorkA
         .sort((a, b) => a.area_id.localeCompare(b.area_id));
     }, [workAreas, searchQuery]);
 
+    // Handle toggle with immediate save
     const handleToggle = (workAreaId: string) => {
-      const newSelected = new Set(selectedIds);
-      if (newSelected.has(workAreaId)) {
-        newSelected.delete(workAreaId);
-      } else {
-        newSelected.add(workAreaId);
-      }
-      setSelectedIds(newSelected);
+      const newIds = currentWorkAreaIds.includes(workAreaId)
+        ? currentWorkAreaIds.filter(id => id !== workAreaId)
+        : [...currentWorkAreaIds, workAreaId];
+      
+      onSave(newIds);
+      triggerSuccess();
     };
 
-    const handleSave = () => {
-      const currentSet = new Set(currentWorkAreaIds);
-      const hasChanged = 
-        selectedIds.size !== currentSet.size ||
-        [...selectedIds].some(id => !currentSet.has(id));
-      
-      onSave(Array.from(selectedIds));
-      setOpen(false);
-      setSearchQuery('');
-      if (hasChanged) {
-        triggerSuccess();
-      }
+    // Handle remove via X button (outside popover)
+    const handleRemove = (e: React.MouseEvent, workAreaId: string) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const newIds = currentWorkAreaIds.filter(id => id !== workAreaId);
+      onSave(newIds);
+      triggerSuccess();
     };
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -156,62 +148,84 @@ export const WorkAreaInlineSelect = forwardRef<WorkAreaInlineSelectHandle, WorkA
     };
 
     return (
-      <Popover open={open} onOpenChange={(isOpen) => {
-        if (!isOpen) {
-          handleSave();
-        }
-        setOpen(isOpen);
-      }}>
-        <PopoverTrigger asChild>
-          <button
-            ref={triggerRef}
-            className={cn(
-              "w-full text-left px-2 py-1 -mx-1 rounded-md transition-all duration-200 cursor-pointer truncate flex items-center gap-1.5",
-              "hover:bg-primary/10 hover:border-primary/30 border border-transparent",
-              "focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-1 focus:bg-primary/10",
-              open && "ring-2 ring-primary ring-offset-1 bg-primary/5",
-              selectedIds.size === 0 && "text-muted-foreground"
-            )}
-            title={displayValue}
-            onKeyDown={handleKeyDown}
+      <div className="flex items-center gap-1 flex-wrap">
+        {/* Show selected work areas as badges with X button */}
+        {selectedWorkAreas.map(wa => (
+          <Badge
+            key={wa.id}
+            variant="secondary"
+            className="text-xs flex items-center gap-1 cursor-default"
           >
-            <MapPin className="h-3 w-3 flex-shrink-0" />
-            <span className="truncate">{displayValue}</span>
-            {showSuccess && (
-              <CheckCircle2 className="h-3.5 w-3.5 text-green-500 animate-scale-in flex-shrink-0" />
-            )}
-          </button>
-        </PopoverTrigger>
-        <PopoverContent className="w-[350px] p-0" align="start" onKeyDown={handlePopoverKeyDown}>
-          <Command shouldFilter={false}>
-            <CommandInput
-              placeholder="Buscar área de trabajo..."
-              value={searchQuery}
-              onValueChange={setSearchQuery}
-            />
-            <CommandList className="max-h-[300px]">
-              <CommandEmpty>No se encontraron áreas de trabajo</CommandEmpty>
-              <CommandGroup>
-                {filteredWorkAreas.map(workArea => (
-                  <CommandItem
-                    key={workArea.id}
-                    value={workArea.id}
-                    onSelect={() => handleToggle(workArea.id)}
-                    className="flex items-center gap-2"
-                  >
-                    <Check className={cn("h-4 w-4", selectedIds.has(workArea.id) ? "opacity-100" : "opacity-0")} />
-                    <div className="flex flex-col flex-1 min-w-0">
-                      <span className="truncate font-medium">{workArea.name}</span>
-                      <span className="text-xs text-muted-foreground truncate">{workArea.area_id}</span>
-                    </div>
-                    <Badge variant="outline" className="text-xs shrink-0">{workArea.level}</Badge>
-                  </CommandItem>
-                ))}
-              </CommandGroup>
-            </CommandList>
-          </Command>
-        </PopoverContent>
-      </Popover>
+            <span className="truncate max-w-[80px]" title={`${wa.area_id}: ${wa.name}`}>
+              {wa.area_id}
+            </span>
+            <button
+              type="button"
+              onClick={(e) => handleRemove(e, wa.id)}
+              className="ml-0.5 rounded-full hover:bg-destructive/20 hover:text-destructive p-0.5 transition-colors"
+              title="Quitar área de trabajo"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </Badge>
+        ))}
+        
+        {/* Popover to add more */}
+        <Popover open={open} onOpenChange={setOpen}>
+          <PopoverTrigger asChild>
+            <button
+              ref={triggerRef}
+              className={cn(
+                "px-2 py-1 rounded-md transition-all duration-200 cursor-pointer flex items-center gap-1.5",
+                "hover:bg-primary/10 hover:border-primary/30 border border-dashed border-muted-foreground/30",
+                "focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-1 focus:bg-primary/10",
+                open && "ring-2 ring-primary ring-offset-1 bg-primary/5",
+                "text-muted-foreground text-xs"
+              )}
+              title="Añadir área de trabajo"
+              onKeyDown={handleKeyDown}
+            >
+              <MapPin className="h-3 w-3 flex-shrink-0" />
+              <span>{selectedWorkAreas.length === 0 ? 'Añadir' : '+'}</span>
+              {showSuccess && (
+                <CheckCircle2 className="h-3.5 w-3.5 text-green-500 animate-scale-in flex-shrink-0" />
+              )}
+            </button>
+          </PopoverTrigger>
+          <PopoverContent className="w-[350px] p-0" align="start" onKeyDown={handlePopoverKeyDown}>
+            <Command shouldFilter={false}>
+              <CommandInput
+                placeholder="Buscar área de trabajo..."
+                value={searchQuery}
+                onValueChange={setSearchQuery}
+              />
+              <CommandList className="max-h-[300px]">
+                <CommandEmpty>No se encontraron áreas de trabajo</CommandEmpty>
+                <CommandGroup>
+                  {filteredWorkAreas.map(workArea => {
+                    const isSelected = currentWorkAreaIds.includes(workArea.id);
+                    return (
+                      <CommandItem
+                        key={workArea.id}
+                        value={workArea.id}
+                        onSelect={() => handleToggle(workArea.id)}
+                        className="flex items-center gap-2"
+                      >
+                        <Check className={cn("h-4 w-4", isSelected ? "opacity-100" : "opacity-0")} />
+                        <div className="flex flex-col flex-1 min-w-0">
+                          <span className="truncate font-medium">{workArea.area_id}</span>
+                          <span className="text-xs text-muted-foreground truncate">{workArea.name || `${workArea.level}/${workArea.work_area}`}</span>
+                        </div>
+                        <Badge variant="outline" className="text-xs shrink-0">{workArea.level}</Badge>
+                      </CommandItem>
+                    );
+                  })}
+                </CommandGroup>
+              </CommandList>
+            </Command>
+          </PopoverContent>
+        </Popover>
+      </div>
     );
   }
 );

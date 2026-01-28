@@ -7,9 +7,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { supabase } from '@/integrations/supabase/client';
-import { cloneBudget, cloneContentToExistingBudget } from '@/lib/clone-budget';
+import { cloneBudget, cloneContentToExistingBudget, cloneWorkAreasOnly } from '@/lib/clone-budget';
 import { toast } from 'sonner';
-import { Copy, Loader2, FileText, Files, Plus } from 'lucide-react';
+import { Copy, Loader2, FileText, Files, Plus, MapPin } from 'lucide-react';
 
 interface Presupuesto {
   id: string;
@@ -27,7 +27,7 @@ interface CloneBudgetDialogProps {
   onCloneSuccess: (newBudgetId: string) => void;
 }
 
-type CloneMode = 'template' | 'complete';
+type CloneMode = 'template' | 'complete' | 'work_areas_only';
 type CloneTarget = 'new' | 'existing';
 
 export function CloneBudgetDialog({ 
@@ -101,7 +101,17 @@ export function CloneBudgetDialog({
       return;
     }
 
-    if (cloneTarget === 'existing') {
+    // Work areas only mode requires existing target
+    if (cloneMode === 'work_areas_only') {
+      if (!targetBudgetId) {
+        toast.error('Selecciona el presupuesto destino');
+        return;
+      }
+      if (targetBudgetId === selectedBudgetId) {
+        toast.error('El presupuesto origen y destino no pueden ser el mismo');
+        return;
+      }
+    } else if (cloneTarget === 'existing') {
       if (!targetBudgetId) {
         toast.error('Selecciona el presupuesto destino');
         return;
@@ -125,13 +135,34 @@ export function CloneBudgetDialog({
     try {
       let result;
       
-      if (cloneTarget === 'existing') {
+      if (cloneMode === 'work_areas_only') {
+        // Clone only work areas (DÓNDE?) to existing budget
+        result = await cloneWorkAreasOnly(selectedBudgetId, targetBudgetId);
+        if (result.success) {
+          const targetName = budgets.find(b => b.id === targetBudgetId)?.nombre;
+          toast.success(`DÓNDE? clonado a "${targetName}": ${result.stats?.workAreas} áreas de trabajo, ${result.stats?.workAreaActivities} enlaces de actividades`);
+          onOpenChange(false);
+          onCloneSuccess(result.newBudgetId!);
+        } else {
+          toast.error(result.error || 'Error al clonar áreas de trabajo');
+        }
+      } else if (cloneTarget === 'existing') {
         // Clone content to existing budget
         result = await cloneContentToExistingBudget(
           selectedBudgetId,
           targetBudgetId,
           { preserveMeasurementValues: cloneMode === 'complete' }
         );
+        if (result.success && result.newBudgetId) {
+          const targetName = budgets.find(b => b.id === targetBudgetId)?.nombre;
+          toast.success(
+            `Contenido clonado a "${targetName}": ${result.stats?.phases} fases, ${result.stats?.activities} actividades, ${result.stats?.resources} recursos`
+          );
+          onOpenChange(false);
+          onCloneSuccess(result.newBudgetId);
+        } else {
+          toast.error(result.error || 'Error al clonar presupuesto');
+        }
       } else {
         // Create new budget with cloned content
         result = await cloneBudget(selectedBudgetId, {
@@ -142,19 +173,15 @@ export function CloneBudgetDialog({
         }, {
           preserveMeasurementValues: cloneMode === 'complete'
         });
-      }
-
-      if (result.success && result.newBudgetId) {
-        const targetName = cloneTarget === 'existing' 
-          ? budgets.find(b => b.id === targetBudgetId)?.nombre 
-          : form.nombre;
-        toast.success(
-          `Contenido clonado a "${targetName}": ${result.stats?.phases} fases, ${result.stats?.activities} actividades, ${result.stats?.resources} recursos`
-        );
-        onOpenChange(false);
-        onCloneSuccess(result.newBudgetId);
-      } else {
-        toast.error(result.error || 'Error al clonar presupuesto');
+        if (result.success && result.newBudgetId) {
+          toast.success(
+            `Contenido clonado a "${form.nombre}": ${result.stats?.phases} fases, ${result.stats?.activities} actividades, ${result.stats?.resources} recursos`
+          );
+          onOpenChange(false);
+          onCloneSuccess(result.newBudgetId);
+        } else {
+          toast.error(result.error || 'Error al clonar presupuesto');
+        }
       }
     } catch (err: any) {
       console.error('Error cloning:', err);
@@ -176,9 +203,11 @@ export function CloneBudgetDialog({
   // Filter budgets for target selection (exclude source budget, but include current budget)
   const availableTargetBudgets = budgets.filter(b => b.id !== selectedBudgetId);
 
-  const canClone = cloneTarget === 'existing' 
+  const canClone = cloneMode === 'work_areas_only'
     ? selectedBudgetId && targetBudgetId && targetBudgetId !== selectedBudgetId
-    : selectedBudgetId && form.nombre.trim() && form.poblacion.trim();
+    : cloneTarget === 'existing' 
+      ? selectedBudgetId && targetBudgetId && targetBudgetId !== selectedBudgetId
+      : selectedBudgetId && form.nombre.trim() && form.poblacion.trim();
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -229,7 +258,13 @@ export function CloneBudgetDialog({
                   <Label className="text-sm font-medium">Modo de clonación</Label>
                   <RadioGroup 
                     value={cloneMode} 
-                    onValueChange={(v) => setCloneMode(v as CloneMode)}
+                    onValueChange={(v) => {
+                      setCloneMode(v as CloneMode);
+                      // Work areas only mode forces existing target
+                      if (v === 'work_areas_only') {
+                        setCloneTarget('existing');
+                      }
+                    }}
                     className="space-y-3"
                   >
                     <div className="flex items-start space-x-3">
@@ -256,50 +291,64 @@ export function CloneBudgetDialog({
                         </p>
                       </div>
                     </div>
-                  </RadioGroup>
-                </div>
-
-                {/* Clone target selection */}
-                <div className="space-y-3 border rounded-lg p-4 bg-muted/30">
-                  <Label className="text-sm font-medium">Destino de la clonación</Label>
-                  <RadioGroup 
-                    value={cloneTarget} 
-                    onValueChange={(v) => {
-                      setCloneTarget(v as CloneTarget);
-                      if (v === 'existing') {
-                        setTargetBudgetId('');
-                      }
-                    }}
-                    className="space-y-3"
-                  >
                     <div className="flex items-start space-x-3">
-                      <RadioGroupItem value="new" id="target-new" className="mt-1" />
+                      <RadioGroupItem value="work_areas_only" id="work_areas_only" className="mt-1" />
                       <div className="flex-1">
-                        <Label htmlFor="target-new" className="flex items-center gap-2 cursor-pointer font-medium">
-                          <Plus className="h-4 w-4 text-muted-foreground" />
-                          Crear nuevo presupuesto
+                        <Label htmlFor="work_areas_only" className="flex items-center gap-2 cursor-pointer font-medium">
+                          <MapPin className="h-4 w-4 text-muted-foreground" />
+                          Solo DÓNDE? (Áreas de trabajo)
                         </Label>
                         <p className="text-xs text-muted-foreground mt-0.5">
-                          Crea un presupuesto nuevo con el contenido clonado.
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-start space-x-3">
-                      <RadioGroupItem value="existing" id="target-existing" className="mt-1" />
-                      <div className="flex-1">
-                        <Label htmlFor="target-existing" className="flex items-center gap-2 cursor-pointer font-medium">
-                          <Copy className="h-4 w-4 text-muted-foreground" />
-                          Añadir a presupuesto existente
-                        </Label>
-                        <p className="text-xs text-muted-foreground mt-0.5">
-                          Añade el contenido clonado a un presupuesto que ya existe.
+                          Copia solo las áreas de trabajo y sus relaciones con actividades existentes (por código).
                         </p>
                       </div>
                     </div>
                   </RadioGroup>
                 </div>
 
-                {cloneTarget === 'existing' ? (
+                {/* Clone target selection - only show for non-work_areas_only modes */}
+                {cloneMode !== 'work_areas_only' && (
+                  <div className="space-y-3 border rounded-lg p-4 bg-muted/30">
+                    <Label className="text-sm font-medium">Destino de la clonación</Label>
+                    <RadioGroup 
+                      value={cloneTarget} 
+                      onValueChange={(v) => {
+                        setCloneTarget(v as CloneTarget);
+                        if (v === 'existing') {
+                          setTargetBudgetId('');
+                        }
+                      }}
+                      className="space-y-3"
+                    >
+                      <div className="flex items-start space-x-3">
+                        <RadioGroupItem value="new" id="target-new" className="mt-1" />
+                        <div className="flex-1">
+                          <Label htmlFor="target-new" className="flex items-center gap-2 cursor-pointer font-medium">
+                            <Plus className="h-4 w-4 text-muted-foreground" />
+                            Crear nuevo presupuesto
+                          </Label>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            Crea un presupuesto nuevo con el contenido clonado.
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-start space-x-3">
+                        <RadioGroupItem value="existing" id="target-existing" className="mt-1" />
+                        <div className="flex-1">
+                          <Label htmlFor="target-existing" className="flex items-center gap-2 cursor-pointer font-medium">
+                            <Copy className="h-4 w-4 text-muted-foreground" />
+                            Añadir a presupuesto existente
+                          </Label>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            Añade el contenido clonado a un presupuesto que ya existe.
+                          </p>
+                        </div>
+                      </div>
+                    </RadioGroup>
+                  </div>
+                )}
+
+                {(cloneTarget === 'existing' || cloneMode === 'work_areas_only') ? (
                   <div className="space-y-2">
                     <Label>Selecciona el presupuesto destino</Label>
                     <Select value={targetBudgetId} onValueChange={setTargetBudgetId}>
@@ -315,7 +364,10 @@ export function CloneBudgetDialog({
                       </SelectContent>
                     </Select>
                     <p className="text-xs text-muted-foreground">
-                      El contenido se añadirá al presupuesto existente sin eliminar su contenido actual.
+                      {cloneMode === 'work_areas_only' 
+                        ? 'Las áreas de trabajo se añadirán y se enlazarán con actividades existentes (por código).'
+                        : 'El contenido se añadirá al presupuesto existente sin eliminar su contenido actual.'
+                      }
                     </p>
                   </div>
                 ) : (
@@ -367,22 +419,38 @@ export function CloneBudgetDialog({
                   </>
                 )}
 
-                <div className="bg-muted/50 rounded-lg p-3 text-sm">
-                  <p className="font-medium mb-1">Se clonará:</p>
-                  <ul className="text-muted-foreground space-y-0.5 text-xs">
-                    <li>✓ Fases y su jerarquía</li>
-                    <li>✓ Actividades y sus configuraciones</li>
-                    <li>✓ Recursos con costes y márgenes</li>
-                    <li>✓ Mediciones y relaciones {cloneMode === 'complete' ? '(con valores)' : '(sin valores)'}</li>
-                    <li>✓ Ante-proyecto (textos sin imágenes)</li>
-                  </ul>
-                  <p className="font-medium mt-2 mb-1">NO se clonará:</p>
-                  <ul className="text-muted-foreground space-y-0.5 text-xs">
-                    {cloneMode === 'template' && <li>✗ Valores de mediciones (Uds manual)</li>}
-                    <li>✗ Archivos/imágenes del ante-proyecto</li>
-                    <li>✗ Archivos adjuntos de actividades</li>
-                  </ul>
-                </div>
+                {cloneMode === 'work_areas_only' ? (
+                  <div className="bg-muted/50 rounded-lg p-3 text-sm">
+                    <p className="font-medium mb-1">Se clonará:</p>
+                    <ul className="text-muted-foreground space-y-0.5 text-xs">
+                      <li>✓ Áreas de trabajo (DÓNDE?)</li>
+                      <li>✓ Enlaces con actividades existentes (por código de actividad)</li>
+                    </ul>
+                    <p className="font-medium mt-2 mb-1">NO se clonará:</p>
+                    <ul className="text-muted-foreground space-y-0.5 text-xs">
+                      <li>✗ Fases, actividades, recursos, mediciones</li>
+                      <li>✗ Actividades nuevas (solo enlaza con existentes)</li>
+                    </ul>
+                  </div>
+                ) : (
+                  <div className="bg-muted/50 rounded-lg p-3 text-sm">
+                    <p className="font-medium mb-1">Se clonará:</p>
+                    <ul className="text-muted-foreground space-y-0.5 text-xs">
+                      <li>✓ Fases y su jerarquía</li>
+                      <li>✓ Actividades y sus configuraciones</li>
+                      <li>✓ Recursos con costes y márgenes</li>
+                      <li>✓ Mediciones y relaciones {cloneMode === 'complete' ? '(con valores)' : '(sin valores)'}</li>
+                      <li>✓ Áreas de trabajo (DÓNDE?) y sus relaciones</li>
+                      <li>✓ Ante-proyecto (textos sin imágenes)</li>
+                    </ul>
+                    <p className="font-medium mt-2 mb-1">NO se clonará:</p>
+                    <ul className="text-muted-foreground space-y-0.5 text-xs">
+                      {cloneMode === 'template' && <li>✗ Valores de mediciones (Uds manual)</li>}
+                      <li>✗ Archivos/imágenes del ante-proyecto</li>
+                      <li>✗ Archivos adjuntos de actividades</li>
+                    </ul>
+                  </div>
+                )}
               </>
             )}
           </div>
@@ -402,10 +470,14 @@ export function CloneBudgetDialog({
                 Clonando...
               </>
             ) : (
-              <>
-                <Copy className="h-4 w-4 mr-2" />
-                {cloneTarget === 'existing' ? 'Clonar Contenido' : 'Clonar Presupuesto'}
-              </>
+            <>
+              <Copy className="h-4 w-4 mr-2" />
+              {cloneMode === 'work_areas_only' 
+                ? 'Clonar DÓNDE?' 
+                : cloneTarget === 'existing' 
+                  ? 'Clonar Contenido' 
+                  : 'Clonar Presupuesto'}
+            </>
             )}
           </Button>
         </DialogFooter>

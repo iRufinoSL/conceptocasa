@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -46,7 +46,7 @@ const LEVELS = [
   'Vivienda'
 ];
 
-const WORK_AREAS = [
+const DEFAULT_WORK_AREAS = [
   'Perímetro parcela',
   'Espacios parcela',
   'Cimentación',
@@ -85,12 +85,21 @@ export function BudgetWorkAreasTab({ budgetId, isAdmin }: BudgetWorkAreasTabProp
   const [editingArea, setEditingArea] = useState<WorkArea | null>(null);
   const [expandedLevels, setExpandedLevels] = useState<Set<string>>(new Set(LEVELS));
   const [expandedOptions, setExpandedOptions] = useState<Set<string>>(new Set()); // collapsed by default
+  const [customWorkAreas, setCustomWorkAreas] = useState<string[]>([]);
+  const [newWorkAreaInput, setNewWorkAreaInput] = useState('');
   const [formData, setFormData] = useState({
     name: '',
     level: 'Nivel 1',
     work_area: 'Espacios',
     activity_ids: [] as string[]
   });
+
+  // Combine default and custom work areas, plus any from existing data
+  const allWorkAreas = useMemo(() => {
+    const existingWorkAreas = workAreas.map(wa => wa.work_area);
+    const combined = new Set([...DEFAULT_WORK_AREAS, ...customWorkAreas, ...existingWorkAreas]);
+    return Array.from(combined).sort((a, b) => a.localeCompare(b, 'es'));
+  }, [customWorkAreas, workAreas]);
 
   const toggleLevel = (level: string) => {
     setExpandedLevels(prev => {
@@ -224,12 +233,20 @@ export function BudgetWorkAreasTab({ budgetId, isAdmin }: BudgetWorkAreasTabProp
     setDialogOpen(true);
   };
 
-  const handleSave = async () => {
-    if (!formData.name.trim()) {
-      toast.error('El nombre es obligatorio');
+  const handleAddCustomWorkArea = () => {
+    const trimmed = newWorkAreaInput.trim();
+    if (!trimmed) return;
+    if (allWorkAreas.includes(trimmed)) {
+      toast.error('Este área de trabajo ya existe');
       return;
     }
+    setCustomWorkAreas(prev => [...prev, trimmed]);
+    setFormData(prev => ({ ...prev, work_area: trimmed }));
+    setNewWorkAreaInput('');
+    toast.success(`Área de trabajo "${trimmed}" añadida`);
+  };
 
+  const handleSave = async () => {
     // Check for duplicate area_id
     const newAreaId = `${formData.work_area}/${formData.level}`;
     const existingArea = workAreas.find(
@@ -324,8 +341,8 @@ export function BudgetWorkAreasTab({ budgetId, isAdmin }: BudgetWorkAreasTabProp
     return acc;
   }, {} as Record<string, WorkArea[]>);
 
-  // Sort alphabetically
-  const sortedAlphabetically = [...workAreas].sort((a, b) => a.name.localeCompare(b.name));
+  // Sort alphabetically by AreaID
+  const sortedAlphabetically = [...workAreas].sort((a, b) => a.area_id.localeCompare(b.area_id, 'es', { numeric: true }));
 
   // Find activities without work areas
   const activityIdsWithWorkArea = new Set(activityLinks.map(link => link.activity_id));
@@ -493,10 +510,8 @@ export function BudgetWorkAreasTab({ budgetId, isAdmin }: BudgetWorkAreasTabProp
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Nombre</TableHead>
-                    <TableHead>Nivel</TableHead>
-                    <TableHead>Área de Trabajo</TableHead>
                     <TableHead>AreaID</TableHead>
+                    <TableHead>Descripción</TableHead>
                     <TableHead className="text-right">€ SubTotal</TableHead>
                     {isAdmin && <TableHead className="w-20">Acciones</TableHead>}
                   </TableRow>
@@ -504,14 +519,10 @@ export function BudgetWorkAreasTab({ budgetId, isAdmin }: BudgetWorkAreasTabProp
                 <TableBody>
                   {sortedAlphabetically.map((area) => (
                     <TableRow key={area.id}>
-                      <TableCell className="font-medium">{area.name}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline">{area.level}</Badge>
-                      </TableCell>
-                      <TableCell>{area.work_area}</TableCell>
                       <TableCell>
                         <code className="text-xs bg-muted px-2 py-1 rounded">{area.area_id}</code>
                       </TableCell>
+                      <TableCell className="text-muted-foreground">{area.name || '-'}</TableCell>
                       <TableCell className="text-right font-medium">
                         {formatCurrency(area.resources_subtotal || 0)}
                       </TableCell>
@@ -584,23 +595,21 @@ export function BudgetWorkAreasTab({ budgetId, isAdmin }: BudgetWorkAreasTabProp
                         <Table>
                           <TableHeader>
                             <TableRow>
-                              <TableHead>Nombre</TableHead>
-                              <TableHead>Área de Trabajo</TableHead>
                               <TableHead>AreaID</TableHead>
+                              <TableHead>Descripción</TableHead>
                               <TableHead className="text-right">€ SubTotal</TableHead>
                               {isAdmin && <TableHead className="w-20">Acciones</TableHead>}
                             </TableRow>
                           </TableHeader>
                           <TableBody>
-                            {areasInLevel.map((area) => (
+                            {areasInLevel.sort((a, b) => a.area_id.localeCompare(b.area_id, 'es', { numeric: true })).map((area) => (
                               <TableRow key={area.id}>
-                                <TableCell className="font-medium">{area.name}</TableCell>
-                                <TableCell>{area.work_area}</TableCell>
                                 <TableCell>
                                   <code className="text-xs bg-muted px-2 py-1 rounded">
                                     {area.area_id}
                                   </code>
                                 </TableCell>
+                                <TableCell className="text-muted-foreground">{area.name || '-'}</TableCell>
                                 <TableCell className="text-right font-medium">
                                   {formatCurrency(area.resources_subtotal || 0)}
                                 </TableCell>
@@ -724,19 +733,10 @@ export function BudgetWorkAreasTab({ budgetId, isAdmin }: BudgetWorkAreasTabProp
                 {editingArea ? 'Editar Área de Trabajo' : 'Nueva Área de Trabajo'}
               </DialogTitle>
               <DialogDescription>
-                Define el nombre, nivel y tipo de área de trabajo
+                Define el nivel, área de trabajo y opcionalmente una descripción
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="name">Nombre del área *</Label>
-                <Input
-                  id="name"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  placeholder="Ej: Cocina, Salón principal..."
-                />
-              </div>
               <div className="space-y-2">
                 <Label htmlFor="level">Nivel *</Label>
                 <Select
@@ -765,13 +765,31 @@ export function BudgetWorkAreasTab({ budgetId, isAdmin }: BudgetWorkAreasTabProp
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {WORK_AREAS.map((area) => (
+                    {allWorkAreas.map((area) => (
                       <SelectItem key={area} value={area}>
                         {area}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
+                {/* Add custom work area */}
+                <div className="flex gap-2 mt-2">
+                  <Input
+                    value={newWorkAreaInput}
+                    onChange={(e) => setNewWorkAreaInput(e.target.value)}
+                    placeholder="Nueva área de trabajo..."
+                    className="text-sm"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleAddCustomWorkArea();
+                      }
+                    }}
+                  />
+                  <Button type="button" variant="outline" size="sm" onClick={handleAddCustomWorkArea}>
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
               <div className="bg-muted/50 p-3 rounded-lg">
                 <p className="text-sm text-muted-foreground">
@@ -780,6 +798,15 @@ export function BudgetWorkAreasTab({ budgetId, isAdmin }: BudgetWorkAreasTabProp
                     {formData.work_area}/{formData.level}
                   </code>
                 </p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="name">Descripción (opcional)</Label>
+                <Input
+                  id="name"
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  placeholder="Descripción adicional del área..."
+                />
               </div>
               {/* Activities multi-select with search - showing only related activities */}
               <WorkAreaActivitiesSelect

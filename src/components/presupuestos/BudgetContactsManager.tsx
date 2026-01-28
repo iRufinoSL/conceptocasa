@@ -15,6 +15,7 @@ import { ContactForm } from '@/components/crm/ContactForm';
 import { SendEmailDialog } from '@/components/crm/SendEmailDialog';
 import { WhatsAppComposeDialog } from '@/components/crm/WhatsAppComposeDialog';
 import { SMSComposeDialog } from '@/components/crm/SMSComposeDialog';
+import { searchMatch } from '@/lib/search-utils';
 
 interface ProfessionalActivity {
   id: string;
@@ -271,10 +272,9 @@ export function BudgetContactsManager({ budgetId, isAdmin }: BudgetContactsManag
   // Filter others by search term
   const filteredOthers = others.filter(bc => {
     if (!othersSearchTerm.trim()) return true;
-    const searchLower = othersSearchTerm.toLowerCase().trim();
-    const fullName = bc.contact ? `${bc.contact.name} ${bc.contact.surname || ''}`.toLowerCase() : '';
-    const activities = bc.contact?.professional_activities?.map(a => a.name.toLowerCase()).join(' ') || '';
-    return fullName.includes(searchLower) || activities.includes(searchLower);
+    const fullName = bc.contact ? `${bc.contact.name} ${bc.contact.surname || ''}` : '';
+    const activities = bc.contact?.professional_activities?.map(a => a.name).join(' ') || '';
+    return searchMatch(fullName, othersSearchTerm) || searchMatch(activities, othersSearchTerm);
   });
 
   // Sort filtered others alphabetically by name

@@ -25,6 +25,7 @@ import { formatCurrency, formatNumber, formatPercent } from '@/lib/format-utils'
 import { percentToRatio } from '@/lib/budget-pricing';
 import { syncActivityResourcesRelatedUnits } from '@/lib/budget-utils';
 import { MeasurementInlineSelect, MeasurementInlineSelectHandle } from './MeasurementInlineSelect';
+import { WorkAreaInlineSelect } from './WorkAreaInlineSelect';
 import { ResourceInlineEdit } from './ResourceInlineEdit';
 import { BudgetResourceForm } from './BudgetResourceForm';
 import { ActivitiesWorkAreaGroupedView } from './ActivitiesWorkAreaGroupedView';
@@ -1707,6 +1708,7 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
                 <TableHead>ActividadID</TableHead>
                 <TableHead className="text-center w-16">Usa Med.</TableHead>
                 <TableHead>Actividad</TableHead>
+                <TableHead>Áreas</TableHead>
                 <TableHead>Opciones</TableHead>
                 <TableHead>Fase</TableHead>
                 <TableHead>Unidad</TableHead>
@@ -1779,6 +1781,20 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
                         </button>
                       ) : (
                         activity.name
+                      )}
+                    </TableCell>
+                    <TableCell className="max-w-[180px]">
+                      {canEditActivity(activity.id) ? (
+                        <WorkAreaInlineSelect
+                          activityId={activity.id}
+                          workAreas={workAreas}
+                          workAreaRelations={workAreaRelations}
+                          onSave={(ids) => handleUpdateActivityWorkAreas(activity.id, ids)}
+                        />
+                      ) : (
+                        <span className="text-muted-foreground text-xs">
+                          {workAreaRelations.filter(r => r.activity_id === activity.id).length} áreas
+                        </span>
                       )}
                     </TableCell>
                     <TableCell>
@@ -1937,7 +1953,7 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
               })}
               {filteredActivities.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={(isAdmin || permissions.canEdit) ? 12 : 11} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={(isAdmin || permissions.canEdit) ? 13 : 12} className="text-center py-8 text-muted-foreground">
                     {searchTerm 
                       ? 'No se encontraron actividades con ese criterio'
                       : 'No hay actividades. Crea una nueva o importa desde CSV.'}

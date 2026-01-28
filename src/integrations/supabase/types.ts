@@ -2617,6 +2617,9 @@ export type Database = {
           id: string
           is_signed: boolean
           nombre: string
+          option_a_description: string | null
+          option_b_description: string | null
+          option_c_description: string | null
           poblacion: string
           portada_overlay_opacity: number | null
           portada_text_color: string | null
@@ -2641,6 +2644,9 @@ export type Database = {
           id?: string
           is_signed?: boolean
           nombre: string
+          option_a_description?: string | null
+          option_b_description?: string | null
+          option_c_description?: string | null
           poblacion: string
           portada_overlay_opacity?: number | null
           portada_text_color?: string | null
@@ -2665,6 +2671,9 @@ export type Database = {
           id?: string
           is_signed?: boolean
           nombre?: string
+          option_a_description?: string | null
+          option_b_description?: string | null
+          option_c_description?: string | null
           poblacion?: string
           portada_overlay_opacity?: number | null
           portada_text_color?: string | null

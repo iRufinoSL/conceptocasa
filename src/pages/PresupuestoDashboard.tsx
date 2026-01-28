@@ -51,6 +51,9 @@ interface Presupuesto {
   comparativa_opciones: string | null;
   is_signed: boolean;
   signed_at: string | null;
+  option_a_description: string | null;
+  option_b_description: string | null;
+  option_c_description: string | null;
 }
 
 interface Project {
@@ -487,6 +490,23 @@ export default function PresupuestoDashboard() {
               comparativaOpciones={presupuesto.comparativa_opciones}
               isAdmin={isAdmin}
               isSigned={presupuesto.is_signed}
+              optionADescription={presupuesto.option_a_description}
+              optionBDescription={presupuesto.option_b_description}
+              optionCDescription={presupuesto.option_c_description}
+              onOptionDescriptionChange={async (option, value) => {
+                try {
+                  const field = `option_${option.toLowerCase()}_description` as 'option_a_description' | 'option_b_description' | 'option_c_description';
+                  const { error } = await supabase
+                    .from('presupuestos')
+                    .update({ [field]: value })
+                    .eq('id', presupuesto.id);
+                  if (error) throw error;
+                  setPresupuesto({ ...presupuesto, [field]: value });
+                } catch (err) {
+                  console.error('Error updating option description:', err);
+                  toast.error('Error al guardar descripción');
+                }
+              }}
               onSignedChange={async (signed) => {
                 if (!signed) return; // Cannot unsign
                 

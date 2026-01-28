@@ -27,6 +27,10 @@ interface BudgetCostSummaryProps {
   isAdmin: boolean;
   isSigned?: boolean;
   onSignedChange?: (signed: boolean) => Promise<void>;
+  optionADescription?: string | null;
+  optionBDescription?: string | null;
+  optionCDescription?: string | null;
+  onOptionDescriptionChange?: (option: string, value: string) => Promise<void>;
 }
 
 interface Resource {
@@ -70,13 +74,43 @@ export function BudgetCostSummary({
   onComparativaOpcionesChange,
   isAdmin,
   isSigned = false,
-  onSignedChange
+  onSignedChange,
+  optionADescription,
+  optionBDescription,
+  optionCDescription,
+  onOptionDescriptionChange
 }: BudgetCostSummaryProps) {
   const [resources, setResources] = useState<Resource[]>([]);
   const [spaces, setSpaces] = useState<Space[]>([]);
   const [loading, setLoading] = useState(true);
   const [signingInProgress, setSigningInProgress] = useState(false);
   const [confirmSignOpen, setConfirmSignOpen] = useState(false);
+  const [editingDescription, setEditingDescription] = useState<string | null>(null);
+  const [descriptionValues, setDescriptionValues] = useState({
+    A: optionADescription || '',
+    B: optionBDescription || '',
+    C: optionCDescription || ''
+  });
+
+  // Sync description values when props change
+  useEffect(() => {
+    setDescriptionValues({
+      A: optionADescription || '',
+      B: optionBDescription || '',
+      C: optionCDescription || ''
+    });
+  }, [optionADescription, optionBDescription, optionCDescription]);
+
+  const getOptionDescription = (option: string) => {
+    return descriptionValues[option as 'A' | 'B' | 'C'] || '';
+  };
+
+  const handleDescriptionBlur = async (option: string) => {
+    setEditingDescription(null);
+    if (onOptionDescriptionChange) {
+      await onOptionDescriptionChange(option, descriptionValues[option as 'A' | 'B' | 'C']);
+    }
+  };
 
   useEffect(() => {
     const fetchData = async () => {
@@ -649,6 +683,36 @@ export function BudgetCostSummary({
                         Opción {option}
                       </Badge>
                     </div>
+                  ))}
+                </div>
+
+                {/* Descripción de cada opción */}
+                <div className="gap-4 items-start" style={{ display: 'grid', gridTemplateColumns: `200px repeat(${availableOptions.length}, 1fr)` }}>
+                  <div className="flex items-center gap-2 text-sm font-medium pt-2">
+                    <FileText className="h-4 w-4 text-muted-foreground" />
+                    Descripción
+                  </div>
+                  {availableOptions.map(option => (
+                    <Card key={option} className={`bg-gradient-to-br ${OPTION_COLORS[option]?.from || 'from-gray-500/10'} ${OPTION_COLORS[option]?.to || 'to-gray-500/10'} ${OPTION_COLORS[option]?.border || 'border-gray-500/20'}`}>
+                      <CardContent className="py-3 px-3">
+                        {isAdmin ? (
+                          <Textarea
+                            value={descriptionValues[option as 'A' | 'B' | 'C']}
+                            onChange={(e) => setDescriptionValues(prev => ({
+                              ...prev,
+                              [option]: e.target.value
+                            }))}
+                            onBlur={() => handleDescriptionBlur(option)}
+                            placeholder={`¿Qué caracteriza la Opción ${option}?`}
+                            className={`min-h-[80px] text-sm resize-none border-0 focus:ring-1 ${OPTION_COLORS[option]?.text || 'text-gray-600'} placeholder:text-muted-foreground/60 bg-transparent`}
+                          />
+                        ) : (
+                          <p className={`text-sm whitespace-pre-wrap ${OPTION_COLORS[option]?.text || 'text-gray-600'}`}>
+                            {getOptionDescription(option) || <span className="italic text-muted-foreground">Sin descripción</span>}
+                          </p>
+                        )}
+                      </CardContent>
+                    </Card>
                   ))}
                 </div>
 

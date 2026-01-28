@@ -1505,7 +1505,11 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
         }
 
         allPhasesForPdf.forEach(phase => {
-          const phaseActivities = activities.filter(a => a.phase_id === phase.id);
+          // Use filtered activities instead of all activities
+          const phaseActivities = filteredActivitiesForPdf.filter(a => a.phase_id === phase.id);
+
+          // Skip phase if no activities after filtering
+          if (phaseActivities.length === 0) return;
 
           const phaseSubtotal = phaseActivities.reduce((sum, a) => sum + (activityResourcesMap.get(a.id) || 0), 0);
 

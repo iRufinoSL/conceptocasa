@@ -16,6 +16,7 @@ import { SendEmailDialog } from '@/components/crm/SendEmailDialog';
 import { WhatsAppComposeDialog } from '@/components/crm/WhatsAppComposeDialog';
 import { SMSComposeDialog } from '@/components/crm/SMSComposeDialog';
 import { searchMatch } from '@/lib/search-utils';
+import { PhoneLink } from '@/lib/contact-utils';
 
 interface ProfessionalActivity {
   id: string;
@@ -369,7 +370,7 @@ export function BudgetContactsManager({ budgetId, isAdmin }: BudgetContactsManag
           {bc.contact?.phone && (
             <>
               <span>•</span>
-              <span>{bc.contact.phone}</span>
+              <PhoneLink phone={bc.contact.phone} />
             </>
           )}
           {bc.contact?.city && <span>• {bc.contact.city}</span>}

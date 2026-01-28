@@ -13,8 +13,9 @@ export function PhoneLink({ phone, className }: { phone: string | null | undefin
   return (
     <a 
       href={`tel:${cleanPhone}`}
-      className={`hover:underline hover:text-primary transition-colors ${className || ''}`}
+      className={`text-primary hover:underline cursor-pointer transition-colors ${className || ''}`}
       onClick={(e) => e.stopPropagation()}
+      onTouchEnd={(e) => e.stopPropagation()}
     >
       {phone}
     </a>

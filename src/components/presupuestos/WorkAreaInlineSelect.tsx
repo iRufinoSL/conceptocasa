@@ -99,6 +99,7 @@ export const WorkAreaInlineSelect = forwardRef<WorkAreaInlineSelectHandle, WorkA
         ? currentWorkAreaIds.filter(id => id !== workAreaId)
         : [...currentWorkAreaIds, workAreaId];
       
+      console.log('Toggle work area:', workAreaId, 'new ids:', newIds);
       onSave(newIds);
       triggerSuccess();
     };
@@ -108,6 +109,7 @@ export const WorkAreaInlineSelect = forwardRef<WorkAreaInlineSelectHandle, WorkA
       e.preventDefault();
       e.stopPropagation();
       const newIds = currentWorkAreaIds.filter(id => id !== workAreaId);
+      console.log('Remove work area:', workAreaId, 'remaining ids:', newIds);
       onSave(newIds);
       triggerSuccess();
     };

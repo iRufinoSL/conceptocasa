@@ -432,6 +432,44 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
     }
   };
 
+  // Realtime subscription for work area relations (cross-browser sync)
+  useEffect(() => {
+    const channel = supabase
+      .channel('budget-work-area-activities-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'budget_work_area_activities'
+        },
+        (payload) => {
+          console.log('Work area relation change:', payload);
+          // Refetch work area relations when changes occur
+          const fetchWorkAreaRelations = async () => {
+            const { data: workAreaRelationsRes } = await supabase
+              .from('budget_work_area_activities')
+              .select('activity_id, work_area_id');
+            
+            if (workAreaRelationsRes) {
+              // Filter to only activities in this budget
+              const activityIds = activities.map(a => a.id);
+              const filteredRelations = workAreaRelationsRes.filter(
+                r => activityIds.includes(r.activity_id)
+              );
+              setWorkAreaRelations(filteredRelations);
+            }
+          };
+          fetchWorkAreaRelations();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [activities]);
+
   useEffect(() => {
     fetchData();
   }, [budgetId]);
@@ -1129,26 +1167,55 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
   // Update activity work areas
   const handleUpdateActivityWorkAreas = async (activityId: string, workAreaIds: string[]) => {
     try {
+      console.log('Updating work areas for activity:', activityId, 'new IDs:', workAreaIds);
+      
       const currentRelations = workAreaRelations.filter(r => r.activity_id === activityId);
       const currentWorkAreaIds = new Set(currentRelations.map(r => r.work_area_id));
       const newWorkAreaIds = new Set(workAreaIds);
       const toAdd = workAreaIds.filter(id => !currentWorkAreaIds.has(id));
       const toRemove = [...currentWorkAreaIds].filter(id => !newWorkAreaIds.has(id));
 
+      console.log('To add:', toAdd, 'To remove:', toRemove);
+
       if (toRemove.length > 0) {
-        await supabase.from('budget_work_area_activities').delete().eq('activity_id', activityId).in('work_area_id', toRemove);
+        const { error: removeError } = await supabase
+          .from('budget_work_area_activities')
+          .delete()
+          .eq('activity_id', activityId)
+          .in('work_area_id', toRemove);
+        
+        if (removeError) {
+          console.error('Error removing work area relations:', removeError);
+          throw removeError;
+        }
       }
+      
       if (toAdd.length > 0) {
-        await supabase.from('budget_work_area_activities').insert(toAdd.map(wid => ({ activity_id: activityId, work_area_id: wid })));
+        const { error: addError } = await supabase
+          .from('budget_work_area_activities')
+          .insert(toAdd.map(wid => ({ activity_id: activityId, work_area_id: wid })));
+        
+        if (addError) {
+          console.error('Error adding work area relations:', addError);
+          throw addError;
+        }
       }
 
+      // Update local state optimistically
       setWorkAreaRelations(prev => {
         const filtered = prev.filter(r => r.activity_id !== activityId);
-        return [...filtered, ...workAreaIds.map(wid => ({ activity_id: activityId, work_area_id: wid }))];
+        const newRelations = [...filtered, ...workAreaIds.map(wid => ({ activity_id: activityId, work_area_id: wid }))];
+        console.log('Updated local work area relations:', newRelations.filter(r => r.activity_id === activityId));
+        return newRelations;
       });
-      toast.success('Áreas actualizadas');
+      
+      // Show minimal feedback for inline edits (no toast to avoid spam)
+      console.log('Work areas updated successfully for activity:', activityId);
     } catch (err: any) {
-      toast.error('Error al actualizar áreas');
+      console.error('Error updating work areas:', err);
+      toast.error('Error al actualizar áreas: ' + (err.message || 'Error desconocido'));
+      // Refetch to restore correct state
+      fetchData();
     }
   };
 

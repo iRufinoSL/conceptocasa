@@ -17,6 +17,7 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import type { Contact } from '@/pages/CRM';
 import { validateContactData, sanitizeInput } from '@/lib/validation-utils';
+import { searchMatch } from '@/lib/search-utils';
 
 interface ProfessionalActivity {
   id: string;
@@ -315,8 +316,7 @@ export function ContactForm({ open, onOpenChange, contact, onSuccess }: ContactF
   
   // Filter activities by search term (only unselected for adding)
   const filteredActivities = activities.filter(a => {
-    const searchLower = activitySearchTerm.toLowerCase().trim();
-    return a.name.toLowerCase().includes(searchLower) && !selectedActivityIds.includes(a.id);
+    return searchMatch(a.name, activitySearchTerm) && !selectedActivityIds.includes(a.id);
   });
   
   // Selected activities
@@ -324,9 +324,8 @@ export function ContactForm({ open, onOpenChange, contact, onSuccess }: ContactF
   
   // Filter contacts by search term (only unselected for adding)
   const filteredContacts = availableRelatedContacts.filter(c => {
-    const searchLower = contactSearchTerm.toLowerCase().trim();
-    const fullName = `${c.name} ${c.surname || ''}`.toLowerCase();
-    return fullName.includes(searchLower) && !selectedRelatedContactIds.includes(c.id);
+    const fullName = `${c.name} ${c.surname || ''}`;
+    return searchMatch(fullName, contactSearchTerm) && !selectedRelatedContactIds.includes(c.id);
   });
   
   // Selected contacts
@@ -334,11 +333,10 @@ export function ContactForm({ open, onOpenChange, contact, onSuccess }: ContactF
   
   // Filter budgets by search term (only unselected for adding)
   const filteredBudgets = availableBudgets.filter(b => {
-    const searchLower = budgetSearchTerm.toLowerCase();
     const matchesSearch = (
-      b.nombre.toLowerCase().includes(searchLower) ||
-      b.poblacion.toLowerCase().includes(searchLower) ||
-      `${b.codigo_correlativo}`.includes(searchLower)
+      searchMatch(b.nombre, budgetSearchTerm) ||
+      searchMatch(b.poblacion, budgetSearchTerm) ||
+      searchMatch(`${b.codigo_correlativo}`, budgetSearchTerm)
     );
     return matchesSearch && !selectedBudgetIds.includes(b.id);
   });

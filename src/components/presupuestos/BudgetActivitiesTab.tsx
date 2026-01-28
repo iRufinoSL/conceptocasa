@@ -856,16 +856,16 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
 
         // Insert new relations (idempotent; avoid unique violations)
         if (normalizedWorkAreaIds.length > 0) {
+          // CRITICAL: Use the correct column order matching the unique constraint (work_area_id, activity_id)
           const relationsToInsert = normalizedWorkAreaIds.map((workAreaId) => ({
-            activity_id: savedActivityId,
             work_area_id: workAreaId,
+            activity_id: savedActivityId,
           }));
 
           const { error: relError } = await supabase
             .from('budget_work_area_activities')
             .upsert(relationsToInsert, {
-              // Match the unique constraint column order to ensure PostgREST applies it
-              onConflict: 'activity_id,work_area_id',
+              onConflict: 'work_area_id,activity_id',
               ignoreDuplicates: true,
             });
 
@@ -1223,10 +1223,11 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
 
         if (toAdd.length > 0) {
           // Idempotent insert: avoid unique constraint errors under concurrent updates.
+          // CRITICAL: Use the correct column order matching the unique constraint (work_area_id, activity_id)
           const { error: addError } = await supabase
             .from('budget_work_area_activities')
-            .upsert(toAdd.map((wid) => ({ activity_id: activityId, work_area_id: wid })), {
-              onConflict: 'activity_id,work_area_id',
+            .upsert(toAdd.map((wid) => ({ work_area_id: wid, activity_id: activityId })), {
+              onConflict: 'work_area_id,activity_id',
               ignoreDuplicates: true,
             });
 

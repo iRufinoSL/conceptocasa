@@ -16,6 +16,7 @@ import { Plus, Trash2, Edit2, MapPin, List, Layers, ChevronDown, ChevronRight, L
 import { WorkAreasOptionsGroupedView } from './WorkAreasOptionsGroupedView';
 import { WorkAreaActivitiesSelect } from './WorkAreaActivitiesSelect';
 import { OPTION_COLORS } from '@/lib/options-utils';
+import { formatActividadId } from '@/lib/activity-id';
 import { formatCurrency } from '@/lib/format-utils';
 import { calcResourceSubtotal } from '@/lib/budget-pricing';
 
@@ -85,6 +86,7 @@ export function BudgetWorkAreasTab({ budgetId, isAdmin }: BudgetWorkAreasTabProp
   const [editingArea, setEditingArea] = useState<WorkArea | null>(null);
   const [expandedLevels, setExpandedLevels] = useState<Set<string>>(new Set(LEVELS));
   const [expandedOptions, setExpandedOptions] = useState<Set<string>>(new Set()); // collapsed by default
+  const [expandedWorkAreas, setExpandedWorkAreas] = useState<Set<string>>(new Set()); // track which work areas show activities
   const [customWorkAreas, setCustomWorkAreas] = useState<string[]>([]);
   const [newWorkAreaInput, setNewWorkAreaInput] = useState('');
   const [formData, setFormData] = useState({
@@ -293,18 +295,34 @@ export function BudgetWorkAreasTab({ budgetId, isAdmin }: BudgetWorkAreasTabProp
 
       // Update activity links
       if (savedAreaId) {
-        await supabase
+        const { error: deleteLinksError } = await supabase
           .from('budget_work_area_activities')
           .delete()
           .eq('work_area_id', savedAreaId);
         
+        if (deleteLinksError) {
+          console.error('Error deleting activity links:', deleteLinksError);
+          throw deleteLinksError;
+        }
+        
         if (formData.activity_ids.length > 0) {
-          await supabase
+          // CRITICAL: Use the correct column order matching unique constraint (work_area_id, activity_id)
+          const relationsToInsert = formData.activity_ids.map(activityId => ({
+            work_area_id: savedAreaId,
+            activity_id: activityId
+          }));
+          
+          const { error: insertLinksError } = await supabase
             .from('budget_work_area_activities')
-            .insert(formData.activity_ids.map(activityId => ({
-              work_area_id: savedAreaId,
-              activity_id: activityId
-            })));
+            .upsert(relationsToInsert, {
+              onConflict: 'work_area_id,activity_id',
+              ignoreDuplicates: true
+            });
+          
+          if (insertLinksError) {
+            console.error('Error inserting activity links:', insertLinksError);
+            throw insertLinksError;
+          }
         }
       }
 
@@ -330,6 +348,40 @@ export function BudgetWorkAreasTab({ budgetId, isAdmin }: BudgetWorkAreasTabProp
     } catch (error: any) {
       toast.error(error.message || 'Error al eliminar');
     }
+  };
+
+  // Phase lookup map
+  const phaseMap = useMemo(() => {
+    const map = new Map<string, Phase>();
+    phases.forEach(p => map.set(p.id, p));
+    return map;
+  }, [phases]);
+
+  // Get activities linked to a specific work area, sorted alphabetically by ActividadID
+  const getActivitiesForWorkArea = (workAreaId: string) => {
+    const linkedActivityIds = activityLinks.filter(l => l.work_area_id === workAreaId).map(l => l.activity_id);
+    return activities
+      .filter(a => linkedActivityIds.includes(a.id))
+      .sort((a, b) => {
+        const phaseA = a.phase_id ? phaseMap.get(a.phase_id) : null;
+        const phaseB = b.phase_id ? phaseMap.get(b.phase_id) : null;
+        const idA = formatActividadId({ phaseCode: phaseA?.code, activityCode: a.code, name: a.name });
+        const idB = formatActividadId({ phaseCode: phaseB?.code, activityCode: b.code, name: b.name });
+        return idA.localeCompare(idB, 'es', { numeric: true });
+      });
+  };
+
+  // Toggle work area activities expansion
+  const toggleWorkArea = (workAreaId: string) => {
+    setExpandedWorkAreas(prev => {
+      const next = new Set(prev);
+      if (next.has(workAreaId)) {
+        next.delete(workAreaId);
+      } else {
+        next.add(workAreaId);
+      }
+      return next;
+    });
   };
 
   // Group work areas by level
@@ -595,6 +647,7 @@ export function BudgetWorkAreasTab({ budgetId, isAdmin }: BudgetWorkAreasTabProp
                         <Table>
                           <TableHeader>
                             <TableRow>
+                              <TableHead className="w-8"></TableHead>
                               <TableHead>AreaID</TableHead>
                               <TableHead>Descripción</TableHead>
                               <TableHead className="text-right">€ SubTotal</TableHead>
@@ -602,46 +655,110 @@ export function BudgetWorkAreasTab({ budgetId, isAdmin }: BudgetWorkAreasTabProp
                             </TableRow>
                           </TableHeader>
                           <TableBody>
-                            {areasInLevel.sort((a, b) => a.area_id.localeCompare(b.area_id, 'es', { numeric: true })).map((area) => (
-                              <TableRow key={area.id}>
-                                <TableCell>
-                                  <code className="text-xs bg-muted px-2 py-1 rounded">
-                                    {area.area_id}
-                                  </code>
-                                </TableCell>
-                                <TableCell className="text-muted-foreground">{area.name || '-'}</TableCell>
-                                <TableCell className="text-right font-medium">
-                                  {formatCurrency(area.resources_subtotal || 0)}
-                                </TableCell>
-                                {isAdmin && (
-                                  <TableCell>
-                                    <div className="flex gap-1">
-                                      <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          handleOpenDialog(area);
-                                        }}
-                                      >
-                                        <Edit2 className="h-4 w-4" />
-                                      </Button>
-                                      <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        className="text-destructive hover:text-destructive"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          handleDelete(area.id);
-                                        }}
-                                      >
-                                        <Trash2 className="h-4 w-4" />
-                                      </Button>
-                                    </div>
-                                  </TableCell>
-                                )}
-                              </TableRow>
-                            ))}
+                            {areasInLevel.sort((a, b) => a.area_id.localeCompare(b.area_id, 'es', { numeric: true })).map((area) => {
+                              const areaActivities = getActivitiesForWorkArea(area.id);
+                              const isAreaExpanded = expandedWorkAreas.has(area.id);
+                              
+                              return (
+                                <>
+                                  <TableRow key={area.id}>
+                                    <TableCell className="w-8 p-1">
+                                      {areaActivities.length > 0 && (
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
+                                          className="h-6 w-6"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            toggleWorkArea(area.id);
+                                          }}
+                                          title={`${areaActivities.length} actividades relacionadas`}
+                                        >
+                                          {isAreaExpanded ? (
+                                            <ChevronDown className="h-4 w-4" />
+                                          ) : (
+                                            <ChevronRight className="h-4 w-4" />
+                                          )}
+                                        </Button>
+                                      )}
+                                    </TableCell>
+                                    <TableCell>
+                                      <div className="flex items-center gap-2">
+                                        <code className="text-xs bg-muted px-2 py-1 rounded">
+                                          {area.area_id}
+                                        </code>
+                                        {areaActivities.length > 0 && (
+                                          <Badge variant="outline" className="text-xs">
+                                            {areaActivities.length}
+                                          </Badge>
+                                        )}
+                                      </div>
+                                    </TableCell>
+                                    <TableCell className="text-muted-foreground">{area.name || '-'}</TableCell>
+                                    <TableCell className="text-right font-medium">
+                                      {formatCurrency(area.resources_subtotal || 0)}
+                                    </TableCell>
+                                    {isAdmin && (
+                                      <TableCell>
+                                        <div className="flex gap-1">
+                                          <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              handleOpenDialog(area);
+                                            }}
+                                          >
+                                            <Edit2 className="h-4 w-4" />
+                                          </Button>
+                                          <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="text-destructive hover:text-destructive"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              handleDelete(area.id);
+                                            }}
+                                          >
+                                            <Trash2 className="h-4 w-4" />
+                                          </Button>
+                                        </div>
+                                      </TableCell>
+                                    )}
+                                  </TableRow>
+                                  {/* Expanded activities for this work area */}
+                                  {isAreaExpanded && areaActivities.length > 0 && (
+                                    <TableRow key={`${area.id}-activities`} className="bg-muted/30">
+                                      <TableCell colSpan={isAdmin ? 5 : 4} className="p-0">
+                                        <div className="pl-10 pr-4 py-2 space-y-1">
+                                          <p className="text-xs font-medium text-muted-foreground mb-2">Actividades relacionadas:</p>
+                                          <div className="flex flex-wrap gap-1">
+                                            {areaActivities.map(activity => {
+                                              const phase = activity.phase_id ? phaseMap.get(activity.phase_id) : null;
+                                              const actividadId = formatActividadId({
+                                                phaseCode: phase?.code,
+                                                activityCode: activity.code,
+                                                name: activity.name
+                                              });
+                                              return (
+                                                <Badge
+                                                  key={activity.id}
+                                                  variant="secondary"
+                                                  className="text-xs cursor-default"
+                                                  title={actividadId}
+                                                >
+                                                  {actividadId.length > 40 ? `${actividadId.substring(0, 37)}...` : actividadId}
+                                                </Badge>
+                                              );
+                                            })}
+                                          </div>
+                                        </div>
+                                      </TableCell>
+                                    </TableRow>
+                                  )}
+                                </>
+                              );
+                            })}
                           </TableBody>
                         </Table>
                       )}

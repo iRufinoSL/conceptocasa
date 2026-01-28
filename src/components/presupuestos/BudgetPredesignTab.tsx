@@ -11,8 +11,6 @@ import { useToast } from '@/hooks/use-toast';
 import { Plus, Pencil, Trash2, Upload, X, Maximize2, FileImage, FileText, LayoutGrid, Layers, ChevronDown, ChevronRight, Sparkles, Move } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
-import { UrbanProfileCard } from './UrbanProfileCard';
-import { PreliminaryUrbanReportsManager } from './PreliminaryUrbanReportsManager';
 import { Generate3DVisualization } from './Generate3DVisualization';
 import { VisualizationAdjustmentViewer } from './VisualizationAdjustmentViewer';
 interface BudgetPredesign {
@@ -514,18 +512,6 @@ export function BudgetPredesignTab({ budgetId, isAdmin }: BudgetPredesignTabProp
 
   return (
     <div className="space-y-6">
-      {/* Urban Profile Section - Analyze specific land by cadastral reference */}
-      <UrbanProfileCard 
-        budgetId={budgetId} 
-        cadastralReference={cadastralReference}
-        isAdmin={isAdmin} 
-      />
-
-      {/* Preliminary Urban Reports - Non-binding reports for buildability analysis */}
-      <PreliminaryUrbanReportsManager 
-        budgetId={budgetId}
-        isAdmin={isAdmin}
-      />
 
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>

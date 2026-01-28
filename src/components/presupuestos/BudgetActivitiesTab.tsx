@@ -2195,6 +2195,7 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
                                   )}
                                 </Button>
                               </TableHead>
+                              <TableHead>Opciones</TableHead>
                               <TableHead>Unidad</TableHead>
                               <TableHead className="text-right">Uds Relac.</TableHead>
                               <TableHead>MediciónID</TableHead>
@@ -2206,9 +2207,71 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
                           <TableBody>
                             {sortActivitiesByActivityId(unassigned).map(activity => {
                               const { relatedUnits, medicionId } = getMeasurementData(activity);
+                              const opciones = activity.opciones || ['A', 'B', 'C'];
                               return (
                                 <TableRow key={activity.id}>
                                   <TableCell className="font-mono text-sm">{generateActivityId(activity)}</TableCell>
+                                  <TableCell>
+                                    {canEditActivity(activity.id) ? (
+                                      <div className="flex gap-0.5">
+                                        {['A', 'B', 'C'].map(op => {
+                                          const isSelected = opciones.includes(op);
+                                          return (
+                                            <button
+                                              key={op}
+                                              onClick={async () => {
+                                                let newOpciones: string[];
+                                                if (isSelected) {
+                                                  if (opciones.length === 1) {
+                                                    toast.error('Debe haber al menos una opción seleccionada');
+                                                    return;
+                                                  }
+                                                  newOpciones = opciones.filter(o => o !== op);
+                                                } else {
+                                                  newOpciones = [...opciones, op].sort();
+                                                }
+                                                try {
+                                                  const { error } = await supabase
+                                                    .from('budget_activities')
+                                                    .update({ opciones: newOpciones })
+                                                    .eq('id', activity.id);
+                                                  if (error) throw error;
+                                                  fetchData();
+                                                  toast.success(`Opciones actualizadas`);
+                                                } catch (err: any) {
+                                                  toast.error('Error al actualizar opciones');
+                                                }
+                                              }}
+                                              className="cursor-pointer hover:opacity-80 transition-opacity"
+                                            >
+                                              <Badge 
+                                                variant={isSelected ? "default" : "outline"}
+                                                className={`text-xs px-1.5 ${
+                                                  isSelected 
+                                                    ? `${OPTION_COLORS[op]?.bg || ''} ${OPTION_COLORS[op]?.hover || ''} text-white` 
+                                                    : `${OPTION_COLORS[op]?.borderSolid || ''}/40 ${OPTION_COLORS[op]?.text || ''} opacity-60 hover:opacity-100`
+                                                }`}
+                                              >
+                                                {op}
+                                              </Badge>
+                                            </button>
+                                          );
+                                        })}
+                                      </div>
+                                    ) : (
+                                      <div className="flex gap-0.5">
+                                        {opciones.map(op => (
+                                          <Badge 
+                                            key={op} 
+                                            variant="outline" 
+                                            className={`text-xs px-1.5 ${OPTION_COLORS[op]?.borderSolid || ''} ${OPTION_COLORS[op]?.text || ''}`}
+                                          >
+                                            {op}
+                                          </Badge>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </TableCell>
                                   <TableCell>{activity.measurement_unit}</TableCell>
                                   <TableCell className="text-right">
                                     {activity.measurement_id ? formatNumber(relatedUnits) : '-'}
@@ -2336,6 +2399,7 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
                                 )}
                               </Button>
                             </TableHead>
+                            <TableHead>Opciones</TableHead>
                             <TableHead>Unidad</TableHead>
                             <TableHead className="text-right">Uds Relac.</TableHead>
                             <TableHead>MediciónID</TableHead>
@@ -2347,9 +2411,71 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
                         <TableBody>
                           {sortActivitiesByActivityId(phaseActivities).map(activity => {
                             const { relatedUnits, medicionId } = getMeasurementData(activity);
+                            const opciones = activity.opciones || ['A', 'B', 'C'];
                             return (
                               <TableRow key={activity.id}>
                                 <TableCell className="font-mono text-sm">{generateActivityId(activity)}</TableCell>
+                                <TableCell>
+                                  {canEditActivity(activity.id) ? (
+                                    <div className="flex gap-0.5">
+                                      {['A', 'B', 'C'].map(op => {
+                                        const isSelected = opciones.includes(op);
+                                        return (
+                                          <button
+                                            key={op}
+                                            onClick={async () => {
+                                              let newOpciones: string[];
+                                              if (isSelected) {
+                                                if (opciones.length === 1) {
+                                                  toast.error('Debe haber al menos una opción seleccionada');
+                                                  return;
+                                                }
+                                                newOpciones = opciones.filter(o => o !== op);
+                                              } else {
+                                                newOpciones = [...opciones, op].sort();
+                                              }
+                                              try {
+                                                const { error } = await supabase
+                                                  .from('budget_activities')
+                                                  .update({ opciones: newOpciones })
+                                                  .eq('id', activity.id);
+                                                if (error) throw error;
+                                                fetchData();
+                                                toast.success(`Opciones actualizadas`);
+                                              } catch (err: any) {
+                                                toast.error('Error al actualizar opciones');
+                                              }
+                                            }}
+                                            className="cursor-pointer hover:opacity-80 transition-opacity"
+                                          >
+                                            <Badge 
+                                              variant={isSelected ? "default" : "outline"}
+                                              className={`text-xs px-1.5 ${
+                                                isSelected 
+                                                  ? `${OPTION_COLORS[op]?.bg || ''} ${OPTION_COLORS[op]?.hover || ''} text-white` 
+                                                  : `${OPTION_COLORS[op]?.borderSolid || ''}/40 ${OPTION_COLORS[op]?.text || ''} opacity-60 hover:opacity-100`
+                                              }`}
+                                            >
+                                              {op}
+                                            </Badge>
+                                          </button>
+                                        );
+                                      })}
+                                    </div>
+                                  ) : (
+                                    <div className="flex gap-0.5">
+                                      {opciones.map(op => (
+                                        <Badge 
+                                          key={op} 
+                                          variant="outline" 
+                                          className={`text-xs px-1.5 ${OPTION_COLORS[op]?.borderSolid || ''} ${OPTION_COLORS[op]?.text || ''}`}
+                                        >
+                                          {op}
+                                        </Badge>
+                                      ))}
+                                    </div>
+                                  )}
+                                </TableCell>
                                 <TableCell>{activity.measurement_unit}</TableCell>
                                 <TableCell className="text-right">
                                   {activity.measurement_id ? formatNumber(relatedUnits) : '-'}

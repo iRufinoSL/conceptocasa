@@ -470,6 +470,129 @@ export async function cloneContentToExistingBudget(
   }
 }
 
+/**
+ * Clona solo las áreas de trabajo (DÓNDE?) de un presupuesto origen a uno destino.
+ * Incluye las relaciones con actividades existentes en el destino que coincidan por código.
+ */
+export async function cloneWorkAreasOnly(
+  sourceBudgetId: string,
+  targetBudgetId: string
+): Promise<CloneResult> {
+  const stats: NonNullable<CloneResult["stats"]> = {
+    phases: 0,
+    activities: 0,
+    resources: 0,
+    measurements: 0,
+    measurementRelations: 0,
+    predesigns: 0,
+    spaces: 0,
+    workAreas: 0,
+    workAreaMeasurements: 0,
+    workAreaActivities: 0,
+    budgetContacts: 0,
+    budgetItems: 0,
+    budgetConcepts: 0,
+  };
+
+  try {
+    // Verify both budgets exist
+    const [sourceRes, targetRes] = await Promise.all([
+      supabase.from("presupuestos").select("id").eq("id", sourceBudgetId).maybeSingle(),
+      supabase.from("presupuestos").select("id").eq("id", targetBudgetId).maybeSingle(),
+    ]);
+
+    if (sourceRes.error || !sourceRes.data) {
+      throw new Error("Presupuesto origen no encontrado");
+    }
+    if (targetRes.error || !targetRes.data) {
+      throw new Error("Presupuesto destino no encontrado");
+    }
+
+    // Fetch source work areas and their activity links
+    const [workAreasRes, workAreaActivitiesRes, sourceActivitiesRes, targetActivitiesRes] = await Promise.all([
+      supabase.from("budget_work_areas").select("*").eq("budget_id", sourceBudgetId),
+      supabase.from("budget_work_area_activities").select("*"),
+      supabase.from("budget_activities").select("id, code").eq("budget_id", sourceBudgetId),
+      supabase.from("budget_activities").select("id, code").eq("budget_id", targetBudgetId),
+    ]);
+
+    if (workAreasRes.error) throw new Error(workAreasRes.error.message);
+    if (workAreaActivitiesRes.error) throw new Error(workAreaActivitiesRes.error.message);
+    if (sourceActivitiesRes.error) throw new Error(sourceActivitiesRes.error.message);
+    if (targetActivitiesRes.error) throw new Error(targetActivitiesRes.error.message);
+
+    const sourceWorkAreas = workAreasRes.data || [];
+    const allWorkAreaActivities = workAreaActivitiesRes.data || [];
+    const sourceActivities = sourceActivitiesRes.data || [];
+    const targetActivities = targetActivitiesRes.data || [];
+
+    // Build activity code mapping from source to target
+    const targetActivityByCode = new Map<string, string>();
+    targetActivities.forEach((a) => {
+      if (a.code) targetActivityByCode.set(a.code, a.id);
+    });
+
+    const sourceActivityCodeMap = new Map<string, string>();
+    sourceActivities.forEach((a) => {
+      if (a.code) sourceActivityCodeMap.set(a.id, a.code);
+    });
+
+    // Clone work areas
+    const workAreaIdMap = new Map<string, string>();
+
+    for (const workArea of sourceWorkAreas) {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { area_id, ...workAreaInsertable } = workArea as any;
+
+      const { data: newWorkArea, error: workAreaError } = await supabase
+        .from("budget_work_areas")
+        .insert({
+          ...workAreaInsertable,
+          id: undefined,
+          created_at: undefined,
+          updated_at: undefined,
+          budget_id: targetBudgetId,
+        })
+        .select("*")
+        .single();
+
+      if (workAreaError || !newWorkArea) throw new Error(workAreaError?.message);
+      workAreaIdMap.set(workArea.id, newWorkArea.id);
+      stats.workAreas++;
+    }
+
+    // Clone work area activity links (matching by activity code)
+    const sourceWorkAreaIds = sourceWorkAreas.map((wa) => wa.id);
+    const relevantLinks = allWorkAreaActivities.filter((l) => sourceWorkAreaIds.includes(l.work_area_id));
+
+    for (const link of relevantLinks) {
+      const newWorkAreaId = workAreaIdMap.get(link.work_area_id);
+      if (!newWorkAreaId) continue;
+
+      // Find the activity code from source and map to target activity
+      const sourceActivityCode = sourceActivityCodeMap.get(link.activity_id);
+      if (!sourceActivityCode) continue;
+
+      const targetActivityId = targetActivityByCode.get(sourceActivityCode);
+      if (!targetActivityId) continue;
+
+      const { error } = await supabase.from("budget_work_area_activities").insert({
+        work_area_id: newWorkAreaId,
+        activity_id: targetActivityId,
+      });
+      if (!error) stats.workAreaActivities++;
+    }
+
+    return { success: true, newBudgetId: targetBudgetId, stats };
+  } catch (error: any) {
+    console.error("Error cloning work areas only:", error);
+    return {
+      success: false,
+      error: error.message || "Error desconocido al clonar áreas de trabajo",
+    };
+  }
+}
+
 export async function cloneBudget(
   sourceBudgetId: string,
   newBudgetData: NewBudgetData,

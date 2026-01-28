@@ -317,10 +317,12 @@ export function WorkAreasOptionsGroupedView({
                                                   <ChevronRight className="h-3 w-3 text-muted-foreground" />
                                                 )}
                                                 <MapPin className="h-3 w-3 text-muted-foreground" />
-                                                <span className="text-sm font-medium">{workArea.name}</span>
-                                                <code className="text-xs bg-muted px-1.5 py-0.5 rounded text-muted-foreground">
-                                                  {workArea.work_area}
+                                                <code className="text-xs bg-muted px-1.5 py-0.5 rounded font-medium">
+                                                  {workArea.area_id}
                                                 </code>
+                                                {workArea.name && (
+                                                  <span className="text-sm text-muted-foreground">{workArea.name}</span>
+                                                )}
                                                 <Badge variant="outline" className="text-xs">
                                                   {waActivities.length} act.
                                                 </Badge>

@@ -704,7 +704,8 @@ export function BudgetCostSummary({
                             }))}
                             onBlur={() => handleDescriptionBlur(option)}
                             placeholder={`¿Qué caracteriza la Opción ${option}?`}
-                            className={`min-h-[80px] text-sm resize-none border-0 focus:ring-1 ${OPTION_COLORS[option]?.text || 'text-gray-600'} placeholder:text-muted-foreground/60 bg-transparent`}
+                            className="min-h-[80px] text-sm resize-none border-0 focus:ring-1 text-foreground placeholder:text-muted-foreground/60 bg-white/50 dark:bg-black/20 font-sans"
+                            style={{ fontFamily: '"Plus Jakarta Sans", system-ui, sans-serif' }}
                           />
                         ) : (
                           <p className={`text-sm whitespace-pre-wrap ${OPTION_COLORS[option]?.text || 'text-gray-600'}`}>

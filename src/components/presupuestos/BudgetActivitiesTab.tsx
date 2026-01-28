@@ -223,6 +223,28 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
   const cellRefs = useRef<Map<string, MeasurementInlineSelectHandle | null>>(new Map());
   const getCellKey = (activityId: string) => activityId;
 
+  // Serialize per-activity work-area updates to avoid race conditions on fast inline toggles
+  const workAreaUpdateChainRef = useRef<Map<string, Promise<void>>>(new Map());
+
+  const normalizeIds = useCallback((ids: string[]) => {
+    // Defensive: de-duplicate and drop falsy values
+    return Array.from(new Set(ids.filter(Boolean)));
+  }, []);
+
+  const enqueueWorkAreaUpdate = useCallback(
+    (activityId: string, fn: () => Promise<void>) => {
+      const chain = workAreaUpdateChainRef.current;
+      const prev = chain.get(activityId) ?? Promise.resolve();
+      const next = prev.then(fn).catch((err) => {
+        // Swallow here to keep the chain alive; error handling is done in fn.
+        console.error('Work area update chain error:', err);
+      });
+      chain.set(activityId, next);
+      return next;
+    },
+    []
+  );
+
   // Get sorted activities for navigation
   const sortedActivities = useMemo(() => {
     return [...activities].sort((a, b) => a.name.localeCompare(b.name));
@@ -817,32 +839,39 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
         toast.success('Actividad creada');
       }
 
-      // Sync related_units for the activity's resources
+       // Sync related_units for the activity's resources
       if (savedActivityId) {
         await syncActivityResourcesRelatedUnits(savedActivityId);
         
         // Update work area relations
-        // First, delete existing relations for this activity
-        await supabase
-          .from('budget_work_area_activities')
-          .delete()
-          .eq('activity_id', savedActivityId);
+         const normalizedWorkAreaIds = normalizeIds(form.work_area_ids);
+
+         // First, delete existing relations for this activity
+         const { error: deleteRelError } = await supabase
+           .from('budget_work_area_activities')
+           .delete()
+           .eq('activity_id', savedActivityId);
+
+         if (deleteRelError) throw deleteRelError;
         
         // Insert new relations
-        if (form.work_area_ids.length > 0) {
-          const relationsToInsert = form.work_area_ids.map(workAreaId => ({
-            activity_id: savedActivityId,
-            work_area_id: workAreaId
-          }));
-          
-          const { error: relError } = await supabase
-            .from('budget_work_area_activities')
-            .insert(relationsToInsert);
-          
-          if (relError) {
-            console.error('Error updating work area relations:', relError);
-          }
-        }
+         if (normalizedWorkAreaIds.length > 0) {
+           const relationsToInsert = normalizedWorkAreaIds.map((workAreaId) => ({
+             activity_id: savedActivityId,
+             work_area_id: workAreaId,
+           }));
+
+           // Idempotent insert: prevents "duplicate key" if the list contains duplicates
+           // or if the server already has the relation.
+           const { error: relError } = await supabase
+             .from('budget_work_area_activities')
+             .upsert(relationsToInsert, {
+               onConflict: 'work_area_id,activity_id',
+               ignoreDuplicates: true,
+             });
+
+           if (relError) throw relError;
+         }
       }
 
       setFormDialogOpen(false);
@@ -1166,57 +1195,59 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
 
   // Update activity work areas
   const handleUpdateActivityWorkAreas = async (activityId: string, workAreaIds: string[]) => {
-    try {
-      console.log('Updating work areas for activity:', activityId, 'new IDs:', workAreaIds);
-      
-      const currentRelations = workAreaRelations.filter(r => r.activity_id === activityId);
-      const currentWorkAreaIds = new Set(currentRelations.map(r => r.work_area_id));
-      const newWorkAreaIds = new Set(workAreaIds);
-      const toAdd = workAreaIds.filter(id => !currentWorkAreaIds.has(id));
-      const toRemove = [...currentWorkAreaIds].filter(id => !newWorkAreaIds.has(id));
+    return enqueueWorkAreaUpdate(activityId, async () => {
+      const normalizedIds = normalizeIds(workAreaIds);
 
-      console.log('To add:', toAdd, 'To remove:', toRemove);
+      try {
+        console.log('Updating work areas for activity:', activityId, 'new IDs:', normalizedIds);
 
-      if (toRemove.length > 0) {
-        const { error: removeError } = await supabase
-          .from('budget_work_area_activities')
-          .delete()
-          .eq('activity_id', activityId)
-          .in('work_area_id', toRemove);
-        
-        if (removeError) {
-          console.error('Error removing work area relations:', removeError);
-          throw removeError;
+        const currentRelations = workAreaRelations.filter((r) => r.activity_id === activityId);
+        const currentWorkAreaIds = new Set(currentRelations.map((r) => r.work_area_id));
+        const newWorkAreaIds = new Set(normalizedIds);
+        const toAdd = normalizedIds.filter((id) => !currentWorkAreaIds.has(id));
+        const toRemove = [...currentWorkAreaIds].filter((id) => !newWorkAreaIds.has(id));
+
+        if (toRemove.length > 0) {
+          const { error: removeError } = await supabase
+            .from('budget_work_area_activities')
+            .delete()
+            .eq('activity_id', activityId)
+            .in('work_area_id', toRemove);
+
+          if (removeError) throw removeError;
         }
-      }
-      
-      if (toAdd.length > 0) {
-        const { error: addError } = await supabase
-          .from('budget_work_area_activities')
-          .insert(toAdd.map(wid => ({ activity_id: activityId, work_area_id: wid })));
-        
-        if (addError) {
-          console.error('Error adding work area relations:', addError);
-          throw addError;
-        }
-      }
 
-      // Update local state optimistically
-      setWorkAreaRelations(prev => {
-        const filtered = prev.filter(r => r.activity_id !== activityId);
-        const newRelations = [...filtered, ...workAreaIds.map(wid => ({ activity_id: activityId, work_area_id: wid }))];
-        console.log('Updated local work area relations:', newRelations.filter(r => r.activity_id === activityId));
-        return newRelations;
-      });
-      
-      // Show minimal feedback for inline edits (no toast to avoid spam)
-      console.log('Work areas updated successfully for activity:', activityId);
-    } catch (err: any) {
-      console.error('Error updating work areas:', err);
-      toast.error('Error al actualizar áreas: ' + (err.message || 'Error desconocido'));
-      // Refetch to restore correct state
-      fetchData();
-    }
+        if (toAdd.length > 0) {
+          // Idempotent insert: avoids "duplicate key" when users click fast or
+          // when state is briefly stale.
+          const { error: addError } = await supabase
+            .from('budget_work_area_activities')
+            .upsert(
+              toAdd.map((wid) => ({ activity_id: activityId, work_area_id: wid })),
+              {
+                onConflict: 'work_area_id,activity_id',
+                ignoreDuplicates: true,
+              }
+            );
+
+          if (addError) throw addError;
+        }
+
+        // Update local state optimistically
+        setWorkAreaRelations((prev) => {
+          const filtered = prev.filter((r) => r.activity_id !== activityId);
+          return [
+            ...filtered,
+            ...normalizedIds.map((wid) => ({ activity_id: activityId, work_area_id: wid })),
+          ];
+        });
+      } catch (err: any) {
+        console.error('Error updating work areas:', err);
+        toast.error('Error al actualizar áreas: ' + (err.message || 'Error desconocido'));
+        // Refetch to restore correct state
+        fetchData();
+      }
+    });
   };
 
   // Navigate to previous/next activity in form

@@ -37,6 +37,9 @@ interface BudgetReportPreviewProps {
     portada_text_color?: string | null;
     portada_text_position?: string | null;
     portada_overlay_opacity?: number | null;
+    option_a_description?: string | null;
+    option_b_description?: string | null;
+    option_c_description?: string | null;
   };
 }
 
@@ -1166,7 +1169,44 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
         yPos += 4;
       }
 
-      // Custom notes section
+      // Option description section - always show if available
+      const optionDescriptionMap: Record<'A' | 'B' | 'C', string | null | undefined> = {
+        'A': presupuesto.option_a_description,
+        'B': presupuesto.option_b_description,
+        'C': presupuesto.option_c_description,
+      };
+      const currentOptionDescription = optionDescriptionMap[selectedOption]?.trim() || '';
+      
+      if (currentOptionDescription) {
+        yPos += 8;
+        doc.setFillColor(239, 246, 255); // blue-50
+        
+        // Calculate text height
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'normal');
+        const splitDescription = doc.splitTextToSize(currentOptionDescription, pageWidth - 40);
+        const descriptionHeight = splitDescription.length * 5 + 16;
+        
+        doc.roundedRect(14, yPos - 4, pageWidth - 28, descriptionHeight, 2, 2, 'F');
+        
+        // Left accent bar - blue
+        doc.setFillColor(59, 130, 246); // blue-500
+        doc.roundedRect(14, yPos - 4, 3, descriptionHeight, 1, 1, 'F');
+        
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(30, 64, 175); // blue-800
+        doc.text(`DESCRIPCIÓN OPCIÓN ${selectedOption}:`, 22, yPos + 4);
+        
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(30, 41, 59);
+        doc.setFontSize(10);
+        doc.text(splitDescription, 22, yPos + 12);
+        
+        yPos += descriptionHeight + 4;
+      }
+
+      // Custom notes section (Observaciones)
       if (customNotes.trim()) {
         yPos += 8;
         doc.setFillColor(248, 250, 252);

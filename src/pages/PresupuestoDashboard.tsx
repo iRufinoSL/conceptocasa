@@ -9,7 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ArrowLeft, Calculator, ClipboardList, Building2, FileText, Settings, Calendar, Ruler, FileDown, Image, RefreshCw, Copy, GanttChart, Upload, X, Loader2, Euro, Home, MapPin, Users, FolderOpen, CalendarCheck, Mail } from 'lucide-react';
+import { ArrowLeft, Calculator, ClipboardList, Building2, FileText, Settings, Calendar, Ruler, FileDown, Image, RefreshCw, Copy, GanttChart, Upload, X, Loader2, Euro, Home, MapPin, Users, FolderOpen, CalendarCheck, Mail, Landmark } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { AppNavDropdown } from '@/components/AppNavDropdown';
@@ -21,6 +21,7 @@ import { BudgetVisualSummary } from '@/components/presupuestos/BudgetVisualSumma
 import { BudgetVersionComparison } from '@/components/presupuestos/BudgetVersionComparison';
 import { BudgetReportPreview } from '@/components/presupuestos/BudgetReportPreview';
 import { BudgetPredesignTab } from '@/components/presupuestos/BudgetPredesignTab';
+import { BudgetUrbanismTab } from '@/components/presupuestos/BudgetUrbanismTab';
 import { BudgetContactsManager } from '@/components/presupuestos/BudgetContactsManager';
 import { BudgetSpacesTab } from '@/components/presupuestos/BudgetSpacesTab';
 import { BudgetCostSummary } from '@/components/presupuestos/BudgetCostSummary';
@@ -421,6 +422,12 @@ export default function PresupuestoDashboard() {
             {/* Segunda línea: Pestañas secundarias */}
             <TabsList className="flex flex-wrap h-auto gap-1 p-1 w-full justify-start">
               {isTabVisible('anteproyecto') && (
+                <TabsTrigger value="urbanismo" className="flex items-center gap-1.5 text-xs px-2 py-1.5">
+                  <Landmark className="h-3.5 w-3.5" />
+                  <span>Urbanismo</span>
+                </TabsTrigger>
+              )}
+              {isTabVisible('anteproyecto') && (
                 <TabsTrigger value="anteproyecto" className="flex items-center gap-1.5 text-xs px-2 py-1.5">
                   <Image className="h-3.5 w-3.5" />
                   <span>Ante-proyecto</span>
@@ -474,6 +481,10 @@ export default function PresupuestoDashboard() {
               )}
             </TabsList>
           </div>
+
+          <TabsContent value="urbanismo" className="mt-6">
+            <BudgetUrbanismTab budgetId={presupuesto.id} isAdmin={isAdmin} />
+          </TabsContent>
 
           <TabsContent value="anteproyecto" className="mt-6">
             <BudgetPredesignTab budgetId={presupuesto.id} isAdmin={isAdmin} />

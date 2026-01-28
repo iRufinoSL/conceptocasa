@@ -844,34 +844,33 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
         await syncActivityResourcesRelatedUnits(savedActivityId);
         
         // Update work area relations
-         const normalizedWorkAreaIds = normalizeIds(form.work_area_ids);
+        const normalizedWorkAreaIds = normalizeIds(form.work_area_ids);
 
-         // First, delete existing relations for this activity
-         const { error: deleteRelError } = await supabase
-           .from('budget_work_area_activities')
-           .delete()
-           .eq('activity_id', savedActivityId);
+        // First, delete existing relations for this activity
+        const { error: deleteRelError } = await supabase
+          .from('budget_work_area_activities')
+          .delete()
+          .eq('activity_id', savedActivityId);
 
-         if (deleteRelError) throw deleteRelError;
-        
-        // Insert new relations
-         if (normalizedWorkAreaIds.length > 0) {
-           const relationsToInsert = normalizedWorkAreaIds.map((workAreaId) => ({
-             activity_id: savedActivityId,
-             work_area_id: workAreaId,
-           }));
+        if (deleteRelError) throw deleteRelError;
 
-           // Idempotent insert: prevents "duplicate key" if the list contains duplicates
-           // or if the server already has the relation.
-           const { error: relError } = await supabase
-             .from('budget_work_area_activities')
-             .upsert(relationsToInsert, {
-               onConflict: 'work_area_id,activity_id',
-               ignoreDuplicates: true,
-             });
+        // Insert new relations (idempotent; avoid unique violations)
+        if (normalizedWorkAreaIds.length > 0) {
+          const relationsToInsert = normalizedWorkAreaIds.map((workAreaId) => ({
+            activity_id: savedActivityId,
+            work_area_id: workAreaId,
+          }));
 
-           if (relError) throw relError;
-         }
+          const { error: relError } = await supabase
+            .from('budget_work_area_activities')
+            .upsert(relationsToInsert, {
+              // Match the unique constraint column order to ensure PostgREST applies it
+              onConflict: 'activity_id,work_area_id',
+              ignoreDuplicates: true,
+            });
+
+          if (relError) throw relError;
+        }
       }
 
       setFormDialogOpen(false);
@@ -1199,10 +1198,15 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
       const normalizedIds = normalizeIds(workAreaIds);
 
       try {
-        console.log('Updating work areas for activity:', activityId, 'new IDs:', normalizedIds);
+        // Always compute diff from the DB to avoid stale local state (fast toggles + realtime)
+        const { data: currentRows, error: currentError } = await supabase
+          .from('budget_work_area_activities')
+          .select('work_area_id')
+          .eq('activity_id', activityId);
 
-        const currentRelations = workAreaRelations.filter((r) => r.activity_id === activityId);
-        const currentWorkAreaIds = new Set(currentRelations.map((r) => r.work_area_id));
+        if (currentError) throw currentError;
+
+        const currentWorkAreaIds = new Set((currentRows || []).map((r) => r.work_area_id));
         const newWorkAreaIds = new Set(normalizedIds);
         const toAdd = normalizedIds.filter((id) => !currentWorkAreaIds.has(id));
         const toRemove = [...currentWorkAreaIds].filter((id) => !newWorkAreaIds.has(id));
@@ -1218,17 +1222,13 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
         }
 
         if (toAdd.length > 0) {
-          // Idempotent insert: avoids "duplicate key" when users click fast or
-          // when state is briefly stale.
+          // Idempotent insert: avoid unique constraint errors under concurrent updates.
           const { error: addError } = await supabase
             .from('budget_work_area_activities')
-            .upsert(
-              toAdd.map((wid) => ({ activity_id: activityId, work_area_id: wid })),
-              {
-                onConflict: 'work_area_id,activity_id',
-                ignoreDuplicates: true,
-              }
-            );
+            .upsert(toAdd.map((wid) => ({ activity_id: activityId, work_area_id: wid })), {
+              onConflict: 'activity_id,work_area_id',
+              ignoreDuplicates: true,
+            });
 
           if (addError) throw addError;
         }
@@ -1243,7 +1243,9 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
         });
       } catch (err: any) {
         console.error('Error updating work areas:', err);
-        toast.error('Error al actualizar áreas: ' + (err.message || 'Error desconocido'));
+        const msg = err?.message || 'Error desconocido';
+        const details = err?.details ? ` (${err.details})` : '';
+        toast.error('Error al actualizar áreas: ' + msg + details);
         // Refetch to restore correct state
         fetchData();
       }

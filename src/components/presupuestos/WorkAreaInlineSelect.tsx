@@ -23,7 +23,7 @@ interface WorkAreaInlineSelectProps {
   activityId: string;
   workAreas: WorkArea[];
   workAreaRelations: WorkAreaRelation[];
-  onSave: (workAreaIds: string[]) => void;
+  onSave: (workAreaIds: string[]) => void | Promise<void>;
   onTabNext?: () => void;
   onTabPrev?: () => void;
   onArrowUp?: () => void;
@@ -49,6 +49,8 @@ export const WorkAreaInlineSelect = forwardRef<WorkAreaInlineSelectHandle, WorkA
     const [open, setOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [showSuccess, setShowSuccess] = useState(false);
+    // Local optimistic state to avoid stale-props race conditions when toggling fast
+    const [localSelectedIds, setLocalSelectedIds] = useState<string[]>([]);
     const triggerRef = useRef<HTMLButtonElement>(null);
 
     // Get current work area IDs for this activity
@@ -57,6 +59,12 @@ export const WorkAreaInlineSelect = forwardRef<WorkAreaInlineSelectHandle, WorkA
         .filter(r => r.activity_id === activityId)
         .map(r => r.work_area_id);
     }, [workAreaRelations, activityId]);
+
+    // Keep local state in sync when props change (e.g., after realtime refresh)
+    useEffect(() => {
+      // De-dupe defensively
+      setLocalSelectedIds(Array.from(new Set(currentWorkAreaIds)));
+    }, [currentWorkAreaIds]);
 
     useImperativeHandle(ref, () => ({
       focus: () => triggerRef.current?.focus(),
@@ -70,8 +78,8 @@ export const WorkAreaInlineSelect = forwardRef<WorkAreaInlineSelectHandle, WorkA
 
     // Get selected work areas for display
     const selectedWorkAreas = useMemo(() => {
-      return workAreas.filter(wa => currentWorkAreaIds.includes(wa.id));
-    }, [currentWorkAreaIds, workAreas]);
+      return workAreas.filter(wa => localSelectedIds.includes(wa.id));
+    }, [localSelectedIds, workAreas]);
 
     // Get display value
     const displayValue = useMemo(() => {
@@ -94,23 +102,32 @@ export const WorkAreaInlineSelect = forwardRef<WorkAreaInlineSelectHandle, WorkA
     }, [workAreas, searchQuery]);
 
     // Handle toggle with immediate save
-    const handleToggle = (workAreaId: string) => {
-      const newIds = currentWorkAreaIds.includes(workAreaId)
-        ? currentWorkAreaIds.filter(id => id !== workAreaId)
-        : [...currentWorkAreaIds, workAreaId];
-      
-      console.log('Toggle work area:', workAreaId, 'new ids:', newIds);
-      onSave(newIds);
-      triggerSuccess();
+    const handleToggle = async (workAreaId: string) => {
+      const base = localSelectedIds;
+      const newIds = base.includes(workAreaId)
+        ? base.filter(id => id !== workAreaId)
+        : [...base, workAreaId];
+
+      // Optimistic UI first
+      setLocalSelectedIds(Array.from(new Set(newIds)));
+      try {
+        await onSave(Array.from(new Set(newIds)));
+        triggerSuccess();
+      } catch (e) {
+        // Revert to server state on error
+        setLocalSelectedIds(Array.from(new Set(currentWorkAreaIds)));
+        throw e;
+      }
     };
 
     // Handle remove via X button (outside popover)
     const handleRemove = (e: React.MouseEvent, workAreaId: string) => {
       e.preventDefault();
       e.stopPropagation();
-      const newIds = currentWorkAreaIds.filter(id => id !== workAreaId);
-      console.log('Remove work area:', workAreaId, 'remaining ids:', newIds);
-      onSave(newIds);
+      const newIds = localSelectedIds.filter(id => id !== workAreaId);
+      setLocalSelectedIds(Array.from(new Set(newIds)));
+      // Fire-and-forget (errors handled in parent toast)
+      void onSave(Array.from(new Set(newIds)));
       triggerSuccess();
     };
 
@@ -205,12 +222,12 @@ export const WorkAreaInlineSelect = forwardRef<WorkAreaInlineSelectHandle, WorkA
                 <CommandEmpty>No se encontraron áreas de trabajo</CommandEmpty>
                 <CommandGroup>
                   {filteredWorkAreas.map(workArea => {
-                    const isSelected = currentWorkAreaIds.includes(workArea.id);
+                    const isSelected = localSelectedIds.includes(workArea.id);
                     return (
                       <CommandItem
                         key={workArea.id}
                         value={workArea.id}
-                        onSelect={() => handleToggle(workArea.id)}
+                        onSelect={() => void handleToggle(workArea.id)}
                         className="flex items-center gap-2"
                       >
                         <Check className={cn("h-4 w-4", isSelected ? "opacity-100" : "opacity-0")} />

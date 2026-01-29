@@ -21,6 +21,7 @@ import { calcResourceSubtotal } from '@/lib/budget-pricing';
 import { searchMatch } from '@/lib/search-utils';
 import { format, addDays, parseISO, isValid } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { InlineDatePicker } from '@/components/ui/inline-date-picker';
 interface BudgetPhase {
   id: string;
   budget_id: string;
@@ -974,22 +975,20 @@ export function BudgetPhasesTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
                         <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
                           <div className="text-center">
                             <p className="text-[10px] text-muted-foreground mb-0.5">Inicio Real</p>
-                            <Input
-                              type="date"
-                              value={phase.actual_start_date || ''}
-                              onChange={(e) => handlePhaseActualDateUpdate(phase.id, 'actual_start_date', e.target.value)}
-                              className="w-32 h-7 text-xs"
+                            <InlineDatePicker
+                              value={phase.actual_start_date}
+                              onChange={(value) => handlePhaseActualDateUpdate(phase.id, 'actual_start_date', value)}
                               disabled={!isAdmin}
+                              placeholder="Seleccionar"
                             />
                           </div>
                           <div className="text-center">
                             <p className="text-[10px] text-muted-foreground mb-0.5">Fin Real</p>
-                            <Input
-                              type="date"
-                              value={phase.actual_end_date || ''}
-                              onChange={(e) => handlePhaseActualDateUpdate(phase.id, 'actual_end_date', e.target.value)}
-                              className="w-32 h-7 text-xs"
+                            <InlineDatePicker
+                              value={phase.actual_end_date}
+                              onChange={(value) => handlePhaseActualDateUpdate(phase.id, 'actual_end_date', value)}
                               disabled={!isAdmin}
+                              placeholder="Seleccionar"
                             />
                           </div>
                         </div>
@@ -1034,22 +1033,20 @@ export function BudgetPhasesTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
                                   <div className="flex items-center gap-2">
                                     <div className="text-center">
                                       <p className="text-[10px] text-muted-foreground mb-0.5">Inicio Real</p>
-                                      <Input
-                                        type="date"
-                                        value={activity.actual_start_date || ''}
-                                        onChange={(e) => handleActivityActualDateUpdate(activity.id, 'actual_start_date', e.target.value)}
-                                        className="w-32 h-7 text-xs"
+                                      <InlineDatePicker
+                                        value={activity.actual_start_date}
+                                        onChange={(value) => handleActivityActualDateUpdate(activity.id, 'actual_start_date', value)}
                                         disabled={!isAdmin}
+                                        placeholder="Seleccionar"
                                       />
                                     </div>
                                     <div className="text-center">
                                       <p className="text-[10px] text-muted-foreground mb-0.5">Fin Real</p>
-                                      <Input
-                                        type="date"
-                                        value={activity.actual_end_date || ''}
-                                        onChange={(e) => handleActivityActualDateUpdate(activity.id, 'actual_end_date', e.target.value)}
-                                        className="w-32 h-7 text-xs"
+                                      <InlineDatePicker
+                                        value={activity.actual_end_date}
+                                        onChange={(value) => handleActivityActualDateUpdate(activity.id, 'actual_end_date', value)}
                                         disabled={!isAdmin}
+                                        placeholder="Seleccionar"
                                       />
                                     </div>
                                   </div>

@@ -27,6 +27,7 @@ import { BudgetSpacesTab } from '@/components/presupuestos/BudgetSpacesTab';
 import { BudgetCostSummary } from '@/components/presupuestos/BudgetCostSummary';
 import { CloneBudgetDialog } from '@/components/presupuestos/CloneBudgetDialog';
 import { BudgetTimelineView } from '@/components/presupuestos/BudgetTimelineView';
+import { HierarchicalGanttView } from '@/components/presupuestos/HierarchicalGanttView';
 import { recalculateAllBudgetResources } from '@/lib/budget-utils';
 import { BudgetWorkAreasTab } from '@/components/presupuestos/BudgetWorkAreasTab';
 import { BudgetDocumentsTab } from '@/components/presupuestos/BudgetDocumentsTab';
@@ -616,7 +617,20 @@ export default function PresupuestoDashboard() {
             />
           </TabsContent>
 
-          <TabsContent value="timeline" className="mt-6">
+          <TabsContent value="timeline" className="mt-6 space-y-6">
+            <HierarchicalGanttView 
+              budgetId={presupuesto.id}
+              budgetStartDate={presupuesto.start_date}
+              budgetEndDate={presupuesto.end_date}
+              onPhaseClick={(phase) => {
+                setSelectedPhaseId(phase.id);
+                setActiveTab('fases');
+              }}
+              onActivityClick={(activity) => {
+                setSelectedActivityId(activity.id);
+                setActiveTab('actividades');
+              }}
+            />
             <BudgetTimelineView 
               budgetId={presupuesto.id}
               budgetStartDate={presupuesto.start_date}

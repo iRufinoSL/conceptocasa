@@ -244,6 +244,8 @@ export type Database = {
       }
       budget_activities: {
         Row: {
+          actual_end_date: string | null
+          actual_start_date: string | null
           budget_id: string
           code: string
           created_at: string
@@ -262,6 +264,8 @@ export type Database = {
           uses_measurement: boolean
         }
         Insert: {
+          actual_end_date?: string | null
+          actual_start_date?: string | null
           budget_id: string
           code: string
           created_at?: string
@@ -280,6 +284,8 @@ export type Database = {
           uses_measurement?: boolean
         }
         Update: {
+          actual_end_date?: string | null
+          actual_start_date?: string | null
           budget_id?: string
           code?: string
           created_at?: string
@@ -682,6 +688,8 @@ export type Database = {
       }
       budget_phases: {
         Row: {
+          actual_end_date: string | null
+          actual_start_date: string | null
           budget_id: string
           code: string | null
           created_at: string | null
@@ -697,6 +705,8 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
+          actual_end_date?: string | null
+          actual_start_date?: string | null
           budget_id: string
           code?: string | null
           created_at?: string | null
@@ -712,6 +722,8 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
+          actual_end_date?: string | null
+          actual_start_date?: string | null
           budget_id?: string
           code?: string | null
           created_at?: string | null

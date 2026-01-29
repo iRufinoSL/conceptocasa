@@ -1,10 +1,10 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Calculator, Home, Euro, TrendingUp, Building2, Package, LayoutGrid, FileText, FileSignature, Loader2 } from 'lucide-react';
+import { Calculator, Home, Euro, TrendingUp, Building2, Package, LayoutGrid, FileText, FileSignature, Loader2, Check } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
@@ -86,31 +86,94 @@ export function BudgetCostSummary({
   const [signingInProgress, setSigningInProgress] = useState(false);
   const [confirmSignOpen, setConfirmSignOpen] = useState(false);
   const [editingDescription, setEditingDescription] = useState<string | null>(null);
+  const [savingDescription, setSavingDescription] = useState<string | null>(null);
+  const [savedDescription, setSavedDescription] = useState<string | null>(null);
   const [descriptionValues, setDescriptionValues] = useState({
     A: optionADescription || '',
     B: optionBDescription || '',
     C: optionCDescription || ''
   });
+  
+  // Track the last saved values to avoid unnecessary saves
+  const lastSavedRef = useRef({
+    A: optionADescription || '',
+    B: optionBDescription || '',
+    C: optionCDescription || ''
+  });
+  
+  // Debounce timers for each option
+  const saveTimersRef = useRef<Record<string, NodeJS.Timeout>>({});
 
-  // Sync description values when props change
+  // Sync description values when props change (from external source)
   useEffect(() => {
     setDescriptionValues({
       A: optionADescription || '',
       B: optionBDescription || '',
       C: optionCDescription || ''
     });
+    lastSavedRef.current = {
+      A: optionADescription || '',
+      B: optionBDescription || '',
+      C: optionCDescription || ''
+    };
   }, [optionADescription, optionBDescription, optionCDescription]);
 
   const getOptionDescription = (option: string) => {
     return descriptionValues[option as 'A' | 'B' | 'C'] || '';
   };
 
+  // Auto-save description with debounce
+  const saveDescription = useCallback(async (option: string, value: string) => {
+    if (onOptionDescriptionChange && value !== lastSavedRef.current[option as 'A' | 'B' | 'C']) {
+      setSavingDescription(option);
+      setSavedDescription(null);
+      try {
+        await onOptionDescriptionChange(option, value);
+        lastSavedRef.current[option as 'A' | 'B' | 'C'] = value;
+        setSavedDescription(option);
+        // Clear the saved indicator after 2 seconds
+        setTimeout(() => setSavedDescription(prev => prev === option ? null : prev), 2000);
+      } catch (err) {
+        console.error('Error saving description:', err);
+      } finally {
+        setSavingDescription(null);
+      }
+    }
+  }, [onOptionDescriptionChange]);
+
+  const handleDescriptionChange = (option: string, value: string) => {
+    setDescriptionValues(prev => ({ ...prev, [option]: value }));
+    
+    // Clear existing timer for this option
+    if (saveTimersRef.current[option]) {
+      clearTimeout(saveTimersRef.current[option]);
+    }
+    
+    // Set new debounce timer (800ms)
+    saveTimersRef.current[option] = setTimeout(() => {
+      saveDescription(option, value);
+    }, 800);
+  };
+
   const handleDescriptionBlur = async (option: string) => {
     setEditingDescription(null);
-    if (onOptionDescriptionChange) {
-      await onOptionDescriptionChange(option, descriptionValues[option as 'A' | 'B' | 'C']);
+    
+    // Clear any pending debounce timer and save immediately
+    if (saveTimersRef.current[option]) {
+      clearTimeout(saveTimersRef.current[option]);
+      delete saveTimersRef.current[option];
     }
+    
+    const value = descriptionValues[option as 'A' | 'B' | 'C'];
+    await saveDescription(option, value);
   };
+  
+  // Cleanup timers on unmount
+  useEffect(() => {
+    return () => {
+      Object.values(saveTimersRef.current).forEach(timer => clearTimeout(timer));
+    };
+  }, []);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -694,19 +757,33 @@ export function BudgetCostSummary({
                   </div>
                   {availableOptions.map(option => (
                     <Card key={option} className={`bg-gradient-to-br ${OPTION_COLORS[option]?.from || 'from-gray-500/10'} ${OPTION_COLORS[option]?.to || 'to-gray-500/10'} ${OPTION_COLORS[option]?.border || 'border-gray-500/20'}`}>
-                      <CardContent className="py-3 px-3">
+                      <CardContent className="py-3 px-3 relative">
                         {isAdmin ? (
-                          <Textarea
-                            value={descriptionValues[option as 'A' | 'B' | 'C']}
-                            onChange={(e) => setDescriptionValues(prev => ({
-                              ...prev,
-                              [option]: e.target.value
-                            }))}
-                            onBlur={() => handleDescriptionBlur(option)}
-                            placeholder={`¿Qué caracteriza la Opción ${option}?`}
-                            className="min-h-[80px] text-sm resize-none border-0 focus:ring-1 text-foreground placeholder:text-muted-foreground/60 bg-white/50 dark:bg-black/20 font-sans"
-                            style={{ fontFamily: '"Plus Jakarta Sans", system-ui, sans-serif' }}
-                          />
+                          <>
+                            <Textarea
+                              value={descriptionValues[option as 'A' | 'B' | 'C']}
+                              onChange={(e) => handleDescriptionChange(option, e.target.value)}
+                              onBlur={() => handleDescriptionBlur(option)}
+                              placeholder={`¿Qué caracteriza la Opción ${option}?`}
+                              className="min-h-[80px] text-sm resize-none border-0 focus:ring-1 text-foreground placeholder:text-muted-foreground/60 bg-white/50 dark:bg-black/20 font-sans"
+                              style={{ fontFamily: '"Plus Jakarta Sans", system-ui, sans-serif' }}
+                            />
+                            {/* Save status indicator */}
+                            <div className="absolute bottom-1 right-1 text-xs">
+                              {savingDescription === option && (
+                                <span className="text-muted-foreground flex items-center gap-1">
+                                  <Loader2 className="h-3 w-3 animate-spin" />
+                                  Guardando...
+                                </span>
+                              )}
+                              {savedDescription === option && (
+                                <span className="text-green-600 flex items-center gap-1">
+                                  <Check className="h-3 w-3" />
+                                  Guardado
+                                </span>
+                              )}
+                            </div>
+                          </>
                         ) : (
                           <p className={`text-sm whitespace-pre-wrap ${OPTION_COLORS[option]?.text || 'text-gray-600'}`}>
                             {getOptionDescription(option) || <span className="italic text-muted-foreground">Sin descripción</span>}

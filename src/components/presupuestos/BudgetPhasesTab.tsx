@@ -45,6 +45,8 @@ interface BudgetActivity {
   phase_id: string | null;
   subtotal?: number;
   opciones: string[];
+  actual_start_date: string | null;
+  actual_end_date: string | null;
 }
 
 interface BudgetResource {
@@ -168,6 +170,7 @@ export function BudgetPhasesTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
   const [importData, setImportData] = useState<{ name: string; code: string }[]>([]);
   const [isImporting, setIsImporting] = useState(false);
   const [expandedPhases, setExpandedPhases] = useState<Set<string>>(new Set());
+  const [expandedPhasesTime, setExpandedPhasesTime] = useState<Set<string>>(new Set());
   const [expandedOptions, setExpandedOptions] = useState<Set<string>>(new Set()); // collapsed by default
   const [editingTimeField, setEditingTimeField] = useState<{ phaseId: string; field: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -184,7 +187,7 @@ export function BudgetPhasesTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
           .order('code', { ascending: true }),
         supabase
           .from('budget_activities')
-          .select('id, name, code, phase_id, opciones')
+          .select('id, name, code, phase_id, opciones, actual_start_date, actual_end_date')
           .eq('budget_id', budgetId),
         supabase
           .from('budget_activity_resources')
@@ -703,6 +706,18 @@ export function BudgetPhasesTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
     });
   };
 
+  const togglePhaseTimeExpanded = (phaseId: string) => {
+    setExpandedPhasesTime(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(phaseId)) {
+        newSet.delete(phaseId);
+      } else {
+        newSet.add(phaseId);
+      }
+      return newSet;
+    });
+  };
+
   const getPhaseActivities = (phaseId: string) => {
     return activities.filter(a => a.phase_id === phaseId);
   };
@@ -713,6 +728,46 @@ export function BudgetPhasesTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
 
   const generateActivityId = (activity: BudgetActivity, phaseCode: string | null) => {
     return `${phaseCode || ''} ${activity.code}.- ${activity.name}`.trim();
+  };
+
+  // Handle inline actual date update for phases
+  const handlePhaseActualDateUpdate = async (phaseId: string, field: 'actual_start_date' | 'actual_end_date', value: string | null) => {
+    try {
+      const { error } = await supabase
+        .from('budget_phases')
+        .update({ [field]: value || null })
+        .eq('id', phaseId);
+      
+      if (error) throw error;
+      
+      setPhases(prev => prev.map(p => 
+        p.id === phaseId ? { ...p, [field]: value || null } : p
+      ));
+      toast.success('Fecha actualizada');
+    } catch (err: any) {
+      console.error('Error updating phase actual date:', err);
+      toast.error('Error al actualizar');
+    }
+  };
+
+  // Handle inline actual date update for activities
+  const handleActivityActualDateUpdate = async (activityId: string, field: 'actual_start_date' | 'actual_end_date', value: string | null) => {
+    try {
+      const { error } = await supabase
+        .from('budget_activities')
+        .update({ [field]: value || null })
+        .eq('id', activityId);
+      
+      if (error) throw error;
+      
+      setActivities(prev => prev.map(a => 
+        a.id === activityId ? { ...a, [field]: value || null } : a
+      ));
+      toast.success('Fecha actualizada');
+    } catch (err: any) {
+      console.error('Error updating activity actual date:', err);
+      toast.error('Error al actualizar');
+    }
   };
 
   // Handle inline time field update
@@ -888,91 +943,131 @@ export function BudgetPhasesTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
             {searchTerm ? 'No se encontraron fases' : 'No hay fases. Importe un archivo CSV o cree una nueva fase.'}
           </div>
         ) : viewMode === 'time' ? (
-          /* Time Management View */
-          <div className="border rounded-lg overflow-hidden">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>FaseID</TableHead>
-                  <TableHead className="text-center w-24">Tiempo %</TableHead>
-                  <TableHead>Fecha Inicio (calculada)</TableHead>
-                  <TableHead className="text-center">Duración (días)</TableHead>
-                  <TableHead>Fecha Fin Estimada</TableHead>
-                  {isAdmin && <TableHead className="w-20">Acciones</TableHead>}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredPhases.map((phase) => (
-                  <TableRow key={phase.id}>
-                    <TableCell className="font-medium">{generatePhaseId(phase)}</TableCell>
-                    <TableCell className="text-center">
-                      {isAdmin ? (
-                        <Input
-                          type="number"
-                          value={phase.time_percent ?? ''}
-                          min={0}
-                          max={100}
-                          onChange={(e) => handleInlineTimeUpdate(phase.id, 'time_percent', e.target.value ? parseFloat(e.target.value) : null)}
-                          className="w-20 h-8 text-center mx-auto"
-                          placeholder="0-100"
-                        />
+          /* Time Management View with collapsible phases */
+          <div className="space-y-2">
+            {filteredPhases.map((phase) => {
+              const phaseActivities = getPhaseActivities(phase.id);
+              const isExpanded = expandedPhasesTime.has(phase.id);
+
+              return (
+                <Collapsible key={phase.id} open={isExpanded} onOpenChange={() => togglePhaseTimeExpanded(phase.id)}>
+                  <div className="border rounded-lg">
+                    <CollapsibleTrigger asChild>
+                      <div className="flex items-center gap-2 p-3 cursor-pointer hover:bg-muted/50 transition-colors">
+                        {phaseActivities.length > 0 ? (
+                          isExpanded ? (
+                            <ChevronDown className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                          ) : (
+                            <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                          )
+                        ) : (
+                          <div className="w-4" />
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium truncate">{generatePhaseId(phase)}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {phaseActivities.length} actividad{phaseActivities.length !== 1 ? 'es' : ''}
+                            {phase.duration_days && ` • ${phase.duration_days} días`}
+                          </p>
+                        </div>
+                        {/* Inline date inputs for phase */}
+                        <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                          <div className="text-center">
+                            <p className="text-[10px] text-muted-foreground mb-0.5">Inicio Real</p>
+                            <Input
+                              type="date"
+                              value={phase.actual_start_date || ''}
+                              onChange={(e) => handlePhaseActualDateUpdate(phase.id, 'actual_start_date', e.target.value)}
+                              className="w-32 h-7 text-xs"
+                              disabled={!isAdmin}
+                            />
+                          </div>
+                          <div className="text-center">
+                            <p className="text-[10px] text-muted-foreground mb-0.5">Fin Real</p>
+                            <Input
+                              type="date"
+                              value={phase.actual_end_date || ''}
+                              onChange={(e) => handlePhaseActualDateUpdate(phase.id, 'actual_end_date', e.target.value)}
+                              className="w-32 h-7 text-xs"
+                              disabled={!isAdmin}
+                            />
+                          </div>
+                        </div>
+                        {isAdmin && (
+                          <div onClick={(e) => e.stopPropagation()}>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-8 w-8">
+                                  <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="bg-popover">
+                                <DropdownMenuItem onClick={() => handleEdit(phase)}>
+                                  <Pencil className="h-4 w-4 mr-2" />
+                                  Editar
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleDeleteClick(phase)} className="text-destructive">
+                                  <Trash2 className="h-4 w-4 mr-2" />
+                                  Eliminar
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+                        )}
+                      </div>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      {phaseActivities.length > 0 ? (
+                        <div className="border-t bg-muted/20 p-3">
+                          <div className="space-y-2">
+                            {phaseActivities
+                              .sort((a, b) => a.code.localeCompare(b.code))
+                              .map((activity) => (
+                                <div 
+                                  key={activity.id}
+                                  className="flex items-center gap-2 p-2 rounded-md border bg-background"
+                                >
+                                  <p className="font-mono text-sm flex-1 min-w-0 truncate">
+                                    {generateActivityId(activity, phase.code)}
+                                  </p>
+                                  {/* Inline date inputs for activity */}
+                                  <div className="flex items-center gap-2">
+                                    <div className="text-center">
+                                      <p className="text-[10px] text-muted-foreground mb-0.5">Inicio Real</p>
+                                      <Input
+                                        type="date"
+                                        value={activity.actual_start_date || ''}
+                                        onChange={(e) => handleActivityActualDateUpdate(activity.id, 'actual_start_date', e.target.value)}
+                                        className="w-32 h-7 text-xs"
+                                        disabled={!isAdmin}
+                                      />
+                                    </div>
+                                    <div className="text-center">
+                                      <p className="text-[10px] text-muted-foreground mb-0.5">Fin Real</p>
+                                      <Input
+                                        type="date"
+                                        value={activity.actual_end_date || ''}
+                                        onChange={(e) => handleActivityActualDateUpdate(activity.id, 'actual_end_date', e.target.value)}
+                                        className="w-32 h-7 text-xs"
+                                        disabled={!isAdmin}
+                                      />
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                          </div>
+                        </div>
                       ) : (
-                        <span>{phase.time_percent ?? '-'}%</span>
+                        <div className="border-t bg-muted/20 p-4 text-center text-muted-foreground">
+                          <ClipboardList className="h-6 w-6 mx-auto mb-1 opacity-50" />
+                          <p className="text-sm">No hay actividades asignadas</p>
+                        </div>
                       )}
-                    </TableCell>
-                    <TableCell>
-                      <span className={phase.time_percent !== null ? 'text-primary font-medium' : ''}>
-                        {phase.start_date 
-                          ? format(parseISO(phase.start_date), 'dd/MM/yyyy', { locale: es })
-                          : '-'}
-                      </span>
-                      {phase.time_percent !== null && (
-                        <span className="text-xs text-muted-foreground ml-1">(calc.)</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-center">
-                      {isAdmin ? (
-                        <Input
-                          type="number"
-                          value={phase.duration_days ?? ''}
-                          min={0}
-                          onChange={(e) => handleInlineTimeUpdate(phase.id, 'duration_days', e.target.value ? parseInt(e.target.value) : null)}
-                          className="w-20 h-8 text-center mx-auto"
-                        />
-                      ) : (
-                        <span>{phase.duration_days ?? '-'}</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {phase.estimated_end_date 
-                        ? format(parseISO(phase.estimated_end_date), 'dd/MM/yyyy', { locale: es })
-                        : '-'}
-                    </TableCell>
-                    {isAdmin && (
-                      <TableCell>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon">
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="bg-popover">
-                            <DropdownMenuItem onClick={() => handleEdit(phase)}>
-                              <Pencil className="h-4 w-4 mr-2" />
-                              Editar
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleDeleteClick(phase)} className="text-destructive">
-                              <Trash2 className="h-4 w-4 mr-2" />
-                              Eliminar
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </TableCell>
-                    )}
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                    </CollapsibleContent>
+                  </div>
+                </Collapsible>
+              );
+            })}
           </div>
         ) : (
           /* Activities View (existing) */

@@ -10,7 +10,9 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Plus, Pencil, Trash2, Upload, Search, ChevronRight, ChevronDown, ClipboardList, MoreHorizontal, Copy, Calendar, List, Clock, LayoutGrid } from 'lucide-react';
+import { Plus, Pencil, Trash2, Upload, Search, ChevronRight, ChevronDown, ClipboardList, MoreHorizontal, Copy, Calendar, List, Clock, LayoutGrid, BarChart3 } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
+import { HierarchicalGanttView } from './HierarchicalGanttView';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { PhasesOptionsGroupedView } from './PhasesOptionsGroupedView';
@@ -19,6 +21,7 @@ import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import { formatCurrency } from '@/lib/format-utils';
 import { calcResourceSubtotal } from '@/lib/budget-pricing';
 import { searchMatch } from '@/lib/search-utils';
+import { cn } from '@/lib/utils';
 import { format, addDays, parseISO, isValid } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { InlineDatePicker } from '@/components/ui/inline-date-picker';
@@ -48,6 +51,7 @@ interface BudgetActivity {
   opciones: string[];
   actual_start_date: string | null;
   actual_end_date: string | null;
+  uses_measurement: boolean;
 }
 
 interface BudgetResource {
@@ -161,7 +165,7 @@ export function BudgetPhasesTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
   const [resources, setResources] = useState<BudgetResource[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [viewMode, setViewMode] = useState<'activities' | 'time' | 'options'>('activities');
+  const [viewMode, setViewMode] = useState<'activities' | 'time' | 'gantt' | 'options'>('activities');
   const [formDialogOpen, setFormDialogOpen] = useState(false);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -188,7 +192,7 @@ export function BudgetPhasesTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
           .order('code', { ascending: true }),
         supabase
           .from('budget_activities')
-          .select('id, name, code, phase_id, opciones, actual_start_date, actual_end_date')
+          .select('id, name, code, phase_id, opciones, actual_start_date, actual_end_date, uses_measurement')
           .eq('budget_id', budgetId),
         supabase
           .from('budget_activity_resources')
@@ -771,6 +775,26 @@ export function BudgetPhasesTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
     }
   };
 
+  // Handle inline SI/NO toggle for activities (uses_measurement as SI/NO indicator)
+  const handleActivitySiNoToggle = async (activityId: string, value: boolean) => {
+    try {
+      const { error } = await supabase
+        .from('budget_activities')
+        .update({ uses_measurement: value })
+        .eq('id', activityId);
+      
+      if (error) throw error;
+      
+      setActivities(prev => prev.map(a => 
+        a.id === activityId ? { ...a, uses_measurement: value } : a
+      ));
+      toast.success(value ? 'Actividad marcada como SI' : 'Actividad marcada como NO');
+    } catch (err: any) {
+      console.error('Error updating activity:', err);
+      toast.error('Error al actualizar');
+    }
+  };
+
   // Handle inline time field update
   const handleInlineTimeUpdate = async (phaseId: string, field: 'start_date' | 'duration_days' | 'time_percent', value: string | number | null) => {
     try {
@@ -879,6 +903,15 @@ export function BudgetPhasesTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
               Gestión Tiempo
             </Button>
             <Button 
+              variant={viewMode === 'gantt' ? 'default' : 'ghost'} 
+              size="sm"
+              onClick={() => setViewMode('gantt')}
+              className="rounded-none border-r"
+            >
+              <BarChart3 className="h-4 w-4 mr-1" />
+              Gantt
+            </Button>
+            <Button 
               variant={viewMode === 'options' ? 'default' : 'ghost'} 
               size="sm"
               onClick={() => setViewMode('options')}
@@ -943,11 +976,21 @@ export function BudgetPhasesTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
           <div className="text-center py-8 text-muted-foreground">
             {searchTerm ? 'No se encontraron fases' : 'No hay fases. Importe un archivo CSV o cree una nueva fase.'}
           </div>
+        ) : viewMode === 'gantt' ? (
+          /* Gantt Chart View */
+          <HierarchicalGanttView
+            budgetId={budgetId}
+            budgetStartDate={budgetStartDate || null}
+            budgetEndDate={budgetEndDate || null}
+            onPhaseClick={(phase) => handleEdit(phase as BudgetPhase)}
+          />
         ) : viewMode === 'time' ? (
-          /* Time Management View with collapsible phases */
+          /* Time Management View with collapsible phases and SI/NO filter */
           <div className="space-y-2">
             {filteredPhases.map((phase) => {
-              const phaseActivities = getPhaseActivities(phase.id);
+              // Filter activities to only show those marked as SI (uses_measurement = true)
+              const phaseActivities = getPhaseActivities(phase.id).filter(a => a.uses_measurement);
+              const allPhaseActivities = getPhaseActivities(phase.id);
               const isExpanded = expandedPhasesTime.has(phase.id);
 
               return (
@@ -955,7 +998,7 @@ export function BudgetPhasesTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
                   <div className="border rounded-lg">
                     <CollapsibleTrigger asChild>
                       <div className="flex items-center gap-2 p-3 cursor-pointer hover:bg-muted/50 transition-colors">
-                        {phaseActivities.length > 0 ? (
+                        {allPhaseActivities.length > 0 ? (
                           isExpanded ? (
                             <ChevronDown className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                           ) : (
@@ -967,7 +1010,7 @@ export function BudgetPhasesTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
                         <div className="flex-1 min-w-0">
                           <p className="font-medium truncate">{generatePhaseId(phase)}</p>
                           <p className="text-xs text-muted-foreground">
-                            {phaseActivities.length} actividad{phaseActivities.length !== 1 ? 'es' : ''}
+                            {phaseActivities.length}/{allPhaseActivities.length} actividad{allPhaseActivities.length !== 1 ? 'es' : ''} activas
                             {phase.duration_days && ` • ${phase.duration_days} días`}
                           </p>
                         </div>
@@ -1016,40 +1059,60 @@ export function BudgetPhasesTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
                       </div>
                     </CollapsibleTrigger>
                     <CollapsibleContent>
-                      {phaseActivities.length > 0 ? (
+                      {allPhaseActivities.length > 0 ? (
                         <div className="border-t bg-muted/20 p-3">
                           <div className="space-y-2">
-                            {phaseActivities
+                            {allPhaseActivities
                               .sort((a, b) => a.code.localeCompare(b.code))
                               .map((activity) => (
                                 <div 
                                   key={activity.id}
-                                  className="flex items-center gap-2 p-2 rounded-md border bg-background"
+                                  className={cn(
+                                    "flex items-center gap-2 p-2 rounded-md border bg-background",
+                                    !activity.uses_measurement && "opacity-50"
+                                  )}
                                 >
+                                  {/* SI/NO Toggle */}
+                                  <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                                    <Switch
+                                      checked={activity.uses_measurement}
+                                      onCheckedChange={(checked) => handleActivitySiNoToggle(activity.id, checked)}
+                                      disabled={!isAdmin}
+                                      className="scale-75"
+                                    />
+                                    <span className={cn(
+                                      "text-[10px] font-medium w-4",
+                                      activity.uses_measurement ? "text-green-600 dark:text-green-400" : "text-muted-foreground"
+                                    )}>
+                                      {activity.uses_measurement ? 'SI' : 'NO'}
+                                    </span>
+                                  </div>
                                   <p className="font-mono text-sm flex-1 min-w-0 truncate">
                                     {generateActivityId(activity, phase.code)}
                                   </p>
-                                  {/* Inline date inputs for activity */}
-                                  <div className="flex items-center gap-2">
-                                    <div className="text-center">
-                                      <p className="text-[10px] text-muted-foreground mb-0.5">Inicio Real</p>
-                                      <InlineDatePicker
-                                        value={activity.actual_start_date}
-                                        onChange={(value) => handleActivityActualDateUpdate(activity.id, 'actual_start_date', value)}
-                                        disabled={!isAdmin}
-                                        placeholder="Seleccionar"
-                                      />
+                                  {/* Inline date inputs for activity - only show if SI */}
+                                  {activity.uses_measurement && (
+                                    <div className="flex items-center gap-2">
+                                      <div className="text-center">
+                                        <p className="text-[10px] text-muted-foreground mb-0.5">Inicio Real</p>
+                                        <InlineDatePicker
+                                          value={activity.actual_start_date}
+                                          onChange={(value) => handleActivityActualDateUpdate(activity.id, 'actual_start_date', value)}
+                                          disabled={!isAdmin}
+                                          placeholder="Seleccionar"
+                                        />
+                                      </div>
+                                      <div className="text-center">
+                                        <p className="text-[10px] text-muted-foreground mb-0.5">Fin Real</p>
+                                        <InlineDatePicker
+                                          value={activity.actual_end_date}
+                                          onChange={(value) => handleActivityActualDateUpdate(activity.id, 'actual_end_date', value)}
+                                          disabled={!isAdmin}
+                                          placeholder="Seleccionar"
+                                        />
+                                      </div>
                                     </div>
-                                    <div className="text-center">
-                                      <p className="text-[10px] text-muted-foreground mb-0.5">Fin Real</p>
-                                      <InlineDatePicker
-                                        value={activity.actual_end_date}
-                                        onChange={(value) => handleActivityActualDateUpdate(activity.id, 'actual_end_date', value)}
-                                        disabled={!isAdmin}
-                                        placeholder="Seleccionar"
-                                      />
-                                    </div>
-                                  </div>
+                                  )}
                                 </div>
                               ))}
                           </div>

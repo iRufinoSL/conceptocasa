@@ -67,6 +67,10 @@ interface BudgetResource {
   resource_type: string | null;
   unit: string | null;
   supplier_id: string | null;
+  purchase_unit: string | null;
+  purchase_unit_quantity: number | null;
+  purchase_unit_cost: number | null;
+  conversion_factor: number | null;
   supplier?: {
     name: string;
   } | null;
@@ -204,7 +208,7 @@ export function BudgetPhasesTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
           .eq('budget_id', budgetId),
         supabase
           .from('budget_activity_resources')
-          .select('id, name, activity_id, external_unit_cost, safety_margin_percent, sales_margin_percent, manual_units, related_units, resource_type, unit, supplier_id, supplier:crm_contacts!budget_activity_resources_supplier_id_fkey(name)')
+          .select('id, name, activity_id, external_unit_cost, safety_margin_percent, sales_margin_percent, manual_units, related_units, resource_type, unit, supplier_id, purchase_unit, purchase_unit_quantity, purchase_unit_cost, conversion_factor, supplier:crm_contacts!budget_activity_resources_supplier_id_fkey(name)')
           .eq('budget_id', budgetId)
       ]);
 
@@ -996,12 +1000,25 @@ export function BudgetPhasesTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
         ) : viewMode === 'shopping' ? (
           /* Buying List View */
           <BuyingListView
-            phases={filteredPhases}
-            activities={activities}
+            phases={filteredPhases.map(p => ({
+              ...p,
+              actual_start_date: p.actual_start_date,
+              actual_end_date: p.actual_end_date
+            }))}
+            activities={activities.map(a => ({
+              ...a,
+              actual_start_date: a.actual_start_date,
+              actual_end_date: a.actual_end_date
+            }))}
             resources={resources.map(r => ({
               ...r,
-              supplier_name: r.supplier?.name || null
+              supplier_name: r.supplier?.name || null,
+              purchase_unit: r.purchase_unit,
+              purchase_unit_quantity: r.purchase_unit_quantity,
+              purchase_unit_cost: r.purchase_unit_cost,
+              conversion_factor: r.conversion_factor
             }))}
+            onResourcesChanged={fetchData}
           />
         ) : viewMode === 'gantt' ? (
           /* Gantt Chart View */

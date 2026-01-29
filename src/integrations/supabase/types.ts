@@ -372,6 +372,7 @@ export type Database = {
         Row: {
           activity_id: string | null
           budget_id: string
+          conversion_factor: number | null
           created_at: string | null
           description: string | null
           duration_days: number | null
@@ -381,6 +382,9 @@ export type Database = {
           id: string
           manual_units: number | null
           name: string
+          purchase_unit: string | null
+          purchase_unit_cost: number | null
+          purchase_unit_quantity: number | null
           related_units: number | null
           reminder_minutes: number | null
           resource_type: string | null
@@ -398,6 +402,7 @@ export type Database = {
         Insert: {
           activity_id?: string | null
           budget_id: string
+          conversion_factor?: number | null
           created_at?: string | null
           description?: string | null
           duration_days?: number | null
@@ -407,6 +412,9 @@ export type Database = {
           id?: string
           manual_units?: number | null
           name: string
+          purchase_unit?: string | null
+          purchase_unit_cost?: number | null
+          purchase_unit_quantity?: number | null
           related_units?: number | null
           reminder_minutes?: number | null
           resource_type?: string | null
@@ -424,6 +432,7 @@ export type Database = {
         Update: {
           activity_id?: string | null
           budget_id?: string
+          conversion_factor?: number | null
           created_at?: string | null
           description?: string | null
           duration_days?: number | null
@@ -433,6 +442,9 @@ export type Database = {
           id?: string
           manual_units?: number | null
           name?: string
+          purchase_unit?: string | null
+          purchase_unit_cost?: number | null
+          purchase_unit_quantity?: number | null
           related_units?: number | null
           reminder_minutes?: number | null
           resource_type?: string | null

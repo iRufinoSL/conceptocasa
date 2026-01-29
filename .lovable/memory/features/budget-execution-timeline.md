@@ -9,3 +9,9 @@ En la vista 'Gestión Tiempo':
 - Cada actividad incluye un toggle SI/NO inline (basado en el campo 'uses_measurement') que determina si aparece activa en la planificación temporal
 - Solo las actividades marcadas como SI muestran los campos de fecha real inline
 - El contador de actividades muestra "X/Y activas" indicando cuántas están marcadas como SI del total
+
+En la vista 'Lista Compra':
+- Agrupación jerárquica expandible: Fase → Actividad (ActividadID) → Recursos
+- Muestra nombre del recurso, tipo (Material, Mano de obra, etc.), proveedor, unidades, coste unitario y subtotal
+- Incluye secciones para actividades sin fase y recursos sin actividad asignada
+- Útil para planificación de compras y logística de obra

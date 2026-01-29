@@ -1,15 +1,20 @@
 import { useState, useMemo } from 'react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Badge } from '@/components/ui/badge';
-import { ChevronRight, ChevronDown, Package, Layers, ClipboardList, ShoppingCart } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { ChevronRight, ChevronDown, Package, Layers, ClipboardList, ShoppingCart, Pencil, Building2, List } from 'lucide-react';
 import { formatCurrency } from '@/lib/format-utils';
 import { formatActividadId } from '@/lib/activity-id';
 import { cn } from '@/lib/utils';
+import { SupplierBuyingListView } from './SupplierBuyingListView';
+import { PurchaseUnitDialog } from './PurchaseUnitDialog';
 
 interface Phase {
   id: string;
   name: string;
   code: string | null;
+  actual_start_date?: string | null;
+  actual_end_date?: string | null;
 }
 
 interface Activity {
@@ -18,6 +23,8 @@ interface Activity {
   code: string;
   phase_id: string | null;
   uses_measurement: boolean;
+  actual_start_date?: string | null;
+  actual_end_date?: string | null;
 }
 
 interface Resource {
@@ -29,18 +36,26 @@ interface Resource {
   manual_units: number | null;
   related_units: number | null;
   unit: string | null;
+  supplier_id?: string | null;
   supplier_name?: string | null;
+  purchase_unit?: string | null;
+  purchase_unit_quantity?: number | null;
+  purchase_unit_cost?: number | null;
+  conversion_factor?: number | null;
 }
 
 interface BuyingListViewProps {
   phases: Phase[];
   activities: Activity[];
   resources: Resource[];
+  onResourcesChanged?: () => void;
 }
 
-export function BuyingListView({ phases, activities, resources }: BuyingListViewProps) {
+export function BuyingListView({ phases, activities, resources, onResourcesChanged }: BuyingListViewProps) {
   const [expandedPhases, setExpandedPhases] = useState<Set<string>>(new Set());
   const [expandedActivities, setExpandedActivities] = useState<Set<string>>(new Set());
+  const [listMode, setListMode] = useState<'activity' | 'supplier'>('activity');
+  const [editingResource, setEditingResource] = useState<Resource | null>(null);
 
   const togglePhase = (phaseId: string) => {
     setExpandedPhases(prev => {
@@ -58,6 +73,14 @@ export function BuyingListView({ phases, activities, resources }: BuyingListView
       else next.add(activityId);
       return next;
     });
+  };
+
+  const handleEditResource = (resource: Resource) => {
+    setEditingResource(resource);
+  };
+
+  const handleResourceSaved = () => {
+    onResourcesChanged?.();
   };
 
   // Group resources by activity
@@ -175,7 +198,51 @@ export function BuyingListView({ phases, activities, resources }: BuyingListView
   }
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-4">
+      {/* View Mode Toggle */}
+      <div className="flex items-center gap-2 p-2 bg-muted/30 rounded-lg">
+        <span className="text-sm font-medium text-muted-foreground mr-2">Vista:</span>
+        <div className="inline-flex rounded-md border">
+          <Button
+            variant={listMode === 'activity' ? 'default' : 'ghost'}
+            size="sm"
+            onClick={() => setListMode('activity')}
+            className="rounded-r-none"
+          >
+            <List className="h-4 w-4 mr-1" />
+            Por Actividad
+          </Button>
+          <Button
+            variant={listMode === 'supplier' ? 'default' : 'ghost'}
+            size="sm"
+            onClick={() => setListMode('supplier')}
+            className="rounded-l-none border-l"
+          >
+            <Building2 className="h-4 w-4 mr-1" />
+            Por Proveedor
+          </Button>
+        </div>
+      </div>
+
+      {/* Purchase Unit Dialog */}
+      <PurchaseUnitDialog
+        open={!!editingResource}
+        onOpenChange={(open) => !open && setEditingResource(null)}
+        resource={editingResource}
+        onSaved={handleResourceSaved}
+      />
+
+      {/* Supplier View */}
+      {listMode === 'supplier' ? (
+        <SupplierBuyingListView
+          phases={phases}
+          activities={activities}
+          resources={resources}
+          onEditResource={handleEditResource}
+        />
+      ) : (
+        /* Activity View */
+        <div className="space-y-2">
       {/* Phases with activities and resources */}
       {sortedPhases.map((phase) => {
         const phaseActivities = activitiesByPhase.get(phase.id) || [];
@@ -246,9 +313,13 @@ export function BuyingListView({ phases, activities, resources }: BuyingListView
                             <div className="border-t divide-y">
                               {activityResources.map((resource) => {
                                 const units = resource.manual_units ?? resource.related_units ?? 0;
-                                const subtotal = (resource.external_unit_cost ?? 0) * units;
+                                const hasPurchaseData = resource.purchase_unit && resource.purchase_unit_cost;
+                                const displayUnits = hasPurchaseData ? resource.purchase_unit_quantity ?? 0 : units;
+                                const displayUnit = hasPurchaseData ? resource.purchase_unit : resource.unit;
+                                const displayCost = hasPurchaseData ? resource.purchase_unit_cost ?? 0 : resource.external_unit_cost ?? 0;
+                                const subtotal = displayUnits * displayCost;
                                 return (
-                                  <div key={resource.id} className="flex items-center gap-2 px-3 py-2 bg-muted/5">
+                                  <div key={resource.id} className="flex items-center gap-2 px-3 py-2 bg-muted/5 group">
                                     <Package className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
                                     <div className="flex-1 min-w-0">
                                       <p className="text-sm truncate">{resource.name}</p>
@@ -258,18 +329,31 @@ export function BuyingListView({ phases, activities, resources }: BuyingListView
                                             {resource.resource_type}
                                           </Badge>
                                         )}
+                                        {hasPurchaseData && (
+                                          <Badge variant="secondary" className="text-[9px] px-1 py-0 bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300">
+                                            Ud. Compra
+                                          </Badge>
+                                        )}
                                         {resource.supplier_name && (
                                           <span className="truncate">{resource.supplier_name}</span>
                                         )}
                                       </div>
                                     </div>
                                     <div className="text-right text-xs whitespace-nowrap">
-                                      <p className="font-medium">{units.toLocaleString('es-ES', { maximumFractionDigits: 2 })} {resource.unit || 'ud'}</p>
-                                      <p className="text-muted-foreground">× {formatCurrency(resource.external_unit_cost || 0)}</p>
+                                      <p className="font-medium">{displayUnits.toLocaleString('es-ES', { maximumFractionDigits: 3 })} {displayUnit || 'ud'}</p>
+                                      <p className="text-muted-foreground">× {formatCurrency(displayCost)}</p>
                                     </div>
                                     <div className="text-right min-w-[80px]">
                                       <p className="text-sm font-semibold tabular-nums">{formatCurrency(subtotal)}</p>
                                     </div>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
+                                      onClick={() => handleEditResource(resource)}
+                                    >
+                                      <Pencil className="h-3.5 w-3.5" />
+                                    </Button>
                                   </div>
                                 );
                               })}
@@ -341,9 +425,13 @@ export function BuyingListView({ phases, activities, resources }: BuyingListView
                           <div className="border-t divide-y">
                             {activityResources.map((resource) => {
                               const units = resource.manual_units ?? resource.related_units ?? 0;
-                              const subtotal = (resource.external_unit_cost ?? 0) * units;
+                              const hasPurchaseData = resource.purchase_unit && resource.purchase_unit_cost;
+                              const displayUnits = hasPurchaseData ? resource.purchase_unit_quantity ?? 0 : units;
+                              const displayUnit = hasPurchaseData ? resource.purchase_unit : resource.unit;
+                              const displayCost = hasPurchaseData ? resource.purchase_unit_cost ?? 0 : resource.external_unit_cost ?? 0;
+                              const subtotal = displayUnits * displayCost;
                               return (
-                                <div key={resource.id} className="flex items-center gap-2 px-3 py-2 bg-muted/5">
+                                <div key={resource.id} className="flex items-center gap-2 px-3 py-2 bg-muted/5 group">
                                   <Package className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
                                   <div className="flex-1 min-w-0">
                                     <p className="text-sm truncate">{resource.name}</p>
@@ -353,18 +441,31 @@ export function BuyingListView({ phases, activities, resources }: BuyingListView
                                           {resource.resource_type}
                                         </Badge>
                                       )}
+                                      {hasPurchaseData && (
+                                        <Badge variant="secondary" className="text-[9px] px-1 py-0 bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300">
+                                          Ud. Compra
+                                        </Badge>
+                                      )}
                                       {resource.supplier_name && (
                                         <span className="truncate">{resource.supplier_name}</span>
                                       )}
                                     </div>
                                   </div>
                                   <div className="text-right text-xs whitespace-nowrap">
-                                    <p className="font-medium">{units.toLocaleString('es-ES', { maximumFractionDigits: 2 })} {resource.unit || 'ud'}</p>
-                                    <p className="text-muted-foreground">× {formatCurrency(resource.external_unit_cost || 0)}</p>
+                                    <p className="font-medium">{displayUnits.toLocaleString('es-ES', { maximumFractionDigits: 3 })} {displayUnit || 'ud'}</p>
+                                    <p className="text-muted-foreground">× {formatCurrency(displayCost)}</p>
                                   </div>
                                   <div className="text-right min-w-[80px]">
                                     <p className="text-sm font-semibold tabular-nums">{formatCurrency(subtotal)}</p>
                                   </div>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
+                                    onClick={() => handleEditResource(resource)}
+                                  >
+                                    <Pencil className="h-3.5 w-3.5" />
+                                  </Button>
                                 </div>
                               );
                             })}
@@ -404,9 +505,13 @@ export function BuyingListView({ phases, activities, resources }: BuyingListView
               <div className="border-t divide-y">
                 {unassignedResources.map((resource) => {
                   const units = resource.manual_units ?? resource.related_units ?? 0;
-                  const subtotal = (resource.external_unit_cost ?? 0) * units;
+                  const hasPurchaseData = resource.purchase_unit && resource.purchase_unit_cost;
+                  const displayUnits = hasPurchaseData ? resource.purchase_unit_quantity ?? 0 : units;
+                  const displayUnit = hasPurchaseData ? resource.purchase_unit : resource.unit;
+                  const displayCost = hasPurchaseData ? resource.purchase_unit_cost ?? 0 : resource.external_unit_cost ?? 0;
+                  const subtotal = displayUnits * displayCost;
                   return (
-                    <div key={resource.id} className="flex items-center gap-2 px-3 py-2 bg-muted/5">
+                    <div key={resource.id} className="flex items-center gap-2 px-3 py-2 bg-muted/5 group">
                       <Package className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
                       <div className="flex-1 min-w-0">
                         <p className="text-sm truncate">{resource.name}</p>
@@ -416,18 +521,31 @@ export function BuyingListView({ phases, activities, resources }: BuyingListView
                               {resource.resource_type}
                             </Badge>
                           )}
+                          {hasPurchaseData && (
+                            <Badge variant="secondary" className="text-[9px] px-1 py-0 bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300">
+                              Ud. Compra
+                            </Badge>
+                          )}
                           {resource.supplier_name && (
                             <span className="truncate">{resource.supplier_name}</span>
                           )}
                         </div>
                       </div>
                       <div className="text-right text-xs whitespace-nowrap">
-                        <p className="font-medium">{units.toLocaleString('es-ES', { maximumFractionDigits: 2 })} {resource.unit || 'ud'}</p>
-                        <p className="text-muted-foreground">× {formatCurrency(resource.external_unit_cost || 0)}</p>
+                        <p className="font-medium">{displayUnits.toLocaleString('es-ES', { maximumFractionDigits: 3 })} {displayUnit || 'ud'}</p>
+                        <p className="text-muted-foreground">× {formatCurrency(displayCost)}</p>
                       </div>
                       <div className="text-right min-w-[80px]">
                         <p className="text-sm font-semibold tabular-nums">{formatCurrency(subtotal)}</p>
                       </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
+                        onClick={() => handleEditResource(resource)}
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
                     </div>
                   );
                 })}
@@ -435,6 +553,8 @@ export function BuyingListView({ phases, activities, resources }: BuyingListView
             </CollapsibleContent>
           </div>
         </Collapsible>
+      )}
+        </div>
       )}
     </div>
   );

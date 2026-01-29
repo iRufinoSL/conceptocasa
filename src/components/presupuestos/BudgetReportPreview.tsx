@@ -169,6 +169,7 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
   const [selectedSections, setSelectedSections] = useState<string[]>(['activities']);
   const [customNotes, setCustomNotes] = useState<string>('');
   const [onlyWithCost, setOnlyWithCost] = useState(false);
+  const [predesignImageSize, setPredesignImageSize] = useState<'compact' | 'full'>('compact');
   const [portadaSignedUrl, setPortadaSignedUrl] = useState<string | null>(null);
   const [selectedOption, setSelectedOption] = useState<'A' | 'B' | 'C'>('A');
   const printRef = useRef<HTMLDivElement>(null);
@@ -1827,94 +1828,168 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
         }
 
         let sectionNumber = 2;
-        for (const contentType of contentTypes) {
-          const items = groupedPredesigns[contentType];
-          doc.addPage();
-          yPos = 20;
-          
-          doc.setFontSize(12);
-          doc.setFont('helvetica', 'bold');
-          doc.setTextColor(37, 99, 235);
-          doc.text(`${sectionNumber}. ANTE-PROYECTO: ${contentType.toUpperCase()}`, 14, yPos);
-          doc.setTextColor(0);
-          
-          yPos += 10;
-          
-          // 3 images per page, arranged vertically
-          const imageHeight = 70; // mm
-          const imageWidth = pageWidth - 28; // full width minus margins
-          let imageCount = 0;
-          
-          for (const item of items) {
-            if (imageCount > 0 && imageCount % 3 === 0) {
-              // New page for every 3 images
-              doc.addPage();
-              yPos = 20;
-              doc.setFontSize(12);
+        
+        // Helper to get image dimensions
+        const getImgDimensions = (src: string): Promise<{ width: number; height: number }> => {
+          return new Promise((resolve) => {
+            const img = new Image();
+            img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
+            img.onerror = () => resolve({ width: 100, height: 100 });
+            img.src = src;
+          });
+        };
+        
+        if (predesignImageSize === 'full') {
+          // FULL PAGE MODE: 1 image per A4 page (landscape for better detail)
+          for (const contentType of contentTypes) {
+            const items = groupedPredesigns[contentType];
+            
+            for (let i = 0; i < items.length; i++) {
+              const item = items[i];
+              
+              // Each image gets its own landscape page
+              doc.addPage('landscape');
+              const landscapeWidth = doc.internal.pageSize.getWidth();
+              const landscapeHeight = doc.internal.pageSize.getHeight();
+              yPos = 15;
+              
+              // Header
+              doc.setFontSize(10);
               doc.setFont('helvetica', 'bold');
               doc.setTextColor(37, 99, 235);
-              doc.text(`${sectionNumber}. ANTE-PROYECTO: ${contentType.toUpperCase()} (cont.)`, 14, yPos);
+              doc.text(`${sectionNumber}. ANTE-PROYECTO: ${contentType.toUpperCase()}`, 14, yPos);
               doc.setTextColor(0);
-              yPos += 10;
-            }
-            
-            // Draw image title
-            doc.setFontSize(10);
-            doc.setFont('helvetica', 'bold');
-            doc.setTextColor(30, 41, 59);
-            doc.text(item.content, 14, yPos);
-            
-            if (item.description) {
-              doc.setFontSize(8);
-              doc.setFont('helvetica', 'normal');
-              doc.setTextColor(100, 116, 139);
-              doc.text(item.description, 14, yPos + 4);
               yPos += 8;
-            } else {
-              yPos += 4;
-            }
-            
-            // Draw image if available
-            const imgData = predesignImages.get(item.id);
-            if (imgData) {
-              // Get image dimensions for proper aspect ratio
-              const getImgDimensions = (src: string): Promise<{ width: number; height: number }> => {
-                return new Promise((resolve) => {
-                  const img = new Image();
-                  img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
-                  img.onerror = () => resolve({ width: imageWidth, height: imageHeight });
-                  img.src = src;
-                });
-              };
               
-              const imgDimensions = await getImgDimensions(imgData);
-              const imgAspectRatio = imgDimensions.width / imgDimensions.height;
+              // Image title
+              doc.setFontSize(11);
+              doc.setFont('helvetica', 'bold');
+              doc.setTextColor(30, 41, 59);
+              doc.text(item.content, 14, yPos);
               
-              let drawWidth = imageWidth;
-              let drawHeight = imageWidth / imgAspectRatio;
-              
-              if (drawHeight > imageHeight) {
-                drawHeight = imageHeight;
-                drawWidth = imageHeight * imgAspectRatio;
+              if (item.description) {
+                doc.setFontSize(9);
+                doc.setFont('helvetica', 'normal');
+                doc.setTextColor(100, 116, 139);
+                doc.text(item.description, 14, yPos + 5);
+                yPos += 10;
+              } else {
+                yPos += 5;
               }
               
-              const offsetX = 14 + (imageWidth - drawWidth) / 2;
-              
-              doc.addImage(imgData, 'JPEG', offsetX, yPos, drawWidth, drawHeight, undefined, 'FAST');
-              yPos += drawHeight + 8;
-            } else {
-              // Placeholder for non-image files
-              doc.setFillColor(240, 240, 240);
-              doc.roundedRect(14, yPos, imageWidth, 20, 2, 2, 'F');
-              doc.setFontSize(9);
-              doc.setTextColor(100);
-              doc.text(`Archivo: ${item.file_name || 'Sin archivo'}`, 20, yPos + 12);
-              yPos += 28;
+              // Draw image - maximize space on landscape A4
+              const imgData = predesignImages.get(item.id);
+              if (imgData) {
+                const imgDimensions = await getImgDimensions(imgData);
+                const imgAspectRatio = imgDimensions.width / imgDimensions.height;
+                
+                // Available space: full landscape page minus header and margins
+                const availableWidth = landscapeWidth - 28; // 14mm margins each side
+                const availableHeight = landscapeHeight - yPos - 15; // Top content + bottom margin
+                
+                let drawWidth = availableWidth;
+                let drawHeight = availableWidth / imgAspectRatio;
+                
+                if (drawHeight > availableHeight) {
+                  drawHeight = availableHeight;
+                  drawWidth = availableHeight * imgAspectRatio;
+                }
+                
+                const offsetX = 14 + (availableWidth - drawWidth) / 2;
+                
+                doc.addImage(imgData, 'JPEG', offsetX, yPos, drawWidth, drawHeight, undefined, 'FAST');
+              } else {
+                // Placeholder for non-image files
+                doc.setFillColor(240, 240, 240);
+                doc.roundedRect(14, yPos, 100, 30, 2, 2, 'F');
+                doc.setFontSize(9);
+                doc.setTextColor(100);
+                doc.text(`Archivo: ${item.file_name || 'Sin archivo'}`, 20, yPos + 18);
+              }
             }
-            
-            imageCount++;
+            sectionNumber++;
           }
-          sectionNumber++;
+        } else {
+          // COMPACT MODE: 2 images per A4 page (original behavior with improvements)
+          for (const contentType of contentTypes) {
+            const items = groupedPredesigns[contentType];
+            doc.addPage();
+            yPos = 20;
+            
+            doc.setFontSize(12);
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(37, 99, 235);
+            doc.text(`${sectionNumber}. ANTE-PROYECTO: ${contentType.toUpperCase()}`, 14, yPos);
+            doc.setTextColor(0);
+            
+            yPos += 10;
+            
+            // 2 images per page, arranged vertically
+            const imageHeight = 115; // mm - larger for 2 per page
+            const imageWidth = pageWidth - 28; // full width minus margins
+            let imageCount = 0;
+            
+            for (const item of items) {
+              if (imageCount > 0 && imageCount % 2 === 0) {
+                // New page for every 2 images
+                doc.addPage();
+                yPos = 20;
+                doc.setFontSize(12);
+                doc.setFont('helvetica', 'bold');
+                doc.setTextColor(37, 99, 235);
+                doc.text(`${sectionNumber}. ANTE-PROYECTO: ${contentType.toUpperCase()} (cont.)`, 14, yPos);
+                doc.setTextColor(0);
+                yPos += 10;
+              }
+              
+              // Draw image title
+              doc.setFontSize(10);
+              doc.setFont('helvetica', 'bold');
+              doc.setTextColor(30, 41, 59);
+              doc.text(item.content, 14, yPos);
+              
+              if (item.description) {
+                doc.setFontSize(8);
+                doc.setFont('helvetica', 'normal');
+                doc.setTextColor(100, 116, 139);
+                doc.text(item.description, 14, yPos + 4);
+                yPos += 8;
+              } else {
+                yPos += 4;
+              }
+              
+              // Draw image if available
+              const imgData = predesignImages.get(item.id);
+              if (imgData) {
+                const imgDimensions = await getImgDimensions(imgData);
+                const imgAspectRatio = imgDimensions.width / imgDimensions.height;
+                
+                let drawWidth = imageWidth;
+                let drawHeight = imageWidth / imgAspectRatio;
+                
+                if (drawHeight > imageHeight) {
+                  drawHeight = imageHeight;
+                  drawWidth = imageHeight * imgAspectRatio;
+                }
+                
+                const offsetX = 14 + (imageWidth - drawWidth) / 2;
+                
+                doc.addImage(imgData, 'JPEG', offsetX, yPos, drawWidth, drawHeight, undefined, 'FAST');
+                yPos += drawHeight + 10;
+              } else {
+                // Placeholder for non-image files
+                doc.setFillColor(240, 240, 240);
+                doc.roundedRect(14, yPos, imageWidth, 20, 2, 2, 'F');
+                doc.setFontSize(9);
+                doc.setTextColor(100);
+                doc.text(`Archivo: ${item.file_name || 'Sin archivo'}`, 20, yPos + 12);
+                yPos += 30;
+              }
+              
+              imageCount++;
+            }
+            sectionNumber++;
+          }
         }
       }
 
@@ -2409,19 +2484,45 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
                 />
                 <Label htmlFor="cuanto-cuando" className="cursor-pointer text-sm font-medium text-primary">CUÁNTO cuesta + CUÁNDO hacer</Label>
               </div>
-              <div className="flex items-center space-x-2">
-                <Checkbox 
-                  id="predesigns" 
-                  checked={selectedSections.includes('predesigns')}
-                  onCheckedChange={(checked) => {
-                    if (checked) {
-                      setSelectedSections(prev => [...prev, 'predesigns']);
-                    } else {
-                      setSelectedSections(prev => prev.filter(s => s !== 'predesigns'));
-                    }
-                  }}
-                />
-                <Label htmlFor="predesigns" className="cursor-pointer text-sm">Ante-proyecto</Label>
+              <div className="space-y-2">
+                <div className="flex items-center space-x-2">
+                  <Checkbox 
+                    id="predesigns" 
+                    checked={selectedSections.includes('predesigns')}
+                    onCheckedChange={(checked) => {
+                      if (checked) {
+                        setSelectedSections(prev => [...prev, 'predesigns']);
+                      } else {
+                        setSelectedSections(prev => prev.filter(s => s !== 'predesigns'));
+                      }
+                    }}
+                  />
+                  <Label htmlFor="predesigns" className="cursor-pointer text-sm">Ante-proyecto</Label>
+                </div>
+                {/* Size selector for predesigns - only show when predesigns is selected */}
+                {selectedSections.includes('predesigns') && (
+                  <div className="ml-6 flex items-center space-x-3 p-2 bg-muted/50 rounded-md">
+                    <Label className="text-xs text-muted-foreground">Tamaño imágenes:</Label>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant={predesignImageSize === 'compact' ? 'default' : 'outline'}
+                        size="sm"
+                        className="text-xs h-7 px-2"
+                        onClick={() => setPredesignImageSize('compact')}
+                      >
+                        2 por página
+                      </Button>
+                      <Button
+                        variant={predesignImageSize === 'full' ? 'default' : 'outline'}
+                        size="sm"
+                        className="text-xs h-7 px-2"
+                        onClick={() => setPredesignImageSize('full')}
+                      >
+                        1 por página (detalle)
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </div>
               <div className="flex items-center space-x-2">
                 <Checkbox 

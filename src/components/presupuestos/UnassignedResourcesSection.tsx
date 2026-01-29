@@ -230,11 +230,13 @@ export function UnassignedResourcesSection({
                               <SelectValue placeholder="Seleccionar actividad..." />
                             </SelectTrigger>
                             <SelectContent>
-                              {activities.map((activity) => (
-                                <SelectItem key={activity.id} value={activity.id}>
-                                  {getActivityDisplay(activity.id)}
-                                </SelectItem>
-                              ))}
+                              {[...activities]
+                                .sort((a, b) => getActivityDisplay(a.id).localeCompare(getActivityDisplay(b.id), 'es'))
+                                .map((activity) => (
+                                  <SelectItem key={activity.id} value={activity.id}>
+                                    {getActivityDisplay(activity.id)}
+                                  </SelectItem>
+                                ))}
                             </SelectContent>
                           </Select>
                           <Button

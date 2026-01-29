@@ -439,3 +439,5 @@ export function BuyingListView({ phases, activities, resources }: BuyingListView
     </div>
   );
 }
+
+export default BuyingListView;

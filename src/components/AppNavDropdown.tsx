@@ -1,5 +1,6 @@
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
+import { useAppAccess } from '@/hooks/useAppAccess';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -26,30 +27,44 @@ interface NavItem {
   path: string;
   icon: React.ComponentType<{ className?: string }>;
   adminOnly?: boolean;
+  appName: string; // For permission check
 }
 
 const navItems: NavItem[] = [
-  { title: 'Panel de control', path: '/dashboard', icon: LayoutDashboard },
-  { title: 'Proyectos', path: '/proyectos', icon: Building2 },
-  { title: 'Presupuestos', path: '/presupuestos', icon: Calculator },
-  { title: 'CRM', path: '/crm', icon: Users },
-  { title: 'Agenda', path: '/agenda', icon: Calendar },
-  { title: 'Documentos', path: '/documentos', icon: FileText },
-  { title: 'Recursos', path: '/recursos', icon: Package, adminOnly: true },
-  { title: 'Administración', path: '/administracion', icon: Wallet, adminOnly: true },
-  { title: 'Usuarios', path: '/usuarios', icon: Users, adminOnly: true },
-  { title: 'Configuración', path: '/configuracion', icon: Settings, adminOnly: true },
+  { title: 'Panel de control', path: '/dashboard', icon: LayoutDashboard, appName: 'dashboard' },
+  { title: 'Proyectos', path: '/proyectos', icon: Building2, appName: 'presupuestos' },
+  { title: 'Presupuestos', path: '/presupuestos', icon: Calculator, appName: 'presupuestos' },
+  { title: 'CRM', path: '/crm', icon: Users, appName: 'crm' },
+  { title: 'Agenda', path: '/agenda', icon: Calendar, appName: 'agenda' },
+  { title: 'Documentos', path: '/documentos', icon: FileText, appName: 'documentos' },
+  { title: 'Recursos', path: '/recursos', icon: Package, adminOnly: true, appName: 'recursos' },
+  { title: 'Administración', path: '/administracion', icon: Wallet, adminOnly: true, appName: 'administracion' },
+  { title: 'Usuarios', path: '/usuarios', icon: Users, adminOnly: true, appName: 'usuarios' },
+  { title: 'Configuración', path: '/configuracion', icon: Settings, adminOnly: true, appName: 'configuracion' },
 ];
 
 export function AppNavDropdown() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { roles } = useAuth();
+  const { roles, isAdmin } = useAuth();
+  const { hasAppAccess } = useAppAccess();
 
   const currentItem = navItems.find(item => item.path === location.pathname);
-  const isUserAdmin = roles.includes('administrador');
+  const isUserAdmin = isAdmin();
 
-  const visibleItems = navItems.filter(item => !item.adminOnly || isUserAdmin);
+  // Filter items based on:
+  // 1. Admin-only flag (if user is not admin, hide admin-only items)
+  // 2. App access (for non-admins, check if they have access to the app)
+  const visibleItems = navItems.filter(item => {
+    // Admins see everything
+    if (isUserAdmin) return true;
+    
+    // Non-admins cannot see admin-only items
+    if (item.adminOnly) return false;
+    
+    // Check app-level access
+    return hasAppAccess(item.appName);
+  });
 
   return (
     <DropdownMenu>

@@ -2470,6 +2470,36 @@ export type Database = {
           },
         ]
       }
+      model_users: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          is_active: boolean
+          role_type: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          role_type: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          role_type?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       notifications: {
         Row: {
           action_url: string | null
@@ -4061,6 +4091,66 @@ export type Database = {
           },
         ]
       }
+      user_app_access: {
+        Row: {
+          app_name: string
+          can_access: boolean
+          created_at: string
+          id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          app_name: string
+          can_access?: boolean
+          created_at?: string
+          id?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          app_name?: string
+          can_access?: boolean
+          created_at?: string
+          id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_field_access: {
+        Row: {
+          can_edit: boolean
+          can_view: boolean
+          created_at: string
+          field_name: string
+          id: string
+          table_name: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          can_edit?: boolean
+          can_view?: boolean
+          created_at?: string
+          field_name: string
+          id?: string
+          table_name: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          can_edit?: boolean
+          can_view?: boolean
+          created_at?: string
+          field_name?: string
+          id?: string
+          table_name?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_presupuestos: {
         Row: {
           created_at: string | null
@@ -4139,6 +4229,39 @@ export type Database = {
         Update: {
           id?: string
           role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_tab_access: {
+        Row: {
+          app_name: string
+          can_edit: boolean
+          can_view: boolean
+          created_at: string
+          id: string
+          tab_name: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          app_name: string
+          can_edit?: boolean
+          can_view?: boolean
+          created_at?: string
+          id?: string
+          tab_name: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          app_name?: string
+          can_edit?: boolean
+          can_view?: boolean
+          created_at?: string
+          id?: string
+          tab_name?: string
+          updated_at?: string
           user_id?: string
         }
         Relationships: []
@@ -4683,6 +4806,19 @@ export type Database = {
         Returns: boolean
       }
       generate_entry_code: { Args: { entry_year: number }; Returns: string }
+      has_app_access: {
+        Args: { _app_name: string; _user_id: string }
+        Returns: boolean
+      }
+      has_field_access: {
+        Args: {
+          _access_type?: string
+          _field_name: string
+          _table_name: string
+          _user_id: string
+        }
+        Returns: boolean
+      }
       has_presupuesto_access: {
         Args: { _presupuesto_id: string; _user_id: string }
         Returns: boolean
@@ -4706,10 +4842,20 @@ export type Database = {
         }
         Returns: boolean
       }
+      has_tab_access: {
+        Args: {
+          _access_type?: string
+          _app_name: string
+          _tab_name: string
+          _user_id: string
+        }
+        Returns: boolean
+      }
       has_urban_profile_access: {
         Args: { _profile_id: string; _user_id: string }
         Returns: boolean
       }
+      is_admin: { Args: { _user_id: string }; Returns: boolean }
     }
     Enums: {
       app_role: "administrador" | "colaborador" | "cliente"

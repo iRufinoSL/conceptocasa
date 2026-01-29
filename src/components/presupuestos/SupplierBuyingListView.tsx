@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { ChevronRight, ChevronDown, Package, Layers, Building2, ShoppingBag, Pencil, Filter, Calendar } from 'lucide-react';
+import { ChevronRight, ChevronDown, Package, Layers, Building2, ShoppingBag, Pencil, Filter, Calendar, ArrowLeft, MousePointerClick } from 'lucide-react';
 import { formatCurrency } from '@/lib/format-utils';
 import { cn } from '@/lib/utils';
 import { format, parseISO, isValid, isWithinInterval } from 'date-fns';
@@ -58,6 +58,21 @@ export function SupplierBuyingListView({ phases, activities, resources, onEditRe
   const [selectedSupplierId, setSelectedSupplierId] = useState<string>('all');
   const [dateFilterStart, setDateFilterStart] = useState<string>('');
   const [dateFilterEnd, setDateFilterEnd] = useState<string>('');
+  const [focusedPhaseId, setFocusedPhaseId] = useState<string | null>(null);
+
+  const handleSelectPhase = (phaseId: string) => {
+    setFocusedPhaseId(phaseId);
+    // Auto-expand the selected phase
+    setExpandedPhases(new Set([phaseId]));
+    // Reset supplier filter when changing phase
+    setSelectedSupplierId('all');
+  };
+
+  const handleBackToAllPhases = () => {
+    setFocusedPhaseId(null);
+    setExpandedPhases(new Set());
+    setSelectedSupplierId('all');
+  };
 
   const togglePhase = (phaseId: string) => {
     setExpandedPhases(prev => {
@@ -77,16 +92,25 @@ export function SupplierBuyingListView({ phases, activities, resources, onEditRe
     });
   };
 
-  // Get unique suppliers
+  // Get unique suppliers - filtered by focused phase if selected
   const uniqueSuppliers = useMemo(() => {
     const suppliers = new Map<string, string>();
-    resources.forEach(r => {
+    
+    // Get resources that belong to the focused phase (or all if no focus)
+    const relevantResources = focusedPhaseId 
+      ? resources.filter(r => {
+          const activity = activities.find(a => a.id === r.activity_id);
+          return activity?.phase_id === focusedPhaseId;
+        })
+      : resources;
+    
+    relevantResources.forEach(r => {
       if (r.supplier_id && r.supplier_name) {
         suppliers.set(r.supplier_id, r.supplier_name);
       }
     });
     return Array.from(suppliers.entries()).map(([id, name]) => ({ id, name }));
-  }, [resources]);
+  }, [resources, focusedPhaseId, activities]);
 
   // Filter resources by supplier and date range
   const filteredResources = useMemo(() => {
@@ -200,6 +224,16 @@ export function SupplierBuyingListView({ phases, activities, resources, onEditRe
     return [...phases].sort((a, b) => (a.code || '').localeCompare(b.code || ''));
   }, [phases]);
 
+  // Filter phases to display based on focus - must be before early return
+  const displayPhases = useMemo(() => {
+    if (focusedPhaseId) {
+      return sortedPhases.filter(p => p.id === focusedPhaseId);
+    }
+    return sortedPhases;
+  }, [sortedPhases, focusedPhaseId]);
+
+  const focusedPhase = focusedPhaseId ? phases.find(p => p.id === focusedPhaseId) : null;
+
   if (phases.length === 0 && filteredResources.length === 0) {
     return (
       <div className="text-center py-8 text-muted-foreground">
@@ -211,6 +245,37 @@ export function SupplierBuyingListView({ phases, activities, resources, onEditRe
 
   return (
     <div className="space-y-4">
+      {/* Back button when phase is focused */}
+      {focusedPhaseId && focusedPhase && (
+        <div className="flex items-center gap-3 p-3 bg-primary/10 border border-primary/20 rounded-lg">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleBackToAllPhases}
+            className="gap-2"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Volver a todas las Fases
+          </Button>
+          <div className="flex-1">
+            <p className="text-sm font-medium">
+              Fase seleccionada: <span className="text-primary">{focusedPhase.code ? `${focusedPhase.code}.- ${focusedPhase.name}` : focusedPhase.name}</span>
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Mostrando proveedores y recursos de esta fase
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Phase selection hint when not focused */}
+      {!focusedPhaseId && sortedPhases.length > 1 && (
+        <div className="flex items-center gap-2 p-2 bg-muted/30 rounded-lg text-sm text-muted-foreground">
+          <MousePointerClick className="h-4 w-4" />
+          <span>Haz clic en una fase para concentrarte en sus proveedores y recursos</span>
+        </div>
+      )}
+
       {/* Filters */}
       <div className="flex flex-wrap gap-4 p-3 bg-muted/30 rounded-lg">
         <div className="flex items-center gap-2">
@@ -255,7 +320,7 @@ export function SupplierBuyingListView({ phases, activities, resources, onEditRe
       </div>
 
       {/* Phase -> Supplier -> Resources Hierarchy */}
-      {sortedPhases.map((phase) => {
+      {displayPhases.map((phase) => {
         const suppliersMap = groupedData.get(phase.id);
         if (!suppliersMap || suppliersMap.size === 0) return null;
 
@@ -263,30 +328,49 @@ export function SupplierBuyingListView({ phases, activities, resources, onEditRe
         const phaseTotalData = phaseTotals.get(phase.id) || { resourceCount: 0, total: 0 };
 
         return (
-          <Collapsible key={phase.id} open={isPhaseExpanded} onOpenChange={() => togglePhase(phase.id)}>
-            <div className="border rounded-lg">
-              <CollapsibleTrigger asChild>
-                <div className="flex items-center gap-3 p-3 cursor-pointer hover:bg-muted/50 transition-colors">
-                  {isPhaseExpanded ? (
+          <Collapsible key={phase.id} open={isPhaseExpanded || focusedPhaseId === phase.id} onOpenChange={() => focusedPhaseId ? togglePhase(phase.id) : undefined}>
+            <div className={cn("border rounded-lg", focusedPhaseId === phase.id && "border-primary ring-1 ring-primary/30")}>
+              <div 
+                className={cn(
+                  "flex items-center gap-3 p-3 cursor-pointer hover:bg-muted/50 transition-colors",
+                  !focusedPhaseId && "hover:bg-primary/5"
+                )}
+                onClick={() => {
+                  if (!focusedPhaseId) {
+                    handleSelectPhase(phase.id);
+                  } else {
+                    togglePhase(phase.id);
+                  }
+                }}
+              >
+                {focusedPhaseId ? (
+                  isPhaseExpanded || focusedPhaseId === phase.id ? (
                     <ChevronDown className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                   ) : (
                     <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                  )}
-                  <Layers className="h-4 w-4 text-primary flex-shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold truncate">
-                      {phase.code ? `${phase.code}.- ${phase.name}` : phase.name}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {suppliersMap.size} proveedor{suppliersMap.size !== 1 ? 'es' : ''} • {phaseTotalData.resourceCount} recurso{phaseTotalData.resourceCount !== 1 ? 's' : ''}
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p className="font-semibold text-sm">{formatCurrency(phaseTotalData.total)}</p>
-                    <p className="text-[10px] text-muted-foreground">Coste Compra</p>
-                  </div>
+                  )
+                ) : (
+                  <MousePointerClick className="h-4 w-4 text-primary/60 flex-shrink-0" />
+                )}
+                <Layers className="h-4 w-4 text-primary flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold truncate">
+                    {phase.code ? `${phase.code}.- ${phase.name}` : phase.name}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {suppliersMap.size} proveedor{suppliersMap.size !== 1 ? 'es' : ''} • {phaseTotalData.resourceCount} recurso{phaseTotalData.resourceCount !== 1 ? 's' : ''}
+                  </p>
                 </div>
-              </CollapsibleTrigger>
+                <div className="text-right">
+                  <p className="font-semibold text-sm">{formatCurrency(phaseTotalData.total)}</p>
+                  <p className="text-[10px] text-muted-foreground">Coste Compra</p>
+                </div>
+                {!focusedPhaseId && (
+                  <Badge variant="outline" className="text-xs">
+                    Click para seleccionar
+                  </Badge>
+                )}
+              </div>
               <CollapsibleContent>
                 <div className="border-t bg-muted/10 p-2 space-y-1">
                   {Array.from(suppliersMap.entries()).map(([supplierId, supplierResources]) => {

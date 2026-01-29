@@ -1840,41 +1840,43 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
         };
         
         if (predesignImageSize === 'full') {
-          // FULL PAGE MODE: 1 image per A4 page (landscape for better detail)
+          // FULL PAGE MODE: 1 image per LANDSCAPE A4 page for maximum detail
           for (const contentType of contentTypes) {
             const items = groupedPredesigns[contentType];
             
             for (let i = 0; i < items.length; i++) {
               const item = items[i];
               
-              // Each image gets its own landscape page
-              doc.addPage('landscape');
-              const landscapeWidth = doc.internal.pageSize.getWidth();
-              const landscapeHeight = doc.internal.pageSize.getHeight();
-              yPos = 15;
+              // Each image gets its own landscape page for maximum size
+              doc.addPage('a4', 'landscape');
+              const landscapeWidth = doc.internal.pageSize.getWidth(); // ~297mm
+              const landscapeHeight = doc.internal.pageSize.getHeight(); // ~210mm
               
-              // Header
-              doc.setFontSize(10);
+              // Minimal margins for maximum image space
+              const marginX = 10;
+              const marginTop = 8;
+              const marginBottom = 8;
+              
+              // Compact header at the top
+              doc.setFontSize(8);
               doc.setFont('helvetica', 'bold');
               doc.setTextColor(37, 99, 235);
-              doc.text(`${sectionNumber}. ANTE-PROYECTO: ${contentType.toUpperCase()}`, 14, yPos);
-              doc.setTextColor(0);
-              yPos += 8;
+              doc.text(`${sectionNumber}. ANTE-PROYECTO: ${contentType.toUpperCase()}`, marginX, marginTop);
               
-              // Image title
-              doc.setFontSize(11);
+              // Image title on the same line
+              doc.setFontSize(9);
               doc.setFont('helvetica', 'bold');
               doc.setTextColor(30, 41, 59);
-              doc.text(item.content, 14, yPos);
+              const titleX = marginX + doc.getTextWidth(`${sectionNumber}. ANTE-PROYECTO: ${contentType.toUpperCase()}`) + 10;
+              doc.text(item.content, titleX, marginTop);
               
-              if (item.description) {
-                doc.setFontSize(9);
+              // Description on same line if short, otherwise skip
+              let headerHeight = marginTop + 4;
+              if (item.description && item.description.length <= 80) {
+                doc.setFontSize(7);
                 doc.setFont('helvetica', 'normal');
                 doc.setTextColor(100, 116, 139);
-                doc.text(item.description, 14, yPos + 5);
-                yPos += 10;
-              } else {
-                yPos += 5;
+                doc.text(` - ${item.description}`, titleX + doc.getTextWidth(item.content) + 2, marginTop);
               }
               
               // Draw image - maximize space on landscape A4
@@ -1883,110 +1885,31 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
                 const imgDimensions = await getImgDimensions(imgData);
                 const imgAspectRatio = imgDimensions.width / imgDimensions.height;
                 
-                // Available space: full landscape page minus header and margins
-                const availableWidth = landscapeWidth - 28; // 14mm margins each side
-                const availableHeight = landscapeHeight - yPos - 15; // Top content + bottom margin
+                // Available space: almost full landscape page
+                const availableWidth = landscapeWidth - (marginX * 2); // ~277mm
+                const availableHeight = landscapeHeight - headerHeight - marginBottom; // ~194mm
                 
                 let drawWidth = availableWidth;
                 let drawHeight = availableWidth / imgAspectRatio;
                 
+                // If height exceeds available, scale down
                 if (drawHeight > availableHeight) {
                   drawHeight = availableHeight;
                   drawWidth = availableHeight * imgAspectRatio;
                 }
                 
-                const offsetX = 14 + (availableWidth - drawWidth) / 2;
+                // Center the image horizontally
+                const offsetX = marginX + (availableWidth - drawWidth) / 2;
                 
-                doc.addImage(imgData, 'JPEG', offsetX, yPos, drawWidth, drawHeight, undefined, 'FAST');
+                doc.addImage(imgData, 'JPEG', offsetX, headerHeight, drawWidth, drawHeight, undefined, 'FAST');
               } else {
                 // Placeholder for non-image files
                 doc.setFillColor(240, 240, 240);
-                doc.roundedRect(14, yPos, 100, 30, 2, 2, 'F');
+                doc.roundedRect(marginX, headerHeight, 100, 30, 2, 2, 'F');
                 doc.setFontSize(9);
                 doc.setTextColor(100);
-                doc.text(`Archivo: ${item.file_name || 'Sin archivo'}`, 20, yPos + 18);
+                doc.text(`Archivo: ${item.file_name || 'Sin archivo'}`, marginX + 6, headerHeight + 18);
               }
-            }
-            sectionNumber++;
-          }
-        } else {
-          // COMPACT MODE: 2 images per A4 page (original behavior with improvements)
-          for (const contentType of contentTypes) {
-            const items = groupedPredesigns[contentType];
-            doc.addPage();
-            yPos = 20;
-            
-            doc.setFontSize(12);
-            doc.setFont('helvetica', 'bold');
-            doc.setTextColor(37, 99, 235);
-            doc.text(`${sectionNumber}. ANTE-PROYECTO: ${contentType.toUpperCase()}`, 14, yPos);
-            doc.setTextColor(0);
-            
-            yPos += 10;
-            
-            // 2 images per page, arranged vertically
-            const imageHeight = 115; // mm - larger for 2 per page
-            const imageWidth = pageWidth - 28; // full width minus margins
-            let imageCount = 0;
-            
-            for (const item of items) {
-              if (imageCount > 0 && imageCount % 2 === 0) {
-                // New page for every 2 images
-                doc.addPage();
-                yPos = 20;
-                doc.setFontSize(12);
-                doc.setFont('helvetica', 'bold');
-                doc.setTextColor(37, 99, 235);
-                doc.text(`${sectionNumber}. ANTE-PROYECTO: ${contentType.toUpperCase()} (cont.)`, 14, yPos);
-                doc.setTextColor(0);
-                yPos += 10;
-              }
-              
-              // Draw image title
-              doc.setFontSize(10);
-              doc.setFont('helvetica', 'bold');
-              doc.setTextColor(30, 41, 59);
-              doc.text(item.content, 14, yPos);
-              
-              if (item.description) {
-                doc.setFontSize(8);
-                doc.setFont('helvetica', 'normal');
-                doc.setTextColor(100, 116, 139);
-                doc.text(item.description, 14, yPos + 4);
-                yPos += 8;
-              } else {
-                yPos += 4;
-              }
-              
-              // Draw image if available
-              const imgData = predesignImages.get(item.id);
-              if (imgData) {
-                const imgDimensions = await getImgDimensions(imgData);
-                const imgAspectRatio = imgDimensions.width / imgDimensions.height;
-                
-                let drawWidth = imageWidth;
-                let drawHeight = imageWidth / imgAspectRatio;
-                
-                if (drawHeight > imageHeight) {
-                  drawHeight = imageHeight;
-                  drawWidth = imageHeight * imgAspectRatio;
-                }
-                
-                const offsetX = 14 + (imageWidth - drawWidth) / 2;
-                
-                doc.addImage(imgData, 'JPEG', offsetX, yPos, drawWidth, drawHeight, undefined, 'FAST');
-                yPos += drawHeight + 10;
-              } else {
-                // Placeholder for non-image files
-                doc.setFillColor(240, 240, 240);
-                doc.roundedRect(14, yPos, imageWidth, 20, 2, 2, 'F');
-                doc.setFontSize(9);
-                doc.setTextColor(100);
-                doc.text(`Archivo: ${item.file_name || 'Sin archivo'}`, 20, yPos + 12);
-                yPos += 30;
-              }
-              
-              imageCount++;
             }
             sectionNumber++;
           }

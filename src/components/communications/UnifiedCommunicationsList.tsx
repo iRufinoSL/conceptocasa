@@ -646,13 +646,23 @@ export function UnifiedCommunicationsList({
     );
   };
 
-  // Communication detail component
+  // Communication detail component - using function that creates handlers with the specific comm
   const CommunicationDetail = ({
     comm,
     isFullscreen = false,
+    onExpandClick,
+    onActionsClick,
+    onReplyClick,
+    onForwardClick,
+    onDeleteClick,
   }: {
     comm: UnifiedCommunication;
     isFullscreen?: boolean;
+    onExpandClick?: () => void;
+    onActionsClick?: () => void;
+    onReplyClick?: () => void;
+    onForwardClick?: () => void;
+    onDeleteClick?: () => void;
   }) => {
     const TypeIcon = typeIcons[comm.type];
     const status = statusConfig[comm.status as keyof typeof statusConfig] || statusConfig.pending;
@@ -806,11 +816,11 @@ export function UnifiedCommunicationsList({
             </div>
             <div className="flex items-center gap-2 flex-wrap">
               {/* Action buttons for assign and task */}
-              {!isFullscreen && (
+              {!isFullscreen && onExpandClick && (
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => setFullscreenCommunication(comm)}
+                  onClick={onExpandClick}
                   className="gap-1"
                   title="Ver a pantalla completa"
                 >
@@ -819,24 +829,26 @@ export function UnifiedCommunicationsList({
                 </Button>
               )}
 
-              <Button 
-                variant="outline" 
-                size="sm"
-                onClick={() => handleOpenActionsDialog(comm)}
-                className="gap-1"
-              >
-                <FolderOpen className="h-4 w-4" />
-                Asociar/Tarea
-              </Button>
+              {onActionsClick && (
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={onActionsClick}
+                  className="gap-1"
+                >
+                  <FolderOpen className="h-4 w-4" />
+                  Asociar/Tarea
+                </Button>
+              )}
               
-              {comm.type === 'email' && onComposeReply && (
+              {comm.type === 'email' && onReplyClick && (
                 <>
-                  <Button variant="outline" size="sm" onClick={handleReply}>
+                  <Button variant="outline" size="sm" onClick={onReplyClick}>
                     <Reply className="h-4 w-4 mr-1" />
                     Responder
                   </Button>
-                  {onComposeForward && (
-                    <Button variant="outline" size="sm" onClick={handleForward}>
+                  {onForwardClick && (
+                    <Button variant="outline" size="sm" onClick={onForwardClick}>
                       <Forward className="h-4 w-4 mr-1" />
                       Reenviar
                     </Button>
@@ -859,12 +871,12 @@ export function UnifiedCommunicationsList({
                   Volver a enviar
                 </Button>
               )}
-              {isAdmin && (
+              {isAdmin && onDeleteClick && (
                 <Button 
                   variant="ghost" 
                   size="sm" 
                   className="text-destructive"
-                  onClick={() => handleDelete(comm)}
+                  onClick={onDeleteClick}
                 >
                   <Trash2 className="h-4 w-4" />
                 </Button>
@@ -1033,7 +1045,14 @@ export function UnifiedCommunicationsList({
           {/* Detail */}
           <div className="h-full overflow-auto">
             {selectedCommunication ? (
-              <CommunicationDetail comm={selectedCommunication} />
+              <CommunicationDetail 
+                comm={selectedCommunication}
+                onExpandClick={() => setFullscreenCommunication(selectedCommunication)}
+                onActionsClick={() => handleOpenActionsDialog(selectedCommunication)}
+                onReplyClick={onComposeReply ? () => onComposeReply(selectedCommunication) : undefined}
+                onForwardClick={onComposeForward ? () => onComposeForward(selectedCommunication) : undefined}
+                onDeleteClick={() => handleDelete(selectedCommunication)}
+              />
             ) : (
               <div className="h-full flex items-center justify-center">
                 <div className="text-center text-muted-foreground py-8">
@@ -1190,7 +1209,14 @@ export function UnifiedCommunicationsList({
         {/* Right column - Detail */}
         <div className="min-h-[500px]">
           {selectedCommunication ? (
-            <CommunicationDetail comm={selectedCommunication} />
+            <CommunicationDetail 
+              comm={selectedCommunication}
+              onExpandClick={() => setFullscreenCommunication(selectedCommunication)}
+              onActionsClick={() => handleOpenActionsDialog(selectedCommunication)}
+              onReplyClick={onComposeReply ? () => onComposeReply(selectedCommunication) : undefined}
+              onForwardClick={onComposeForward ? () => onComposeForward(selectedCommunication) : undefined}
+              onDeleteClick={() => handleDelete(selectedCommunication)}
+            />
           ) : (
             <Card className="h-full flex items-center justify-center">
               <div className="text-center text-muted-foreground py-8">
@@ -1228,7 +1254,14 @@ export function UnifiedCommunicationsList({
           </DialogHeader>
           <div className="flex-1 overflow-auto p-4">
             {fullscreenCommunication && (
-              <CommunicationDetail comm={fullscreenCommunication} isFullscreen />
+              <CommunicationDetail 
+                comm={fullscreenCommunication} 
+                isFullscreen 
+                onActionsClick={() => handleOpenActionsDialog(fullscreenCommunication)}
+                onReplyClick={onComposeReply ? () => onComposeReply(fullscreenCommunication) : undefined}
+                onForwardClick={onComposeForward ? () => onComposeForward(fullscreenCommunication) : undefined}
+                onDeleteClick={() => handleDelete(fullscreenCommunication)}
+              />
             )}
           </div>
         </DialogContent>

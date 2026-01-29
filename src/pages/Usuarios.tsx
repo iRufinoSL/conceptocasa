@@ -15,10 +15,12 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from 'sonner';
 import { z } from 'zod';
-import { ArrowLeft, Plus, UserCog, Pencil, Trash2, Search, FolderOpen } from 'lucide-react';
+import { ArrowLeft, Plus, UserCog, Pencil, Trash2, Search, FolderOpen, Monitor, UserCheck } from 'lucide-react';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import { AppNavDropdown } from '@/components/AppNavDropdown';
 import { UserBudgetAccessDialog } from '@/components/users/UserBudgetAccessDialog';
+import { UserAppAccessDialog } from '@/components/users/UserAppAccessDialog';
+import { ModelUsersManager } from '@/components/users/ModelUsersManager';
 import { searchMatch } from '@/lib/search-utils';
 
 const emailSchema = z.string().email('Email inválido');
@@ -99,6 +101,10 @@ export default function Usuarios() {
   // Budget access dialog
   const [isAccessOpen, setIsAccessOpen] = useState(false);
   const [accessUser, setAccessUser] = useState<UserProfile | null>(null);
+  
+  // App access dialog (permissions for apps/tabs/fields)
+  const [isAppAccessOpen, setIsAppAccessOpen] = useState(false);
+  const [appAccessUser, setAppAccessUser] = useState<UserProfile | null>(null);
 
   // Redirect non-admin users
   useEffect(() => {
@@ -499,6 +505,11 @@ export default function Usuarios() {
     setIsAccessOpen(true);
   };
 
+  const handleManageAppAccess = (userToManage: UserProfile) => {
+    setAppAccessUser(userToManage);
+    setIsAppAccessOpen(true);
+  };
+
   const getRoleBadgeVariant = (role: string) => {
     switch (role) {
       case 'administrador':
@@ -759,8 +770,22 @@ export default function Usuarios() {
                                   <FolderOpen className="h-4 w-4" />
                                 </Button>
                               </TooltipTrigger>
-                              <TooltipContent>Gestionar accesos</TooltipContent>
+                              <TooltipContent>Gestionar accesos a presupuestos</TooltipContent>
                             </Tooltip>
+                            {u.roles.includes('colaborador') || u.roles.includes('cliente') ? (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => handleManageAppAccess(u)}
+                                  >
+                                    <Monitor className="h-4 w-4" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Permisos de aplicaciones</TooltipContent>
+                              </Tooltip>
+                            ) : null}
                             <Tooltip>
                               <TooltipTrigger asChild>
                                 <Button
@@ -796,6 +821,11 @@ export default function Usuarios() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Model Users Section */}
+        <div className="mt-8">
+          <ModelUsersManager />
+        </div>
       </main>
 
       {/* Edit Dialog */}
@@ -974,6 +1004,22 @@ export default function Usuarios() {
           userId={accessUser.id}
           userName={accessUser.full_name || ''}
           userEmail={accessUser.email}
+        />
+      )}
+
+      {/* App Access Dialog */}
+      {appAccessUser && (
+        <UserAppAccessDialog
+          open={isAppAccessOpen}
+          onOpenChange={(open) => {
+            setIsAppAccessOpen(open);
+            if (!open) {
+              setAppAccessUser(null);
+            }
+          }}
+          userId={appAccessUser.id}
+          userName={appAccessUser.full_name || appAccessUser.email}
+          userRole={appAccessUser.roles[0] || 'cliente'}
         />
       )}
     </div>

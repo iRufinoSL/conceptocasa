@@ -231,7 +231,11 @@ export function UnassignedResourcesSection({
                             </SelectTrigger>
                             <SelectContent>
                               {[...activities]
-                                .sort((a, b) => getActivityDisplay(a.id).localeCompare(getActivityDisplay(b.id), 'es'))
+                                .sort((a, b) => {
+                                  const idA = getActivityDisplay(a.id);
+                                  const idB = getActivityDisplay(b.id);
+                                  return idA.localeCompare(idB, 'es');
+                                })
                                 .map((activity) => (
                                   <SelectItem key={activity.id} value={activity.id}>
                                     {getActivityDisplay(activity.id)}

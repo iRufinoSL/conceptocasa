@@ -250,15 +250,21 @@ export function ResourcesTypeGroupedView({
                   const canEdit = canEditResource(resource);
                   
                   const unitOptions = UNITS.map(u => ({ value: u, label: u }));
-                  const activityOptions = activities
+                  const activityOptions = [...activities]
+                    .sort((a, b) => {
+                      const phaseA = a.phase_id ? phases.find(p => p.id === a.phase_id) : null;
+                      const phaseB = b.phase_id ? phases.find(p => p.id === b.phase_id) : null;
+                      const idA = `${phaseA?.code || ''} ${a.code}.-${a.name}`;
+                      const idB = `${phaseB?.code || ''} ${b.code}.-${b.name}`;
+                      return idA.localeCompare(idB, 'es');
+                    })
                     .map(a => {
                       const phase = a.phase_id ? phases.find(p => p.id === a.phase_id) : null;
                       return {
                         value: a.id,
                         label: `${phase?.code || ''} ${a.code}.-${a.name}`,
                       };
-                    })
-                    .sort((a, b) => a.label.localeCompare(b.label, 'es'));
+                    });
 
                   return (
                     <TableRow key={resource.id} className={selectedIds.has(resource.id) ? 'bg-muted/50' : ''}>

@@ -76,6 +76,8 @@ interface BudgetActivity {
   duration_days: number | null;
   tolerance_days: number | null;
   end_date: string | null;
+  actual_start_date: string | null;
+  actual_end_date: string | null;
 }
 
 interface Measurement {
@@ -127,6 +129,8 @@ interface ActivityForm {
   duration_days: string;
   tolerance_days: string;
   work_area_ids: string[];
+  actual_start_date: string;
+  actual_end_date: string;
 }
 
 interface BudgetActivitiesTabProps {
@@ -164,7 +168,9 @@ const emptyForm: ActivityForm = {
   start_date: '',
   duration_days: '',
   tolerance_days: '',
-  work_area_ids: []
+  work_area_ids: [],
+  actual_start_date: '',
+  actual_end_date: '',
 };
 
 export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStartDate, budgetEndDate, initialActivityId, onClearInitialActivityId }: BudgetActivitiesTabProps) {
@@ -535,7 +541,9 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
               start_date: data.start_date || '',
               duration_days: data.duration_days?.toString() || '',
               tolerance_days: data.tolerance_days?.toString() || '',
-              work_area_ids: (workAreaLinksRes.data || []).map(r => r.work_area_id)
+              work_area_ids: (workAreaLinksRes.data || []).map(r => r.work_area_id),
+              actual_start_date: data.actual_start_date || '',
+              actual_end_date: data.actual_end_date || '',
             });
             setWorkAreaSearchQuery('');
             setShowAllWorkAreas(false);
@@ -610,7 +618,9 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
       start_date: activity.start_date || '',
       duration_days: activity.duration_days?.toString() || '',
       tolerance_days: activity.tolerance_days?.toString() || '',
-      work_area_ids: workAreaRelations.filter(r => r.activity_id === activity.id).map(r => r.work_area_id)
+      work_area_ids: workAreaRelations.filter(r => r.activity_id === activity.id).map(r => r.work_area_id),
+      actual_start_date: activity.actual_start_date || '',
+      actual_end_date: activity.actual_end_date || '',
     });
     
     // Reset search state
@@ -813,7 +823,9 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
         opciones: form.opciones.length > 0 ? form.opciones : ['A', 'B', 'C'],
         start_date: form.start_date || null,
         duration_days: form.duration_days ? parseInt(form.duration_days) : null,
-        tolerance_days: form.tolerance_days ? parseInt(form.tolerance_days) : null
+        tolerance_days: form.tolerance_days ? parseInt(form.tolerance_days) : null,
+        actual_start_date: form.actual_start_date || null,
+        actual_end_date: form.actual_end_date || null,
       };
 
       let savedActivityId: string | null = null;
@@ -3128,6 +3140,31 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
                   ) : (
                     <span className="text-muted-foreground">-</span>
                   )}
+                </div>
+              </div>
+            </div>
+
+            {/* Fechas Reales de Ejecución */}
+            <div className="border-t pt-4 mt-4">
+              <Label className="text-base font-semibold mb-3 block">Fechas Reales de Ejecución</Label>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="actual_start_date">Inicio Real</Label>
+                  <Input
+                    id="actual_start_date"
+                    type="date"
+                    value={form.actual_start_date}
+                    onChange={(e) => setForm({ ...form, actual_start_date: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="actual_end_date">Fin Real</Label>
+                  <Input
+                    id="actual_end_date"
+                    type="date"
+                    value={form.actual_end_date}
+                    onChange={(e) => setForm({ ...form, actual_end_date: e.target.value })}
+                  />
                 </div>
               </div>
             </div>

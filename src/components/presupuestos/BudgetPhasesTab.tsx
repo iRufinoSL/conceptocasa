@@ -34,6 +34,8 @@ interface BudgetPhase {
   time_percent: number | null;
   parent_id: string | null;
   depends_on_phase_id: string | null;
+  actual_start_date: string | null;
+  actual_end_date: string | null;
 }
 
 interface BudgetActivity {
@@ -64,6 +66,8 @@ interface PhaseForm {
   time_percent: string;
   parent_id: string;
   depends_on_phase_id: string;
+  actual_start_date: string;
+  actual_end_date: string;
 }
 
 interface BudgetPhasesTabProps {
@@ -83,6 +87,8 @@ const emptyForm: PhaseForm = {
   time_percent: '',
   parent_id: '',
   depends_on_phase_id: '',
+  actual_start_date: '',
+  actual_end_date: '',
 };
 
 // Calculate budget duration in days
@@ -232,6 +238,8 @@ export function BudgetPhasesTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
           time_percent: phase.time_percent?.toString() || '',
           parent_id: phase.parent_id || '',
           depends_on_phase_id: phase.depends_on_phase_id || '',
+          actual_start_date: phase.actual_start_date || '',
+          actual_end_date: phase.actual_end_date || '',
         });
         setFormDialogOpen(true);
       }
@@ -334,6 +342,8 @@ export function BudgetPhasesTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
       time_percent: phase.time_percent?.toString() || '',
       parent_id: phase.parent_id || '',
       depends_on_phase_id: phase.depends_on_phase_id || '',
+      actual_start_date: phase.actual_start_date || '',
+      actual_end_date: phase.actual_end_date || '',
     });
     setFormDialogOpen(true);
   };
@@ -402,6 +412,8 @@ export function BudgetPhasesTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
             time_percent: timePercent,
             parent_id: form.parent_id || null,
             depends_on_phase_id: form.depends_on_phase_id || null,
+            actual_start_date: form.actual_start_date || null,
+            actual_end_date: form.actual_end_date || null,
           })
           .eq('id', currentPhase.id);
 
@@ -421,6 +433,8 @@ export function BudgetPhasesTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
             time_percent: timePercent,
             parent_id: form.parent_id || null,
             depends_on_phase_id: form.depends_on_phase_id || null,
+            actual_start_date: form.actual_start_date || null,
+            actual_end_date: form.actual_end_date || null,
           })
           .select()
           .single();
@@ -1211,6 +1225,37 @@ export function BudgetPhasesTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
                     : 'Se calcula desde Tiempo% × Duración Presupuesto'
                   }
                 </p>
+              </div>
+            </div>
+
+            {/* Fechas Reales de Ejecución */}
+            <div className="border-t pt-4 mt-4">
+              <Label className="text-base font-semibold mb-3 block">Fechas Reales de Ejecución</Label>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="actual_start_date">Inicio Real</Label>
+                  <Input
+                    id="actual_start_date"
+                    type="date"
+                    value={form.actual_start_date}
+                    onChange={(e) => setForm({ ...form, actual_start_date: e.target.value })}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Fecha de inicio efectivo de la fase
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="actual_end_date">Fin Real</Label>
+                  <Input
+                    id="actual_end_date"
+                    type="date"
+                    value={form.actual_end_date}
+                    onChange={(e) => setForm({ ...form, actual_end_date: e.target.value })}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Fecha de finalización efectiva de la fase
+                  </p>
+                </div>
               </div>
             </div>
 

@@ -10,9 +10,10 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Plus, Pencil, Trash2, Upload, Search, ChevronRight, ChevronDown, ClipboardList, MoreHorizontal, Copy, Calendar, List, Clock, LayoutGrid, BarChart3 } from 'lucide-react';
+import { Plus, Pencil, Trash2, Upload, Search, ChevronRight, ChevronDown, ClipboardList, MoreHorizontal, Copy, Calendar, List, Clock, LayoutGrid, BarChart3, ShoppingCart } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { HierarchicalGanttView } from './HierarchicalGanttView';
+import { BuyingListView } from './BuyingListView';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { PhasesOptionsGroupedView } from './PhasesOptionsGroupedView';
@@ -56,12 +57,19 @@ interface BudgetActivity {
 
 interface BudgetResource {
   id: string;
+  name: string;
   activity_id: string | null;
   external_unit_cost: number | null;
   safety_margin_percent: number | null;
   sales_margin_percent: number | null;
   manual_units: number | null;
   related_units: number | null;
+  resource_type: string | null;
+  unit: string | null;
+  supplier_id: string | null;
+  supplier?: {
+    name: string;
+  } | null;
 }
 
 interface PhaseForm {
@@ -165,7 +173,7 @@ export function BudgetPhasesTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
   const [resources, setResources] = useState<BudgetResource[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [viewMode, setViewMode] = useState<'activities' | 'time' | 'gantt' | 'options'>('activities');
+  const [viewMode, setViewMode] = useState<'activities' | 'time' | 'gantt' | 'options' | 'shopping'>('activities');
   const [formDialogOpen, setFormDialogOpen] = useState(false);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -196,7 +204,7 @@ export function BudgetPhasesTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
           .eq('budget_id', budgetId),
         supabase
           .from('budget_activity_resources')
-          .select('id, activity_id, external_unit_cost, safety_margin_percent, sales_margin_percent, manual_units, related_units')
+          .select('id, name, activity_id, external_unit_cost, safety_margin_percent, sales_margin_percent, manual_units, related_units, resource_type, unit, supplier_id, supplier:crm_contacts!budget_activity_resources_supplier_id_fkey(name)')
           .eq('budget_id', budgetId)
       ]);
 
@@ -915,10 +923,19 @@ export function BudgetPhasesTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
               variant={viewMode === 'options' ? 'default' : 'ghost'} 
               size="sm"
               onClick={() => setViewMode('options')}
-              className="rounded-l-none"
+              className="rounded-none border-r"
             >
               <LayoutGrid className="h-4 w-4 mr-1" />
               Por Opción
+            </Button>
+            <Button 
+              variant={viewMode === 'shopping' ? 'default' : 'ghost'} 
+              size="sm"
+              onClick={() => setViewMode('shopping')}
+              className="rounded-l-none"
+            >
+              <ShoppingCart className="h-4 w-4 mr-1" />
+              Lista Compra
             </Button>
           </div>
           {isAdmin && (
@@ -976,6 +993,16 @@ export function BudgetPhasesTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
           <div className="text-center py-8 text-muted-foreground">
             {searchTerm ? 'No se encontraron fases' : 'No hay fases. Importe un archivo CSV o cree una nueva fase.'}
           </div>
+        ) : viewMode === 'shopping' ? (
+          /* Buying List View */
+          <BuyingListView
+            phases={filteredPhases}
+            activities={activities}
+            resources={resources.map(r => ({
+              ...r,
+              supplier_name: r.supplier?.name || null
+            }))}
+          />
         ) : viewMode === 'gantt' ? (
           /* Gantt Chart View */
           <HierarchicalGanttView

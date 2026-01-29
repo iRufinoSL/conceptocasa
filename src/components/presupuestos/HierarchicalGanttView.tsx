@@ -8,7 +8,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { format, differenceInDays, addDays, parseISO, eachWeekOfInterval, eachDayOfInterval } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { ChevronDown, ChevronRight, Calendar, ZoomIn, ZoomOut, ArrowLeft, Clock, CheckCircle2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, Calendar, ZoomIn, ZoomOut, ArrowLeft, Clock, CheckCircle2, Maximize2, Minimize2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
@@ -86,6 +86,7 @@ export function HierarchicalGanttView({
   const [zoomLevel, setZoomLevel] = useState<ZoomLevel>('weeks');
   const [viewMode, setViewMode] = useState<ViewMode>('phases');
   const [selectedPhaseId, setSelectedPhaseId] = useState<string | null>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -578,7 +579,9 @@ export function HierarchicalGanttView({
   }
 
   return (
-    <Card>
+    <Card className={cn(
+      isFullscreen && "fixed inset-0 z-50 rounded-none overflow-auto"
+    )}>
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <div className="flex items-center gap-2">
@@ -615,10 +618,22 @@ export function HierarchicalGanttView({
                 Días
               </ToggleGroupItem>
             </ToggleGroup>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsFullscreen(!isFullscreen)}
+              title={isFullscreen ? "Salir de pantalla completa" : "Pantalla completa"}
+            >
+              {isFullscreen ? (
+                <Minimize2 className="h-4 w-4" />
+              ) : (
+                <Maximize2 className="h-4 w-4" />
+              )}
+            </Button>
           </div>
         </div>
       </CardHeader>
-      <CardContent className="p-0">
+      <CardContent className={cn("p-0", isFullscreen && "h-[calc(100vh-80px)] overflow-auto")}>
         <div className="flex border-t">
           {/* Fixed left column header */}
           <div className="w-[300px] shrink-0 border-r bg-muted/30 px-3 py-2">

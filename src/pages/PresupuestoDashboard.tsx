@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useTabVisibility } from '@/hooks/useTabVisibility';
 import { useSignedUrl, extractFilePath } from '@/hooks/useSignedUrl';
+import { useBudgetPresence } from '@/hooks/useBudgetPresence';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -33,6 +34,7 @@ import { BudgetWorkAreasTab } from '@/components/presupuestos/BudgetWorkAreasTab
 import { BudgetDocumentsTab } from '@/components/presupuestos/BudgetDocumentsTab';
 import { BudgetAgendaTab } from '@/components/presupuestos/BudgetAgendaTab';
 import { BudgetCommunicationsTab } from '@/components/presupuestos/BudgetCommunicationsTab';
+import { BudgetPresenceIndicator } from '@/components/presupuestos/BudgetPresenceIndicator';
 import { toast } from 'sonner';
 
 interface Presupuesto {
@@ -84,6 +86,18 @@ export default function PresupuestoDashboard() {
   const isAdmin = roles.includes('administrador');
   const { isTabVisible } = useTabVisibility();
 
+  // Budget presence for real-time collaboration
+  const { activeUsers, updatePresence, isEntityLocked, clearEditingState } = useBudgetPresence({
+    budgetId: id || '',
+    enabled: !!id && !!user,
+  });
+
+  // Update presence when tab changes
+  useEffect(() => {
+    if (id && user) {
+      updatePresence({ active_tab: activeTab });
+    }
+  }, [activeTab, id, user, updatePresence]);
   const handleRecalculateAll = async () => {
     if (!id) return;
     
@@ -321,6 +335,13 @@ export default function PresupuestoDashboard() {
               <p className="text-xs text-muted-foreground">{generatePresupuestoId()}</p>
             </div>
           </div>
+          {/* Presence indicator */}
+          {user && (
+            <BudgetPresenceIndicator 
+              activeUsers={activeUsers} 
+              currentUserId={user.id} 
+            />
+          )}
           {isAdmin && (
             <Button 
               variant="outline" 

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -20,6 +20,7 @@ import { OPTION_COLORS } from '@/lib/options-utils';
 import { formatActividadId } from '@/lib/activity-id';
 import { formatCurrency } from '@/lib/format-utils';
 import { calcResourceSubtotal } from '@/lib/budget-pricing';
+import { useBudgetBroadcast } from '@/hooks/useBudgetBroadcast';
 
 interface WorkArea {
   id: string;
@@ -108,6 +109,22 @@ export function BudgetWorkAreasTab({ budgetId, isAdmin }: BudgetWorkAreasTabProp
     level: 'Nivel 1',
     work_area: 'Espacios',
     activity_ids: [] as string[]
+  });
+
+  // Ref to hold fetchWorkAreas so broadcast callback can access it
+  const fetchWorkAreasRef = useRef<() => Promise<void>>();
+
+  // Instant broadcast for cross-client sync
+  const handleBroadcast = useCallback((payload: any) => {
+    // When another client broadcasts a change, refetch immediately
+    if (payload.type === 'work-area-changed' || payload.type === 'activity-changed') {
+      fetchWorkAreasRef.current?.();
+    }
+  }, []);
+
+  const { broadcastWorkAreaChange } = useBudgetBroadcast({
+    budgetId,
+    onBroadcast: handleBroadcast,
   });
 
   // Combine default and custom work areas, plus any from existing data
@@ -225,6 +242,9 @@ export function BudgetWorkAreasTab({ budgetId, isAdmin }: BudgetWorkAreasTabProp
       setIsLoading(false);
     }
   };
+
+  // Update ref so broadcast callback can call fetchWorkAreas
+  fetchWorkAreasRef.current = fetchWorkAreas;
 
   useEffect(() => {
     if (budgetId) {
@@ -399,7 +419,10 @@ export function BudgetWorkAreasTab({ budgetId, isAdmin }: BudgetWorkAreasTabProp
       }
 
       setDialogOpen(false);
-      fetchWorkAreas();
+      // Immediate refetch for local state
+      await fetchWorkAreas();
+      // Broadcast to other clients for instant sync
+      broadcastWorkAreaChange(editingArea ? 'update' : 'create', savedAreaId || undefined);
     } catch (error: any) {
       toast.error(error.message || 'Error al guardar');
     }
@@ -416,7 +439,8 @@ export function BudgetWorkAreasTab({ budgetId, isAdmin }: BudgetWorkAreasTabProp
 
       if (error) throw error;
       toast.success('Área de trabajo eliminada');
-      fetchWorkAreas();
+      await fetchWorkAreas();
+      broadcastWorkAreaChange('delete', id);
     } catch (error: any) {
       toast.error(error.message || 'Error al eliminar');
     }
@@ -496,7 +520,8 @@ export function BudgetWorkAreasTab({ budgetId, isAdmin }: BudgetWorkAreasTabProp
       
       if (error) throw error;
       toast.success('Área de trabajo asignada');
-      fetchWorkAreas();
+      await fetchWorkAreas();
+      broadcastWorkAreaChange('update', workAreaId);
     } catch (error: any) {
       console.error('Error assigning work area:', error);
       toast.error(error.message || 'Error al asignar área de trabajo');

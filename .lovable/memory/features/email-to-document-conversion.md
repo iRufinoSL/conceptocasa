@@ -1,0 +1,3 @@
+# Email-to-Document Conversion Feature
+
+Emails (inbound and outbound) in both the CRM Communications module (`UnifiedCommunicationsList`) and the Budget Communications module (`BudgetEmailInbox`) can be converted into project documents. The "Documento" button is placed next to the "Asociar/Tarea" button in the detail view. The process automatically maps the email subject to the document title, preserves all attachments, and maintains relational links to the source email, associated budget, and contact. Users can assign specific document types during the conversion process, ensuring a complete filing history within the document management system.

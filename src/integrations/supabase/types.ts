@@ -1991,11 +1991,13 @@ export type Database = {
           delivery_status: string | null
           delivery_updated_at: string | null
           direction: string
+          document_type: string | null
           error_message: string | null
           external_id: string | null
           from_email: string
           from_name: string | null
           id: string
+          is_document: boolean | null
           is_read: boolean | null
           metadata: Json | null
           project_id: string | null
@@ -2025,11 +2027,13 @@ export type Database = {
           delivery_status?: string | null
           delivery_updated_at?: string | null
           direction: string
+          document_type?: string | null
           error_message?: string | null
           external_id?: string | null
           from_email: string
           from_name?: string | null
           id?: string
+          is_document?: boolean | null
           is_read?: boolean | null
           metadata?: Json | null
           project_id?: string | null
@@ -2059,11 +2063,13 @@ export type Database = {
           delivery_status?: string | null
           delivery_updated_at?: string | null
           direction?: string
+          document_type?: string | null
           error_message?: string | null
           external_id?: string | null
           from_email?: string
           from_name?: string | null
           id?: string
+          is_document?: boolean | null
           is_read?: boolean | null
           metadata?: Json | null
           project_id?: string | null

@@ -46,7 +46,9 @@ import {
   FileArchive,
   Maximize2,
   List,
-  ChevronDown
+  ChevronDown,
+  Mail,
+  Paperclip
 } from 'lucide-react';
 import { RichTextEditor } from '@/components/ui/rich-text-editor';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -68,6 +70,33 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { openSafeUrl } from '@/lib/url-utils';
 
+// Unified document interface that supports both regular docs and email-docs
+interface UnifiedDocument {
+  id: string;
+  name: string;
+  description: string | null;
+  file_path: string | null;
+  file_type: string | null;
+  file_size: number | null;
+  document_type: string | null;
+  document_url: string | null;
+  created_at: string | null;
+  project_id: string | null;
+  // Email-specific fields
+  isEmailDocument?: boolean;
+  email_subject?: string | null;
+  email_from?: string | null;
+  email_body_html?: string | null;
+  email_attachments?: Array<{
+    id: string;
+    file_name: string;
+    file_path: string;
+    file_type: string | null;
+    file_size: number | null;
+  }>;
+}
+
+// Keep the old interface for backward compatibility
 interface ProjectDocument {
   id: string;
   name: string;
@@ -137,20 +166,21 @@ const isValidUrl = (url: string) => {
   }
 };
 
-// Reusable DocumentRow component
+// Reusable DocumentRow component - now uses UnifiedDocument
 interface DocumentRowProps {
-  doc: ProjectDocument;
+  doc: UnifiedDocument;
   isAdmin: boolean;
-  getFileIcon: (doc: ProjectDocument) => React.ReactNode;
+  getFileIcon: (doc: UnifiedDocument) => React.ReactNode;
   truncateDescription: (text: string | null, maxLength?: number) => string;
   formatFileSize: (bytes: number | null) => string;
   hideType?: boolean;
   onDescriptionPreview: (title: string, content: string) => void;
   onOpenUrl: (url: string) => void;
-  onPreview: (doc: ProjectDocument) => void;
-  onDownload: (doc: ProjectDocument) => void;
-  onEdit: (doc: ProjectDocument) => void;
-  onDelete: (doc: ProjectDocument) => void;
+  onPreview: (doc: UnifiedDocument) => void;
+  onDownload: (doc: UnifiedDocument) => void;
+  onEdit: (doc: UnifiedDocument) => void;
+  onDelete: (doc: UnifiedDocument) => void;
+  onEmailPreview?: (doc: UnifiedDocument) => void;
 }
 
 function DocumentRow({
@@ -165,16 +195,32 @@ function DocumentRow({
   onPreview,
   onDownload,
   onEdit,
-  onDelete
+  onDelete,
+  onEmailPreview
 }: DocumentRowProps) {
+  const attachmentCount = doc.email_attachments?.length || 0;
+  
   return (
     <TableRow>
       <TableCell>
         <div className="flex items-center gap-3">
           {getFileIcon(doc)}
           <div className="min-w-0">
-            <p className="font-medium truncate">{doc.name}</p>
-            {doc.description && (
+            <div className="flex items-center gap-2">
+              <p className="font-medium truncate">{doc.name}</p>
+              {doc.isEmailDocument && (
+                <Badge variant="secondary" className="text-xs flex items-center gap-1 flex-shrink-0">
+                  <Mail className="h-3 w-3" />
+                  Email
+                </Badge>
+              )}
+            </div>
+            {doc.isEmailDocument && doc.email_from && (
+              <p className="text-xs text-muted-foreground truncate">
+                De: {doc.email_from}
+              </p>
+            )}
+            {!doc.isEmailDocument && doc.description && (
               <div className="flex items-center gap-1">
                 <p className="text-xs text-muted-foreground truncate">
                   {truncateDescription(doc.description)}
@@ -195,11 +241,22 @@ function DocumentRow({
       </TableCell>
       {!hideType && (
         <TableCell>
-          <Badge variant="outline">{doc.document_type || 'Otro'}</Badge>
+          <div className="flex items-center gap-2">
+            <Badge variant="outline">{doc.document_type || 'Otro'}</Badge>
+            {attachmentCount > 0 && (
+              <Badge variant="secondary" className="text-xs flex items-center gap-1">
+                <Paperclip className="h-3 w-3" />
+                {attachmentCount}
+              </Badge>
+            )}
+          </div>
         </TableCell>
       )}
       <TableCell className="hidden md:table-cell text-muted-foreground">
-        {formatFileSize(doc.file_size)}
+        {doc.isEmailDocument 
+          ? (attachmentCount > 0 ? `${attachmentCount} adjuntos` : '-')
+          : formatFileSize(doc.file_size)
+        }
       </TableCell>
       <TableCell className="hidden md:table-cell text-muted-foreground">
         {doc.created_at 
@@ -208,7 +265,20 @@ function DocumentRow({
       </TableCell>
       <TableCell>
         <div className="flex items-center justify-end gap-1">
-          {doc.document_url && (
+          {/* Email document actions */}
+          {doc.isEmailDocument && onEmailPreview && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => onEmailPreview(doc)}
+              title="Ver email"
+            >
+              <Eye className="h-4 w-4" />
+            </Button>
+          )}
+          
+          {/* Regular document actions */}
+          {doc.document_url && !doc.isEmailDocument && (
             <Button
               variant="ghost"
               size="icon"
@@ -218,7 +288,7 @@ function DocumentRow({
               <ExternalLink className="h-4 w-4" />
             </Button>
           )}
-          {doc.file_path && (
+          {doc.file_path && !doc.isEmailDocument && (
             <>
               <Button
                 variant="ghost"
@@ -238,7 +308,7 @@ function DocumentRow({
               </Button>
             </>
           )}
-          {isAdmin && (
+          {isAdmin && !doc.isEmailDocument && (
             <>
               <Button
                 variant="ghost"
@@ -259,6 +329,18 @@ function DocumentRow({
               </Button>
             </>
           )}
+          {/* Email document delete (unmark as document) */}
+          {isAdmin && doc.isEmailDocument && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => onDelete(doc)}
+              className="text-muted-foreground hover:text-destructive"
+              title="Quitar de documentos"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          )}
         </div>
       </TableCell>
     </TableRow>
@@ -266,7 +348,7 @@ function DocumentRow({
 }
 
 export function BudgetDocumentsTab({ budgetId, projectId, projectName, isAdmin }: BudgetDocumentsTabProps) {
-  const [documents, setDocuments] = useState<ProjectDocument[]>([]);
+  const [documents, setDocuments] = useState<UnifiedDocument[]>([]);
   const [loading, setLoading] = useState(true);
   const [customTypes, setCustomTypes] = useState<string[]>([]);
   const [viewMode, setViewMode] = useState<'alphabetical' | 'grouped'>('alphabetical');
@@ -285,7 +367,7 @@ export function BudgetDocumentsTab({ budgetId, projectId, projectName, isAdmin }
 
   // Group documents by type
   const groupedDocuments = useMemo(() => {
-    const groups: Record<string, ProjectDocument[]> = {};
+    const groups: Record<string, UnifiedDocument[]> = {};
     documents.forEach(doc => {
       const type = doc.document_type || 'Sin tipo';
       if (!groups[type]) groups[type] = [];
@@ -337,12 +419,12 @@ export function BudgetDocumentsTab({ budgetId, projectId, projectName, isAdmin }
 
   // Delete state
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [documentToDelete, setDocumentToDelete] = useState<ProjectDocument | null>(null);
+  const [documentToDelete, setDocumentToDelete] = useState<UnifiedDocument | null>(null);
   const [deleting, setDeleting] = useState(false);
 
   // Edit state
   const [editDialogOpen, setEditDialogOpen] = useState(false);
-  const [documentToEdit, setDocumentToEdit] = useState<ProjectDocument | null>(null);
+  const [documentToEdit, setDocumentToEdit] = useState<UnifiedDocument | null>(null);
   const [editName, setEditName] = useState('');
   const [editDescription, setEditDescription] = useState('');
   const [editDocType, setEditDocType] = useState('Otro');
@@ -357,6 +439,10 @@ export function BudgetDocumentsTab({ budgetId, projectId, projectName, isAdmin }
   const [descriptionPreviewOpen, setDescriptionPreviewOpen] = useState(false);
   const [descriptionPreviewContent, setDescriptionPreviewContent] = useState('');
   const [descriptionPreviewTitle, setDescriptionPreviewTitle] = useState('');
+  
+  // Email preview state
+  const [emailPreviewOpen, setEmailPreviewOpen] = useState(false);
+  const [emailToPreview, setEmailToPreview] = useState<UnifiedDocument | null>(null);
 
   // Helper to truncate description
   const truncateDescription = (text: string | null, maxLength = 50) => {
@@ -367,7 +453,7 @@ export function BudgetDocumentsTab({ budgetId, projectId, projectName, isAdmin }
   };
 
   const fetchDocuments = async () => {
-    if (!projectId) {
+    if (!projectId && !budgetId) {
       setDocuments([]);
       setLoading(false);
       return;
@@ -375,18 +461,77 @@ export function BudgetDocumentsTab({ budgetId, projectId, projectName, isAdmin }
 
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('project_documents')
-        .select('*')
-        .eq('project_id', projectId)
-        .order('created_at', { ascending: false });
+      // Fetch regular documents
+      const regularDocsQuery = projectId 
+        ? supabase.from('project_documents').select('*').eq('project_id', projectId)
+        : supabase.from('project_documents').select('*').eq('budget_id', budgetId);
+      
+      const { data: regularDocs, error: regularError } = await regularDocsQuery.order('created_at', { ascending: false });
+      if (regularError) throw regularError;
 
-      if (error) throw error;
+      // Fetch emails marked as documents for this project/budget
+      let emailDocsQuery = supabase
+        .from('email_messages')
+        .select(`
+          id,
+          subject,
+          from_email,
+          from_name,
+          body_html,
+          document_type,
+          created_at,
+          project_id,
+          budget_id,
+          email_attachments (
+            id,
+            file_name,
+            file_path,
+            file_type,
+            file_size
+          )
+        `)
+        .eq('is_document', true);
+      
+      if (projectId) {
+        emailDocsQuery = emailDocsQuery.eq('project_id', projectId);
+      } else if (budgetId) {
+        emailDocsQuery = emailDocsQuery.eq('budget_id', budgetId);
+      }
 
-      setDocuments(data || []);
+      const { data: emailDocs, error: emailError } = await emailDocsQuery.order('created_at', { ascending: false });
+      if (emailError) throw emailError;
 
-      // Extract custom types from existing documents
-      const existingTypes = (data || [])
+      // Convert email docs to unified format
+      const emailDocsUnified: UnifiedDocument[] = (emailDocs || []).map(email => ({
+        id: email.id,
+        name: email.subject || 'Email sin asunto',
+        description: null,
+        file_path: null,
+        file_type: null,
+        file_size: null,
+        document_type: email.document_type || 'Email',
+        document_url: null,
+        created_at: email.created_at,
+        project_id: email.project_id,
+        isEmailDocument: true,
+        email_subject: email.subject,
+        email_from: email.from_name || email.from_email,
+        email_body_html: email.body_html,
+        email_attachments: email.email_attachments || [],
+      }));
+
+      // Convert regular docs to unified format
+      const regularDocsUnified: UnifiedDocument[] = (regularDocs || []).map(doc => ({
+        ...doc,
+        isEmailDocument: false,
+      }));
+
+      // Merge both lists
+      const allDocs = [...regularDocsUnified, ...emailDocsUnified];
+      setDocuments(allDocs);
+
+      // Extract custom types from all documents
+      const existingTypes = allDocs
         .map(d => d.document_type)
         .filter((t): t is string => !!t && !DEFAULT_DOCUMENT_TYPES.includes(t));
       setCustomTypes([...new Set(existingTypes)]);
@@ -400,7 +545,7 @@ export function BudgetDocumentsTab({ budgetId, projectId, projectName, isAdmin }
 
   useEffect(() => {
     fetchDocuments();
-  }, [projectId]);
+  }, [projectId, budgetId]);
 
   const resetUploadForm = () => {
     setUploadName('');
@@ -500,8 +645,8 @@ export function BudgetDocumentsTab({ budgetId, projectId, projectName, isAdmin }
     }
   };
 
-  const handleDownload = async (doc: ProjectDocument) => {
-    if (!doc.file_path) return;
+  const handleDownload = async (doc: UnifiedDocument) => {
+    if (!doc.file_path || doc.isEmailDocument) return;
 
     try {
       const { data, error } = await supabase.storage
@@ -523,8 +668,8 @@ export function BudgetDocumentsTab({ budgetId, projectId, projectName, isAdmin }
     }
   };
 
-  const handlePreview = async (doc: ProjectDocument) => {
-    if (!doc.file_path) return;
+  const handlePreview = async (doc: UnifiedDocument) => {
+    if (!doc.file_path || doc.isEmailDocument) return;
 
     try {
       const { data, error } = await supabase.storage
@@ -550,7 +695,7 @@ export function BudgetDocumentsTab({ budgetId, projectId, projectName, isAdmin }
     }
   };
 
-  const handleDeleteClick = (doc: ProjectDocument) => {
+  const handleDeleteClick = (doc: UnifiedDocument) => {
     setDocumentToDelete(doc);
     setDeleteDialogOpen(true);
   };
@@ -560,20 +705,32 @@ export function BudgetDocumentsTab({ budgetId, projectId, projectName, isAdmin }
 
     setDeleting(true);
     try {
-      if (documentToDelete.file_path) {
-        await supabase.storage
-          .from('project-documents')
-          .remove([documentToDelete.file_path]);
+      if (documentToDelete.isEmailDocument) {
+        // For email documents, just unmark them (don't delete the email)
+        const { error } = await supabase
+          .from('email_messages')
+          .update({ is_document: false, document_type: null })
+          .eq('id', documentToDelete.id);
+        
+        if (error) throw error;
+        toast.success('Email quitado de documentos');
+      } else {
+        // For regular documents, delete the file and record
+        if (documentToDelete.file_path) {
+          await supabase.storage
+            .from('project-documents')
+            .remove([documentToDelete.file_path]);
+        }
+
+        const { error } = await supabase
+          .from('project_documents')
+          .delete()
+          .eq('id', documentToDelete.id);
+
+        if (error) throw error;
+        toast.success('Documento eliminado');
       }
-
-      const { error } = await supabase
-        .from('project_documents')
-        .delete()
-        .eq('id', documentToDelete.id);
-
-      if (error) throw error;
-
-      toast.success('Documento eliminado');
+      
       setDeleteDialogOpen(false);
       setDocumentToDelete(null);
       fetchDocuments();
@@ -584,7 +741,8 @@ export function BudgetDocumentsTab({ budgetId, projectId, projectName, isAdmin }
     }
   };
 
-  const handleEditClick = (doc: ProjectDocument) => {
+  const handleEditClick = (doc: UnifiedDocument) => {
+    if (doc.isEmailDocument) return; // Don't allow editing email documents here
     setDocumentToEdit(doc);
     setEditName(doc.name);
     setEditDescription(doc.description || '');
@@ -592,6 +750,33 @@ export function BudgetDocumentsTab({ budgetId, projectId, projectName, isAdmin }
     setEditUrl(doc.document_url || '');
     setEditFile(null);
     setEditDialogOpen(true);
+  };
+  
+  const handleEmailPreview = (doc: UnifiedDocument) => {
+    if (!doc.isEmailDocument) return;
+    setEmailToPreview(doc);
+    setEmailPreviewOpen(true);
+  };
+  
+  const handleDownloadEmailAttachment = async (attachment: { file_name: string; file_path: string }) => {
+    try {
+      const { data, error } = await supabase.storage
+        .from('email-attachments')
+        .download(attachment.file_path);
+
+      if (error) throw error;
+
+      const url = URL.createObjectURL(data);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = attachment.file_name;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (error: any) {
+      toast.error(error.message || 'Error al descargar adjunto');
+    }
   };
 
   const handleEditFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -671,18 +856,23 @@ export function BudgetDocumentsTab({ budgetId, projectId, projectName, isAdmin }
     }
   };
 
-  const getFileIcon = (doc: ProjectDocument) => {
+  const getFileIcon = (doc: UnifiedDocument) => {
+    // Email document
+    if (doc.isEmailDocument) {
+      return <Mail className="h-5 w-5 text-primary" />;
+    }
+    
     if (doc.document_url && !doc.file_path) {
-      return <LinkIcon className="h-5 w-5 text-blue-600" />;
+      return <LinkIcon className="h-5 w-5 text-primary" />;
     }
     
     const fileType = doc.file_type;
     if (!fileType) return <File className="h-5 w-5" />;
-    if (fileType.startsWith('image/')) return <Image className="h-5 w-5 text-green-600" />;
-    if (fileType.includes('pdf')) return <FileText className="h-5 w-5 text-red-600" />;
-    if (fileType.includes('spreadsheet') || fileType.includes('excel')) return <FileSpreadsheet className="h-5 w-5 text-emerald-600" />;
-    if (fileType.includes('zip') || fileType.includes('archive')) return <FileArchive className="h-5 w-5 text-yellow-600" />;
-    return <FileText className="h-5 w-5 text-blue-600" />;
+    if (fileType.startsWith('image/')) return <Image className="h-5 w-5 text-primary" />;
+    if (fileType.includes('pdf')) return <FileText className="h-5 w-5 text-destructive" />;
+    if (fileType.includes('spreadsheet') || fileType.includes('excel')) return <FileSpreadsheet className="h-5 w-5 text-primary" />;
+    if (fileType.includes('zip') || fileType.includes('archive')) return <FileArchive className="h-5 w-5 text-muted-foreground" />;
+    return <FileText className="h-5 w-5 text-primary" />;
   };
 
   const formatFileSize = (bytes: number | null) => {
@@ -791,6 +981,7 @@ export function BudgetDocumentsTab({ budgetId, projectId, projectName, isAdmin }
                         onDownload={handleDownload}
                         onEdit={handleEditClick}
                         onDelete={handleDeleteClick}
+                        onEmailPreview={handleEmailPreview}
                       />
                     ))}
                   </TableBody>
@@ -857,6 +1048,7 @@ export function BudgetDocumentsTab({ budgetId, projectId, projectName, isAdmin }
                                   onDownload={handleDownload}
                                   onEdit={handleEditClick}
                                   onDelete={handleDeleteClick}
+                                  onEmailPreview={handleEmailPreview}
                                 />
                               ))}
                             </TableBody>
@@ -1215,9 +1407,14 @@ export function BudgetDocumentsTab({ budgetId, projectId, projectName, isAdmin }
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>¿Eliminar documento?</AlertDialogTitle>
+            <AlertDialogTitle>
+              {documentToDelete?.isEmailDocument ? '¿Quitar de documentos?' : '¿Eliminar documento?'}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              Esta acción eliminará permanentemente el documento "{documentToDelete?.name}".
+              {documentToDelete?.isEmailDocument 
+                ? `El email "${documentToDelete?.name}" dejará de aparecer en Documentos, pero seguirá disponible en Comunicaciones.`
+                : `Esta acción eliminará permanentemente el documento "${documentToDelete?.name}".`
+              }
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -1225,9 +1422,12 @@ export function BudgetDocumentsTab({ budgetId, projectId, projectName, isAdmin }
             <AlertDialogAction 
               onClick={handleConfirmDelete}
               disabled={deleting}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              className={documentToDelete?.isEmailDocument 
+                ? "bg-secondary text-secondary-foreground hover:bg-secondary/90"
+                : "bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              }
             >
-              {deleting ? 'Eliminando...' : 'Eliminar'}
+              {deleting ? 'Procesando...' : (documentToDelete?.isEmailDocument ? 'Quitar' : 'Eliminar')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -1248,6 +1448,62 @@ export function BudgetDocumentsTab({ budgetId, projectId, projectName, isAdmin }
               dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(descriptionPreviewContent) }}
             />
           </ScrollArea>
+        </DialogContent>
+      </Dialog>
+
+      {/* Email Preview Dialog */}
+      <Dialog open={emailPreviewOpen} onOpenChange={setEmailPreviewOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Mail className="h-5 w-5" />
+              {emailToPreview?.email_subject || 'Email sin asunto'}
+            </DialogTitle>
+          </DialogHeader>
+          
+          {emailToPreview && (
+            <div className="flex-1 overflow-hidden flex flex-col min-h-0">
+              {/* Email metadata */}
+              <div className="text-sm text-muted-foreground mb-3 flex-shrink-0">
+                <p><strong>De:</strong> {emailToPreview.email_from}</p>
+                {emailToPreview.created_at && (
+                  <p><strong>Fecha:</strong> {format(new Date(emailToPreview.created_at), 'dd/MM/yyyy HH:mm', { locale: es })}</p>
+                )}
+              </div>
+              
+              {/* Email body */}
+              <ScrollArea className="flex-1 min-h-0 border rounded-md">
+                <div 
+                  className="prose prose-sm dark:prose-invert max-w-none p-4 break-words overflow-x-auto"
+                  dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(emailToPreview.email_body_html || '') }}
+                />
+              </ScrollArea>
+              
+              {/* Attachments */}
+              {emailToPreview.email_attachments && emailToPreview.email_attachments.length > 0 && (
+                <div className="mt-4 flex-shrink-0">
+                  <Label className="flex items-center gap-2 mb-2">
+                    <Paperclip className="h-4 w-4" />
+                    Adjuntos ({emailToPreview.email_attachments.length})
+                  </Label>
+                  <div className="flex flex-wrap gap-2">
+                    {emailToPreview.email_attachments.map(attachment => (
+                      <Button
+                        key={attachment.id}
+                        variant="outline"
+                        size="sm"
+                        className="gap-2"
+                        onClick={() => handleDownloadEmailAttachment(attachment)}
+                      >
+                        <Download className="h-3 w-3" />
+                        {attachment.file_name}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>

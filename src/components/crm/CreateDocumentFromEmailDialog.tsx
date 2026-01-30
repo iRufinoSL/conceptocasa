@@ -166,20 +166,38 @@ export function CreateDocumentFromEmailDialog({
     setSaving(true);
     try {
       const { data: userData } = await supabase.auth.getUser();
+      const userId = userData.user?.id;
       
       // Get selected attachments
       const attachmentsToCopy = email.email_attachments?.filter(a => selectedAttachments.has(a.id)) || [];
       
-      // Variables for the main document file
-      let mainFilePath: string | null = null;
-      let mainFileType: string | null = null;
-      let mainFileSize: number | null = null;
+      // Common document metadata
+      const baseDocData = {
+        document_type: docType,
+        project_id: projectId !== '__none__' ? projectId : null,
+        budget_id: budgetId !== '__none__' ? budgetId : null,
+        contact_id: contactId !== '__none__' ? contactId : null,
+        email_id: email.id,
+        uploaded_by: userId,
+      };
       
-      // Build final description with email content and attachment info
-      let finalDescription = description;
+      // Create main document with email content (no file attachment - just the email body)
+      const { error: mainDocError } = await supabase
+        .from('project_documents')
+        .insert({
+          ...baseDocData,
+          name: docName.trim(),
+          description: description || null,
+          file_path: null,
+          file_type: null,
+          file_size: null,
+        });
+
+      if (mainDocError) throw mainDocError;
       
-      // If there are attachments, copy them and track info
-      const copiedAttachments: { name: string; path: string; size: number | null }[] = [];
+      // Process and create separate documents for each attachment
+      let successCount = 0;
+      let failCount = 0;
       
       for (const attachment of attachmentsToCopy) {
         try {
@@ -189,7 +207,8 @@ export function CreateDocumentFromEmailDialog({
             .download(attachment.file_path);
 
           if (downloadError) {
-            console.error('Error downloading attachment:', downloadError);
+            console.error('Error downloading attachment:', attachment.file_name, downloadError);
+            failCount++;
             continue;
           }
 
@@ -205,59 +224,52 @@ export function CreateDocumentFromEmailDialog({
             .upload(newPath, fileData);
 
           if (uploadError) {
-            console.error('Error uploading to project-documents:', uploadError);
+            console.error('Error uploading attachment:', attachment.file_name, uploadError);
+            failCount++;
             continue;
           }
 
-          copiedAttachments.push({
-            name: fileName,
-            path: newPath,
-            size: attachment.file_size
-          });
-          
-          // Use first attachment as the main document file
-          if (!mainFilePath) {
-            mainFilePath = newPath;
-            mainFileType = attachment.file_type;
-            mainFileSize = attachment.file_size;
+          // Create a document record for this attachment
+          const attachmentDocName = `${docName.trim()} - ${fileName}`;
+          const { error: attachDocError } = await supabase
+            .from('project_documents')
+            .insert({
+              ...baseDocData,
+              name: attachmentDocName,
+              description: `Adjunto del email: ${email.subject || 'Sin asunto'}`,
+              file_path: newPath,
+              file_type: attachment.file_type,
+              file_size: attachment.file_size,
+            });
+
+          if (attachDocError) {
+            console.error('Error creating attachment document:', attachment.file_name, attachDocError);
+            failCount++;
+          } else {
+            successCount++;
           }
         } catch (err) {
-          console.error('Error processing attachment:', err);
+          console.error('Error processing attachment:', attachment.file_name, err);
+          failCount++;
         }
       }
       
-      // Add attachments info to description if there are multiple
-      if (copiedAttachments.length > 1) {
-        finalDescription += '<hr/><p><strong>Adjuntos incluidos:</strong></p><ul>';
-        for (const att of copiedAttachments) {
-          const sizeStr = att.size ? ` (${formatFileSize(att.size)})` : '';
-          finalDescription += `<li>${att.name}${sizeStr}</li>`;
-        }
-        finalDescription += '</ul>';
-      } else if (copiedAttachments.length === 1) {
-        finalDescription += `<hr/><p><strong>Archivo adjunto:</strong> ${copiedAttachments[0].name}</p>`;
-      }
-      
-      // Create the unified document
-      const { error: docError } = await supabase
-        .from('project_documents')
-        .insert({
-          name: docName.trim(),
-          description: finalDescription || null,
-          document_type: docType,
-          project_id: projectId !== '__none__' ? projectId : null,
-          budget_id: budgetId !== '__none__' ? budgetId : null,
-          contact_id: contactId !== '__none__' ? contactId : null,
-          email_id: email.id,
-          file_path: mainFilePath,
-          file_type: mainFileType,
-          file_size: mainFileSize,
-          uploaded_by: userData.user?.id,
+      // Show appropriate success message
+      if (attachmentsToCopy.length === 0) {
+        toast({ title: 'Documento creado correctamente' });
+      } else if (failCount === 0) {
+        toast({ 
+          title: 'Documentos creados correctamente',
+          description: `1 documento principal + ${successCount} adjunto${successCount !== 1 ? 's' : ''}`
         });
-
-      if (docError) throw docError;
-
-      toast({ title: 'Documento creado correctamente' });
+      } else {
+        toast({ 
+          title: 'Documentos creados con advertencias',
+          description: `${successCount} adjuntos guardados, ${failCount} fallaron`,
+          variant: failCount === attachmentsToCopy.length ? 'destructive' : 'default'
+        });
+      }
+      
       queryClient.invalidateQueries({ queryKey: ['project-documents'] });
       onOpenChange(false);
     } catch (error: any) {

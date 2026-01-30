@@ -11,22 +11,17 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { 
   Mail, Inbox, Send, ChevronDown, ChevronRight, Reply, Forward,
-  Paperclip, Eye, Clock, CheckCircle, XCircle, Trash2, Download, FileText, Image, File, Maximize2
+  Paperclip, Eye, Clock, CheckCircle, XCircle, Trash2, Download, FileText, Image, File, Maximize2, FilePlus
 } from 'lucide-react';
+import { CreateDocumentFromEmailDialog } from '@/components/crm/CreateDocumentFromEmailDialog';
 import { useToast } from '@/hooks/use-toast';
 import type { Tables } from '@/integrations/supabase/types';
 import DOMPurify from 'dompurify';
 
-type EmailAttachment = {
-  id: string;
-  file_name: string;
-  file_path?: string;
-  file_size?: number | null;
-  file_type?: string | null;
-};
+type EmailAttachment = Tables<'email_attachments'>;
 
 type EmailMessage = Tables<'email_messages'> & {
-  crm_contacts?: { name: string; surname: string | null; email: string | null } | null;
+  crm_contacts?: { id: string; name: string; surname: string | null; email: string | null } | null;
   email_attachments?: EmailAttachment[];
 };
 
@@ -43,6 +38,8 @@ export function BudgetEmailInbox({ budgetId, onComposeReply, onComposeForward }:
   const [isInboxExpanded, setIsInboxExpanded] = useState(true);
   const [isOutboxExpanded, setIsOutboxExpanded] = useState(true);
   const [isFullscreenOpen, setIsFullscreenOpen] = useState(false);
+  const [showCreateDocument, setShowCreateDocument] = useState(false);
+  const [emailForDocument, setEmailForDocument] = useState<EmailMessage | null>(null);
 
   // Fetch emails related to this budget via junction table
   const { data: emails = [], isLoading } = useQuery({
@@ -67,7 +64,7 @@ export function BudgetEmailInbox({ budgetId, onComposeReply, onComposeForward }:
         .from('email_messages')
         .select(`
           *,
-          crm_contacts (name, surname, email),
+          crm_contacts (id, name, surname, email),
           email_attachments (id, file_name, file_path, file_size, file_type)
         `)
         .in('id', emailIds)
@@ -319,6 +316,17 @@ export function BudgetEmailInbox({ budgetId, onComposeReply, onComposeForward }:
               <Button 
                 variant="outline" 
                 size="sm" 
+                onClick={() => {
+                  setEmailForDocument(email);
+                  setShowCreateDocument(true);
+                }}
+              >
+                <FilePlus className="h-4 w-4 mr-1" />
+                <span className="hidden sm:inline">Documento</span>
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm" 
                 onClick={() => deleteEmailMutation.mutate(email.id)}
                 className="text-destructive hover:text-destructive"
               >
@@ -514,6 +522,13 @@ export function BudgetEmailInbox({ budgetId, onComposeReply, onComposeForward }:
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Create Document from Email Dialog */}
+      <CreateDocumentFromEmailDialog
+        open={showCreateDocument}
+        onOpenChange={setShowCreateDocument}
+        email={emailForDocument}
+      />
     </div>
   );
 }

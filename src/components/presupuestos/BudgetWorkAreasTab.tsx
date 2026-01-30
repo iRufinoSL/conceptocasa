@@ -139,7 +139,8 @@ export function BudgetWorkAreasTab({ budgetId, isAdmin }: BudgetWorkAreasTabProp
           .eq('budget_id', budgetId),
         supabase
           .from('budget_work_area_activities')
-          .select('work_area_id, activity_id'),
+          .select('work_area_id, activity_id, budget_activities!inner(budget_id)')
+          .eq('budget_activities.budget_id', budgetId),
         supabase
           .from('budget_activity_resources')
           .select('activity_id, external_unit_cost, manual_units, related_units, safety_margin_percent, sales_margin_percent')
@@ -154,7 +155,7 @@ export function BudgetWorkAreasTab({ budgetId, isAdmin }: BudgetWorkAreasTabProp
 
       setPhases(phasesRes.data || []);
 
-      const links = allActivityLinksRes.data || [];
+      const links = (allActivityLinksRes.data || []).map((l: any) => ({ work_area_id: l.work_area_id, activity_id: l.activity_id }));
       const allResources = resourcesRes.data || [];
 
       // Subtotal by activity

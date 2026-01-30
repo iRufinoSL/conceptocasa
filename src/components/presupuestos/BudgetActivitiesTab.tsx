@@ -218,6 +218,7 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
   const [isSaving, setIsSaving] = useState(false);
   const [workAreaSearchQuery, setWorkAreaSearchQuery] = useState('');
   const [showAllWorkAreas, setShowAllWorkAreas] = useState(false);
+  const [returnTabAfterSave, setReturnTabAfterSave] = useState<string | null>(null);
   
   // Import state
   const [importFile, setImportFile] = useState<File | null>(null);
@@ -508,6 +509,13 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
       const customEvent = e as CustomEvent;
       const activityData = customEvent.detail;
       if (activityData && activityData.id) {
+        // Store return tab if provided (e.g., 'areas-trabajo' from DÓNDE?)
+        if (activityData.returnTab) {
+          setReturnTabAfterSave(activityData.returnTab);
+        } else {
+          setReturnTabAfterSave(null);
+        }
+        
         // Find the full activity in our state or fetch it
         const fullActivity = activities.find(a => a.id === activityData.id);
         if (fullActivity) {
@@ -886,6 +894,15 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
       }
 
       setFormDialogOpen(false);
+      
+      // If we have a return tab, dispatch event to navigate back
+      if (returnTabAfterSave) {
+        window.dispatchEvent(new CustomEvent('activity-form-closed', { 
+          detail: { returnTab: returnTabAfterSave } 
+        }));
+        setReturnTabAfterSave(null);
+      }
+      
       fetchData();
     } catch (err: any) {
       console.error('Error saving:', err);

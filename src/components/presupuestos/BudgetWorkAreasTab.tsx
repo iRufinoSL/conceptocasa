@@ -408,21 +408,38 @@ export function BudgetWorkAreasTab({ budgetId, isAdmin }: BudgetWorkAreasTabProp
     if (!workAreaId) return;
     
     try {
-      // Insert the relationship
+      // First check if relationship already exists
+      const { data: existing } = await supabase
+        .from('budget_work_area_activities')
+        .select('id')
+        .eq('activity_id', activityId)
+        .eq('work_area_id', workAreaId)
+        .maybeSingle();
+      
+      if (existing) {
+        toast.info('Esta actividad ya está asignada a esta área');
+        return;
+      }
+      
+      // Delete any existing assignment for this activity (an activity can only be in one work area at a time)
+      await supabase
+        .from('budget_work_area_activities')
+        .delete()
+        .eq('activity_id', activityId);
+      
+      // Insert the new relationship
       const { error } = await supabase
         .from('budget_work_area_activities')
-        .upsert({
+        .insert({
           work_area_id: workAreaId,
           activity_id: activityId
-        }, {
-          onConflict: 'work_area_id,activity_id',
-          ignoreDuplicates: true
         });
       
       if (error) throw error;
       toast.success('Área de trabajo asignada');
       fetchWorkAreas();
     } catch (error: any) {
+      console.error('Error assigning work area:', error);
       toast.error(error.message || 'Error al asignar área de trabajo');
     }
   };

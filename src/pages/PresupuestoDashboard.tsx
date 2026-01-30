@@ -78,6 +78,7 @@ export default function PresupuestoDashboard() {
   const [uploadingPortada, setUploadingPortada] = useState(false);
   const [selectedPhaseId, setSelectedPhaseId] = useState<string | null>(null);
   const [selectedActivityId, setSelectedActivityId] = useState<string | null>(null);
+  const [activityReturnTab, setActivityReturnTab] = useState<string | null>(null);
   const portadaInputRef = useRef<HTMLInputElement>(null);
 
   const isAdmin = roles.includes('administrador');
@@ -191,12 +192,30 @@ export default function PresupuestoDashboard() {
       const activityData = customEvent.detail;
       if (activityData && activityData.id) {
         setSelectedActivityId(activityData.id);
+        // Store return tab if provided (e.g., 'areas-trabajo' from DÓNDE?)
+        if (activityData.returnTab) {
+          setActivityReturnTab(activityData.returnTab);
+        }
       }
       setActiveTab('actividades');
     };
     window.addEventListener('edit-activity', handleEditActivity);
     return () => window.removeEventListener('edit-activity', handleEditActivity);
   }, []);
+
+  // Listen for activity-form-closed events to return to the previous tab
+  useEffect(() => {
+    const handleActivityFormClosed = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      const returnTab = customEvent.detail?.returnTab || activityReturnTab;
+      if (returnTab) {
+        setActiveTab(returnTab);
+        setActivityReturnTab(null);
+      }
+    };
+    window.addEventListener('activity-form-closed', handleActivityFormClosed);
+    return () => window.removeEventListener('activity-form-closed', handleActivityFormClosed);
+  }, [activityReturnTab]);
 
   // Listen for navigate-to-resources events to switch to resources tab
   useEffect(() => {

@@ -67,6 +67,7 @@ interface ActivityWithOpciones {
   opciones: string[];
   phase_id: string | null;
   resources_subtotal?: number;
+  uses_measurement?: boolean;
 }
 
 interface Phase {
@@ -129,7 +130,7 @@ export function BudgetWorkAreasTab({ budgetId, isAdmin }: BudgetWorkAreasTabProp
           .order('work_area', { ascending: true }),
         supabase
           .from('budget_activities')
-          .select('id, name, code, opciones, phase_id')
+          .select('id, name, code, opciones, phase_id, uses_measurement')
           .eq('budget_id', budgetId),
         supabase
           .from('budget_phases')
@@ -714,8 +715,9 @@ export function BudgetWorkAreasTab({ budgetId, isAdmin }: BudgetWorkAreasTabProp
                 onDeleteWorkArea={handleDelete}
                 onEditActivity={(activityId) => {
                   // Dispatch custom event to open activity edit dialog in BudgetActivitiesTab
+                  // Include returnTab to navigate back to DÓNDE? after saving
                   window.dispatchEvent(new CustomEvent('edit-activity', { 
-                    detail: { id: activityId }
+                    detail: { id: activityId, returnTab: 'areas-trabajo' }
                   }));
                 }}
                 onEditResource={(resourceId) => {

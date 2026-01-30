@@ -26,6 +26,7 @@ interface ActivityWithOpciones {
   opciones: string[];
   phase_id: string | null;
   resources_subtotal?: number;
+  uses_measurement?: boolean;
 }
 
 interface Phase {
@@ -117,7 +118,8 @@ export function WorkAreaHierarchyView({
   const getActivitiesForWorkArea = (workAreaId: string) => {
     const linkedActivityIds = activityLinks.filter(l => l.work_area_id === workAreaId).map(l => l.activity_id);
     return activities
-      .filter(a => linkedActivityIds.includes(a.id))
+      // Filter out activities with uses_measurement = false (marked as "No")
+      .filter(a => linkedActivityIds.includes(a.id) && a.uses_measurement !== false)
       .sort((a, b) => {
         const phaseA = a.phase_id ? phaseMap.get(a.phase_id) : null;
         const phaseB = b.phase_id ? phaseMap.get(b.phase_id) : null;

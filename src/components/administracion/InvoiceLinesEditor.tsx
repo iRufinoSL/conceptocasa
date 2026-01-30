@@ -3,15 +3,25 @@ import { supabase } from '@/integrations/supabase/client';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Plus, Trash2, Save, Check, ChevronsUpDown, Search } from 'lucide-react';
+import { Plus, Trash2, Save, Check, ChevronsUpDown, Search, Pencil } from 'lucide-react';
 import { toast } from 'sonner';
-import { formatCurrency } from '@/lib/format-utils';
+import { formatCurrency, formatNumber } from '@/lib/format-utils';
 import { cn } from '@/lib/utils';
 import { normalizeSearchText, searchMatch } from '@/lib/search-utils';
+
+// Parse European formatted number (1.234,56) to float
+const parseEuropeanNumber = (value: string): number => {
+  if (!value || value.trim() === '') return 0;
+  // Remove thousand separators (.) and replace decimal comma with dot
+  const normalized = value.replace(/\./g, '').replace(',', '.');
+  const parsed = parseFloat(normalized);
+  return isNaN(parsed) ? 0 : parsed;
+};
 interface Invoice {
   id: string;
   invoice_number: number;
@@ -236,6 +246,15 @@ export function InvoiceLinesEditor({ invoice, onClose }: Props) {
     }
   };
 
+  // State for line edit dialog
+  const [editingLine, setEditingLine] = useState<InvoiceLine | null>(null);
+  const [lineFormData, setLineFormData] = useState({
+    description: '',
+    activity_id: null as string | null,
+    units: '',
+    unit_price: ''
+  });
+
   const addNewLine = () => {
     const nextCode = lines.length > 0 ? Math.max(...lines.map(l => l.code)) + 1 : 1;
     const newLine: InvoiceLine = {
@@ -249,7 +268,69 @@ export function InvoiceLinesEditor({ invoice, onClose }: Props) {
       subtotal: 0,
       isNew: true
     };
-    setLines([...lines, newLine]);
+    // Open form immediately for new line
+    setEditingLine(newLine);
+    setLineFormData({
+      description: '',
+      activity_id: null,
+      units: '1',
+      unit_price: '0'
+    });
+  };
+
+  const openEditLine = (line: InvoiceLine) => {
+    setEditingLine(line);
+    setLineFormData({
+      description: line.description || '',
+      activity_id: line.activity_id,
+      units: formatNumber(line.units, 2).replace(/\./g, ''), // Remove thousand separators for editing
+      unit_price: formatNumber(line.unit_price, 2).replace(/\./g, '')
+    });
+  };
+
+  const saveLineFromForm = () => {
+    if (!editingLine) return;
+    
+    const units = parseEuropeanNumber(lineFormData.units);
+    const unitPrice = parseEuropeanNumber(lineFormData.unit_price);
+    const subtotal = units * unitPrice;
+    
+    const isExistingLine = lines.some(l => l.id === editingLine.id);
+    
+    if (isExistingLine) {
+      // Update existing line
+      setLines(lines.map(line => {
+        if (line.id !== editingLine.id) return line;
+        return {
+          ...line,
+          description: lineFormData.description,
+          activity_id: lineFormData.activity_id,
+          units,
+          unit_price: unitPrice,
+          subtotal,
+          isModified: !line.isNew
+        };
+      }));
+    } else {
+      // Add new line
+      const newLine: InvoiceLine = {
+        ...editingLine,
+        description: lineFormData.description,
+        activity_id: lineFormData.activity_id,
+        units,
+        unit_price: unitPrice,
+        subtotal,
+        isNew: true
+      };
+      setLines([...lines, newLine]);
+    }
+    
+    setEditingLine(null);
+    toast.success('Línea guardada');
+  };
+
+  const cancelLineEdit = () => {
+    setEditingLine(null);
   };
 
   const updateLine = (id: string, field: keyof InvoiceLine, value: any) => {
@@ -445,61 +526,59 @@ export function InvoiceLinesEditor({ invoice, onClose }: Props) {
                 </TableHeader>
                 <TableBody>
                   {lines.map((line) => (
-                    <TableRow key={line.id} className={line.isNew || line.isModified ? 'bg-muted/30' : ''}>
+                    <TableRow 
+                      key={line.id} 
+                      className={cn(
+                        line.isNew || line.isModified ? 'bg-muted/30' : '',
+                        'cursor-pointer hover:bg-muted/50'
+                      )}
+                      onClick={() => openEditLine(line)}
+                    >
                       <TableCell className="font-mono text-sm">
                         {line.code}
                       </TableCell>
                       <TableCell>
-                        <Input
-                          value={line.description || ''}
-                          onChange={(e) => updateLine(line.id, 'description', e.target.value)}
-                          placeholder="Descripción..."
-                          className="h-8"
-                        />
+                        <span className="text-sm">{line.description || <span className="text-muted-foreground italic">Sin descripción</span>}</span>
                       </TableCell>
                       <TableCell>
-                        {activities.length > 0 ? (
-                          <ActivitySelector
-                            activities={activities}
-                            selectedActivityId={line.activity_id}
-                            onSelect={(activityId) => updateLine(line.id, 'activity_id', activityId)}
-                          />
+                        {line.activity_id ? (
+                          <span className="text-xs truncate block max-w-[180px]">
+                            {activities.find(a => a.id === line.activity_id)?.activityId || 'Actividad'}
+                          </span>
                         ) : (
                           <span className="text-xs text-muted-foreground italic">
-                            {invoice.budget_id ? 'Sin actividades' : 'Sin presupuesto'}
+                            {invoice.budget_id ? (activities.length > 0 ? 'Sin actividad' : 'Sin actividades') : 'Sin presupuesto'}
                           </span>
                         )}
                       </TableCell>
-                      <TableCell>
-                        <Input
-                          type="number"
-                          value={line.units}
-                          onChange={(e) => updateLine(line.id, 'units', parseFloat(e.target.value) || 0)}
-                          className="h-8 text-right"
-                          step="0.01"
-                        />
+                      <TableCell className="text-right font-mono">
+                        {formatNumber(line.units)}
                       </TableCell>
-                      <TableCell>
-                        <Input
-                          type="number"
-                          value={line.unit_price}
-                          onChange={(e) => updateLine(line.id, 'unit_price', parseFloat(e.target.value) || 0)}
-                          className="h-8 text-right"
-                          step="0.01"
-                        />
+                      <TableCell className="text-right font-mono">
+                        {formatCurrency(line.unit_price)}
                       </TableCell>
                       <TableCell className="text-right font-medium">
                         {formatCurrency(line.subtotal)}
                       </TableCell>
-                      <TableCell>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => deleteLine(line.id)}
-                          className="h-8 w-8"
-                        >
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
+                      <TableCell onClick={(e) => e.stopPropagation()}>
+                        <div className="flex gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7"
+                            onClick={() => openEditLine(line)}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7"
+                            onClick={() => deleteLine(line.id)}
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -539,6 +618,88 @@ export function InvoiceLinesEditor({ invoice, onClose }: Props) {
           </Button>
         </DialogFooter>
       </DialogContent>
+
+      {/* Line Edit Dialog */}
+      {editingLine && (
+        <Dialog open={!!editingLine} onOpenChange={() => cancelLineEdit()}>
+          <DialogContent className="max-w-lg">
+            <DialogHeader>
+              <DialogTitle>
+                {lines.some(l => l.id === editingLine.id) ? 'Editar' : 'Nueva'} Línea #{editingLine.code}
+              </DialogTitle>
+            </DialogHeader>
+
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="line-description">Descripción</Label>
+                <Input
+                  id="line-description"
+                  value={lineFormData.description}
+                  onChange={(e) => setLineFormData(prev => ({ ...prev, description: e.target.value }))}
+                  placeholder="Descripción de la línea..."
+                />
+              </div>
+
+              {activities.length > 0 && (
+                <div className="space-y-2">
+                  <Label>Actividad</Label>
+                  <ActivitySelector
+                    activities={activities}
+                    selectedActivityId={lineFormData.activity_id}
+                    onSelect={(activityId) => setLineFormData(prev => ({ ...prev, activity_id: activityId }))}
+                  />
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="line-units">Unidades</Label>
+                  <Input
+                    id="line-units"
+                    value={lineFormData.units}
+                    onChange={(e) => setLineFormData(prev => ({ ...prev, units: e.target.value }))}
+                    placeholder="1,00"
+                    className="text-right font-mono"
+                  />
+                  <p className="text-xs text-muted-foreground">Formato: 1,50 o 1.234,56</p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="line-unit-price">Precio Unitario (€)</Label>
+                  <Input
+                    id="line-unit-price"
+                    value={lineFormData.unit_price}
+                    onChange={(e) => setLineFormData(prev => ({ ...prev, unit_price: e.target.value }))}
+                    placeholder="0,00"
+                    className="text-right font-mono"
+                  />
+                  <p className="text-xs text-muted-foreground">Formato: 100,50</p>
+                </div>
+              </div>
+
+              {/* Calculated subtotal preview */}
+              <div className="p-3 bg-muted/50 rounded-lg">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-muted-foreground">Subtotal calculado:</span>
+                  <span className="font-semibold text-lg">
+                    {formatCurrency(parseEuropeanNumber(lineFormData.units) * parseEuropeanNumber(lineFormData.unit_price))}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button variant="outline" onClick={cancelLineEdit}>
+                Cancelar
+              </Button>
+              <Button onClick={saveLineFromForm} className="gap-2">
+                <Save className="h-4 w-4" />
+                Guardar Línea
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
     </Dialog>
   );
 }

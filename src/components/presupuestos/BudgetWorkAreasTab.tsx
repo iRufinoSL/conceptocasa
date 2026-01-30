@@ -212,6 +212,57 @@ export function BudgetWorkAreasTab({ budgetId, isAdmin }: BudgetWorkAreasTabProp
     }
   }, [budgetId]);
 
+  // Realtime subscription for cross-tab synchronization
+  useEffect(() => {
+    if (!budgetId) return;
+
+    const channel = supabase
+      .channel(`work-areas-${budgetId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'budget_work_areas',
+          filter: `budget_id=eq.${budgetId}`
+        },
+        () => {
+          console.log('Work areas changed, refreshing...');
+          fetchWorkAreas();
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'budget_work_area_activities'
+        },
+        () => {
+          console.log('Work area activities changed, refreshing...');
+          fetchWorkAreas();
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'budget_activities',
+          filter: `budget_id=eq.${budgetId}`
+        },
+        () => {
+          console.log('Activities changed, refreshing...');
+          fetchWorkAreas();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [budgetId]);
+
   const handleOpenDialog = (area?: WorkArea) => {
     if (area) {
       setEditingArea(area);

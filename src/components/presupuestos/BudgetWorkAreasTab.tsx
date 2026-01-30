@@ -403,6 +403,30 @@ export function BudgetWorkAreasTab({ budgetId, isAdmin }: BudgetWorkAreasTabProp
   // Calculate subtotal for activities WITHOUT work area
   const unassignedSubtotal = activitiesWithoutWorkArea.reduce((sum, a) => sum + (a.resources_subtotal || 0), 0);
 
+  // Handle inline work area assignment
+  const handleAssignWorkArea = async (activityId: string, workAreaId: string) => {
+    if (!workAreaId) return;
+    
+    try {
+      // Insert the relationship
+      const { error } = await supabase
+        .from('budget_work_area_activities')
+        .upsert({
+          work_area_id: workAreaId,
+          activity_id: activityId
+        }, {
+          onConflict: 'work_area_id,activity_id',
+          ignoreDuplicates: true
+        });
+      
+      if (error) throw error;
+      toast.success('Área de trabajo asignada');
+      fetchWorkAreas();
+    } catch (error: any) {
+      toast.error(error.message || 'Error al asignar área de trabajo');
+    }
+  };
+
   // Total includes work areas + activities without work area + resources without activity
   const totalSubtotal = workAreas.reduce((sum, wa) => sum + (wa.resources_subtotal || 0), 0) + unassignedSubtotal + unassignedResourcesSubtotal;
 
@@ -788,6 +812,7 @@ export function BudgetWorkAreasTab({ budgetId, isAdmin }: BudgetWorkAreasTabProp
                     <TableRow>
                       <TableHead>Código</TableHead>
                       <TableHead>Nombre Actividad</TableHead>
+                      <TableHead>Área de Trabajo</TableHead>
                       <TableHead>Opciones</TableHead>
                       <TableHead className="text-right">€ SubTotal</TableHead>
                       {isAdmin && <TableHead className="w-20">Acciones</TableHead>}
@@ -800,6 +825,24 @@ export function BudgetWorkAreasTab({ budgetId, isAdmin }: BudgetWorkAreasTabProp
                           <code className="text-xs bg-muted px-2 py-1 rounded">{activity.code}</code>
                         </TableCell>
                         <TableCell className="font-medium">{activity.name}</TableCell>
+                        <TableCell>
+                          <Select
+                            onValueChange={(value) => handleAssignWorkArea(activity.id, value)}
+                          >
+                            <SelectTrigger className="h-8 w-[200px] text-xs">
+                              <SelectValue placeholder="Seleccionar área..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {workAreas
+                                .sort((a, b) => a.area_id.localeCompare(b.area_id, 'es', { numeric: true }))
+                                .map((wa) => (
+                                  <SelectItem key={wa.id} value={wa.id} className="text-xs">
+                                    {wa.area_id}
+                                  </SelectItem>
+                                ))}
+                            </SelectContent>
+                          </Select>
+                        </TableCell>
                         <TableCell>
                           <div className="flex gap-1">
                             {activity.opciones?.map(opt => (

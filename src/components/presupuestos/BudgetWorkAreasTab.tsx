@@ -15,6 +15,7 @@ import { toast } from 'sonner';
 import { Plus, Trash2, Edit2, MapPin, List, Layers, ChevronDown, ChevronRight, LayoutGrid, Pencil } from 'lucide-react';
 import { WorkAreasOptionsGroupedView } from './WorkAreasOptionsGroupedView';
 import { WorkAreaActivitiesSelect } from './WorkAreaActivitiesSelect';
+import { WorkAreaHierarchyView } from './WorkAreaHierarchyView';
 import { OPTION_COLORS } from '@/lib/options-utils';
 import { formatActividadId } from '@/lib/activity-id';
 import { formatCurrency } from '@/lib/format-utils';
@@ -74,19 +75,31 @@ interface Phase {
   name: string;
 }
 
+interface ResourceData {
+  id: string;
+  activity_id: string | null;
+  name: string;
+  resource_type: string | null;
+  external_unit_cost: number | null;
+  manual_units: number | null;
+  related_units: number | null;
+  safety_margin_percent: number | null;
+  sales_margin_percent: number | null;
+  subtotal: number;
+}
+
 export function BudgetWorkAreasTab({ budgetId, isAdmin }: BudgetWorkAreasTabProps) {
   const [workAreas, setWorkAreas] = useState<WorkArea[]>([]);
   const [activities, setActivities] = useState<ActivityWithOpciones[]>([]);
   const [phases, setPhases] = useState<Phase[]>([]);
   const [activityLinks, setActivityLinks] = useState<{ work_area_id: string; activity_id: string }[]>([]);
+  const [resources, setResources] = useState<ResourceData[]>([]);
   const [unassignedResourcesSubtotal, setUnassignedResourcesSubtotal] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'alphabetic' | 'grouped' | 'options'>('grouped');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingArea, setEditingArea] = useState<WorkArea | null>(null);
-  const [expandedLevels, setExpandedLevels] = useState<Set<string>>(new Set(LEVELS));
   const [expandedOptions, setExpandedOptions] = useState<Set<string>>(new Set()); // collapsed by default
-  const [expandedWorkAreas, setExpandedWorkAreas] = useState<Set<string>>(new Set()); // track which work areas show activities
   const [customWorkAreas, setCustomWorkAreas] = useState<string[]>([]);
   const [newWorkAreaInput, setNewWorkAreaInput] = useState('');
   const [formData, setFormData] = useState({
@@ -102,21 +115,6 @@ export function BudgetWorkAreasTab({ budgetId, isAdmin }: BudgetWorkAreasTabProp
     const combined = new Set([...DEFAULT_WORK_AREAS, ...customWorkAreas, ...existingWorkAreas]);
     return Array.from(combined).sort((a, b) => a.localeCompare(b, 'es'));
   }, [customWorkAreas, workAreas]);
-
-  const toggleLevel = (level: string) => {
-    setExpandedLevels(prev => {
-      const next = new Set(prev);
-      if (next.has(level)) {
-        next.delete(level);
-      } else {
-        next.add(level);
-      }
-      return next;
-    });
-  };
-
-  const expandAllLevels = () => setExpandedLevels(new Set(LEVELS));
-  const collapseAllLevels = () => setExpandedLevels(new Set());
 
   const fetchWorkAreas = async () => {
     setIsLoading(true);
@@ -143,7 +141,7 @@ export function BudgetWorkAreasTab({ budgetId, isAdmin }: BudgetWorkAreasTabProp
           .eq('budget_activities.budget_id', budgetId),
         supabase
           .from('budget_activity_resources')
-          .select('activity_id, external_unit_cost, manual_units, related_units, safety_margin_percent, sales_margin_percent')
+          .select('id, activity_id, name, resource_type, external_unit_cost, manual_units, related_units, safety_margin_percent, sales_margin_percent')
           .eq('budget_id', budgetId)
       ]);
 
@@ -189,6 +187,27 @@ export function BudgetWorkAreasTab({ budgetId, isAdmin }: BudgetWorkAreasTabProp
 
       setActivities(activitiesWithSubtotals);
       setActivityLinks(links);
+
+      // Build resources with subtotals
+      const resourcesWithSubtotals: ResourceData[] = allResources.map((r: any) => ({
+        id: r.id,
+        activity_id: r.activity_id,
+        name: r.name,
+        resource_type: r.resource_type,
+        external_unit_cost: r.external_unit_cost,
+        manual_units: r.manual_units,
+        related_units: r.related_units,
+        safety_margin_percent: r.safety_margin_percent,
+        sales_margin_percent: r.sales_margin_percent,
+        subtotal: calcResourceSubtotal({
+          externalUnitCost: r.external_unit_cost,
+          safetyPercent: r.safety_margin_percent,
+          salesPercent: r.sales_margin_percent,
+          manualUnits: r.manual_units,
+          relatedUnits: r.related_units,
+        })
+      }));
+      setResources(resourcesWithSubtotals);
 
       // Work areas enriched with subtotal (sum subtotals of linked activities)
       const enrichedData = (workAreasRes.data || []).map((area) => {
@@ -421,19 +440,6 @@ export function BudgetWorkAreasTab({ budgetId, isAdmin }: BudgetWorkAreasTabProp
         const idB = formatActividadId({ phaseCode: phaseB?.code, activityCode: b.code, name: b.name });
         return idA.localeCompare(idB, 'es', { numeric: true });
       });
-  };
-
-  // Toggle work area activities expansion
-  const toggleWorkArea = (workAreaId: string) => {
-    setExpandedWorkAreas(prev => {
-      const next = new Set(prev);
-      if (next.has(workAreaId)) {
-        next.delete(workAreaId);
-      } else {
-        next.add(workAreaId);
-      }
-      return next;
-    });
   };
 
   // Group work areas by level
@@ -697,168 +703,28 @@ export function BudgetWorkAreasTab({ budgetId, isAdmin }: BudgetWorkAreasTabProp
                 </TableBody>
               </Table>
             ) : (
-              <div className="space-y-4">
-                <div className="flex gap-2">
-                  <Button variant="outline" size="sm" onClick={expandAllLevels}>
-                    Expandir todo
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={collapseAllLevels}>
-                    Colapsar todo
-                  </Button>
-                </div>
-                {LEVELS.map((level) => {
-                  const areasInLevel = groupedByLevel[level] || [];
-                  if (areasInLevel.length === 0) return null;
-
-                  const levelSubtotal = areasInLevel.reduce(
-                    (sum, wa) => sum + (wa.resources_subtotal || 0),
-                    0
-                  );
-                  const isExpanded = expandedLevels.has(level);
-
-                  return (
-                    <div key={level} className="border rounded-lg overflow-hidden">
-                      <button
-                        className="w-full bg-muted/50 px-4 py-3 flex items-center justify-between hover:bg-muted/70 transition-colors"
-                        onClick={() => toggleLevel(level)}
-                      >
-                        <div className="flex items-center gap-3">
-                          {isExpanded ? (
-                            <ChevronDown className="h-4 w-4" />
-                          ) : (
-                            <ChevronRight className="h-4 w-4" />
-                          )}
-                          <Layers className="h-4 w-4 text-primary" />
-                          <span className="font-semibold">{level}</span>
-                          <Badge variant="secondary">{areasInLevel.length}</Badge>
-                        </div>
-                        <span className="font-medium text-primary">
-                          {formatCurrency(levelSubtotal)}
-                        </span>
-                      </button>
-                      {isExpanded && (
-                        <Table>
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead className="w-8"></TableHead>
-                              <TableHead>AreaID</TableHead>
-                              <TableHead>Descripción</TableHead>
-                              <TableHead className="text-right">€ SubTotal</TableHead>
-                              {isAdmin && <TableHead className="w-20">Acciones</TableHead>}
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {areasInLevel.sort((a, b) => a.area_id.localeCompare(b.area_id, 'es', { numeric: true })).map((area) => {
-                              const areaActivities = getActivitiesForWorkArea(area.id);
-                              const isAreaExpanded = expandedWorkAreas.has(area.id);
-                              
-                              return (
-                                <>
-                                  <TableRow key={area.id}>
-                                    <TableCell className="w-8 p-1">
-                                      {areaActivities.length > 0 && (
-                                        <Button
-                                          variant="ghost"
-                                          size="icon"
-                                          className="h-6 w-6"
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            toggleWorkArea(area.id);
-                                          }}
-                                          title={`${areaActivities.length} actividades relacionadas`}
-                                        >
-                                          {isAreaExpanded ? (
-                                            <ChevronDown className="h-4 w-4" />
-                                          ) : (
-                                            <ChevronRight className="h-4 w-4" />
-                                          )}
-                                        </Button>
-                                      )}
-                                    </TableCell>
-                                    <TableCell>
-                                      <div className="flex items-center gap-2">
-                                        <code className="text-xs bg-muted px-2 py-1 rounded">
-                                          {area.area_id}
-                                        </code>
-                                        {areaActivities.length > 0 && (
-                                          <Badge variant="outline" className="text-xs">
-                                            {areaActivities.length}
-                                          </Badge>
-                                        )}
-                                      </div>
-                                    </TableCell>
-                                    <TableCell className="text-muted-foreground">{area.name || '-'}</TableCell>
-                                    <TableCell className="text-right font-medium">
-                                      {formatCurrency(area.resources_subtotal || 0)}
-                                    </TableCell>
-                                    {isAdmin && (
-                                      <TableCell>
-                                        <div className="flex gap-1">
-                                          <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              handleOpenDialog(area);
-                                            }}
-                                          >
-                                            <Edit2 className="h-4 w-4" />
-                                          </Button>
-                                          <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            className="text-destructive hover:text-destructive"
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              handleDelete(area.id);
-                                            }}
-                                          >
-                                            <Trash2 className="h-4 w-4" />
-                                          </Button>
-                                        </div>
-                                      </TableCell>
-                                    )}
-                                  </TableRow>
-                                  {/* Expanded activities for this work area */}
-                                  {isAreaExpanded && areaActivities.length > 0 && (
-                                    <TableRow key={`${area.id}-activities`} className="bg-muted/30">
-                                      <TableCell colSpan={isAdmin ? 5 : 4} className="p-0">
-                                        <div className="pl-10 pr-4 py-2 space-y-1">
-                                          <p className="text-xs font-medium text-muted-foreground mb-2">Actividades relacionadas:</p>
-                                          <div className="flex flex-wrap gap-1">
-                                            {areaActivities.map(activity => {
-                                              const phase = activity.phase_id ? phaseMap.get(activity.phase_id) : null;
-                                              const actividadId = formatActividadId({
-                                                phaseCode: phase?.code,
-                                                activityCode: activity.code,
-                                                name: activity.name
-                                              });
-                                              return (
-                                                <Badge
-                                                  key={activity.id}
-                                                  variant="secondary"
-                                                  className="text-xs cursor-default"
-                                                  title={actividadId}
-                                                >
-                                                  {actividadId.length > 40 ? `${actividadId.substring(0, 37)}...` : actividadId}
-                                                </Badge>
-                                              );
-                                            })}
-                                          </div>
-                                        </div>
-                                      </TableCell>
-                                    </TableRow>
-                                  )}
-                                </>
-                              );
-                            })}
-                          </TableBody>
-                        </Table>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
+              <WorkAreaHierarchyView
+                workAreas={workAreas}
+                activities={activities}
+                phases={phases}
+                activityLinks={activityLinks}
+                resources={resources}
+                isAdmin={isAdmin}
+                onEditWorkArea={handleOpenDialog}
+                onDeleteWorkArea={handleDelete}
+                onEditActivity={(activityId) => {
+                  // Dispatch custom event to open activity edit dialog in BudgetActivitiesTab
+                  window.dispatchEvent(new CustomEvent('edit-activity', { 
+                    detail: { id: activityId }
+                  }));
+                }}
+                onEditResource={(resourceId) => {
+                  // Dispatch custom event to open resource edit dialog in BudgetResourcesTab
+                  window.dispatchEvent(new CustomEvent('edit-resource', { 
+                    detail: { id: resourceId }
+                  }));
+                }}
+              />
             )}
 
             {/* Activities without work area section */}

@@ -184,9 +184,14 @@ export default function PresupuestoDashboard() {
   const portadaPath = presupuesto?.portada_url ? extractFilePath(presupuesto.portada_url) : null;
   const { signedUrl: portadaDisplayUrl } = useSignedUrl(portadaPath, { bucket: 'budget-covers' });
 
-  // Listen for edit-activity events to switch to activities tab
+  // Listen for edit-activity events to switch to activities tab and open the activity form
   useEffect(() => {
-    const handleEditActivity = () => {
+    const handleEditActivity = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      const activityData = customEvent.detail;
+      if (activityData && activityData.id) {
+        setSelectedActivityId(activityData.id);
+      }
       setActiveTab('actividades');
     };
     window.addEventListener('edit-activity', handleEditActivity);

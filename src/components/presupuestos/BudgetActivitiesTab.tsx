@@ -37,7 +37,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { format, addDays, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
-
+import { useBudgetBroadcast } from '@/hooks/useBudgetBroadcast';
 interface WorkArea {
   id: string;
   name: string;
@@ -219,7 +219,22 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
   const [workAreaSearchQuery, setWorkAreaSearchQuery] = useState('');
   const [showAllWorkAreas, setShowAllWorkAreas] = useState(false);
   const [returnTabAfterSave, setReturnTabAfterSave] = useState<string | null>(null);
-  
+
+  // Ref to hold fetchData so broadcast callback can access it
+  const fetchDataRef = useRef<() => Promise<void>>();
+
+  // Instant broadcast for cross-client sync
+  const handleBroadcast = useCallback((payload: any) => {
+    // When another client broadcasts a change, refetch immediately
+    if (payload.type === 'activity-changed' || payload.type === 'resource-changed') {
+      fetchDataRef.current?.();
+    }
+  }, []);
+
+  const { broadcastActivityChange, broadcastResourceChange } = useBudgetBroadcast({
+    budgetId,
+    onBroadcast: handleBroadcast,
+  });
   // Import state
   const [importFile, setImportFile] = useState<File | null>(null);
   const [isImporting, setIsImporting] = useState(false);
@@ -461,7 +476,8 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
     }
   };
 
-  // Realtime subscription for work area relations (cross-browser sync)
+  // Update ref so broadcast callback can call fetchData
+  fetchDataRef.current = fetchData;
   useEffect(() => {
     const channel = supabase
       .channel('budget-work-area-activities-changes')
@@ -903,7 +919,10 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
         setReturnTabAfterSave(null);
       }
       
-      fetchData();
+      // Immediate refetch for local state
+      await fetchData();
+      // Broadcast to other clients for instant sync
+      broadcastActivityChange(editingActivity ? 'update' : 'create', savedActivityId || undefined);
     } catch (err: any) {
       console.error('Error saving:', err);
       toast.error(err.message || 'Error al guardar');
@@ -923,10 +942,12 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
         .eq('id', deletingActivity.id);
 
       if (error) throw error;
+      const deletedId = deletingActivity.id;
       toast.success('Actividad eliminada');
       setDeleteDialogOpen(false);
       setDeletingActivity(null);
-      fetchData();
+      await fetchData();
+      broadcastActivityChange('delete', deletedId);
     } catch (err: any) {
       console.error('Error deleting:', err);
       toast.error(err.message || 'Error al eliminar');

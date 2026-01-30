@@ -15,21 +15,16 @@ import {
   Reply, Forward, Trash2, ArrowDownLeft, ArrowUpRight,
   Paperclip, Eye, Clock, CheckCircle, XCircle, Search, Inbox, Send,
   ArrowLeft, Maximize2, FolderOpen, ClipboardList, Building2,
-  FileText, Image, File as FileIcon, Download, ExternalLink, X, RefreshCw, Loader2
+  FileText, Image, File as FileIcon, Download, ExternalLink, X, RefreshCw, Loader2, FilePlus
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import type { Tables } from '@/integrations/supabase/types';
 import DOMPurify from 'dompurify';
 import { CommunicationActionsDialog } from './CommunicationActionsDialog';
+import { CreateDocumentFromEmailDialog } from '@/components/crm/CreateDocumentFromEmailDialog';
 
-// Types for unified communications
-type EmailAttachment = {
-  id: string;
-  file_name: string;
-  file_path?: string;
-  file_type?: string | null;
-  file_size?: number | null;
-};
+// Type for local usage with optional fields
+type EmailAttachment = Tables<'email_attachments'>;
 
 type EmailMessage = Tables<'email_messages'> & {
   crm_contacts?: { id: string; name: string; surname: string | null; email: string | null } | null;
@@ -120,6 +115,8 @@ export function UnifiedCommunicationsList({
   const [previewAttachment, setPreviewAttachment] = useState<{ url: string; name: string; type: string } | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [fullscreenCommunication, setFullscreenCommunication] = useState<UnifiedCommunication | null>(null);
+  const [showCreateDocument, setShowCreateDocument] = useState(false);
+  const [emailForDocument, setEmailForDocument] = useState<EmailMessage | null>(null);
 
   const getEmailAttachmentDisplayName = (att: EmailAttachment) => {
     const name = (att.file_name || '').trim();
@@ -652,6 +649,7 @@ export function UnifiedCommunicationsList({
     isFullscreen = false,
     onExpandClick,
     onActionsClick,
+    onDocumentClick,
     onReplyClick,
     onForwardClick,
     onDeleteClick,
@@ -660,6 +658,7 @@ export function UnifiedCommunicationsList({
     isFullscreen?: boolean;
     onExpandClick?: () => void;
     onActionsClick?: () => void;
+    onDocumentClick?: () => void;
     onReplyClick?: () => void;
     onForwardClick?: () => void;
     onDeleteClick?: () => void;
@@ -838,6 +837,19 @@ export function UnifiedCommunicationsList({
                 >
                   <FolderOpen className="h-4 w-4" />
                   Asociar/Tarea
+                </Button>
+              )}
+              
+              {/* Document button - only for emails */}
+              {comm.type === 'email' && onDocumentClick && (
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={onDocumentClick}
+                  className="gap-1"
+                >
+                  <FilePlus className="h-4 w-4" />
+                  Documento
                 </Button>
               )}
               
@@ -1213,6 +1225,10 @@ export function UnifiedCommunicationsList({
               comm={selectedCommunication}
               onExpandClick={() => setFullscreenCommunication(selectedCommunication)}
               onActionsClick={() => handleOpenActionsDialog(selectedCommunication)}
+              onDocumentClick={selectedCommunication.type === 'email' ? () => {
+                setEmailForDocument(selectedCommunication.originalData as EmailMessage);
+                setShowCreateDocument(true);
+              } : undefined}
               onReplyClick={onComposeReply ? () => onComposeReply(selectedCommunication) : undefined}
               onForwardClick={onComposeForward ? () => onComposeForward(selectedCommunication) : undefined}
               onDeleteClick={() => handleDelete(selectedCommunication)}
@@ -1258,6 +1274,10 @@ export function UnifiedCommunicationsList({
                 comm={fullscreenCommunication} 
                 isFullscreen 
                 onActionsClick={() => handleOpenActionsDialog(fullscreenCommunication)}
+                onDocumentClick={fullscreenCommunication.type === 'email' ? () => {
+                  setEmailForDocument(fullscreenCommunication.originalData as EmailMessage);
+                  setShowCreateDocument(true);
+                } : undefined}
                 onReplyClick={onComposeReply ? () => onComposeReply(fullscreenCommunication) : undefined}
                 onForwardClick={onComposeForward ? () => onComposeForward(fullscreenCommunication) : undefined}
                 onDeleteClick={() => handleDelete(fullscreenCommunication)}
@@ -1317,6 +1337,13 @@ export function UnifiedCommunicationsList({
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Create Document from Email Dialog */}
+      <CreateDocumentFromEmailDialog
+        open={showCreateDocument}
+        onOpenChange={setShowCreateDocument}
+        email={emailForDocument}
+      />
     </div>
   );
 }

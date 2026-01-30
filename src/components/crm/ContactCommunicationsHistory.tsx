@@ -15,13 +15,22 @@ import { es } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { 
   Mail, MessageSquare, Search, ArrowUpRight, ArrowDownLeft, 
-  Phone, Calendar, Clock, Eye, Plus, Maximize2, X, Smartphone
+  Phone, Calendar, Clock, Eye, Plus, Maximize2, X, Smartphone,
+  Reply, Forward, Paperclip, Download, ExternalLink, FolderOpen, FilePlus, RefreshCw, Loader2,
+  FileText, Image, File as FileIcon, Trash2
 } from 'lucide-react';
+import DOMPurify from 'dompurify';
+import { CommunicationActionsDialog } from '@/components/communications/CommunicationActionsDialog';
+import { CreateDocumentFromEmailDialog } from '@/components/crm/CreateDocumentFromEmailDialog';
+import type { Tables } from '@/integrations/supabase/types';
 
 interface ContactCommunicationsHistoryProps {
   contactId: string;
   contactPhone?: string | null;
+  isAdmin?: boolean;
 }
+
+type EmailAttachment = Tables<'email_attachments'>;
 
 interface EmailMessage {
   id: string;
@@ -30,11 +39,17 @@ interface EmailMessage {
   to_emails: string[];
   subject: string | null;
   body_text: string | null;
+  body_html: string | null;
   status: string;
   sent_at: string | null;
   received_at: string | null;
   created_at: string;
   is_read: boolean | null;
+  contact_id: string | null;
+  budget_id: string | null;
+  project_id: string | null;
+  ticket_id: string | null;
+  email_attachments?: EmailAttachment[];
 }
 
 interface WhatsAppMessage {
@@ -58,7 +73,7 @@ interface SmsMessage {
   metadata: any;
 }
 
-export function ContactCommunicationsHistory({ contactId, contactPhone }: ContactCommunicationsHistoryProps) {
+export function ContactCommunicationsHistory({ contactId, contactPhone, isAdmin = false }: ContactCommunicationsHistoryProps) {
   const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState('all');
   const [registerDialogOpen, setRegisterDialogOpen] = useState(false);
@@ -67,14 +82,95 @@ export function ContactCommunicationsHistory({ contactId, contactPhone }: Contac
   const [newNotes, setNewNotes] = useState('');
   const queryClient = useQueryClient();
 
-  // Fetch emails for this contact
-  const { data: emails = [], isLoading: loadingEmails } = useQuery({
+  // New state for email detail view
+  const [selectedEmail, setSelectedEmail] = useState<EmailMessage | null>(null);
+  const [emailDetailDialogOpen, setEmailDetailDialogOpen] = useState(false);
+  const [actionsDialogOpen, setActionsDialogOpen] = useState(false);
+  const [showCreateDocument, setShowCreateDocument] = useState(false);
+  const [previewAttachment, setPreviewAttachment] = useState<{ url: string; name: string; type: string } | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+
+  // Helper functions for attachments
+  const getEmailAttachmentDisplayName = (att: EmailAttachment) => {
+    const name = (att.file_name || '').trim();
+    if (name) return name;
+    return att.file_path?.split('/').pop() || 'adjunto';
+  };
+
+  const getEmailFileIcon = (fileType: string | null | undefined, fileName: string) => {
+    const type = (fileType || '').toLowerCase();
+    const name = fileName.toLowerCase();
+    if (type.includes('pdf') || name.endsWith('.pdf')) return <FileText className="h-4 w-4 text-primary" />;
+    if (type.includes('image') || name.match(/\.(jpg|jpeg|png|gif|webp|svg)$/)) return <Image className="h-4 w-4 text-primary" />;
+    return <FileIcon className="h-4 w-4 text-muted-foreground" />;
+  };
+
+  const formatFileSize = (size: number | null | undefined) => {
+    if (!size) return '';
+    return size > 1024 * 1024 ? `${(size / (1024 * 1024)).toFixed(1)} MB` : `${(size / 1024).toFixed(1)} KB`;
+  };
+
+  const previewEmailAttachment = async (att: EmailAttachment) => {
+    if (!att.file_path) {
+      toast.error('No se encuentra la ruta del archivo');
+      return;
+    }
+    setPreviewLoading(true);
+    try {
+      const { data, error } = await supabase.storage
+        .from('email-attachments')
+        .createSignedUrl(att.file_path, 3600);
+      if (error) throw error;
+      setPreviewAttachment({
+        url: data.signedUrl,
+        name: getEmailAttachmentDisplayName(att),
+        type: att.file_type || ''
+      });
+    } catch (error: any) {
+      toast.error(error?.message || 'No se pudo abrir el archivo');
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
+  const downloadEmailAttachment = async (att: EmailAttachment) => {
+    if (!att.file_path) {
+      toast.error('No se encuentra la ruta del archivo');
+      return;
+    }
+    try {
+      const { data, error } = await supabase.storage
+        .from('email-attachments')
+        .download(att.file_path);
+      if (error) throw error;
+      const url = URL.createObjectURL(data);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = getEmailAttachmentDisplayName(att);
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast.success('Descarga iniciada');
+    } catch (error: any) {
+      toast.error(error?.message || 'No se pudo descargar el archivo');
+    }
+  };
+
+  // Fetch emails for this contact with attachments
+  const { data: emails = [], isLoading: loadingEmails, refetch: refetchEmails } = useQuery({
     queryKey: ['contact-emails', contactId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('email_messages')
-        .select('id, direction, from_email, to_emails, subject, body_text, status, sent_at, received_at, created_at, is_read')
+        .select(`
+          id, direction, from_email, to_emails, subject, body_text, body_html, 
+          status, sent_at, received_at, created_at, is_read, contact_id, 
+          budget_id, project_id, ticket_id,
+          email_attachments (id, file_name, file_path, file_type, file_size)
+        `)
         .eq('contact_id', contactId)
+        .is('deleted_at', null)
         .order('created_at', { ascending: false });
       
       if (error) throw error;
@@ -143,6 +239,72 @@ export function ContactCommunicationsHistory({ contactId, contactPhone }: Contac
       toast.error(error.message || 'Error al registrar WhatsApp');
     },
   });
+
+  // Resend email mutation
+  const resendEmailMutation = useMutation({
+    mutationFn: async (emailId: string) => {
+      // Fetch the original email
+      const { data: originalEmail, error: fetchError } = await supabase
+        .from('email_messages')
+        .select('*')
+        .eq('id', emailId)
+        .single();
+      
+      if (fetchError) throw fetchError;
+      if (!originalEmail) throw new Error('Email no encontrado');
+
+      // Call the send-crm-email edge function
+      const { data, error } = await supabase.functions.invoke('send-crm-email', {
+        body: {
+          to: originalEmail.to_emails,
+          cc: originalEmail.cc_emails || [],
+          bcc: originalEmail.bcc_emails || [],
+          subject: originalEmail.subject || '(Sin asunto)',
+          html: originalEmail.body_html || originalEmail.body_text || '',
+          contact_id: originalEmail.contact_id,
+          budget_id: originalEmail.budget_id,
+        },
+      });
+
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      
+      return data;
+    },
+    onSuccess: () => {
+      toast.success('Email reenviado correctamente');
+      refetchEmails();
+    },
+    onError: (error: any) => {
+      toast.error(error.message || 'No se pudo reenviar el email');
+    },
+  });
+
+  // Delete email mutation
+  const deleteEmailMutation = useMutation({
+    mutationFn: async (emailId: string) => {
+      const { error } = await supabase
+        .from('email_messages')
+        .update({ deleted_at: new Date().toISOString() })
+        .eq('id', emailId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success('Email movido a papelera');
+      setSelectedEmail(null);
+      setEmailDetailDialogOpen(false);
+      refetchEmails();
+    },
+    onError: (error: any) => {
+      toast.error(error.message || 'Error al eliminar email');
+    },
+  });
+
+  // Handle email click to open detail view
+  const handleEmailClick = (email: EmailMessage) => {
+    setSelectedEmail(email);
+    setEmailDetailDialogOpen(true);
+  };
 
   const isLoading = loadingEmails || loadingWhatsApp || loadingSms;
 
@@ -354,10 +516,13 @@ export function ContactCommunicationsHistory({ contactId, contactPhone }: Contac
                   const TypeIcon = isEmail ? Mail : isSms ? Smartphone : MessageSquare;
                   const typeIconColor = isEmail ? 'text-blue-600' : isSms ? 'text-purple-600' : 'text-green-600';
                   
+                  const hasAttachments = isEmail && ((item as EmailMessage).email_attachments?.length || 0) > 0;
+                  
                   return (
                     <div
                       key={`${item.type}-${item.id}`}
-                      className={`p-2 rounded-lg border ${isInbound ? 'border-l-2 border-l-green-500' : 'border-l-2 border-l-blue-500'} bg-card`}
+                      className={`p-2 rounded-lg border ${isInbound ? 'border-l-2 border-l-green-500' : 'border-l-2 border-l-blue-500'} bg-card ${isEmail ? 'cursor-pointer hover:bg-accent/50 transition-colors' : ''}`}
+                      onClick={isEmail ? () => handleEmailClick(item as EmailMessage) : undefined}
                     >
                       <div className="flex items-start gap-2">
                         <div className={`p-1.5 rounded-full ${typeIconBg}`}>
@@ -377,6 +542,9 @@ export function ContactCommunicationsHistory({ contactId, contactPhone }: Contac
                             <Badge className={`text-[10px] h-4 ${getStatusColor(itemStatus)}`}>
                               {itemStatus}
                             </Badge>
+                            {hasAttachments && (
+                              <Paperclip className="h-3 w-3 text-muted-foreground" />
+                            )}
                           </div>
                           
                           {isEmail ? (
@@ -626,6 +794,226 @@ export function ContactCommunicationsHistory({ contactId, contactPhone }: Contac
               Cerrar
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Email Detail Dialog */}
+      <Dialog open={emailDetailDialogOpen} onOpenChange={setEmailDetailDialogOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
+          <DialogHeader className="flex-shrink-0">
+            <DialogTitle className="flex items-center gap-2">
+              <Mail className="h-5 w-5 text-blue-600" />
+              Detalle del Email
+            </DialogTitle>
+          </DialogHeader>
+
+          {selectedEmail && (
+            <div className="flex-1 flex flex-col gap-4 overflow-hidden py-2">
+              {/* Email metadata */}
+              <div className="flex-shrink-0 space-y-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                  {selectedEmail.direction === 'inbound' ? (
+                    <Badge variant="outline" className="text-green-600">
+                      <ArrowDownLeft className="h-3 w-3 mr-1" />
+                      Entrada
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline" className="text-blue-600">
+                      <ArrowUpRight className="h-3 w-3 mr-1" />
+                      Salida
+                    </Badge>
+                  )}
+                  <Badge className={getStatusColor(selectedEmail.status)}>
+                    {selectedEmail.status}
+                  </Badge>
+                  <span className="text-sm text-muted-foreground">
+                    {format(new Date(selectedEmail.created_at), "EEEE d 'de' MMMM yyyy, HH:mm", { locale: es })}
+                  </span>
+                </div>
+                
+                <div className="space-y-1 text-sm">
+                  <p><span className="font-medium">De:</span> {selectedEmail.from_email}</p>
+                  <p><span className="font-medium">Para:</span> {selectedEmail.to_emails?.join(', ')}</p>
+                  {selectedEmail.subject && (
+                    <p><span className="font-medium">Asunto:</span> {selectedEmail.subject}</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Action buttons */}
+              <div className="flex items-center gap-2 flex-wrap flex-shrink-0 border-y py-3">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setActionsDialogOpen(true);
+                  }}
+                  className="gap-1"
+                >
+                  <FolderOpen className="h-4 w-4" />
+                  Asociar/Tarea
+                </Button>
+                
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setShowCreateDocument(true);
+                  }}
+                  className="gap-1"
+                >
+                  <FilePlus className="h-4 w-4" />
+                  Documento
+                </Button>
+
+                {selectedEmail.direction === 'outbound' && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => resendEmailMutation.mutate(selectedEmail.id)}
+                    disabled={resendEmailMutation.isPending}
+                    className="gap-1"
+                  >
+                    {resendEmailMutation.isPending ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <RefreshCw className="h-4 w-4" />
+                    )}
+                    Volver a enviar
+                  </Button>
+                )}
+
+                {isAdmin && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-destructive gap-1"
+                    onClick={() => {
+                      if (confirm('¿Estás seguro de que deseas eliminar este email?')) {
+                        deleteEmailMutation.mutate(selectedEmail.id);
+                      }
+                    }}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Eliminar
+                  </Button>
+                )}
+              </div>
+
+              {/* Email body */}
+              <ScrollArea className="flex-1 min-h-0">
+                <div className="overflow-x-auto pr-4">
+                  {selectedEmail.body_html ? (
+                    <div
+                      className="prose prose-sm dark:prose-invert max-w-none break-words [word-break:break-word] [overflow-wrap:anywhere] [&_*]:max-w-full [&_*]:break-words [&_img]:max-w-full [&_table]:max-w-full [&_table]:block [&_table]:overflow-x-auto [&_pre]:max-w-full [&_pre]:overflow-x-auto"
+                      dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(selectedEmail.body_html) }}
+                    />
+                  ) : (
+                    <div className="text-sm whitespace-pre-wrap break-words">
+                      {selectedEmail.body_text}
+                    </div>
+                  )}
+                </div>
+              </ScrollArea>
+
+              {/* Attachments */}
+              {(selectedEmail.email_attachments?.length || 0) > 0 && (
+                <div className="flex-shrink-0 border-t pt-3 space-y-2">
+                  <p className="text-xs text-muted-foreground flex items-center gap-1">
+                    <Paperclip className="h-3 w-3" />
+                    Adjuntos ({selectedEmail.email_attachments?.length})
+                  </p>
+                  <div className="space-y-2">
+                    {selectedEmail.email_attachments?.map((att) => {
+                      const name = getEmailAttachmentDisplayName(att);
+                      return (
+                        <div key={att.id} className="flex items-center justify-between gap-2 p-2 bg-muted/50 rounded-md border">
+                          <div className="flex items-center gap-2 min-w-0">
+                            {getEmailFileIcon(att.file_type, name)}
+                            <span className="text-sm truncate max-w-[260px]" title={name}>{name}</span>
+                            {att.file_size ? (
+                              <span className="text-xs text-muted-foreground">({formatFileSize(att.file_size)})</span>
+                            ) : null}
+                          </div>
+                          <div className="flex items-center gap-1 shrink-0">
+                            <Button variant="ghost" size="sm" onClick={() => previewEmailAttachment(att)} title="Ver">
+                              <ExternalLink className="h-4 w-4" />
+                            </Button>
+                            <Button variant="ghost" size="sm" onClick={() => downloadEmailAttachment(att)} title="Descargar">
+                              <Download className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          <DialogFooter className="flex-shrink-0 border-t pt-4">
+            <Button onClick={() => setEmailDetailDialogOpen(false)}>
+              Cerrar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Communication Actions Dialog */}
+      {selectedEmail && (
+        <CommunicationActionsDialog
+          open={actionsDialogOpen}
+          onOpenChange={setActionsDialogOpen}
+          communicationId={selectedEmail.id}
+          communicationType="email"
+          communicationSubject={selectedEmail.subject}
+          communicationContent={selectedEmail.body_text || selectedEmail.body_html || ''}
+          contactId={selectedEmail.contact_id}
+        />
+      )}
+
+      {/* Create Document From Email Dialog */}
+      {selectedEmail && (
+        <CreateDocumentFromEmailDialog
+          open={showCreateDocument}
+          onOpenChange={(open) => {
+            setShowCreateDocument(open);
+            if (!open) {
+              toast.success('Email marcado como documento');
+            }
+          }}
+          email={selectedEmail as any}
+        />
+      )}
+
+      {/* Attachment Preview Dialog */}
+      <Dialog open={!!previewAttachment} onOpenChange={() => setPreviewAttachment(null)}>
+        <DialogContent className="max-w-4xl max-h-[90vh]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Paperclip className="h-5 w-5" />
+              {previewAttachment?.name}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="flex-1 min-h-[400px]">
+            {previewAttachment && (
+              previewAttachment.type.includes('image') ? (
+                <img src={previewAttachment.url} alt={previewAttachment.name} className="max-w-full max-h-[70vh] object-contain mx-auto" />
+              ) : previewAttachment.type.includes('pdf') ? (
+                <iframe src={previewAttachment.url} className="w-full h-[70vh]" title={previewAttachment.name} />
+              ) : (
+                <div className="text-center py-12">
+                  <FileIcon className="h-16 w-16 mx-auto text-muted-foreground mb-4" />
+                  <p className="text-muted-foreground mb-4">Vista previa no disponible para este tipo de archivo</p>
+                  <Button onClick={() => window.open(previewAttachment.url, '_blank')}>
+                    <ExternalLink className="h-4 w-4 mr-2" />
+                    Abrir en nueva pestaña
+                  </Button>
+                </div>
+              )
+            )}
+          </div>
         </DialogContent>
       </Dialog>
     </>

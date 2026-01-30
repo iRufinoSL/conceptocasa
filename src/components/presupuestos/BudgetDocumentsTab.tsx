@@ -470,36 +470,118 @@ export function BudgetDocumentsTab({ budgetId, projectId, projectName, isAdmin }
       if (regularError) throw regularError;
 
       // Fetch emails marked as documents for this project/budget
-      let emailDocsQuery = supabase
-        .from('email_messages')
-        .select(`
-          id,
-          subject,
-          from_email,
-          from_name,
-          body_html,
-          document_type,
-          created_at,
-          project_id,
-          budget_id,
-          email_attachments (
-            id,
-            file_name,
-            file_path,
-            file_type,
-            file_size
-          )
-        `)
-        .eq('is_document', true);
+      // For budgets, we need to consider both:
+      // 1. Emails with budget_id directly set
+      // 2. Emails assigned via email_budget_assignments junction table
+      let emailDocs: any[] = [];
       
-      if (projectId) {
-        emailDocsQuery = emailDocsQuery.eq('project_id', projectId);
-      } else if (budgetId) {
-        emailDocsQuery = emailDocsQuery.eq('budget_id', budgetId);
+      if (budgetId) {
+        // Get email IDs from junction table
+        const { data: assignments } = await supabase
+          .from('email_budget_assignments')
+          .select('email_id')
+          .eq('budget_id', budgetId);
+        
+        const assignedEmailIds = (assignments || []).map(a => a.email_id);
+        
+        // Fetch emails that are marked as documents AND either:
+        // - Have budget_id set directly, OR
+        // - Are in the assignments list
+        const { data: emailsWithDirectBudget, error: directError } = await supabase
+          .from('email_messages')
+          .select(`
+            id,
+            subject,
+            from_email,
+            from_name,
+            body_html,
+            document_type,
+            created_at,
+            project_id,
+            budget_id,
+            email_attachments (
+              id,
+              file_name,
+              file_path,
+              file_type,
+              file_size
+            )
+          `)
+          .eq('is_document', true)
+          .eq('budget_id', budgetId)
+          .order('created_at', { ascending: false });
+        
+        if (directError) throw directError;
+        
+        // Also fetch emails from assignments that are marked as documents
+        if (assignedEmailIds.length > 0) {
+          const { data: emailsFromAssignments, error: assignError } = await supabase
+            .from('email_messages')
+            .select(`
+              id,
+              subject,
+              from_email,
+              from_name,
+              body_html,
+              document_type,
+              created_at,
+              project_id,
+              budget_id,
+              email_attachments (
+                id,
+                file_name,
+                file_path,
+                file_type,
+                file_size
+              )
+            `)
+            .eq('is_document', true)
+            .in('id', assignedEmailIds)
+            .order('created_at', { ascending: false });
+          
+          if (assignError) throw assignError;
+          
+          // Merge and deduplicate
+          const allEmails = [...(emailsWithDirectBudget || []), ...(emailsFromAssignments || [])];
+          const seenIds = new Set<string>();
+          emailDocs = allEmails.filter(e => {
+            if (seenIds.has(e.id)) return false;
+            seenIds.add(e.id);
+            return true;
+          });
+        } else {
+          emailDocs = emailsWithDirectBudget || [];
+        }
+      } else if (projectId) {
+        const { data, error: emailError } = await supabase
+          .from('email_messages')
+          .select(`
+            id,
+            subject,
+            from_email,
+            from_name,
+            body_html,
+            document_type,
+            created_at,
+            project_id,
+            budget_id,
+            email_attachments (
+              id,
+              file_name,
+              file_path,
+              file_type,
+              file_size
+            )
+          `)
+          .eq('is_document', true)
+          .eq('project_id', projectId)
+          .order('created_at', { ascending: false });
+        
+        if (emailError) throw emailError;
+        emailDocs = data || [];
       }
-
-      const { data: emailDocs, error: emailError } = await emailDocsQuery.order('created_at', { ascending: false });
-      if (emailError) throw emailError;
+      
+      // emailError already handled in branches above
 
       // Convert email docs to unified format
       const emailDocsUnified: UnifiedDocument[] = (emailDocs || []).map(email => ({

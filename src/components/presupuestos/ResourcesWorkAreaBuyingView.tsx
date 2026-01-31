@@ -394,7 +394,12 @@ export function ResourcesWorkAreaBuyingView({
       <div className="flex flex-wrap items-end gap-4 p-4 bg-muted/30 rounded-lg border">
         <div className="flex items-center gap-2">
           <Calendar className="h-5 w-5 text-muted-foreground" />
-          <span className="font-medium text-sm">Filtrar por rango de fechas:</span>
+          <div className="flex flex-col">
+            <span className="font-medium text-sm">Filtrar por rango de fechas:</span>
+            <span className="text-xs text-muted-foreground">
+              Solo actividades con <span className="font-medium">Uso en Presupuesto</span>: <span className="font-medium">Sí</span>
+            </span>
+          </div>
         </div>
         <div className="flex items-center gap-2">
           <div className="space-y-1">

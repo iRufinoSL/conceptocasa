@@ -630,6 +630,16 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
   // Open form for editing
   const handleEdit = async (activity: BudgetActivity) => {
     setEditingActivity(activity);
+    
+    // CRITICAL: Always fetch work area links directly from DB to ensure accurate data
+    // The local state (workAreaRelations) might be stale or filtered incorrectly
+    const { data: workAreaLinksRes } = await supabase
+      .from('budget_work_area_activities')
+      .select('work_area_id')
+      .eq('activity_id', activity.id);
+    
+    const fetchedWorkAreaIds = (workAreaLinksRes || []).map(r => r.work_area_id);
+    
     setForm({
       name: activity.name,
       code: activity.code,
@@ -642,7 +652,7 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
       start_date: activity.start_date || '',
       duration_days: activity.duration_days?.toString() || '',
       tolerance_days: activity.tolerance_days?.toString() || '',
-      work_area_ids: workAreaRelations.filter(r => r.activity_id === activity.id).map(r => r.work_area_id),
+      work_area_ids: fetchedWorkAreaIds,
       actual_start_date: activity.actual_start_date || '',
       actual_end_date: activity.actual_end_date || '',
     });

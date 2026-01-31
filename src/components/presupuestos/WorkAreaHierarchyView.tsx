@@ -6,6 +6,7 @@ import { ChevronDown, ChevronRight, Edit2, Trash2, MapPin, Layers, Pencil, Packa
 import { formatActividadId } from '@/lib/activity-id';
 import { formatCurrency } from '@/lib/format-utils';
 import { OPTION_COLORS } from '@/lib/options-utils';
+import { searchMatch } from '@/lib/search-utils';
 
 interface WorkArea {
   id: string;
@@ -55,6 +56,7 @@ interface WorkAreaHierarchyViewProps {
   activityLinks: { work_area_id: string; activity_id: string }[];
   resources: Resource[];
   isAdmin: boolean;
+  searchTerm?: string;
   onEditWorkArea: (area: WorkArea) => void;
   onDeleteWorkArea: (id: string) => void;
   onEditActivity: (activityId: string) => void;
@@ -78,6 +80,7 @@ export function WorkAreaHierarchyView({
   activityLinks,
   resources,
   isAdmin,
+  searchTerm = '',
   onEditWorkArea,
   onDeleteWorkArea,
   onEditActivity,
@@ -105,21 +108,27 @@ export function WorkAreaHierarchyView({
     return map;
   }, [resources]);
 
-  const groupedByLevel = useMemo(() => {
-    return workAreas.reduce((acc, area) => {
-      if (!acc[area.level]) {
-        acc[area.level] = [];
-      }
-      acc[area.level].push(area);
-      return acc;
-    }, {} as Record<string, WorkArea[]>);
-  }, [workAreas]);
+  // Check if an item matches the search term
+  const matchesSearch = (text: string) => {
+    if (!searchTerm.trim()) return true;
+    return searchMatch(text, searchTerm);
+  };
 
+  // Get activities for a work area with search filtering
   const getActivitiesForWorkArea = (workAreaId: string) => {
     const linkedActivityIds = activityLinks.filter(l => l.work_area_id === workAreaId).map(l => l.activity_id);
     return activities
       // Filter out activities with uses_measurement = false (marked as "No")
       .filter(a => linkedActivityIds.includes(a.id) && a.uses_measurement !== false)
+      .filter(a => {
+        if (!searchTerm.trim()) return true;
+        // Check if activity or any of its resources match
+        const phase = a.phase_id ? phaseMap.get(a.phase_id) : null;
+        const activityId = formatActividadId({ phaseCode: phase?.code, activityCode: a.code, name: a.name });
+        const activityResources = resourcesByActivity.get(a.id) || [];
+        const resourcesText = activityResources.map(r => r.name).join(' ');
+        return matchesSearch([activityId, a.name, resourcesText].join(' '));
+      })
       .sort((a, b) => {
         const phaseA = a.phase_id ? phaseMap.get(a.phase_id) : null;
         const phaseB = b.phase_id ? phaseMap.get(b.phase_id) : null;
@@ -128,6 +137,38 @@ export function WorkAreaHierarchyView({
         return idA.localeCompare(idB, 'es', { numeric: true });
       });
   };
+
+  // Filter work areas based on search - show area if it or any of its children match
+  const filteredGroupedByLevel = useMemo(() => {
+    if (!searchTerm.trim()) {
+      return workAreas.reduce((acc, area) => {
+        if (!acc[area.level]) {
+          acc[area.level] = [];
+        }
+        acc[area.level].push(area);
+        return acc;
+      }, {} as Record<string, WorkArea[]>);
+    }
+
+    // With search: filter areas that match or have matching activities/resources
+    const filteredAreas = workAreas.filter(area => {
+      // Check if the area itself matches
+      if (matchesSearch([area.area_id, area.name || '', area.level, area.work_area].join(' '))) {
+        return true;
+      }
+      // Check if any of its activities/resources match
+      const areaActivities = getActivitiesForWorkArea(area.id);
+      return areaActivities.length > 0;
+    });
+
+    return filteredAreas.reduce((acc, area) => {
+      if (!acc[area.level]) {
+        acc[area.level] = [];
+      }
+      acc[area.level].push(area);
+      return acc;
+    }, {} as Record<string, WorkArea[]>);
+  }, [workAreas, searchTerm, activities, activityLinks, resources]);
 
   const toggleLevel = (level: string) => {
     setExpandedLevels(prev => {
@@ -175,7 +216,7 @@ export function WorkAreaHierarchyView({
       </div>
 
       {LEVELS.map((level) => {
-        const areasInLevel = groupedByLevel[level] || [];
+        const areasInLevel = filteredGroupedByLevel[level] || [];
         if (areasInLevel.length === 0) return null;
 
         const levelSubtotal = areasInLevel.reduce(

@@ -12,7 +12,8 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { Plus, Trash2, Edit2, MapPin, List, Layers, ChevronDown, ChevronRight, LayoutGrid, Pencil } from 'lucide-react';
+import { Plus, Trash2, Edit2, MapPin, List, Layers, ChevronDown, ChevronRight, LayoutGrid, Pencil, Search } from 'lucide-react';
+import { searchMatch } from '@/lib/search-utils';
 import { WorkAreasOptionsGroupedView } from './WorkAreasOptionsGroupedView';
 import { WorkAreaActivitiesSelect } from './WorkAreaActivitiesSelect';
 import { WorkAreaHierarchyView } from './WorkAreaHierarchyView';
@@ -104,6 +105,7 @@ export function BudgetWorkAreasTab({ budgetId, isAdmin }: BudgetWorkAreasTabProp
   const [expandedOptions, setExpandedOptions] = useState<Set<string>>(new Set()); // collapsed by default
   const [customWorkAreas, setCustomWorkAreas] = useState<string[]>([]);
   const [newWorkAreaInput, setNewWorkAreaInput] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
   const [formData, setFormData] = useState({
     name: '',
     level: 'Nivel 1',
@@ -636,31 +638,44 @@ export function BudgetWorkAreasTab({ budgetId, isAdmin }: BudgetWorkAreasTabProp
           </div>
         ) : (
           <>
-            <div className="flex gap-2 mb-4">
-              <Button
-                variant={viewMode === 'grouped' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setViewMode('grouped')}
-              >
-                <Layers className="h-4 w-4 mr-1" />
-                Por Nivel
-              </Button>
-              <Button
-                variant={viewMode === 'alphabetic' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setViewMode('alphabetic')}
-              >
-                <List className="h-4 w-4 mr-1" />
-                Alfabético
-              </Button>
-              <Button
-                variant={viewMode === 'options' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setViewMode('options')}
-              >
-                <LayoutGrid className="h-4 w-4 mr-1" />
-                Por Opción
-              </Button>
+            <div className="flex items-center gap-4 mb-4">
+              <div className="flex gap-2">
+                <Button
+                  variant={viewMode === 'grouped' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setViewMode('grouped')}
+                >
+                  <Layers className="h-4 w-4 mr-1" />
+                  Por Nivel
+                </Button>
+                <Button
+                  variant={viewMode === 'alphabetic' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setViewMode('alphabetic')}
+                >
+                  <List className="h-4 w-4 mr-1" />
+                  Alfabético
+                </Button>
+                <Button
+                  variant={viewMode === 'options' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setViewMode('options')}
+                >
+                  <LayoutGrid className="h-4 w-4 mr-1" />
+                  Por Opción
+                </Button>
+              </div>
+              <div className="flex-1 max-w-md">
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Buscar en áreas, actividades, recursos..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-9"
+                  />
+                </div>
+              </div>
             </div>
 
             {viewMode === 'options' ? (
@@ -694,7 +709,13 @@ export function BudgetWorkAreasTab({ budgetId, isAdmin }: BudgetWorkAreasTabProp
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {sortedAlphabetically.map((area) => (
+                  {sortedAlphabetically
+                    .filter((area) => {
+                      if (!searchTerm.trim()) return true;
+                      const searchableText = [area.area_id, area.name || '', area.level, area.work_area].join(' ');
+                      return searchMatch(searchableText, searchTerm);
+                    })
+                    .map((area) => (
                     <TableRow key={area.id}>
                       <TableCell>
                         <code className="text-xs bg-muted px-2 py-1 rounded">{area.area_id}</code>
@@ -736,6 +757,7 @@ export function BudgetWorkAreasTab({ budgetId, isAdmin }: BudgetWorkAreasTabProp
                 activityLinks={activityLinks}
                 resources={resources}
                 isAdmin={isAdmin}
+                searchTerm={searchTerm}
                 onEditWorkArea={handleOpenDialog}
                 onDeleteWorkArea={handleDelete}
                 onEditActivity={(activityId) => {

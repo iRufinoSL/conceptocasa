@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Plus, Search, Pencil, Trash2, Package, Wrench, Truck, Briefcase, FileSpreadsheet, Check, List, FolderTree, FileDown, FileText, LayoutGrid, CheckSquare, Users } from 'lucide-react';
+import { Plus, Search, Pencil, Trash2, Package, Wrench, Truck, Briefcase, FileSpreadsheet, Check, List, FolderTree, FileDown, FileText, LayoutGrid, CheckSquare, Users, ShoppingCart } from 'lucide-react';
 import { OPTION_COLORS } from '@/lib/options-utils';
 import { ResourcesOptionsGroupedView } from './ResourcesOptionsGroupedView';
 import { toast } from 'sonner';
@@ -26,6 +26,7 @@ import { ResourcesActivityGroupedView } from './ResourcesActivityGroupedView';
 import { ResourcesTypePhaseActivityGroupedView } from './ResourcesTypePhaseActivityGroupedView';
 import { ResourcesSupplierGroupedView } from './ResourcesSupplierGroupedView';
 import { UnassignedResourcesSection } from './UnassignedResourcesSection';
+import { ResourcesWorkAreaBuyingView } from './ResourcesWorkAreaBuyingView';
 import { useCompanySettings } from '@/hooks/useCompanySettings';
 import { usePermissions, canAccessResource, canAccessActivity } from '@/hooks/usePermissions';
 import { useTabVisibility } from '@/hooks/useTabVisibility';
@@ -61,6 +62,8 @@ interface Activity {
   name: string;
   phase_id: string | null;
   opciones: string[];
+  actual_start_date?: string | null;
+  actual_end_date?: string | null;
 }
 
 interface Phase {
@@ -124,6 +127,7 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
   const [resources, setResources] = useState<BudgetResource[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
   const [phases, setPhases] = useState<Phase[]>([]);
+  const [supplierNames, setSupplierNames] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [formOpen, setFormOpen] = useState(false);
@@ -147,7 +151,7 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
   // 2) 'grouped' (Fases/Actividades)
   const availableViewModes = useMemo(() => {
     const configured = recursosSettings?.viewModes;
-    const base = configured && configured.length > 0 ? configured : ['list', 'grouped', 'activity', 'type', 'supplier', 'options'];
+    const base = configured && configured.length > 0 ? configured : ['list', 'grouped', 'activity', 'type', 'supplier', 'options', 'buying'];
 
     const modeSet = new Set<string>(base);
     modeSet.add('list');
@@ -155,9 +159,10 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
     modeSet.add('type');
     modeSet.add('supplier');
     modeSet.add('options');
+    modeSet.add('buying');
 
-    const ordered: Array<'list' | 'grouped' | 'activity' | 'type' | 'supplier' | 'options'> = [];
-    (['list', 'type', 'grouped', 'activity', 'supplier', 'options'] as const).forEach((m) => {
+    const ordered: Array<'list' | 'grouped' | 'activity' | 'type' | 'supplier' | 'options' | 'buying'> = [];
+    (['list', 'type', 'grouped', 'activity', 'supplier', 'options', 'buying'] as const).forEach((m) => {
       if (modeSet.has(m)) ordered.push(m);
     });
 
@@ -165,22 +170,23 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
   }, [recursosSettings?.viewModes]);
   
   // Determine initial view mode - default to 'list' first (alphabetically sorted with bulk selection)
-  const getInitialViewMode = (): 'list' | 'grouped' | 'activity' | 'type' | 'supplier' | 'options' => {
+  const getInitialViewMode = (): 'list' | 'grouped' | 'activity' | 'type' | 'supplier' | 'options' | 'buying' => {
     if (availableViewModes.includes('list')) return 'list';
     if (availableViewModes.includes('type')) return 'type';
     if (availableViewModes.includes('grouped')) return 'grouped';
     if (availableViewModes.includes('activity')) return 'activity';
     if (availableViewModes.includes('supplier')) return 'supplier';
     if (availableViewModes.includes('options')) return 'options';
+    if (availableViewModes.includes('buying')) return 'buying';
     return 'list';
   };
   
-  const [viewMode, setViewMode] = useState<'list' | 'grouped' | 'activity' | 'type' | 'supplier' | 'options'>(getInitialViewMode());
+  const [viewMode, setViewMode] = useState<'list' | 'grouped' | 'activity' | 'type' | 'supplier' | 'options' | 'buying'>(getInitialViewMode());
   const [expandedOptions, setExpandedOptions] = useState<Set<string>>(new Set()); // collapsed by default
 
   // If role/tab settings change, ensure we always stay on an allowed view.
   useEffect(() => {
-    if (viewMode !== 'options' && !availableViewModes.includes(viewMode)) {
+    if (viewMode !== 'options' && viewMode !== 'buying' && !availableViewModes.includes(viewMode)) {
       setViewMode(getInitialViewMode());
     }
   }, [availableViewModes, viewMode]);
@@ -221,7 +227,7 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
           .order('name'),
         supabase
           .from('budget_activities')
-          .select('id, code, name, phase_id, opciones')
+          .select('id, code, name, phase_id, opciones, actual_start_date, actual_end_date')
           .eq('budget_id', budgetId)
           .order('code'),
         supabase
@@ -235,9 +241,27 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
       if (activitiesRes.error) throw activitiesRes.error;
       if (phasesRes.error) throw phasesRes.error;
 
-      setResources(resourcesRes.data || []);
+      const resourcesData = resourcesRes.data || [];
+      setResources(resourcesData);
       setActivities(activitiesRes.data || []);
       setPhases(phasesRes.data || []);
+
+      // Fetch supplier names for resources with supplier_id
+      const supplierIds = [...new Set(resourcesData.filter(r => r.supplier_id).map(r => r.supplier_id as string))];
+      if (supplierIds.length > 0) {
+        const { data: suppliersData } = await supabase
+          .from('crm_contacts')
+          .select('id, name, surname')
+          .in('id', supplierIds);
+        
+        if (suppliersData) {
+          const namesMap: Record<string, string> = {};
+          suppliersData.forEach(s => {
+            namesMap[s.id] = s.surname ? `${s.name} ${s.surname}` : s.name;
+          });
+          setSupplierNames(namesMap);
+        }
+      }
     } catch (error) {
       console.error('Error fetching data:', error);
       toast.error('Error al cargar los recursos');
@@ -1532,12 +1556,22 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
                   <Button
                     variant={viewMode === 'options' ? 'secondary' : 'ghost'}
                     size="sm"
-                    className="rounded-l-none"
+                    className="rounded-none border-x"
                     onClick={() => setViewMode('options')}
                     title="Agrupado por Opción"
                   >
                     <LayoutGrid className="h-4 w-4 mr-1" />
                     Por Opción
+                  </Button>
+                  <Button
+                    variant={viewMode === 'buying' ? 'secondary' : 'ghost'}
+                    size="sm"
+                    className="rounded-l-none"
+                    onClick={() => setViewMode('buying')}
+                    title="Lista de compra por Área de Trabajo"
+                  >
+                    <ShoppingCart className="h-4 w-4 mr-1" />
+                    Lista compra
                   </Button>
                 </div>
               )}
@@ -1668,6 +1702,19 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
               onDelete={handleDelete}
               calculateFields={calculateFields}
               getActivityId={getActivityId}
+            />
+          ) : viewMode === 'buying' ? (
+            <ResourcesWorkAreaBuyingView
+              budgetId={budgetId}
+              resources={filteredResources.map(r => ({
+                ...r,
+                supplier_name: supplierNames[r.supplier_id || ''] || null
+              }))}
+              activities={activities.map(a => ({
+                ...a,
+                uses_measurement: true
+              }))}
+              phases={phases}
             />
           ) : (
             <div className="rounded-md border overflow-x-auto">

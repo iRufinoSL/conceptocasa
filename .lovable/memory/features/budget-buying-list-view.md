@@ -2,17 +2,46 @@
 Updated: now
 
 ## Descripción General
-La 'Lista compra' (Buying List) es una funcionalidad dentro de la pestaña 'CUÁNDO? (Fases)' que permite gestionar las unidades de compra de recursos del proyecto, diferenciándolas de las unidades de cálculo del presupuesto.
+Existen dos ubicaciones de 'Lista compra':
+1. **CUÁNDO? (Fases)**: Vista original con jerarquía Fase → ActividadID → Recursos
+2. **CÓMO? (Recursos)**: Nueva vista con jerarquía Área trabajo → ActividadID → Fecha real inicio → Recursos
 
-## Vistas Disponibles
+## Vista en CÓMO? (ResourcesWorkAreaBuyingView)
 
-### 1. Vista por Actividad (Por Actividad)
+### Jerarquía
+- **Área de trabajo** → Obtenida de la tabla budget_work_area_activities
+- **ActividadID** → Código completo con fase y nombre
+- **Fecha real inicio** → actual_start_date de la actividad (badge visual)
+- **Recurso** → Campos de lista de compra
+
+### Campos Mostrados por Recurso
+- Nombre del recurso
+- Tipo de recurso (badge de color)
+- Suministrador (nombre del contacto CRM)
+- Uds calculadas (manual_units ?? related_units)
+- Coste ud externa (external_unit_cost)
+- Subtotal
+
+### Filtro por Rango de Fechas
+- Permite filtrar actividades por fecha real de inicio (actual_start_date)
+- Inputs manuales para "Desde" y "Hasta"
+- Solo aparecen recursos cuya actividad tiene fecha dentro del rango
+- Botón "Limpiar" para resetear filtros
+
+### Componente
+- `ResourcesWorkAreaBuyingView.tsx`: Vista en CÓMO? con filtro por fechas
+
+## Vista en CUÁNDO? (BuyingListView)
+
+### Vistas Disponibles
+
+#### 1. Vista por Actividad (Por Actividad)
 Organización jerárquica en tres niveles:
 - **Fase** → Agrupación expansible por fases del proyecto
 - **ActividadID** → Agrupación por código de actividad dentro de cada fase
 - **Recursos** → Listado de recursos con cantidades, costes y proveedores
 
-### 2. Vista por Proveedor (Por Proveedor)
+#### 2. Vista por Proveedor (Por Proveedor)
 Organización jerárquica alternativa:
 - **Fase** → Agrupación por fases
 - **Suministrador** → Agrupación por proveedor/suministrador
@@ -34,29 +63,8 @@ Los recursos pueden tener dos tipos de unidades:
 - `purchase_unit_cost`: Coste por unidad de compra
 - `conversion_factor`: Factor de conversión (ej: 0.15 para 15cm de altura)
 
-### Ejemplo de Conversión:
-- Hormigón para solera de 15cm de altura
-- Unidades calculadas: 100 m2 × coste/m2
-- Factor de conversión: 0.15 (15cm = 0.15m)
-- Unidades de compra: 100 × 0.15 = 15 m3 de hormigón
-
-## Interfaz de Usuario
-
-### Botón de Edición
-Cada recurso muestra un botón de lápiz (hover) para abrir el diálogo de unidades de compra.
-
-### Diálogo de Unidades de Compra (PurchaseUnitDialog)
-- Muestra unidades calculadas del presupuesto
-- Input para factor de conversión
-- Selector de unidad de compra
-- Input para coste por unidad de compra
-- Vista previa del resumen de compra (cantidad y coste total)
-
-### Indicador Visual
-Los recursos con unidades de compra configuradas muestran un badge verde "Ud. Compra".
-
 ## Componentes
-
-- `BuyingListView.tsx`: Vista principal con toggle entre modos
+- `BuyingListView.tsx`: Vista en CUÁNDO? con toggle entre modos
 - `SupplierBuyingListView.tsx`: Vista agrupada por proveedor con filtros
+- `ResourcesWorkAreaBuyingView.tsx`: Vista en CÓMO? por área de trabajo
 - `PurchaseUnitDialog.tsx`: Diálogo para editar unidades de compra

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useVersionCheck } from '@/hooks/useVersionCheck';
+import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -10,19 +11,25 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { toast } from 'sonner';
 import { z } from 'zod';
 import { Building2, Mail, Lock, Eye, EyeOff, RefreshCw, ArrowLeft, CheckCircle } from 'lucide-react';
+import { TwoFactorVerification } from '@/components/TwoFactorVerification';
 
 const emailSchema = z.string().email('Email inválido');
 const passwordSchema = z.string()
   .min(8, 'La contraseña debe tener al menos 8 caracteres')
   .max(128, 'La contraseña no puede exceder 128 caracteres');
 
-type AuthMode = 'login' | 'forgot-password' | 'reset-password';
+type AuthMode = 'login' | 'forgot-password' | 'reset-password' | '2fa-verification';
+
+interface Pending2FA {
+  userId: string;
+  phoneNumber: string;
+}
 
 export default function Auth() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const location = useLocation();
-  const { user, loading, signIn, resetPasswordForEmail, updatePassword } = useAuth();
+  const { user, loading, signIn, signOut, resetPasswordForEmail, updatePassword } = useAuth();
   const { hasUpdate, updateApp } = useVersionCheck(true);
   
   const [mode, setMode] = useState<AuthMode>('login');
@@ -34,6 +41,7 @@ export default function Auth() {
   const [emailSent, setEmailSent] = useState(false);
   const [passwordReset, setPasswordReset] = useState(false);
   const [errors, setErrors] = useState<{ email?: string; password?: string; confirmPassword?: string }>({});
+  const [pending2FA, setPending2FA] = useState<Pending2FA | null>(null);
 
   // Check if coming from reset email link
   useEffect(() => {
@@ -47,8 +55,8 @@ export default function Auth() {
   }, [searchParams]);
 
   useEffect(() => {
-    // Only redirect if logged in AND not in reset-password mode
-    if (user && !loading && mode !== 'reset-password') {
+    // Only redirect if logged in AND not in reset-password or 2FA mode
+    if (user && !loading && mode !== 'reset-password' && mode !== '2fa-verification') {
       // Check if there's a saved location to redirect to
       const from = (location.state as { from?: { pathname: string } })?.from?.pathname;
       navigate(from || '/dashboard', { replace: true });
@@ -108,11 +116,49 @@ export default function Auth() {
       return;
     }
     
+    // Check if user has 2FA enabled
+    try {
+      const { data: session } = await supabase.auth.getSession();
+      if (session?.session?.user) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('two_factor_enabled, two_factor_phone')
+          .eq('id', session.session.user.id)
+          .single();
+        
+        if (profile?.two_factor_enabled && profile?.two_factor_phone) {
+          // User has 2FA enabled, show verification
+          setPending2FA({
+            userId: session.session.user.id,
+            phoneNumber: profile.two_factor_phone
+          });
+          setMode('2fa-verification');
+          setIsSubmitting(false);
+          return;
+        }
+      }
+    } catch (error) {
+      console.error('Error checking 2FA status:', error);
+    }
+    
     toast.success('Sesión iniciada correctamente');
-    // Redirect will be handled by useEffect when user state updates
     const from = (location.state as { from?: { pathname: string } })?.from?.pathname;
     navigate(from || '/dashboard', { replace: true });
     setIsSubmitting(false);
+  };
+
+  const handle2FAVerified = () => {
+    toast.success('Verificación completada. Bienvenido!');
+    const from = (location.state as { from?: { pathname: string } })?.from?.pathname;
+    navigate(from || '/dashboard', { replace: true });
+  };
+
+  const handle2FACancel = async () => {
+    // Sign out the user since 2FA wasn't completed
+    await signOut();
+    setPending2FA(null);
+    setMode('login');
+    toast.info('Inicio de sesión cancelado');
   };
 
   const handleForgotPassword = async (e: React.FormEvent) => {
@@ -170,6 +216,18 @@ export default function Auth() {
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
       </div>
+    );
+  }
+
+  // Show 2FA verification screen
+  if (mode === '2fa-verification' && pending2FA) {
+    return (
+      <TwoFactorVerification
+        userId={pending2FA.userId}
+        phoneNumber={pending2FA.phoneNumber}
+        onVerified={handle2FAVerified}
+        onCancel={handle2FACancel}
+      />
     );
   }
 

@@ -14,6 +14,10 @@ Existen dos ubicaciones de 'Lista compra':
 - **ActividadID** → Código completo con fase y nombre
 - **Recurso** → Campos de lista de compra con botón editar
 
+### Filtro de Actividades
+- **IMPORTANTE**: Solo aparecen actividades donde `uses_measurement = true`
+- Las actividades con "Usa Med. = No" se excluyen automáticamente del listado
+
 ### Campos Mostrados por Recurso
 - Nombre del recurso
 - Tipo de recurso (badge de color)
@@ -37,7 +41,8 @@ Existen dos ubicaciones de 'Lista compra':
 ### Componente
 - `ResourcesWorkAreaBuyingView.tsx`: Vista en CÓMO? con:
   - Jerarquía Nivel → Área → Actividad → Recurso
-  - Filtro por fechas
+  - Filtro automático por uses_measurement = true
+  - Filtro manual por fechas
   - Edición inline de fechas reales (inicio y fin)
   - Botón editar en recursos
   - Callbacks: onEditResource, onRefresh
@@ -61,6 +66,13 @@ Organización jerárquica alternativa:
 Esta vista incluye:
 - Filtro por proveedor específico
 - Filtro por período de fechas (fecha real de inicio/fin)
+
+## Columna "Usa Med." en QUÉ? Por Fase
+- Columna añadida en el listado "Por Fase" de la pestaña QUÉ? (Actividades)
+- Posición: después de la columna "Opciones"
+- **Editable inline**: Click para alternar entre Sí/No
+- Badge visual: "Sí" (default) / "No" (secondary)
+- Actualiza `uses_measurement` en `budget_activities`
 
 ## Conversión de Unidades de Compra
 

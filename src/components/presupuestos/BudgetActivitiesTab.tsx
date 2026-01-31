@@ -1872,7 +1872,7 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
                   />
                 </TableHead>
                 <TableHead>ActividadID</TableHead>
-                <TableHead className="text-center w-16">Usa Med.</TableHead>
+                <TableHead className="text-center w-16">Uso Pres.</TableHead>
                 <TableHead>Actividad</TableHead>
                 <TableHead>Áreas</TableHead>
                 <TableHead>Opciones</TableHead>
@@ -1920,7 +1920,7 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
                               if (error) throw error;
                               await syncActivityResourcesRelatedUnits(activity.id);
                               fetchData();
-                              toast.success(`Usa Medición: ${newValue ? 'Sí' : 'No'}`);
+                              toast.success(`Uso en Presupuesto: ${newValue ? 'Sí' : 'No'}`);
                             } catch (err: any) {
                               toast.error('Error al actualizar');
                             }
@@ -2261,7 +2261,7 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
                               </Button>
                             </TableHead>
                             <TableHead>Opciones</TableHead>
-                            <TableHead>Usa Med.</TableHead>
+                            <TableHead>Uso Pres.</TableHead>
                             <TableHead>Unidad</TableHead>
                             <TableHead className="text-right">Uds Relac.</TableHead>
                             <TableHead>MediciónID</TableHead>
@@ -2350,7 +2350,7 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
                                             .eq('id', activity.id);
                                           if (error) throw error;
                                           fetchData();
-                                          toast.success(newValue ? 'Usa Medición: Sí' : 'Usa Medición: No');
+                                          toast.success(newValue ? 'Uso en Presupuesto: Sí' : 'Uso en Presupuesto: No');
                                         } catch (err: any) {
                                           toast.error('Error al actualizar');
                                         }
@@ -2495,7 +2495,7 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
                               </Button>
                             </TableHead>
                             <TableHead>Opciones</TableHead>
-                            <TableHead>Usa Med.</TableHead>
+                            <TableHead>Uso Pres.</TableHead>
                             <TableHead>Unidad</TableHead>
                             <TableHead className="text-right">Uds Relac.</TableHead>
                             <TableHead>MediciónID</TableHead>
@@ -2584,7 +2584,7 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
                                             .eq('id', activity.id);
                                           if (error) throw error;
                                           fetchData();
-                                          toast.success(newValue ? 'Usa Medición: Sí' : 'Usa Medición: No');
+                                          toast.success(newValue ? 'Uso en Presupuesto: Sí' : 'Uso en Presupuesto: No');
                                         } catch (err: any) {
                                           toast.error('Error al actualizar');
                                         }
@@ -2956,8 +2956,8 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
 
             <div className="flex items-center justify-between py-2 px-3 border rounded-lg bg-muted/30">
               <div className="space-y-0.5">
-                <Label htmlFor="uses_measurement" className="text-sm font-medium">Usa Medición</Label>
-                <p className="text-xs text-muted-foreground">Si NO, las Uds relacionadas serán 0,00</p>
+                <Label htmlFor="uses_measurement" className="text-sm font-medium">Uso en Presupuesto</Label>
+                <p className="text-xs text-muted-foreground">Si NO, las Uds relacionadas serán 0,00 y no aparecerá en Lista compra</p>
               </div>
               <Switch
                 id="uses_measurement"

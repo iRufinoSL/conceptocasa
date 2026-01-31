@@ -16,7 +16,8 @@ Existen dos ubicaciones de 'Lista compra':
 
 ### Filtro de Actividades
 - **IMPORTANTE**: Solo aparecen actividades donde `uses_measurement = true`
-- Las actividades con "Usa Med. = No" se excluyen automáticamente del listado
+- Las actividades con "Uso Pres. = No" se excluyen automáticamente del listado
+- Este campo ahora se llama "Uso en Presupuesto" (antes "Usa Medición")
 
 ### Campos Mostrados por Recurso
 - Nombre del recurso
@@ -67,12 +68,13 @@ Esta vista incluye:
 - Filtro por proveedor específico
 - Filtro por período de fechas (fecha real de inicio/fin)
 
-## Columna "Usa Med." en QUÉ? Por Fase
+## Columna "Uso Pres." en QUÉ? Por Fase
 - Columna añadida en el listado "Por Fase" de la pestaña QUÉ? (Actividades)
 - Posición: después de la columna "Opciones"
 - **Editable inline**: Click para alternar entre Sí/No
 - Badge visual: "Sí" (default) / "No" (secondary)
 - Actualiza `uses_measurement` en `budget_activities`
+- Renombrado de "Usa Med." a "Uso Pres." (Uso en Presupuesto)
 
 ## Conversión de Unidades de Compra
 

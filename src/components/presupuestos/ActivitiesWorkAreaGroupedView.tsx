@@ -325,7 +325,7 @@ export function ActivitiesWorkAreaGroupedView({
                             <TableHeader>
                               <TableRow>
                                 <TableHead>ActividadID</TableHead>
-                                <TableHead className="text-center w-16">Usa Med.</TableHead>
+                                <TableHead className="text-center w-16">Uso Pres.</TableHead>
                                 <TableHead>Actividad</TableHead>
                                 <TableHead>Fase</TableHead>
                                 <TableHead>Áreas</TableHead>

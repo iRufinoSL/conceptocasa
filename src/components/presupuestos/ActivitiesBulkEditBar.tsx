@@ -49,7 +49,7 @@ interface ActivitiesBulkEditBarProps {
 }
 
 const BULK_EDIT_FIELDS = [
-  { value: 'uses_measurement', label: 'Usa Medición', type: 'boolean' },
+  { value: 'uses_measurement', label: 'Uso en Presupuesto', type: 'boolean' },
   { value: 'opciones', label: 'Opciones', type: 'opciones' },
   { value: 'phase_id', label: 'Fase', type: 'phase' },
 ];

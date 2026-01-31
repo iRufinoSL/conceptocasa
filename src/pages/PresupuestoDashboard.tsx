@@ -1023,7 +1023,7 @@ export default function PresupuestoDashboard() {
                         <div>
                           <h4 className="font-medium">Recalcular Unidades Relacionadas</h4>
                           <p className="text-sm text-muted-foreground">
-                            Actualiza las Uds relacionadas de todos los recursos basándose en las mediciones y el flag "Usa Medición" de cada actividad.
+                            Actualiza las Uds relacionadas de todos los recursos basándose en las mediciones y el campo "Uso en Presupuesto" de cada actividad.
                           </p>
                         </div>
                         <Button 

@@ -64,6 +64,7 @@ interface Activity {
   opciones: string[];
   actual_start_date?: string | null;
   actual_end_date?: string | null;
+  uses_measurement?: boolean;
 }
 
 interface Phase {
@@ -227,7 +228,7 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
           .order('name'),
         supabase
           .from('budget_activities')
-          .select('id, code, name, phase_id, opciones, actual_start_date, actual_end_date')
+          .select('id, code, name, phase_id, opciones, actual_start_date, actual_end_date, uses_measurement')
           .eq('budget_id', budgetId)
           .order('code'),
         supabase

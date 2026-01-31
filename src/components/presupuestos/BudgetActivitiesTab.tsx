@@ -2244,99 +2244,129 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
                       <div className="border-t bg-muted/20 p-4">
                         <Table>
                           <TableHeader>
-                            <TableRow>
-                              <TableHead>
-                                <Button 
-                                  variant="ghost" 
-                                  size="sm" 
-                                  className="h-auto p-0 font-medium hover:bg-transparent"
-                                  onClick={toggleActivitySortOrder}
-                                >
-                                  ActividadID
-                                  {activitySortOrder === 'asc' ? (
-                                    <ArrowUp className="ml-1 h-3 w-3 inline" />
-                                  ) : (
-                                    <ArrowDown className="ml-1 h-3 w-3 inline" />
-                                  )}
-                                </Button>
-                              </TableHead>
-                              <TableHead>Opciones</TableHead>
-                              <TableHead>Unidad</TableHead>
-                              <TableHead className="text-right">Uds Relac.</TableHead>
-                              <TableHead>MediciónID</TableHead>
-                              <TableHead className="text-right">€SubTotal Recursos</TableHead>
-                              <TableHead>Archivos</TableHead>
-                              {(isAdmin || permissions.canEdit) && <TableHead className="w-20">Acciones</TableHead>}
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {sortActivitiesByActivityId(unassigned).map(activity => {
-                              const { relatedUnits, medicionId } = getMeasurementData(activity);
-                              const opciones = activity.opciones || ['A', 'B', 'C'];
-                              return (
-                                <TableRow key={activity.id}>
-                                  <TableCell className="font-mono text-sm">{generateActivityId(activity)}</TableCell>
-                                  <TableCell>
-                                    {canEditActivity(activity.id) ? (
-                                      <div className="flex gap-0.5">
-                                        {['A', 'B', 'C'].map(op => {
-                                          const isSelected = opciones.includes(op);
-                                          return (
-                                            <button
-                                              key={op}
-                                              onClick={async () => {
-                                                let newOpciones: string[];
-                                                if (isSelected) {
-                                                  if (opciones.length === 1) {
-                                                    toast.error('Debe haber al menos una opción seleccionada');
-                                                    return;
-                                                  }
-                                                  newOpciones = opciones.filter(o => o !== op);
-                                                } else {
-                                                  newOpciones = [...opciones, op].sort();
+                          <TableRow>
+                            <TableHead>
+                              <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                className="h-auto p-0 font-medium hover:bg-transparent"
+                                onClick={toggleActivitySortOrder}
+                              >
+                                ActividadID
+                                {activitySortOrder === 'asc' ? (
+                                  <ArrowUp className="ml-1 h-3 w-3 inline" />
+                                ) : (
+                                  <ArrowDown className="ml-1 h-3 w-3 inline" />
+                                )}
+                              </Button>
+                            </TableHead>
+                            <TableHead>Opciones</TableHead>
+                            <TableHead>Usa Med.</TableHead>
+                            <TableHead>Unidad</TableHead>
+                            <TableHead className="text-right">Uds Relac.</TableHead>
+                            <TableHead>MediciónID</TableHead>
+                            <TableHead className="text-right">€SubTotal Recursos</TableHead>
+                            <TableHead>Archivos</TableHead>
+                            {(isAdmin || permissions.canEdit) && <TableHead className="w-20">Acciones</TableHead>}
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {sortActivitiesByActivityId(unassigned).map(activity => {
+                            const { relatedUnits, medicionId } = getMeasurementData(activity);
+                            const opciones = activity.opciones || ['A', 'B', 'C'];
+                            return (
+                              <TableRow key={activity.id}>
+                                <TableCell className="font-mono text-sm">{generateActivityId(activity)}</TableCell>
+                                <TableCell>
+                                  {canEditActivity(activity.id) ? (
+                                    <div className="flex gap-0.5">
+                                      {['A', 'B', 'C'].map(op => {
+                                        const isSelected = opciones.includes(op);
+                                        return (
+                                          <button
+                                            key={op}
+                                            onClick={async () => {
+                                              let newOpciones: string[];
+                                              if (isSelected) {
+                                                if (opciones.length === 1) {
+                                                  toast.error('Debe haber al menos una opción seleccionada');
+                                                  return;
                                                 }
-                                                try {
-                                                  const { error } = await supabase
-                                                    .from('budget_activities')
-                                                    .update({ opciones: newOpciones })
-                                                    .eq('id', activity.id);
-                                                  if (error) throw error;
-                                                  fetchData();
-                                                  toast.success(`Opciones actualizadas`);
-                                                } catch (err: any) {
-                                                  toast.error('Error al actualizar opciones');
-                                                }
-                                              }}
-                                              className="cursor-pointer hover:opacity-80 transition-opacity"
-                                            >
-                                              <Badge 
-                                                variant={isSelected ? "default" : "outline"}
-                                                className={`text-xs px-1.5 ${
-                                                  isSelected 
-                                                    ? `${OPTION_COLORS[op]?.bg || ''} ${OPTION_COLORS[op]?.hover || ''} text-white` 
-                                                    : `${OPTION_COLORS[op]?.borderSolid || ''}/40 ${OPTION_COLORS[op]?.text || ''} opacity-60 hover:opacity-100`
-                                                }`}
-                                              >
-                                                {op}
-                                              </Badge>
-                                            </button>
-                                          );
-                                        })}
-                                      </div>
-                                    ) : (
-                                      <div className="flex gap-0.5">
-                                        {opciones.map(op => (
-                                          <Badge 
-                                            key={op} 
-                                            variant="outline" 
-                                            className={`text-xs px-1.5 ${OPTION_COLORS[op]?.borderSolid || ''} ${OPTION_COLORS[op]?.text || ''}`}
+                                                newOpciones = opciones.filter(o => o !== op);
+                                              } else {
+                                                newOpciones = [...opciones, op].sort();
+                                              }
+                                              try {
+                                                const { error } = await supabase
+                                                  .from('budget_activities')
+                                                  .update({ opciones: newOpciones })
+                                                  .eq('id', activity.id);
+                                                if (error) throw error;
+                                                fetchData();
+                                                toast.success(`Opciones actualizadas`);
+                                              } catch (err: any) {
+                                                toast.error('Error al actualizar opciones');
+                                              }
+                                            }}
+                                            className="cursor-pointer hover:opacity-80 transition-opacity"
                                           >
-                                            {op}
-                                          </Badge>
-                                        ))}
-                                      </div>
-                                    )}
-                                  </TableCell>
+                                            <Badge 
+                                              variant={isSelected ? "default" : "outline"}
+                                              className={`text-xs px-1.5 ${
+                                                isSelected 
+                                                  ? `${OPTION_COLORS[op]?.bg || ''} ${OPTION_COLORS[op]?.hover || ''} text-white` 
+                                                  : `${OPTION_COLORS[op]?.borderSolid || ''}/40 ${OPTION_COLORS[op]?.text || ''} opacity-60 hover:opacity-100`
+                                              }`}
+                                            >
+                                              {op}
+                                            </Badge>
+                                          </button>
+                                        );
+                                      })}
+                                    </div>
+                                  ) : (
+                                    <div className="flex gap-0.5">
+                                      {opciones.map(op => (
+                                        <Badge 
+                                          key={op} 
+                                          variant="outline" 
+                                          className={`text-xs px-1.5 ${OPTION_COLORS[op]?.borderSolid || ''} ${OPTION_COLORS[op]?.text || ''}`}
+                                        >
+                                          {op}
+                                        </Badge>
+                                      ))}
+                                    </div>
+                                  )}
+                                </TableCell>
+                                <TableCell>
+                                  {canEditActivity(activity.id) ? (
+                                    <button
+                                      onClick={async () => {
+                                        const newValue = !activity.uses_measurement;
+                                        try {
+                                          const { error } = await supabase
+                                            .from('budget_activities')
+                                            .update({ uses_measurement: newValue })
+                                            .eq('id', activity.id);
+                                          if (error) throw error;
+                                          fetchData();
+                                          toast.success(newValue ? 'Usa Medición: Sí' : 'Usa Medición: No');
+                                        } catch (err: any) {
+                                          toast.error('Error al actualizar');
+                                        }
+                                      }}
+                                      className="cursor-pointer hover:opacity-80 transition-opacity"
+                                    >
+                                      <Badge variant={activity.uses_measurement !== false ? 'default' : 'secondary'} className="text-xs">
+                                        {activity.uses_measurement !== false ? 'Sí' : 'No'}
+                                      </Badge>
+                                    </button>
+                                  ) : (
+                                    <Badge variant={activity.uses_measurement !== false ? 'default' : 'secondary'} className="text-xs">
+                                      {activity.uses_measurement !== false ? 'Sí' : 'No'}
+                                    </Badge>
+                                  )}
+                                </TableCell>
                                   <TableCell>{activity.measurement_unit}</TableCell>
                                   <TableCell className="text-right">
                                     {activity.measurement_id ? formatNumber(relatedUnits) : '-'}
@@ -2465,6 +2495,7 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
                               </Button>
                             </TableHead>
                             <TableHead>Opciones</TableHead>
+                            <TableHead>Usa Med.</TableHead>
                             <TableHead>Unidad</TableHead>
                             <TableHead className="text-right">Uds Relac.</TableHead>
                             <TableHead>MediciónID</TableHead>
@@ -2539,6 +2570,35 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
                                         </Badge>
                                       ))}
                                     </div>
+                                  )}
+                                </TableCell>
+                                <TableCell>
+                                  {canEditActivity(activity.id) ? (
+                                    <button
+                                      onClick={async () => {
+                                        const newValue = !activity.uses_measurement;
+                                        try {
+                                          const { error } = await supabase
+                                            .from('budget_activities')
+                                            .update({ uses_measurement: newValue })
+                                            .eq('id', activity.id);
+                                          if (error) throw error;
+                                          fetchData();
+                                          toast.success(newValue ? 'Usa Medición: Sí' : 'Usa Medición: No');
+                                        } catch (err: any) {
+                                          toast.error('Error al actualizar');
+                                        }
+                                      }}
+                                      className="cursor-pointer hover:opacity-80 transition-opacity"
+                                    >
+                                      <Badge variant={activity.uses_measurement !== false ? 'default' : 'secondary'} className="text-xs">
+                                        {activity.uses_measurement !== false ? 'Sí' : 'No'}
+                                      </Badge>
+                                    </button>
+                                  ) : (
+                                    <Badge variant={activity.uses_measurement !== false ? 'default' : 'secondary'} className="text-xs">
+                                      {activity.uses_measurement !== false ? 'Sí' : 'No'}
+                                    </Badge>
                                   )}
                                 </TableCell>
                                 <TableCell>{activity.measurement_unit}</TableCell>

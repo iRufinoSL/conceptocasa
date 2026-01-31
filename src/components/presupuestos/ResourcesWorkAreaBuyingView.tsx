@@ -196,8 +196,9 @@ export function ResourcesWorkAreaBuyingView({
 
   // Filter activities: only those with uses_measurement = true, then by date range
   const filteredActivities = useMemo(() => {
-    // First filter out activities where uses_measurement is false
-    const measurementActivities = activities.filter(activity => activity.uses_measurement !== false);
+    // First filter out activities where uses_measurement is false or null/undefined
+    // Only include activities explicitly marked as uses_measurement = true
+    const measurementActivities = activities.filter(activity => activity.uses_measurement === true);
     
     if (!startDate && !endDate) return measurementActivities;
     

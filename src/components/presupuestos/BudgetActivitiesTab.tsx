@@ -72,6 +72,7 @@ interface BudgetActivity {
   created_at: string;
   files_count?: number;
   resources_subtotal?: number;
+  signed_subtotal?: number;
   start_date: string | null;
   duration_days: number | null;
   tolerance_days: number | null;
@@ -457,10 +458,17 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
             filteredRelations
           );
 
+          // Calculate signed subtotal (sum of signed_subtotal from all resources in this activity)
+          const signedSubtotal = activityResources.reduce(
+            (sum, r) => sum + (r.signed_subtotal || 0),
+            0
+          );
+
           return {
             ...activity,
             files_count: count || 0,
-            resources_subtotal: resourcesSubtotal
+            resources_subtotal: resourcesSubtotal,
+            signed_subtotal: signedSubtotal
           };
         })
       );
@@ -2450,6 +2458,12 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
               0
             );
 
+            // Calculate phase signed subtotal (sum of signed_subtotal from all activities in this phase)
+            const phaseSignedSubtotal = phaseActivities.reduce(
+              (total, activity) => total + (activity.signed_subtotal || 0),
+              0
+            );
+
             return (
               <Collapsible key={phase.id} open={isExpanded} onOpenChange={() => togglePhaseExpanded(phase.id)}>
                 <div className="border rounded-lg">
@@ -2468,9 +2482,15 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
                           </p>
                         </div>
                       </div>
-                      <div className="text-right">
-                        <p className="text-xs text-muted-foreground">€SubTotal Recursos</p>
-                        <p className="font-mono font-semibold text-primary">{formatCurrency(phaseResourcesSubtotal)}</p>
+                      <div className="flex items-center gap-6">
+                        <div className="text-right">
+                          <p className="text-xs text-muted-foreground">€SubTotal Firmado</p>
+                          <p className="font-mono font-semibold text-amber-600">{formatCurrency(phaseSignedSubtotal)}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-xs text-muted-foreground">€SubTotal Recursos</p>
+                          <p className="font-mono font-semibold text-primary">{formatCurrency(phaseResourcesSubtotal)}</p>
+                        </div>
                       </div>
                     </div>
                   </CollapsibleTrigger>
@@ -2499,6 +2519,7 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
                             <TableHead>Unidad</TableHead>
                             <TableHead className="text-right">Uds Relac.</TableHead>
                             <TableHead>MediciónID</TableHead>
+                            <TableHead className="text-right">€SubTotal Firmado</TableHead>
                             <TableHead className="text-right">€SubTotal Recursos</TableHead>
                             <TableHead>Archivos</TableHead>
                             {(isAdmin || permissions.canEdit) && <TableHead className="w-20">Acciones</TableHead>}
@@ -2624,6 +2645,9 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
                                       {medicionId}
                                     </span>
                                   )}
+                                </TableCell>
+                                <TableCell className="text-right font-mono font-semibold text-amber-600">
+                                  {formatCurrency(activity.signed_subtotal || 0)}
                                 </TableCell>
                                 <TableCell className="text-right font-mono font-semibold text-primary">
                                   {formatCurrency(activity.resources_subtotal || 0)}

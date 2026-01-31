@@ -191,7 +191,7 @@ export function ActivitiesOptionsGroupedView({
                           <TableHead>Actividad</TableHead>
                           <TableHead>Opciones</TableHead>
                           <TableHead>Fase</TableHead>
-                          <TableHead className="text-center">Usa Med.</TableHead>
+                          <TableHead className="text-center">Uso Pres.</TableHead>
                           <TableHead className="text-right">€SubTotal</TableHead>
                           <TableHead>Archivos</TableHead>
                           {(isAdmin || canEdit) && <TableHead className="w-20">Acciones</TableHead>}

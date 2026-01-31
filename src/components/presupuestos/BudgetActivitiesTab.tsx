@@ -398,9 +398,12 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
           .select('id, name, level, work_area, area_id')
           .eq('budget_id', budgetId)
           .order('area_id', { ascending: true }),
+        // IMPORTANT: Filter by budget at query level to avoid the 1000-row default limit
+        // and ensure QUÉ? matches DÓNDE? (source of truth).
         supabase
           .from('budget_work_area_activities')
-          .select('activity_id, work_area_id')
+          .select('activity_id, work_area_id, budget_activities!inner(budget_id)')
+          .eq('budget_activities.budget_id', budgetId)
       ]);
 
       if (activitiesRes.error) throw activitiesRes.error;
@@ -432,9 +435,9 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
 
       // Filter work area relations to only those for activities in this budget
       const activityIds = (activitiesRes.data || []).map(a => a.id);
-      const filteredWorkAreaRelations = (workAreaRelationsRes.data || []).filter(
-        r => activityIds.includes(r.activity_id)
-      );
+      const filteredWorkAreaRelations = (workAreaRelationsRes.data || [])
+        .map((r: any) => ({ activity_id: r.activity_id, work_area_id: r.work_area_id }))
+        .filter((r: any) => activityIds.includes(r.activity_id));
 
       // Get file counts and resource subtotals for each activity
       // Pass fresh measurement data to avoid stale state issues
@@ -492,16 +495,18 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
           console.log('Work area relation change:', payload);
           // Refetch work area relations when changes occur
           const fetchWorkAreaRelations = async () => {
+            // IMPORTANT: Filter by budget at query level to avoid hitting default limits.
             const { data: workAreaRelationsRes } = await supabase
               .from('budget_work_area_activities')
-              .select('activity_id, work_area_id');
+              .select('activity_id, work_area_id, budget_activities!inner(budget_id)')
+              .eq('budget_activities.budget_id', budgetId);
             
             if (workAreaRelationsRes) {
               // Filter to only activities in this budget
               const activityIds = activities.map(a => a.id);
-              const filteredRelations = workAreaRelationsRes.filter(
-                r => activityIds.includes(r.activity_id)
-              );
+              const filteredRelations = workAreaRelationsRes
+                .map((r: any) => ({ activity_id: r.activity_id, work_area_id: r.work_area_id }))
+                .filter((r: any) => activityIds.includes(r.activity_id));
               setWorkAreaRelations(filteredRelations);
             }
           };
@@ -513,7 +518,7 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [activities]);
+  }, [activities, budgetId]);
 
   useEffect(() => {
     fetchData();

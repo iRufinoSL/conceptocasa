@@ -6,6 +6,9 @@ import { Badge } from '@/components/ui/badge';
 import { ChevronDown, ChevronRight, Pencil, Trash2, Package, Wrench, Truck, Briefcase, CheckSquare } from 'lucide-react';
 import { formatCurrency, formatNumber, formatPercent } from '@/lib/format-utils';
 import { ResourceInlineEdit } from './ResourceInlineEdit';
+import { InlineDatePicker } from '@/components/ui/inline-date-picker';
+import { format, parseISO, isValid } from 'date-fns';
+import { es } from 'date-fns/locale';
 
 interface BudgetResource {
   id: string;
@@ -30,6 +33,8 @@ interface Activity {
   code: string;
   name: string;
   phase_id: string | null;
+  actual_start_date?: string | null;
+  actual_end_date?: string | null;
 }
 
 interface Phase {
@@ -59,6 +64,7 @@ interface ResourcesTypePhaseActivityGroupedViewProps {
   onEdit: (resource: BudgetResource) => void;
   onDelete: (resource: BudgetResource) => void;
   onInlineUpdate: (id: string, field: string, value: any) => Promise<void>;
+  onActivityDateUpdate?: (activityId: string, field: 'actual_start_date' | 'actual_end_date', value: string | null) => Promise<void>;
   calculateFields: (resource: BudgetResource) => CalculatedFields;
   getActivityId: (activityId: string | null) => string;
   canEditResource: (resource: BudgetResource) => boolean;
@@ -99,6 +105,7 @@ export function ResourcesTypePhaseActivityGroupedView({
   onEdit,
   onDelete,
   onInlineUpdate,
+  onActivityDateUpdate,
   calculateFields,
   getActivityId,
   canEditResource,
@@ -480,13 +487,20 @@ export function ResourcesTypePhaseActivityGroupedView({
                           const isActivityExpanded = expandedActivities.has(activityKey);
                           const activityTotal = activityTotals[type]?.[phaseId]?.[activityId] || 0;
                           const activityName = getActivityName(activityId);
+                          const activityData = activityId !== '__no_activity__' ? activities.find(a => a.id === activityId) : null;
+                          
+                          const formatDateDisplay = (dateStr: string | null | undefined) => {
+                            if (!dateStr) return '-';
+                            const parsed = parseISO(dateStr);
+                            return isValid(parsed) ? format(parsed, 'dd/MM/yy', { locale: es }) : '-';
+                          };
+                          
                           return (
                             <Fragment key={activityKey}>
                               {/* Activity Header Row */}
                               <TableRow className="cursor-pointer hover:bg-primary/5 bg-primary/10">
                                 {isAdmin && <TableCell className="py-1" />}
                                 <TableCell 
-                                  colSpan={isAdmin ? 9 : 10}
                                   className="py-1 pl-20"
                                   onClick={() => toggleActivity(activityKey)}
                                 >
@@ -498,10 +512,44 @@ export function ResourcesTypePhaseActivityGroupedView({
                                     <span className="text-xs text-muted-foreground">
                                       ({activityResources.length} recursos)
                                     </span>
-                                    <span className="ml-auto font-medium text-sm text-primary">
-                                      Subtotal: {formatCurrency(activityTotal)}
-                                    </span>
                                   </div>
+                                </TableCell>
+                                {/* Fecha Real Inicio */}
+                                <TableCell className="py-1" colSpan={2} onClick={(e) => e.stopPropagation()}>
+                                  {activityData && onActivityDateUpdate ? (
+                                    <div className="flex items-center gap-1">
+                                      <span className="text-[10px] text-muted-foreground">Inicio:</span>
+                                      <InlineDatePicker
+                                        value={activityData.actual_start_date || null}
+                                        onChange={(value) => onActivityDateUpdate(activityId, 'actual_start_date', value)}
+                                        placeholder="--/--/--"
+                                        className="h-6 w-24 text-[10px]"
+                                      />
+                                    </div>
+                                  ) : (
+                                    <span className="text-xs text-muted-foreground">{formatDateDisplay(activityData?.actual_start_date)}</span>
+                                  )}
+                                </TableCell>
+                                {/* Fecha Real Final */}
+                                <TableCell className="py-1" colSpan={2} onClick={(e) => e.stopPropagation()}>
+                                  {activityData && onActivityDateUpdate ? (
+                                    <div className="flex items-center gap-1">
+                                      <span className="text-[10px] text-muted-foreground">Final:</span>
+                                      <InlineDatePicker
+                                        value={activityData.actual_end_date || null}
+                                        onChange={(value) => onActivityDateUpdate(activityId, 'actual_end_date', value)}
+                                        placeholder="--/--/--"
+                                        className="h-6 w-24 text-[10px]"
+                                      />
+                                    </div>
+                                  ) : (
+                                    <span className="text-xs text-muted-foreground">{formatDateDisplay(activityData?.actual_end_date)}</span>
+                                  )}
+                                </TableCell>
+                                <TableCell className="py-1" colSpan={isAdmin ? 4 : 5}>
+                                  <span className="font-medium text-sm text-primary">
+                                    Subtotal: {formatCurrency(activityTotal)}
+                                  </span>
                                 </TableCell>
                                 {isAdmin && <TableCell className="py-1" />}
                               </TableRow>

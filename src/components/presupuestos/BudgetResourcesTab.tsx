@@ -64,7 +64,8 @@ interface Activity {
   opciones: string[];
   actual_start_date?: string | null;
   actual_end_date?: string | null;
-  uses_measurement?: boolean;
+  // En BD es boolean NOT NULL ("Uso en Presupuesto")
+  uses_measurement: boolean;
 }
 
 interface Phase {
@@ -1711,10 +1712,7 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
                 ...r,
                 supplier_name: supplierNames[r.supplier_id || ''] || null
               }))}
-              activities={activities.map(a => ({
-                ...a,
-                uses_measurement: true
-              }))}
+              activities={activities}
               phases={phases}
               onEditResource={(resource) => {
                 const fullResource = resources.find(r => r.id === resource.id);

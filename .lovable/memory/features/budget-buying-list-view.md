@@ -4,15 +4,15 @@ Updated: now
 ## Descripción General
 Existen dos ubicaciones de 'Lista compra':
 1. **CUÁNDO? (Fases)**: Vista original con jerarquía Fase → ActividadID → Recursos
-2. **CÓMO? (Recursos)**: Nueva vista con jerarquía Área trabajo → ActividadID → Fecha real inicio → Recursos
+2. **CÓMO? (Recursos)**: Nueva vista con jerarquía Nivel → Área trabajo → ActividadID → Recursos
 
 ## Vista en CÓMO? (ResourcesWorkAreaBuyingView)
 
-### Jerarquía
-- **Área de trabajo** → Obtenida de la tabla budget_work_area_activities
+### Jerarquía Completa
+- **Nivel** → Primer agrupamiento (Planta Baja, Planta 1, etc.)
+- **Área de trabajo** → Segundo nivel de agrupación
 - **ActividadID** → Código completo con fase y nombre
-- **Fecha real inicio** → actual_start_date de la actividad (badge visual)
-- **Recurso** → Campos de lista de compra
+- **Recurso** → Campos de lista de compra con botón editar
 
 ### Campos Mostrados por Recurso
 - Nombre del recurso
@@ -21,6 +21,12 @@ Existen dos ubicaciones de 'Lista compra':
 - Uds calculadas (manual_units ?? related_units)
 - Coste ud externa (external_unit_cost)
 - Subtotal
+- **Botón Editar**: Abre formulario del recurso y vuelve a este listado
+
+### Fechas en la Fila de Actividad
+- **Fecha real inicio** (actual_start_date) - Editable inline
+- **Fecha real fin** (actual_end_date) - Editable inline
+- Ambas fechas usan InlineDatePicker con calendario en español
 
 ### Filtro por Rango de Fechas
 - Permite filtrar actividades por fecha real de inicio (actual_start_date)
@@ -29,7 +35,12 @@ Existen dos ubicaciones de 'Lista compra':
 - Botón "Limpiar" para resetear filtros
 
 ### Componente
-- `ResourcesWorkAreaBuyingView.tsx`: Vista en CÓMO? con filtro por fechas
+- `ResourcesWorkAreaBuyingView.tsx`: Vista en CÓMO? con:
+  - Jerarquía Nivel → Área → Actividad → Recurso
+  - Filtro por fechas
+  - Edición inline de fechas reales (inicio y fin)
+  - Botón editar en recursos
+  - Callbacks: onEditResource, onRefresh
 
 ## Vista en CUÁNDO? (BuyingListView)
 

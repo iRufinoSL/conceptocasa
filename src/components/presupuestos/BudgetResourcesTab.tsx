@@ -1715,6 +1715,11 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
                 uses_measurement: true
               }))}
               phases={phases}
+              onEditResource={(resource) => {
+                const fullResource = resources.find(r => r.id === resource.id);
+                if (fullResource) handleEdit(fullResource);
+              }}
+              onRefresh={fetchData}
             />
           ) : (
             <div className="rounded-md border overflow-x-auto">

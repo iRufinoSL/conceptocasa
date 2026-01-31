@@ -20,7 +20,9 @@ import {
   Settings,
   ChevronDown,
   Wallet,
+  LogOut,
 } from 'lucide-react';
+import { toast } from 'sonner';
 
 interface NavItem {
   title: string;
@@ -46,10 +48,10 @@ const navItems: NavItem[] = [
 export function AppNavDropdown() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { roles, isAdmin } = useAuth();
+  const { roles, isAdmin, signOut } = useAuth();
   const { hasAppAccess } = useAppAccess();
 
-  const currentItem = navItems.find(item => item.path === location.pathname);
+  const currentItem = navItems.find(item => location.pathname.startsWith(item.path));
   const isUserAdmin = isAdmin();
 
   // Filter items based on:
@@ -66,6 +68,15 @@ export function AppNavDropdown() {
     return hasAppAccess(item.appName);
   });
 
+  const handleSignOut = async () => {
+    const { error } = await signOut();
+    toast.success('Sesión cerrada');
+    navigate('/auth');
+    if (error) {
+      console.warn('[AppNavDropdown] Sign out warning:', error.message);
+    }
+  };
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -77,7 +88,8 @@ export function AppNavDropdown() {
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-48">
         {visibleItems.map((item, index) => {
-          const isActive = location.pathname === item.path;
+          const isActive = location.pathname === item.path || 
+            (item.path !== '/dashboard' && location.pathname.startsWith(item.path));
           const isDashboard = item.path === '/dashboard';
           
           return (
@@ -94,6 +106,16 @@ export function AppNavDropdown() {
             </div>
           );
         })}
+        
+        {/* Separador y botón Cerrar Aplicación */}
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          onClick={handleSignOut}
+          className="text-destructive focus:text-destructive focus:bg-destructive/10"
+        >
+          <LogOut className="h-4 w-4 mr-2" />
+          Cerrar aplicación
+        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );

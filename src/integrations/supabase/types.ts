@@ -242,6 +242,39 @@ export type Database = {
           },
         ]
       }
+      auth_otp_codes: {
+        Row: {
+          attempts: number
+          code: string
+          created_at: string
+          expires_at: string
+          id: string
+          phone_number: string
+          user_id: string
+          verified_at: string | null
+        }
+        Insert: {
+          attempts?: number
+          code: string
+          created_at?: string
+          expires_at?: string
+          id?: string
+          phone_number: string
+          user_id: string
+          verified_at?: string | null
+        }
+        Update: {
+          attempts?: number
+          code?: string
+          created_at?: string
+          expires_at?: string
+          id?: string
+          phone_number?: string
+          user_id?: string
+          verified_at?: string | null
+        }
+        Relationships: []
+      }
       budget_activities: {
         Row: {
           actual_end_date: string | null
@@ -2775,6 +2808,8 @@ export type Database = {
           system_notification_email: string | null
           system_notification_phone: string | null
           system_notification_type: string | null
+          two_factor_enabled: boolean | null
+          two_factor_phone: string | null
           updated_at: string | null
         }
         Insert: {
@@ -2794,6 +2829,8 @@ export type Database = {
           system_notification_email?: string | null
           system_notification_phone?: string | null
           system_notification_type?: string | null
+          two_factor_enabled?: boolean | null
+          two_factor_phone?: string | null
           updated_at?: string | null
         }
         Update: {
@@ -2813,6 +2850,8 @@ export type Database = {
           system_notification_email?: string | null
           system_notification_phone?: string | null
           system_notification_type?: string | null
+          two_factor_enabled?: boolean | null
+          two_factor_phone?: string | null
           updated_at?: string | null
         }
         Relationships: []
@@ -4841,6 +4880,7 @@ export type Database = {
         Args: { target_user_id: string }
         Returns: boolean
       }
+      cleanup_expired_otp_codes: { Args: never; Returns: undefined }
       generate_entry_code: { Args: { entry_year: number }; Returns: string }
       has_app_access: {
         Args: { _app_name: string; _user_id: string }

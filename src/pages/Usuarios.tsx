@@ -15,7 +15,8 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from 'sonner';
 import { z } from 'zod';
-import { ArrowLeft, Plus, UserCog, Pencil, Trash2, Search, FolderOpen, Monitor, UserCheck } from 'lucide-react';
+import { ArrowLeft, Plus, UserCog, Pencil, Trash2, Search, FolderOpen, Monitor, UserCheck, Shield, Smartphone } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import { AppNavDropdown } from '@/components/AppNavDropdown';
 import { UserBudgetAccessDialog } from '@/components/users/UserBudgetAccessDialog';
@@ -47,6 +48,9 @@ interface UserProfile {
   system_notification_email?: string | null;
   system_notification_phone?: string | null;
   system_notification_type?: string | null;
+  // 2FA settings
+  two_factor_enabled?: boolean;
+  two_factor_phone?: string | null;
 }
 
 type AppRole = 'administrador' | 'colaborador' | 'cliente';
@@ -92,6 +96,9 @@ export default function Usuarios() {
   const [editSystemNotificationEmail, setEditSystemNotificationEmail] = useState('');
   const [editSystemNotificationPhone, setEditSystemNotificationPhone] = useState('');
   const [editSystemNotificationType, setEditSystemNotificationType] = useState<string>('email');
+  // 2FA state
+  const [edit2FAEnabled, setEdit2FAEnabled] = useState(false);
+  const [edit2FAPhone, setEdit2FAPhone] = useState('');
   const [isEditing, setIsEditing] = useState(false);
   
   // Delete dialog
@@ -184,9 +191,14 @@ export default function Usuarios() {
           ?.filter(r => r.user_id === profile.id)
           .map(r => r.role) || [],
         budgetAccessCount: accessCounts[profile.id] || 0,
-        notification_email: profile.notification_email,
-        notification_phone: profile.notification_phone,
-        notification_type: profile.notification_type
+        personal_notification_email: profile.personal_notification_email,
+        personal_notification_phone: profile.personal_notification_phone,
+        personal_notification_type: profile.personal_notification_type,
+        system_notification_email: profile.system_notification_email,
+        system_notification_phone: profile.system_notification_phone,
+        system_notification_type: profile.system_notification_type,
+        two_factor_enabled: profile.two_factor_enabled,
+        two_factor_phone: profile.two_factor_phone
       }));
 
       setUsers(usersWithRoles);
@@ -391,6 +403,9 @@ export default function Usuarios() {
     setEditSystemNotificationEmail(userToEdit.system_notification_email || '');
     setEditSystemNotificationPhone(userToEdit.system_notification_phone || '');
     setEditSystemNotificationType(userToEdit.system_notification_type || 'email');
+    // 2FA settings
+    setEdit2FAEnabled(userToEdit.two_factor_enabled || false);
+    setEdit2FAPhone(userToEdit.two_factor_phone || '');
     setIsEditOpen(true);
   };
 
@@ -399,7 +414,7 @@ export default function Usuarios() {
     
     setIsEditing(true);
     try {
-      // Update profile with dual notification preferences
+      // Update profile with all settings including 2FA
       const { error: profileError } = await supabase
         .from('profiles')
         .update({ 
@@ -409,7 +424,9 @@ export default function Usuarios() {
           personal_notification_type: editPersonalNotificationType,
           system_notification_email: editSystemNotificationEmail || null,
           system_notification_phone: editSystemNotificationPhone || null,
-          system_notification_type: editSystemNotificationType
+          system_notification_type: editSystemNotificationType,
+          two_factor_enabled: edit2FAEnabled,
+          two_factor_phone: edit2FAEnabled ? edit2FAPhone : null
         })
         .eq('id', editingUser.id);
 
@@ -980,6 +997,48 @@ export default function Usuarios() {
                 </div>
               </div>
             )}
+
+            {/* 2FA Settings Section - for all users */}
+            <div className="space-y-4 pt-4 border-t">
+              <div className="flex items-center gap-2">
+                <Shield className="h-4 w-4 text-primary" />
+                <h4 className="font-medium text-sm">Autenticación en Dos Pasos (2FA)</h4>
+              </div>
+              
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label htmlFor="edit-2fa-toggle">Activar 2FA por SMS</Label>
+                  <p className="text-xs text-muted-foreground">
+                    El usuario recibirá un código SMS al iniciar sesión
+                  </p>
+                </div>
+                <Switch
+                  id="edit-2fa-toggle"
+                  checked={edit2FAEnabled}
+                  onCheckedChange={setEdit2FAEnabled}
+                />
+              </div>
+
+              {edit2FAEnabled && (
+                <div className="space-y-2">
+                  <Label htmlFor="edit-2fa-phone">Teléfono para 2FA</Label>
+                  <div className="relative">
+                    <Smartphone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="edit-2fa-phone"
+                      type="tel"
+                      placeholder="+34 612 345 678"
+                      value={edit2FAPhone}
+                      onChange={(e) => setEdit2FAPhone(e.target.value.replace(/[^\d+\s]/g, ''))}
+                      className="pl-10"
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Formato internacional: +34 seguido del número
+                  </p>
+                </div>
+              )}
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsEditOpen(false)}>

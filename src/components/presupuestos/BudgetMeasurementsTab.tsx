@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
-import { Plus, Search, Edit, Trash2, Ruler, Link2, Upload, FileUp, X, Download, Copy, List, Layers } from 'lucide-react';
+import { Plus, Search, Edit, Trash2, Ruler, Link2, Upload, FileUp, X, Download, Copy, List, Layers, ChevronFirst, ChevronLast, ChevronLeft, ChevronRight } from 'lucide-react';
 import { formatNumber } from '@/lib/format-utils';
 import { searchMatch } from '@/lib/search-utils';
 import { NumericInput } from '@/components/ui/numeric-input';
@@ -263,10 +263,11 @@ export function BudgetMeasurementsTab({ budgetId, isAdmin }: BudgetMeasurementsT
     setFormOpen(true);
   };
 
-  const handleSubmit = async () => {
+  // Save measurement and optionally navigate
+  const saveMeasurement = async (): Promise<boolean> => {
     if (!formData.name.trim()) {
       toast.error('El nombre es obligatorio');
-      return;
+      return false;
     }
 
     try {
@@ -366,6 +367,17 @@ export function BudgetMeasurementsTab({ budgetId, isAdmin }: BudgetMeasurementsT
         toast.success('Medición creada');
       }
 
+      return true;
+    } catch (error) {
+      console.error('Error saving measurement:', error);
+      toast.error('Error al guardar la medición');
+      return false;
+    }
+  };
+
+  const handleSubmit = async () => {
+    const success = await saveMeasurement();
+    if (success) {
       setFormOpen(false);
       await fetchData();
 
@@ -377,11 +389,52 @@ export function BudgetMeasurementsTab({ budgetId, isAdmin }: BudgetMeasurementsT
           window.scrollTo({ top, behavior: 'instant' });
         });
       }
-    } catch (error) {
-      console.error('Error saving measurement:', error);
-      toast.error('Error al guardar la medición');
     }
   };
+
+  // Get current measurement index in filteredMeasurements
+  const currentMeasurementIndex = useMemo(() => {
+    if (!editingMeasurement) return -1;
+    return filteredMeasurements.findIndex(m => m.id === editingMeasurement.id);
+  }, [editingMeasurement, filteredMeasurements]);
+
+  // Navigation handlers for the form
+  const navigateToMeasurement = async (direction: 'first' | 'prev' | 'next' | 'last') => {
+    if (!editingMeasurement || filteredMeasurements.length === 0) return;
+
+    // First save current changes
+    const success = await saveMeasurement();
+    if (!success) return;
+
+    // Refresh data to get updated measurements
+    await fetchData();
+
+    // Determine target index
+    let targetIndex = currentMeasurementIndex;
+    switch (direction) {
+      case 'first':
+        targetIndex = 0;
+        break;
+      case 'prev':
+        targetIndex = Math.max(0, currentMeasurementIndex - 1);
+        break;
+      case 'next':
+        targetIndex = Math.min(filteredMeasurements.length - 1, currentMeasurementIndex + 1);
+        break;
+      case 'last':
+        targetIndex = filteredMeasurements.length - 1;
+        break;
+    }
+
+    // Open the target measurement form
+    const targetMeasurement = filteredMeasurements[targetIndex];
+    if (targetMeasurement) {
+      openEditForm(targetMeasurement);
+    }
+  };
+
+  const canNavigatePrev = currentMeasurementIndex > 0;
+  const canNavigateNext = currentMeasurementIndex < filteredMeasurements.length - 1;
 
   const handleDelete = async () => {
     if (!measurementToDelete) return;
@@ -1059,9 +1112,58 @@ export function BudgetMeasurementsTab({ budgetId, isAdmin }: BudgetMeasurementsT
       <Dialog open={formOpen} onOpenChange={setFormOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>
-              {editingMeasurement ? 'Editar Medición' : 'Nueva Medición'}
-            </DialogTitle>
+            <div className="flex items-center justify-between">
+              <DialogTitle>
+                {editingMeasurement ? 'Editar Medición' : 'Nueva Medición'}
+              </DialogTitle>
+              {editingMeasurement && filteredMeasurements.length > 1 && (
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => navigateToMeasurement('first')}
+                    disabled={!canNavigatePrev}
+                    title="Primera medición"
+                    className="h-8 w-8"
+                  >
+                    <ChevronFirst className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => navigateToMeasurement('prev')}
+                    disabled={!canNavigatePrev}
+                    title="Medición anterior"
+                    className="h-8 w-8"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <span className="text-sm text-muted-foreground px-2 min-w-[60px] text-center">
+                    {currentMeasurementIndex + 1} / {filteredMeasurements.length}
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => navigateToMeasurement('next')}
+                    disabled={!canNavigateNext}
+                    title="Medición siguiente"
+                    className="h-8 w-8"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => navigateToMeasurement('last')}
+                    disabled={!canNavigateNext}
+                    title="Última medición"
+                    className="h-8 w-8"
+                  >
+                    <ChevronLast className="h-4 w-4" />
+                  </Button>
+                </div>
+              )}
+            </div>
             <DialogDescription>
               {editingMeasurement ? 'Modifica los datos de la medición' : 'Crea una nueva medición para el presupuesto'}
             </DialogDescription>

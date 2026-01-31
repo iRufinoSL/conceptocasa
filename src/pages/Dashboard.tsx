@@ -130,7 +130,8 @@ export default function Dashboard() {
   const [checkingRedirect, setCheckingRedirect] = useState(true);
   const redirectCheckedRef = useRef(false);
 
-  // Smart redirect: Restore last route or redirect clients to their budget
+  // Smart redirect: Only for clients who don't have dashboard access
+  // Regular users clicking "Panel de control" should stay on dashboard
   useEffect(() => {
     if (loading || rolesLoading || !user || redirectCheckedRef.current) {
       if (!loading && !rolesLoading) {
@@ -143,20 +144,7 @@ export default function Dashboard() {
       redirectCheckedRef.current = true;
       
       try {
-        // Fetch last route from profile
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('last_route')
-          .eq('id', user.id)
-          .single();
-
-        // If user has a saved route that's not the dashboard, redirect there
-        if (profile?.last_route && profile.last_route !== '/dashboard') {
-          navigate(profile.last_route, { replace: true });
-          return;
-        }
-
-        // For clients: redirect to their first assigned budget
+        // Only redirect clients to their first budget (they don't have dashboard access)
         if (isCliente() && !isAdmin() && userPresupuestos.length > 0) {
           const firstBudget = userPresupuestos[0];
           navigate(`/presupuestos/${firstBudget.presupuesto_id}`, { replace: true });

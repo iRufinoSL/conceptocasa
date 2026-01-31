@@ -5,7 +5,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ChevronRight, ChevronDown, Package, MapPin, ClipboardList, Calendar, ShoppingCart, Building2, Pencil, CalendarCheck } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { ChevronRight, ChevronDown, Package, MapPin, ClipboardList, Calendar, ShoppingCart, Building2, Pencil, CalendarCheck, RefreshCw } from 'lucide-react';
 import { formatCurrency, formatNumber } from '@/lib/format-utils';
 import { formatActividadId } from '@/lib/activity-id';
 import { cn } from '@/lib/utils';
@@ -13,6 +14,11 @@ import { format, parseISO, isWithinInterval } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { InlineDatePicker } from '@/components/ui/inline-date-picker';
 import { toast } from 'sonner';
+
+// Unit options - same as measurement units
+const UNIT_OPTIONS = [
+  'ud', 'm', 'm2', 'm3', 'ml', 'kg', 'l', 't', 'h', 'día', 'mes', 'año', 'pa', '%'
+];
 
 interface Phase {
   id: string;
@@ -65,7 +71,7 @@ interface ResourcesWorkAreaBuyingViewProps {
 
 export function ResourcesWorkAreaBuyingView({ 
   budgetId,
-  resources, 
+  resources: initialResources, 
   activities: initialActivities, 
   phases,
   onEditResource,
@@ -75,8 +81,9 @@ export function ResourcesWorkAreaBuyingView({
   const [expandedWorkAreas, setExpandedWorkAreas] = useState<Set<string>>(new Set());
   const [expandedActivities, setExpandedActivities] = useState<Set<string>>(new Set());
   
-  // Local copy of activities for inline date editing
+  // Local copy of activities and resources for inline editing
   const [activities, setActivities] = useState<Activity[]>(initialActivities);
+  const [resources, setResources] = useState<Resource[]>(initialResources);
   
   // Date range filter
   const [startDate, setStartDate] = useState<string>('');
@@ -86,11 +93,23 @@ export function ResourcesWorkAreaBuyingView({
   const [workAreas, setWorkAreas] = useState<WorkArea[]>([]);
   const [workAreaActivityLinks, setWorkAreaActivityLinks] = useState<{ work_area_id: string; activity_id: string }[]>([]);
   const [loading, setLoading] = useState(true);
+  
+  // Track which resource is being inline edited
+  const [editingResource, setEditingResource] = useState<string | null>(null);
+  const [editValues, setEditValues] = useState<{
+    purchase_unit_cost?: string;
+    purchase_unit?: string;
+    purchase_unit_quantity?: string;
+  }>({});
 
-  // Sync activities when props change
+  // Sync activities and resources when props change
   useEffect(() => {
     setActivities(initialActivities);
   }, [initialActivities]);
+  
+  useEffect(() => {
+    setResources(initialResources);
+  }, [initialResources]);
 
   // Fetch work areas and their activity links
   useEffect(() => {
@@ -176,12 +195,70 @@ export function ResourcesWorkAreaBuyingView({
       ));
 
       toast.success('Fecha actualizada');
-      onRefresh?.();
     } catch (error) {
       console.error('Error updating date:', error);
       toast.error('Error al actualizar la fecha');
     }
-  }, [onRefresh]);
+  }, []);
+  
+  // Handle inline resource field update
+  const handleResourceFieldUpdate = useCallback(async (
+    resourceId: string,
+    updates: {
+      purchase_unit_cost?: number | null;
+      purchase_unit?: string | null;
+      purchase_unit_quantity?: number | null;
+    }
+  ) => {
+    try {
+      const { error } = await supabase
+        .from('budget_activity_resources')
+        .update(updates)
+        .eq('id', resourceId);
+
+      if (error) throw error;
+
+      // Update local state
+      setResources(prev => prev.map(r => 
+        r.id === resourceId ? { ...r, ...updates } : r
+      ));
+
+      toast.success('Recurso actualizado');
+      setEditingResource(null);
+      setEditValues({});
+    } catch (error) {
+      console.error('Error updating resource:', error);
+      toast.error('Error al actualizar el recurso');
+    }
+  }, []);
+  
+  // Start inline editing for a resource
+  const startEditing = (resource: Resource) => {
+    const calculatedUnits = resource.manual_units ?? resource.related_units ?? 0;
+    setEditingResource(resource.id);
+    setEditValues({
+      purchase_unit_cost: String(resource.purchase_unit_cost ?? resource.external_unit_cost ?? 0),
+      purchase_unit: resource.purchase_unit ?? resource.unit ?? 'ud',
+      purchase_unit_quantity: String(resource.purchase_unit_quantity ?? calculatedUnits)
+    });
+  };
+  
+  // Save inline edits
+  const saveEditing = () => {
+    if (!editingResource) return;
+    
+    handleResourceFieldUpdate(editingResource, {
+      purchase_unit_cost: editValues.purchase_unit_cost ? parseFloat(editValues.purchase_unit_cost) : null,
+      purchase_unit: editValues.purchase_unit || null,
+      purchase_unit_quantity: editValues.purchase_unit_quantity ? parseFloat(editValues.purchase_unit_quantity) : null
+    });
+  };
+  
+  // Cancel inline editing
+  const cancelEditing = () => {
+    setEditingResource(null);
+    setEditValues({});
+  };
 
   // Map activity_id to work areas
   const activityToWorkAreas = useMemo(() => {
@@ -196,8 +273,6 @@ export function ResourcesWorkAreaBuyingView({
 
   // Filter activities: only those with uses_measurement = true, then by date range
   const filteredActivities = useMemo(() => {
-    // First filter out activities where uses_measurement is false or null/undefined
-    // Only include activities explicitly marked as uses_measurement = true
     const measurementActivities = activities.filter(activity => activity.uses_measurement === true);
     
     if (!startDate && !endDate) return measurementActivities;
@@ -209,7 +284,6 @@ export function ResourcesWorkAreaBuyingView({
       try {
         const actStartDate = parseISO(actStart);
         
-        // Check if within range
         if (startDate && endDate) {
           return isWithinInterval(actStartDate, {
             start: parseISO(startDate),
@@ -267,7 +341,6 @@ export function ResourcesWorkAreaBuyingView({
 
       const workAreaIds = activityToWorkAreas.get(activity.id) || [];
       if (workAreaIds.length === 0) {
-        // Use a synthetic "Sin área" group
         workAreaIds.push('__unassigned__');
       }
 
@@ -281,7 +354,6 @@ export function ResourcesWorkAreaBuyingView({
 
         const levelKey = wa.level || 'Sin nivel';
 
-        // Initialize level if needed
         if (!levelGroups.has(levelKey)) {
           levelGroups.set(levelKey, {
             level: levelKey,
@@ -293,7 +365,6 @@ export function ResourcesWorkAreaBuyingView({
 
         const levelGroup = levelGroups.get(levelKey)!;
 
-        // Initialize work area if needed
         if (!levelGroup.workAreas.has(waId)) {
           levelGroup.workAreas.set(waId, {
             workArea: wa,
@@ -315,8 +386,10 @@ export function ResourcesWorkAreaBuyingView({
         const actGroup = waGroup.activities.get(activity.id)!;
         activityResources.forEach(r => {
           actGroup.resources.push(r);
-          const units = r.manual_units ?? r.related_units ?? 0;
-          const subtotal = (r.external_unit_cost ?? 0) * units;
+          // Calculate subtotal for buying list using purchase fields or fallbacks
+          const purchaseQty = r.purchase_unit_quantity ?? r.manual_units ?? r.related_units ?? 0;
+          const purchaseCost = r.purchase_unit_cost ?? r.external_unit_cost ?? 0;
+          const subtotal = purchaseQty * purchaseCost;
           waGroup.resourceCount++;
           waGroup.total += subtotal;
           levelGroup.resourceCount++;
@@ -390,7 +463,7 @@ export function ResourcesWorkAreaBuyingView({
 
   return (
     <div className="space-y-4">
-      {/* Date Range Filter */}
+      {/* Date Range Filter with Refresh Button */}
       <div className="flex flex-wrap items-end gap-4 p-4 bg-muted/30 rounded-lg border">
         <div className="flex items-center gap-2">
           <Calendar className="h-5 w-5 text-muted-foreground" />
@@ -437,6 +510,20 @@ export function ResourcesWorkAreaBuyingView({
           )}
         </div>
         <div className="flex-1" />
+        
+        {/* Refresh Button */}
+        {onRefresh && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onRefresh}
+            className="gap-2"
+          >
+            <RefreshCw className="h-4 w-4" />
+            Actualizar
+          </Button>
+        )}
+        
         <Badge variant="secondary" className="h-7">
           Total: {formatCurrency(grandTotal)}
         </Badge>
@@ -471,7 +558,7 @@ export function ResourcesWorkAreaBuyingView({
             <Collapsible key={levelKey} open={isLevelExpanded} onOpenChange={() => toggleLevel(levelKey)}>
               <div className={cn("border rounded-lg", isUnassignedLevel && "border-dashed")}>
                 <CollapsibleTrigger asChild>
-                  <div className="flex items-center gap-3 p-3 cursor-pointer hover:bg-muted/50 transition-colors bg-muted/20">
+                  <div className="flex items-center gap-3 p-3 cursor-pointer hover:bg-muted/50 transition-colors bg-primary/5">
                     {isLevelExpanded ? (
                       <ChevronDown className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                     ) : (
@@ -493,7 +580,7 @@ export function ResourcesWorkAreaBuyingView({
                     </div>
                     <div className="text-right">
                       <p className="font-bold text-sm">{formatCurrency(levelGroup.total)}</p>
-                      <p className="text-[10px] text-muted-foreground">Coste Base</p>
+                      <p className="text-[10px] text-muted-foreground">Total Lista Compra</p>
                     </div>
                   </div>
                 </CollapsibleTrigger>
@@ -516,13 +603,13 @@ export function ResourcesWorkAreaBuyingView({
                         <Collapsible key={waKey} open={isWaExpanded} onOpenChange={() => toggleWorkArea(waKey)}>
                           <div className={cn("border rounded-md", isUnassignedWa && "border-dashed")}>
                             <CollapsibleTrigger asChild>
-                              <div className="flex items-center gap-3 p-2.5 cursor-pointer hover:bg-muted/30 transition-colors">
+                              <div className="flex items-center gap-3 p-2.5 cursor-pointer hover:bg-accent/50 transition-colors bg-accent/20">
                                 {isWaExpanded ? (
                                   <ChevronDown className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
                                 ) : (
                                   <ChevronRight className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
                                 )}
-                                <MapPin className={cn("h-4 w-4 flex-shrink-0", isUnassignedWa ? "text-muted-foreground" : "text-primary")} />
+                                <MapPin className={cn("h-4 w-4 flex-shrink-0", isUnassignedWa ? "text-muted-foreground" : "text-accent-foreground")} />
                                 <div className="flex-1 min-w-0">
                                   <p className={cn("font-semibold truncate", isUnassignedWa && "text-muted-foreground")}>
                                     {waGroup.workArea.name}
@@ -542,8 +629,9 @@ export function ResourcesWorkAreaBuyingView({
                                   const actKey = `${waKey}-${actGroup.activity.id}`;
                                   const isActivityExpanded = expandedActivities.has(actKey);
                                   const activityTotal = actGroup.resources.reduce((sum, r) => {
-                                    const units = r.manual_units ?? r.related_units ?? 0;
-                                    return sum + (r.external_unit_cost ?? 0) * units;
+                                    const qty = r.purchase_unit_quantity ?? r.manual_units ?? r.related_units ?? 0;
+                                    const cost = r.purchase_unit_cost ?? r.external_unit_cost ?? 0;
+                                    return sum + qty * cost;
                                   }, 0);
 
                                   return (
@@ -588,13 +676,30 @@ export function ResourcesWorkAreaBuyingView({
                                           </div>
                                         </CollapsibleTrigger>
                                         <CollapsibleContent>
-                                          <div className="border-t divide-y">
+                                          <div className="border-t">
+                                            {/* Resource header row */}
+                                            <div className="flex items-center gap-2 px-3 py-1.5 bg-muted/30 text-[10px] text-muted-foreground font-medium border-b">
+                                              <div className="w-5" />
+                                              <div className="flex-1 min-w-0">Recurso</div>
+                                              <div className="w-24 text-center">Suministrador</div>
+                                              <div className="w-20 text-center">€Coste ud compra</div>
+                                              <div className="w-16 text-center">Ud compra</div>
+                                              <div className="w-20 text-center">Uds compra</div>
+                                              <div className="w-24 text-right">€SubTotal Lista</div>
+                                              <div className="w-16" />
+                                            </div>
                                             {actGroup.resources.map(resource => {
-                                              const units = resource.manual_units ?? resource.related_units ?? 0;
-                                              const subtotal = units * (resource.external_unit_cost ?? 0);
+                                              const isEditing = editingResource === resource.id;
+                                              const calculatedUnits = resource.manual_units ?? resource.related_units ?? 0;
+                                              
+                                              // Display values: prefer purchase fields, fall back to original
+                                              const displayPurchaseCost = resource.purchase_unit_cost ?? resource.external_unit_cost ?? 0;
+                                              const displayPurchaseUnit = resource.purchase_unit ?? resource.unit ?? 'ud';
+                                              const displayPurchaseQty = resource.purchase_unit_quantity ?? calculatedUnits;
+                                              const buyingSubtotal = displayPurchaseQty * displayPurchaseCost;
 
                                               return (
-                                                <div key={resource.id} className="flex items-center gap-2 px-3 py-2 bg-muted/5 hover:bg-muted/10">
+                                                <div key={resource.id} className="flex items-center gap-2 px-3 py-2 bg-muted/5 hover:bg-muted/10 border-b last:border-b-0">
                                                   <Package className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
                                                   <div className="flex-1 min-w-0">
                                                     <p className="text-sm truncate">{resource.name}</p>
@@ -604,38 +709,137 @@ export function ResourcesWorkAreaBuyingView({
                                                           {resource.resource_type}
                                                         </Badge>
                                                       )}
-                                                      {resource.supplier_name && (
-                                                        <span className="flex items-center gap-1 truncate">
-                                                          <Building2 className="h-3 w-3" />
-                                                          {resource.supplier_name}
-                                                        </span>
-                                                      )}
                                                     </div>
                                                   </div>
-                                                  <div className="text-right text-xs whitespace-nowrap">
-                                                    <p className="font-medium">{formatNumber(units)} {resource.unit || 'ud'}</p>
-                                                    <p className="text-muted-foreground">Uds calc.</p>
+                                                  
+                                                  {/* Supplier */}
+                                                  <div className="w-24 text-center">
+                                                    {resource.supplier_name ? (
+                                                      <span className="text-xs truncate flex items-center justify-center gap-1">
+                                                        <Building2 className="h-3 w-3 text-muted-foreground" />
+                                                        <span className="truncate max-w-16">{resource.supplier_name}</span>
+                                                      </span>
+                                                    ) : (
+                                                      <span className="text-xs text-muted-foreground">-</span>
+                                                    )}
                                                   </div>
-                                                  <div className="text-right text-xs whitespace-nowrap">
-                                                    <p className="font-medium">{formatCurrency(resource.external_unit_cost ?? 0)}</p>
-                                                    <p className="text-muted-foreground">Coste ud</p>
+                                                  
+                                                  {/* Purchase Unit Cost - inline editable */}
+                                                  <div className="w-20 text-center">
+                                                    {isEditing ? (
+                                                      <Input
+                                                        type="number"
+                                                        step="0.01"
+                                                        value={editValues.purchase_unit_cost || ''}
+                                                        onChange={(e) => setEditValues(prev => ({ ...prev, purchase_unit_cost: e.target.value }))}
+                                                        className="h-6 text-xs text-center px-1"
+                                                        onClick={(e) => e.stopPropagation()}
+                                                      />
+                                                    ) : (
+                                                      <span className="text-xs font-medium">{formatCurrency(displayPurchaseCost)}</span>
+                                                    )}
                                                   </div>
-                                                  <div className="text-right min-w-[80px]">
-                                                    <p className="text-sm font-semibold tabular-nums">{formatCurrency(subtotal)}</p>
+                                                  
+                                                  {/* Purchase Unit - inline editable */}
+                                                  <div className="w-16 text-center">
+                                                    {isEditing ? (
+                                                      <Select
+                                                        value={editValues.purchase_unit || 'ud'}
+                                                        onValueChange={(v) => setEditValues(prev => ({ ...prev, purchase_unit: v }))}
+                                                      >
+                                                        <SelectTrigger className="h-6 text-xs px-1" onClick={(e) => e.stopPropagation()}>
+                                                          <SelectValue />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                          {UNIT_OPTIONS.map(unit => (
+                                                            <SelectItem key={unit} value={unit} className="text-xs">{unit}</SelectItem>
+                                                          ))}
+                                                        </SelectContent>
+                                                      </Select>
+                                                    ) : (
+                                                      <span className="text-xs text-muted-foreground">{displayPurchaseUnit}</span>
+                                                    )}
                                                   </div>
-                                                  {onEditResource && (
-                                                    <Button
-                                                      variant="ghost"
-                                                      size="icon"
-                                                      className="h-7 w-7 shrink-0"
-                                                      onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        onEditResource(resource);
-                                                      }}
-                                                    >
-                                                      <Pencil className="h-3.5 w-3.5" />
-                                                    </Button>
-                                                  )}
+                                                  
+                                                  {/* Purchase Quantity - inline editable */}
+                                                  <div className="w-20 text-center">
+                                                    {isEditing ? (
+                                                      <Input
+                                                        type="number"
+                                                        step="0.01"
+                                                        value={editValues.purchase_unit_quantity || ''}
+                                                        onChange={(e) => setEditValues(prev => ({ ...prev, purchase_unit_quantity: e.target.value }))}
+                                                        className="h-6 text-xs text-center px-1"
+                                                        onClick={(e) => e.stopPropagation()}
+                                                      />
+                                                    ) : (
+                                                      <span className="text-xs font-medium">{formatNumber(displayPurchaseQty)}</span>
+                                                    )}
+                                                  </div>
+                                                  
+                                                  {/* Buying List Subtotal (calculated) */}
+                                                  <div className="w-24 text-right">
+                                                    <p className="text-sm font-semibold tabular-nums text-primary">{formatCurrency(buyingSubtotal)}</p>
+                                                  </div>
+                                                  
+                                                  {/* Actions */}
+                                                  <div className="w-16 flex items-center justify-end gap-1">
+                                                    {isEditing ? (
+                                                      <>
+                                                        <Button
+                                                          variant="ghost"
+                                                          size="icon"
+                                                          className="h-6 w-6"
+                                                          onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            saveEditing();
+                                                          }}
+                                                        >
+                                                          <CalendarCheck className="h-3 w-3 text-green-600" />
+                                                        </Button>
+                                                        <Button
+                                                          variant="ghost"
+                                                          size="icon"
+                                                          className="h-6 w-6"
+                                                          onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            cancelEditing();
+                                                          }}
+                                                        >
+                                                          <span className="text-xs text-muted-foreground">✕</span>
+                                                        </Button>
+                                                      </>
+                                                    ) : (
+                                                      <>
+                                                        <Button
+                                                          variant="ghost"
+                                                          size="icon"
+                                                          className="h-6 w-6"
+                                                          onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            startEditing(resource);
+                                                          }}
+                                                          title="Editar campos de compra"
+                                                        >
+                                                          <Pencil className="h-3 w-3" />
+                                                        </Button>
+                                                        {onEditResource && (
+                                                          <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="h-6 w-6"
+                                                            onClick={(e) => {
+                                                              e.stopPropagation();
+                                                              onEditResource(resource);
+                                                            }}
+                                                            title="Abrir formulario completo"
+                                                          >
+                                                            <ChevronRight className="h-3 w-3" />
+                                                          </Button>
+                                                        )}
+                                                      </>
+                                                    )}
+                                                  </div>
                                                 </div>
                                               );
                                             })}

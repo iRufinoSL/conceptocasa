@@ -876,6 +876,23 @@ export default function Usuarios() {
               />
             </div>
             <div className="space-y-2">
+              <Label htmlFor="edit-phone">Teléfono Móvil</Label>
+              <div className="relative">
+                <Smartphone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  id="edit-phone"
+                  type="tel"
+                  placeholder="+34 612 345 678"
+                  value={edit2FAPhone}
+                  onChange={(e) => setEdit2FAPhone(e.target.value.replace(/[^\d+\s]/g, ''))}
+                  className="pl-10"
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Formato internacional: +34 seguido del número. Necesario para recibir SMS (2FA y notificaciones).
+              </p>
+            </div>
+            <div className="space-y-2">
               <Label htmlFor="edit-role">Rol</Label>
               <Select value={editRole} onValueChange={(value: AppRole) => setEditRole(value)}>
                 <SelectTrigger>
@@ -1015,28 +1032,26 @@ export default function Usuarios() {
                 <Switch
                   id="edit-2fa-toggle"
                   checked={edit2FAEnabled}
-                  onCheckedChange={setEdit2FAEnabled}
+                  onCheckedChange={(checked) => {
+                    if (checked && !edit2FAPhone?.trim()) {
+                      toast.error('Debes configurar un teléfono móvil para activar 2FA');
+                      return;
+                    }
+                    setEdit2FAEnabled(checked);
+                  }}
                 />
               </div>
 
-              {edit2FAEnabled && (
-                <div className="space-y-2">
-                  <Label htmlFor="edit-2fa-phone">Teléfono para 2FA</Label>
-                  <div className="relative">
-                    <Smartphone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      id="edit-2fa-phone"
-                      type="tel"
-                      placeholder="+34 612 345 678"
-                      value={edit2FAPhone}
-                      onChange={(e) => setEdit2FAPhone(e.target.value.replace(/[^\d+\s]/g, ''))}
-                      className="pl-10"
-                    />
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Formato internacional: +34 seguido del número
-                  </p>
-                </div>
+              {edit2FAEnabled && !edit2FAPhone?.trim() && (
+                <p className="text-xs text-destructive">
+                  ⚠️ Configura el teléfono móvil arriba para que el 2FA funcione correctamente
+                </p>
+              )}
+              
+              {edit2FAEnabled && edit2FAPhone?.trim() && (
+                <p className="text-xs text-muted-foreground">
+                  Los códigos se enviarán al: <span className="font-medium">{edit2FAPhone}</span>
+                </p>
               )}
             </div>
           </div>

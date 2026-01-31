@@ -298,6 +298,16 @@ export default function Usuarios() {
           toast.error('Usuario creado pero hubo un error al asignar el rol');
         }
 
+        // Mark user as needing password change on first login
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .update({ password_change_required: true })
+          .eq('id', data.user.id);
+
+        if (profileError) {
+          console.error('Error marking password change required:', profileError);
+        }
+
         // Assign selected budget access
         if (selectedBudgets.length > 0) {
           const budgetAccess = selectedBudgets.map(budgetId => ({

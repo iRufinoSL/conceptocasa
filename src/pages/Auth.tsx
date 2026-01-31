@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useVersionCheck } from '@/hooks/useVersionCheck';
 import { Button } from '@/components/ui/button';
@@ -21,6 +21,7 @@ type AuthMode = 'login' | 'forgot-password' | 'reset-password';
 export default function Auth() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const location = useLocation();
   const { user, loading, signIn, resetPasswordForEmail, updatePassword } = useAuth();
   const { hasUpdate, updateApp } = useVersionCheck(true);
   
@@ -48,9 +49,11 @@ export default function Auth() {
   useEffect(() => {
     // Only redirect if logged in AND not in reset-password mode
     if (user && !loading && mode !== 'reset-password') {
-      navigate('/dashboard');
+      // Check if there's a saved location to redirect to
+      const from = (location.state as { from?: { pathname: string } })?.from?.pathname;
+      navigate(from || '/dashboard', { replace: true });
     }
-  }, [user, loading, navigate, mode]);
+  }, [user, loading, navigate, mode, location.state]);
 
   const validateEmail = () => {
     try {
@@ -96,14 +99,19 @@ export default function Auth() {
     if (error) {
       if (error.message.includes('Invalid login credentials')) {
         toast.error('Credenciales inválidas. Verifica tu email y contraseña.');
+      } else if (error.message.includes('Email not confirmed')) {
+        toast.error('Debes confirmar tu email antes de iniciar sesión.');
       } else {
         toast.error(error.message);
       }
-    } else {
-      toast.success('Sesión iniciada correctamente');
-      navigate('/dashboard');
+      setIsSubmitting(false);
+      return;
     }
     
+    toast.success('Sesión iniciada correctamente');
+    // Redirect will be handled by useEffect when user state updates
+    const from = (location.state as { from?: { pathname: string } })?.from?.pathname;
+    navigate(from || '/dashboard', { replace: true });
     setIsSubmitting(false);
   };
 

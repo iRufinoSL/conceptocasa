@@ -1,5 +1,7 @@
 import { useNavigate } from 'react-router-dom';
+import { useEffect, useState, useRef } from 'react';
 import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/integrations/supabase/client';
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { BackupButton } from '@/components/BackupButton';
@@ -124,7 +126,51 @@ const apps: AppCard[] = [
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  const { user, signOut, isAdmin, loading, rolesLoading } = useAuth();
+  const { user, signOut, isAdmin, isCliente, userPresupuestos, loading, rolesLoading } = useAuth();
+  const [checkingRedirect, setCheckingRedirect] = useState(true);
+  const redirectCheckedRef = useRef(false);
+
+  // Smart redirect: Restore last route or redirect clients to their budget
+  useEffect(() => {
+    if (loading || rolesLoading || !user || redirectCheckedRef.current) {
+      if (!loading && !rolesLoading) {
+        setCheckingRedirect(false);
+      }
+      return;
+    }
+
+    const checkRedirect = async () => {
+      redirectCheckedRef.current = true;
+      
+      try {
+        // Fetch last route from profile
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('last_route')
+          .eq('id', user.id)
+          .single();
+
+        // If user has a saved route that's not the dashboard, redirect there
+        if (profile?.last_route && profile.last_route !== '/dashboard') {
+          navigate(profile.last_route, { replace: true });
+          return;
+        }
+
+        // For clients: redirect to their first assigned budget
+        if (isCliente() && !isAdmin() && userPresupuestos.length > 0) {
+          const firstBudget = userPresupuestos[0];
+          navigate(`/presupuestos/${firstBudget.presupuesto_id}`, { replace: true });
+          return;
+        }
+      } catch (error) {
+        console.error('[Dashboard] Redirect check error:', error);
+      } finally {
+        setCheckingRedirect(false);
+      }
+    };
+
+    checkRedirect();
+  }, [user, loading, rolesLoading, isCliente, isAdmin, userPresupuestos, navigate]);
 
   const handleSignOut = async () => {
     await signOut();
@@ -143,8 +189,8 @@ export default function Dashboard() {
     return !app.adminOnly;
   });
 
-  // Wait for both auth and roles to load
-  if (loading || rolesLoading) {
+  // Wait for both auth and roles to load, and redirect check
+  if (loading || rolesLoading || checkingRedirect) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>

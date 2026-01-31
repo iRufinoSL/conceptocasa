@@ -2764,9 +2764,11 @@ export type Database = {
           full_name: string | null
           hourly_rate: number | null
           id: string
+          last_route: string | null
           notification_email: string | null
           notification_phone: string | null
           notification_type: string | null
+          password_change_required: boolean | null
           personal_notification_email: string | null
           personal_notification_phone: string | null
           personal_notification_type: string | null
@@ -2781,9 +2783,11 @@ export type Database = {
           full_name?: string | null
           hourly_rate?: number | null
           id: string
+          last_route?: string | null
           notification_email?: string | null
           notification_phone?: string | null
           notification_type?: string | null
+          password_change_required?: boolean | null
           personal_notification_email?: string | null
           personal_notification_phone?: string | null
           personal_notification_type?: string | null
@@ -2798,9 +2802,11 @@ export type Database = {
           full_name?: string | null
           hourly_rate?: number | null
           id?: string
+          last_route?: string | null
           notification_email?: string | null
           notification_phone?: string | null
           notification_type?: string | null
+          password_change_required?: boolean | null
           personal_notification_email?: string | null
           personal_notification_phone?: string | null
           personal_notification_type?: string | null

@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Plus, Search, Pencil, Trash2, Package, Wrench, Truck, Briefcase, FileSpreadsheet, Check, List, FolderTree, FileDown, FileText, LayoutGrid, CheckSquare, Users, ShoppingCart } from 'lucide-react';
+import { Plus, Search, Pencil, Trash2, Package, Wrench, Truck, Briefcase, FileSpreadsheet, Check, List, FolderTree, FileDown, FileText, LayoutGrid, CheckSquare, Users, ShoppingCart, RefreshCw } from 'lucide-react';
 import { OPTION_COLORS } from '@/lib/options-utils';
 import { ResourcesOptionsGroupedView } from './ResourcesOptionsGroupedView';
 import { toast } from 'sonner';
@@ -449,6 +449,32 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
     const phaseCode = phase?.code || '';
     return `${phaseCode} ${activity.code}.-${activity.name}`;
   };
+
+  // Handle activity date update (for inline editing in type view)
+  const handleActivityDateUpdate = useCallback(async (
+    activityId: string,
+    field: 'actual_start_date' | 'actual_end_date',
+    value: string | null
+  ) => {
+    try {
+      const { error } = await supabase
+        .from('budget_activities')
+        .update({ [field]: value })
+        .eq('id', activityId);
+
+      if (error) throw error;
+
+      // Update local state
+      setActivities(prev => prev.map(a => 
+        a.id === activityId ? { ...a, [field]: value } : a
+      ));
+
+      toast.success(`Fecha ${field === 'actual_start_date' ? 'inicio' : 'final'} actualizada`);
+    } catch (error) {
+      console.error('Error updating activity date:', error);
+      toast.error('Error al actualizar la fecha');
+    }
+  }, []);
 
   // Calculate derived fields for a resource
   // Note: This uses the stored related_units from the database. For consistency with
@@ -1435,6 +1461,10 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
               </CardDescription>
             </div>
             <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={() => fetchData()}>
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Actualizar
+              </Button>
               <Button variant="outline" size="sm" onClick={exportResourcesPDF}>
                 <FileDown className="h-4 w-4 mr-2" />
                 Exportar PDF
@@ -1672,6 +1702,7 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
               onEdit={handleEdit}
               onDelete={handleDelete}
               onInlineUpdate={handleInlineUpdate}
+              onActivityDateUpdate={handleActivityDateUpdate}
               calculateFields={calculateFields}
               getActivityId={getActivityId}
               canEditResource={canEditResource}

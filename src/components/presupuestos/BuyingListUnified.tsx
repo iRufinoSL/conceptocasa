@@ -8,8 +8,9 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { 
   ChevronRight, ChevronDown, Package, Calendar, ShoppingCart, Building2, 
-  Pencil, RefreshCw, ClipboardList, List, Save, X, Check, Edit
+  Pencil, RefreshCw, ClipboardList, List, Save, X, Check, Edit, Search
 } from 'lucide-react';
+import { searchMatch } from '@/lib/search-utils';
 import { formatCurrency, formatNumber } from '@/lib/format-utils';
 import { formatActividadId } from '@/lib/activity-id';
 import { cn } from '@/lib/utils';
@@ -116,6 +117,9 @@ export function BuyingListUnified({
       localStorage.setItem(storageKey, JSON.stringify({ startDate, endDate }));
     } catch {}
   }, [startDate, endDate, storageKey]);
+
+  // Search term
+  const [searchTerm, setSearchTerm] = useState<string>('');
   
   // Inline editing
   const [editingResource, setEditingResource] = useState<string | null>(null);
@@ -194,10 +198,35 @@ export function BuyingListUnified({
 
   const filteredActivityIds = useMemo(() => new Set(filteredActivities.map(a => a.id)), [filteredActivities]);
 
-  // Filter resources by filtered activities
+  // Filter resources by filtered activities and search term
   const filteredResources = useMemo(() => {
-    return resources.filter(r => r.activity_id && filteredActivityIds.has(r.activity_id));
-  }, [resources, filteredActivityIds]);
+    let result = resources.filter(r => r.activity_id && filteredActivityIds.has(r.activity_id));
+    
+    // Apply search filter if search term exists
+    if (searchTerm.trim()) {
+      result = result.filter(r => {
+        const activity = filteredActivities.find(a => a.id === r.activity_id);
+        const phase = activity ? phases.find(p => p.id === activity.phase_id) : null;
+        const activityId = activity ? formatActividadId({
+          phaseCode: phase?.code || null,
+          activityCode: activity.code,
+          name: activity.name
+        }) : '';
+        
+        // Search in resource name, type, supplier, activity id, phase name
+        return (
+          searchMatch(r.name, searchTerm) ||
+          searchMatch(r.resource_type || '', searchTerm) ||
+          searchMatch(r.supplier_name || '', searchTerm) ||
+          searchMatch(activityId, searchTerm) ||
+          searchMatch(phase?.name || '', searchTerm) ||
+          searchMatch(activity?.name || '', searchTerm)
+        );
+      });
+    }
+    
+    return result;
+  }, [resources, filteredActivityIds, searchTerm, filteredActivities, phases]);
 
   // Handle inline resource update
   const handleResourceUpdate = useCallback(async (
@@ -613,7 +642,7 @@ export function BuyingListUnified({
 
   return (
     <div className="space-y-4">
-      {/* Date Range Filter */}
+      {/* Filters: Date Range + Search */}
       <div className="flex flex-wrap items-end gap-4 p-4 bg-muted/30 rounded-lg border">
         <div className="flex items-center gap-2">
           <Calendar className="h-5 w-5 text-muted-foreground" />
@@ -656,6 +685,33 @@ export function BuyingListUnified({
             </Button>
           )}
         </div>
+        
+        {/* Search */}
+        <div className="space-y-1">
+          <Label htmlFor="search" className="text-xs text-muted-foreground">Buscar</Label>
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              id="search"
+              type="text"
+              placeholder="Recurso, proveedor, actividad..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="h-9 w-56 pl-8"
+            />
+            {searchTerm && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="absolute right-1 top-1/2 -translate-y-1/2 h-6 w-6"
+                onClick={() => setSearchTerm('')}
+              >
+                <X className="h-3.5 w-3.5" />
+              </Button>
+            )}
+          </div>
+        </div>
+        
         <div className="flex-1" />
         
         {onRefresh && (

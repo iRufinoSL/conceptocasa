@@ -285,7 +285,10 @@ export function BudgetAgendaTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
             purchase_unit,
             purchase_unit_quantity,
             purchase_unit_cost,
-            conversion_factor
+            conversion_factor,
+            purchase_vat_percent,
+            purchase_units,
+            purchase_unit_measure
           `)
           .eq('budget_id', budgetId)
           .not('resource_type', 'in', '("Tarea","Cita")'),

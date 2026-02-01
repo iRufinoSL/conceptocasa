@@ -561,7 +561,7 @@ export function BudgetResourceForm({
                   <div className="space-y-2">
                     <Label htmlFor="purchase_unit_measure">Ud medida lista compra</Label>
                     <Select
-                      value={formData.purchase_unit_measure || formData.unit}
+                      value={formData.purchase_unit_measure !== '' ? formData.purchase_unit_measure : formData.unit}
                       onValueChange={(value) => setFormData({ ...formData, purchase_unit_measure: value })}
                     >
                       <SelectTrigger>
@@ -579,11 +579,11 @@ export function BudgetResourceForm({
                     <Label htmlFor="purchase_units">Uds compra</Label>
                     <NumericInput
                       id="purchase_units"
-                      value={formData.purchase_units ?? calculatedUnits}
-                      onChange={(value) => setFormData({ ...formData, purchase_units: value === calculatedUnits ? null : value })}
+                      value={formData.purchase_units !== null ? formData.purchase_units : calculatedUnits}
+                      onChange={(value) => setFormData({ ...formData, purchase_units: value })}
                       decimals={2}
                     />
-                    <p className="text-xs text-muted-foreground">Por defecto = Uds calculadas</p>
+                    <p className="text-xs text-muted-foreground">Por defecto = Uds calculadas ({calculatedUnits})</p>
                   </div>
                   <div className="space-y-2">
                     <Label>€SubTotal compra</Label>

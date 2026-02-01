@@ -18,6 +18,7 @@ import { ResourcesGestionesView } from './ResourcesGestionesView';
 import { WorkReportsList } from './WorkReportsList';
 import { BuyingListUnified } from './BuyingListUnified';
 import { BudgetResourceForm } from './BudgetResourceForm';
+import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 
 // A Task is a resource with resource_type = 'Tarea' or 'Cita'
 export interface BudgetTask {
@@ -98,8 +99,10 @@ export function BudgetAgendaTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
   
   // State for editing a resource from buying list
   const [editingResource, setEditingResource] = useState<any | null>(null);
-
-  // Fetch budget name
+  
+  // State for deleting a resource from buying list
+  const [resourceToDelete, setResourceToDelete] = useState<string | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const fetchBudgetName = useCallback(async () => {
     const { data } = await supabase
       .from('presupuestos')
@@ -398,6 +401,52 @@ export function BudgetAgendaTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
     } catch (error) {
       console.error('Error deleting task:', error);
       toast.error('Error al eliminar la tarea');
+    }
+  };
+
+  // Handle delete resource from buying list
+  const handleDeleteResource = (resourceId: string) => {
+    // Check if resource has signed_subtotal
+    const resource = buyingResources.find((r: any) => r.id === resourceId);
+    if (resource?.signed_subtotal !== null && resource?.signed_subtotal !== undefined) {
+      toast.error('No se puede eliminar un recurso que pertenece a un presupuesto firmado');
+      return;
+    }
+    setResourceToDelete(resourceId);
+    setDeleteDialogOpen(true);
+  };
+
+  const confirmDeleteResource = async () => {
+    if (!resourceToDelete) return;
+    
+    try {
+      // Delete related contacts and images first
+      await supabase
+        .from('budget_resource_contacts')
+        .delete()
+        .eq('resource_id', resourceToDelete);
+
+      await supabase
+        .from('budget_resource_images')
+        .delete()
+        .eq('resource_id', resourceToDelete);
+
+      // Delete the resource
+      const { error } = await supabase
+        .from('budget_activity_resources')
+        .delete()
+        .eq('id', resourceToDelete);
+
+      if (error) throw error;
+
+      toast.success('Recurso eliminado');
+      fetchBuyingListData();
+    } catch (error) {
+      console.error('Error deleting resource:', error);
+      toast.error('Error al eliminar el recurso');
+    } finally {
+      setDeleteDialogOpen(false);
+      setResourceToDelete(null);
     }
   };
 
@@ -746,6 +795,7 @@ export function BudgetAgendaTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
                   setEditingResource(fullResource);
                 }
               }}
+              onDeleteResource={handleDeleteResource}
               onRefresh={fetchBuyingListData}
             />
           </CardContent>
@@ -878,6 +928,15 @@ export function BudgetAgendaTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
           />
         </>
       )}
+
+      {/* Delete Resource Confirmation Dialog */}
+      <DeleteConfirmDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        onConfirm={confirmDeleteResource}
+        title="¿Eliminar recurso?"
+        description="Esta acción no se puede deshacer. El recurso será eliminado permanentemente."
+      />
     </div>
   );
 }

@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import { 
   ChevronRight, ChevronDown, Package, Calendar, ShoppingCart, Building2, 
-  Pencil, RefreshCw, ClipboardList, List, Save, X, Check, Edit, Search, Printer
+  Pencil, RefreshCw, ClipboardList, List, Save, X, Check, Edit, Search, Printer, Trash2
 } from 'lucide-react';
 import { searchMatch } from '@/lib/search-utils';
 import { formatCurrency, formatNumber } from '@/lib/format-utils';
@@ -95,6 +95,7 @@ interface BuyingListUnifiedProps {
   activities: Activity[];
   phases: Phase[];
   onEditResource?: (resource: Resource) => void;
+  onDeleteResource?: (resourceId: string) => void;
   onRefresh?: () => void;
 }
 
@@ -104,6 +105,7 @@ export function BuyingListUnified({
   activities: initialActivities, 
   phases,
   onEditResource,
+  onDeleteResource,
   onRefresh
 }: BuyingListUnifiedProps) {
   // View mode
@@ -764,6 +766,17 @@ export function BuyingListUnified({
                   <Edit className="h-3 w-3" />
                 </Button>
               )}
+              {onDeleteResource && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6 text-destructive hover:text-destructive"
+                  onClick={(e) => { e.stopPropagation(); onDeleteResource(resource.id); }}
+                  title="Borrar recurso"
+                >
+                  <Trash2 className="h-3 w-3" />
+                </Button>
+              )}
             </>
           )}
         </div>
@@ -962,6 +975,17 @@ export function BuyingListUnified({
                   title="Editar recurso"
                 >
                   <Edit className="h-3 w-3" />
+                </Button>
+              )}
+              {onDeleteResource && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6 text-destructive hover:text-destructive"
+                  onClick={(e) => { e.stopPropagation(); onDeleteResource(resource.id); }}
+                  title="Borrar recurso"
+                >
+                  <Trash2 className="h-3 w-3" />
                 </Button>
               )}
             </>

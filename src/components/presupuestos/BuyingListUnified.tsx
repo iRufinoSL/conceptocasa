@@ -1143,6 +1143,21 @@ export function BuyingListUnified({
       {/* View: By Resource (flat list) */}
       {viewMode === 'resource' && resourceList.length > 0 && (
         <div className="border rounded-lg">
+          {/* Total header row above the column headers */}
+          <div className="flex items-center gap-2 px-3 py-2 bg-primary/10 text-xs font-semibold border-b">
+            <div className="w-4" />
+            <div className="flex-1 min-w-0" />
+            <div className="w-36" />
+            <div className="w-20" />
+            <div className="w-14" />
+            <div className="w-20" />
+            <div className="w-20" />
+            <div className="w-24 text-right">
+              <p className="text-primary">{formatCurrency(grandTotal)}</p>
+              <p className="text-[9px] text-muted-foreground font-normal">Total Compra</p>
+            </div>
+            <div className="w-20" />
+          </div>
           <ResourceHeaderSimple />
           {resourceList.map(resource => renderResourceRowSimple(resource))}
         </div>

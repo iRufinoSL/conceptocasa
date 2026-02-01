@@ -56,6 +56,9 @@ interface Resource {
   purchase_unit_quantity?: number | null;
   purchase_unit_cost?: number | null;
   conversion_factor?: number | null;
+  purchase_vat_percent?: number | null;
+  purchase_units?: number | null;
+  purchase_unit_measure?: string | null;
 }
 
 type ViewMode = 'activity' | 'supplier' | 'resource';
@@ -128,6 +131,9 @@ export function BuyingListUnified({
     purchase_unit_cost?: string;
     purchase_unit?: string;
     purchase_unit_quantity?: string;
+    purchase_vat_percent?: string;
+    purchase_units?: string;
+    purchase_unit_measure?: string;
     supplier_id?: string | null;
   }>({});
   
@@ -235,6 +241,9 @@ export function BuyingListUnified({
       purchase_unit_cost?: number | null;
       purchase_unit?: string | null;
       purchase_unit_quantity?: number | null;
+      purchase_vat_percent?: number | null;
+      purchase_units?: number | null;
+      purchase_unit_measure?: string | null;
       supplier_id?: string | null;
     },
     supplierName?: string | null
@@ -315,6 +324,9 @@ export function BuyingListUnified({
       purchase_unit_cost: String(resource.purchase_unit_cost ?? resource.external_unit_cost ?? 0),
       purchase_unit: resource.purchase_unit ?? resource.unit ?? 'ud',
       purchase_unit_quantity: String(resource.purchase_unit_quantity ?? calculatedUnits),
+      purchase_vat_percent: String(resource.purchase_vat_percent ?? 21),
+      purchase_units: String(resource.purchase_units ?? calculatedUnits),
+      purchase_unit_measure: resource.purchase_unit_measure ?? resource.unit ?? 'ud',
       supplier_id: resource.supplier_id
     });
   };
@@ -326,7 +338,10 @@ export function BuyingListUnified({
     handleResourceUpdate(editingResource, {
       purchase_unit_cost: editValues.purchase_unit_cost ? parseFloat(editValues.purchase_unit_cost) : null,
       purchase_unit: editValues.purchase_unit || null,
-      purchase_unit_quantity: editValues.purchase_unit_quantity ? parseFloat(editValues.purchase_unit_quantity) : null
+      purchase_unit_quantity: editValues.purchase_unit_quantity ? parseFloat(editValues.purchase_unit_quantity) : null,
+      purchase_vat_percent: editValues.purchase_vat_percent ? parseFloat(editValues.purchase_vat_percent) : 21,
+      purchase_units: editValues.purchase_units ? parseFloat(editValues.purchase_units) : null,
+      purchase_unit_measure: editValues.purchase_unit_measure || null
     });
   };
 
@@ -364,12 +379,20 @@ export function BuyingListUnified({
     }
   };
 
-  // Calculate totals
+  // Calculate buying list subtotal with VAT
+  const calcBuyingSubtotal = (r: Resource) => {
+    const calculatedUnits = r.manual_units ?? r.related_units ?? 0;
+    const qty = r.purchase_units ?? calculatedUnits;
+    const cost = r.purchase_unit_cost ?? r.external_unit_cost ?? 0;
+    const vatPercent = r.purchase_vat_percent ?? 21;
+    const vatAmount = cost * qty * (vatPercent / 100);
+    return (cost * qty) + vatAmount;
+  };
+
+  // Calculate totals with VAT
   const grandTotal = useMemo(() => {
     return filteredResources.reduce((sum, r) => {
-      const qty = r.purchase_unit_quantity ?? r.manual_units ?? r.related_units ?? 0;
-      const cost = r.purchase_unit_cost ?? r.external_unit_cost ?? 0;
-      return sum + qty * cost;
+      return sum + calcBuyingSubtotal(r);
     }, 0);
   }, [filteredResources]);
 
@@ -382,9 +405,7 @@ export function BuyingListUnified({
       if (actResources.length === 0) return;
       
       const total = actResources.reduce((sum, r) => {
-        const qty = r.purchase_unit_quantity ?? r.manual_units ?? r.related_units ?? 0;
-        const cost = r.purchase_unit_cost ?? r.external_unit_cost ?? 0;
-        return sum + qty * cost;
+        return sum + calcBuyingSubtotal(r);
       }, 0);
       
       groups.set(activity.id, { activity, resources: actResources, total });
@@ -410,9 +431,7 @@ export function BuyingListUnified({
       
       const group = groups.get(supplierId)!;
       group.resources.push(resource);
-      const qty = resource.purchase_unit_quantity ?? resource.manual_units ?? resource.related_units ?? 0;
-      const cost = resource.purchase_unit_cost ?? resource.external_unit_cost ?? 0;
-      group.total += qty * cost;
+      group.total += calcBuyingSubtotal(resource);
     });
     
     // Sort alphabetically, "Sin proveedor" last
@@ -427,13 +446,11 @@ export function BuyingListUnified({
   const resourceList = useMemo(() => {
     return filteredResources.map(resource => {
       const activity = filteredActivities.find(a => a.id === resource.activity_id);
-      const qty = resource.purchase_unit_quantity ?? resource.manual_units ?? resource.related_units ?? 0;
-      const cost = resource.purchase_unit_cost ?? resource.external_unit_cost ?? 0;
       return {
         ...resource,
         activity,
         activityId: activity ? formatActivityId(activity) : '',
-        total: qty * cost
+        total: calcBuyingSubtotal(resource)
       };
     }).sort((a, b) => a.name.localeCompare(b.name));
   }, [filteredResources, filteredActivities]);
@@ -444,9 +461,11 @@ export function BuyingListUnified({
     const isEditingSupplierInline = editingSupplier === resource.id;
     const calculatedUnits = resource.manual_units ?? resource.related_units ?? 0;
     const displayPurchaseCost = resource.purchase_unit_cost ?? resource.external_unit_cost ?? 0;
-    const displayPurchaseUnit = resource.purchase_unit ?? resource.unit ?? 'ud';
-    const displayPurchaseQty = resource.purchase_unit_quantity ?? calculatedUnits;
-    const buyingSubtotal = displayPurchaseQty * displayPurchaseCost;
+    const displayPurchaseUnitMeasure = resource.purchase_unit_measure ?? resource.unit ?? 'ud';
+    const displayPurchaseUnits = resource.purchase_units ?? calculatedUnits;
+    const displayVatPercent = resource.purchase_vat_percent ?? 21;
+    const vatAmount = displayPurchaseCost * displayPurchaseUnits * (displayVatPercent / 100);
+    const buyingSubtotal = (displayPurchaseCost * displayPurchaseUnits) + vatAmount;
     const activity = activities.find(a => a.id === resource.activity_id);
 
     return (
@@ -523,12 +542,28 @@ export function BuyingListUnified({
           )}
         </div>
         
-        {/* Purchase Unit */}
+        {/* VAT Percent */}
+        <div className="w-16 text-center">
+          {isEditing ? (
+            <Input
+              type="number"
+              step="0.01"
+              value={editValues.purchase_vat_percent || '21'}
+              onChange={(e) => setEditValues(prev => ({ ...prev, purchase_vat_percent: e.target.value }))}
+              className="h-6 text-xs text-center px-1"
+              onClick={(e) => e.stopPropagation()}
+            />
+          ) : (
+            <span className="text-xs text-muted-foreground">{formatNumber(displayVatPercent)}%</span>
+          )}
+        </div>
+        
+        {/* Purchase Unit Measure */}
         <div className="w-16 text-center">
           {isEditing ? (
             <Select
-              value={editValues.purchase_unit || 'ud'}
-              onValueChange={(v) => setEditValues(prev => ({ ...prev, purchase_unit: v }))}
+              value={editValues.purchase_unit_measure || 'ud'}
+              onValueChange={(v) => setEditValues(prev => ({ ...prev, purchase_unit_measure: v }))}
             >
               <SelectTrigger className="h-6 text-xs px-1" onClick={(e) => e.stopPropagation()}>
                 <SelectValue />
@@ -540,24 +575,29 @@ export function BuyingListUnified({
               </SelectContent>
             </Select>
           ) : (
-            <span className="text-xs text-muted-foreground">{displayPurchaseUnit}</span>
+            <span className="text-xs text-muted-foreground">{displayPurchaseUnitMeasure}</span>
           )}
         </div>
         
-        {/* Purchase Quantity */}
+        {/* Purchase Units */}
         <div className="w-20 text-center">
           {isEditing ? (
             <Input
               type="number"
               step="0.01"
-              value={editValues.purchase_unit_quantity || ''}
-              onChange={(e) => setEditValues(prev => ({ ...prev, purchase_unit_quantity: e.target.value }))}
+              value={editValues.purchase_units || ''}
+              onChange={(e) => setEditValues(prev => ({ ...prev, purchase_units: e.target.value }))}
               className="h-6 text-xs text-center px-1"
               onClick={(e) => e.stopPropagation()}
             />
           ) : (
-            <span className="text-xs font-medium">{formatNumber(displayPurchaseQty)}</span>
+            <span className="text-xs font-medium">{formatNumber(displayPurchaseUnits)}</span>
           )}
+        </div>
+        
+        {/* VAT Amount (calculated, read-only) */}
+        <div className="w-20 text-center">
+          <span className="text-xs text-muted-foreground">{formatCurrency(vatAmount)}</span>
         </div>
         
         {/* Subtotal */}
@@ -633,8 +673,10 @@ export function BuyingListUnified({
       <div className="flex-1 min-w-0">{showActivity ? 'Recurso / Actividad' : 'Recurso'}</div>
       <div className="w-32 text-center hidden sm:block">Proveedor</div>
       <div className="w-20 text-center">€Coste ud</div>
-      <div className="w-16 text-center">Ud compra</div>
-      <div className="w-20 text-center">Uds</div>
+      <div className="w-16 text-center">%IVA</div>
+      <div className="w-16 text-center">Ud medida</div>
+      <div className="w-20 text-center">Uds compra</div>
+      <div className="w-20 text-center">€IVA</div>
       <div className="w-24 text-right">€SubTotal</div>
       <div className="w-24 text-center">Acciones</div>
     </div>

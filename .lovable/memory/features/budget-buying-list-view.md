@@ -76,17 +76,26 @@ Esta vista incluye:
 - Actualiza `uses_measurement` en `budget_activities`
 - Renombrado de "Usa Med." a "Uso Pres." (Uso en Presupuesto)
 
-## Conversión de Unidades de Compra
+## Campos de Lista de Compra
 
-Los recursos pueden tener dos tipos de unidades:
-1. **Unidades calculadas** (del presupuesto): m2 de solera, metros lineales, etc.
-2. **Unidades de compra** (para el proveedor): m3 de hormigón, kg de material, etc.
+Los recursos tienen campos específicos para la lista de compra:
 
 ### Campos en budget_activity_resources:
-- `purchase_unit`: Unidad de compra (ej: 'm3')
-- `purchase_unit_quantity`: Cantidad convertida a comprar
-- `purchase_unit_cost`: Coste por unidad de compra
+- `purchase_unit_cost`: €Coste ud compra (por defecto = external_unit_cost)
+- `purchase_vat_percent`: %IVA compra (por defecto = 21%)
+- `purchase_units`: Uds lista compra (por defecto = manual_units ?? related_units)
+- `purchase_unit_measure`: Ud medida lista compra (por defecto = unit)
+- `purchase_unit`: Unidad de compra legacy (ej: 'm3')
+- `purchase_unit_quantity`: Cantidad convertida legacy
 - `conversion_factor`: Factor de conversión (ej: 0.15 para 15cm de altura)
+
+### Campos Calculados:
+- **€Importe IVA Recurso** = `purchase_unit_cost × purchase_units × (purchase_vat_percent / 100)`
+- **€SubTotal lista compra Recurso** = `(purchase_unit_cost × purchase_units) + €Importe IVA Recurso`
+
+### Valores por Defecto:
+- Los campos de compra heredan automáticamente los valores base si no se especifican
+- El usuario puede modificar cualquiera de estos campos de forma independiente
 
 ## Componente Unificado (BuyingListUnified.tsx)
 

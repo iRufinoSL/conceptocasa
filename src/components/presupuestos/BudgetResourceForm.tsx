@@ -31,6 +31,9 @@ interface BudgetResource {
   description: string | null;
   supplier_id: string | null;
   signed_subtotal: number | null;
+  purchase_vat_percent?: number | null;
+  purchase_units?: number | null;
+  purchase_unit_measure?: string | null;
 }
 
 interface Activity {
@@ -84,6 +87,10 @@ export function BudgetResourceForm({
     duration_days: 1,
     task_status: 'pendiente' as 'pendiente' | 'realizada',
     supplier_id: null as string | null,
+    // Buying list specific fields
+    purchase_vat_percent: 21,
+    purchase_units: null as number | null,
+    purchase_unit_measure: '',
   });
 
   // Calculate end date for tasks
@@ -130,6 +137,10 @@ export function BudgetResourceForm({
           duration_days: resourceWithTaskFields.duration_days || 1,
           task_status: (resourceWithTaskFields.task_status as 'pendiente' | 'realizada') || 'pendiente',
           supplier_id: resource.supplier_id || null,
+          // Buying list specific fields
+          purchase_vat_percent: resource.purchase_vat_percent ?? 21,
+          purchase_units: resource.purchase_units ?? null,
+          purchase_unit_measure: resource.purchase_unit_measure || '',
         });
         
         // If resource has an activity, recalculate related_units to ensure it's up-to-date
@@ -157,6 +168,10 @@ export function BudgetResourceForm({
           duration_days: 1,
           task_status: 'pendiente',
           supplier_id: null,
+          // Buying list specific fields
+          purchase_vat_percent: 21,
+          purchase_units: null,
+          purchase_unit_measure: '',
         });
         
         // If preselected activity, fetch related_units
@@ -248,6 +263,10 @@ export function BudgetResourceForm({
         duration_days: formData.resource_type === 'Tarea' ? formData.duration_days : null,
         task_status: formData.resource_type === 'Tarea' ? formData.task_status : null,
         supplier_id: formData.supplier_id,
+        // Buying list specific fields
+        purchase_vat_percent: formData.purchase_vat_percent,
+        purchase_units: formData.purchase_units,
+        purchase_unit_measure: formData.purchase_unit_measure || null,
       };
 
       if (resource) {
@@ -487,6 +506,51 @@ export function BudgetResourceForm({
                 disabled
                 className="bg-muted font-semibold"
               />
+            </div>
+          </div>
+
+          {/* Row 4.5: Buying List Fields */}
+          <div className="p-4 bg-blue-50 dark:bg-blue-950/30 rounded-lg border border-blue-200 dark:border-blue-800">
+            <div className="col-span-4 text-sm font-medium text-blue-700 dark:text-blue-400 mb-3">
+              Campos Lista de Compra
+            </div>
+            <div className="grid grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="purchase_vat_percent">%IVA compra</Label>
+                <NumericInput
+                  id="purchase_vat_percent"
+                  value={formData.purchase_vat_percent}
+                  onChange={(value) => setFormData({ ...formData, purchase_vat_percent: value ?? 21 })}
+                  decimals={2}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="purchase_units">Uds lista compra</Label>
+                <NumericInput
+                  id="purchase_units"
+                  value={formData.purchase_units ?? calculatedUnits}
+                  onChange={(value) => setFormData({ ...formData, purchase_units: value === calculatedUnits ? null : value })}
+                  decimals={2}
+                />
+                <p className="text-xs text-muted-foreground">Por defecto = Uds calculadas</p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="purchase_unit_measure">Ud medida lista compra</Label>
+                <Select
+                  value={formData.purchase_unit_measure || formData.unit}
+                  onValueChange={(value) => setFormData({ ...formData, purchase_unit_measure: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccionar unidad" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {UNIT_MEASURES.map((unit) => (
+                      <SelectItem key={unit} value={unit}>{unit}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">Por defecto = Ud medida</p>
+              </div>
             </div>
           </div>
 

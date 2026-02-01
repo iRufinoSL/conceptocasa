@@ -1,304 +1,173 @@
 
-# Plan: Módulo de Partes de Trabajo
+# Plan: PDF Report for Estimated Budget (Presupuesto Estimado)
 
-## Resumen
+## Summary
+Add a new PDF export option in the "Informe PDF" dialog that generates a report containing the estimated budget data: the total estimated budget from the budget settings and a breakdown by phase showing each phase's estimated percentage and amount.
 
-Implementar un sistema de **Partes de Trabajo** dentro de la pestaña "Agenda de Gestión" de cada presupuesto. Este módulo permitirá registrar diariamente los trabajos realizados, incluyendo:
+## Changes Required
 
-- Titulo y fecha del parte
-- Uno o varios trabajos concretos con descripcion, actividad vinculada y fotografias
-- Asignacion de trabajadores (usuarios del sistema con rol colaborador/administrador)
-- Captura de fotos directamente desde el movil (usando la camara del dispositivo)
+### 1. Update Phase Interface in BudgetReportPreview
+Add the estimated budget fields to the Phase interface to include the new columns:
+- `estimated_budget_percent`
+- `estimated_budget_amount`
+
+### 2. Fetch Estimated Budget Data
+Modify the data fetching logic to:
+- Fetch the budget's `estimated_budget` value from the `presupuestos` table
+- Include `estimated_budget_percent` and `estimated_budget_amount` in the phases query
+
+### 3. Add New Section Checkbox
+Add a new checkbox option in the report configuration section labeled "Presupuesto Estimado" that allows users to include this section in the PDF export.
+
+### 4. Update Report Type Name Logic
+Include "Presupuesto Estimado" in the `getReportTypeName()` function when this section is selected.
+
+### 5. PDF Export Implementation
+Add a new section to the `exportToPDF()` function that:
+- Creates a new page for the estimated budget section
+- Displays the header with company data (same as other sections)
+- Shows the total estimated budget prominently
+- Generates a table with columns: Fase (Phase), % Presupuesto estimado, Euro Presupuesto estimado fase
+- Includes a total row at the bottom summing all phase amounts
+
+### 6. Preview Section Implementation
+Add the HTML preview section for the estimated budget that shows:
+- A header with the total estimated budget
+- A table displaying all phases with their estimated percentages and amounts
+- A footer row with totals
 
 ---
 
-## Estructura de Datos
+## Technical Details
 
-Se crearan las siguientes tablas:
+### File to Modify
+`src/components/presupuestos/BudgetReportPreview.tsx`
+
+### Interface Updates
+```typescript
+interface Phase {
+  id: string;
+  name: string;
+  code: string | null;
+  start_date: string | null;
+  duration_days: number | null;
+  estimated_end_date: string | null;
+  // NEW FIELDS
+  estimated_budget_percent: number | null;
+  estimated_budget_amount: number | null;
+}
+```
+
+### State Addition
+```typescript
+const [estimatedBudget, setEstimatedBudget] = useState<number | null>(null);
+```
+
+### Data Fetching
+Fetch the `estimated_budget` from the presupuesto record and update the phases query to include the new fields.
+
+### Section Checkbox (in UI)
+```typescript
+<div className="flex items-center space-x-2">
+  <Checkbox 
+    id="estimated-budget" 
+    checked={selectedSections.includes('estimated-budget')}
+    onCheckedChange={(checked) => {
+      if (checked) {
+        setSelectedSections(prev => [...prev, 'estimated-budget']);
+      } else {
+        setSelectedSections(prev => prev.filter(s => s !== 'estimated-budget'));
+      }
+    }}
+  />
+  <Label htmlFor="estimated-budget" className="cursor-pointer text-sm">Presupuesto Estimado</Label>
+</div>
+```
+
+### PDF Table Structure
+The PDF section will use `jspdf-autotable` with:
+- Header: Fase | % Presupuesto estimado | Euro Presupuesto estimado fase
+- Body: One row per phase with code, name, percentage, and amount
+- Footer: Total row with sum of all amounts
+
+### Preview HTML Structure
+```tsx
+{selectedSections.includes('estimated-budget') && (
+  <div className="print-section">
+    <h3 className="text-lg font-bold text-primary mb-4">PRESUPUESTO ESTIMADO</h3>
+    
+    {/* Total header card */}
+    <Card className="bg-primary/5 border-primary/20 mb-4">
+      <CardContent className="py-4 flex items-center justify-between">
+        <span className="font-semibold">Presupuesto Estimado Total:</span>
+        <span className="text-xl font-bold text-primary">{formatCurrency(estimatedBudget || 0)}</span>
+      </CardContent>
+    </Card>
+    
+    {/* Phases table */}
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead>Fase</TableHead>
+          <TableHead className="text-right">% Presupuesto estimado</TableHead>
+          <TableHead className="text-right">Euro Presupuesto estimado fase</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {phases.map(phase => (
+          <TableRow key={phase.id}>
+            <TableCell>{phase.code} {phase.name}</TableCell>
+            <TableCell className="text-right">{phase.estimated_budget_percent ?? '-'}%</TableCell>
+            <TableCell className="text-right">{formatCurrency(phase.estimated_budget_amount || 0)}</TableCell>
+          </TableRow>
+        ))}
+        {/* Total row */}
+        <TableRow className="bg-muted/50 font-semibold">
+          <TableCell>Total</TableCell>
+          <TableCell className="text-right">-</TableCell>
+          <TableCell className="text-right">{formatCurrency(totalEstimatedPhaseAmount)}</TableCell>
+        </TableRow>
+      </TableBody>
+    </Table>
+  </div>
+)}
+```
+
+---
+
+## Visual Layout of PDF Section
 
 ```text
-+----------------------+        +------------------------+
-|   work_reports       |        |  work_report_entries   |
-+----------------------+        +------------------------+
-| id (PK)              |<------>| id (PK)                |
-| budget_id (FK)       |   1:N  | work_report_id (FK)    |
-| title                |        | description            |
-| report_date          |        | activity_id (FK, null) |
-| created_by (FK)      |        | created_at             |
-| created_at           |        +------------------------+
-| updated_at           |                   |
-+----------------------+                   | 1:N
-         |                                 v
-         | 1:N              +---------------------------+
-         v                  | work_report_entry_images  |
-+------------------------+  +---------------------------+
-| work_report_workers    |  | id (PK)                   |
-+------------------------+  | entry_id (FK)             |
-| id (PK)                |  | file_name                 |
-| work_report_id (FK)    |  | file_path                 |
-| profile_id (FK)        |  | file_size                 |
-| created_at             |  | file_type                 |
-+------------------------+  | uploaded_by (FK, null)    |
-                            | created_at                |
-                            +---------------------------+
-```
++------------------------------------------------------------------+
+|  [LOGO]  COMPANY NAME                                             |
+|          email | phone | website                                  |
++------------------------------------------------------------------+
 
-### Campos principales:
+PRESUPUESTO ESTIMADO
 
-**work_reports** (Cabecera del Parte):
-- `id`: UUID
-- `budget_id`: Vinculo al presupuesto
-- `title`: Titulo/resumen del parte del dia
-- `report_date`: Fecha del parte (default: hoy)
-- `created_by`: Usuario que creo el parte
-- `created_at`, `updated_at`: Marcas de tiempo
++------------------------------------------------------------------+
+|  Presupuesto Estimado Total:                    Euro 150,000.00    |
++------------------------------------------------------------------+
 
-**work_report_workers** (Trabajadores asignados):
-- `id`: UUID
-- `work_report_id`: Vinculo al parte
-- `profile_id`: Vinculo al perfil del trabajador (tabla `profiles`)
-
-**work_report_entries** (Trabajos concretos):
-- `id`: UUID
-- `work_report_id`: Vinculo al parte padre
-- `description`: Descripcion del trabajo realizado
-- `activity_id`: Vinculo opcional a la actividad del presupuesto
-
-**work_report_entry_images** (Fotografias):
-- `id`: UUID
-- `entry_id`: Vinculo a la entrada de trabajo
-- `file_name`, `file_path`, `file_size`, `file_type`: Metadatos del archivo
-- `uploaded_by`: Usuario que subio la imagen
-
----
-
-## Integracion con Sistema Actual
-
-### Trabajadores ("QUIEN")
-
-Los trabajadores se obtienen de la tabla `profiles`, filtrados por usuarios con rol `administrador` o `colaborador` en `user_roles`. Esto permite:
-- Mostrar lista de personal disponible
-- Seleccion multiple de trabajadores por parte
-- Nombre completo visible desde el perfil
-
-### Captura de Fotos desde Movil
-
-El sistema actual ya soporta subida de imagenes con `<input type="file" accept="image/*" capture>`. En dispositivos moviles, esto abre directamente la camara. La implementacion:
-
-1. Usar atributo `capture="environment"` para camara trasera
-2. Subir imagenes al bucket `resource-images` existente
-3. Registrar metadatos en `work_report_entry_images`
-
----
-
-## Flujo de Usuario
-
-1. Usuario accede a **Presupuesto > Agenda de Gestion**
-2. Nuevo boton **"+ Nuevo Parte de Trabajo"** junto a Tarea/Cita
-3. Formulario modal con:
-   - Campo titulo (breve resumen)
-   - Fecha (default: hoy, editable)
-   - Selector multiple de trabajadores (lista de colaboradores/admins)
-   - Seccion "Trabajos realizados" con boton "+ Anadir trabajo"
-4. Cada trabajo incluye:
-   - Descripcion (textarea)
-   - Selector de ActividadID del presupuesto
-   - Boton de camara/galeria para fotos (multiples)
-5. Guardar crea el parte con todos sus trabajos e imagenes
-
----
-
-## Componentes a Crear
-
-| Componente | Descripcion |
-|------------|-------------|
-| `WorkReportForm.tsx` | Formulario principal del parte de trabajo |
-| `WorkReportEntryForm.tsx` | Sub-formulario para cada trabajo concreto |
-| `WorkReportWorkerSelect.tsx` | Selector multiple de trabajadores |
-| `WorkReportsList.tsx` | Vista de lista de partes en la agenda |
-| `WorkReportCard.tsx` | Tarjeta visual para mostrar un parte |
-
----
-
-## Modificaciones a Archivos Existentes
-
-1. **BudgetAgendaTab.tsx**: Anadir pestana/seccion "Partes de Trabajo"
-2. **TaskForm.tsx**: Servira como referencia para el patron de formulario
-3. Reutilizar logica de subida de imagenes existente
-
----
-
-## Detalles Tecnicos
-
-### Migracion de Base de Datos
-
-```sql
--- Tabla principal de partes de trabajo
-CREATE TABLE public.work_reports (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  budget_id UUID NOT NULL REFERENCES presupuestos(id) ON DELETE CASCADE,
-  title TEXT NOT NULL,
-  report_date DATE NOT NULL DEFAULT CURRENT_DATE,
-  created_by UUID REFERENCES profiles(id),
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- Trabajadores asignados al parte
-CREATE TABLE public.work_report_workers (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  work_report_id UUID NOT NULL REFERENCES work_reports(id) ON DELETE CASCADE,
-  profile_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  UNIQUE(work_report_id, profile_id)
-);
-
--- Entradas/trabajos individuales
-CREATE TABLE public.work_report_entries (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  work_report_id UUID NOT NULL REFERENCES work_reports(id) ON DELETE CASCADE,
-  description TEXT NOT NULL,
-  activity_id UUID REFERENCES budget_activities(id) ON DELETE SET NULL,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- Imagenes por entrada
-CREATE TABLE public.work_report_entry_images (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  entry_id UUID NOT NULL REFERENCES work_report_entries(id) ON DELETE CASCADE,
-  file_name TEXT NOT NULL,
-  file_path TEXT NOT NULL,
-  file_size INTEGER,
-  file_type TEXT,
-  uploaded_by UUID REFERENCES profiles(id),
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- RLS Policies
-ALTER TABLE work_reports ENABLE ROW LEVEL SECURITY;
-ALTER TABLE work_report_workers ENABLE ROW LEVEL SECURITY;
-ALTER TABLE work_report_entries ENABLE ROW LEVEL SECURITY;
-ALTER TABLE work_report_entry_images ENABLE ROW LEVEL SECURITY;
-
--- Politicas basadas en acceso al presupuesto
-CREATE POLICY "Users can view work reports for accessible budgets"
-  ON work_reports FOR SELECT
-  USING (
-    budget_id IN (
-      SELECT budget_id FROM user_budget_access WHERE user_id = auth.uid()
-    ) OR EXISTS (
-      SELECT 1 FROM user_roles WHERE user_id = auth.uid() AND role = 'administrador'
-    )
-  );
-
-CREATE POLICY "Users can insert work reports for accessible budgets"
-  ON work_reports FOR INSERT
-  WITH CHECK (
-    budget_id IN (
-      SELECT budget_id FROM user_budget_access WHERE user_id = auth.uid()
-    ) OR EXISTS (
-      SELECT 1 FROM user_roles WHERE user_id = auth.uid() AND role = 'administrador'
-    )
-  );
-
-CREATE POLICY "Users can update their own work reports"
-  ON work_reports FOR UPDATE
-  USING (
-    created_by = auth.uid() OR EXISTS (
-      SELECT 1 FROM user_roles WHERE user_id = auth.uid() AND role = 'administrador'
-    )
-  );
-
-CREATE POLICY "Users can delete their own work reports"
-  ON work_reports FOR DELETE
-  USING (
-    created_by = auth.uid() OR EXISTS (
-      SELECT 1 FROM user_roles WHERE user_id = auth.uid() AND role = 'administrador'
-    )
-  );
-
--- Politicas similares para tablas relacionadas
-CREATE POLICY "View workers" ON work_report_workers FOR SELECT
-  USING (work_report_id IN (SELECT id FROM work_reports));
-
-CREATE POLICY "Manage workers" ON work_report_workers FOR ALL
-  USING (work_report_id IN (SELECT id FROM work_reports));
-
-CREATE POLICY "View entries" ON work_report_entries FOR SELECT
-  USING (work_report_id IN (SELECT id FROM work_reports));
-
-CREATE POLICY "Manage entries" ON work_report_entries FOR ALL
-  USING (work_report_id IN (SELECT id FROM work_reports));
-
-CREATE POLICY "View images" ON work_report_entry_images FOR SELECT
-  USING (entry_id IN (SELECT id FROM work_report_entries));
-
-CREATE POLICY "Manage images" ON work_report_entry_images FOR ALL
-  USING (entry_id IN (SELECT id FROM work_report_entries));
-```
-
-### Captura de Camara Movil
-
-```tsx
-// Input con captura directa de camara
-<input
-  type="file"
-  accept="image/*"
-  capture="environment"
-  multiple
-  onChange={handleImageCapture}
-/>
-```
-
-El atributo `capture="environment"` abre la camara trasera en dispositivos moviles. En desktop, funciona como selector de archivos normal.
-
-### Obtencion de Trabajadores
-
-```tsx
-const fetchWorkers = async () => {
-  const { data } = await supabase
-    .from('profiles')
-    .select(`
-      id,
-      full_name,
-      email,
-      user_roles!inner(role)
-    `)
-    .in('user_roles.role', ['administrador', 'colaborador']);
-  
-  return data;
-};
++------------------------------------------------------------------+
+| Fase                      | % Pres. estimado | Euro Pres. estimado |
++------------------------------------------------------------------+
+| 01 Demolición             |        5.0%      |       7,500.00 Euro |
+| 02 Estructura             |       25.0%      |      37,500.00 Euro |
+| 03 Cerramientos           |       15.0%      |      22,500.00 Euro |
+| 04 Instalaciones          |       20.0%      |      30,000.00 Euro |
+| 05 Acabados               |       35.0%      |      52,500.00 Euro |
++------------------------------------------------------------------+
+| TOTAL                     |         -        |     150,000.00 Euro |
++------------------------------------------------------------------+
 ```
 
 ---
 
-## Casos de Uso Movil
-
-La PWA ya instalada permite:
-
-1. **Acceso offline parcial**: Service worker cachea la app
-2. **Camara nativa**: Input file con capture abre camara del dispositivo
-3. **Geolocalizacion**: Podria anadirse coordenadas a las fotos
-4. **Notificaciones**: Recordatorios de completar partes diarios
-
----
-
-## Pasos de Implementacion
-
-1. Crear migracion de base de datos con las 4 tablas
-2. Aplicar politicas RLS
-3. Crear componente `WorkReportForm.tsx` con formulario completo
-4. Crear componentes auxiliares (selector trabajadores, entrada de trabajo)
-5. Integrar en `BudgetAgendaTab.tsx` como nueva vista/pestana
-6. Probar captura de imagenes en movil
-7. Anadir vista de lista de partes existentes
-
----
-
-## Consideraciones Adicionales
-
-- **Almacenamiento de imagenes**: Usar bucket existente `resource-images`
-- **Tamano de archivos**: Limitar a 10MB por imagen
-- **Compresion**: Considerar comprimir imagenes en cliente antes de subir
-- **Firma digital**: Posibilidad futura de firmar partes
-
+## Index Update
+Add the new section to the document index when selected:
+```typescript
+if (selectedSections.includes('estimated-budget')) {
+  indexItems.push({ title: 'Presupuesto Estimado', page: 3 });
+}
+```

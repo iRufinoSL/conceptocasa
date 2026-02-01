@@ -17,6 +17,7 @@ import { BudgetGanttView } from './BudgetGanttView';
 import { ResourcesGestionesView } from './ResourcesGestionesView';
 import { WorkReportsList } from './WorkReportsList';
 import { BuyingListUnified } from './BuyingListUnified';
+import { BudgetResourceForm } from './BudgetResourceForm';
 
 // A Task is a resource with resource_type = 'Tarea' or 'Cita'
 export interface BudgetTask {
@@ -94,6 +95,9 @@ export function BudgetAgendaTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
   const [buyingPhases, setBuyingPhases] = useState<any[]>([]);
   const [buyingActivities, setBuyingActivities] = useState<any[]>([]);
   const [buyingResources, setBuyingResources] = useState<any[]>([]);
+  
+  // State for editing a resource from buying list
+  const [editingResource, setEditingResource] = useState<any | null>(null);
 
   // Fetch budget name
   const fetchBudgetName = useCallback(async () => {
@@ -732,11 +736,32 @@ export function BudgetAgendaTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
               phases={buyingPhases}
               activities={buyingActivities}
               resources={buyingResources}
+              onEditResource={(resource) => {
+                // Find full resource from buyingResources
+                const fullResource = buyingResources.find(r => r.id === resource.id);
+                if (fullResource) {
+                  setEditingResource(fullResource);
+                }
+              }}
               onRefresh={fetchBuyingListData}
             />
           </CardContent>
         </Card>
       )}
+
+      {/* Resource Edit Form (for Buying List) */}
+      <BudgetResourceForm
+        open={!!editingResource}
+        onOpenChange={(open) => !open && setEditingResource(null)}
+        budgetId={budgetId}
+        resource={editingResource}
+        activities={buyingActivities}
+        phases={buyingPhases}
+        onSave={() => {
+          setEditingResource(null);
+          fetchBuyingListData();
+        }}
+      />
 
       {/* Agenda View */}
       {mainViewMode === 'agenda' && (

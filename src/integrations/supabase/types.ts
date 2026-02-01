@@ -2715,7 +2715,9 @@ export type Database = {
           coordenadas_lat: number | null
           coordenadas_lng: number | null
           created_at: string | null
+          direccion: string | null
           end_date: string | null
+          google_maps_url: string | null
           id: string
           is_signed: boolean
           nombre: string
@@ -2742,7 +2744,9 @@ export type Database = {
           coordenadas_lat?: number | null
           coordenadas_lng?: number | null
           created_at?: string | null
+          direccion?: string | null
           end_date?: string | null
+          google_maps_url?: string | null
           id?: string
           is_signed?: boolean
           nombre: string
@@ -2769,7 +2773,9 @@ export type Database = {
           coordenadas_lat?: number | null
           coordenadas_lng?: number | null
           created_at?: string | null
+          direccion?: string | null
           end_date?: string | null
+          google_maps_url?: string | null
           id?: string
           is_signed?: boolean
           nombre?: string

@@ -45,8 +45,10 @@ interface PresupuestoForm {
   version: string;
   poblacion: string;
   provincia: string;
+  direccion: string;
   coordenadas_lat: string;
   coordenadas_lng: string;
+  google_maps_url: string;
   status: PresupuestoStatus;
   start_date: string;
   end_date: string;
@@ -58,8 +60,10 @@ const emptyForm: PresupuestoForm = {
   version: 'v1.0',
   poblacion: '',
   provincia: '',
+  direccion: '',
   coordenadas_lat: '',
   coordenadas_lng: '',
+  google_maps_url: '',
   status: 'activo',
   start_date: '',
   end_date: ''
@@ -378,8 +382,10 @@ export default function Presupuestos() {
       version: p.version,
       poblacion: p.poblacion,
       provincia: p.provincia || '',
+      direccion: (p as any).direccion || '',
       coordenadas_lat: p.coordenadas_lat?.toString() || '',
       coordenadas_lng: p.coordenadas_lng?.toString() || '',
+      google_maps_url: (p as any).google_maps_url || '',
       status: p.status || 'activo',
       start_date: (p as any).start_date || '',
       end_date: (p as any).end_date || ''
@@ -413,8 +419,10 @@ export default function Presupuestos() {
         version: form.version.trim() || 'v1.0',
         poblacion: form.poblacion.trim(),
         provincia: form.provincia.trim() || null,
+        direccion: form.direccion.trim() || null,
         coordenadas_lat: form.coordenadas_lat ? parseFloat(form.coordenadas_lat) : null,
         coordenadas_lng: form.coordenadas_lng ? parseFloat(form.coordenadas_lng) : null,
+        google_maps_url: form.google_maps_url.trim() || null,
         status: form.status,
         archived: form.status === 'archivado',
         start_date: form.start_date || null,
@@ -892,6 +900,17 @@ export default function Presupuestos() {
               </div>
             </div>
 
+            {/* Dirección */}
+            <div className="space-y-2">
+              <Label htmlFor="direccion">Dirección de obra</Label>
+              <Input
+                id="direccion"
+                value={form.direccion}
+                onChange={(e) => setForm({ ...form, direccion: e.target.value })}
+                placeholder="Ej: Calle Mayor 123, 28001"
+              />
+            </div>
+
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="lat">Latitud</Label>
@@ -911,6 +930,20 @@ export default function Presupuestos() {
                   placeholder="Ej: -3.7038"
                 />
               </div>
+            </div>
+
+            {/* Google Maps URL */}
+            <div className="space-y-2">
+              <Label htmlFor="google_maps_url">URL Google Maps</Label>
+              <Input
+                id="google_maps_url"
+                value={form.google_maps_url}
+                onChange={(e) => setForm({ ...form, google_maps_url: e.target.value })}
+                placeholder="https://www.google.com/maps?q=..."
+              />
+              <p className="text-xs text-muted-foreground">
+                URL de ubicación desde Google Maps o sección de Urbanismo
+              </p>
             </div>
 
             {/* Dates */}

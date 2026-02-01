@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { 
   ChevronRight, ChevronDown, Package, Calendar, ShoppingCart, Building2, 
-  Pencil, RefreshCw, ClipboardList, List, Save, X, Check, Edit, Search
+  Pencil, RefreshCw, ClipboardList, List, Save, X, Check, Edit, Search, Printer
 } from 'lucide-react';
 import { searchMatch } from '@/lib/search-utils';
 import { formatCurrency, formatNumber } from '@/lib/format-utils';
@@ -19,6 +19,11 @@ import { InlineDatePicker } from '@/components/ui/inline-date-picker';
 import { toast } from 'sonner';
 import { PurchaseUnitDialog } from './PurchaseUnitDialog';
 import { ResourceSupplierSelect } from '@/components/ResourceSupplierSelect';
+import { 
+  exportBuyingListAllPdf,
+  exportBuyingListByActivityPdf,
+  exportBuyingListBySupplierPdf
+} from './BuyingListPdfExport';
 
 // Unit options
 const UNIT_OPTIONS = [
@@ -63,6 +68,15 @@ interface Resource {
 
 type ViewMode = 'activity' | 'supplier' | 'resource';
 
+interface BudgetInfo {
+  id: string;
+  nombre: string;
+  direccion?: string | null;
+  poblacion?: string | null;
+  provincia?: string | null;
+  google_maps_url?: string | null;
+}
+
 interface BuyingListUnifiedProps {
   budgetId: string;
   resources: Resource[];
@@ -82,6 +96,9 @@ export function BuyingListUnified({
 }: BuyingListUnifiedProps) {
   // View mode
   const [viewMode, setViewMode] = useState<ViewMode>('activity');
+  
+  // Budget info for PDF export
+  const [budgetInfo, setBudgetInfo] = useState<BudgetInfo | null>(null);
   
   // Expansion state
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
@@ -149,6 +166,23 @@ export function BuyingListUnified({
   useEffect(() => {
     setResources(initialResources);
   }, [initialResources]);
+
+  // Fetch budget info for PDF export
+  useEffect(() => {
+    const fetchBudgetInfo = async () => {
+      const { data, error } = await supabase
+        .from('presupuestos')
+        .select('id, nombre, direccion, poblacion, provincia, google_maps_url')
+        .eq('id', budgetId)
+        .single();
+      
+      if (!error && data) {
+        setBudgetInfo(data as BudgetInfo);
+      }
+    };
+    
+    fetchBudgetInfo();
+  }, [budgetId]);
 
   const toggleGroup = (id: string) => {
     setExpandedGroups(prev => {
@@ -963,6 +997,20 @@ export function BuyingListUnified({
         
         <div className="flex-1" />
         
+        {/* Print All Button */}
+        {budgetInfo && filteredResources.length > 0 && (
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={() => exportBuyingListAllPdf(budgetInfo, filteredResources, filteredActivities, phases)}
+            className="gap-2"
+            title="Imprimir toda la lista de compra"
+          >
+            <Printer className="h-4 w-4" />
+            Imprimir Todo
+          </Button>
+        )}
+        
         {onRefresh && (
           <Button variant="outline" size="sm" onClick={onRefresh} className="gap-2">
             <RefreshCw className="h-4 w-4" />
@@ -1076,6 +1124,29 @@ export function BuyingListUnified({
                         />
                       </div>
                       
+                      {/* Print button for this activity */}
+                      {budgetInfo && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            exportBuyingListByActivityPdf(
+                              budgetInfo,
+                              filteredResources,
+                              filteredActivities,
+                              phases,
+                              activity.id,
+                              formatActivityId(activity)
+                            );
+                          }}
+                          title={`Imprimir recursos de ${formatActivityId(activity)}`}
+                        >
+                          <Printer className="h-4 w-4" />
+                        </Button>
+                      )}
+                      
                       <div className="text-right">
                         <p className="font-semibold text-sm">{formatCurrency(total)}</p>
                         <p className="text-[10px] text-muted-foreground">Total Compra</p>
@@ -1121,6 +1192,30 @@ export function BuyingListUnified({
                           {suppResources.length} recurso{suppResources.length !== 1 ? 's' : ''}
                         </p>
                       </div>
+                      
+                      {/* Print button for this supplier */}
+                      {budgetInfo && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            exportBuyingListBySupplierPdf(
+                              budgetInfo,
+                              filteredResources,
+                              filteredActivities,
+                              phases,
+                              supplierId,
+                              supplierName
+                            );
+                          }}
+                          title={`Imprimir recursos de ${supplierName}`}
+                        >
+                          <Printer className="h-4 w-4" />
+                        </Button>
+                      )}
+                      
                       <div className="text-right">
                         <p className="font-semibold text-sm">{formatCurrency(total)}</p>
                         <p className="text-[10px] text-muted-foreground">Total Compra</p>
@@ -1156,7 +1251,19 @@ export function BuyingListUnified({
               <p className="text-primary">{formatCurrency(grandTotal)}</p>
               <p className="text-[9px] text-muted-foreground font-normal">Total Compra</p>
             </div>
-            <div className="w-20" />
+            <div className="w-20 flex justify-center">
+              {budgetInfo && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7"
+                  onClick={() => exportBuyingListAllPdf(budgetInfo, filteredResources, filteredActivities, phases)}
+                  title="Imprimir lista de recursos"
+                >
+                  <Printer className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
           </div>
           <ResourceHeaderSimple />
           {resourceList.map(resource => renderResourceRowSimple(resource))}

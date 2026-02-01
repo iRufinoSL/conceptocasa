@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
 import { 
   ChevronRight, ChevronDown, Package, Calendar, ShoppingCart, Building2, 
   Pencil, RefreshCw, ClipboardList, List, Save, X, Check, Edit, Search, Printer
@@ -22,7 +23,8 @@ import { ResourceSupplierSelect } from '@/components/ResourceSupplierSelect';
 import { 
   exportBuyingListAllPdf,
   exportBuyingListByActivityPdf,
-  exportBuyingListBySupplierPdf
+  exportBuyingListBySupplierPdf,
+  exportBuyingListSelectedPdf
 } from './BuyingListPdfExport';
 
 // Unit options
@@ -68,6 +70,16 @@ interface Resource {
 
 type ViewMode = 'activity' | 'supplier' | 'resource';
 
+interface SupplierInfo {
+  id: string;
+  name: string;
+  surname?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  address?: string | null;
+  nif_dni?: string | null;
+}
+
 interface BudgetInfo {
   id: string;
   nombre: string;
@@ -99,6 +111,12 @@ export function BuyingListUnified({
   
   // Budget info for PDF export
   const [budgetInfo, setBudgetInfo] = useState<BudgetInfo | null>(null);
+  
+  // Supplier details for PDF export
+  const [supplierDetails, setSupplierDetails] = useState<Map<string, SupplierInfo>>(new Map());
+  
+  // Selected resources for printing in "Por Recurso" view
+  const [selectedResources, setSelectedResources] = useState<Set<string>>(new Set());
   
   // Expansion state
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
@@ -183,6 +201,59 @@ export function BuyingListUnified({
     
     fetchBudgetInfo();
   }, [budgetId]);
+
+  // Fetch supplier details for PDF export
+  useEffect(() => {
+    const fetchSupplierDetails = async () => {
+      // Get unique supplier IDs from resources
+      const supplierIds = [...new Set(
+        resources
+          .filter(r => r.supplier_id)
+          .map(r => r.supplier_id as string)
+      )];
+      
+      if (supplierIds.length === 0) return;
+      
+      const { data, error } = await supabase
+        .from('crm_contacts')
+        .select('id, name, surname, email, phone, address, nif_dni')
+        .in('id', supplierIds);
+      
+      if (!error && data) {
+        const detailsMap = new Map<string, SupplierInfo>();
+        data.forEach(contact => {
+          detailsMap.set(contact.id, contact as SupplierInfo);
+        });
+        setSupplierDetails(detailsMap);
+      }
+    };
+    
+    fetchSupplierDetails();
+  }, [resources]);
+
+  // Toggle resource selection
+  const toggleResourceSelection = (resourceId: string) => {
+    setSelectedResources(prev => {
+      const next = new Set(prev);
+      if (next.has(resourceId)) next.delete(resourceId);
+      else next.add(resourceId);
+      return next;
+    });
+  };
+
+  // Select/deselect all resources
+  const toggleSelectAll = useCallback((resourceIds: string[]) => {
+    setSelectedResources(prev => {
+      const allSelected = resourceIds.every(id => prev.has(id));
+      const next = new Set(prev);
+      if (allSelected) {
+        resourceIds.forEach(id => next.delete(id));
+      } else {
+        resourceIds.forEach(id => next.add(id));
+      }
+      return next;
+    });
+  }, []);
 
   const toggleGroup = (id: string) => {
     setExpandedGroups(prev => {
@@ -711,9 +782,17 @@ export function BuyingListUnified({
     const displayVatPercent = resource.purchase_vat_percent ?? 21;
     const vatAmount = displayPurchaseCost * displayPurchaseUnits * (displayVatPercent / 100);
     const buyingSubtotal = (displayPurchaseCost * displayPurchaseUnits) + vatAmount;
+    const isSelected = selectedResources.has(resource.id);
 
     return (
       <div key={resource.id} className="flex items-center gap-2 px-3 py-2 bg-muted/5 hover:bg-muted/10 border-b last:border-b-0">
+        {/* Selection checkbox */}
+        <Checkbox
+          checked={isSelected}
+          onCheckedChange={() => toggleResourceSelection(resource.id)}
+          className="flex-shrink-0"
+        />
+        
         {/* 1. Recurso */}
         <Package className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
         <div className="flex-1 min-w-0">
@@ -908,20 +987,31 @@ export function BuyingListUnified({
     </div>
   );
 
-  // Resource header row for "Por Recurso" view (simplified columns)
-  const ResourceHeaderSimple = () => (
-    <div className="flex items-center gap-2 px-3 py-1.5 bg-muted/30 text-[10px] text-muted-foreground font-medium border-b">
-      <div className="w-4" />
-      <div className="flex-1 min-w-0">Recurso</div>
-      <div className="w-36 text-center">Proveedor</div>
-      <div className="w-20 text-center">€Coste ud</div>
-      <div className="w-14 text-center">%IVA</div>
-      <div className="w-20 text-center">Ud medida</div>
-      <div className="w-20 text-center">Uds compra</div>
-      <div className="w-24 text-right">€SubTotal</div>
-      <div className="w-20 text-center">Acciones</div>
-    </div>
-  );
+  // Resource header row for "Por Recurso" view (simplified columns with selection)
+  const ResourceHeaderSimple = ({ resourceIds }: { resourceIds: string[] }) => {
+    const allSelected = resourceIds.length > 0 && resourceIds.every(id => selectedResources.has(id));
+    const someSelected = resourceIds.some(id => selectedResources.has(id));
+    
+    return (
+      <div className="flex items-center gap-2 px-3 py-1.5 bg-muted/30 text-[10px] text-muted-foreground font-medium border-b">
+        <Checkbox
+          checked={allSelected}
+          onCheckedChange={() => toggleSelectAll(resourceIds)}
+          className="flex-shrink-0"
+          data-state={someSelected && !allSelected ? "indeterminate" : undefined}
+        />
+        <div className="w-4" />
+        <div className="flex-1 min-w-0">Recurso</div>
+        <div className="w-36 text-center">Proveedor</div>
+        <div className="w-20 text-center">€Coste ud</div>
+        <div className="w-14 text-center">%IVA</div>
+        <div className="w-20 text-center">Ud medida</div>
+        <div className="w-20 text-center">Uds compra</div>
+        <div className="w-24 text-right">€SubTotal</div>
+        <div className="w-20 text-center">Acciones</div>
+      </div>
+    );
+  };
 
   return (
     <div className="space-y-4">
@@ -1207,7 +1297,8 @@ export function BuyingListUnified({
                               filteredActivities,
                               phases,
                               supplierId,
-                              supplierName
+                              supplierName,
+                              supplierDetails
                             );
                           }}
                           title={`Imprimir recursos de ${supplierName}`}
@@ -1240,8 +1331,15 @@ export function BuyingListUnified({
         <div className="border rounded-lg">
           {/* Total header row above the column headers */}
           <div className="flex items-center gap-2 px-3 py-2 bg-primary/10 text-xs font-semibold border-b">
+            <div className="w-5" /> {/* Space for checkbox */}
             <div className="w-4" />
-            <div className="flex-1 min-w-0" />
+            <div className="flex-1 min-w-0">
+              {selectedResources.size > 0 && (
+                <span className="text-muted-foreground font-normal text-xs">
+                  {selectedResources.size} seleccionado{selectedResources.size !== 1 ? 's' : ''}
+                </span>
+              )}
+            </div>
             <div className="w-36" />
             <div className="w-20" />
             <div className="w-14" />
@@ -1251,21 +1349,39 @@ export function BuyingListUnified({
               <p className="text-primary">{formatCurrency(grandTotal)}</p>
               <p className="text-[9px] text-muted-foreground font-normal">Total Compra</p>
             </div>
-            <div className="w-20 flex justify-center">
-              {budgetInfo && (
+            <div className="w-20 flex justify-center gap-1">
+              {budgetInfo && selectedResources.size > 0 && (
+                <Button
+                  variant="default"
+                  size="sm"
+                  className="h-7 gap-1 text-xs"
+                  onClick={() => exportBuyingListSelectedPdf(
+                    budgetInfo, 
+                    filteredResources, 
+                    filteredActivities, 
+                    phases, 
+                    [...selectedResources]
+                  )}
+                  title="Imprimir recursos seleccionados"
+                >
+                  <Printer className="h-3.5 w-3.5" />
+                  Selección
+                </Button>
+              )}
+              {budgetInfo && selectedResources.size === 0 && (
                 <Button
                   variant="ghost"
                   size="icon"
                   className="h-7 w-7"
                   onClick={() => exportBuyingListAllPdf(budgetInfo, filteredResources, filteredActivities, phases)}
-                  title="Imprimir lista de recursos"
+                  title="Imprimir todo"
                 >
                   <Printer className="h-4 w-4" />
                 </Button>
               )}
             </div>
           </div>
-          <ResourceHeaderSimple />
+          <ResourceHeaderSimple resourceIds={resourceList.map(r => r.id)} />
           {resourceList.map(resource => renderResourceRowSimple(resource))}
         </div>
       )}

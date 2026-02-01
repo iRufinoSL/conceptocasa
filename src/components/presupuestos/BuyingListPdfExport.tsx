@@ -14,6 +14,16 @@ interface BudgetInfo {
   google_maps_url?: string | null;
 }
 
+interface SupplierInfo {
+  id: string;
+  name: string;
+  surname?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  address?: string | null;
+  nif_dni?: string | null;
+}
+
 interface Phase {
   id: string;
   name: string;
@@ -44,12 +54,14 @@ interface Resource {
   purchase_vat_percent?: number | null;
 }
 
-type PrintMode = 'all' | 'activity' | 'supplier';
+type PrintMode = 'all' | 'activity' | 'supplier' | 'selected';
 
 interface PrintOptions {
   mode: PrintMode;
   groupId?: string;
   groupName?: string;
+  selectedResourceIds?: string[];
+  supplierDetails?: Map<string, SupplierInfo>;
 }
 
 const calcBuyingSubtotal = (r: Resource) => {
@@ -70,11 +82,11 @@ export function exportBuyingListPdf(
 ) {
   // Filter resources based on print mode
   let filteredResources = resources;
-  let title = 'Lista de Compra';
+  let title = 'Orden de compra';
   
   if (options.mode === 'activity' && options.groupId) {
     filteredResources = resources.filter(r => r.activity_id === options.groupId);
-    title = `Lista de Compra - ${options.groupName || 'Actividad'}`;
+    title = `Orden de compra - ${options.groupName || 'Actividad'}`;
   } else if (options.mode === 'supplier' && options.groupId) {
     const isNoSupplier = options.groupId === '__no_supplier__';
     filteredResources = resources.filter(r => 
@@ -82,7 +94,10 @@ export function exportBuyingListPdf(
         ? !r.supplier_id 
         : r.supplier_id === options.groupId
     );
-    title = `Lista de Compra - ${options.groupName || 'Proveedor'}`;
+    title = `Orden de compra - ${options.groupName || 'Proveedor'}`;
+  } else if (options.mode === 'selected' && options.selectedResourceIds) {
+    filteredResources = resources.filter(r => options.selectedResourceIds!.includes(r.id));
+    title = 'Orden de compra - Selección';
   }
 
   if (filteredResources.length === 0) {
@@ -124,7 +139,7 @@ export function exportBuyingListPdf(
   // Google Maps URL
   if (budget.google_maps_url) {
     doc.setTextColor(0, 102, 204);
-    doc.textWithLink(`Google Maps: ${budget.google_maps_url}`, margin, yPos, {
+    doc.textWithLink(`Ver en Google Maps`, margin, yPos, {
       url: budget.google_maps_url
     });
     doc.setTextColor(0, 0, 0);
@@ -144,6 +159,41 @@ export function exportBuyingListPdf(
   doc.setFont('helvetica', 'normal');
   doc.text(`Generado: ${format(new Date(), "dd/MM/yyyy HH:mm", { locale: es })}`, margin, yPos);
   yPos += 8;
+
+  // Supplier details section - only for supplier-specific prints
+  if (options.mode === 'supplier' && options.groupId && options.groupId !== '__no_supplier__' && options.supplierDetails) {
+    const supplier = options.supplierDetails.get(options.groupId);
+    if (supplier) {
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Datos del Proveedor:', margin, yPos);
+      yPos += 5;
+      
+      doc.setFont('helvetica', 'normal');
+      const supplierName = supplier.surname ? `${supplier.name} ${supplier.surname}` : supplier.name;
+      doc.text(`Nombre: ${supplierName}`, margin, yPos);
+      yPos += 4;
+      
+      if (supplier.nif_dni) {
+        doc.text(`NIF/CIF: ${supplier.nif_dni}`, margin, yPos);
+        yPos += 4;
+      }
+      if (supplier.email) {
+        doc.text(`Email: ${supplier.email}`, margin, yPos);
+        yPos += 4;
+      }
+      if (supplier.phone) {
+        doc.text(`Teléfono: ${supplier.phone}`, margin, yPos);
+        yPos += 4;
+      }
+      if (supplier.address) {
+        doc.text(`Dirección: ${supplier.address}`, margin, yPos);
+        yPos += 4;
+      }
+      
+      yPos += 4;
+    }
+  }
 
   // Helper to get activity info
   const getActivityInfo = (activityId: string | null) => {
@@ -248,8 +298,10 @@ export function exportBuyingListPdf(
 
   // Save the PDF
   const fileName = options.mode === 'all' 
-    ? `Lista_Compra_${budget.nombre.replace(/\s+/g, '_')}.pdf`
-    : `Lista_Compra_${options.groupName?.replace(/\s+/g, '_') || 'Filtrada'}.pdf`;
+    ? `Orden_Compra_${budget.nombre.replace(/\s+/g, '_')}.pdf`
+    : options.mode === 'selected'
+    ? `Orden_Compra_Seleccion_${budget.nombre.replace(/\s+/g, '_')}.pdf`
+    : `Orden_Compra_${options.groupName?.replace(/\s+/g, '_') || 'Filtrada'}.pdf`;
   
   doc.save(fileName);
 }
@@ -260,12 +312,14 @@ export function exportBuyingListBySupplierPdf(
   activities: Activity[],
   phases: Phase[],
   supplierId: string,
-  supplierName: string
+  supplierName: string,
+  supplierDetails?: Map<string, SupplierInfo>
 ) {
   exportBuyingListPdf(budget, resources, activities, phases, {
     mode: 'supplier',
     groupId: supplierId,
-    groupName: supplierName
+    groupName: supplierName,
+    supplierDetails
   });
 }
 
@@ -292,5 +346,18 @@ export function exportBuyingListAllPdf(
 ) {
   exportBuyingListPdf(budget, resources, activities, phases, {
     mode: 'all'
+  });
+}
+
+export function exportBuyingListSelectedPdf(
+  budget: BudgetInfo,
+  resources: Resource[],
+  activities: Activity[],
+  phases: Phase[],
+  selectedResourceIds: string[]
+) {
+  exportBuyingListPdf(budget, resources, activities, phases, {
+    mode: 'selected',
+    selectedResourceIds
   });
 }

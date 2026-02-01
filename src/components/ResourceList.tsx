@@ -2,7 +2,7 @@ import { ExternalResource, ResourceType, getResourceComposition } from '@/types/
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Pencil, Trash2, ExternalLink, Package, Users, Clock, Wrench, Boxes, Cog, Layers, Square, Copy } from 'lucide-react';
+import { Pencil, Trash2, ExternalLink, Package, Users, Clock, Wrench, Boxes, Cog, Layers, Square, Copy, Hammer } from 'lucide-react';
 import { formatCurrency } from '@/lib/format-utils';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -15,22 +15,24 @@ interface ResourceListProps {
   getEffectiveCost: (resource: ExternalResource) => number;
 }
 
-const resourceTypeVariants: Record<ResourceType, "producto" | "manoDeObra" | "alquiler" | "servicio" | "material" | "equipo"> = {
-  'Producto': 'producto',
-  'Mano de obra': 'manoDeObra',
+const resourceTypeVariants: Record<ResourceType, "producto" | "manoDeObra" | "alquiler" | "servicio" | "material" | "equipo" | "utiles"> = {
   'Alquiler': 'alquiler',
-  'Servicio': 'servicio',
-  'Material': 'material',
   'Equipo': 'equipo',
+  'Mano de obra': 'manoDeObra',
+  'Material': 'material',
+  'Producto': 'producto',
+  'Servicio': 'servicio',
+  'Utiles y herramientas': 'utiles',
 };
 
 const resourceTypeIcons: Record<ResourceType, React.ReactNode> = {
-  'Producto': <Package className="h-3.5 w-3.5" />,
-  'Mano de obra': <Users className="h-3.5 w-3.5" />,
   'Alquiler': <Clock className="h-3.5 w-3.5" />,
-  'Servicio': <Wrench className="h-3.5 w-3.5" />,
-  'Material': <Boxes className="h-3.5 w-3.5" />,
   'Equipo': <Cog className="h-3.5 w-3.5" />,
+  'Mano de obra': <Users className="h-3.5 w-3.5" />,
+  'Material': <Boxes className="h-3.5 w-3.5" />,
+  'Producto': <Package className="h-3.5 w-3.5" />,
+  'Servicio': <Wrench className="h-3.5 w-3.5" />,
+  'Utiles y herramientas': <Hammer className="h-3.5 w-3.5" />,
 };
 
 export function ResourceList({ resources, onEdit, onDelete, onDuplicate, getEffectiveCost }: ResourceListProps) {

@@ -58,6 +58,7 @@ interface Presupuesto {
   option_a_description: string | null;
   option_b_description: string | null;
   option_c_description: string | null;
+  estimated_budget: number | null;
 }
 
 interface Project {
@@ -637,6 +638,21 @@ export default function PresupuestoDashboard() {
                   toast.error('Error al guardar');
                 }
               }}
+              estimatedBudget={presupuesto.estimated_budget}
+              onEstimatedBudgetChange={async (value) => {
+                try {
+                  const { error } = await supabase
+                    .from('presupuestos')
+                    .update({ estimated_budget: value })
+                    .eq('id', presupuesto.id);
+                  if (error) throw error;
+                  setPresupuesto({ ...presupuesto, estimated_budget: value });
+                } catch (err) {
+                  console.error('Error updating estimated_budget:', err);
+                  toast.error('Error al guardar presupuesto estimado');
+                  throw err;
+                }
+              }}
             />
           </TabsContent>
 
@@ -659,6 +675,7 @@ export default function PresupuestoDashboard() {
               budgetStartDate={presupuesto.start_date}
               budgetEndDate={presupuesto.end_date}
               initialPhaseId={selectedPhaseId}
+              estimatedBudget={presupuesto.estimated_budget}
             />
           </TabsContent>
 

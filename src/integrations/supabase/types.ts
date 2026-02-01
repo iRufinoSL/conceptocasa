@@ -749,6 +749,8 @@ export type Database = {
           created_at: string | null
           depends_on_phase_id: string | null
           duration_days: number | null
+          estimated_budget_amount: number | null
+          estimated_budget_percent: number | null
           estimated_end_date: string | null
           id: string
           name: string
@@ -766,6 +768,8 @@ export type Database = {
           created_at?: string | null
           depends_on_phase_id?: string | null
           duration_days?: number | null
+          estimated_budget_amount?: number | null
+          estimated_budget_percent?: number | null
           estimated_end_date?: string | null
           id?: string
           name: string
@@ -783,6 +787,8 @@ export type Database = {
           created_at?: string | null
           depends_on_phase_id?: string | null
           duration_days?: number | null
+          estimated_budget_amount?: number | null
+          estimated_budget_percent?: number | null
           estimated_end_date?: string | null
           id?: string
           name?: string
@@ -2717,6 +2723,7 @@ export type Database = {
           created_at: string | null
           direccion: string | null
           end_date: string | null
+          estimated_budget: number | null
           google_maps_url: string | null
           id: string
           is_signed: boolean
@@ -2746,6 +2753,7 @@ export type Database = {
           created_at?: string | null
           direccion?: string | null
           end_date?: string | null
+          estimated_budget?: number | null
           google_maps_url?: string | null
           id?: string
           is_signed?: boolean
@@ -2775,6 +2783,7 @@ export type Database = {
           created_at?: string | null
           direccion?: string | null
           end_date?: string | null
+          estimated_budget?: number | null
           google_maps_url?: string | null
           id?: string
           is_signed?: boolean

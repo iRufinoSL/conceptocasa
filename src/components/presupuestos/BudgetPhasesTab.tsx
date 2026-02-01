@@ -10,7 +10,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Plus, Pencil, Trash2, Upload, Search, ChevronRight, ChevronDown, ClipboardList, MoreHorizontal, Copy, Calendar, List, Clock, LayoutGrid, BarChart3, ShoppingCart } from 'lucide-react';
+import { Plus, Pencil, Trash2, Upload, Search, ChevronRight, ChevronDown, ClipboardList, MoreHorizontal, Copy, Calendar, List, Clock, LayoutGrid, BarChart3, ShoppingCart, Euro } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { HierarchicalGanttView } from './HierarchicalGanttView';
 import { BuyingListView } from './BuyingListView';
@@ -41,6 +41,8 @@ interface BudgetPhase {
   depends_on_phase_id: string | null;
   actual_start_date: string | null;
   actual_end_date: string | null;
+  estimated_budget_percent: number | null;
+  estimated_budget_amount: number | null;
 }
 
 interface BudgetActivity {
@@ -95,6 +97,7 @@ interface BudgetPhasesTabProps {
   budgetStartDate?: string | null;
   budgetEndDate?: string | null;
   initialPhaseId?: string | null;
+  estimatedBudget?: number | null;
 }
 
 const emptyForm: PhaseForm = {
@@ -171,13 +174,13 @@ const calculateResourceSubtotal = (resource: BudgetResource): number => {
   });
 };
 
-export function BudgetPhasesTab({ budgetId, isAdmin, budgetStartDate, budgetEndDate, initialPhaseId }: BudgetPhasesTabProps) {
+export function BudgetPhasesTab({ budgetId, isAdmin, budgetStartDate, budgetEndDate, initialPhaseId, estimatedBudget }: BudgetPhasesTabProps) {
   const [phases, setPhases] = useState<BudgetPhase[]>([]);
   const [activities, setActivities] = useState<BudgetActivity[]>([]);
   const [resources, setResources] = useState<BudgetResource[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [viewMode, setViewMode] = useState<'activities' | 'time' | 'gantt' | 'options' | 'shopping'>('activities');
+  const [viewMode, setViewMode] = useState<'activities' | 'time' | 'gantt' | 'options' | 'shopping' | 'estimated'>('activities');
   const [formDialogOpen, setFormDialogOpen] = useState(false);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -843,6 +846,38 @@ export function BudgetPhasesTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
     setEditingTimeField(null);
   };
 
+  // Handle estimated budget field update for phases
+  const handlePhaseEstimatedBudgetUpdate = async (phaseId: string, field: 'estimated_budget_percent' | 'estimated_budget_amount', value: number | null) => {
+    try {
+      const updateData: any = { [field]: value };
+      
+      // If updating percent, calculate amount based on budget's estimated_budget
+      if (field === 'estimated_budget_percent' && value !== null && estimatedBudget) {
+        updateData.estimated_budget_amount = (value / 100) * estimatedBudget;
+      }
+      
+      const { error } = await supabase
+        .from('budget_phases')
+        .update(updateData)
+        .eq('id', phaseId);
+      
+      if (error) throw error;
+      
+      setPhases(prev => prev.map(p => 
+        p.id === phaseId ? { ...p, ...updateData } : p
+      ));
+      toast.success('Presupuesto estimado actualizado');
+    } catch (err: any) {
+      console.error('Error updating estimated budget:', err);
+      toast.error('Error al actualizar');
+    }
+  };
+
+  // Calculate total estimated budget amount across all phases
+  const totalEstimatedBudgetAmount = useMemo(() => {
+    return phases.reduce((sum, phase) => sum + (phase.estimated_budget_amount || 0), 0);
+  }, [phases]);
+
   // Sort phases by start_date for time view
   const phasesSortedByDate = useMemo(() => {
     return [...phases].sort((a, b) => {
@@ -936,10 +971,19 @@ export function BudgetPhasesTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
               variant={viewMode === 'shopping' ? 'default' : 'ghost'} 
               size="sm"
               onClick={() => setViewMode('shopping')}
-              className="rounded-l-none"
+              className="rounded-none border-r"
             >
               <ShoppingCart className="h-4 w-4 mr-1" />
               Lista Compra
+            </Button>
+            <Button 
+              variant={viewMode === 'estimated' ? 'default' : 'ghost'} 
+              size="sm"
+              onClick={() => setViewMode('estimated')}
+              className="rounded-l-none"
+            >
+              <Euro className="h-4 w-4 mr-1" />
+              Presupuesto Estimado
             </Button>
           </div>
           {isAdmin && (
@@ -996,6 +1040,101 @@ export function BudgetPhasesTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
         {filteredPhases.length === 0 ? (
           <div className="text-center py-8 text-muted-foreground">
             {searchTerm ? 'No se encontraron fases' : 'No hay fases. Importe un archivo CSV o cree una nueva fase.'}
+          </div>
+        ) : viewMode === 'estimated' ? (
+          /* Estimated Budget View */
+          <div className="space-y-4">
+            {/* Header with total */}
+            <div className="bg-primary/5 border border-primary/20 rounded-lg p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Euro className="h-5 w-5 text-primary" />
+                  <span className="font-semibold">Presupuesto Estimado Total:</span>
+                </div>
+                <span className="text-xl font-bold text-primary font-mono">
+                  {formatCurrency(estimatedBudget || 0)}
+                </span>
+              </div>
+              {estimatedBudget && (
+                <div className="mt-2 text-sm text-muted-foreground">
+                  Asignado a fases: {formatCurrency(totalEstimatedBudgetAmount)} ({((totalEstimatedBudgetAmount / estimatedBudget) * 100).toFixed(1)}%)
+                </div>
+              )}
+            </div>
+            
+            {/* Phases table */}
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-[300px]">Fase</TableHead>
+                  <TableHead className="w-[150px] text-right">% Presupuesto estimado</TableHead>
+                  <TableHead className="w-[180px] text-right">€Presupuesto estimado fase</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredPhases.map((phase) => (
+                  <TableRow key={phase.id}>
+                    <TableCell className="font-medium">
+                      {phase.code && <span className="text-muted-foreground mr-1">{phase.code}</span>}
+                      {phase.name}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {isAdmin ? (
+                        <Input
+                          type="number"
+                          step="0.1"
+                          min="0"
+                          max="100"
+                          placeholder="0"
+                          value={phase.estimated_budget_percent ?? ''}
+                          onChange={(e) => {
+                            const val = e.target.value === '' ? null : parseFloat(e.target.value);
+                            handlePhaseEstimatedBudgetUpdate(phase.id, 'estimated_budget_percent', val);
+                          }}
+                          className="w-24 text-right font-mono ml-auto"
+                        />
+                      ) : (
+                        <span className="font-mono">
+                          {phase.estimated_budget_percent !== null ? `${phase.estimated_budget_percent}%` : '-'}
+                        </span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {isAdmin ? (
+                        <Input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          placeholder="0.00"
+                          value={phase.estimated_budget_amount ?? ''}
+                          onChange={(e) => {
+                            const val = e.target.value === '' ? null : parseFloat(e.target.value);
+                            handlePhaseEstimatedBudgetUpdate(phase.id, 'estimated_budget_amount', val);
+                          }}
+                          className="w-32 text-right font-mono ml-auto"
+                        />
+                      ) : (
+                        <span className="font-mono font-semibold text-primary">
+                          {phase.estimated_budget_amount !== null ? formatCurrency(phase.estimated_budget_amount) : '-'}
+                        </span>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+                {/* Total row */}
+                <TableRow className="bg-muted/50 font-semibold">
+                  <TableCell>Total</TableCell>
+                  <TableCell className="text-right font-mono">
+                    {estimatedBudget 
+                      ? `${((totalEstimatedBudgetAmount / estimatedBudget) * 100).toFixed(1)}%`
+                      : '-'}
+                  </TableCell>
+                  <TableCell className="text-right font-mono text-primary">
+                    {formatCurrency(totalEstimatedBudgetAmount)}
+                  </TableCell>
+                </TableRow>
+              </TableBody>
+            </Table>
           </div>
         ) : viewMode === 'shopping' ? (
           /* Buying List View */

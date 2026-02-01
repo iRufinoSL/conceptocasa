@@ -15,3 +15,10 @@ En la vista 'Lista Compra':
 - Muestra nombre del recurso, tipo (Material, Mano de obra, etc.), proveedor, unidades, coste unitario y subtotal
 - Incluye secciones para actividades sin fase y recursos sin actividad asignada
 - Útil para planificación de compras y logística de obra
+
+En la vista 'Presupuesto Estimado':
+- Campo '€Presupuesto estimado' en sección CUÁNTO? para definir el valor estimado inicial del proyecto
+- Campo '% Presupuesto estimado' por fase: porcentaje del presupuesto total asignado
+- Campo '€Presupuesto estimado fase' por fase: calculado automáticamente (% × €Presupuesto estimado) o editable manualmente
+- Tabla con listado de fases mostrando código, nombre, porcentaje y monto estimado
+- Cabecera con total del presupuesto estimado y suma de lo asignado a fases con porcentaje de cumplimiento

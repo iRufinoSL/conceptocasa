@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Calculator, Home, Euro, TrendingUp, Building2, Package, LayoutGrid, FileText, FileSignature, Loader2, Check } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { formatNumber, formatCurrency } from '@/lib/format-utils';
@@ -31,6 +32,8 @@ interface BudgetCostSummaryProps {
   optionBDescription?: string | null;
   optionCDescription?: string | null;
   onOptionDescriptionChange?: (option: string, value: string) => Promise<void>;
+  estimatedBudget?: number | null;
+  onEstimatedBudgetChange?: (value: number | null) => Promise<void>;
 }
 
 interface Resource {
@@ -78,7 +81,9 @@ export function BudgetCostSummary({
   optionADescription,
   optionBDescription,
   optionCDescription,
-  onOptionDescriptionChange
+  onOptionDescriptionChange,
+  estimatedBudget,
+  onEstimatedBudgetChange
 }: BudgetCostSummaryProps) {
   const [resources, setResources] = useState<Resource[]>([]);
   const [spaces, setSpaces] = useState<Space[]>([]);
@@ -93,6 +98,47 @@ export function BudgetCostSummary({
     B: optionBDescription || '',
     C: optionCDescription || ''
   });
+  
+  // State for estimated budget field
+  const [estimatedBudgetValue, setEstimatedBudgetValue] = useState<string>(
+    estimatedBudget !== null && estimatedBudget !== undefined ? estimatedBudget.toString() : ''
+  );
+  const [savingEstimatedBudget, setSavingEstimatedBudget] = useState(false);
+  const [savedEstimatedBudget, setSavedEstimatedBudget] = useState(false);
+  const estimatedBudgetTimerRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Sync estimated budget when prop changes
+  useEffect(() => {
+    setEstimatedBudgetValue(
+      estimatedBudget !== null && estimatedBudget !== undefined ? estimatedBudget.toString() : ''
+    );
+  }, [estimatedBudget]);
+  
+  // Handle estimated budget change with debounce
+  const handleEstimatedBudgetChange = (value: string) => {
+    setEstimatedBudgetValue(value);
+    setSavedEstimatedBudget(false);
+    
+    if (estimatedBudgetTimerRef.current) {
+      clearTimeout(estimatedBudgetTimerRef.current);
+    }
+    
+    estimatedBudgetTimerRef.current = setTimeout(async () => {
+      if (onEstimatedBudgetChange) {
+        setSavingEstimatedBudget(true);
+        const numValue = value === '' ? null : parseFloat(value.replace(/[^\d.-]/g, ''));
+        try {
+          await onEstimatedBudgetChange(numValue);
+          setSavedEstimatedBudget(true);
+          setTimeout(() => setSavedEstimatedBudget(false), 2000);
+        } catch (err) {
+          console.error('Error saving estimated budget:', err);
+        } finally {
+          setSavingEstimatedBudget(false);
+        }
+      }
+    }, 800);
+  };
   
   // Track the last saved values to avoid unnecessary saves
   const lastSavedRef = useRef({
@@ -691,6 +737,51 @@ export function BudgetCostSummary({
                 </p>
               </div>
             )}
+            
+            {/* Estimated Budget Field */}
+            <div className="mt-4 pt-4 border-t">
+              <Label htmlFor="estimated-budget" className="flex items-center gap-2 text-sm font-medium mb-2">
+                <Euro className="h-4 w-4" />
+                €Presupuesto estimado
+              </Label>
+              {isAdmin && onEstimatedBudgetChange ? (
+                <div className="relative">
+                  <div className="flex items-center gap-2">
+                    <Input
+                      id="estimated-budget"
+                      type="number"
+                      step="0.01"
+                      placeholder="0.00"
+                      value={estimatedBudgetValue}
+                      onChange={(e) => handleEstimatedBudgetChange(e.target.value)}
+                      className="max-w-xs font-mono"
+                    />
+                    <span className="text-sm text-muted-foreground">€</span>
+                    {savingEstimatedBudget && (
+                      <span className="text-muted-foreground flex items-center gap-1 text-xs">
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                        Guardando...
+                      </span>
+                    )}
+                    {savedEstimatedBudget && (
+                      <span className="text-green-600 flex items-center gap-1 text-xs">
+                        <Check className="h-3 w-3" />
+                        Guardado
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Valor estimado inicial del presupuesto para distribución por fases
+                  </p>
+                </div>
+              ) : (
+                <p className="text-lg font-mono font-semibold text-primary">
+                  {estimatedBudget !== null && estimatedBudget !== undefined 
+                    ? formatCurrency(estimatedBudget) 
+                    : 'Sin definir'}
+                </p>
+              )}
+            </div>
             
             {/* Comparativa Opciones Field */}
             <div className="mt-4 pt-4 border-t">

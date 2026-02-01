@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { 
   ChevronRight, ChevronDown, Package, Calendar, ShoppingCart, Building2, 
-  Pencil, RefreshCw, ClipboardList, List, Save, X, Check
+  Pencil, RefreshCw, ClipboardList, List, Save, X, Check, Edit
 } from 'lucide-react';
 import { formatCurrency, formatNumber } from '@/lib/format-utils';
 import { formatActividadId } from '@/lib/activity-id';
@@ -17,6 +17,7 @@ import { parseISO, isWithinInterval, isValid, isBefore, isAfter } from 'date-fns
 import { InlineDatePicker } from '@/components/ui/inline-date-picker';
 import { toast } from 'sonner';
 import { PurchaseUnitDialog } from './PurchaseUnitDialog';
+import { ResourceSupplierSelect } from '@/components/ResourceSupplierSelect';
 
 // Unit options
 const UNIT_OPTIONS = [
@@ -92,10 +93,12 @@ export function BuyingListUnified({
   
   // Inline editing
   const [editingResource, setEditingResource] = useState<string | null>(null);
+  const [editingSupplier, setEditingSupplier] = useState<string | null>(null);
   const [editValues, setEditValues] = useState<{
     purchase_unit_cost?: string;
     purchase_unit?: string;
     purchase_unit_quantity?: string;
+    supplier_id?: string | null;
   }>({});
   
   // Dialog for full edit
@@ -177,7 +180,9 @@ export function BuyingListUnified({
       purchase_unit_cost?: number | null;
       purchase_unit?: string | null;
       purchase_unit_quantity?: number | null;
-    }
+      supplier_id?: string | null;
+    },
+    supplierName?: string | null
   ) => {
     try {
       const { error } = await supabase
@@ -187,18 +192,40 @@ export function BuyingListUnified({
 
       if (error) throw error;
 
+      // Update local state, including supplier_name if supplier changed
       setResources(prev => prev.map(r => 
-        r.id === resourceId ? { ...r, ...updates } : r
+        r.id === resourceId 
+          ? { 
+              ...r, 
+              ...updates,
+              ...(supplierName !== undefined && { supplier_name: supplierName })
+            } 
+          : r
       ));
 
       toast.success('Recurso actualizado');
       setEditingResource(null);
+      setEditingSupplier(null);
       setEditValues({});
     } catch (error) {
       console.error('Error updating resource:', error);
       toast.error('Error al actualizar');
     }
   }, []);
+
+  // Handle supplier change inline
+  const handleSupplierChange = useCallback(async (
+    resourceId: string,
+    supplierId: string | null,
+    contact: { name: string; surname: string | null } | null
+  ) => {
+    const supplierName = contact 
+      ? (contact.surname ? `${contact.name} ${contact.surname}` : contact.name) 
+      : null;
+    
+    await handleResourceUpdate(resourceId, { supplier_id: supplierId }, supplierName);
+    setEditingSupplier(null);
+  }, [handleResourceUpdate]);
 
   // Handle activity date update
   const handleActivityDateChange = useCallback(async (
@@ -232,7 +259,8 @@ export function BuyingListUnified({
     setEditValues({
       purchase_unit_cost: String(resource.purchase_unit_cost ?? resource.external_unit_cost ?? 0),
       purchase_unit: resource.purchase_unit ?? resource.unit ?? 'ud',
-      purchase_unit_quantity: String(resource.purchase_unit_quantity ?? calculatedUnits)
+      purchase_unit_quantity: String(resource.purchase_unit_quantity ?? calculatedUnits),
+      supplier_id: resource.supplier_id
     });
   };
 
@@ -250,6 +278,7 @@ export function BuyingListUnified({
   // Cancel inline editing
   const cancelEditing = () => {
     setEditingResource(null);
+    setEditingSupplier(null);
     setEditValues({});
   };
 
@@ -357,6 +386,7 @@ export function BuyingListUnified({
   // Render resource row with inline editing
   const renderResourceRow = (resource: Resource, showActivity = false) => {
     const isEditing = editingResource === resource.id;
+    const isEditingSupplierInline = editingSupplier === resource.id;
     const calculatedUnits = resource.manual_units ?? resource.related_units ?? 0;
     const displayPurchaseCost = resource.purchase_unit_cost ?? resource.external_unit_cost ?? 0;
     const displayPurchaseUnit = resource.purchase_unit ?? resource.unit ?? 'ud';
@@ -381,15 +411,44 @@ export function BuyingListUnified({
           </div>
         </div>
         
-        {/* Supplier */}
-        <div className="w-24 text-center hidden sm:block">
-          {resource.supplier_name ? (
-            <span className="text-xs truncate flex items-center justify-center gap-1">
-              <Building2 className="h-3 w-3 text-muted-foreground" />
-              <span className="truncate max-w-16">{resource.supplier_name}</span>
-            </span>
+        {/* Supplier - Editable inline */}
+        <div className="w-32 hidden sm:block" onClick={(e) => e.stopPropagation()}>
+          {isEditingSupplierInline ? (
+            <div className="relative">
+              <ResourceSupplierSelect
+                value={resource.supplier_id || null}
+                onChange={(supplierId, contact) => {
+                  handleSupplierChange(resource.id, supplierId, contact);
+                }}
+              />
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-5 w-5 absolute -right-6 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-destructive"
+                onClick={() => setEditingSupplier(null)}
+              >
+                <X className="h-3 w-3" />
+              </Button>
+            </div>
           ) : (
-            <span className="text-xs text-muted-foreground">-</span>
+            <button
+              className="text-xs w-full flex items-center justify-center gap-1 hover:bg-muted/50 rounded py-1 px-1 transition-colors"
+              onClick={() => setEditingSupplier(resource.id)}
+              title="Click para editar proveedor"
+            >
+              {resource.supplier_name ? (
+                <>
+                  <Building2 className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+                  <span className="truncate max-w-20">{resource.supplier_name}</span>
+                  <Pencil className="h-2.5 w-2.5 text-muted-foreground opacity-60" />
+                </>
+              ) : (
+                <span className="text-muted-foreground/60 italic flex items-center gap-1">
+                  Sin proveedor
+                  <Pencil className="h-2.5 w-2.5" />
+                </span>
+              )}
+            </button>
           )}
         </div>
         
@@ -452,7 +511,7 @@ export function BuyingListUnified({
         </div>
         
         {/* Actions */}
-        <div className="w-20 flex items-center justify-end gap-1">
+        <div className="w-24 flex items-center justify-end gap-1">
           {isEditing ? (
             <>
               <Button
@@ -460,6 +519,7 @@ export function BuyingListUnified({
                 size="icon"
                 className="h-6 w-6 text-primary"
                 onClick={(e) => { e.stopPropagation(); saveEditing(); }}
+                title="Guardar"
               >
                 <Check className="h-3.5 w-3.5" />
               </Button>
@@ -468,6 +528,7 @@ export function BuyingListUnified({
                 size="icon"
                 className="h-6 w-6 text-destructive"
                 onClick={(e) => { e.stopPropagation(); cancelEditing(); }}
+                title="Cancelar"
               >
                 <X className="h-3.5 w-3.5" />
               </Button>
@@ -479,7 +540,7 @@ export function BuyingListUnified({
                 size="icon"
                 className="h-6 w-6"
                 onClick={(e) => { e.stopPropagation(); startEditing(resource); }}
-                title="Editar inline"
+                title="Editar costes inline"
               >
                 <Pencil className="h-3 w-3" />
               </Button>
@@ -488,10 +549,21 @@ export function BuyingListUnified({
                 size="icon"
                 className="h-6 w-6"
                 onClick={(e) => { e.stopPropagation(); setDialogResource(resource); }}
-                title="Editar completo"
+                title="Editar unidad compra"
               >
                 <ShoppingCart className="h-3 w-3" />
               </Button>
+              {onEditResource && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6"
+                  onClick={(e) => { e.stopPropagation(); onEditResource(resource); }}
+                  title="Editar recurso completo"
+                >
+                  <Edit className="h-3 w-3" />
+                </Button>
+              )}
             </>
           )}
         </div>
@@ -504,12 +576,12 @@ export function BuyingListUnified({
     <div className="flex items-center gap-2 px-3 py-1.5 bg-muted/30 text-[10px] text-muted-foreground font-medium border-b">
       <div className="w-4" />
       <div className="flex-1 min-w-0">{showActivity ? 'Recurso / Actividad' : 'Recurso'}</div>
-      <div className="w-24 text-center hidden sm:block">Suministrador</div>
+      <div className="w-32 text-center hidden sm:block">Proveedor</div>
       <div className="w-20 text-center">€Coste ud</div>
       <div className="w-16 text-center">Ud compra</div>
       <div className="w-20 text-center">Uds</div>
       <div className="w-24 text-right">€SubTotal</div>
-      <div className="w-20" />
+      <div className="w-24 text-center">Acciones</div>
     </div>
   );
 

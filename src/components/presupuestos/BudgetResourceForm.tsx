@@ -34,6 +34,7 @@ interface BudgetResource {
   purchase_vat_percent?: number | null;
   purchase_units?: number | null;
   purchase_unit_measure?: string | null;
+  purchase_unit_cost?: number | null;
 }
 
 interface Activity {
@@ -91,6 +92,7 @@ export function BudgetResourceForm({
     purchase_vat_percent: 21,
     purchase_units: null as number | null,
     purchase_unit_measure: '',
+    purchase_unit_cost: null as number | null,
   });
 
   // Calculate end date for tasks
@@ -141,6 +143,7 @@ export function BudgetResourceForm({
           purchase_vat_percent: resource.purchase_vat_percent ?? 21,
           purchase_units: resource.purchase_units ?? null,
           purchase_unit_measure: resource.purchase_unit_measure || '',
+          purchase_unit_cost: resource.purchase_unit_cost ?? null,
         });
         
         // If resource has an activity, recalculate related_units to ensure it's up-to-date
@@ -172,6 +175,7 @@ export function BudgetResourceForm({
           purchase_vat_percent: 21,
           purchase_units: null,
           purchase_unit_measure: '',
+          purchase_unit_cost: null,
         });
         
         // If preselected activity, fetch related_units
@@ -267,6 +271,7 @@ export function BudgetResourceForm({
         purchase_vat_percent: formData.purchase_vat_percent,
         purchase_units: formData.purchase_units,
         purchase_unit_measure: formData.purchase_unit_measure || null,
+        purchase_unit_cost: formData.purchase_unit_cost,
       };
 
       if (resource) {
@@ -510,49 +515,88 @@ export function BudgetResourceForm({
           </div>
 
           {/* Row 4.5: Buying List Fields */}
-          <div className="p-4 bg-blue-50 dark:bg-blue-950/30 rounded-lg border border-blue-200 dark:border-blue-800">
-            <div className="col-span-4 text-sm font-medium text-blue-700 dark:text-blue-400 mb-3">
-              Campos Lista de Compra
-            </div>
-            <div className="grid grid-cols-3 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="purchase_vat_percent">%IVA compra</Label>
-                <NumericInput
-                  id="purchase_vat_percent"
-                  value={formData.purchase_vat_percent}
-                  onChange={(value) => setFormData({ ...formData, purchase_vat_percent: value ?? 21 })}
-                  decimals={2}
-                />
+          {(() => {
+            // Calculate buying list values
+            const purchaseUnitCost = formData.purchase_unit_cost ?? formData.external_unit_cost;
+            const purchaseUnits = formData.purchase_units ?? calculatedUnits;
+            const purchaseVatPercent = formData.purchase_vat_percent ?? 21;
+            const vatAmount = purchaseUnitCost * purchaseUnits * (purchaseVatPercent / 100);
+            const purchaseSubtotal = (purchaseUnitCost * purchaseUnits) + vatAmount;
+            
+            return (
+              <div className="p-4 bg-blue-50 dark:bg-blue-950/30 rounded-lg border border-blue-200 dark:border-blue-800">
+                <div className="col-span-6 text-sm font-medium text-blue-700 dark:text-blue-400 mb-3">
+                  Campos Lista de Compra
+                </div>
+                <div className="grid grid-cols-3 gap-4 mb-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="purchase_unit_cost">€Coste ud compra</Label>
+                    <NumericInput
+                      id="purchase_unit_cost"
+                      value={formData.purchase_unit_cost ?? formData.external_unit_cost}
+                      onChange={(value) => setFormData({ ...formData, purchase_unit_cost: value === formData.external_unit_cost ? null : value })}
+                      decimals={2}
+                    />
+                    <p className="text-xs text-muted-foreground">Por defecto = €Coste ud externa</p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="purchase_vat_percent">%IVA</Label>
+                    <NumericInput
+                      id="purchase_vat_percent"
+                      value={formData.purchase_vat_percent}
+                      onChange={(value) => setFormData({ ...formData, purchase_vat_percent: value ?? 21 })}
+                      decimals={2}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>€Importe IVA</Label>
+                    <Input
+                      value={formatCurrency(vatAmount)}
+                      disabled
+                      className="bg-blue-100 dark:bg-blue-900/50"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="purchase_unit_measure">Ud medida lista compra</Label>
+                    <Select
+                      value={formData.purchase_unit_measure || formData.unit}
+                      onValueChange={(value) => setFormData({ ...formData, purchase_unit_measure: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Seleccionar unidad" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {UNIT_MEASURES.map((unit) => (
+                          <SelectItem key={unit} value={unit}>{unit}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">Por defecto = Ud medida</p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="purchase_units">Uds compra</Label>
+                    <NumericInput
+                      id="purchase_units"
+                      value={formData.purchase_units ?? calculatedUnits}
+                      onChange={(value) => setFormData({ ...formData, purchase_units: value === calculatedUnits ? null : value })}
+                      decimals={2}
+                    />
+                    <p className="text-xs text-muted-foreground">Por defecto = Uds calculadas</p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>€SubTotal compra</Label>
+                    <Input
+                      value={formatCurrency(purchaseSubtotal)}
+                      disabled
+                      className="bg-blue-100 dark:bg-blue-900/50 font-semibold"
+                    />
+                  </div>
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="purchase_units">Uds lista compra</Label>
-                <NumericInput
-                  id="purchase_units"
-                  value={formData.purchase_units ?? calculatedUnits}
-                  onChange={(value) => setFormData({ ...formData, purchase_units: value === calculatedUnits ? null : value })}
-                  decimals={2}
-                />
-                <p className="text-xs text-muted-foreground">Por defecto = Uds calculadas</p>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="purchase_unit_measure">Ud medida lista compra</Label>
-                <Select
-                  value={formData.purchase_unit_measure || formData.unit}
-                  onValueChange={(value) => setFormData({ ...formData, purchase_unit_measure: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Seleccionar unidad" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {UNIT_MEASURES.map((unit) => (
-                      <SelectItem key={unit} value={unit}>{unit}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground">Por defecto = Ud medida</p>
-              </div>
-            </div>
-          </div>
+            );
+          })()}
 
           {/* Row 5: Activity Relation */}
           <div className="grid grid-cols-2 gap-4">

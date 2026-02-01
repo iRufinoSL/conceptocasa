@@ -455,8 +455,8 @@ export function BuyingListUnified({
     }).sort((a, b) => a.name.localeCompare(b.name));
   }, [filteredResources, filteredActivities]);
 
-  // Render resource row with inline editing
-  const renderResourceRow = (resource: Resource, showActivity = false) => {
+  // Render resource row for activity/supplier views (full columns)
+  const renderResourceRowFull = (resource: Resource, showActivity = false) => {
     const isEditing = editingResource === resource.id;
     const isEditingSupplierInline = editingSupplier === resource.id;
     const calculatedUnits = resource.manual_units ?? resource.related_units ?? 0;
@@ -666,8 +666,200 @@ export function BuyingListUnified({
     );
   };
 
-  // Resource header row
-  const ResourceHeader = ({ showActivity = false }: { showActivity?: boolean }) => (
+  // Render resource row for "Por Recurso" view with simplified columns
+  const renderResourceRowSimple = (resource: Resource) => {
+    const isEditing = editingResource === resource.id;
+    const isEditingSupplierInline = editingSupplier === resource.id;
+    const calculatedUnits = resource.manual_units ?? resource.related_units ?? 0;
+    const displayPurchaseCost = resource.purchase_unit_cost ?? resource.external_unit_cost ?? 0;
+    const displayPurchaseUnitMeasure = resource.purchase_unit_measure ?? resource.unit ?? 'ud';
+    const displayPurchaseUnits = resource.purchase_units ?? calculatedUnits;
+    const displayVatPercent = resource.purchase_vat_percent ?? 21;
+    const vatAmount = displayPurchaseCost * displayPurchaseUnits * (displayVatPercent / 100);
+    const buyingSubtotal = (displayPurchaseCost * displayPurchaseUnits) + vatAmount;
+
+    return (
+      <div key={resource.id} className="flex items-center gap-2 px-3 py-2 bg-muted/5 hover:bg-muted/10 border-b last:border-b-0">
+        {/* 1. Recurso */}
+        <Package className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+        <div className="flex-1 min-w-0">
+          <p className="text-sm truncate font-medium">{resource.name}</p>
+          {resource.resource_type && (
+            <Badge className={cn("text-[9px] px-1 py-0", getResourceTypeBadgeColor(resource.resource_type))}>
+              {resource.resource_type}
+            </Badge>
+          )}
+        </div>
+        
+        {/* 2. Proveedor - Editable inline */}
+        <div className="w-36" onClick={(e) => e.stopPropagation()}>
+          {isEditingSupplierInline ? (
+            <div className="relative">
+              <ResourceSupplierSelect
+                value={resource.supplier_id || null}
+                onChange={(supplierId, contact) => {
+                  handleSupplierChange(resource.id, supplierId, contact);
+                }}
+              />
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-5 w-5 absolute -right-6 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-destructive"
+                onClick={() => setEditingSupplier(null)}
+              >
+                <X className="h-3 w-3" />
+              </Button>
+            </div>
+          ) : (
+            <button
+              className="text-xs w-full flex items-center justify-center gap-1 hover:bg-muted/50 rounded py-1 px-1 transition-colors"
+              onClick={() => setEditingSupplier(resource.id)}
+              title="Click para editar proveedor"
+            >
+              {resource.supplier_name ? (
+                <>
+                  <Building2 className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+                  <span className="truncate max-w-24">{resource.supplier_name}</span>
+                  <Pencil className="h-2.5 w-2.5 text-muted-foreground opacity-60" />
+                </>
+              ) : (
+                <span className="text-muted-foreground/60 italic flex items-center gap-1">
+                  Sin proveedor
+                  <Pencil className="h-2.5 w-2.5" />
+                </span>
+              )}
+            </button>
+          )}
+        </div>
+        
+        {/* 3. €Coste ud compra - Editable inline */}
+        <div className="w-20 text-center">
+          {isEditing ? (
+            <Input
+              type="number"
+              step="0.01"
+              value={editValues.purchase_unit_cost || ''}
+              onChange={(e) => setEditValues(prev => ({ ...prev, purchase_unit_cost: e.target.value }))}
+              className="h-6 text-xs text-center px-1"
+              onClick={(e) => e.stopPropagation()}
+            />
+          ) : (
+            <span className="text-xs font-medium">{formatCurrency(displayPurchaseCost)}</span>
+          )}
+        </div>
+        
+        {/* 4. %IVA - Editable inline */}
+        <div className="w-14 text-center">
+          {isEditing ? (
+            <Input
+              type="number"
+              step="0.01"
+              value={editValues.purchase_vat_percent || '21'}
+              onChange={(e) => setEditValues(prev => ({ ...prev, purchase_vat_percent: e.target.value }))}
+              className="h-6 text-xs text-center px-1"
+              onClick={(e) => e.stopPropagation()}
+            />
+          ) : (
+            <span className="text-xs text-muted-foreground">{formatNumber(displayVatPercent)}%</span>
+          )}
+        </div>
+        
+        {/* 5. Ud medida lista compra - Editable inline */}
+        <div className="w-20 text-center">
+          {isEditing ? (
+            <Select
+              value={editValues.purchase_unit_measure || 'ud'}
+              onValueChange={(v) => setEditValues(prev => ({ ...prev, purchase_unit_measure: v }))}
+            >
+              <SelectTrigger className="h-6 text-xs px-1" onClick={(e) => e.stopPropagation()}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {UNIT_OPTIONS.map(unit => (
+                  <SelectItem key={unit} value={unit} className="text-xs">{unit}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : (
+            <span className="text-xs text-muted-foreground">{displayPurchaseUnitMeasure}</span>
+          )}
+        </div>
+        
+        {/* 6. Uds compra - Editable inline */}
+        <div className="w-20 text-center">
+          {isEditing ? (
+            <Input
+              type="number"
+              step="0.01"
+              value={editValues.purchase_units || ''}
+              onChange={(e) => setEditValues(prev => ({ ...prev, purchase_units: e.target.value }))}
+              className="h-6 text-xs text-center px-1"
+              onClick={(e) => e.stopPropagation()}
+            />
+          ) : (
+            <span className="text-xs font-medium">{formatNumber(displayPurchaseUnits)}</span>
+          )}
+        </div>
+        
+        {/* 7. €SubTotal compra */}
+        <div className="w-24 text-right">
+          <span className="text-sm font-semibold tabular-nums">{formatCurrency(buyingSubtotal)}</span>
+        </div>
+        
+        {/* Actions */}
+        <div className="w-20 flex items-center justify-end gap-1">
+          {isEditing ? (
+            <>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 text-primary"
+                onClick={(e) => { e.stopPropagation(); saveEditing(); }}
+                title="Guardar"
+              >
+                <Check className="h-3.5 w-3.5" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 text-destructive"
+                onClick={(e) => { e.stopPropagation(); cancelEditing(); }}
+                title="Cancelar"
+              >
+                <X className="h-3.5 w-3.5" />
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6"
+                onClick={(e) => { e.stopPropagation(); startEditing(resource); }}
+                title="Editar inline"
+              >
+                <Pencil className="h-3 w-3" />
+              </Button>
+              {onEditResource && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6"
+                  onClick={(e) => { e.stopPropagation(); onEditResource(resource); }}
+                  title="Editar recurso"
+                >
+                  <Edit className="h-3 w-3" />
+                </Button>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  // Resource header row for activity/supplier views
+  const ResourceHeaderFull = ({ showActivity = false }: { showActivity?: boolean }) => (
     <div className="flex items-center gap-2 px-3 py-1.5 bg-muted/30 text-[10px] text-muted-foreground font-medium border-b">
       <div className="w-4" />
       <div className="flex-1 min-w-0">{showActivity ? 'Recurso / Actividad' : 'Recurso'}</div>
@@ -679,6 +871,21 @@ export function BuyingListUnified({
       <div className="w-20 text-center">€IVA</div>
       <div className="w-24 text-right">€SubTotal</div>
       <div className="w-24 text-center">Acciones</div>
+    </div>
+  );
+
+  // Resource header row for "Por Recurso" view (simplified columns)
+  const ResourceHeaderSimple = () => (
+    <div className="flex items-center gap-2 px-3 py-1.5 bg-muted/30 text-[10px] text-muted-foreground font-medium border-b">
+      <div className="w-4" />
+      <div className="flex-1 min-w-0">Recurso</div>
+      <div className="w-36 text-center">Proveedor</div>
+      <div className="w-20 text-center">€Coste ud</div>
+      <div className="w-14 text-center">%IVA</div>
+      <div className="w-20 text-center">Ud medida</div>
+      <div className="w-20 text-center">Uds compra</div>
+      <div className="w-24 text-right">€SubTotal</div>
+      <div className="w-20 text-center">Acciones</div>
     </div>
   );
 
@@ -877,8 +1084,8 @@ export function BuyingListUnified({
                   </CollapsibleTrigger>
                   <CollapsibleContent>
                     <div className="border-t">
-                      <ResourceHeader />
-                      {actResources.map(resource => renderResourceRow(resource))}
+                      <ResourceHeaderFull />
+                      {actResources.map(resource => renderResourceRowFull(resource))}
                     </div>
                   </CollapsibleContent>
                 </div>
@@ -922,8 +1129,8 @@ export function BuyingListUnified({
                   </CollapsibleTrigger>
                   <CollapsibleContent>
                     <div className="border-t">
-                      <ResourceHeader showActivity />
-                      {suppResources.map(resource => renderResourceRow(resource, true))}
+                      <ResourceHeaderFull showActivity />
+                      {suppResources.map(resource => renderResourceRowFull(resource, true))}
                     </div>
                   </CollapsibleContent>
                 </div>
@@ -936,8 +1143,8 @@ export function BuyingListUnified({
       {/* View: By Resource (flat list) */}
       {viewMode === 'resource' && resourceList.length > 0 && (
         <div className="border rounded-lg">
-          <ResourceHeader showActivity />
-          {resourceList.map(resource => renderResourceRow(resource, true))}
+          <ResourceHeaderSimple />
+          {resourceList.map(resource => renderResourceRowSimple(resource))}
         </div>
       )}
     </div>

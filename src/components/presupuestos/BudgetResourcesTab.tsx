@@ -1749,6 +1749,10 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
                 const fullResource = resources.find(r => r.id === resource.id);
                 if (fullResource) handleEdit(fullResource);
               }}
+              onDeleteResource={(resourceId) => {
+                const resource = resources.find(r => r.id === resourceId);
+                if (resource) handleDelete(resource);
+              }}
               onRefresh={fetchData}
             />
           ) : (

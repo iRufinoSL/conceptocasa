@@ -1,6 +1,6 @@
 export type UnitMeasure = 'm2' | 'm3' | 'ml' | 'mes' | 'ud' | 'kg' | 'hora' | 'día';
 
-export type ResourceType = 'Producto' | 'Mano de obra' | 'Alquiler' | 'Servicio' | 'Material' | 'Equipo';
+export type ResourceType = 'Alquiler' | 'Equipo' | 'Mano de obra' | 'Material' | 'Producto' | 'Servicio' | 'Utiles y herramientas';
 
 export type ResourceComposition = 'Simple' | 'Compuesto';
 
@@ -52,7 +52,7 @@ export interface ExternalResource {
 
 export const UNIT_MEASURES: UnitMeasure[] = ['m2', 'm3', 'ml', 'mes', 'ud', 'kg', 'hora', 'día'];
 
-export const RESOURCE_TYPES: ResourceType[] = ['Producto', 'Mano de obra', 'Alquiler', 'Servicio', 'Material', 'Equipo'];
+export const RESOURCE_TYPES: ResourceType[] = ['Alquiler', 'Equipo', 'Mano de obra', 'Material', 'Producto', 'Servicio', 'Utiles y herramientas'];
 
 // Helper to determine if a resource is Simple or Compuesto
 export function getResourceComposition(resource: ExternalResource): ResourceComposition {

@@ -87,9 +87,35 @@ export function BuyingListUnified({
   const [activities, setActivities] = useState<Activity[]>(initialActivities);
   const [resources, setResources] = useState<Resource[]>(initialResources);
   
-  // Date range filter
-  const [startDate, setStartDate] = useState<string>('');
-  const [endDate, setEndDate] = useState<string>('');
+  // Date range filter - persisted in localStorage per budget
+  const storageKey = `buyingList_dateRange_${budgetId}`;
+  const [startDate, setStartDate] = useState<string>(() => {
+    try {
+      const saved = localStorage.getItem(storageKey);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return parsed.startDate || '';
+      }
+    } catch {}
+    return '';
+  });
+  const [endDate, setEndDate] = useState<string>(() => {
+    try {
+      const saved = localStorage.getItem(storageKey);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return parsed.endDate || '';
+      }
+    } catch {}
+    return '';
+  });
+
+  // Persist date range to localStorage when changed
+  useEffect(() => {
+    try {
+      localStorage.setItem(storageKey, JSON.stringify({ startDate, endDate }));
+    } catch {}
+  }, [startDate, endDate, storageKey]);
   
   // Inline editing
   const [editingResource, setEditingResource] = useState<string | null>(null);

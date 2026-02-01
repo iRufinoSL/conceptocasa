@@ -11,14 +11,22 @@ export function useInactivityTimeout() {
   const navigate = useNavigate();
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isLoggingOutRef = useRef(false);
+  const lastActivityRef = useRef<number>(Date.now());
 
   const handleLogout = useCallback(async () => {
     if (isLoggingOutRef.current || !user) return;
     
+    // Double-check: if there was recent activity, don't logout
+    const timeSinceLastActivity = Date.now() - lastActivityRef.current;
+    if (timeSinceLastActivity < INACTIVITY_TIMEOUT_MS - 1000) {
+      console.log('[useInactivityTimeout] Recent activity detected, skipping logout');
+      return;
+    }
+    
     isLoggingOutRef.current = true;
     console.log('[useInactivityTimeout] Session expired due to inactivity');
     
-    // Mark that we logged out due to inactivity - this will trigger a full reload on next login
+    // Mark that we logged out due to inactivity
     sessionStorage.setItem(INACTIVITY_LOGOUT_KEY, 'true');
     
     toast.info('Sesión cerrada por inactividad', {
@@ -33,6 +41,9 @@ export function useInactivityTimeout() {
 
   const resetTimeout = useCallback(() => {
     if (!user) return;
+    
+    // Update last activity timestamp
+    lastActivityRef.current = Date.now();
     
     if (timeoutRef.current) {
       clearTimeout(timeoutRef.current);
@@ -53,45 +64,87 @@ export function useInactivityTimeout() {
       return;
     }
 
-    // Check if we're logging in after an inactivity logout - if so, force a full page reload
+    // Check if we're logging in after an inactivity logout
     const wasInactivityLogout = sessionStorage.getItem(INACTIVITY_LOGOUT_KEY);
     if (wasInactivityLogout === 'true') {
       console.log('[useInactivityTimeout] Detected login after inactivity logout, forcing full reload');
       sessionStorage.removeItem(INACTIVITY_LOGOUT_KEY);
-      // Use a small delay to ensure the auth state is fully settled before reload
       setTimeout(() => {
         window.location.reload();
       }, 100);
       return;
     }
 
-    // Events that reset the inactivity timer
-    const activityEvents = [
+    // Events that reset the inactivity timer - comprehensive list
+    const documentEvents = [
       'mousedown',
       'mousemove',
+      'mouseup',
       'keydown',
+      'keyup',
+      'keypress',
       'scroll',
       'touchstart',
+      'touchmove',
+      'touchend',
       'click',
+      'dblclick',
       'wheel',
+      'input',
+      'change',
+      'focus',
+      'blur',
+      'submit',
+      'reset',
+      'select',
+      'contextmenu',
+      'drag',
+      'dragstart',
+      'dragend',
+      'drop',
+    ];
+
+    // Window-level events
+    const windowEvents = [
+      'focus',
+      'blur',
+      'resize',
+      'scroll',
     ];
 
     // Initial timeout
     resetTimeout();
 
-    // Add event listeners
-    activityEvents.forEach(event => {
-      document.addEventListener(event, resetTimeout, { passive: true });
+    // Add document event listeners using capture phase to catch all events
+    documentEvents.forEach(event => {
+      document.addEventListener(event, resetTimeout, { capture: true, passive: true });
     });
+
+    // Add window event listeners
+    windowEvents.forEach(event => {
+      window.addEventListener(event, resetTimeout, { passive: true });
+    });
+
+    // Also listen for visibility changes
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        resetTimeout();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
       // Cleanup
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current);
       }
-      activityEvents.forEach(event => {
-        document.removeEventListener(event, resetTimeout);
+      documentEvents.forEach(event => {
+        document.removeEventListener(event, resetTimeout, { capture: true });
       });
+      windowEvents.forEach(event => {
+        window.removeEventListener(event, resetTimeout);
+      });
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [user, resetTimeout]);
 

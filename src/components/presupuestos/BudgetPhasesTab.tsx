@@ -1115,7 +1115,7 @@ export function BudgetPhasesTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
                         />
                       ) : (
                         <span className="font-mono font-semibold text-primary">
-                          {phase.estimated_budget_amount !== null ? formatCurrency(phase.estimated_budget_amount) : '-'}
+                          {phase.estimated_budget_amount !== null ? `${formatCurrency(phase.estimated_budget_amount)}` : '-'}
                         </span>
                       )}
                     </TableCell>

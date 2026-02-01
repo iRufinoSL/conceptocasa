@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Calendar, List, ChevronLeft, ChevronRight, FileText, BarChart3, ClipboardList, CalendarClock, Hammer } from 'lucide-react';
+import { Plus, Calendar, List, ChevronLeft, ChevronRight, FileText, BarChart3, ClipboardList, CalendarClock, Hammer, ShoppingCart } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, addMonths, subMonths, addWeeks, subWeeks, addDays, subDays, eachDayOfInterval, isSameMonth, isSameDay, isToday } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { toast } from 'sonner';
@@ -16,6 +16,7 @@ import { useCompanySettings } from '@/hooks/useCompanySettings';
 import { BudgetGanttView } from './BudgetGanttView';
 import { ResourcesGestionesView } from './ResourcesGestionesView';
 import { WorkReportsList } from './WorkReportsList';
+import { BuyingListView } from './BuyingListView';
 
 // A Task is a resource with resource_type = 'Tarea' or 'Cita'
 export interface BudgetTask {
@@ -70,7 +71,7 @@ interface BudgetAgendaTabProps {
   onNavigateToActivity?: (activityId: string) => void;
 }
 
-type MainViewMode = 'agenda' | 'gantt' | 'gestiones' | 'partes';
+type MainViewMode = 'agenda' | 'gantt' | 'gestiones' | 'partes' | 'listacompra';
 type ViewMode = 'month' | 'week' | 'day' | 'list';
 type FilterMode = 'all' | 'pendiente' | 'realizada';
 
@@ -88,6 +89,11 @@ export function BudgetAgendaTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
   const [selectedDay, setSelectedDay] = useState<Date | null>(null);
   const [newEntryType, setNewEntryType] = useState<EntryType>('Tarea');
   const { settings: companySettings } = useCompanySettings();
+  
+  // State for Buying List view
+  const [buyingPhases, setBuyingPhases] = useState<any[]>([]);
+  const [buyingActivities, setBuyingActivities] = useState<any[]>([]);
+  const [buyingResources, setBuyingResources] = useState<any[]>([]);
 
   // Fetch budget name
   const fetchBudgetName = useCallback(async () => {
@@ -246,11 +252,75 @@ export function BudgetAgendaTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
     }
   }, [budgetId]);
 
+  // Fetch data for Buying List view
+  const fetchBuyingListData = useCallback(async () => {
+    try {
+      const [phasesRes, activitiesRes, resourcesRes, contactsRes] = await Promise.all([
+        supabase
+          .from('budget_phases')
+          .select('id, name, code, actual_start_date, actual_end_date')
+          .eq('budget_id', budgetId)
+          .order('code'),
+        supabase
+          .from('budget_activities')
+          .select('id, name, code, phase_id, uses_measurement, actual_start_date, actual_end_date')
+          .eq('budget_id', budgetId)
+          .order('code'),
+        supabase
+          .from('budget_activity_resources')
+          .select(`
+            id,
+            name,
+            activity_id,
+            resource_type,
+            external_unit_cost,
+            manual_units,
+            related_units,
+            unit,
+            supplier_id,
+            purchase_unit,
+            purchase_unit_quantity,
+            purchase_unit_cost,
+            conversion_factor
+          `)
+          .eq('budget_id', budgetId)
+          .not('resource_type', 'in', '("Tarea","Cita")'),
+        supabase
+          .from('crm_contacts')
+          .select('id, name')
+      ]);
+
+      if (phasesRes.error) throw phasesRes.error;
+      if (activitiesRes.error) throw activitiesRes.error;
+      if (resourcesRes.error) throw resourcesRes.error;
+
+      // Map supplier names to resources
+      const contactMap = new Map((contactsRes.data || []).map(c => [c.id, c.name]));
+      const resourcesWithSupplier = (resourcesRes.data || []).map(r => ({
+        ...r,
+        supplier_name: r.supplier_id ? contactMap.get(r.supplier_id) || null : null
+      }));
+
+      setBuyingPhases(phasesRes.data || []);
+      setBuyingActivities(activitiesRes.data || []);
+      setBuyingResources(resourcesWithSupplier);
+    } catch (error) {
+      console.error('Error fetching buying list data:', error);
+    }
+  }, [budgetId]);
+
   useEffect(() => {
     fetchActivities();
     fetchTasks();
     fetchBudgetName();
   }, [fetchActivities, fetchTasks, fetchBudgetName]);
+
+  // Fetch buying list data when switching to that view
+  useEffect(() => {
+    if (mainViewMode === 'listacompra') {
+      fetchBuyingListData();
+    }
+  }, [mainViewMode, fetchBuyingListData]);
 
   // Calculate end date from start date and duration
   const getEndDate = (startDate: string, durationDays: number): Date => {
@@ -560,6 +630,10 @@ export function BudgetAgendaTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
                 <Hammer className="h-4 w-4" />
                 Partes
               </TabsTrigger>
+              <TabsTrigger value="listacompra" className="flex items-center gap-1.5">
+                <ShoppingCart className="h-4 w-4" />
+                Lista compra
+              </TabsTrigger>
             </TabsList>
           </Tabs>
           
@@ -645,6 +719,20 @@ export function BudgetAgendaTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
         <Card>
           <CardContent className="pt-6">
             <WorkReportsList budgetId={budgetId} isAdmin={isAdmin} />
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Lista Compra View */}
+      {mainViewMode === 'listacompra' && (
+        <Card>
+          <CardContent className="pt-6">
+            <BuyingListView
+              phases={buyingPhases}
+              activities={buyingActivities}
+              resources={buyingResources}
+              onResourcesChanged={fetchBuyingListData}
+            />
           </CardContent>
         </Card>
       )}

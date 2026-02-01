@@ -277,31 +277,109 @@ export default function Usuarios() {
   const handleCreateUser = async () => {
     if (!validateCreateForm()) return;
     
+    // Validate that at least one budget is selected for cliente/colaborador
+    if ((newRole === 'cliente' || newRole === 'colaborador') && selectedBudgets.length === 0) {
+      toast.error('Debe seleccionar al menos un presupuesto para este rol');
+      return;
+    }
+    
     setIsCreating(true);
     try {
-      // Generate a secure random password for initial account (user will set their own via setup link)
-      const secureInitialPassword = generateSecurePassword();
-      
-      // Create user via signUp with generated secure password
-      const { data, error } = await supabase.auth.signUp({
-        email: newEmail,
-        password: secureInitialPassword,
-        options: {
-          emailRedirectTo: `${window.location.origin}/auth`,
-          data: {
-            full_name: newFullName
-          }
+      // First, check if user already exists in profiles
+      const { data: existingProfile, error: profileCheckError } = await supabase
+        .from('profiles')
+        .select('id, email, full_name')
+        .eq('email', newEmail.toLowerCase().trim())
+        .maybeSingle();
+
+      if (profileCheckError) {
+        console.error('Error checking existing profile:', profileCheckError);
+      }
+
+      let userId: string;
+      let isExistingUser = false;
+
+      if (existingProfile) {
+        // User already exists - we'll just add budget access
+        userId = existingProfile.id;
+        isExistingUser = true;
+        
+        // Check which budgets the user already has access to
+        const { data: existingAccess, error: accessCheckError } = await supabase
+          .from('user_presupuestos')
+          .select('presupuesto_id')
+          .eq('user_id', userId);
+
+        if (accessCheckError) {
+          console.error('Error checking existing access:', accessCheckError);
         }
-      });
 
-      if (error) throw error;
+        const existingBudgetIds = new Set((existingAccess || []).map(a => a.presupuesto_id));
+        
+        // Filter out budgets user already has access to
+        const newBudgetIds = selectedBudgets.filter(id => !existingBudgetIds.has(id));
+        
+        if (newBudgetIds.length === 0) {
+          toast.warning('Este usuario ya tiene acceso a todos los presupuestos seleccionados');
+          setIsCreating(false);
+          return;
+        }
 
-      if (data.user) {
+        // Add new budget access only
+        const budgetAccess = newBudgetIds.map(budgetId => ({
+          user_id: userId,
+          presupuesto_id: budgetId,
+          role: selectedBudgetRole
+        }));
+
+        const { error: accessError } = await supabase
+          .from('user_presupuestos')
+          .insert(budgetAccess);
+
+        if (accessError) {
+          console.error('Error assigning budget access:', accessError);
+          toast.error('Error al asignar acceso a presupuestos');
+          setIsCreating(false);
+          return;
+        }
+
+        const budgetNames = presupuestos
+          .filter(p => newBudgetIds.includes(p.id))
+          .map(p => p.nombre)
+          .join(', ');
+        
+        toast.success(
+          `Se ha añadido acceso a ${newBudgetIds.length} presupuesto(s) para ${existingProfile.full_name || existingProfile.email}: ${budgetNames}`,
+          { duration: 5000 }
+        );
+      } else {
+        // User doesn't exist - create new user
+        const secureInitialPassword = generateSecurePassword();
+        
+        const { data, error } = await supabase.auth.signUp({
+          email: newEmail,
+          password: secureInitialPassword,
+          options: {
+            emailRedirectTo: `${window.location.origin}/auth`,
+            data: {
+              full_name: newFullName
+            }
+          }
+        });
+
+        if (error) throw error;
+
+        if (!data.user) {
+          throw new Error('No se pudo crear el usuario');
+        }
+
+        userId = data.user.id;
+
         // Add role to user_roles table
         const { error: roleError } = await supabase
           .from('user_roles')
           .insert({
-            user_id: data.user.id,
+            user_id: userId,
             role: newRole
           });
 
@@ -314,7 +392,7 @@ export default function Usuarios() {
         const { error: profileError } = await supabase
           .from('profiles')
           .update({ password_change_required: true })
-          .eq('id', data.user.id);
+          .eq('id', userId);
 
         if (profileError) {
           console.error('Error marking password change required:', profileError);
@@ -323,7 +401,7 @@ export default function Usuarios() {
         // Assign selected budget access
         if (selectedBudgets.length > 0) {
           const budgetAccess = selectedBudgets.map(budgetId => ({
-            user_id: data.user!.id,
+            user_id: userId,
             presupuesto_id: budgetId,
             role: selectedBudgetRole
           }));
@@ -338,7 +416,7 @@ export default function Usuarios() {
           }
         }
 
-        // Send setup link email (more secure than sending password)
+        // Send setup link email
         const emailSent = await sendSetupLinkEmail(newEmail, newFullName);
         
         if (emailSent) {
@@ -365,7 +443,8 @@ export default function Usuarios() {
     } catch (error: any) {
       console.error('Error creating user:', error);
       if (error.message?.includes('already registered')) {
-        toast.error('Este email ya está registrado');
+        // This shouldn't happen now since we check first, but handle gracefully
+        toast.error('Este email ya está registrado. Por favor, use la gestión de accesos del usuario existente.');
       } else {
         toast.error(error.message || 'Error al crear usuario');
       }

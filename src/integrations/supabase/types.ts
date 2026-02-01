@@ -417,7 +417,10 @@ export type Database = {
           name: string
           purchase_unit: string | null
           purchase_unit_cost: number | null
+          purchase_unit_measure: string | null
           purchase_unit_quantity: number | null
+          purchase_units: number | null
+          purchase_vat_percent: number | null
           related_units: number | null
           reminder_minutes: number | null
           resource_type: string | null
@@ -447,7 +450,10 @@ export type Database = {
           name: string
           purchase_unit?: string | null
           purchase_unit_cost?: number | null
+          purchase_unit_measure?: string | null
           purchase_unit_quantity?: number | null
+          purchase_units?: number | null
+          purchase_vat_percent?: number | null
           related_units?: number | null
           reminder_minutes?: number | null
           resource_type?: string | null
@@ -477,7 +483,10 @@ export type Database = {
           name?: string
           purchase_unit?: string | null
           purchase_unit_cost?: number | null
+          purchase_unit_measure?: string | null
           purchase_unit_quantity?: number | null
+          purchase_units?: number | null
+          purchase_vat_percent?: number | null
           related_units?: number | null
           reminder_minutes?: number | null
           resource_type?: string | null

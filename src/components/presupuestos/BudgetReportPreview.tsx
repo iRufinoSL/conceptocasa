@@ -65,6 +65,8 @@ interface Phase {
   start_date: string | null;
   duration_days: number | null;
   estimated_end_date: string | null;
+  estimated_budget_percent: number | null;
+  estimated_budget_amount: number | null;
 }
 
 interface Resource {
@@ -173,6 +175,7 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
   const [portadaSignedUrl, setPortadaSignedUrl] = useState<string | null>(null);
   const [selectedOption, setSelectedOption] = useState<'A' | 'B' | 'C'>('A');
   const printRef = useRef<HTMLDivElement>(null);
+  const [estimatedBudget, setEstimatedBudget] = useState<number | null>(null);
 
   // Derived data for clients and providers
   const clients = budgetContacts.filter(bc => bc.contact_role === 'cliente');
@@ -199,6 +202,7 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
         spacesRes,
         workAreasRes,
         workAreaActivitiesRes,
+        presupuestoDataRes,
       ] = await Promise.all([
         supabase
           .from('budget_activities')
@@ -207,7 +211,7 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
           .order('name'),
         supabase
           .from('budget_phases')
-          .select('id, name, code, start_date, duration_days, estimated_end_date')
+          .select('id, name, code, start_date, duration_days, estimated_end_date, estimated_budget_percent, estimated_budget_amount')
           .eq('budget_id', presupuesto.id)
           .order('code'),
         supabase
@@ -247,6 +251,11 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
         supabase
           .from('budget_work_area_activities')
           .select('work_area_id, activity_id'),
+        supabase
+          .from('presupuestos')
+          .select('estimated_budget')
+          .eq('id', presupuesto.id)
+          .single(),
       ]);
 
       if (activitiesRes.error) throw activitiesRes.error;
@@ -260,6 +269,7 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
       setPhases(phasesRes.data || []);
       setResources(resourcesRes.data || []);
       setPredesigns(predesignsRes.data || []);
+      setEstimatedBudget(presupuestoDataRes.data?.estimated_budget || null);
       
       // Set measurements and filter relations to this budget
       const measurementsData = measurementsRes.data || [];
@@ -435,6 +445,7 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
     if (selectedSections.includes('measurements')) names.push('Mediciones');
     if (selectedSections.includes('spaces-alphabetical')) names.push('Espacios Alfabético');
     if (selectedSections.includes('spaces-grouped')) names.push('Espacios por Nivel/Tipo');
+    if (selectedSections.includes('estimated-budget')) names.push('Presupuesto Estimado');
     const baseName = names.length > 0 ? names.join(' + ') : 'Resumen General';
     return `${baseName} - Opción ${selectedOption}`;
   };
@@ -1027,6 +1038,9 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
       }
       if (selectedSections.includes('donde-hierarchy')) {
         indexItems.push({ title: 'Areas trabajo/Actividades', page: 3 });
+      }
+      if (selectedSections.includes('estimated-budget')) {
+        indexItems.push({ title: 'Presupuesto Estimado', page: 3 });
       }
 
       indexItems.forEach((item, idx) => {
@@ -2314,6 +2328,77 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
         });
       }
 
+      // Section: Estimated Budget (Presupuesto Estimado) - only if selected
+      if (selectedSections.includes('estimated-budget')) {
+        doc.addPage();
+        yPos = 20;
+        
+        drawHeader(true);
+        yPos = 36;
+        
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(37, 99, 235);
+        doc.text('PRESUPUESTO ESTIMADO', 14, yPos);
+        doc.setTextColor(0);
+
+        yPos += 10;
+
+        // Total estimated budget card
+        const totalEstimatedBudget = estimatedBudget || 0;
+        doc.setFillColor(239, 246, 255); // blue-50
+        doc.roundedRect(14, yPos - 4, pageWidth - 28, 14, 2, 2, 'F');
+        
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(30, 64, 175); // blue-800
+        doc.text('Presupuesto Estimado Total:', 18, yPos + 4);
+        doc.text(formatPdfCurrency(totalEstimatedBudget), pageWidth - 18, yPos + 4, { align: 'right' });
+        doc.setTextColor(0);
+        doc.setFont('helvetica', 'normal');
+
+        yPos += 20;
+
+        // Phases table with estimated budget
+        const phasesWithEstimate = [...phases].sort((a, b) => (a.code || '').localeCompare(b.code || ''));
+        const totalEstimatedPhases = phasesWithEstimate.reduce((sum, p) => sum + (p.estimated_budget_amount || 0), 0);
+        
+        const estimatedBudgetTableData: any[] = [];
+        
+        phasesWithEstimate.forEach(phase => {
+          const percentValue = phase.estimated_budget_percent !== null ? `${formatNumber(phase.estimated_budget_percent, 2)}%` : '-';
+          const amountValue = formatPdfCurrency(phase.estimated_budget_amount || 0);
+          
+          estimatedBudgetTableData.push([
+            `${phase.code || ''} ${phase.name}`.trim(),
+            percentValue,
+            amountValue
+          ]);
+        });
+
+        // Total row
+        estimatedBudgetTableData.push([
+          { content: 'TOTAL', styles: { fillColor: [34, 197, 94], textColor: [255, 255, 255], fontStyle: 'bold' } },
+          { content: '-', styles: { fillColor: [34, 197, 94], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'right' } },
+          { content: formatPdfCurrency(totalEstimatedPhases), styles: { fillColor: [34, 197, 94], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'right' } }
+        ]);
+
+        autoTable(doc, {
+          startY: yPos,
+          head: [['Fase', '% Presupuesto estimado', '€ Presupuesto estimado fase']],
+          body: estimatedBudgetTableData,
+          theme: 'striped',
+          headStyles: { fillColor: [59, 130, 246] },
+          margin: { left: 14, right: 14 },
+          styles: { fontSize: 9 },
+          columnStyles: {
+            0: { cellWidth: 90 },
+            1: { cellWidth: 45, halign: 'right' },
+            2: { cellWidth: 45, halign: 'right' },
+          },
+        });
+      }
+
       // Footer
       const pageCount = doc.getNumberOfPages();
       const footerTextHeight = 3; // Height of footer text in mm (font size 7 ≈ 2.5-3mm)
@@ -2357,6 +2442,7 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
       if (selectedSections.includes('measurements')) sectionSuffixes.push('mediciones');
       if (selectedSections.includes('spaces-alphabetical')) sectionSuffixes.push('espacios_alfa');
       if (selectedSections.includes('spaces-grouped')) sectionSuffixes.push('espacios_nivel');
+      if (selectedSections.includes('estimated-budget')) sectionSuffixes.push('presupuesto_estimado');
       const sectionSuffix = sectionSuffixes.length > 0 ? sectionSuffixes.join('_') : 'informe';
       const fileName = `presupuesto_${sectionSuffix}_${presupuesto.nombre.replace(/[^a-zA-Z0-9]/g, '_')}_${format(new Date(), 'yyyyMMdd')}.pdf`;
       doc.save(fileName);
@@ -2559,6 +2645,20 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
                   }}
                 />
                 <Label htmlFor="spaces-grouped" className="cursor-pointer text-sm">Espacios (Nivel/Tipo)</Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <Checkbox 
+                  id="estimated-budget" 
+                  checked={selectedSections.includes('estimated-budget')}
+                  onCheckedChange={(checked) => {
+                    if (checked) {
+                      setSelectedSections(prev => [...prev, 'estimated-budget']);
+                    } else {
+                      setSelectedSections(prev => prev.filter(s => s !== 'estimated-budget'));
+                    }
+                  }}
+                />
+                <Label htmlFor="estimated-budget" className="cursor-pointer text-sm">Presupuesto Estimado</Label>
               </div>
             </div>
             
@@ -3585,6 +3685,64 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
                             <TableCell className="text-right">{formatNumber(spacesTotals.m2_built)}</TableCell>
                             <TableCell className="text-right">{formatNumber(spacesTotals.m2_livable)}</TableCell>
                             <TableCell className="text-right">{formatNumber(spacesTotals.m2_construction)}</TableCell>
+                          </TableRow>
+                        </>
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+              )}
+
+              {/* Section: Presupuesto Estimado - only if selected */}
+              {selectedSections.includes('estimated-budget') && (
+              <div className="print-section">
+                <h3 className="text-lg font-bold text-primary mb-4">PRESUPUESTO ESTIMADO</h3>
+                
+                {/* Total header card */}
+                <Card className="bg-primary/5 border-primary/20 mb-4">
+                  <CardContent className="py-4 flex items-center justify-between">
+                    <span className="font-semibold">Presupuesto Estimado Total:</span>
+                    <span className="text-xl font-bold text-primary">{formatCurrency(estimatedBudget || 0)}</span>
+                  </CardContent>
+                </Card>
+                
+                {/* Phases table */}
+                <div className="border rounded-lg overflow-hidden">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-primary/10">
+                        <TableHead className="font-bold">Fase</TableHead>
+                        <TableHead className="font-bold w-40 text-right">% Presupuesto estimado</TableHead>
+                        <TableHead className="font-bold w-40 text-right">€ Presupuesto estimado fase</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {phases.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={3} className="text-center py-8 text-muted-foreground">
+                            No hay fases registradas
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        <>
+                          {[...phases].sort((a, b) => (a.code || '').localeCompare(b.code || '')).map(phase => (
+                            <TableRow key={phase.id}>
+                              <TableCell className="font-medium">{phase.code} {phase.name}</TableCell>
+                              <TableCell className="text-right font-mono">
+                                {phase.estimated_budget_percent !== null ? `${formatNumber(phase.estimated_budget_percent, 2)}%` : '-'}
+                              </TableCell>
+                              <TableCell className="text-right font-mono">
+                                {formatCurrency(phase.estimated_budget_amount || 0)}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                          <TableRow className="bg-green-500/10 font-bold">
+                            <TableCell className="font-bold">TOTAL</TableCell>
+                            <TableCell className="text-right font-bold">-</TableCell>
+                            <TableCell className="text-right font-bold">
+                              {formatCurrency(phases.reduce((sum, p) => sum + (p.estimated_budget_amount || 0), 0))}
+                            </TableCell>
                           </TableRow>
                         </>
                       )}

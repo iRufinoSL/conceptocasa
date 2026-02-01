@@ -22,3 +22,4 @@ En la vista 'Presupuesto Estimado':
 - Campo '€Presupuesto estimado fase' por fase: calculado automáticamente (% × €Presupuesto estimado) o editable manualmente
 - Tabla con listado de fases mostrando código, nombre, porcentaje y monto estimado
 - Cabecera con total del presupuesto estimado y suma de lo asignado a fases con porcentaje de cumplimiento
+- Exportable a PDF mediante la opción 'Presupuesto Estimado' en Informe PDF, con cabecera de empresa y tabla de fases con sus importes estimados

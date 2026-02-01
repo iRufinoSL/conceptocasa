@@ -26,7 +26,7 @@ import { ResourcesActivityGroupedView } from './ResourcesActivityGroupedView';
 import { ResourcesTypePhaseActivityGroupedView } from './ResourcesTypePhaseActivityGroupedView';
 import { ResourcesSupplierGroupedView } from './ResourcesSupplierGroupedView';
 import { UnassignedResourcesSection } from './UnassignedResourcesSection';
-import { ResourcesWorkAreaBuyingView } from './ResourcesWorkAreaBuyingView';
+import { BuyingListUnified } from './BuyingListUnified';
 import { useCompanySettings } from '@/hooks/useCompanySettings';
 import { usePermissions, canAccessResource, canAccessActivity } from '@/hooks/usePermissions';
 import { useTabVisibility } from '@/hooks/useTabVisibility';
@@ -1737,7 +1737,7 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
               getActivityId={getActivityId}
             />
           ) : viewMode === 'buying' ? (
-            <ResourcesWorkAreaBuyingView
+            <BuyingListUnified
               budgetId={budgetId}
               resources={filteredResources.map(r => ({
                 ...r,

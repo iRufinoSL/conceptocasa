@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Badge } from '@/components/ui/badge';
@@ -82,7 +82,7 @@ export function BuyingListUnified({
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [expandedSubGroups, setExpandedSubGroups] = useState<Set<string>>(new Set());
   
-  // Local data
+  // Local data - initialized from props
   const [activities, setActivities] = useState<Activity[]>(initialActivities);
   const [resources, setResources] = useState<Resource[]>(initialResources);
   
@@ -101,8 +101,15 @@ export function BuyingListUnified({
   // Dialog for full edit
   const [dialogResource, setDialogResource] = useState<Resource | null>(null);
 
-  // Sync with props - use useEffect instead of useState callback
-  // (Activities and resources are already synced via initial state)
+  // CRITICAL: Sync local state with props when they change
+  // This ensures data loaded asynchronously (e.g., in Agenda tab) gets reflected
+  useEffect(() => {
+    setActivities(initialActivities);
+  }, [initialActivities]);
+
+  useEffect(() => {
+    setResources(initialResources);
+  }, [initialResources]);
 
   const toggleGroup = (id: string) => {
     setExpandedGroups(prev => {

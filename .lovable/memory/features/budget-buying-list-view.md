@@ -88,7 +88,30 @@ Los recursos pueden tener dos tipos de unidades:
 - `purchase_unit_cost`: Coste por unidad de compra
 - `conversion_factor`: Factor de conversión (ej: 0.15 para 15cm de altura)
 
+## Componente Unificado (BuyingListUnified.tsx)
+
+### Características
+- Usado tanto en Agenda como en CÓMO? (Recursos)
+- **Persistencia de fechas**: El rango de fechas se guarda en localStorage por presupuesto
+- Las fechas persisten al salir y volver a entrar en la aplicación
+
+### Vistas Disponibles
+- **Por Actividad**: Agrupado por ActividadID con fechas inline
+- **Por Proveedor**: Agrupado por proveedor con edición inline
+- **Por Recurso**: Lista plana de todos los recursos
+
+### Acciones por Recurso
+- **Lápiz**: Edición inline de coste, unidad y cantidad de compra
+- **Carrito**: Diálogo completo para unidad de compra
+- **Edit**: Acceso al formulario completo del recurso
+
+### Edición Inline de Proveedor
+- Click en el nombre del proveedor abre selector
+- Recursos sin proveedor muestran "Sin proveedor" clickeable
+- Actualización inmediata sin recargar
+
 ## Componentes
+- `BuyingListUnified.tsx`: Componente unificado para Agenda y CÓMO?
 - `BuyingListView.tsx`: Vista en CUÁNDO? con toggle entre modos
 - `SupplierBuyingListView.tsx`: Vista agrupada por proveedor con filtros
 - `ResourcesWorkAreaBuyingView.tsx`: Vista en CÓMO? por área de trabajo

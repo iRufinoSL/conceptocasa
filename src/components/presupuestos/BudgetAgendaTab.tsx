@@ -16,7 +16,7 @@ import { useCompanySettings } from '@/hooks/useCompanySettings';
 import { BudgetGanttView } from './BudgetGanttView';
 import { ResourcesGestionesView } from './ResourcesGestionesView';
 import { WorkReportsList } from './WorkReportsList';
-import { BuyingListView } from './BuyingListView';
+import { BuyingListUnified } from './BuyingListUnified';
 
 // A Task is a resource with resource_type = 'Tarea' or 'Cita'
 export interface BudgetTask {
@@ -727,11 +727,12 @@ export function BudgetAgendaTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
       {mainViewMode === 'listacompra' && (
         <Card>
           <CardContent className="pt-6">
-            <BuyingListView
+            <BuyingListUnified
+              budgetId={budgetId}
               phases={buyingPhases}
               activities={buyingActivities}
               resources={buyingResources}
-              onResourcesChanged={fetchBuyingListData}
+              onRefresh={fetchBuyingListData}
             />
           </CardContent>
         </Card>

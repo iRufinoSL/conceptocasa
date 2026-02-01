@@ -747,16 +747,18 @@ export function BudgetCostSummary({
               {isAdmin && onEstimatedBudgetChange ? (
                 <div className="relative">
                   <div className="flex items-center gap-2">
-                    <Input
-                      id="estimated-budget"
-                      type="number"
-                      step="0.01"
-                      placeholder="0.00"
-                      value={estimatedBudgetValue}
-                      onChange={(e) => handleEstimatedBudgetChange(e.target.value)}
-                      className="max-w-xs font-mono"
-                    />
-                    <span className="text-sm text-muted-foreground">€</span>
+                    <div className="relative flex items-center">
+                      <Input
+                        id="estimated-budget"
+                        type="number"
+                        step="0.01"
+                        placeholder="0,00"
+                        value={estimatedBudgetValue}
+                        onChange={(e) => handleEstimatedBudgetChange(e.target.value)}
+                        className="max-w-xs font-mono pr-8"
+                      />
+                      <span className="absolute right-3 text-sm text-muted-foreground">€</span>
+                    </div>
                     {savingEstimatedBudget && (
                       <span className="text-muted-foreground flex items-center gap-1 text-xs">
                         <Loader2 className="h-3 w-3 animate-spin" />

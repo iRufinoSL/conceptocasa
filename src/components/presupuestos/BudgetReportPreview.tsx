@@ -1013,10 +1013,13 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
 
       let indexY = yPos + 20;
       
+      // Check if ONLY estimated-budget is selected
+      const isOnlyEstimatedBudget = selectedSections.length === 1 && selectedSections.includes('estimated-budget');
+      
       // Build index items (all on page 2)
-      const indexItems: { title: string; page: number }[] = [
-        { title: 'Resumen General', page: 2 },
-      ];
+      const indexItems: { title: string; page: number }[] = isOnlyEstimatedBudget 
+        ? [] // Don't add Resumen General when only estimated-budget
+        : [{ title: 'Resumen General', page: 2 }];
 
       if (selectedSections.includes('cuanto-cuando')) {
         indexItems.push({ title: 'CUÁNTO cuesta + CUÁNDO hacer', page: 3 });
@@ -1062,35 +1065,36 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
         indexY += 6;
       });
 
-      // PAGE 2: General Summary
-      doc.addPage();
-      yPos = 20;
-      doc.setFontSize(12);
-      doc.setFont('helvetica', 'bold');
-      doc.setTextColor(37, 99, 235);
-      doc.text('1. RESUMEN GENERAL', 14, yPos);
-      doc.setTextColor(0);
+      // PAGE 2: General Summary - only if NOT only estimated-budget
+      if (!isOnlyEstimatedBudget) {
+        doc.addPage();
+        yPos = 20;
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(37, 99, 235);
+        doc.text('1. RESUMEN GENERAL', 14, yPos);
+        doc.setTextColor(0);
 
-      yPos += 12;
-      doc.setFontSize(11);
-      doc.setFont('helvetica', 'bold');
-      doc.text('1.1. Estadísticas del presupuesto', 14, yPos);
-      doc.setFont('helvetica', 'normal');
+        yPos += 12;
+        doc.setFontSize(11);
+        doc.setFont('helvetica', 'bold');
+        doc.text('1.1. Estadísticas del presupuesto', 14, yPos);
+        doc.setFont('helvetica', 'normal');
 
-      yPos += 10;
-      doc.setFontSize(10);
+        yPos += 10;
+        doc.setFontSize(10);
 
-      const summaryData = [
-        ['Total de actividades:', activities.length.toString()],
-        ['Total de fases:', phases.length.toString()],
-        ['Total de recursos:', resources.length.toString()],
-      ];
+        const summaryData = [
+          ['Total de actividades:', activities.length.toString()],
+          ['Total de fases:', phases.length.toString()],
+          ['Total de recursos:', resources.length.toString()],
+        ];
 
-      summaryData.forEach(([label, value]) => {
-        doc.text(label, 14, yPos);
-        doc.text(value, 80, yPos);
-        yPos += 6;
-      });
+        summaryData.forEach(([label, value]) => {
+          doc.text(label, 14, yPos);
+          doc.text(value, 80, yPos);
+          yPos += 6;
+        });
 
       // Client and Provider Section
       if (clients.length > 0 || providers.length > 0) {
@@ -1251,11 +1255,12 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
         yPos += notesHeight + 4;
       }
 
-      // Check if ONLY Ante-proyecto is selected (no other sections)
+      // Check if ONLY Ante-proyecto or ONLY Presupuesto Estimado is selected (no other sections)
       const isOnlyAnteproyecto = selectedSections.length === 1 && selectedSections.includes('predesigns');
+      const isOnlyEstimatedBudgetPdf = selectedSections.length === 1 && selectedSections.includes('estimated-budget');
       
-      // Only show Total Presupuesto and Desglose if NOT only Ante-proyecto
-      if (!isOnlyAnteproyecto) {
+      // Only show Total Presupuesto and Desglose if NOT only Ante-proyecto and NOT only Estimated Budget
+      if (!isOnlyAnteproyecto && !isOnlyEstimatedBudgetPdf) {
         // Get filtered values for selected option
         const filteredTotal = getFilteredTotalResourcesSubtotal();
         const filteredTypeData = getFilteredByType();
@@ -1297,6 +1302,7 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
           },
         });
       }
+      } // Close isOnlyEstimatedBudget check
 
       // Section: CUÁNTO cuesta + CUÁNDO hacer (only if selected)
       if (selectedSections.includes('cuanto-cuando')) {
@@ -2846,6 +2852,8 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
               </div>
 
               {/* Section 1: General Summary - starts on new page */}
+              {/* Only show general summary if NOT only estimated-budget is selected */}
+              {!(selectedSections.length === 1 && selectedSections.includes('estimated-budget')) && (
               <div className="print-section">
                 <h3 className="text-lg font-bold text-primary mb-4">1. RESUMEN GENERAL</h3>
                 
@@ -2910,6 +2918,7 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
                   </div>
                 </div>
               </div>
+              )}
 
               <Separator className="print:hidden" />
 

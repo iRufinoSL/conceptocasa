@@ -35,7 +35,7 @@ interface ProjectProfile {
   patio_descubierto: string | null;
   garaje: string | null;
   tiene_terreno: string | null;
-  inclinacion_terreno: string | null;
+  inclinacion_terreno?: string | null;
   poblacion: string | null;
   provincia: string | null;
   coordenadas_google_maps: string | null;

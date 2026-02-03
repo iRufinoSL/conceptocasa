@@ -3124,6 +3124,7 @@ export type Database = {
           garaje: string | null
           google_maps_url: string | null
           id: string
+          inclinacion_terreno: string | null
           lavanderia: string | null
           m2_por_planta: string | null
           mensaje_adicional: string | null
@@ -3158,6 +3159,7 @@ export type Database = {
           garaje?: string | null
           google_maps_url?: string | null
           id?: string
+          inclinacion_terreno?: string | null
           lavanderia?: string | null
           m2_por_planta?: string | null
           mensaje_adicional?: string | null
@@ -3192,6 +3194,7 @@ export type Database = {
           garaje?: string | null
           google_maps_url?: string | null
           id?: string
+          inclinacion_terreno?: string | null
           lavanderia?: string | null
           m2_por_planta?: string | null
           mensaje_adicional?: string | null

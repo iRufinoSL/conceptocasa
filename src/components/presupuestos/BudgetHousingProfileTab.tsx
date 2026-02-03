@@ -1,16 +1,19 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
   Home, MapPin, Calendar, Users, Grid3X3, Palette, MessageSquare, 
   Building2, ExternalLink, Bath, BedDouble, Sofa, UtensilsCrossed, 
   WashingMachine, Archive, Car, TreeDeciduous, Fence, DoorOpen,
-  Layers, Euro, Ruler, Mountain, AlertCircle
+  Layers, Euro, Ruler, Mountain, AlertCircle, Settings2
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { HousingProfileEditor, SpaceDetail } from './HousingProfileEditor';
+import { Json } from '@/integrations/supabase/types';
 
 interface ProjectProfile {
   id: string;
@@ -45,6 +48,11 @@ interface ProjectProfile {
   mensaje_adicional: string | null;
   fecha_ideal_finalizacion: string | null;
   created_at: string;
+  // New internal fields
+  altura_habitaciones?: number | null;
+  espesor_paredes_externas?: number | null;
+  espesor_paredes_internas?: number | null;
+  espacios_detalle?: SpaceDetail[] | null;
 }
 
 interface BudgetHousingProfileTabProps {
@@ -127,43 +135,51 @@ export function BudgetHousingProfileTab({ budgetId, projectId }: BudgetHousingPr
   const [profile, setProfile] = useState<ProjectProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'resumen' | 'detalle'>('resumen');
+
+  const fetchProfile = useCallback(async () => {
+    if (!projectId) {
+      setIsLoading(false);
+      return;
+    }
+    
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      const { data, error: fetchError } = await supabase
+        .from('project_profiles')
+        .select('*')
+        .eq('project_id', projectId)
+        .maybeSingle();
+
+      if (fetchError) {
+        console.error('Error fetching profile:', fetchError);
+        setError(fetchError.message);
+        setProfile(null);
+      } else if (data) {
+        // Cast espacios_detalle from Json to SpaceDetail[]
+        const profileData: ProjectProfile = {
+          ...data,
+          espacios_detalle: Array.isArray(data.espacios_detalle) 
+            ? (data.espacios_detalle as unknown as SpaceDetail[])
+            : null
+        };
+        setProfile(profileData);
+      } else {
+        setProfile(null);
+      }
+    } catch (err) {
+      console.error('Error:', err);
+      setError('Error al cargar el perfil');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [projectId]);
 
   useEffect(() => {
-    const fetchProfile = async () => {
-      if (!projectId) {
-        setIsLoading(false);
-        return;
-      }
-      
-      setIsLoading(true);
-      setError(null);
-      
-      try {
-        const { data, error: fetchError } = await supabase
-          .from('project_profiles')
-          .select('*')
-          .eq('project_id', projectId)
-          .maybeSingle();
-
-        if (fetchError) {
-          console.error('Error fetching profile:', fetchError);
-          setError(fetchError.message);
-          setProfile(null);
-        } else if (data) {
-          setProfile(data);
-        } else {
-          setProfile(null);
-        }
-      } catch (err) {
-        console.error('Error:', err);
-        setError('Error al cargar el perfil');
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
     fetchProfile();
-  }, [projectId]);
+  }, [fetchProfile]);
 
   // Parse m2_por_planta to get individual floor areas
   const parseFloorAreas = (m2PorPlanta: string | null): { floor: number; m2: string }[] => {
@@ -238,7 +254,7 @@ export function BudgetHousingProfileTab({ budgetId, projectId }: BudgetHousingPr
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Header con fecha y presupuesto */}
       <div className="flex flex-wrap items-center justify-between gap-4 p-4 rounded-lg bg-gradient-to-r from-primary/5 to-primary/10 border">
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -259,7 +275,20 @@ export function BudgetHousingProfileTab({ budgetId, projectId }: BudgetHousingPr
         )}
       </div>
 
-      {/* Estilos constructivos */}
+      {/* Tabs for summary vs detailed */}
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'resumen' | 'detalle')}>
+        <TabsList className="grid w-full grid-cols-2 max-w-md">
+          <TabsTrigger value="resumen" className="gap-2">
+            <Home className="h-4 w-4" />
+            Resumen del Cliente
+          </TabsTrigger>
+          <TabsTrigger value="detalle" className="gap-2">
+            <Settings2 className="h-4 w-4" />
+            Detalle Técnico
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="resumen" className="mt-4 space-y-6">
       {profile.estilo_constructivo && profile.estilo_constructivo.length > 0 && (
         <Card>
           <CardHeader className="pb-3">
@@ -506,6 +535,16 @@ export function BudgetHousingProfileTab({ budgetId, projectId }: BudgetHousingPr
           </CardContent>
         </Card>
       )}
+        </TabsContent>
+
+        <TabsContent value="detalle" className="mt-4">
+          <HousingProfileEditor
+            projectId={projectId}
+            profile={profile}
+            onUpdate={fetchProfile}
+          />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

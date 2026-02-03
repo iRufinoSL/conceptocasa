@@ -3111,6 +3111,7 @@ export type Database = {
       }
       project_profiles: {
         Row: {
+          altura_habitaciones: number | null
           contact_email: string
           contact_name: string
           contact_phone: string | null
@@ -3118,6 +3119,9 @@ export type Database = {
           coordenadas_google_maps: string | null
           created_at: string
           despensa: string | null
+          espacios_detalle: Json | null
+          espesor_paredes_externas: number | null
+          espesor_paredes_internas: number | null
           estilo_constructivo: string[] | null
           fecha_ideal_finalizacion: string | null
           forma_geometrica: string | null
@@ -3146,6 +3150,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          altura_habitaciones?: number | null
           contact_email: string
           contact_name: string
           contact_phone?: string | null
@@ -3153,6 +3158,9 @@ export type Database = {
           coordenadas_google_maps?: string | null
           created_at?: string
           despensa?: string | null
+          espacios_detalle?: Json | null
+          espesor_paredes_externas?: number | null
+          espesor_paredes_internas?: number | null
           estilo_constructivo?: string[] | null
           fecha_ideal_finalizacion?: string | null
           forma_geometrica?: string | null
@@ -3181,6 +3189,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          altura_habitaciones?: number | null
           contact_email?: string
           contact_name?: string
           contact_phone?: string | null
@@ -3188,6 +3197,9 @@ export type Database = {
           coordenadas_google_maps?: string | null
           created_at?: string
           despensa?: string | null
+          espacios_detalle?: Json | null
+          espesor_paredes_externas?: number | null
+          espesor_paredes_internas?: number | null
           estilo_constructivo?: string[] | null
           fecha_ideal_finalizacion?: string | null
           forma_geometrica?: string | null

@@ -21,6 +21,7 @@ interface BudgetResource {
   activity_id: string | null;
   description: string | null;
   created_at: string | null;
+  purchase_vat_percent?: number | null;
 }
 
 interface Activity {
@@ -193,6 +194,7 @@ export function ResourcesTypeGroupedView({
             )}
             <TableHead className="min-w-[200px]">Recurso</TableHead>
             <TableHead className="text-right">€Coste ud ext.</TableHead>
+            <TableHead className="text-right">%IVA</TableHead>
             <TableHead>Ud</TableHead>
             <TableHead className="text-right">%Seg.</TableHead>
             <TableHead className="text-right">€Seg.</TableHead>
@@ -221,7 +223,7 @@ export function ResourcesTypeGroupedView({
                 <TableRow className="cursor-pointer hover:bg-muted/50 bg-muted/30">
                   {isAdmin && <TableCell className="py-2" />}
                   <TableCell 
-                    colSpan={isAdmin ? 12 : 13}
+                    colSpan={isAdmin ? 13 : 14}
                     className="py-2"
                     onClick={() => toggleType(type)}
                   >
@@ -292,6 +294,17 @@ export function ResourcesTypeGroupedView({
                           onSave={(v) => onInlineUpdate(resource.id, 'external_unit_cost', v)}
                           type="number"
                           decimals={2}
+                          disabled={!canEdit}
+                        />
+                      </TableCell>
+                      <TableCell className="text-right font-mono">
+                        <ResourceInlineEdit
+                          value={resource.purchase_vat_percent}
+                          displayValue={resource.purchase_vat_percent != null ? `${resource.purchase_vat_percent}%` : '-'}
+                          onSave={(v) => onInlineUpdate(resource.id, 'purchase_vat_percent', v)}
+                          type="number"
+                          decimals={0}
+                          allowNull={true}
                           disabled={!canEdit}
                         />
                       </TableCell>
@@ -381,7 +394,7 @@ export function ResourcesTypeGroupedView({
           })}
           {resources.length === 0 && (
             <TableRow>
-              <TableCell colSpan={isAdmin ? 14 : 13} className="text-center text-muted-foreground py-8">
+              <TableCell colSpan={isAdmin ? 15 : 14} className="text-center text-muted-foreground py-8">
                 No hay recursos. Añade uno nuevo o importa desde CSV/Excel.
               </TableCell>
             </TableRow>

@@ -54,6 +54,7 @@ interface BudgetResource {
   created_at: string | null;
   supplier_id: string | null;
   signed_subtotal: number | null;
+  purchase_vat_percent?: number | null;
 }
 
 interface Activity {
@@ -1770,6 +1771,7 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
                     )}
                     <TableHead className="min-w-[200px]">Recurso</TableHead>
                     <TableHead className="text-right">€Coste ud ext.</TableHead>
+                    <TableHead className="text-right">%IVA</TableHead>
                     <TableHead>Ud</TableHead>
                     <TableHead>Tipo</TableHead>
                     <TableHead className="text-right">%Seg.</TableHead>
@@ -1789,7 +1791,7 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
                 <TableBody>
                   {filteredResources.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={isAdmin ? 18 : 15} className="text-center text-muted-foreground py-8">
+                      <TableCell colSpan={isAdmin ? 19 : 16} className="text-center text-muted-foreground py-8">
                         {searchTerm ? 'No se encontraron recursos' : 'No hay recursos. Añade uno nuevo o importa desde CSV/Excel.'}
                       </TableCell>
                     </TableRow>
@@ -1835,6 +1837,17 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
                               onSave={(v) => handleInlineUpdate(resource.id, 'external_unit_cost', v)}
                               type="number"
                               decimals={2}
+                              disabled={!canEdit}
+                            />
+                          </TableCell>
+                          <TableCell className="text-right font-mono">
+                            <ResourceInlineEdit
+                              value={resource.purchase_vat_percent}
+                              displayValue={resource.purchase_vat_percent != null ? `${resource.purchase_vat_percent}%` : '-'}
+                              onSave={(v) => handleInlineUpdate(resource.id, 'purchase_vat_percent', v)}
+                              type="number"
+                              decimals={0}
+                              allowNull={true}
                               disabled={!canEdit}
                             />
                           </TableCell>

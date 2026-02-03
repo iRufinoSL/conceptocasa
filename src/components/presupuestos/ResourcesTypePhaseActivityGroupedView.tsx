@@ -26,6 +26,7 @@ interface BudgetResource {
   created_at: string | null;
   supplier_id: string | null;
   signed_subtotal: number | null;
+  purchase_vat_percent?: number | null;
 }
 
 interface Activity {
@@ -374,6 +375,7 @@ export function ResourcesTypePhaseActivityGroupedView({
               )}
               <TableHead className="min-w-[180px]">Recurso</TableHead>
               <TableHead className="text-right w-[90px]">€Coste ud</TableHead>
+              <TableHead className="text-right w-[55px]">%IVA</TableHead>
               <TableHead className="w-[50px]">Ud</TableHead>
               <TableHead className="text-right w-[55px]">%Seg.</TableHead>
               <TableHead className="text-right w-[75px]">€Coste int.</TableHead>
@@ -407,12 +409,12 @@ export function ResourcesTypePhaseActivityGroupedView({
                 <Fragment key={`type-${type}`}>
                   {/* Type Header Row */}
                   <TableRow className="cursor-pointer hover:bg-muted/50 bg-muted/30">
-                    {isAdmin && <TableCell className="py-2" />}
-                    <TableCell 
-                      colSpan={isAdmin ? 9 : 10}
-                      className="py-2"
-                      onClick={() => toggleType(type)}
-                    >
+                  {isAdmin && <TableCell className="py-2" />}
+                  <TableCell 
+                    colSpan={isAdmin ? 10 : 11}
+                    className="py-2"
+                    onClick={() => toggleType(type)}
+                  >
                       <div className="flex items-center gap-3">
                         <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0">
                           {isTypeExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
@@ -600,6 +602,17 @@ export function ResourcesTypePhaseActivityGroupedView({
                                         disabled={!canEdit}
                                       />
                                     </TableCell>
+                                    <TableCell className="text-right font-mono">
+                                      <ResourceInlineEdit
+                                        value={resource.purchase_vat_percent}
+                                        displayValue={resource.purchase_vat_percent != null ? `${resource.purchase_vat_percent}%` : '-'}
+                                        onSave={(v) => onInlineUpdate(resource.id, 'purchase_vat_percent', v)}
+                                        type="number"
+                                        decimals={0}
+                                        allowNull={true}
+                                        disabled={!canEdit}
+                                      />
+                                    </TableCell>
                                     <TableCell>
                                       <ResourceInlineEdit
                                         value={resource.unit}
@@ -680,7 +693,7 @@ export function ResourcesTypePhaseActivityGroupedView({
             })}
             {resources.length === 0 && (
               <TableRow>
-                <TableCell colSpan={isAdmin ? 11 : 10} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={isAdmin ? 12 : 11} className="text-center text-muted-foreground py-8">
                   No hay recursos. Añade uno nuevo o importa desde CSV/Excel.
                 </TableCell>
               </TableRow>

@@ -14,6 +14,7 @@ import { WhatsAppComposeDialog } from './WhatsAppComposeDialog';
 import { SMSComposeDialog } from './SMSComposeDialog';
 import { ExportContactsDialog } from './ExportContactsDialog';
 import { searchMatch } from '@/lib/search-utils';
+import { PhoneLink } from '@/lib/contact-utils';
 import type { Contact } from '@/pages/CRM';
 
 type ViewMode = 'cards' | 'list' | 'grouped';
@@ -524,7 +525,9 @@ export function ContactsTab({ contacts, searchTerm, onEdit, onDelete }: Contacts
                                 </Button>
                               ) : '-'}
                             </TableCell>
-                            <TableCell className="text-muted-foreground">{contact.phone || '-'}</TableCell>
+                            <TableCell className="text-muted-foreground">
+                              <PhoneLink phone={contact.phone} />
+                            </TableCell>
                             <TableCell className="text-muted-foreground">{contact.city || '-'}</TableCell>
                             <TableCell>
                               <Badge variant={getTypeVariant(contact.contact_type)} className="text-xs">

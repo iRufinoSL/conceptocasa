@@ -7,12 +7,14 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Pencil, Trash2, Upload, X, Maximize2, FileImage, FileText, LayoutGrid, Layers, ChevronDown, ChevronRight, Sparkles, Move } from 'lucide-react';
+import { Plus, Pencil, Trash2, Upload, X, Maximize2, FileImage, FileText, LayoutGrid, Layers, ChevronDown, ChevronRight, Sparkles, Move, Home } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import { Generate3DVisualization } from './Generate3DVisualization';
 import { VisualizationAdjustmentViewer } from './VisualizationAdjustmentViewer';
+import { BudgetHousingProfileTab } from './BudgetHousingProfileTab';
 interface BudgetPredesign {
   id: string;
   budget_id: string;
@@ -29,6 +31,7 @@ interface BudgetPredesign {
 interface BudgetPredesignTabProps {
   budgetId: string;
   isAdmin: boolean;
+  projectId?: string | null;
 }
 
 const DEFAULT_CONTENT_TYPES = [
@@ -41,7 +44,7 @@ const DEFAULT_CONTENT_TYPES = [
 
 type ViewMode = 'alphabetical' | 'grouped';
 
-export function BudgetPredesignTab({ budgetId, isAdmin }: BudgetPredesignTabProps) {
+export function BudgetPredesignTab({ budgetId, isAdmin, projectId }: BudgetPredesignTabProps) {
   const { toast } = useToast();
   const [predesigns, setPredesigns] = useState<BudgetPredesign[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -55,6 +58,7 @@ export function BudgetPredesignTab({ budgetId, isAdmin }: BudgetPredesignTabProp
     return (localStorage.getItem('predesign-view-mode') as ViewMode) || 'alphabetical';
   });
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
+  const [activeSubTab, setActiveSubTab] = useState<string>('perfil-vivienda');
   const [generate3DOpen, setGenerate3DOpen] = useState(false);
   const [adjustmentViewerOpen, setAdjustmentViewerOpen] = useState(false);
   const [adjustmentItem, setAdjustmentItem] = useState<BudgetPredesign | null>(null);
@@ -512,14 +516,34 @@ export function BudgetPredesignTab({ budgetId, isAdmin }: BudgetPredesignTabProp
 
   return (
     <div className="space-y-6">
+      {/* Sub-pestañas de Ante-proyecto */}
+      <Tabs value={activeSubTab} onValueChange={setActiveSubTab}>
+        <TabsList className="grid w-full grid-cols-2 max-w-md">
+          <TabsTrigger value="perfil-vivienda" className="gap-2">
+            <Home className="h-4 w-4" />
+            Perfil vivienda
+          </TabsTrigger>
+          <TabsTrigger value="elementos" className="gap-2">
+            <FileImage className="h-4 w-4" />
+            Elementos
+          </TabsTrigger>
+        </TabsList>
 
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <div>
-          <h3 className="text-lg font-semibold">Ante-proyecto</h3>
-          <p className="text-sm text-muted-foreground">
-            Referencias catastrales, planos, alzados, perspectivas y otros documentos visuales
-          </p>
-        </div>
+        {/* Pestaña Perfil vivienda */}
+        <TabsContent value="perfil-vivienda" className="mt-6">
+          <BudgetHousingProfileTab budgetId={budgetId} projectId={projectId || null} />
+        </TabsContent>
+
+        {/* Pestaña Elementos (contenido anterior) */}
+        <TabsContent value="elementos" className="mt-6">
+          <div className="space-y-6">
+            <div className="flex items-center justify-between flex-wrap gap-4">
+              <div>
+                <h3 className="text-lg font-semibold">Elementos del Ante-proyecto</h3>
+                <p className="text-sm text-muted-foreground">
+                  Referencias catastrales, planos, alzados, perspectivas y otros documentos visuales
+                </p>
+              </div>
         <div className="flex items-center gap-2">
           {/* View mode toggle */}
           <div className="flex items-center border rounded-lg p-1 bg-muted/30">
@@ -790,6 +814,9 @@ export function BudgetPredesignTab({ budgetId, isAdmin }: BudgetPredesignTabProp
           }}
         />
       )}
+          </div>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

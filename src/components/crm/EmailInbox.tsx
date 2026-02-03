@@ -1490,6 +1490,14 @@ export function EmailInbox({ onComposeReply, onComposeForward }: EmailInboxProps
                 {/* Actions */}
                 <div className="border-t pt-4 mt-4 flex flex-wrap gap-2">
                   <Button 
+                    variant="default" 
+                    size="sm"
+                    onClick={() => setIsFullscreen(true)}
+                  >
+                    <Maximize2 className="h-4 w-4 mr-2" />
+                    Ampliar
+                  </Button>
+                  <Button 
                     variant="outline" 
                     size="sm"
                     onClick={() => {
@@ -1516,6 +1524,36 @@ export function EmailInbox({ onComposeReply, onComposeForward }: EmailInboxProps
                     <Forward className="h-4 w-4 mr-2" />
                     Reenviar
                   </Button>
+                  {!selectedEmail.deleted_at && (
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => {
+                        const email = selectedEmail;
+                        setSelectedEmail(null);
+                        setIsFullscreen(false);
+                        openFolderDialog(email);
+                      }}
+                    >
+                      <FolderOpen className="h-4 w-4 mr-2" />
+                      Asociar/Tarea
+                    </Button>
+                  )}
+                  {!selectedEmail.deleted_at && (
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => {
+                        const email = selectedEmail;
+                        setSelectedEmail(null);
+                        setEmailForDocument(email);
+                        setTimeout(() => setShowCreateDocument(true), 100);
+                      }}
+                    >
+                      <FilePlus className="h-4 w-4 mr-2" />
+                      Documento
+                    </Button>
+                  )}
                   {!selectedEmail.ticket_id && !selectedEmail.deleted_at && (
                     <Button 
                       variant="outline" 
@@ -1537,19 +1575,6 @@ export function EmailInbox({ onComposeReply, onComposeForward }: EmailInboxProps
                     </Button>
                   )}
                   {!selectedEmail.deleted_at && (
-                    <Button 
-                      variant="outline" 
-                      size="sm"
-                      onClick={() => {
-                        setEmailForDocument(selectedEmail);
-                        setShowCreateDocument(true);
-                      }}
-                    >
-                      <FilePlus className="h-4 w-4 mr-2" />
-                      Crear Documento
-                    </Button>
-                  )}
-                  {!selectedEmail.deleted_at && (
                     <>
                       <Button 
                         variant="outline" 
@@ -1558,19 +1583,6 @@ export function EmailInbox({ onComposeReply, onComposeForward }: EmailInboxProps
                       >
                         <AlarmClock className="h-4 w-4 mr-2" />
                         Posponer
-                      </Button>
-                      <Button 
-                        variant="outline" 
-                        size="sm"
-                        onClick={() => {
-                          const email = selectedEmail;
-                          setSelectedEmail(null);
-                          setIsFullscreen(false);
-                          openFolderDialog(email);
-                        }}
-                      >
-                        <FolderOpen className="h-4 w-4 mr-2" />
-                        Asignar carpeta
                       </Button>
                       <Button 
                         variant="outline" 

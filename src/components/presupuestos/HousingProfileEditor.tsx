@@ -152,34 +152,30 @@ export function HousingProfileEditor({ projectId, profile, onUpdate }: HousingPr
   }, [profile.m2_por_planta]);
 
   // Calculate external wall area
+  // Using m² construidos (built area) - perimeter is simply sqrt(m2)*4
   const externalWallCalculation = useMemo(() => {
-    const { altura_habitaciones, espesor_paredes_externas } = constructionParams;
+    const { altura_habitaciones } = constructionParams;
     
-    if (!altura_habitaciones || !espesor_paredes_externas || floorAreas.length === 0) {
+    if (!altura_habitaciones || floorAreas.length === 0) {
       return null;
     }
-
-    const wallThicknessM = espesor_paredes_externas / 100; // cm to meters
     
     let totalWallArea = 0;
-    const perFloorData: { floor: number; m2Habitables: number; perimeter: number; wallArea: number }[] = [];
+    const perFloorData: { floor: number; m2Construidos: number; perimeter: number; wallArea: number }[] = [];
     
     for (const { floor, m2 } of floorAreas) {
-      // Calculate perimeter from m² (assuming square-ish shape)
+      // Calculate perimeter from m² construidos (assuming square-ish shape)
       const sideLength = Math.sqrt(m2);
       const perimeter = sideLength * 4;
       
-      // External perimeter includes wall thickness
-      const externalPerimeter = perimeter + (wallThicknessM * 8); // 4 corners, 2 sides each
-      
-      // Wall area = perimeter × height
-      const wallArea = externalPerimeter * altura_habitaciones;
+      // Wall area = perimeter × height (simple calculation with built m²)
+      const wallArea = perimeter * altura_habitaciones;
       
       totalWallArea += wallArea;
       perFloorData.push({
         floor,
-        m2Habitables: m2,
-        perimeter: externalPerimeter,
+        m2Construidos: m2,
+        perimeter,
         wallArea
       });
     }
@@ -204,7 +200,7 @@ export function HousingProfileEditor({ projectId, profile, onUpdate }: HousingPr
       externalDoorArea,
       netWallArea: Math.max(0, netWallArea)
     };
-  }, [constructionParams, floorAreas, spaces]);
+  }, [constructionParams.altura_habitaciones, floorAreas, spaces]);
 
   const handleParamChange = (field: keyof ConstructionParams, value: string) => {
     const numValue = value === '' ? null : parseFloat(value.replace(',', '.'));
@@ -476,16 +472,16 @@ export function HousingProfileEditor({ projectId, profile, onUpdate }: HousingPr
             <div className="space-y-4">
               {/* Per floor breakdown */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {externalWallCalculation.perFloorData.map(({ floor, m2Habitables, perimeter, wallArea }) => (
+                {externalWallCalculation.perFloorData.map(({ floor, m2Construidos, perimeter, wallArea }) => (
                   <div key={floor} className="p-3 rounded-lg bg-background border">
                     <div className="text-sm font-medium mb-2">Planta {floor}</div>
                     <div className="space-y-1 text-xs text-muted-foreground">
                       <div className="flex justify-between">
-                        <span>m² habitables:</span>
-                        <span className="font-medium text-foreground">{formatNumber(m2Habitables, 1)}</span>
+                        <span>m² construidos:</span>
+                        <span className="font-medium text-foreground">{formatNumber(m2Construidos, 1)}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span>Perímetro ext.:</span>
+                        <span>Perímetro:</span>
                         <span className="font-medium text-foreground">{formatNumber(perimeter, 2)} ml</span>
                       </div>
                       <div className="flex justify-between">
@@ -528,7 +524,7 @@ export function HousingProfileEditor({ projectId, profile, onUpdate }: HousingPr
               </div>
               
               <div className="text-xs text-muted-foreground bg-muted/50 p-2 rounded">
-                <strong>Cálculo:</strong> √(m² habitables) × 4 + ancho paredes × 8 = perímetro exterior → × altura = m² brutos
+                <strong>Cálculo:</strong> √(m² construidos) × 4 = perímetro → × altura = m² brutos
                 <br />
                 Se resta: superficie de ventanas + 1 puerta externa ({EXTERNAL_DOOR_M2} m²) por planta
               </div>

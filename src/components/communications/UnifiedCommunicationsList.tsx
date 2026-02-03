@@ -1061,6 +1061,10 @@ export function UnifiedCommunicationsList({
                 comm={selectedCommunication}
                 onExpandClick={() => setFullscreenCommunication(selectedCommunication)}
                 onActionsClick={() => handleOpenActionsDialog(selectedCommunication)}
+                onDocumentClick={selectedCommunication.type === 'email' ? () => {
+                  setEmailForDocument(selectedCommunication.originalData as EmailMessage);
+                  setShowCreateDocument(true);
+                } : undefined}
                 onReplyClick={onComposeReply ? () => onComposeReply(selectedCommunication) : undefined}
                 onForwardClick={onComposeForward ? () => onComposeForward(selectedCommunication) : undefined}
                 onDeleteClick={() => handleDelete(selectedCommunication)}
@@ -1273,10 +1277,15 @@ export function UnifiedCommunicationsList({
               <CommunicationDetail 
                 comm={fullscreenCommunication} 
                 isFullscreen 
-                onActionsClick={() => handleOpenActionsDialog(fullscreenCommunication)}
+                onActionsClick={() => {
+                  const comm = fullscreenCommunication;
+                  setFullscreenCommunication(null);
+                  setTimeout(() => handleOpenActionsDialog(comm), 100);
+                }}
                 onDocumentClick={fullscreenCommunication.type === 'email' ? () => {
                   setEmailForDocument(fullscreenCommunication.originalData as EmailMessage);
-                  setShowCreateDocument(true);
+                  setFullscreenCommunication(null);
+                  setTimeout(() => setShowCreateDocument(true), 100);
                 } : undefined}
                 onReplyClick={onComposeReply ? () => onComposeReply(fullscreenCommunication) : undefined}
                 onForwardClick={onComposeForward ? () => onComposeForward(fullscreenCommunication) : undefined}

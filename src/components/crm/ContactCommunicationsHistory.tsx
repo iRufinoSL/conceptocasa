@@ -846,7 +846,8 @@ export function ContactCommunicationsHistory({ contactId, contactPhone, isAdmin 
                   variant="outline"
                   size="sm"
                   onClick={() => {
-                    setActionsDialogOpen(true);
+                    setEmailDetailDialogOpen(false);
+                    setTimeout(() => setActionsDialogOpen(true), 100);
                   }}
                   className="gap-1"
                 >
@@ -858,7 +859,8 @@ export function ContactCommunicationsHistory({ contactId, contactPhone, isAdmin 
                   variant="outline"
                   size="sm"
                   onClick={() => {
-                    setShowCreateDocument(true);
+                    setEmailDetailDialogOpen(false);
+                    setTimeout(() => setShowCreateDocument(true), 100);
                   }}
                   className="gap-1"
                 >

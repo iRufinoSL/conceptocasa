@@ -59,6 +59,7 @@ interface ContactEmailRequest {
   patioDescubierto?: string;
   garaje?: string;
   tieneTerreno?: string;
+  inclinacionTerreno?: string;
   poblacionProvincia?: string;
   coordenadasGoogleMaps?: string;
   googleMapsUrl?: string;
@@ -314,6 +315,13 @@ const handler = async (req: Request): Promise<Response> => {
       console.log("Project created with ID:", projectId, "Number:", projectNumber);
       
       // 2. Create project profile with all form data
+      // Build m2_por_planta string from individual floor values
+      const m2PorPlantaParts: string[] = [];
+      if (requestData.m2Planta1) m2PorPlantaParts.push(`Planta 1: ${requestData.m2Planta1}`);
+      if (requestData.m2Planta2) m2PorPlantaParts.push(`Planta 2: ${requestData.m2Planta2}`);
+      if (requestData.m2Planta3) m2PorPlantaParts.push(`Planta 3: ${requestData.m2Planta3}`);
+      const m2PorPlanta = m2PorPlantaParts.length > 0 ? m2PorPlantaParts.join(', ') : null;
+      
       const { error: profileError } = await supabase
         .from('project_profiles')
         .insert({
@@ -323,9 +331,7 @@ const handler = async (req: Request): Promise<Response> => {
           contact_email: email,
           contact_phone: phone,
           num_plantas: requestData.numPlantas || null,
-          m2_planta_1: requestData.m2Planta1 || null,
-          m2_planta_2: requestData.m2Planta2 || null,
-          m2_planta_3: requestData.m2Planta3 || null,
+          m2_por_planta: m2PorPlanta,
           forma_geometrica: requestData.formaGeometrica || null,
           tipo_tejado: requestData.tipoTejado || null,
           num_habitaciones_total: requestData.numHabitacionesTotal || null,
@@ -340,6 +346,7 @@ const handler = async (req: Request): Promise<Response> => {
           patio_descubierto: requestData.patioDescubierto || null,
           garaje: requestData.garaje || null,
           tiene_terreno: requestData.tieneTerreno || null,
+          inclinacion_terreno: requestData.inclinacionTerreno || null,
           poblacion: poblacion || null,
           provincia: provincia || null,
           coordenadas_google_maps: requestData.coordenadasGoogleMaps || null,

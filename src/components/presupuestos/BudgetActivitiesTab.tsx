@@ -73,6 +73,7 @@ interface BudgetActivity {
   files_count?: number;
   resources_subtotal?: number;
   signed_subtotal?: number;
+  purchase_subtotal?: number;
   start_date: string | null;
   duration_days: number | null;
   tolerance_days: number | null;
@@ -464,11 +465,23 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
             0
           );
 
+          // Calculate purchase subtotal (buying list with VAT included)
+          // Formula: (cost * qty) + (cost * qty * vatPercent/100)
+          const purchaseSubtotal = activityResources.reduce((sum, r) => {
+            const calculatedUnits = r.manual_units ?? r.related_units ?? 0;
+            const qty = r.purchase_units ?? calculatedUnits;
+            const cost = r.purchase_unit_cost ?? r.external_unit_cost ?? 0;
+            const vatPercent = r.purchase_vat_percent ?? 21;
+            const vatAmount = cost * qty * (vatPercent / 100);
+            return sum + (cost * qty) + vatAmount;
+          }, 0);
+
           return {
             ...activity,
             files_count: count || 0,
             resources_subtotal: resourcesSubtotal,
-            signed_subtotal: signedSubtotal
+            signed_subtotal: signedSubtotal,
+            purchase_subtotal: purchaseSubtotal
           };
         })
       );
@@ -2464,6 +2477,12 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
               0
             );
 
+            // Calculate phase purchase subtotal (sum of purchase_subtotal from all activities in this phase)
+            const phasePurchaseSubtotal = phaseActivities.reduce(
+              (total, activity) => total + (activity.purchase_subtotal || 0),
+              0
+            );
+
             return (
               <Collapsible key={phase.id} open={isExpanded} onOpenChange={() => togglePhaseExpanded(phase.id)}>
                 <div className="border rounded-lg">
@@ -2490,6 +2509,10 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
                         <div className="text-right">
                           <p className="text-xs text-muted-foreground">€SubTotal Recursos</p>
                           <p className="font-mono font-semibold text-primary">{formatCurrency(phaseResourcesSubtotal)}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-xs text-muted-foreground">€SubTotal Compra</p>
+                          <p className="font-mono font-semibold text-emerald-600">{formatCurrency(phasePurchaseSubtotal)}</p>
                         </div>
                       </div>
                     </div>
@@ -2521,6 +2544,7 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
                             <TableHead>MediciónID</TableHead>
                             <TableHead className="text-right">€SubTotal Firmado</TableHead>
                             <TableHead className="text-right">€SubTotal Recursos</TableHead>
+                            <TableHead className="text-right">€SubTotal Compra</TableHead>
                             <TableHead>Archivos</TableHead>
                             {(isAdmin || permissions.canEdit) && <TableHead className="w-20">Acciones</TableHead>}
                           </TableRow>
@@ -2651,6 +2675,9 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
                                 </TableCell>
                                 <TableCell className="text-right font-mono font-semibold text-primary">
                                   {formatCurrency(activity.resources_subtotal || 0)}
+                                </TableCell>
+                                <TableCell className="text-right font-mono font-semibold text-emerald-600">
+                                  {formatCurrency(activity.purchase_subtotal || 0)}
                                 </TableCell>
                                 <TableCell>
                                   <Button variant="ghost" size="sm" onClick={() => handleManageFiles(activity)}>

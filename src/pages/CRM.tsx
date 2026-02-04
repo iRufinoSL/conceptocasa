@@ -40,6 +40,8 @@ export interface Contact {
   nif_dni: string | null;
   observations: string | null;
   created_at: string | null;
+  secondary_phones: string[] | null;
+  secondary_emails: string[] | null;
 }
 
 export interface Management {

@@ -106,8 +106,18 @@ export function ContactsTab({ contacts, searchTerm, onEdit, onDelete }: Contacts
           searchMatch(contact.name, searchTerm) ||
           searchMatch(contact.surname, searchTerm) ||
           searchMatch(contact.email, searchTerm) ||
+          searchMatch(contact.phone, searchTerm) ||
           searchMatch(contact.city, searchTerm) ||
+          searchMatch(contact.address, searchTerm) ||
+          searchMatch(contact.province, searchTerm) ||
+          searchMatch(contact.postal_code, searchTerm) ||
+          searchMatch(contact.country, searchTerm) ||
+          searchMatch(contact.nif_dni, searchTerm) ||
+          searchMatch(contact.observations, searchTerm) ||
+          searchMatch(contact.website, searchTerm) ||
           contact.tags?.some((tag) => searchMatch(tag, searchTerm)) ||
+          contact.secondary_phones?.some((phone) => searchMatch(phone, searchTerm)) ||
+          contact.secondary_emails?.some((email) => searchMatch(email, searchTerm)) ||
           activityMatches
         );
       });

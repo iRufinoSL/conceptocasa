@@ -2,11 +2,80 @@ import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Printer, Download, Home } from 'lucide-react';
+import { Printer, Download, Home, ZoomIn, ZoomOut, Minus } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { formatCurrency } from '@/lib/format-utils';
 import { useCompanySettings } from '@/hooks/useCompanySettings';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+
+type PrintScale = 'compact' | 'normal' | 'large';
+
+const SCALE_CONFIGS: Record<PrintScale, {
+  label: string;
+  bodyFontSize: string;
+  titleFontSize: string;
+  sectionFontSize: string;
+  tableFontSize: string;
+  tableHeaderFontSize: string;
+  partyNameFontSize: string;
+  partyDetailsFontSize: string;
+  totalsFontSize: string;
+  finalTotalFontSize: string;
+  padding: string;
+  printPadding: string;
+  logoMaxWidth: string;
+  iconSize: string;
+}> = {
+  compact: {
+    label: 'Compacto',
+    bodyFontSize: '10px',
+    titleFontSize: '18px',
+    sectionFontSize: '9px',
+    tableFontSize: '9px',
+    tableHeaderFontSize: '8px',
+    partyNameFontSize: '11px',
+    partyDetailsFontSize: '9px',
+    totalsFontSize: '9px',
+    finalTotalFontSize: '12px',
+    padding: '16px',
+    printPadding: '12px',
+    logoMaxWidth: '120px',
+    iconSize: '32px',
+  },
+  normal: {
+    label: 'Normal',
+    bodyFontSize: '12px',
+    titleFontSize: '22px',
+    sectionFontSize: '10px',
+    tableFontSize: '11px',
+    tableHeaderFontSize: '9px',
+    partyNameFontSize: '13px',
+    partyDetailsFontSize: '11px',
+    totalsFontSize: '11px',
+    finalTotalFontSize: '14px',
+    padding: '24px',
+    printPadding: '20px',
+    logoMaxWidth: '160px',
+    iconSize: '40px',
+  },
+  large: {
+    label: 'Ampliado',
+    bodyFontSize: '14px',
+    titleFontSize: '26px',
+    sectionFontSize: '11px',
+    tableFontSize: '12px',
+    tableHeaderFontSize: '10px',
+    partyNameFontSize: '15px',
+    partyDetailsFontSize: '12px',
+    totalsFontSize: '12px',
+    finalTotalFontSize: '16px',
+    padding: '32px',
+    printPadding: '24px',
+    logoMaxWidth: '180px',
+    iconSize: '44px',
+  },
+};
 
 type DocumentType = 'factura' | 'presupuesto' | 'proforma';
 
@@ -100,8 +169,11 @@ export function InvoicePrintView({ invoice, onClose }: Props) {
   const [lines, setLines] = useState<InvoiceLine[]>([]);
   const [loading, setLoading] = useState(true);
   const [receiverContactFiscal, setReceiverContactFiscal] = useState<ContactFiscal | null>(null);
+  const [printScale, setPrintScale] = useState<PrintScale>('normal');
   const printRef = useRef<HTMLDivElement>(null);
   const { settings: companySettings } = useCompanySettings();
+
+  const scaleConfig = SCALE_CONFIGS[printScale];
 
   useEffect(() => {
     fetchLines();
@@ -166,10 +238,10 @@ export function InvoicePrintView({ invoice, onClose }: Props) {
             * { margin: 0; padding: 0; box-sizing: border-box; }
             body { 
               font-family: 'Segoe UI', Arial, sans-serif; 
-              padding: 20px; 
+              padding: ${scaleConfig.padding}; 
               color: #1a1a1a;
-              line-height: 1.3;
-              font-size: 11px;
+              line-height: 1.4;
+              font-size: ${scaleConfig.bodyFontSize};
             }
             .invoice-header {
               display: flex;
@@ -182,11 +254,11 @@ export function InvoicePrintView({ invoice, onClose }: Props) {
             .logo-section {
               display: flex;
               align-items: center;
-              gap: 8px;
+              gap: 10px;
             }
             .logo-icon {
-              width: 36px;
-              height: 36px;
+              width: ${scaleConfig.iconSize};
+              height: ${scaleConfig.iconSize};
               background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
               border-radius: 8px;
               display: flex;
@@ -194,17 +266,17 @@ export function InvoicePrintView({ invoice, onClose }: Props) {
               justify-content: center;
             }
             .logo-icon svg {
-              width: 20px;
-              height: 20px;
+              width: 60%;
+              height: 60%;
               color: white;
             }
             .logo-image {
-              max-width: 140px;
-              max-height: 45px;
+              max-width: ${scaleConfig.logoMaxWidth};
+              max-height: 55px;
               object-fit: contain;
             }
             .company-name {
-              font-size: 18px;
+              font-size: ${scaleConfig.partyNameFontSize};
               font-weight: 700;
               color: #1a1a1a;
             }
@@ -212,12 +284,12 @@ export function InvoicePrintView({ invoice, onClose }: Props) {
               text-align: right;
             }
             .invoice-title h1 {
-              font-size: 20px;
+              font-size: ${scaleConfig.titleFontSize};
               color: ${docColor};
               margin-bottom: 2px;
             }
             .invoice-number {
-              font-size: 14px;
+              font-size: ${scaleConfig.tableFontSize};
               color: #666;
             }
             .parties {
@@ -229,25 +301,25 @@ export function InvoicePrintView({ invoice, onClose }: Props) {
               width: 45%;
             }
             .party-label {
-              font-size: 10px;
+              font-size: ${scaleConfig.sectionFontSize};
               text-transform: uppercase;
               color: #666;
               margin-bottom: 4px;
               letter-spacing: 0.5px;
             }
             .party-name {
-              font-size: 12px;
+              font-size: ${scaleConfig.partyNameFontSize};
               font-weight: 600;
               color: #1a1a1a;
               margin-bottom: 2px;
             }
             .party-address {
-              font-size: 10px;
+              font-size: ${scaleConfig.partyDetailsFontSize};
               color: #444;
-              line-height: 1.3;
+              line-height: 1.4;
             }
             .party-nif {
-              font-size: 10px;
+              font-size: ${scaleConfig.partyDetailsFontSize};
               color: #666;
               margin-top: 2px;
             }
@@ -260,14 +332,14 @@ export function InvoicePrintView({ invoice, onClose }: Props) {
               border-radius: 6px;
             }
             .info-item label {
-              font-size: 10px;
+              font-size: ${scaleConfig.sectionFontSize};
               color: #666;
               display: block;
               margin-bottom: 2px;
             }
             .info-item span {
               font-weight: 600;
-              font-size: 11px;
+              font-size: ${scaleConfig.tableFontSize};
               color: #1a1a1a;
             }
             table {
@@ -277,17 +349,17 @@ export function InvoicePrintView({ invoice, onClose }: Props) {
             }
             th {
               background: #f1f5f9;
-              padding: 6px 8px;
+              padding: 8px;
               text-align: left;
-              font-size: 9px;
+              font-size: ${scaleConfig.tableHeaderFontSize};
               text-transform: uppercase;
               color: #475569;
               letter-spacing: 0.5px;
             }
             td {
-              padding: 6px 8px;
+              padding: 8px;
               border-bottom: 1px solid #e5e5e5;
-              font-size: 10px;
+              font-size: ${scaleConfig.tableFontSize};
             }
             .text-right { text-align: right; }
             .text-center { text-align: center; }
@@ -297,22 +369,22 @@ export function InvoicePrintView({ invoice, onClose }: Props) {
               margin-bottom: 20px;
             }
             .totals-box {
-              width: 220px;
+              width: 240px;
               background: #f8fafc;
               border-radius: 6px;
-              padding: 10px;
+              padding: 12px;
             }
             .totals-row {
               display: flex;
               justify-content: space-between;
               padding: 4px 0;
-              font-size: 11px;
+              font-size: ${scaleConfig.totalsFontSize};
             }
             .totals-row.total {
               border-top: 2px solid #e5e5e5;
               margin-top: 4px;
               padding-top: 10px;
-              font-size: 13px;
+              font-size: ${scaleConfig.finalTotalFontSize};
               font-weight: 700;
               color: #3b82f6;
             }
@@ -324,7 +396,7 @@ export function InvoicePrintView({ invoice, onClose }: Props) {
               border-left: 3px solid ${docColor};
             }
             .observations-label {
-              font-size: 10px;
+              font-size: ${scaleConfig.sectionFontSize};
               text-transform: uppercase;
               color: #666;
               margin-bottom: 4px;
@@ -333,13 +405,13 @@ export function InvoicePrintView({ invoice, onClose }: Props) {
             .observations-content {
               color: #1a1a1a;
               white-space: pre-wrap;
-              font-size: 10px;
+              font-size: ${scaleConfig.tableFontSize};
             }
             .footer {
               text-align: center;
               padding-top: 12px;
               border-top: 1px solid #e5e5e5;
-              font-size: 9px;
+              font-size: ${scaleConfig.sectionFontSize};
               color: #666;
               margin-top: 20px;
             }
@@ -348,7 +420,7 @@ export function InvoicePrintView({ invoice, onClose }: Props) {
               text-decoration: none;
             }
             @media print {
-              body { padding: 15px; }
+              body { padding: ${scaleConfig.printPadding}; }
               .footer { margin-top: 30px; }
             }
           </style>
@@ -426,30 +498,54 @@ export function InvoicePrintView({ invoice, onClose }: Props) {
     <Dialog open onOpenChange={onClose}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Vista Previa de {DOCUMENT_TYPE_LABELS[invoice.document_type || 'factura']}</DialogTitle>
+          <div className="flex items-center justify-between">
+            <DialogTitle>Vista Previa de {DOCUMENT_TYPE_LABELS[invoice.document_type || 'factura']}</DialogTitle>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground">Escala:</span>
+              <ToggleGroup 
+                type="single" 
+                value={printScale} 
+                onValueChange={(value) => value && setPrintScale(value as PrintScale)}
+                className="border rounded-md"
+              >
+                <ToggleGroupItem value="compact" size="sm" className="gap-1 text-xs px-2">
+                  <ZoomOut className="h-3 w-3" />
+                  Compacto
+                </ToggleGroupItem>
+                <ToggleGroupItem value="normal" size="sm" className="gap-1 text-xs px-2">
+                  <Minus className="h-3 w-3" />
+                  Normal
+                </ToggleGroupItem>
+                <ToggleGroupItem value="large" size="sm" className="gap-1 text-xs px-2">
+                  <ZoomIn className="h-3 w-3" />
+                  Ampliado
+                </ToggleGroupItem>
+              </ToggleGroup>
+            </div>
+          </div>
         </DialogHeader>
 
-        <div ref={printRef} className="bg-white p-4 rounded-lg text-sm">
+        <div ref={printRef} className="bg-white p-4 rounded-lg" style={{ fontSize: scaleConfig.bodyFontSize }}>
           {/* Header */}
           <div className="invoice-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px', paddingBottom: '10px', borderBottom: '2px solid #e5e5e5' }}>
             {/* Logo */}
-            <div className="logo-section" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div className="logo-section" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               {logoUrl ? (
                 <img 
                   src={logoUrl} 
                   alt={companySettings.name} 
-                  style={{ maxWidth: '140px', maxHeight: '45px', objectFit: 'contain' }}
+                  style={{ maxWidth: scaleConfig.logoMaxWidth, maxHeight: '55px', objectFit: 'contain' }}
                   className="logo-image"
                 />
               ) : (
                 <>
-                  <div style={{ width: '36px', height: '36px', background: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <div style={{ width: scaleConfig.iconSize, height: scaleConfig.iconSize, background: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <svg width="60%" height="60%" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
                       <polyline points="9 22 9 12 15 12 15 22"/>
                     </svg>
                   </div>
-                  <div style={{ fontSize: '16px', fontWeight: '700', color: '#1a1a1a' }}>{companySettings.name}</div>
+                  <div style={{ fontSize: scaleConfig.partyNameFontSize, fontWeight: '700', color: '#1a1a1a' }}>{companySettings.name}</div>
                 </>
               )}
             </div>
@@ -457,13 +553,13 @@ export function InvoicePrintView({ invoice, onClose }: Props) {
             {/* Presupuesto vinculado (centro) */}
             {invoice.presupuesto && (
               <div style={{ textAlign: 'center', flex: 1 }}>
-                <div style={{ fontSize: '9px', textTransform: 'uppercase', color: '#888', letterSpacing: '0.5px', marginBottom: '2px' }}>
+                <div style={{ fontSize: scaleConfig.sectionFontSize, textTransform: 'uppercase', color: '#888', letterSpacing: '0.5px', marginBottom: '2px' }}>
                   Presupuesto
                 </div>
-                <div style={{ fontSize: '11px', fontWeight: '600', color: '#1a1a1a' }}>
+                <div style={{ fontSize: scaleConfig.tableFontSize, fontWeight: '600', color: '#1a1a1a' }}>
                   {String(invoice.presupuesto.codigo_correlativo).padStart(4, '0')} - {invoice.presupuesto.nombre}
                 </div>
-                <div style={{ fontSize: '10px', color: '#666' }}>
+                <div style={{ fontSize: scaleConfig.sectionFontSize, color: '#666' }}>
                   Versión {invoice.presupuesto.version}
                 </div>
               </div>
@@ -471,10 +567,10 @@ export function InvoicePrintView({ invoice, onClose }: Props) {
 
             {/* Tipo de documento y número */}
             <div style={{ textAlign: 'right' }}>
-              <h1 style={{ fontSize: '20px', color: DOCUMENT_TYPE_COLORS[invoice.document_type || 'factura'], marginBottom: '2px' }}>
+              <h1 style={{ fontSize: scaleConfig.titleFontSize, color: DOCUMENT_TYPE_COLORS[invoice.document_type || 'factura'], marginBottom: '2px' }}>
                 {DOCUMENT_TYPE_LABELS[invoice.document_type || 'factura']}
               </h1>
-              <div style={{ fontSize: '13px', color: '#666' }}>{formatInvoiceNumber(invoice.invoice_number, invoice.invoice_date)}</div>
+              <div style={{ fontSize: scaleConfig.tableFontSize, color: '#666' }}>{formatInvoiceNumber(invoice.invoice_number, invoice.invoice_date)}</div>
             </div>
           </div>
 
@@ -482,13 +578,13 @@ export function InvoicePrintView({ invoice, onClose }: Props) {
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px', gap: '16px' }}>
             {/* Emisor */}
             <div style={{ flex: 1, padding: '10px', background: '#f8fafc', borderRadius: '6px', borderLeft: '3px solid #3b82f6' }}>
-              <div style={{ fontSize: '9px', textTransform: 'uppercase', color: '#3b82f6', marginBottom: '6px', letterSpacing: '0.5px', fontWeight: '600' }}>Emisor</div>
-              <div style={{ fontSize: '12px', fontWeight: '600', color: '#1a1a1a', marginBottom: '4px' }}>
+              <div style={{ fontSize: scaleConfig.sectionFontSize, textTransform: 'uppercase', color: '#3b82f6', marginBottom: '6px', letterSpacing: '0.5px', fontWeight: '600' }}>Emisor</div>
+              <div style={{ fontSize: scaleConfig.partyNameFontSize, fontWeight: '600', color: '#1a1a1a', marginBottom: '4px' }}>
                 {invoice.issuer_account?.name || 'No definido'}
               </div>
               {renderPartyAddress(invoice.issuer_account)}
               {invoice.issuer_account?.nif_cif && (
-                <div style={{ fontSize: '10px', color: '#1a1a1a', marginTop: '4px', fontWeight: '500' }}>
+                <div style={{ fontSize: scaleConfig.partyDetailsFontSize, color: '#1a1a1a', marginTop: '4px', fontWeight: '500' }}>
                   NIF/CIF: {invoice.issuer_account.nif_cif}
                 </div>
               )}
@@ -496,13 +592,13 @@ export function InvoicePrintView({ invoice, onClose }: Props) {
 
             {/* Receptor */}
             <div style={{ flex: 1, padding: '10px', background: '#f8fafc', borderRadius: '6px', borderLeft: '3px solid #10b981' }}>
-              <div style={{ fontSize: '9px', textTransform: 'uppercase', color: '#10b981', marginBottom: '6px', letterSpacing: '0.5px', fontWeight: '600' }}>Receptor / Cliente</div>
-              <div style={{ fontSize: '12px', fontWeight: '600', color: '#1a1a1a', marginBottom: '4px' }}>
+              <div style={{ fontSize: scaleConfig.sectionFontSize, textTransform: 'uppercase', color: '#10b981', marginBottom: '6px', letterSpacing: '0.5px', fontWeight: '600' }}>Receptor / Cliente</div>
+              <div style={{ fontSize: scaleConfig.partyNameFontSize, fontWeight: '600', color: '#1a1a1a', marginBottom: '4px' }}>
                 {invoice.receiver_account?.name || 'No definido'}
               </div>
               {renderPartyAddress(invoice.receiver_account, receiverContactFiscal)}
               {getReceiverNif() && (
-                <div style={{ fontSize: '10px', color: '#1a1a1a', marginTop: '4px', fontWeight: '500' }}>
+                <div style={{ fontSize: scaleConfig.partyDetailsFontSize, color: '#1a1a1a', marginTop: '4px', fontWeight: '500' }}>
                   NIF/CIF: {getReceiverNif()}
                 </div>
               )}
@@ -512,13 +608,13 @@ export function InvoicePrintView({ invoice, onClose }: Props) {
           {/* Invoice Info */}
           <div style={{ display: 'flex', gap: '24px', marginBottom: '16px', padding: '8px 10px', background: '#f8fafc', borderRadius: '6px' }}>
             <div>
-              <label style={{ fontSize: '9px', color: '#666', display: 'block', marginBottom: '2px' }}>Fecha</label>
-              <span style={{ fontWeight: '600', color: '#1a1a1a', fontSize: '11px' }}>{formatDate(invoice.invoice_date)}</span>
+              <label style={{ fontSize: scaleConfig.sectionFontSize, color: '#666', display: 'block', marginBottom: '2px' }}>Fecha</label>
+              <span style={{ fontWeight: '600', color: '#1a1a1a', fontSize: scaleConfig.tableFontSize }}>{formatDate(invoice.invoice_date)}</span>
             </div>
             {invoice.description && (
               <div>
-                <label style={{ fontSize: '9px', color: '#666', display: 'block', marginBottom: '2px' }}>Descripción</label>
-                <span style={{ fontWeight: '600', color: '#1a1a1a', fontSize: '11px' }}>{invoice.description}</span>
+                <label style={{ fontSize: scaleConfig.sectionFontSize, color: '#666', display: 'block', marginBottom: '2px' }}>Descripción</label>
+                <span style={{ fontWeight: '600', color: '#1a1a1a', fontSize: scaleConfig.tableFontSize }}>{invoice.description}</span>
               </div>
             )}
           </div>
@@ -527,26 +623,26 @@ export function InvoicePrintView({ invoice, onClose }: Props) {
           <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '16px' }}>
             <thead>
               <tr>
-                <th style={{ background: '#f1f5f9', padding: '6px 8px', textAlign: 'left', fontSize: '9px', textTransform: 'uppercase', color: '#475569', letterSpacing: '0.5px' }}>Cód.</th>
-                <th style={{ background: '#f1f5f9', padding: '6px 8px', textAlign: 'left', fontSize: '9px', textTransform: 'uppercase', color: '#475569', letterSpacing: '0.5px' }}>Descripción</th>
-                <th style={{ background: '#f1f5f9', padding: '6px 8px', textAlign: 'right', fontSize: '9px', textTransform: 'uppercase', color: '#475569', letterSpacing: '0.5px' }}>Uds.</th>
-                <th style={{ background: '#f1f5f9', padding: '6px 8px', textAlign: 'right', fontSize: '9px', textTransform: 'uppercase', color: '#475569', letterSpacing: '0.5px' }}>€/Ud.</th>
-                <th style={{ background: '#f1f5f9', padding: '6px 8px', textAlign: 'right', fontSize: '9px', textTransform: 'uppercase', color: '#475569', letterSpacing: '0.5px' }}>Subtotal</th>
+                <th style={{ background: '#f1f5f9', padding: '8px', textAlign: 'left', fontSize: scaleConfig.tableHeaderFontSize, textTransform: 'uppercase', color: '#475569', letterSpacing: '0.5px' }}>Cód.</th>
+                <th style={{ background: '#f1f5f9', padding: '8px', textAlign: 'left', fontSize: scaleConfig.tableHeaderFontSize, textTransform: 'uppercase', color: '#475569', letterSpacing: '0.5px' }}>Descripción</th>
+                <th style={{ background: '#f1f5f9', padding: '8px', textAlign: 'right', fontSize: scaleConfig.tableHeaderFontSize, textTransform: 'uppercase', color: '#475569', letterSpacing: '0.5px' }}>Uds.</th>
+                <th style={{ background: '#f1f5f9', padding: '8px', textAlign: 'right', fontSize: scaleConfig.tableHeaderFontSize, textTransform: 'uppercase', color: '#475569', letterSpacing: '0.5px' }}>€/Ud.</th>
+                <th style={{ background: '#f1f5f9', padding: '8px', textAlign: 'right', fontSize: scaleConfig.tableHeaderFontSize, textTransform: 'uppercase', color: '#475569', letterSpacing: '0.5px' }}>Subtotal</th>
               </tr>
             </thead>
             <tbody>
               {lines.map((line) => (
                 <tr key={line.id}>
-                  <td style={{ padding: '5px 8px', borderBottom: '1px solid #e5e5e5', fontSize: '10px' }}>{line.code}</td>
-                  <td style={{ padding: '5px 8px', borderBottom: '1px solid #e5e5e5', fontSize: '10px' }}>{line.description || '-'}</td>
-                  <td style={{ padding: '5px 8px', borderBottom: '1px solid #e5e5e5', textAlign: 'right', fontSize: '10px' }}>{line.units}</td>
-                  <td style={{ padding: '5px 8px', borderBottom: '1px solid #e5e5e5', textAlign: 'right', fontSize: '10px' }}>{formatCurrency(line.unit_price)}</td>
-                  <td style={{ padding: '5px 8px', borderBottom: '1px solid #e5e5e5', textAlign: 'right', fontSize: '10px' }}>{formatCurrency(line.subtotal)}</td>
+                  <td style={{ padding: '8px', borderBottom: '1px solid #e5e5e5', fontSize: scaleConfig.tableFontSize }}>{line.code}</td>
+                  <td style={{ padding: '8px', borderBottom: '1px solid #e5e5e5', fontSize: scaleConfig.tableFontSize }}>{line.description || '-'}</td>
+                  <td style={{ padding: '8px', borderBottom: '1px solid #e5e5e5', textAlign: 'right', fontSize: scaleConfig.tableFontSize }}>{line.units}</td>
+                  <td style={{ padding: '8px', borderBottom: '1px solid #e5e5e5', textAlign: 'right', fontSize: scaleConfig.tableFontSize }}>{formatCurrency(line.unit_price)}</td>
+                  <td style={{ padding: '8px', borderBottom: '1px solid #e5e5e5', textAlign: 'right', fontSize: scaleConfig.tableFontSize }}>{formatCurrency(line.subtotal)}</td>
                 </tr>
               ))}
               {lines.length === 0 && (
                 <tr>
-                  <td colSpan={5} style={{ padding: '16px', textAlign: 'center', color: '#666', fontSize: '10px' }}>
+                  <td colSpan={5} style={{ padding: '16px', textAlign: 'center', color: '#666', fontSize: scaleConfig.tableFontSize }}>
                     No hay líneas en este documento
                   </td>
                 </tr>
@@ -556,23 +652,23 @@ export function InvoicePrintView({ invoice, onClose }: Props) {
 
           {/* Totals */}
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '16px' }}>
-            <div style={{ width: '200px', background: '#f8fafc', borderRadius: '6px', padding: '10px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '10px' }}>
+            <div style={{ width: '240px', background: '#f8fafc', borderRadius: '6px', padding: '12px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: scaleConfig.totalsFontSize }}>
                 <span>Subtotal:</span>
                 <span>{formatCurrency(invoice.subtotal)}</span>
               </div>
               {invoice.vat_rate === -1 ? (
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', color: '#666', fontSize: '10px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', color: '#666', fontSize: scaleConfig.totalsFontSize }}>
                   <span>IVA no incluido</span>
                   <span>-</span>
                 </div>
               ) : (
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '10px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: scaleConfig.totalsFontSize }}>
                   <span>IVA ({invoice.vat_rate}%):</span>
                   <span>{formatCurrency(invoice.vat_amount)}</span>
                 </div>
               )}
-              <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '2px solid #e5e5e5', marginTop: '4px', paddingTop: '8px', fontSize: '13px', fontWeight: '700', color: DOCUMENT_TYPE_COLORS[invoice.document_type || 'factura'] }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '2px solid #e5e5e5', marginTop: '4px', paddingTop: '8px', fontSize: scaleConfig.finalTotalFontSize, fontWeight: '700', color: DOCUMENT_TYPE_COLORS[invoice.document_type || 'factura'] }}>
                 <span>Total:</span>
                 <span>{formatCurrency(invoice.total)}</span>
               </div>
@@ -582,13 +678,13 @@ export function InvoicePrintView({ invoice, onClose }: Props) {
           {/* Observations */}
           {invoice.observations && (
             <div style={{ marginBottom: '16px', padding: '8px 10px', background: '#f8fafc', borderRadius: '6px', borderLeft: `3px solid ${DOCUMENT_TYPE_COLORS[invoice.document_type || 'factura']}` }}>
-              <div style={{ fontSize: '9px', textTransform: 'uppercase', color: '#666', marginBottom: '4px', letterSpacing: '0.5px' }}>Observaciones</div>
-              <div style={{ color: '#1a1a1a', whiteSpace: 'pre-wrap', fontSize: '10px' }}>{invoice.observations}</div>
+              <div style={{ fontSize: scaleConfig.sectionFontSize, textTransform: 'uppercase', color: '#666', marginBottom: '4px', letterSpacing: '0.5px' }}>Observaciones</div>
+              <div style={{ color: '#1a1a1a', whiteSpace: 'pre-wrap', fontSize: scaleConfig.tableFontSize }}>{invoice.observations}</div>
             </div>
           )}
 
           {/* Footer */}
-          <div style={{ textAlign: 'center', paddingTop: '10px', borderTop: '1px solid #e5e5e5', fontSize: '9px', color: '#666', marginTop: '16px' }}>
+          <div style={{ textAlign: 'center', paddingTop: '10px', borderTop: '1px solid #e5e5e5', fontSize: scaleConfig.sectionFontSize, color: '#666', marginTop: '16px' }}>
             <p>{companySettings.email} | {companySettings.phone}</p>
             <p>{companySettings.website}</p>
           </div>

@@ -14,7 +14,7 @@ import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { ScrollArea } from '@/components/ui/scroll-area';
-
+import { searchMatch } from '@/lib/search-utils';
 const ACCOUNT_TYPES = [
   'Compras y gastos',
   'Ventas e ingresos',
@@ -184,8 +184,8 @@ export function AccountingEntryWizard({ open, onOpenChange, onEntryCreated }: Pr
 
   const filteredBudgets = presupuestos.filter(p => 
     budgetSearch === '' ||
-    p.nombre.toLowerCase().includes(budgetSearch.toLowerCase()) ||
-    p.codigo_correlativo.toString().includes(budgetSearch)
+    searchMatch(p.nombre, budgetSearch) ||
+    searchMatch(p.codigo_correlativo.toString(), budgetSearch)
   );
 
   const filteredContacts = contacts.filter((c) => {
@@ -196,8 +196,8 @@ export function AccountingEntryWizard({ open, onOpenChange, onEntryCreated }: Pr
     if (c.status !== expectedStatus) return false;
 
     if (contactSearch === '') return true;
-    const fullName = `${c.name} ${c.surname || ''}`.toLowerCase();
-    return fullName.includes(contactSearch.toLowerCase());
+    const fullName = `${c.name} ${c.surname || ''}`;
+    return searchMatch(fullName, contactSearch);
   });
 
   const getFilteredAccounts = () => {
@@ -211,9 +211,8 @@ export function AccountingEntryWizard({ open, onOpenChange, onEntryCreated }: Pr
         // When no search, show default type accounts
         return a.account_type === typeFilter;
       }
-      // When searching, search across ALL accounts (any type)
-      const searchLower = accountSearch.toLowerCase();
-      return a.name.toLowerCase().includes(searchLower);
+      // When searching, search across ALL accounts (any type) - accent insensitive
+      return searchMatch(a.name, accountSearch);
     });
   };
 

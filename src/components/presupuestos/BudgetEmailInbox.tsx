@@ -85,7 +85,11 @@ export function BudgetEmailInbox({ budgetId, onComposeReply, onComposeForward }:
         .eq('id', emailId);
       if (error) throw error;
     },
-    onSuccess: () => {
+    onSuccess: (_data, emailId) => {
+      // Optimistically update selectedEmail to avoid stale state issues
+      if (selectedEmail && selectedEmail.id === emailId) {
+        setSelectedEmail(prev => prev ? { ...prev, is_read: true, read_at: new Date().toISOString() } : null);
+      }
       queryClient.invalidateQueries({ queryKey: ['budget-emails', budgetId] });
     },
   });

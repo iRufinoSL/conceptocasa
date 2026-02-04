@@ -229,7 +229,11 @@ export function EmailInbox({ onComposeReply, onComposeForward }: EmailInboxProps
         .eq('id', emailId);
       if (error) throw error;
     },
-    onSuccess: () => {
+    onSuccess: (_data, emailId) => {
+      // Optimistically update selectedEmail to avoid stale state issues with buttons
+      if (selectedEmail && selectedEmail.id === emailId) {
+        setSelectedEmail(prev => prev ? { ...prev, is_read: true, read_at: new Date().toISOString() } : null);
+      }
       queryClient.invalidateQueries({ queryKey: ['email-messages'] });
     },
   });

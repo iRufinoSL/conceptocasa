@@ -58,7 +58,7 @@ export function BudgetPredesignTab({ budgetId, isAdmin, projectId }: BudgetPrede
     return (localStorage.getItem('predesign-view-mode') as ViewMode) || 'alphabetical';
   });
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
-  const [activeSubTab, setActiveSubTab] = useState<string>('perfil-vivienda');
+  const [activeSubTab, setActiveSubTab] = useState<string>('ante-proyecto');
   const [generate3DOpen, setGenerate3DOpen] = useState(false);
   const [adjustmentViewerOpen, setAdjustmentViewerOpen] = useState(false);
   const [adjustmentItem, setAdjustmentItem] = useState<BudgetPredesign | null>(null);
@@ -518,30 +518,29 @@ export function BudgetPredesignTab({ budgetId, isAdmin, projectId }: BudgetPrede
     <div className="space-y-6">
       {/* Sub-pestañas de Ante-proyecto */}
       <Tabs value={activeSubTab} onValueChange={setActiveSubTab}>
-        <TabsList className="grid w-full grid-cols-2 max-w-md">
+        <TabsList className="grid w-full grid-cols-3 max-w-lg">
+          <TabsTrigger value="ante-proyecto" className="gap-2">
+            <FileImage className="h-4 w-4" />
+            Ante-proyecto
+          </TabsTrigger>
           <TabsTrigger value="perfil-vivienda" className="gap-2">
             <Home className="h-4 w-4" />
             Perfil vivienda
           </TabsTrigger>
           <TabsTrigger value="elementos" className="gap-2">
-            <FileImage className="h-4 w-4" />
+            <Layers className="h-4 w-4" />
             Elementos
           </TabsTrigger>
         </TabsList>
 
-        {/* Pestaña Perfil vivienda */}
-        <TabsContent value="perfil-vivienda" className="mt-6">
-          <BudgetHousingProfileTab budgetId={budgetId} projectId={projectId || null} />
-        </TabsContent>
-
-        {/* Pestaña Elementos (contenido anterior) */}
-        <TabsContent value="elementos" className="mt-6">
+        {/* Pestaña Ante-proyecto - Imágenes: planos, alzados, perspectivas */}
+        <TabsContent value="ante-proyecto" className="mt-6">
           <div className="space-y-6">
             <div className="flex items-center justify-between flex-wrap gap-4">
               <div>
-                <h3 className="text-lg font-semibold">Elementos del Ante-proyecto</h3>
+                <h3 className="text-lg font-semibold">Imágenes del Ante-proyecto</h3>
                 <p className="text-sm text-muted-foreground">
-                  Referencias catastrales, planos, alzados, perspectivas y otros documentos visuales
+                  Planos, alzados, perspectivas y visualizaciones 3D del proyecto
                 </p>
               </div>
         <div className="flex items-center gap-2">
@@ -814,6 +813,31 @@ export function BudgetPredesignTab({ budgetId, isAdmin, projectId }: BudgetPrede
           }}
         />
       )}
+          </div>
+        </TabsContent>
+
+        {/* Pestaña Perfil vivienda */}
+        <TabsContent value="perfil-vivienda" className="mt-6">
+          <BudgetHousingProfileTab budgetId={budgetId} projectId={projectId || null} />
+        </TabsContent>
+
+        {/* Pestaña Elementos - Otros documentos y referencias */}
+        <TabsContent value="elementos" className="mt-6">
+          <div className="space-y-4">
+            <div>
+              <h3 className="text-lg font-semibold">Elementos Adicionales</h3>
+              <p className="text-sm text-muted-foreground">
+                Referencias catastrales y otros documentos del proyecto
+              </p>
+            </div>
+            <Card>
+              <CardContent className="py-8 text-center">
+                <Layers className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                <p className="text-muted-foreground">
+                  Gestiona elementos adicionales desde la pestaña "Ante-proyecto"
+                </p>
+              </CardContent>
+            </Card>
           </div>
         </TabsContent>
       </Tabs>

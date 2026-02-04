@@ -14,7 +14,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Plus, Search, Upload, Pencil, Trash2, MoreHorizontal, FileUp, File, X, Download, ChevronRight, ChevronDown, ChevronLeft, List, Layers, Copy, Package, Wrench, Truck, Briefcase, CheckSquare, Eye, ArrowUpDown, ArrowUp, ArrowDown, FileDown, Clock, MapPin, Settings2 } from 'lucide-react';
+import { Plus, Search, Upload, Pencil, Trash2, MoreHorizontal, FileUp, File, X, Download, ChevronRight, ChevronDown, ChevronLeft, List, Layers, Copy, Package, Wrench, Truck, Briefcase, CheckSquare, Eye, ArrowUpDown, ArrowUp, ArrowDown, FileDown, Clock, MapPin, Settings2, Printer } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { toast } from 'sonner';
@@ -192,6 +192,7 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
   const [workAreas, setWorkAreas] = useState<WorkArea[]>([]);
   const [workAreaRelations, setWorkAreaRelations] = useState<WorkAreaRelation[]>([]);
   const [unassignedResourcesSubtotal, setUnassignedResourcesSubtotal] = useState(0);
+  const [selectedPhasesForPrint, setSelectedPhasesForPrint] = useState<Set<string>>(new Set());
   
   // Dialog states
   const [formDialogOpen, setFormDialogOpen] = useState(false);
@@ -1690,6 +1691,237 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
     toast.success('PDF exportado correctamente');
   };
 
+  // Export selected phases to PDF
+  const exportSelectedPhasesPDF = () => {
+    if (selectedPhasesForPrint.size === 0) {
+      toast.error('Seleccione al menos una fase para imprimir');
+      return;
+    }
+
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.getWidth();
+    
+    // Company info from settings
+    const companyName = companySettings.name || 'Mi Empresa';
+    const companyEmail = companySettings.email || '';
+    const companyPhone = companySettings.phone || '';
+    const companyInitials = companyName.substring(0, 2).toUpperCase();
+    
+    // Header with company branding
+    doc.setFillColor(37, 99, 235);
+    doc.roundedRect(14, 10, 25, 25, 3, 3, 'F');
+    doc.setTextColor(255);
+    doc.setFontSize(16);
+    doc.setFont('helvetica', 'bold');
+    doc.text(companyInitials, 26.5, 26, { align: 'center' });
+    doc.setTextColor(0);
+    
+    // Company name and contact
+    doc.setFontSize(16);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(37, 99, 235);
+    doc.text(companyName, 45, 18);
+    doc.setTextColor(0);
+    
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(100);
+    const contactLine = [companyEmail, companyPhone].filter(Boolean).join('; ');
+    if (contactLine) doc.text(contactLine, 45, 26);
+    doc.setTextColor(0);
+    
+    // Separator line
+    doc.setDrawColor(200);
+    doc.line(14, 40, pageWidth - 14, 40);
+    
+    // Document title - Budget name as header
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.text(budgetName, pageWidth / 2, 50, { align: 'center' });
+    
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(100);
+    doc.text('Listado de Actividades por Fase', pageWidth / 2, 58, { align: 'center' });
+    
+    doc.setFontSize(9);
+    doc.text(`Fecha de generación: ${format(new Date(), "d 'de' MMMM 'de' yyyy", { locale: es })}`, pageWidth / 2, 65, { align: 'center' });
+    doc.setTextColor(0);
+
+    // Build table data for selected phases only
+    let yPos = 75;
+    const tableData: any[] = [];
+    
+    // Check if "unassigned" is selected
+    if (selectedPhasesForPrint.has('unassigned')) {
+      const unassigned = activities.filter(a => !a.phase_id);
+      if (unassigned.length > 0) {
+        const unassignedSignedSubtotal = unassigned.reduce((sum, a) => sum + (a.signed_subtotal || 0), 0);
+        const unassignedResourcesSubtotal = unassigned.reduce((sum, a) => sum + (a.resources_subtotal || 0), 0);
+        const unassignedPurchaseSubtotal = unassigned.reduce((sum, a) => sum + (a.purchase_subtotal || 0), 0);
+        
+        tableData.push([
+          { content: 'Sin fase asignada', colSpan: 4, styles: { fillColor: [240, 240, 240], fontStyle: 'bold' } },
+          { content: formatPdfCurrency(unassignedSignedSubtotal), styles: { fillColor: [240, 240, 240], fontStyle: 'bold', halign: 'right' } },
+          { content: formatPdfCurrency(unassignedResourcesSubtotal), styles: { fillColor: [240, 240, 240], fontStyle: 'bold', halign: 'right' } },
+          { content: formatPdfCurrency(unassignedPurchaseSubtotal), styles: { fillColor: [240, 240, 240], fontStyle: 'bold', halign: 'right' } }
+        ]);
+        unassigned.forEach(activity => {
+          const opciones = activity.opciones?.join(', ') || 'A, B, C';
+          tableData.push([
+            `  ${generateActivityId(activity)}`,
+            opciones,
+            activity.uses_measurement !== false ? 'Sí' : 'No',
+            activity.measurement_unit,
+            formatPdfCurrency(activity.signed_subtotal || 0),
+            formatPdfCurrency(activity.resources_subtotal || 0),
+            formatPdfCurrency(activity.purchase_subtotal || 0)
+          ]);
+        });
+      }
+    }
+    
+    // Calculate totals for selected phases
+    let totalSignedSubtotal = 0;
+    let totalResourcesSubtotal = 0;
+    let totalPurchaseSubtotal = 0;
+    
+    // Add selected phases with their activities
+    phases.forEach(phase => {
+      if (!selectedPhasesForPrint.has(phase.id)) return;
+      
+      const phaseActivities = activities.filter(a => a.phase_id === phase.id);
+      if (phaseActivities.length === 0) return;
+      
+      const phaseSignedSubtotal = phaseActivities.reduce((sum, a) => sum + (a.signed_subtotal || 0), 0);
+      const phaseResourcesSubtotal = phaseActivities.reduce((sum, a) => sum + (a.resources_subtotal || 0), 0);
+      const phasePurchaseSubtotal = phaseActivities.reduce((sum, a) => sum + (a.purchase_subtotal || 0), 0);
+      
+      totalSignedSubtotal += phaseSignedSubtotal;
+      totalResourcesSubtotal += phaseResourcesSubtotal;
+      totalPurchaseSubtotal += phasePurchaseSubtotal;
+      
+      // Phase header row
+      tableData.push([
+        { content: `${phase.code || ''} ${phase.name}`, colSpan: 4, styles: { fillColor: [59, 130, 246], textColor: [255, 255, 255], fontStyle: 'bold' } },
+        { content: formatPdfCurrency(phaseSignedSubtotal), styles: { fillColor: [59, 130, 246], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'right' } },
+        { content: formatPdfCurrency(phaseResourcesSubtotal), styles: { fillColor: [59, 130, 246], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'right' } },
+        { content: formatPdfCurrency(phasePurchaseSubtotal), styles: { fillColor: [59, 130, 246], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'right' } }
+      ]);
+      
+      // Activity rows sorted by code
+      [...phaseActivities].sort((a, b) => a.code.localeCompare(b.code)).forEach(activity => {
+        const opciones = activity.opciones?.join(', ') || 'A, B, C';
+        tableData.push([
+          `  ${generateActivityId(activity)}`,
+          opciones,
+          activity.uses_measurement !== false ? 'Sí' : 'No',
+          activity.measurement_unit,
+          formatPdfCurrency(activity.signed_subtotal || 0),
+          formatPdfCurrency(activity.resources_subtotal || 0),
+          formatPdfCurrency(activity.purchase_subtotal || 0)
+        ]);
+      });
+    });
+    
+    // Add unassigned totals if selected
+    if (selectedPhasesForPrint.has('unassigned')) {
+      const unassigned = activities.filter(a => !a.phase_id);
+      totalSignedSubtotal += unassigned.reduce((sum, a) => sum + (a.signed_subtotal || 0), 0);
+      totalResourcesSubtotal += unassigned.reduce((sum, a) => sum + (a.resources_subtotal || 0), 0);
+      totalPurchaseSubtotal += unassigned.reduce((sum, a) => sum + (a.purchase_subtotal || 0), 0);
+    }
+    
+    // Total row
+    tableData.push([
+      { content: 'TOTAL FASES SELECCIONADAS', colSpan: 4, styles: { fillColor: [34, 197, 94], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'right' } },
+      { content: formatPdfCurrency(totalSignedSubtotal), styles: { fillColor: [34, 197, 94], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'right' } },
+      { content: formatPdfCurrency(totalResourcesSubtotal), styles: { fillColor: [34, 197, 94], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'right' } },
+      { content: formatPdfCurrency(totalPurchaseSubtotal), styles: { fillColor: [34, 197, 94], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'right' } }
+    ]);
+
+    autoTable(doc, {
+      startY: yPos,
+      head: [['ActividadID', 'Opciones', 'Uso Pres.', 'Unidad', '€SubTotal Firmado', '€SubTotal Recursos', '€SubTotal Compra']],
+      body: tableData,
+      theme: 'striped',
+      headStyles: { fillColor: [59, 130, 246], fontSize: 7 },
+      margin: { left: 14, right: 14 },
+      styles: { fontSize: 7 },
+      columnStyles: {
+        0: { cellWidth: 45 },
+        1: { cellWidth: 20, halign: 'center' },
+        2: { cellWidth: 15, halign: 'center' },
+        3: { cellWidth: 15, halign: 'center' },
+        4: { cellWidth: 30, halign: 'right' },
+        5: { cellWidth: 30, halign: 'right' },
+        6: { cellWidth: 30, halign: 'right' },
+      },
+    });
+
+    // Footer with company info
+    const pageCount = doc.getNumberOfPages();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i);
+      
+      doc.setDrawColor(200);
+      doc.line(14, pageHeight - 20, pageWidth - 14, pageHeight - 20);
+      
+      doc.setFontSize(7);
+      doc.setTextColor(120);
+      const footerInfo = [companyName, companyEmail, companyPhone].filter(Boolean).join(' | ');
+      doc.text(footerInfo, 14, pageHeight - 14);
+      
+      doc.text(
+        `Página ${i} de ${pageCount}`,
+        pageWidth - 14,
+        pageHeight - 14,
+        { align: 'right' }
+      );
+    }
+
+    // Save
+    const fileName = `actividades_fases_${budgetName.replace(/[^a-zA-Z0-9]/g, '_')}_${format(new Date(), 'yyyyMMdd')}.pdf`;
+    doc.save(fileName);
+    toast.success('PDF de fases seleccionadas exportado');
+    setSelectedPhasesForPrint(new Set());
+  };
+
+  // Toggle phase selection for print
+  const togglePhaseForPrint = (phaseId: string) => {
+    setSelectedPhasesForPrint(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(phaseId)) {
+        newSet.delete(phaseId);
+      } else {
+        newSet.add(phaseId);
+      }
+      return newSet;
+    });
+  };
+
+  // Select all phases for print
+  const selectAllPhasesForPrint = () => {
+    const allPhaseIds = new Set<string>();
+    // Add unassigned if there are activities without phase
+    if (activities.some(a => !a.phase_id)) {
+      allPhaseIds.add('unassigned');
+    }
+    // Add all phases that have activities
+    phases.forEach(phase => {
+      if (activities.some(a => a.phase_id === phase.id)) {
+        allPhaseIds.add(phase.id);
+      }
+    });
+    setSelectedPhasesForPrint(allPhaseIds);
+  };
+
+  // Clear phase selection for print
+  const clearPhasesForPrint = () => {
+    setSelectedPhasesForPrint(new Set());
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -2236,31 +2468,73 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
       {/* Grouped by Phase View */}
       {viewMode === 'grouped' && (
         <div className="space-y-2">
+          {/* Print Selection Bar */}
+          <div className="flex items-center justify-between p-3 bg-muted/30 border rounded-lg">
+            <div className="flex items-center gap-4">
+              <span className="text-sm font-medium">Imprimir por Fases:</span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={selectAllPhasesForPrint}
+              >
+                <CheckSquare className="h-4 w-4 mr-1" />
+                Seleccionar todas
+              </Button>
+              {selectedPhasesForPrint.size > 0 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={clearPhasesForPrint}
+                >
+                  <X className="h-4 w-4 mr-1" />
+                  Limpiar ({selectedPhasesForPrint.size})
+                </Button>
+              )}
+            </div>
+            <Button
+              variant="default"
+              size="sm"
+              onClick={exportSelectedPhasesPDF}
+              disabled={selectedPhasesForPrint.size === 0}
+            >
+              <Printer className="h-4 w-4 mr-1" />
+              Imprimir selección
+            </Button>
+          </div>
+
           {/* Activities without phase */}
           {(() => {
             const unassigned = filteredActivities.filter(a => !a.phase_id);
             if (unassigned.length > 0) {
               const isExpanded = expandedPhases.has('unassigned');
+              const isSelectedForPrint = selectedPhasesForPrint.has('unassigned');
               return (
                 <Collapsible open={isExpanded} onOpenChange={() => togglePhaseExpanded('unassigned')}>
-                  <div className="border rounded-lg">
-                    <CollapsibleTrigger asChild>
-                      <div className="flex items-center justify-between p-4 cursor-pointer hover:bg-muted/50 transition-colors">
-                        <div className="flex items-center gap-3">
-                          {isExpanded ? (
-                            <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                          ) : (
-                            <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                          )}
-                          <div>
-                            <p className="font-medium text-muted-foreground">Sin fase asignada</p>
-                            <p className="text-sm text-muted-foreground">
-                              {unassigned.length} actividad{unassigned.length !== 1 ? 'es' : ''}
-                            </p>
+                  <div className={`border rounded-lg ${isSelectedForPrint ? 'ring-2 ring-primary' : ''}`}>
+                    <div className="flex items-center justify-between p-4 hover:bg-muted/50 transition-colors">
+                      <div className="flex items-center gap-3">
+                        <Checkbox
+                          checked={isSelectedForPrint}
+                          onCheckedChange={() => togglePhaseForPrint('unassigned')}
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                        <CollapsibleTrigger asChild>
+                          <div className="flex items-center gap-3 cursor-pointer flex-1">
+                            {isExpanded ? (
+                              <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                            ) : (
+                              <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                            )}
+                            <div>
+                              <p className="font-medium text-muted-foreground">Sin fase asignada</p>
+                              <p className="text-sm text-muted-foreground">
+                                {unassigned.length} actividad{unassigned.length !== 1 ? 'es' : ''}
+                              </p>
+                            </div>
                           </div>
-                        </div>
+                        </CollapsibleTrigger>
                       </div>
-                    </CollapsibleTrigger>
+                    </div>
                     <CollapsibleContent>
                       <div className="border-t bg-muted/20 p-4">
                         <Table>
@@ -2483,40 +2757,49 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
               0
             );
 
+            const isSelectedForPrint = selectedPhasesForPrint.has(phase.id);
+
             return (
               <Collapsible key={phase.id} open={isExpanded} onOpenChange={() => togglePhaseExpanded(phase.id)}>
-                <div className="border rounded-lg">
-                  <CollapsibleTrigger asChild>
-                    <div className="flex items-center justify-between p-4 cursor-pointer hover:bg-muted/50 transition-colors">
-                      <div className="flex items-center gap-3">
-                        {isExpanded ? (
-                          <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                        ) : (
-                          <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                        )}
-                        <div>
-                          <p className="font-medium">{phase.code} {phase.name}</p>
-                          <p className="text-sm text-muted-foreground">
-                            {phaseActivities.length} actividad{phaseActivities.length !== 1 ? 'es' : ''}
-                          </p>
+                <div className={`border rounded-lg ${isSelectedForPrint ? 'ring-2 ring-primary' : ''}`}>
+                  <div className="flex items-center justify-between p-4 hover:bg-muted/50 transition-colors">
+                    <div className="flex items-center gap-3">
+                      <Checkbox
+                        checked={isSelectedForPrint}
+                        onCheckedChange={() => togglePhaseForPrint(phase.id)}
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                      <CollapsibleTrigger asChild>
+                        <div className="flex items-center gap-3 cursor-pointer flex-1">
+                          {isExpanded ? (
+                            <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                          ) : (
+                            <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                          )}
+                          <div>
+                            <p className="font-medium">{phase.code} {phase.name}</p>
+                            <p className="text-sm text-muted-foreground">
+                              {phaseActivities.length} actividad{phaseActivities.length !== 1 ? 'es' : ''}
+                            </p>
+                          </div>
                         </div>
+                      </CollapsibleTrigger>
+                    </div>
+                    <div className="flex items-center gap-6">
+                      <div className="text-right">
+                        <p className="text-xs text-muted-foreground">€SubTotal Firmado</p>
+                        <p className="font-mono font-semibold text-amber-600">{formatCurrency(phaseSignedSubtotal)}</p>
                       </div>
-                      <div className="flex items-center gap-6">
-                        <div className="text-right">
-                          <p className="text-xs text-muted-foreground">€SubTotal Firmado</p>
-                          <p className="font-mono font-semibold text-amber-600">{formatCurrency(phaseSignedSubtotal)}</p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-xs text-muted-foreground">€SubTotal Recursos</p>
-                          <p className="font-mono font-semibold text-primary">{formatCurrency(phaseResourcesSubtotal)}</p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-xs text-muted-foreground">€SubTotal Compra</p>
-                          <p className="font-mono font-semibold text-emerald-600">{formatCurrency(phasePurchaseSubtotal)}</p>
-                        </div>
+                      <div className="text-right">
+                        <p className="text-xs text-muted-foreground">€SubTotal Recursos</p>
+                        <p className="font-mono font-semibold text-primary">{formatCurrency(phaseResourcesSubtotal)}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs text-muted-foreground">€SubTotal Compra</p>
+                        <p className="font-mono font-semibold text-emerald-600">{formatCurrency(phasePurchaseSubtotal)}</p>
                       </div>
                     </div>
-                  </CollapsibleTrigger>
+                  </div>
                   <CollapsibleContent>
                     <div className="border-t bg-muted/20 p-4">
                       <Table>

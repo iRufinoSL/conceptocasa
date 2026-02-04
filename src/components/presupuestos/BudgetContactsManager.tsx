@@ -273,9 +273,17 @@ export function BudgetContactsManager({ budgetId, isAdmin }: BudgetContactsManag
   // Filter others by search term
   const filteredOthers = others.filter(bc => {
     if (!othersSearchTerm.trim()) return true;
-    const fullName = bc.contact ? `${bc.contact.name} ${bc.contact.surname || ''}` : '';
-    const activities = bc.contact?.professional_activities?.map(a => a.name).join(' ') || '';
-    return searchMatch(fullName, othersSearchTerm) || searchMatch(activities, othersSearchTerm);
+    if (!bc.contact) return false;
+    const contact = bc.contact;
+    const fullName = `${contact.name} ${contact.surname || ''}`;
+    const activities = contact.professional_activities?.map(a => a.name).join(' ') || '';
+    return (
+      searchMatch(fullName, othersSearchTerm) ||
+      searchMatch(contact.email, othersSearchTerm) ||
+      searchMatch(contact.phone, othersSearchTerm) ||
+      searchMatch(contact.city, othersSearchTerm) ||
+      searchMatch(activities, othersSearchTerm)
+    );
   });
 
   // Sort filtered others alphabetically by name
@@ -778,7 +786,9 @@ export function BudgetContactsManager({ budgetId, isAdmin }: BudgetContactsManag
           website: null,
           observations: null,
           tags: null,
-          professional_activity_id: null
+          professional_activity_id: null,
+          secondary_phones: null,
+          secondary_emails: null
         } : null}
         onSuccess={() => {
           setEditDialogOpen(false);

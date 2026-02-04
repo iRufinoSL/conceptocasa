@@ -48,8 +48,10 @@ import {
   List,
   ChevronDown,
   Mail,
-  Paperclip
+  Paperclip,
+  Search
 } from 'lucide-react';
+import { searchMatch } from '@/lib/search-utils';
 import { RichTextEditor } from '@/components/ui/rich-text-editor';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import DOMPurify from 'dompurify';
@@ -353,6 +355,7 @@ export function BudgetDocumentsTab({ budgetId, projectId, projectName, isAdmin }
   const [customTypes, setCustomTypes] = useState<string[]>([]);
   const [viewMode, setViewMode] = useState<'alphabetical' | 'grouped'>('alphabetical');
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  const [searchTerm, setSearchTerm] = useState('');
 
   // Sort document types alphabetically
   const allDocumentTypes = useMemo(() => {
@@ -360,15 +363,35 @@ export function BudgetDocumentsTab({ budgetId, projectId, projectName, isAdmin }
     return combined.sort((a, b) => a.localeCompare(b, 'es'));
   }, [customTypes]);
 
-  // Sort documents alphabetically
-  const sortedDocuments = useMemo(() => {
-    return [...documents].sort((a, b) => a.name.localeCompare(b.name, 'es'));
-  }, [documents]);
+  // Filter documents by search term
+  const filteredDocuments = useMemo(() => {
+    if (!searchTerm.trim()) return documents;
+    return documents.filter(doc => {
+      // Search in name
+      if (searchMatch(doc.name, searchTerm)) return true;
+      // Search in description
+      if (searchMatch(doc.description, searchTerm)) return true;
+      // Search in document type
+      if (searchMatch(doc.document_type, searchTerm)) return true;
+      // Search in email from (for email documents)
+      if (doc.isEmailDocument && searchMatch(doc.email_from, searchTerm)) return true;
+      // Search in email subject (for email documents)
+      if (doc.isEmailDocument && searchMatch(doc.email_subject, searchTerm)) return true;
+      // Search in attachment names (for email documents)
+      if (doc.email_attachments?.some(att => searchMatch(att.file_name, searchTerm))) return true;
+      return false;
+    });
+  }, [documents, searchTerm]);
 
-  // Group documents by type
+  // Sort documents alphabetically (using filtered)
+  const sortedDocuments = useMemo(() => {
+    return [...filteredDocuments].sort((a, b) => a.name.localeCompare(b.name, 'es'));
+  }, [filteredDocuments]);
+
+  // Group documents by type (using filtered)
   const groupedDocuments = useMemo(() => {
     const groups: Record<string, UnifiedDocument[]> = {};
-    documents.forEach(doc => {
+    filteredDocuments.forEach(doc => {
       const type = doc.document_type || 'Sin tipo';
       if (!groups[type]) groups[type] = [];
       groups[type].push(doc);
@@ -379,7 +402,7 @@ export function BudgetDocumentsTab({ budgetId, projectId, projectName, isAdmin }
     });
     // Return sorted by type name
     return Object.entries(groups).sort((a, b) => a[0].localeCompare(b[0], 'es'));
-  }, [documents]);
+  }, [filteredDocuments]);
 
   const toggleGroup = (type: string) => {
     const newExpanded = new Set(expandedGroups);
@@ -1001,6 +1024,19 @@ export function BudgetDocumentsTab({ budgetId, projectId, projectName, isAdmin }
           )}
         </CardHeader>
         <CardContent>
+          {/* Search bar */}
+          {documents.length > 0 && (
+            <div className="relative mb-4">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Buscar documentos..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+          )}
+          
           {loading ? (
             <div className="flex items-center justify-center py-12">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
@@ -1019,6 +1055,18 @@ export function BudgetDocumentsTab({ budgetId, projectId, projectName, isAdmin }
                   Añadir documento
                 </Button>
               )}
+            </div>
+          ) : filteredDocuments.length === 0 ? (
+            <div className="text-center py-12">
+              <Search className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+              <p className="text-muted-foreground">No se encontraron documentos con "{searchTerm}"</p>
+              <Button 
+                variant="outline" 
+                className="mt-4"
+                onClick={() => setSearchTerm('')}
+              >
+                Limpiar búsqueda
+              </Button>
             </div>
           ) : (
             <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as 'alphabetical' | 'grouped')}>

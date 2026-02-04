@@ -2542,9 +2542,18 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
                             <TableHead>Unidad</TableHead>
                             <TableHead className="text-right">Uds Relac.</TableHead>
                             <TableHead>MediciónID</TableHead>
-                            <TableHead className="text-right">€SubTotal Firmado</TableHead>
-                            <TableHead className="text-right">€SubTotal Recursos</TableHead>
-                            <TableHead className="text-right">€SubTotal Compra</TableHead>
+                            <TableHead className="text-right">
+                              <div className="text-xs text-muted-foreground">€SubTotal Firmado</div>
+                              <div className="font-mono font-semibold text-amber-600">{formatCurrency(phaseSignedSubtotal)}</div>
+                            </TableHead>
+                            <TableHead className="text-right">
+                              <div className="text-xs text-muted-foreground">€SubTotal Recursos</div>
+                              <div className="font-mono font-semibold text-primary">{formatCurrency(phaseResourcesSubtotal)}</div>
+                            </TableHead>
+                            <TableHead className="text-right">
+                              <div className="text-xs text-muted-foreground">€SubTotal Compra</div>
+                              <div className="font-mono font-semibold text-emerald-600">{formatCurrency(phasePurchaseSubtotal)}</div>
+                            </TableHead>
                             <TableHead>Archivos</TableHead>
                             {(isAdmin || permissions.canEdit) && <TableHead className="w-20">Acciones</TableHead>}
                           </TableRow>

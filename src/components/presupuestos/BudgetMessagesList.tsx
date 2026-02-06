@@ -23,6 +23,9 @@ interface Activity {
   name: string;
   code: string;
   phase_id: string | null;
+  uses_measurement?: boolean;
+  actual_start_date?: string | null;
+  actual_end_date?: string | null;
 }
 
 interface Phase {
@@ -61,6 +64,8 @@ interface BudgetMessagesListProps {
   activities: Activity[];
   phases: Phase[];
   resources: Resource[];
+  filterStartDate?: string;
+  filterEndDate?: string;
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -83,7 +88,7 @@ const CHANNEL_ICONS: Record<string, React.ReactNode> = {
   sms: <Smartphone className="h-3 w-3" />,
 };
 
-export function BudgetMessagesList({ budgetId, activities, phases, resources }: BudgetMessagesListProps) {
+export function BudgetMessagesList({ budgetId, activities, phases, resources, filterStartDate, filterEndDate }: BudgetMessagesListProps) {
   const [messages, setMessages] = useState<MessageRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -426,6 +431,8 @@ export function BudgetMessagesList({ budgetId, activities, phases, resources }: 
         resources={resources}
         message={editingMessage}
         onSuccess={fetchMessages}
+        filterStartDate={filterStartDate}
+        filterEndDate={filterEndDate}
       />
 
       {/* Delete Dialog */}

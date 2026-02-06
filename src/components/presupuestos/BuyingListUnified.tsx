@@ -1427,6 +1427,8 @@ export function BuyingListUnified({
           activities={activities.length > 0 ? activities : initialActivities}
           phases={phases}
           resources={resources.length > 0 ? resources : initialResources}
+          filterStartDate={startDate}
+          filterEndDate={endDate}
         />
       )}
     </div>

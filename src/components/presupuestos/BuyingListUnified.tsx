@@ -9,8 +9,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import { 
   ChevronRight, ChevronDown, Package, Calendar, ShoppingCart, Building2, 
-  Pencil, RefreshCw, ClipboardList, List, Save, X, Check, Edit, Search, Printer, Trash2
+  Pencil, RefreshCw, ClipboardList, List, Save, X, Check, Edit, Search, Printer, Trash2, MessageSquare
 } from 'lucide-react';
+import { BudgetMessagesList } from './BudgetMessagesList';
 import { searchMatch } from '@/lib/search-utils';
 import { formatCurrency, formatNumber } from '@/lib/format-utils';
 import { formatActividadId } from '@/lib/activity-id';
@@ -68,7 +69,7 @@ interface Resource {
   purchase_unit_measure?: string | null;
 }
 
-type ViewMode = 'activity' | 'supplier' | 'resource';
+type ViewMode = 'activity' | 'supplier' | 'resource' | 'messages';
 
 interface SupplierInfo {
   id: string;
@@ -1163,10 +1164,19 @@ export function BuyingListUnified({
             variant={viewMode === 'resource' ? 'default' : 'ghost'}
             size="sm"
             onClick={() => setViewMode('resource')}
-            className="rounded-l-none"
+            className="rounded-none border-r"
           >
             <Package className="h-4 w-4 mr-1" />
             Por Recurso
+          </Button>
+          <Button
+            variant={viewMode === 'messages' ? 'default' : 'ghost'}
+            size="sm"
+            onClick={() => setViewMode('messages')}
+            className="rounded-l-none"
+          >
+            <MessageSquare className="h-4 w-4 mr-1" />
+            Mensajes
           </Button>
         </div>
       </div>
@@ -1408,6 +1418,16 @@ export function BuyingListUnified({
           <ResourceHeaderSimple resourceIds={resourceList.map(r => r.id)} />
           {resourceList.map(resource => renderResourceRowSimple(resource))}
         </div>
+      )}
+
+      {/* View: Messages */}
+      {viewMode === 'messages' && (
+        <BudgetMessagesList
+          budgetId={budgetId}
+          activities={activities.length > 0 ? activities : initialActivities}
+          phases={phases}
+          resources={resources.length > 0 ? resources : initialResources}
+        />
       )}
     </div>
   );

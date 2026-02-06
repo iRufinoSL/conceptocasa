@@ -163,6 +163,7 @@ export function ResourceTradeGroupedList({
                       <TableHead>Tipo</TableHead>
                       <TableHead>Composición</TableHead>
                       <TableHead className="text-right">Coste</TableHead>
+                      <TableHead className="text-right">%IVA incl.</TableHead>
                       <TableHead className="hidden sm:table-cell">Ud.</TableHead>
                       <TableHead className="hidden lg:table-cell">Fecha</TableHead>
                       <TableHead className="w-[120px] text-right">Acciones</TableHead>
@@ -255,6 +256,9 @@ export function ResourceTradeGroupedList({
                             {isComposite && (
                               <span className="text-xs text-accent font-normal">Calculado</span>
                             )}
+                          </TableCell>
+                          <TableCell className="text-right text-sm text-muted-foreground">
+                            {resource.vatIncludedPercent ? `${resource.vatIncludedPercent}%` : '—'}
                           </TableCell>
                           <TableCell className="hidden sm:table-cell text-muted-foreground text-sm">
                             {resource.unitMeasure}

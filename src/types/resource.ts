@@ -48,6 +48,7 @@ export interface ExternalResource {
     id: string;
     name: string;
   } | null;
+  vatIncludedPercent?: number | null;
 }
 
 export const UNIT_MEASURES: UnitMeasure[] = ['m2', 'm3', 'ml', 'mes', 'ud', 'kg', 'hora', 'día'];

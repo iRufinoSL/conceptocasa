@@ -710,6 +710,8 @@ export type Database = {
           manual_units: number | null
           measurement_unit: string | null
           name: string
+          source: string | null
+          source_classification: string | null
           updated_at: string
         }
         Insert: {
@@ -719,6 +721,8 @@ export type Database = {
           manual_units?: number | null
           measurement_unit?: string | null
           name: string
+          source?: string | null
+          source_classification?: string | null
           updated_at?: string
         }
         Update: {
@@ -728,6 +732,8 @@ export type Database = {
           manual_units?: number | null
           measurement_unit?: string | null
           name?: string
+          source?: string | null
+          source_classification?: string | null
           updated_at?: string
         }
         Relationships: [

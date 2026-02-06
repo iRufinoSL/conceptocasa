@@ -21,6 +21,7 @@ import { MeasurementsWorkAreaGroupedView } from '@/components/presupuestos/Measu
 import { syncAllAffectedResources, syncResourcesRelatedUnits } from '@/lib/budget-utils';
 import { ResourceInlineEdit } from '@/components/presupuestos/ResourceInlineEdit';
 import { ChiefArchitectImportDialog } from '@/components/presupuestos/ChiefArchitectImportDialog';
+import { ChiefMeasurementsView } from '@/components/presupuestos/ChiefMeasurementsView';
 import { 
   readExcelFile, 
   writeExcelFile, 
@@ -38,6 +39,8 @@ interface Measurement {
   name: string;
   manual_units: number | null;
   measurement_unit: string | null;
+  source: string | null;
+  source_classification: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -90,7 +93,7 @@ export function BudgetMeasurementsTab({ budgetId, isAdmin }: BudgetMeasurementsT
   const [workAreaMeasurements, setWorkAreaMeasurements] = useState<WorkAreaMeasurement[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [viewMode, setViewMode] = useState<'alphabetic' | 'grouped'>('alphabetic');
+  const [viewMode, setViewMode] = useState<'alphabetic' | 'grouped' | 'chief'>('alphabetic');
   
   // Form states
   const [formOpen, setFormOpen] = useState(false);
@@ -929,7 +932,7 @@ export function BudgetMeasurementsTab({ budgetId, isAdmin }: BudgetMeasurementsT
         <CardContent>
           {/* View Mode Tabs + Search */}
           <div className="flex flex-col sm:flex-row sm:items-center gap-4 mb-4">
-            <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as 'alphabetic' | 'grouped')} className="w-auto">
+            <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as 'alphabetic' | 'grouped' | 'chief')} className="w-auto">
               <TabsList>
                 <TabsTrigger value="alphabetic" className="flex items-center gap-2">
                   <List className="h-4 w-4" />
@@ -938,6 +941,10 @@ export function BudgetMeasurementsTab({ budgetId, isAdmin }: BudgetMeasurementsT
                 <TabsTrigger value="grouped" className="flex items-center gap-2">
                   <Layers className="h-4 w-4" />
                   Por Área
+                </TabsTrigger>
+                <TabsTrigger value="chief" className="flex items-center gap-2">
+                  <FileCode2 className="h-4 w-4" />
+                  Mediciones Chief
                 </TabsTrigger>
               </TabsList>
             </Tabs>
@@ -952,8 +959,15 @@ export function BudgetMeasurementsTab({ budgetId, isAdmin }: BudgetMeasurementsT
             </div>
           </div>
 
-          {/* Grouped View */}
-          {viewMode === 'grouped' ? (
+          {/* Chief View */}
+          {viewMode === 'chief' ? (
+            <ChiefMeasurementsView
+              measurements={measurements}
+              allMeasurements={measurements}
+              isAdmin={isAdmin}
+              onDataChanged={fetchData}
+            />
+          ) : viewMode === 'grouped' ? (
             <MeasurementsWorkAreaGroupedView
               measurements={filteredMeasurements}
               relations={relations}
@@ -963,7 +977,7 @@ export function BudgetMeasurementsTab({ budgetId, isAdmin }: BudgetMeasurementsT
               isAdmin={isAdmin}
               onEdit={openEditForm}
               onDuplicate={handleDuplicate}
-              onDelete={(m) => {
+              onDelete={(m: Measurement) => {
                 setMeasurementToDelete(m);
                 setDeleteDialogOpen(true);
               }}

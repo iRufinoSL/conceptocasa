@@ -24,6 +24,8 @@ interface Measurement {
   name: string;
   manual_units: number | null;
   measurement_unit: string | null;
+  source?: string | null;
+  source_classification?: string | null;
   created_at: string;
   updated_at: string;
 }

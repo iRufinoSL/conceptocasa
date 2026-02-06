@@ -148,12 +148,14 @@ export function ChiefArchitectImportDialog({
     try {
       const toImport = parseResult.measurements.filter(m => selectedIds.has(m.id));
       
-      // Create measurements in the database
+      // Create measurements in the database with source metadata
       const measurementsToInsert = toImport.map(m => ({
         budget_id: budgetId,
         name: m.description,
         manual_units: m.convertedValue,
         measurement_unit: m.finalUnit,
+        source: 'chief_architect' as string,
+        source_classification: m.classificationEs,
       }));
 
       const { data: inserted, error } = await supabase

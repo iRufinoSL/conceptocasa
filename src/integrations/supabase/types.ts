@@ -740,6 +740,180 @@ export type Database = {
           },
         ]
       }
+      budget_message_activities: {
+        Row: {
+          activity_id: string
+          comment: string | null
+          created_at: string
+          id: string
+          message_id: string
+        }
+        Insert: {
+          activity_id: string
+          comment?: string | null
+          created_at?: string
+          id?: string
+          message_id: string
+        }
+        Update: {
+          activity_id?: string
+          comment?: string | null
+          created_at?: string
+          id?: string
+          message_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "budget_message_activities_activity_id_fkey"
+            columns: ["activity_id"]
+            isOneToOne: false
+            referencedRelation: "budget_activities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budget_message_activities_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "budget_messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      budget_message_recipients: {
+        Row: {
+          contact_id: string
+          created_at: string
+          id: string
+          message_id: string
+        }
+        Insert: {
+          contact_id: string
+          created_at?: string
+          id?: string
+          message_id: string
+        }
+        Update: {
+          contact_id?: string
+          created_at?: string
+          id?: string
+          message_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "budget_message_recipients_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budget_message_recipients_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "budget_messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      budget_message_resources: {
+        Row: {
+          comment: string | null
+          created_at: string
+          id: string
+          message_id: string
+          resource_id: string
+        }
+        Insert: {
+          comment?: string | null
+          created_at?: string
+          id?: string
+          message_id: string
+          resource_id: string
+        }
+        Update: {
+          comment?: string | null
+          created_at?: string
+          id?: string
+          message_id?: string
+          resource_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "budget_message_resources_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "budget_messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budget_message_resources_resource_id_fkey"
+            columns: ["resource_id"]
+            isOneToOne: false
+            referencedRelation: "budget_activity_resources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      budget_messages: {
+        Row: {
+          budget_id: string
+          created_at: string
+          created_by: string | null
+          end_time: string | null
+          id: string
+          sent_at: string | null
+          sent_via: string | null
+          start_time: string | null
+          status: string
+          target_date: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          budget_id: string
+          created_at?: string
+          created_by?: string | null
+          end_time?: string | null
+          id?: string
+          sent_at?: string | null
+          sent_via?: string | null
+          start_time?: string | null
+          status?: string
+          target_date?: string | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          budget_id?: string
+          created_at?: string
+          created_by?: string | null
+          end_time?: string | null
+          id?: string
+          sent_at?: string | null
+          sent_via?: string | null
+          start_time?: string | null
+          status?: string
+          target_date?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "budget_messages_budget_id_fkey"
+            columns: ["budget_id"]
+            isOneToOne: false
+            referencedRelation: "presupuestos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budget_messages_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       budget_phases: {
         Row: {
           actual_end_date: string | null

@@ -373,7 +373,7 @@ export function BudgetMessagesList({ budgetId, activities, phases, resources }: 
                       )}
 
                       {/* Actions */}
-                      <div className="flex items-center gap-2 border-t pt-2">
+                      <div className="flex items-center gap-2 border-t pt-2 flex-wrap">
                         <Button
                           variant="outline"
                           size="sm"
@@ -383,6 +383,20 @@ export function BudgetMessagesList({ budgetId, activities, phases, resources }: 
                           <Pencil className="h-3.5 w-3.5" />
                           Editar
                         </Button>
+                        {/* Re-send buttons */}
+                        {msg.sent_via && msg.sent_via !== 'interno' && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="gap-1"
+                            onClick={() => { setEditingMessage(msg); setFormOpen(true); }}
+                          >
+                            {msg.sent_via === 'email' && <Mail className="h-3.5 w-3.5" />}
+                            {msg.sent_via === 'whatsapp' && <MessageCircle className="h-3.5 w-3.5" />}
+                            {msg.sent_via === 'sms' && <Smartphone className="h-3.5 w-3.5" />}
+                            Reenviar
+                          </Button>
+                        )}
                         <Button
                           variant="outline"
                           size="sm"

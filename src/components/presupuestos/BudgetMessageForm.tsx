@@ -16,6 +16,7 @@ import { toast } from 'sonner';
 import { searchMatch } from '@/lib/search-utils';
 import { formatActividadId } from '@/lib/activity-id';
 import { cn } from '@/lib/utils';
+import { parseISO, isValid, isBefore, isAfter } from 'date-fns';
 import { 
   ChevronDown, ChevronRight, ClipboardList, Package, Users, 
   Plus, Search, X, MessageSquare, Send, Save, Mail, MessageCircle, Smartphone, Loader2
@@ -27,6 +28,9 @@ interface Activity {
   name: string;
   code: string;
   phase_id: string | null;
+  uses_measurement?: boolean;
+  actual_start_date?: string | null;
+  actual_end_date?: string | null;
 }
 
 interface Phase {
@@ -72,6 +76,8 @@ interface BudgetMessageFormProps {
   resources: Resource[];
   message?: BudgetMessage | null;
   onSuccess: () => void;
+  filterStartDate?: string;
+  filterEndDate?: string;
 }
 
 // Build plain text body from message data
@@ -176,6 +182,8 @@ export function BudgetMessageForm({
   resources,
   message,
   onSuccess,
+  filterStartDate,
+  filterEndDate,
 }: BudgetMessageFormProps) {
   const { user } = useAuth();
   const { sendEmail, sending: emailSending } = useEmailService();
@@ -306,13 +314,46 @@ export function BudgetMessageForm({
     });
   };
 
+  // Filter activities: only uses_measurement=true and within date range, then sort by ActividadID
+  const dateFilteredActivities = useMemo(() => {
+    // First filter by uses_measurement
+    let result = activities.filter(a => a.uses_measurement !== false);
+
+    // Apply date range filter (same logic as BuyingListUnified)
+    if (filterStartDate || filterEndDate) {
+      result = result.filter(activity => {
+        const actStart = activity.actual_start_date;
+        const actEnd = activity.actual_end_date;
+        if (!actStart && !actEnd) return false;
+        try {
+          const fStart = filterStartDate ? parseISO(filterStartDate) : null;
+          const fEnd = filterEndDate ? parseISO(filterEndDate) : null;
+          const aStart = actStart ? parseISO(actStart) : null;
+          const aEnd = actEnd ? parseISO(actEnd) : null;
+          if (fStart && aEnd && isValid(fStart) && isValid(aEnd) && isBefore(aEnd, fStart)) return false;
+          if (fEnd && aStart && isValid(fEnd) && isValid(aStart) && isAfter(aStart, fEnd)) return false;
+          return true;
+        } catch {
+          return false;
+        }
+      });
+    }
+
+    // Sort alphabetically by ActividadID
+    return result.sort((a, b) => {
+      const labelA = formatActivityLabel(a);
+      const labelB = formatActivityLabel(b);
+      return labelA.localeCompare(labelB, 'es');
+    });
+  }, [activities, filterStartDate, filterEndDate, phases]);
+
   const filteredActivities = useMemo(() => {
-    if (!activitySearch.trim()) return activities;
-    return activities.filter(a =>
+    if (!activitySearch.trim()) return dateFilteredActivities;
+    return dateFilteredActivities.filter(a =>
       searchMatch(formatActivityLabel(a), activitySearch) ||
       searchMatch(a.name, activitySearch)
     );
-  }, [activities, activitySearch, phases]);
+  }, [dateFilteredActivities, activitySearch]);
 
   const toggleActivity = (activityId: string) => {
     setSelectedActivityIds(prev => {
@@ -774,7 +815,9 @@ export function BudgetMessageForm({
                 {filteredActivities.map(activity => {
                   const isSelected = selectedActivityIds.has(activity.id);
                   const isExpanded = expandedActivities.has(activity.id);
-                  const actResources = resources.filter(r => r.activity_id === activity.id);
+                  const actResources = resources
+                    .filter(r => r.activity_id === activity.id)
+                    .sort((a, b) => (a.name || '').localeCompare(b.name || '', 'es'));
 
                   return (
                     <div key={activity.id} className="border rounded-md">

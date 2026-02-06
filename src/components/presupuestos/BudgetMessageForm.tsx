@@ -10,13 +10,15 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { supabase } from '@/integrations/supabase/client';
+import { useEmailService } from '@/hooks/useEmailService';
+import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
 import { searchMatch } from '@/lib/search-utils';
 import { formatActividadId } from '@/lib/activity-id';
 import { cn } from '@/lib/utils';
 import { 
   ChevronDown, ChevronRight, ClipboardList, Package, Users, 
-  Plus, Search, X, MessageSquare, Send, Save
+  Plus, Search, X, MessageSquare, Send, Save, Mail, MessageCircle, Smartphone, Loader2
 } from 'lucide-react';
 import { ContactSelectWithCreate } from '@/components/crm/ContactSelectWithCreate';
 
@@ -61,16 +63,6 @@ interface BudgetMessage {
   created_at: string;
 }
 
-interface ActivityComment {
-  activityId: string;
-  comment: string;
-}
-
-interface ResourceComment {
-  resourceId: string;
-  comment: string;
-}
-
 interface BudgetMessageFormProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -80,6 +72,99 @@ interface BudgetMessageFormProps {
   resources: Resource[];
   message?: BudgetMessage | null;
   onSuccess: () => void;
+}
+
+// Build plain text body from message data
+function buildMessageBody(
+  title: string,
+  activities: Activity[],
+  phases: Phase[],
+  resources: Resource[],
+  selectedActivityIds: Set<string>,
+  selectedResourceIds: Set<string>,
+  activityComments: Map<string, string>,
+  resourceComments: Map<string, string>,
+): string {
+  const lines: string[] = [];
+  lines.push(`📋 ${title}`);
+  lines.push('');
+
+  for (const actId of selectedActivityIds) {
+    const activity = activities.find(a => a.id === actId);
+    if (!activity) continue;
+    const phase = phases.find(p => p.id === activity.phase_id);
+    const label = formatActividadId({
+      phaseCode: phase?.code || null,
+      activityCode: activity.code,
+      name: activity.name,
+    });
+    lines.push(`▸ ${label}`);
+    const actComment = activityComments.get(actId);
+    if (actComment) lines.push(`  ${actComment}`);
+
+    // Resources under this activity
+    const relatedResources = Array.from(selectedResourceIds)
+      .map(rId => resources.find(r => r.id === rId))
+      .filter(r => r && r.activity_id === actId);
+
+    for (const resource of relatedResources) {
+      if (!resource) continue;
+      lines.push(`    • ${resource.name}`);
+      const resComment = resourceComments.get(resource.id);
+      if (resComment) lines.push(`      ${resComment}`);
+    }
+    lines.push('');
+  }
+
+  return lines.join('\n');
+}
+
+// Build HTML body from message data
+function buildMessageHtml(
+  title: string,
+  activities: Activity[],
+  phases: Phase[],
+  resources: Resource[],
+  selectedActivityIds: Set<string>,
+  selectedResourceIds: Set<string>,
+  activityComments: Map<string, string>,
+  resourceComments: Map<string, string>,
+): string {
+  let html = `<h2 style="margin-bottom:12px;">${title}</h2>`;
+
+  for (const actId of selectedActivityIds) {
+    const activity = activities.find(a => a.id === actId);
+    if (!activity) continue;
+    const phase = phases.find(p => p.id === activity.phase_id);
+    const label = formatActividadId({
+      phaseCode: phase?.code || null,
+      activityCode: activity.code,
+      name: activity.name,
+    });
+    html += `<div style="margin-bottom:12px;padding:8px 12px;border:1px solid #ddd;border-radius:6px;">`;
+    html += `<strong style="font-family:monospace;">▸ ${label}</strong>`;
+    const actComment = activityComments.get(actId);
+    if (actComment) html += `<p style="color:#555;margin:4px 0 0 12px;">${actComment.replace(/\n/g, '<br>')}</p>`;
+
+    const relatedResources = Array.from(selectedResourceIds)
+      .map(rId => resources.find(r => r.id === rId))
+      .filter(r => r && r.activity_id === actId);
+
+    if (relatedResources.length > 0) {
+      html += `<ul style="margin:8px 0 0 20px;padding-left:0;">`;
+      for (const resource of relatedResources) {
+        if (!resource) continue;
+        html += `<li style="margin-bottom:4px;"><strong>${resource.name}</strong>`;
+        const resComment = resourceComments.get(resource.id);
+        if (resComment) html += `<br><span style="color:#666;font-size:0.9em;">${resComment.replace(/\n/g, '<br>')}</span>`;
+        html += `</li>`;
+      }
+      html += `</ul>`;
+    }
+    html += `</div>`;
+  }
+
+  return html;
 }
 
 export function BudgetMessageForm({
@@ -92,6 +177,8 @@ export function BudgetMessageForm({
   message,
   onSuccess,
 }: BudgetMessageFormProps) {
+  const { user } = useAuth();
+  const { sendEmail, sending: emailSending } = useEmailService();
   const [isLoading, setIsLoading] = useState(false);
   const [title, setTitle] = useState('');
   const [status, setStatus] = useState('pendiente');
@@ -267,6 +354,196 @@ export function BudgetMessageForm({
     setSelectedContacts(prev => prev.filter(c => c.id !== contactId));
   };
 
+  // Send message via the selected channel
+  const sendViaChannel = async (channel: string, messageId: string) => {
+    const plainText = buildMessageBody(
+      title, activities, phases, resources,
+      selectedActivityIds, selectedResourceIds,
+      activityComments, resourceComments
+    );
+    const htmlBody = buildMessageHtml(
+      title, activities, phases, resources,
+      selectedActivityIds, selectedResourceIds,
+      activityComments, resourceComments
+    );
+
+    if (channel === 'email') {
+      // Send email to all recipients that have email
+      const emailRecipients = selectedContacts.filter(c => c.email);
+      if (emailRecipients.length === 0) {
+        toast.error('Ningún receptor tiene email configurado');
+        return false;
+      }
+
+      const result = await sendEmail({
+        to: emailRecipients.map(c => c.email!),
+        subject: title,
+        body_html: htmlBody,
+        body_text: plainText,
+        budget_id: budgetId,
+        contact_id: emailRecipients[0]?.id,
+      });
+
+      if (!result.success) return false;
+
+      // Log in crm_communications for each contact
+      for (const contact of emailRecipients) {
+        await supabase.from('crm_communications').insert({
+          communication_type: 'email',
+          contact_id: contact.id,
+          content: plainText,
+          subject: title,
+          direction: 'outbound',
+          status: 'sent',
+          sent_at: new Date().toISOString(),
+          created_by: user?.id || null,
+          metadata: { budget_id: budgetId, message_id: messageId },
+        });
+      }
+
+      // Create follow-up gestión
+      await createFollowUpGestion(emailRecipients, 'Email', messageId);
+      return true;
+    }
+
+    if (channel === 'whatsapp') {
+      const phoneContacts = selectedContacts.filter(c => c.phone);
+      if (phoneContacts.length === 0) {
+        toast.error('Ningún receptor tiene teléfono configurado');
+        return false;
+      }
+
+      // Save to whatsapp_messages for the first contact
+      const firstContact = phoneContacts[0];
+      const phone = normalizePhone(firstContact.phone);
+
+      if (phone) {
+        await supabase.from('whatsapp_messages').insert({
+          contact_id: firstContact.id,
+          budget_id: budgetId,
+          phone_number: phone,
+          direction: 'outbound',
+          message: plainText,
+          status: 'sent',
+          created_by: user?.id,
+        });
+
+        // Log in crm_communications
+        await supabase.from('crm_communications').insert({
+          communication_type: 'whatsapp',
+          contact_id: firstContact.id,
+          content: plainText,
+          subject: title,
+          direction: 'outbound',
+          status: 'sent',
+          sent_at: new Date().toISOString(),
+          created_by: user?.id || null,
+          metadata: { budget_id: budgetId, message_id: messageId },
+        });
+
+        // Copy to clipboard
+        try {
+          await navigator.clipboard.writeText(plainText);
+          toast.success('Mensaje copiado al portapapeles');
+        } catch {
+          // Silently fail
+        }
+
+        // Open WhatsApp
+        const waPhone = phone.replace(/^\+/, '');
+        const waUrl = `https://wa.me/${waPhone}?text=${encodeURIComponent(plainText)}`;
+        window.open(waUrl, '_blank');
+      }
+
+      // Create follow-up gestión
+      await createFollowUpGestion(phoneContacts, 'WhatsApp', messageId);
+      return true;
+    }
+
+    if (channel === 'sms') {
+      const phoneContacts = selectedContacts.filter(c => c.phone);
+      if (phoneContacts.length === 0) {
+        toast.error('Ningún receptor tiene teléfono configurado');
+        return false;
+      }
+
+      const firstContact = phoneContacts[0];
+      const phone = normalizePhone(firstContact.phone);
+
+      if (phone) {
+        // Log in crm_communications
+        await supabase.from('crm_communications').insert({
+          communication_type: 'sms',
+          contact_id: firstContact.id,
+          content: plainText,
+          subject: title,
+          direction: 'outbound',
+          status: 'sent',
+          sent_at: new Date().toISOString(),
+          created_by: user?.id || null,
+          metadata: { budget_id: budgetId, message_id: messageId, manual_send: true },
+        });
+
+        // Copy to clipboard
+        try {
+          await navigator.clipboard.writeText(plainText);
+          toast.success('Mensaje copiado al portapapeles');
+        } catch {
+          // Silently fail
+        }
+
+        // Open SMS app
+        const smsPhone = phone.replace('+', '');
+        window.open(`sms:${smsPhone}`, '_blank');
+      }
+
+      // Create follow-up gestión
+      await createFollowUpGestion(phoneContacts, 'SMS', messageId);
+      return true;
+    }
+
+    return false;
+  };
+
+  const normalizePhone = (phone: string | null | undefined): string | null => {
+    if (!phone) return null;
+    let clean = phone.replace(/[\s\-\(\)\.]/g, '');
+    if (clean.startsWith('00')) clean = '+' + clean.slice(2);
+    if (/^[6789]\d{8}$/.test(clean)) clean = '+34' + clean;
+    if (!clean.startsWith('+') && /^\d{10,15}$/.test(clean)) clean = '+' + clean;
+    return clean.startsWith('+') ? clean : null;
+  };
+
+  const createFollowUpGestion = async (contacts: Contact[], channel: string, messageId: string) => {
+    try {
+      const contactNames = contacts.map(c => c.surname ? `${c.name} ${c.surname}` : c.name).join(', ');
+      const { data: management } = await supabase
+        .from('crm_managements')
+        .insert({
+          title: `Seguimiento ${channel} - ${title}`,
+          description: `Seguimiento del mensaje enviado por ${channel} a: ${contactNames}`,
+          management_type: 'Tarea',
+          status: 'Pendiente',
+          target_date: new Date(Date.now() + 86400000).toISOString().split('T')[0],
+          start_time: new Date().toTimeString().slice(0, 5),
+          created_by: user?.id || null,
+        })
+        .select()
+        .single();
+
+      if (management) {
+        // Link contacts to the management
+        const inserts = contacts.map(c => ({
+          management_id: management.id,
+          contact_id: c.id,
+        }));
+        await supabase.from('crm_management_contacts').insert(inserts);
+      }
+    } catch (error) {
+      console.error('Error creating follow-up:', error);
+    }
+  };
+
   const handleSubmit = async (sendNow = false) => {
     if (!title.trim()) {
       toast.error('El título es obligatorio');
@@ -280,6 +557,17 @@ export function BudgetMessageForm({
       toast.error('Selecciona al menos una actividad');
       return;
     }
+    if (sendNow && sentVia && sentVia !== 'interno') {
+      // Validate channel requirements
+      if (sentVia === 'email' && !selectedContacts.some(c => c.email)) {
+        toast.error('Ningún receptor tiene email. Añade contactos con email.');
+        return;
+      }
+      if ((sentVia === 'whatsapp' || sentVia === 'sms') && !selectedContacts.some(c => c.phone)) {
+        toast.error('Ningún receptor tiene teléfono. Añade contactos con teléfono.');
+        return;
+      }
+    }
 
     setIsLoading(true);
     try {
@@ -290,8 +578,8 @@ export function BudgetMessageForm({
         target_date: targetDate || null,
         start_time: startTime || null,
         end_time: endTime || null,
-        sent_via: sendNow && sentVia ? sentVia : null,
-        sent_at: sendNow ? new Date().toISOString() : null,
+        sent_via: sendNow && sentVia && sentVia !== 'interno' ? sentVia : (sentVia === 'interno' ? 'interno' : null),
+        sent_at: sendNow && sentVia && sentVia !== 'interno' ? new Date().toISOString() : null,
       };
 
       let messageId: string;
@@ -349,7 +637,18 @@ export function BudgetMessageForm({
         );
       }
 
-      toast.success(message ? 'Mensaje actualizado' : 'Mensaje creado');
+      // Send via channel if requested
+      if (sendNow && sentVia && sentVia !== 'interno') {
+        const sent = await sendViaChannel(sentVia, messageId);
+        if (sent) {
+          toast.success(`Mensaje ${message ? 'actualizado' : 'creado'} y enviado por ${sentVia}`);
+        } else {
+          toast.warning('Mensaje guardado, pero hubo un problema al enviar');
+        }
+      } else {
+        toast.success(message ? 'Mensaje actualizado' : 'Mensaje creado');
+      }
+
       onSuccess();
       onOpenChange(false);
     } catch (error: any) {
@@ -370,6 +669,14 @@ export function BudgetMessageForm({
       return searchMatch(fullName, contactSearch) || searchMatch(c.email || '', contactSearch);
     });
   }, [budgetContacts, selectedContacts, contactSearch]);
+
+  const isBusy = isLoading || emailSending;
+
+  // Channel-specific icons for the send button
+  const channelIcon = sentVia === 'email' ? <Mail className="h-4 w-4" /> :
+    sentVia === 'whatsapp' ? <MessageCircle className="h-4 w-4" /> :
+    sentVia === 'sms' ? <Smartphone className="h-4 w-4" /> :
+    <Send className="h-4 w-4" />;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -405,6 +712,8 @@ export function BudgetMessageForm({
                 {selectedContacts.map(c => (
                   <Badge key={c.id} variant="secondary" className="gap-1 pr-1">
                     {c.surname ? `${c.name} ${c.surname}` : c.name}
+                    {c.email && <Mail className="h-2.5 w-2.5 text-muted-foreground" />}
+                    {c.phone && <Smartphone className="h-2.5 w-2.5 text-muted-foreground" />}
                     <button
                       onClick={() => removeContact(c.id)}
                       className="ml-1 hover:text-destructive"
@@ -435,7 +744,10 @@ export function BudgetMessageForm({
                     onClick={() => { addContact(c); setContactSearch(''); }}
                   >
                     <span>{c.surname ? `${c.name} ${c.surname}` : c.name}</span>
-                    <span className="text-xs text-muted-foreground">{c.email || c.phone || ''}</span>
+                    <span className="text-xs text-muted-foreground flex items-center gap-2">
+                      {c.email && <span>{c.email}</span>}
+                      {c.phone && <span>{c.phone}</span>}
+                    </span>
                   </button>
                 ))}
               </div>
@@ -608,42 +920,54 @@ export function BudgetMessageForm({
 
           {/* Send via channel */}
           <div className="space-y-2 border-t pt-4">
-            <Label>Canal de envío (opcional)</Label>
+            <Label>Canal de envío</Label>
             <Select value={sentVia} onValueChange={setSentVia}>
               <SelectTrigger>
                 <SelectValue placeholder="Solo registro interno" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="interno">Solo registro interno</SelectItem>
-                <SelectItem value="email">Email</SelectItem>
-                <SelectItem value="whatsapp">WhatsApp</SelectItem>
-                <SelectItem value="sms">SMS</SelectItem>
+                <SelectItem value="email">
+                  <span className="flex items-center gap-2"><Mail className="h-3.5 w-3.5" /> Email</span>
+                </SelectItem>
+                <SelectItem value="whatsapp">
+                  <span className="flex items-center gap-2"><MessageCircle className="h-3.5 w-3.5" /> WhatsApp</span>
+                </SelectItem>
+                <SelectItem value="sms">
+                  <span className="flex items-center gap-2"><Smartphone className="h-3.5 w-3.5" /> SMS</span>
+                </SelectItem>
               </SelectContent>
             </Select>
+            {sentVia === 'email' && !selectedContacts.some(c => c.email) && selectedContacts.length > 0 && (
+              <p className="text-xs text-destructive">⚠ Ningún receptor seleccionado tiene email</p>
+            )}
+            {(sentVia === 'whatsapp' || sentVia === 'sms') && !selectedContacts.some(c => c.phone) && selectedContacts.length > 0 && (
+              <p className="text-xs text-destructive">⚠ Ningún receptor seleccionado tiene teléfono</p>
+            )}
           </div>
 
           {/* Actions */}
           <div className="flex justify-end gap-2 pt-4 border-t">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isBusy}>
               Cancelar
             </Button>
             <Button
               onClick={() => handleSubmit(false)}
-              disabled={isLoading}
+              disabled={isBusy}
               variant="secondary"
               className="gap-1"
             >
               <Save className="h-4 w-4" />
-              {isLoading ? 'Guardando...' : 'Guardar'}
+              {isBusy ? 'Guardando...' : 'Guardar'}
             </Button>
             {sentVia && sentVia !== 'interno' && (
               <Button
                 onClick={() => handleSubmit(true)}
-                disabled={isLoading}
+                disabled={isBusy}
                 className="gap-1"
               >
-                <Send className="h-4 w-4" />
-                Guardar y Enviar
+                {isBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : channelIcon}
+                {isBusy ? 'Enviando...' : `Guardar y Enviar`}
               </Button>
             )}
           </div>

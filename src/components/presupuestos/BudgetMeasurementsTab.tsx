@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
-import { Plus, Search, Edit, Trash2, Ruler, Link2, Upload, FileUp, X, Download, Copy, List, Layers, ChevronFirst, ChevronLast, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, Search, Edit, Trash2, Ruler, Link2, Upload, FileUp, X, Download, Copy, List, Layers, ChevronFirst, ChevronLast, ChevronLeft, ChevronRight, FileCode2 } from 'lucide-react';
 import { formatNumber } from '@/lib/format-utils';
 import { searchMatch } from '@/lib/search-utils';
 import { NumericInput } from '@/components/ui/numeric-input';
@@ -20,6 +20,7 @@ import { MeasurementMultiSelect } from '@/components/presupuestos/MeasurementMul
 import { MeasurementsWorkAreaGroupedView } from '@/components/presupuestos/MeasurementsWorkAreaGroupedView';
 import { syncAllAffectedResources, syncResourcesRelatedUnits } from '@/lib/budget-utils';
 import { ResourceInlineEdit } from '@/components/presupuestos/ResourceInlineEdit';
+import { ChiefArchitectImportDialog } from '@/components/presupuestos/ChiefArchitectImportDialog';
 import { 
   readExcelFile, 
   writeExcelFile, 
@@ -110,6 +111,9 @@ export function BudgetMeasurementsTab({ budgetId, isAdmin }: BudgetMeasurementsT
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
   const [isImporting, setIsImporting] = useState(false);
+  
+  // ChiefArchitect import dialog
+  const [chiefImportOpen, setChiefImportOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // When opening the edit form from the list, store scroll position so we can restore it after saving
@@ -906,6 +910,10 @@ export function BudgetMeasurementsTab({ budgetId, isAdmin }: BudgetMeasurementsT
                     Exportar
                   </Button>
                 )}
+                <Button variant="outline" onClick={() => setChiefImportOpen(true)}>
+                  <FileCode2 className="h-4 w-4 mr-2" />
+                  Mediciones Chief
+                </Button>
                 <Button variant="outline" onClick={() => setImportDialogOpen(true)}>
                   <Upload className="h-4 w-4 mr-2" />
                   Importar
@@ -1380,6 +1388,15 @@ export function BudgetMeasurementsTab({ budgetId, isAdmin }: BudgetMeasurementsT
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* ChiefArchitect Import Dialog */}
+      <ChiefArchitectImportDialog
+        open={chiefImportOpen}
+        onOpenChange={setChiefImportOpen}
+        budgetId={budgetId}
+        existingMeasurementNames={new Set(measurements.map(m => m.name.toLowerCase().trim()))}
+        onImportComplete={fetchData}
+      />
     </div>
   );
 }

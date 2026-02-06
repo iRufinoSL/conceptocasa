@@ -578,7 +578,7 @@ export function InvoicePrintView({ invoice, onClose }: Props) {
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px', gap: '16px' }}>
             {/* Emisor */}
             <div style={{ flex: 1, padding: '10px', background: '#f8fafc', borderRadius: '6px', borderLeft: '3px solid #3b82f6' }}>
-              <div style={{ fontSize: scaleConfig.sectionFontSize, textTransform: 'uppercase', color: '#3b82f6', marginBottom: '6px', letterSpacing: '0.5px', fontWeight: '600' }}>Emisor</div>
+              <div style={{ fontSize: scaleConfig.sectionFontSize, textTransform: 'uppercase', color: '#3b82f6', marginBottom: '6px', letterSpacing: '0.5px', fontWeight: '600' }}>Emisor / Proveedor</div>
               <div style={{ fontSize: scaleConfig.partyNameFontSize, fontWeight: '600', color: '#1a1a1a', marginBottom: '4px' }}>
                 {invoice.issuer_account?.name || 'No definido'}
               </div>

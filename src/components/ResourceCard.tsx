@@ -100,6 +100,11 @@ export function ResourceCard({ resource, onEdit, onDelete, effectiveCost, allRes
                   {formatCurrency(effectiveCost)}
                 </div>
                 <div className="text-sm text-muted-foreground">/{resource.unitMeasure}</div>
+                {resource.vatIncludedPercent ? (
+                  <div className="text-xs text-muted-foreground mt-0.5">
+                    IVA {resource.vatIncludedPercent}% incluido
+                  </div>
+                ) : null}
                 {isComposite && (
                   <div className="text-xs text-accent mt-1">Calculado</div>
                 )}

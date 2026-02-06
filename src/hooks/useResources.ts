@@ -16,6 +16,7 @@ interface DBResource {
   registration_date: string | null;
   supplier_id: string | null;
   trade_id: string | null;
+  vat_included_percent: number | null;
   created_at: string | null;
   updated_at: string | null;
   supplier?: {
@@ -55,6 +56,7 @@ function mapDBToResource(dbResource: DBResource, relations: DBRelation[], files:
     supplier: dbResource.supplier || null,
     tradeId: dbResource.trade_id,
     trade: dbResource.trade || null,
+    vatIncludedPercent: dbResource.vat_included_percent,
     relatedResources: relations
       .filter(r => r.resource_id === dbResource.id)
       .map(r => ({ resourceId: r.related_resource_id, quantity: Number(r.quantity) || 1 })),
@@ -166,6 +168,7 @@ export function useResources() {
           registration_date: resourceData.registrationDate.toISOString().split('T')[0],
           supplier_id: resourceData.supplierId || null,
           trade_id: resourceData.tradeId || null,
+          vat_included_percent: resourceData.vatIncludedPercent ?? null,
         })
         .select()
         .single();
@@ -232,6 +235,7 @@ export function useResources() {
       }
       if (updates.supplierId !== undefined) updateData.supplier_id = updates.supplierId || null;
       if (updates.tradeId !== undefined) updateData.trade_id = updates.tradeId || null;
+      if (updates.vatIncludedPercent !== undefined) updateData.vat_included_percent = updates.vatIncludedPercent ?? null;
 
       const { error } = await supabase
         .from('external_resources')

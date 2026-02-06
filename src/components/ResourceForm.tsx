@@ -38,6 +38,7 @@ const initialFormState = {
   registrationDate: new Date().toISOString().split('T')[0],
   supplierId: null as string | null,
   tradeId: null as string | null,
+  vatIncludedPercent: null as number | null,
 };
 
 export function ResourceForm({ 
@@ -73,6 +74,7 @@ export function ResourceForm({
         registrationDate: regDate,
         supplierId: resource.supplierId || null,
         tradeId: resource.tradeId || null,
+        vatIncludedPercent: resource.vatIncludedPercent ?? null,
       });
     } else {
       setFormData({
@@ -176,7 +178,7 @@ export function ResourceForm({
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-3 gap-4">
             <div className="space-y-2">
               <Label htmlFor="unitCost">
                 Coste unitario {!isComposite && '*'}
@@ -197,7 +199,23 @@ export function ResourceForm({
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="unitMeasure">Unidad de medida *</Label>
+              <Label htmlFor="vatIncludedPercent">% IVA incluido</Label>
+              <InputAddon addon="%">
+                <NumericInput
+                  id="vatIncludedPercent"
+                  value={formData.vatIncludedPercent ?? 0}
+                  onChange={(value) => setFormData({ ...formData, vatIncludedPercent: value || null })}
+                  placeholder="0"
+                  decimals={0}
+                />
+              </InputAddon>
+              <p className="text-xs text-muted-foreground">
+                IVA que lleva incluido el precio
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="unitMeasure">Ud. medida *</Label>
               <Select
                 value={formData.unitMeasure}
                 onValueChange={(value: UnitMeasure) => setFormData({ ...formData, unitMeasure: value })}

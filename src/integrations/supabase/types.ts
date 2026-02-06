@@ -2530,6 +2530,7 @@ export type Database = {
           unit_cost: number | null
           unit_measure: string | null
           updated_at: string | null
+          vat_included_percent: number | null
           website: string | null
         }
         Insert: {
@@ -2545,6 +2546,7 @@ export type Database = {
           unit_cost?: number | null
           unit_measure?: string | null
           updated_at?: string | null
+          vat_included_percent?: number | null
           website?: string | null
         }
         Update: {
@@ -2560,6 +2562,7 @@ export type Database = {
           unit_cost?: number | null
           unit_measure?: string | null
           updated_at?: string | null
+          vat_included_percent?: number | null
           website?: string | null
         }
         Relationships: [

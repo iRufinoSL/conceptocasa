@@ -2,9 +2,8 @@ import {
   Document,
   Packer,
   Paragraph,
-  ImageRun,
+  TextRun,
   SectionType,
-  PageOrientation,
 } from 'docx';
 import * as pdfjsLib from 'pdfjs-dist';
 import { ensurePdfjsWorker } from '@/lib/pdfjs-worker';
@@ -12,127 +11,128 @@ import { supabase } from '@/integrations/supabase/client';
 
 ensurePdfjsWorker();
 
-/**
- * Render a single PDF page to a PNG ArrayBuffer at high resolution.
- */
-async function renderPageToBuffer(
-  pdf: pdfjsLib.PDFDocumentProxy,
-  pageNum: number,
-  scale = 2.5
-): Promise<{ buffer: ArrayBuffer; width: number; height: number }> {
-  const page = await pdf.getPage(pageNum);
-  const viewport = page.getViewport({ scale });
+// ─── Types ────────────────────────────────────────────────────
 
-  const canvas = document.createElement('canvas');
-  canvas.width = viewport.width;
-  canvas.height = viewport.height;
-  const ctx = canvas.getContext('2d')!;
-  await page.render({ canvasContext: ctx, viewport }).promise;
-
-  return new Promise((resolve, reject) => {
-    canvas.toBlob((blob) => {
-      if (!blob) return reject(new Error('Canvas to blob failed'));
-      blob.arrayBuffer().then((buffer) =>
-        resolve({ buffer, width: canvas.width, height: canvas.height })
-      );
-    }, 'image/png');
-  });
+interface ExtractedLine {
+  text: string;
+  fontSize: number;
+  bold: boolean;
 }
 
+// ─── Text extraction ─────────────────────────────────────────
+
 /**
- * Load an image URL into an ArrayBuffer (for already-rendered page images).
+ * Extract text from every page of a PDF document.
+ * Groups text items into lines based on their Y-coordinate,
+ * sorts items left-to-right within each line, and returns
+ * them ordered top-to-bottom.
  */
-async function loadImageUrlToBuffer(
-  url: string
-): Promise<{ buffer: ArrayBuffer; width: number; height: number }> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.onload = () => {
-      const canvas = document.createElement('canvas');
-      canvas.width = img.naturalWidth;
-      canvas.height = img.naturalHeight;
-      const ctx = canvas.getContext('2d')!;
-      ctx.drawImage(img, 0, 0);
-      canvas.toBlob((blob) => {
-        if (!blob) return reject(new Error('Canvas to blob failed'));
-        blob.arrayBuffer().then((buf) =>
-          resolve({ buffer: buf, width: img.naturalWidth, height: img.naturalHeight })
-        );
-      }, 'image/png');
-    };
-    img.onerror = reject;
-    img.src = url;
-  });
+async function extractTextFromPdf(
+  pdf: pdfjsLib.PDFDocumentProxy
+): Promise<ExtractedLine[][]> {
+  const allPages: ExtractedLine[][] = [];
+
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const textContent = await page.getTextContent();
+
+    // Collect items grouped by approximate Y position
+    const lineMap = new Map<
+      number,
+      Array<{ text: string; x: number; fontSize: number; bold: boolean }>
+    >();
+
+    for (const item of textContent.items) {
+      // Skip non-text items (e.g. TextMarkedContent)
+      if (!('str' in item) || !item.str.trim()) continue;
+
+      const y = Math.round(item.transform[5]);
+      const bucket = Math.round(y / 3) * 3; // cluster nearby Y values
+      const x = item.transform[4];
+      const fontSize = Math.abs(item.transform[0]) || 12;
+      const bold = ((item as any).fontName || '').toLowerCase().includes('bold');
+
+      if (!lineMap.has(bucket)) lineMap.set(bucket, []);
+      lineMap.get(bucket)!.push({ text: item.str, x, fontSize, bold });
+    }
+
+    // Sort lines top → bottom (PDF Y axis goes bottom-up)
+    const sortedYs = [...lineMap.keys()].sort((a, b) => b - a);
+
+    const lines: ExtractedLine[] = sortedYs
+      .map((y) => {
+        const items = lineMap.get(y)!;
+        // Sort items left → right within the line
+        items.sort((a, b) => a.x - b.x);
+
+        const text = items
+          .map((i) => i.text)
+          .join(' ')
+          .replace(/\s+/g, ' ')
+          .trim();
+
+        const fontSize = items[0]?.fontSize || 12;
+        const bold = items.some((i) => i.bold);
+
+        return { text, fontSize, bold };
+      })
+      .filter((line) => line.text.length > 0);
+
+    allPages.push(lines);
+  }
+
+  return allPages;
 }
 
-// A4 usable area for image scaling (in pixels at 96 DPI)
-// A4 = 210mm x 297mm. With ~10mm margin each side → usable 190mm x 277mm
-const A4_USABLE_W_PX = Math.round((190 / 25.4) * 96); // ~717 px
-const A4_USABLE_H_PX = Math.round((277 / 25.4) * 96); // ~1047 px
-const A4_USABLE_W_LANDSCAPE_PX = Math.round((277 / 25.4) * 96);
-const A4_USABLE_H_LANDSCAPE_PX = Math.round((190 / 25.4) * 96);
+// ─── Word document builder ───────────────────────────────────
 
 /**
- * Build a Word document from an array of page images.
- * Each page image becomes a full-page image in the Word document,
- * preserving the original aspect ratio.
+ * Build a Word document from extracted text.
+ * Each PDF page becomes a Word section (with a page break in between).
+ * Text is fully editable.
  */
-function buildWordDoc(
-  pages: { buffer: ArrayBuffer; width: number; height: number }[]
-): Document {
-  const sections = pages.map((page, idx) => {
-    const isLandscape = page.width > page.height;
-
-    const usableW = isLandscape ? A4_USABLE_W_LANDSCAPE_PX : A4_USABLE_W_PX;
-    const usableH = isLandscape ? A4_USABLE_H_LANDSCAPE_PX : A4_USABLE_H_PX;
-
-    const ratioW = usableW / page.width;
-    const ratioH = usableH / page.height;
-    const ratio = Math.min(ratioW, ratioH);
-
-    const finalWidthPx = Math.round(page.width * ratio);
-    const finalHeightPx = Math.round(page.height * ratio);
+function buildEditableDoc(pages: ExtractedLine[][]): Document {
+  const sections = pages.map((lines, idx) => {
+    const children: Paragraph[] =
+      lines.length > 0
+        ? lines.map(
+            (line) =>
+              new Paragraph({
+                spacing: { after: 60 },
+                children: [
+                  new TextRun({
+                    text: line.text,
+                    bold: line.bold,
+                    // docx size is in half-points (24 = 12pt)
+                    size: Math.round(line.fontSize * 2),
+                  }),
+                ],
+              })
+          )
+        : [new Paragraph({ children: [new TextRun({ text: '' })] })];
 
     return {
       properties: {
         type: idx === 0 ? undefined : SectionType.NEXT_PAGE,
         page: {
-          size: {
-            orientation: isLandscape
-              ? PageOrientation.LANDSCAPE
-              : PageOrientation.PORTRAIT,
-          },
           margin: {
-            top: "10mm" as const,
-            bottom: "10mm" as const,
-            left: "10mm" as const,
-            right: "10mm" as const,
+            top: '15mm' as const,
+            bottom: '15mm' as const,
+            left: '15mm' as const,
+            right: '15mm' as const,
           },
         },
       },
-      children: [
-        new Paragraph({
-          children: [
-            new ImageRun({
-              type: "png",
-              data: new Uint8Array(page.buffer),
-              transformation: {
-                width: finalWidthPx,
-                height: finalHeightPx,
-              },
-            }),
-          ],
-        }),
-      ],
+      children,
     };
   });
 
   return new Document({ sections });
 }
 
+// ─── Helpers ─────────────────────────────────────────────────
+
 function downloadBlob(blob: Blob, filename: string) {
-  // Ensure the blob has the correct MIME type for Word documents
   const wordBlob = new Blob([blob], {
     type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   });
@@ -146,63 +146,55 @@ function downloadBlob(blob: Blob, filename: string) {
   URL.revokeObjectURL(url);
 }
 
-// ─── PUBLIC API ────────────────────────────────────────────────
+async function loadPdfFromStorage(
+  bucketName: string,
+  filePath: string
+): Promise<pdfjsLib.PDFDocumentProxy> {
+  const { data: blob, error } = await supabase.storage
+    .from(bucketName)
+    .download(filePath);
+  if (error) throw error;
+  const arrayBuffer = await blob.arrayBuffer();
+  return pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+}
+
+// ─── PUBLIC API ──────────────────────────────────────────────
 
 /**
- * Clone a PDF stored in Supabase storage to a Word document.
- * Downloads the PDF, renders every page at high resolution,
- * and exports each page as a full-page image in a .docx file.
+ * Clone a PDF stored in Supabase storage to an editable Word document.
+ * Extracts text content from the PDF and creates Word paragraphs
+ * that can be freely edited in any Word-compatible editor.
  */
 export async function cloneStoragePdfToWord(
   bucketName: string,
   filePath: string,
   outputName: string
 ): Promise<void> {
-  // Download the PDF
-  const { data: blob, error } = await supabase.storage
-    .from(bucketName)
-    .download(filePath);
-  if (error) throw error;
-
-  const arrayBuffer = await blob.arrayBuffer();
-  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-
-  const pages: { buffer: ArrayBuffer; width: number; height: number }[] = [];
-  for (let i = 1; i <= pdf.numPages; i++) {
-    pages.push(await renderPageToBuffer(pdf, i));
-  }
-
-  const doc = buildWordDoc(pages);
+  const pdf = await loadPdfFromStorage(bucketName, filePath);
+  const pages = await extractTextFromPdf(pdf);
+  const doc = buildEditableDoc(pages);
   const wordBlob = await Packer.toBlob(doc);
   downloadBlob(wordBlob, `${outputName}.docx`);
 }
 
 /**
- * Clone a template (whose pages are already rendered as images in storage)
- * to a Word document. Uses the pre-rendered page images for speed.
+ * Clone a template to an editable Word document.
+ * Uses the original PDF file to extract text content.
  */
 export async function cloneTemplateToWord(
-  pageImagePaths: string[],
-  outputName: string
+  originalFilePath: string,
+  outputName: string,
+  bucketName: string = 'project-documents'
 ): Promise<void> {
-  const pages: { buffer: ArrayBuffer; width: number; height: number }[] = [];
-
-  for (const path of pageImagePaths) {
-    const { data, error } = await supabase.storage
-      .from('project-documents')
-      .createSignedUrl(path, 600);
-    if (error) throw error;
-    pages.push(await loadImageUrlToBuffer(data.signedUrl));
-  }
-
-  const doc = buildWordDoc(pages);
+  const pdf = await loadPdfFromStorage(bucketName, originalFilePath);
+  const pages = await extractTextFromPdf(pdf);
+  const doc = buildEditableDoc(pages);
   const wordBlob = await Packer.toBlob(doc);
   downloadBlob(wordBlob, `${outputName}.docx`);
 }
 
 /**
- * Clone a local File (PDF) to a Word document.
- * Useful when the file hasn't been uploaded yet.
+ * Clone a local PDF file to an editable Word document.
  */
 export async function cloneLocalPdfToWord(
   file: File,
@@ -210,13 +202,8 @@ export async function cloneLocalPdfToWord(
 ): Promise<void> {
   const arrayBuffer = await file.arrayBuffer();
   const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-
-  const pages: { buffer: ArrayBuffer; width: number; height: number }[] = [];
-  for (let i = 1; i <= pdf.numPages; i++) {
-    pages.push(await renderPageToBuffer(pdf, i));
-  }
-
-  const doc = buildWordDoc(pages);
+  const pages = await extractTextFromPdf(pdf);
+  const doc = buildEditableDoc(pages);
   const wordBlob = await Packer.toBlob(doc);
   downloadBlob(wordBlob, `${outputName}.docx`);
 }

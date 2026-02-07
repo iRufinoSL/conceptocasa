@@ -120,7 +120,7 @@ function buildWordDoc(
         new Paragraph({
           children: [
             new ImageRun({
-              data: page.buffer,
+              data: new Uint8Array(page.buffer),
               transformation: {
                 width: finalWidthPx,
                 height: finalHeightPx,
@@ -137,7 +137,11 @@ function buildWordDoc(
 }
 
 function downloadBlob(blob: Blob, filename: string) {
-  const url = URL.createObjectURL(blob);
+  // Ensure the blob has the correct MIME type for Word documents
+  const wordBlob = new Blob([blob], {
+    type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  });
+  const url = URL.createObjectURL(wordBlob);
   const a = document.createElement('a');
   a.href = url;
   a.download = filename;

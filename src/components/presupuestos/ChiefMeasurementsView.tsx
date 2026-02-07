@@ -4,7 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent } from '@/components/ui/card';
-import { ScrollArea } from '@/components/ui/scroll-area';
+
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { toast } from 'sonner';
 import { Search, Trash2, FileCode2, AlertTriangle, CheckCircle2, Layers, ChevronRight, ChevronDown } from 'lucide-react';
@@ -277,8 +277,7 @@ export function ChiefMeasurementsView({
       </div>
 
       {/* Hierarchical list */}
-      <ScrollArea className="max-h-[600px]">
-        <div className="space-y-2">
+      <div className="space-y-2">
           {Array.from(groupedMeasurements.entries()).map(([classification, items]) => {
             const isExpanded = expandedGroups.has(classification);
             const groupDuplicates = items.filter(m => isDuplicate(m)).length;
@@ -386,7 +385,6 @@ export function ChiefMeasurementsView({
             );
           })}
         </div>
-      </ScrollArea>
 
       {/* Delete confirmation */}
       <DeleteConfirmDialog

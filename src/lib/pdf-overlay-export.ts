@@ -8,6 +8,8 @@ export interface TextOverlay {
   y: number;
   /** Width as percentage of page width */
   width: number;
+  /** Height as percentage of page height */
+  height: number;
   /** Text content */
   text: string;
   /** Font size in pt */
@@ -70,10 +72,12 @@ export function generateOverlayPdf(
       const oy = (overlay.y / 100) * pdfH;
       const ow = (overlay.width / 100) * pdfW;
 
-      // Estimate height based on font size and text lines
+      // Use explicit height if available, otherwise estimate from text
       const lines = overlay.text.split('\n');
       const lineHeightMm = (overlay.fontSize * 0.3528) * 1.3; // pt to mm * line spacing
-      const oh = lineHeightMm * lines.length + 1;
+      const oh = overlay.height > 0
+        ? (overlay.height / 100) * pdfH
+        : lineHeightMm * lines.length + 1;
 
       // White out the original content behind the overlay
       doc.setFillColor(255, 255, 255);

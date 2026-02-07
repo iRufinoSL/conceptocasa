@@ -166,31 +166,70 @@ export function PdfOverlayEditor({ template, onClose }: PdfOverlayEditorProps) {
     }
   };
 
-  /** Find the nearest text item to a given position on the current page */
-  const findNearestTextItem = useCallback(
-    (xPct: number, yPct: number): PdfTextItem | null => {
+  /** Find all text items within a given rectangular area on the current page */
+  const findTextItemsInArea = useCallback(
+    (x1Pct: number, y1Pct: number, x2Pct: number, y2Pct: number): PdfTextItem[] => {
       const items = textItemsByPage.get(currentPage);
-      if (!items || items.length === 0) return null;
+      if (!items || items.length === 0) return [];
 
-      let nearest: PdfTextItem | null = null;
-      let minDist = Infinity;
+      const minX = Math.min(x1Pct, x2Pct);
+      const maxX = Math.max(x1Pct, x2Pct);
+      const minY = Math.min(y1Pct, y2Pct);
+      const maxY = Math.max(y1Pct, y2Pct);
+
+      // Expand search area slightly (2%) to catch nearby text
+      return items.filter(
+        (item) =>
+          item.xPct >= minX - 2 &&
+          item.xPct <= maxX + 2 &&
+          item.yPct >= minY - 2 &&
+          item.yPct <= maxY + 2
+      );
+    },
+    [currentPage, textItemsByPage]
+  );
+
+  /** Determine the dominant font properties from a set of text items */
+  const getDominantFont = useCallback(
+    (items: PdfTextItem[]): { fontSize: number; fontFamily: 'helvetica' | 'times' | 'courier'; bold: boolean } => {
+      if (items.length === 0) return { fontSize: 11, fontFamily: 'helvetica', bold: false };
+
+      // Use the most common font size (mode)
+      const sizeCounts = new Map<number, number>();
+      const familyCounts = new Map<string, number>();
+      let boldCount = 0;
 
       for (const item of items) {
-        // Weight Y distance more since text lines are horizontal
-        const dx = item.xPct - xPct;
-        const dy = (item.yPct - yPct) * 2;
-        const dist = dx * dx + dy * dy;
-        if (dist < minDist) {
-          minDist = dist;
-          nearest = item;
+        sizeCounts.set(item.fontSize, (sizeCounts.get(item.fontSize) || 0) + 1);
+        familyCounts.set(item.fontFamily, (familyCounts.get(item.fontFamily) || 0) + 1);
+        if (item.bold) boldCount++;
+      }
+
+      let dominantSize = 11;
+      let maxSizeCount = 0;
+      for (const [size, count] of sizeCounts) {
+        if (count > maxSizeCount) {
+          maxSizeCount = count;
+          dominantSize = size;
         }
       }
 
-      // Only use if reasonably close (within ~8% of page)
-      if (minDist > 8 * 8 * 5) return null;
-      return nearest;
+      let dominantFamily: 'helvetica' | 'times' | 'courier' = 'helvetica';
+      let maxFamilyCount = 0;
+      for (const [family, count] of familyCounts) {
+        if (count > maxFamilyCount) {
+          maxFamilyCount = count;
+          dominantFamily = family as typeof dominantFamily;
+        }
+      }
+
+      return {
+        fontSize: dominantSize,
+        fontFamily: dominantFamily,
+        bold: boldCount > items.length / 2,
+      };
     },
-    [currentPage, textItemsByPage]
+    []
   );
 
   const currentOverlays = overlaysByPage.get(currentPage) || [];
@@ -226,54 +265,120 @@ export function PdfOverlayEditor({ template, onClose }: PdfOverlayEditorProps) {
     [currentPage, selectedOverlayId]
   );
 
-  const handleImageClick = useCallback(
-    (e: React.MouseEvent<HTMLDivElement>) => {
-      if (!isAddingMode) return;
+  // Drawing state for drag-to-create overlays
+  const [drawStart, setDrawStart] = useState<{ x: number; y: number } | null>(null);
+  const [drawCurrent, setDrawCurrent] = useState<{ x: number; y: number } | null>(null);
 
+  const getImageRelativePos = useCallback(
+    (e: React.MouseEvent | MouseEvent): { x: number; y: number } | null => {
       const container = imageContainerRef.current;
-      if (!container) return;
+      if (!container) return null;
       const img = container.querySelector('img');
-      if (!img) return;
-
+      if (!img) return null;
       const imgRect = img.getBoundingClientRect();
-      const xPct = ((e.clientX - imgRect.left) / imgRect.width) * 100;
-      const yPct = ((e.clientY - imgRect.top) / imgRect.height) * 100;
-
-      // Detect font from nearest original text
-      const nearest = findNearestTextItem(xPct, yPct);
-
-      const newOverlay: TextOverlay = {
-        id: crypto.randomUUID(),
-        x: Math.max(0, Math.min(xPct, 90)),
-        y: Math.max(0, Math.min(yPct, 95)),
-        width: 25,
-        text: nearest?.text || 'Texto editable',
-        fontSize: nearest?.fontSize || 11,
-        fontFamily: nearest?.fontFamily || 'helvetica',
-        bold: nearest?.bold || false,
-        color: '#000000',
+      return {
+        x: ((e.clientX - imgRect.left) / imgRect.width) * 100,
+        y: ((e.clientY - imgRect.top) / imgRect.height) * 100,
       };
-
-      setOverlaysByPage((prev) => {
-        const next = new Map(prev);
-        const pageOverlays = [...(next.get(currentPage) || []), newOverlay];
-        next.set(currentPage, pageOverlays);
-        return next;
-      });
-
-      setSelectedOverlayId(newOverlay.id);
-      setIsAddingMode(false);
     },
-    [isAddingMode, currentPage, findNearestTextItem]
+    []
   );
 
-  // Drag state
+  const handleImageMouseDown = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      if (!isAddingMode) return;
+      e.preventDefault();
+      const pos = getImageRelativePos(e);
+      if (!pos) return;
+      setDrawStart(pos);
+      setDrawCurrent(pos);
+    },
+    [isAddingMode, getImageRelativePos]
+  );
+
+  const handleImageMouseMove = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      if (!isAddingMode || !drawStart) return;
+      e.preventDefault();
+      const pos = getImageRelativePos(e);
+      if (pos) setDrawCurrent(pos);
+    },
+    [isAddingMode, drawStart, getImageRelativePos]
+  );
+
+  const handleImageMouseUp = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      if (!isAddingMode || !drawStart || !drawCurrent) return;
+      e.preventDefault();
+
+      const x = Math.max(0, Math.min(drawStart.x, drawCurrent.x));
+      const y = Math.max(0, Math.min(drawStart.y, drawCurrent.y));
+      const w = Math.abs(drawCurrent.x - drawStart.x);
+      const h = Math.abs(drawCurrent.y - drawStart.y);
+
+      // Minimum size: 3% x 2%
+      if (w > 3 && h > 2) {
+        // Detect text items within the drawn area
+        const textItems = findTextItemsInArea(x, y, x + w, y + h);
+        const dominantFont = getDominantFont(textItems);
+
+        const newOverlay: TextOverlay = {
+          id: crypto.randomUUID(),
+          x: Math.min(x, 95),
+          y: Math.min(y, 95),
+          width: Math.min(w, 100 - x),
+          height: Math.min(h, 100 - y),
+          text: '',
+          fontSize: dominantFont.fontSize,
+          fontFamily: dominantFont.fontFamily,
+          bold: dominantFont.bold,
+          color: '#000000',
+        };
+
+        setOverlaysByPage((prev) => {
+          const next = new Map(prev);
+          const pageOverlays = [...(next.get(currentPage) || []), newOverlay];
+          next.set(currentPage, pageOverlays);
+          return next;
+        });
+
+        setSelectedOverlayId(newOverlay.id);
+        setIsAddingMode(false);
+      }
+
+      setDrawStart(null);
+      setDrawCurrent(null);
+    },
+    [isAddingMode, drawStart, drawCurrent, currentPage, findTextItemsInArea, getDominantFont]
+  );
+
+  // Drawing preview rect
+  const drawPreviewRect =
+    drawStart && drawCurrent
+      ? {
+          left: `${Math.min(drawStart.x, drawCurrent.x)}%`,
+          top: `${Math.min(drawStart.y, drawCurrent.y)}%`,
+          width: `${Math.abs(drawCurrent.x - drawStart.x)}%`,
+          height: `${Math.abs(drawCurrent.y - drawStart.y)}%`,
+        }
+      : null;
+
+  // Drag state (move overlay)
   const [dragging, setDragging] = useState<{
     id: string;
     startMouseX: number;
     startMouseY: number;
     startX: number;
     startY: number;
+  } | null>(null);
+
+  // Resize state
+  const [resizing, setResizing] = useState<{
+    id: string;
+    startMouseX: number;
+    startMouseY: number;
+    startWidth: number;
+    startHeight: number;
   } | null>(null);
 
   const handleOverlayMouseDown = useCallback(
@@ -298,6 +403,7 @@ export function PdfOverlayEditor({ template, onClose }: PdfOverlayEditorProps) {
     []
   );
 
+  // Handle drag (move)
   useEffect(() => {
     if (!dragging) return;
 
@@ -328,6 +434,38 @@ export function PdfOverlayEditor({ template, onClose }: PdfOverlayEditorProps) {
       window.removeEventListener('mouseup', handleMouseUp);
     };
   }, [dragging, updateOverlay]);
+
+  // Handle resize
+  useEffect(() => {
+    if (!resizing) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const container = imageContainerRef.current;
+      if (!container) return;
+      const img = container.querySelector('img');
+      if (!img) return;
+
+      const imgRect = img.getBoundingClientRect();
+      const dw = ((e.clientX - resizing.startMouseX) / imgRect.width) * 100;
+      const dh = ((e.clientY - resizing.startMouseY) / imgRect.height) * 100;
+
+      const newWidth = Math.max(3, Math.min(resizing.startWidth + dw, 95));
+      const newHeight = Math.max(2, Math.min(resizing.startHeight + dh, 95));
+
+      updateOverlay(resizing.id, { width: newWidth, height: newHeight });
+    };
+
+    const handleMouseUp = () => {
+      setResizing(null);
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [resizing, updateOverlay]);
 
   // Load image as data URL for PDF generation
   const loadImageAsDataUrl = useCallback(async (url: string): Promise<string> => {
@@ -406,8 +544,8 @@ export function PdfOverlayEditor({ template, onClose }: PdfOverlayEditorProps) {
           <div>
             <h2 className="text-lg font-semibold">Editar PDF: {template.name}</h2>
             <p className="text-sm text-muted-foreground">
-              Haz clic en la página para añadir cuadros de texto invisibles.
-              Se superpondrán sobre el original al exportar.
+              Dibuja un rectángulo sobre el texto a sustituir.
+              La tipografía se detectará automáticamente.
             </p>
           </div>
         </div>
@@ -467,7 +605,15 @@ export function PdfOverlayEditor({ template, onClose }: PdfOverlayEditorProps) {
           ref={imageContainerRef}
           className="relative border rounded-lg overflow-hidden bg-muted/30"
           style={{ cursor: isAddingMode ? 'crosshair' : 'default' }}
-          onClick={handleImageClick}
+          onMouseDown={handleImageMouseDown}
+          onMouseMove={handleImageMouseMove}
+          onMouseUp={handleImageMouseUp}
+          onMouseLeave={() => {
+            if (drawStart) {
+              setDrawStart(null);
+              setDrawCurrent(null);
+            }
+          }}
         >
           {pageImageUrls[currentPage] ? (
             <>
@@ -477,6 +623,14 @@ export function PdfOverlayEditor({ template, onClose }: PdfOverlayEditorProps) {
                 className="w-full h-auto"
                 draggable={false}
               />
+
+              {/* Drawing preview rectangle */}
+              {drawPreviewRect && (
+                <div
+                  className="absolute border-2 border-dashed border-primary bg-primary/10 rounded pointer-events-none z-20"
+                  style={drawPreviewRect}
+                />
+              )}
 
               {/* Text overlays */}
               {currentOverlays.map((overlay) => (
@@ -491,7 +645,7 @@ export function PdfOverlayEditor({ template, onClose }: PdfOverlayEditorProps) {
                     left: `${overlay.x}%`,
                     top: `${overlay.y}%`,
                     width: `${overlay.width}%`,
-                    minHeight: '1.5em',
+                    height: `${overlay.height}%`,
                     cursor: dragging ? 'grabbing' : 'grab',
                   }}
                   onMouseDown={(e) => handleOverlayMouseDown(e, overlay)}
@@ -500,11 +654,12 @@ export function PdfOverlayEditor({ template, onClose }: PdfOverlayEditorProps) {
                     setSelectedOverlayId(overlay.id);
                   }}
                 >
-                  {/* The actual text area - transparent background to be invisible */}
+                  {/* The actual text area - white background to mask original */}
                   <textarea
                     value={overlay.text}
                     onChange={(e) => updateOverlay(overlay.id, { text: e.target.value })}
-                    className="w-full bg-white/90 border-none outline-none resize-none p-0.5"
+                    placeholder="Escribe el texto de reemplazo..."
+                    className="w-full h-full bg-white/90 border-none outline-none resize-none p-0.5"
                     style={{
                       fontSize: `${overlay.fontSize * 0.85}px`,
                       fontFamily:
@@ -516,16 +671,31 @@ export function PdfOverlayEditor({ template, onClose }: PdfOverlayEditorProps) {
                       fontWeight: overlay.bold ? 'bold' : 'normal',
                       color: overlay.color,
                       lineHeight: '1.3',
-                      minHeight: '1.5em',
                     }}
                     onMouseDown={(e) => e.stopPropagation()}
                     onClick={(e) => e.stopPropagation()}
-                    rows={overlay.text.split('\n').length}
+                  />
+
+                  {/* Resize handle - bottom right corner */}
+                  <div
+                    className="absolute bottom-0 right-0 w-3 h-3 bg-primary rounded-tl cursor-se-resize opacity-0 group-hover:opacity-100 transition-opacity z-10"
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setSelectedOverlayId(overlay.id);
+                      setResizing({
+                        id: overlay.id,
+                        startMouseX: e.clientX,
+                        startMouseY: e.clientY,
+                        startWidth: overlay.width,
+                        startHeight: overlay.height,
+                      });
+                    }}
                   />
 
                   {/* Delete button on hover */}
                   <button
-                    className="absolute -top-3 -right-3 bg-destructive text-destructive-foreground rounded-full w-5 h-5 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+                    className="absolute -top-3 -right-3 bg-destructive text-destructive-foreground rounded-full w-5 h-5 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity z-10"
                     onClick={(e) => {
                       e.stopPropagation();
                       deleteOverlay(overlay.id);
@@ -538,12 +708,12 @@ export function PdfOverlayEditor({ template, onClose }: PdfOverlayEditorProps) {
               ))}
 
               {/* Adding mode indicator */}
-              {isAddingMode && (
+              {isAddingMode && !drawStart && (
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                   <div className="bg-background/90 backdrop-blur-sm px-4 py-2 rounded-lg shadow-lg border">
                     <p className="text-sm font-medium flex items-center gap-2">
                       <Type className="h-4 w-4" />
-                      Haz clic donde quieras colocar el cuadro de texto
+                      Dibuja un rectángulo sobre el texto a sustituir
                     </p>
                   </div>
                 </div>
@@ -623,20 +793,37 @@ export function PdfOverlayEditor({ template, onClose }: PdfOverlayEditorProps) {
                 />
               </div>
 
-              <div className="space-y-2">
-                <Label className="text-xs">Ancho (%)</Label>
-                <Input
-                  type="number"
-                  value={Math.round(selectedOverlay.width)}
-                  onChange={(e) =>
-                    updateOverlay(selectedOverlay.id, {
-                      width: Math.max(5, Math.min(95, Number(e.target.value) || 25)),
-                    })
-                  }
-                  min={5}
-                  max={95}
-                  className="h-8 text-sm"
-                />
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-2">
+                  <Label className="text-xs">Ancho (%)</Label>
+                  <Input
+                    type="number"
+                    value={Math.round(selectedOverlay.width)}
+                    onChange={(e) =>
+                      updateOverlay(selectedOverlay.id, {
+                        width: Math.max(3, Math.min(95, Number(e.target.value) || 25)),
+                      })
+                    }
+                    min={3}
+                    max={95}
+                    className="h-8 text-sm"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs">Alto (%)</Label>
+                  <Input
+                    type="number"
+                    value={Math.round(selectedOverlay.height)}
+                    onChange={(e) =>
+                      updateOverlay(selectedOverlay.id, {
+                        height: Math.max(1, Math.min(95, Number(e.target.value) || 5)),
+                      })
+                    }
+                    min={1}
+                    max={95}
+                    className="h-8 text-sm"
+                  />
+                </div>
               </div>
 
               <div className="space-y-2">

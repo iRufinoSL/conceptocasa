@@ -66,15 +66,12 @@ async function loadImageUrlToBuffer(
   });
 }
 
-// A4 dimensions in EMUs (914400 EMUs = 1 inch)
-// A4: 210mm x 297mm ≈ 8.27 x 11.69 inches
-const A4_WIDTH_EMU = Math.round(8.27 * 914400);
-const A4_HEIGHT_EMU = Math.round(11.69 * 914400);
-
-// Margins (≈ 1cm each side)
-const MARGIN_EMU = Math.round(0.4 * 914400);
-const USABLE_WIDTH_EMU = A4_WIDTH_EMU - 2 * MARGIN_EMU;
-const USABLE_HEIGHT_EMU = A4_HEIGHT_EMU - 2 * MARGIN_EMU;
+// A4 usable area for image scaling (in pixels at 96 DPI)
+// A4 = 210mm x 297mm. With ~10mm margin each side → usable 190mm x 277mm
+const A4_USABLE_W_PX = Math.round((190 / 25.4) * 96); // ~717 px
+const A4_USABLE_H_PX = Math.round((277 / 25.4) * 96); // ~1047 px
+const A4_USABLE_W_LANDSCAPE_PX = Math.round((277 / 25.4) * 96);
+const A4_USABLE_H_LANDSCAPE_PX = Math.round((190 / 25.4) * 96);
 
 /**
  * Build a Word document from an array of page images.
@@ -87,17 +84,15 @@ function buildWordDoc(
   const sections = pages.map((page, idx) => {
     const isLandscape = page.width > page.height;
 
-    const usableW = isLandscape ? USABLE_HEIGHT_EMU : USABLE_WIDTH_EMU;
-    const usableH = isLandscape ? USABLE_WIDTH_EMU : USABLE_HEIGHT_EMU;
+    const usableW = isLandscape ? A4_USABLE_W_LANDSCAPE_PX : A4_USABLE_W_PX;
+    const usableH = isLandscape ? A4_USABLE_H_LANDSCAPE_PX : A4_USABLE_H_PX;
 
     const ratioW = usableW / page.width;
     const ratioH = usableH / page.height;
     const ratio = Math.min(ratioW, ratioH);
 
-    // Convert from EMU to pixels (docx ImageRun uses pixels for transformation)
-    // 914400 EMU = 1 inch, 96 pixels = 1 inch → 1 pixel = 9525 EMU
-    const finalWidthPx = Math.round((page.width * ratio) / 9525);
-    const finalHeightPx = Math.round((page.height * ratio) / 9525);
+    const finalWidthPx = Math.round(page.width * ratio);
+    const finalHeightPx = Math.round(page.height * ratio);
 
     return {
       properties: {
@@ -109,10 +104,10 @@ function buildWordDoc(
               : PageOrientation.PORTRAIT,
           },
           margin: {
-            top: MARGIN_EMU,
-            bottom: MARGIN_EMU,
-            left: MARGIN_EMU,
-            right: MARGIN_EMU,
+            top: "10mm" as const,
+            bottom: "10mm" as const,
+            left: "10mm" as const,
+            right: "10mm" as const,
           },
         },
       },
@@ -120,12 +115,12 @@ function buildWordDoc(
         new Paragraph({
           children: [
             new ImageRun({
+              type: "png",
               data: new Uint8Array(page.buffer),
               transformation: {
                 width: finalWidthPx,
                 height: finalHeightPx,
               },
-              type: 'png',
             }),
           ],
         }),

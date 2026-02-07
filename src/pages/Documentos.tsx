@@ -48,7 +48,8 @@ import {
   Maximize2,
   User,
   List,
-  ChevronDown
+  ChevronDown,
+  FileDown,
 } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -73,6 +74,7 @@ import { AppNavDropdown } from '@/components/AppNavDropdown';
 import { BackupButton } from '@/components/BackupButton';
 import { searchMatch } from '@/lib/search-utils';
 import { ContactSelectWithCreate } from '@/components/crm/ContactSelectWithCreate';
+import { cloneStoragePdfToWord } from '@/lib/clone-to-word';
 
 interface ProjectDocument {
   id: string;
@@ -214,6 +216,9 @@ export default function Documentos() {
   const [descriptionPreviewOpen, setDescriptionPreviewOpen] = useState(false);
   const [descriptionPreviewContent, setDescriptionPreviewContent] = useState('');
   const [descriptionPreviewTitle, setDescriptionPreviewTitle] = useState('');
+
+  // Clone to Word state
+  const [cloningDocId, setCloningDocId] = useState<string | null>(null);
 
   // Helper to truncate description
   const truncateDescription = (text: string | null, maxLength = 50) => {
@@ -678,6 +683,28 @@ export default function Documentos() {
     }
   };
 
+  const handleCloneToWord = async (doc: ProjectDocument) => {
+    if (!doc.file_path) {
+      toast.error('No hay archivo asociado para clonar');
+      return;
+    }
+    if (doc.file_type !== 'application/pdf') {
+      toast.error('Solo se pueden clonar archivos PDF a Word');
+      return;
+    }
+    setCloningDocId(doc.id);
+    try {
+      const bucketName = doc.source === 'accounting' ? 'accounting-documents' : 'project-documents';
+      await cloneStoragePdfToWord(bucketName, doc.file_path, doc.name.replace(/\.pdf$/i, ''));
+      toast.success('Documento Word generado correctamente');
+    } catch (err: any) {
+      console.error('Error cloning to Word:', err);
+      toast.error(err?.message || 'Error al clonar a Word');
+    } finally {
+      setCloningDocId(null);
+    }
+  };
+
   const formatFileSize = (bytes: number | null) => {
     if (!bytes) return '-';
     if (bytes < 1024) return `${bytes} B`;
@@ -984,6 +1011,17 @@ export default function Documentos() {
                                     <Download className="h-4 w-4" />
                                   </Button>
                                 )}
+                                {doc.file_path && doc.file_type === 'application/pdf' && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handleCloneToWord(doc)}
+                                    disabled={cloningDocId === doc.id}
+                                    title="Clonar a Word"
+                                  >
+                                    <FileDown className="h-4 w-4" />
+                                  </Button>
+                                )}
                                 {isAdmin() && doc.source !== 'accounting' && (
                                   <>
                                     <Button
@@ -1143,6 +1181,17 @@ export default function Documentos() {
                                             title="Descargar"
                                           >
                                             <Download className="h-4 w-4" />
+                                          </Button>
+                                        )}
+                                        {doc.file_path && doc.file_type === 'application/pdf' && (
+                                          <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() => handleCloneToWord(doc)}
+                                            disabled={cloningDocId === doc.id}
+                                            title="Clonar a Word"
+                                          >
+                                            <FileDown className="h-4 w-4" />
                                           </Button>
                                         )}
                                         {isAdmin() && doc.source !== 'accounting' && (

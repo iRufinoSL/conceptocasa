@@ -37,6 +37,7 @@ import { toast } from 'sonner';
 import { TemplateZoneCanvas } from './TemplateZoneCanvas';
 import { TemplateGenerateDialog } from './TemplateGenerateDialog';
 import { cloneTemplateToWord } from '@/lib/clone-to-word';
+import { PdfOverlayEditor } from './PdfOverlayEditor';
 
 ensurePdfjsWorker();
 
@@ -367,7 +368,7 @@ export function DocumentTemplatesTab() {
   };
 
   const [cloningWord, setCloningWord] = useState(false);
-
+  const [overlayEditorTemplate, setOverlayEditorTemplate] = useState<Template | null>(null);
   const handleCloneToWord = async (template: Template) => {
     if (!template.original_file_path) {
       toast.error('La plantilla no tiene archivo PDF original');
@@ -409,6 +410,16 @@ export function DocumentTemplatesTab() {
     setZoneDefaultData(zoneDefaultData.filter((_, i) => i !== idx));
   };
 
+  // ─── OVERLAY EDITOR VIEW ────────────────────────────────────
+  if (overlayEditorTemplate) {
+    return (
+      <PdfOverlayEditor
+        template={overlayEditorTemplate}
+        onClose={() => setOverlayEditorTemplate(null)}
+      />
+    );
+  }
+
   // ─── DETAIL VIEW ──────────────────────────────────────────────
   if (selectedTemplate) {
     const pageZones = zones.filter((z) => z.page_number === selectedPage + 1);
@@ -438,6 +449,15 @@ export function DocumentTemplatesTab() {
             </div>
           </div>
           <div className="flex gap-2 flex-wrap">
+            <Button
+              variant="default"
+              size="sm"
+              onClick={() => setOverlayEditorTemplate(selectedTemplate)}
+              className="gap-1"
+            >
+              <FileText className="h-4 w-4" />
+              Editar PDF
+            </Button>
             <Button
               variant="secondary"
               size="sm"
@@ -765,9 +785,21 @@ export function DocumentTemplatesTab() {
                 </div>
                 <div className="mt-3 pt-3 border-t flex gap-2">
                   <Button
-                    variant="secondary"
+                    variant="default"
                     size="sm"
                     className="gap-1 flex-1"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setOverlayEditorTemplate(template);
+                    }}
+                  >
+                    <FileText className="h-3 w-3" />
+                    Editar PDF
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    className="gap-1"
                     disabled={cloningWord}
                     onClick={(e) => {
                       e.stopPropagation();
@@ -775,7 +807,7 @@ export function DocumentTemplatesTab() {
                     }}
                   >
                     <FileDown className="h-3 w-3" />
-                    {cloningWord ? 'Generando...' : 'Clonar a Word'}
+                    Word
                   </Button>
                   <Button
                     variant="ghost"
@@ -786,7 +818,6 @@ export function DocumentTemplatesTab() {
                       openTemplate(template);
                     }}
                   >
-                    <FileText className="h-3 w-3" />
                     Zonas
                   </Button>
                 </div>

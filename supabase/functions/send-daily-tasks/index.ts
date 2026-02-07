@@ -132,12 +132,11 @@ const handler = async (req: Request): Promise<Response> => {
     
     console.log(`Fetching pending tasks for date: ${todayStr} and overdue`);
 
-    // Fetch all users with notification_email set
+    // Fetch all users with notification preferences
     const { data: usersWithNotifications, error: usersError } = await supabase
       .from('profiles')
-      .select('id, email, full_name, notification_email, notification_type')
-      .not('notification_email', 'is', null)
-      .neq('notification_type', 'none');
+      .select('id, email, full_name, notification_email, notification_type, personal_notification_email, personal_notification_phone, personal_notification_type')
+      .or('notification_email.not.is.null,personal_notification_email.not.is.null,personal_notification_phone.not.is.null');
 
     if (usersError) {
       console.error('Error fetching users:', usersError);
@@ -148,11 +147,66 @@ const handler = async (req: Request): Promise<Response> => {
     }
 
     if (!usersWithNotifications || usersWithNotifications.length === 0) {
-      console.log('No users with notification email configured');
+      console.log('No users with notification preferences configured');
       return new Response(
         JSON.stringify({ success: true, message: 'No users configured for notifications' }),
         { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
       );
+    }
+
+    // Bird API key for SMS
+    const birdApiKey = Deno.env.get('BIRD_API_KEY');
+    const birdSenderPhone = Deno.env.get('BIRD_SENDER_PHONE');
+
+    // Helper to send SMS via Bird API
+    async function sendSmsNotification(toPhone: string, message: string) {
+      if (!birdApiKey) {
+        console.error('BIRD_API_KEY not configured, skipping SMS');
+        return false;
+      }
+
+      // Get sender phone from company settings
+      const { data: compSettings } = await supabase
+        .from('company_settings')
+        .select('sms_sender_phone, whatsapp_phone')
+        .single();
+
+      const fromPhone = compSettings?.sms_sender_phone || birdSenderPhone || compSettings?.whatsapp_phone;
+      if (!fromPhone) {
+        console.error('No SMS sender phone configured');
+        return false;
+      }
+
+      let normalizedFrom = fromPhone.replace(/\s+/g, '');
+      if (!normalizedFrom.startsWith('+')) normalizedFrom = '+' + normalizedFrom;
+      let normalizedTo = toPhone.replace(/\s+/g, '');
+      if (!normalizedTo.startsWith('+')) normalizedTo = '+' + normalizedTo;
+
+      try {
+        const response = await fetch('https://api.bird.com/v2/send', {
+          method: 'POST',
+          headers: {
+            'Authorization': `AccessKey ${birdApiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            originator: normalizedFrom,
+            recipients: [normalizedTo],
+            body: message,
+          }),
+        });
+
+        const data = await response.json();
+        if (!response.ok) {
+          console.error('Bird SMS error:', data);
+          return false;
+        }
+        console.log(`SMS sent to ${normalizedTo}: ${data.id}`);
+        return true;
+      } catch (err) {
+        console.error(`Error sending SMS to ${normalizedTo}:`, err);
+        return false;
+      }
     }
 
     console.log(`Found ${usersWithNotifications.length} users with notifications enabled`);
@@ -385,10 +439,18 @@ const handler = async (req: Request): Promise<Response> => {
 
     let emailsSent = 0;
     let emailsFailed = 0;
+    let smsSent = 0;
+    let smsFailed = 0;
 
     for (const userProfile of usersWithNotifications) {
-      const notificationEmail = userProfile.notification_email;
-      if (!notificationEmail) continue;
+      const notificationEmail = userProfile.personal_notification_email || userProfile.notification_email;
+      const notificationPhone = userProfile.personal_notification_phone;
+      const notifType = userProfile.personal_notification_type || userProfile.notification_type || 'email';
+      
+      // Skip if notifications disabled
+      if (notifType === 'none') continue;
+      // Need at least one channel configured
+      if (!notificationEmail && !notificationPhone) continue;
 
       // For now, send all tasks to all users with notifications
       // In the future, could filter by user's access to budgets
@@ -602,36 +664,57 @@ const handler = async (req: Request): Promise<Response> => {
         </html>
       `;
 
-      try {
-        const subjectOverdue = overdueTasks.length > 0 ? ` (⚠️ ${overdueTasks.length} vencidas)` : '';
-        const emailResponse = await resend.emails.send({
-          from: "Concepto Casa <noreply@concepto.casa>",
-          to: [notificationEmail],
-          subject: `📋 Tareas pendientes (${userTasks.length})${subjectOverdue} - ${formattedDate}`,
-          html: emailHtml,
-        });
+      const shouldSendEmail = (notifType === 'email' || notifType === 'both') && notificationEmail;
+      const shouldSendSms = (notifType === 'sms' || notifType === 'both') && notificationPhone;
 
-        if (emailResponse.error) {
-          console.error(`Error sending email to ${notificationEmail}:`, emailResponse.error);
+      // Send email
+      if (shouldSendEmail) {
+        try {
+          const subjectOverdue = overdueTasks.length > 0 ? ` (⚠️ ${overdueTasks.length} vencidas)` : '';
+          const emailResponse = await resend.emails.send({
+            from: "Concepto Casa <noreply@concepto.casa>",
+            to: [notificationEmail],
+            subject: `📋 Tareas pendientes (${userTasks.length})${subjectOverdue} - ${formattedDate}`,
+            html: emailHtml,
+          });
+
+          if (emailResponse.error) {
+            console.error(`Error sending email to ${notificationEmail}:`, emailResponse.error);
+            emailsFailed++;
+          } else {
+            console.log(`Email sent to ${notificationEmail}:`, emailResponse.data?.id);
+            emailsSent++;
+          }
+        } catch (emailError) {
+          console.error(`Error sending email to ${notificationEmail}:`, emailError);
           emailsFailed++;
-        } else {
-          console.log(`Email sent to ${notificationEmail}:`, emailResponse.data?.id);
-          emailsSent++;
         }
-      } catch (emailError) {
-        console.error(`Error sending email to ${notificationEmail}:`, emailError);
-        emailsFailed++;
+      }
+
+      // Send SMS
+      if (shouldSendSms) {
+        const overdueText = overdueTasks.length > 0 ? ` (${overdueTasks.length} vencidas)` : '';
+        const smsMessage = `ConceptoCasa: Tienes ${userTasks.length} tareas pendientes${overdueText}. Ver agenda: ${appUrl}/agenda`;
+        
+        const smsResult = await sendSmsNotification(notificationPhone, smsMessage);
+        if (smsResult) {
+          smsSent++;
+        } else {
+          smsFailed++;
+        }
       }
     }
 
-    console.log(`Emails sent: ${emailsSent}, failed: ${emailsFailed}`);
+    console.log(`Emails sent: ${emailsSent}, failed: ${emailsFailed}. SMS sent: ${smsSent}, failed: ${smsFailed}`);
 
     return new Response(
       JSON.stringify({ 
         success: true, 
         tasksCount: allTasks.length,
         emailsSent,
-        emailsFailed
+        emailsFailed,
+        smsSent,
+        smsFailed
       }),
       { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
     );

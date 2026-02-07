@@ -75,15 +75,15 @@ const handler = async (req: Request): Promise<Response> => {
     // Get profiles for these users
     const { data: userProfiles, error: profilesError } = await supabase
       .from("profiles")
-      .select("id, email, full_name, personal_notification_email")
+      .select("id, email, full_name, personal_notification_email, personal_notification_phone, personal_notification_type")
       .in("id", userIds);
 
     if (profilesError) {
       console.error("Error fetching user profiles:", profilesError);
     }
 
-    const profileMap = new Map<string, AdminProfile>();
-    userProfiles?.forEach((p: AdminProfile) => profileMap.set(p.id, p));
+    const profileMap = new Map<string, any>();
+    userProfiles?.forEach((p: any) => profileMap.set(p.id, p));
 
     // Also notify all admins
     const { data: adminUsers, error: adminError } = await supabase
@@ -101,14 +101,67 @@ const handler = async (req: Request): Promise<Response> => {
     if (adminIds.length > 0) {
       const { data: adminProfiles } = await supabase
         .from("profiles")
-        .select("id, email, full_name, personal_notification_email")
+        .select("id, email, full_name, personal_notification_email, personal_notification_phone, personal_notification_type")
         .in("id", adminIds);
       
-      adminProfiles?.forEach((p: AdminProfile) => {
+      adminProfiles?.forEach((p: any) => {
         if (!profileMap.has(p.id)) {
           profileMap.set(p.id, p);
         }
       });
+    }
+
+    // Bird API for SMS
+    const birdApiKey = Deno.env.get('BIRD_API_KEY');
+    const birdSenderPhone = Deno.env.get('BIRD_SENDER_PHONE');
+
+    async function sendSmsNotification(toPhone: string, message: string) {
+      if (!birdApiKey) {
+        console.error('BIRD_API_KEY not configured, skipping SMS');
+        return false;
+      }
+
+      const { data: compSettings } = await supabase
+        .from('company_settings')
+        .select('sms_sender_phone, whatsapp_phone')
+        .single();
+
+      const fromPhone = compSettings?.sms_sender_phone || birdSenderPhone || compSettings?.whatsapp_phone;
+      if (!fromPhone) {
+        console.error('No SMS sender phone configured');
+        return false;
+      }
+
+      let normalizedFrom = fromPhone.replace(/\s+/g, '');
+      if (!normalizedFrom.startsWith('+')) normalizedFrom = '+' + normalizedFrom;
+      let normalizedTo = toPhone.replace(/\s+/g, '');
+      if (!normalizedTo.startsWith('+')) normalizedTo = '+' + normalizedTo;
+
+      try {
+        const response = await fetch('https://api.bird.com/v2/send', {
+          method: 'POST',
+          headers: {
+            'Authorization': `AccessKey ${birdApiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            originator: normalizedFrom,
+            recipients: [normalizedTo],
+            body: message,
+          }),
+        });
+
+        const data = await response.json();
+        if (!response.ok) {
+          console.error('Bird SMS error:', data);
+          return false;
+        }
+        console.log(`SMS sent to ${normalizedTo}: ${data.id}`);
+        return true;
+      } catch (err) {
+        console.error(`Error sending SMS to ${normalizedTo}:`, err);
+        return false;
+      }
     }
 
     // Group emails by user to send consolidated notifications
@@ -129,6 +182,7 @@ const handler = async (req: Request): Promise<Response> => {
     });
 
     let notificationsSent = 0;
+    let smsSentCount = 0;
     const emailsToMarkNotified: string[] = [];
 
     // Send notifications
@@ -137,7 +191,13 @@ const handler = async (req: Request): Promise<Response> => {
       if (!profile) continue;
 
       const notificationEmail = profile.personal_notification_email || profile.email;
-      if (!notificationEmail) continue;
+      const notificationPhone = profile.personal_notification_phone;
+      const notifType = profile.personal_notification_type || 'email';
+
+      if (notifType === 'none') continue;
+
+      const shouldSendEmail = (notifType === 'email' || notifType === 'both') && notificationEmail;
+      const shouldSendSms = (notifType === 'sms' || notifType === 'both') && notificationPhone;
 
       // Build email list HTML
       const emailListHtml = emails.map((email: EmailWithDeadline) => {
@@ -191,27 +251,44 @@ const handler = async (req: Request): Promise<Response> => {
         </html>
       `;
 
-      try {
-        const result = await resend.emails.send({
-          from: "Concepto Casa <organiza@concepto.casa>",
-          to: [notificationEmail],
-          subject: `⏰ ${emails.length} email(s) pendientes de respuesta`,
-          html: emailHtml,
-        });
+      // Send email
+      if (shouldSendEmail) {
+        try {
+          const result = await resend.emails.send({
+            from: "Concepto Casa <organiza@concepto.casa>",
+            to: [notificationEmail],
+            subject: `⏰ ${emails.length} email(s) pendientes de respuesta`,
+            html: emailHtml,
+          });
 
-        if (!result.error) {
-          notificationsSent++;
-          console.log(`Notification sent to ${notificationEmail}`);
-          
-          // Mark these emails as notified (only for the original sender)
-          if (userId === emails[0]?.created_by) {
-            emails.forEach((email: EmailWithDeadline) => emailsToMarkNotified.push(email.id));
+          if (!result.error) {
+            notificationsSent++;
+            console.log(`Email notification sent to ${notificationEmail}`);
+            
+            if (userId === emails[0]?.created_by) {
+              emails.forEach((email: EmailWithDeadline) => emailsToMarkNotified.push(email.id));
+            }
+          } else {
+            console.error(`Failed to send email to ${notificationEmail}:`, result.error);
           }
-        } else {
-          console.error(`Failed to send notification to ${notificationEmail}:`, result.error);
+        } catch (err) {
+          console.error(`Error sending email to ${notificationEmail}:`, err);
         }
-      } catch (err) {
-        console.error(`Error sending notification to ${notificationEmail}:`, err);
+      }
+
+      // Send SMS
+      if (shouldSendSms) {
+        const smsMessage = `ConceptoCasa: Tienes ${emails.length} email(s) pendientes de respuesta. Ver CRM: https://conceptocasa.lovable.app/crm`;
+        const smsResult = await sendSmsNotification(notificationPhone, smsMessage);
+        if (smsResult) {
+          smsSentCount++;
+          console.log(`SMS notification sent to ${notificationPhone}`);
+        }
+        
+        // Also mark as notified if email wasn't sent
+        if (!shouldSendEmail && userId === emails[0]?.created_by) {
+          emails.forEach((email: EmailWithDeadline) => emailsToMarkNotified.push(email.id));
+        }
       }
     }
 
@@ -253,13 +330,14 @@ const handler = async (req: Request): Promise<Response> => {
       }
     }
 
-    console.log(`Process complete: ${notificationsSent} notifications sent, ${overdueEmails.length} alerts created`);
+    console.log(`Process complete: ${notificationsSent} email notifications, ${smsSentCount} SMS sent, ${overdueEmails.length} alerts created`);
 
     return new Response(
       JSON.stringify({ 
         success: true, 
         overdueEmails: overdueEmails.length,
         notificationsSent,
+        smsSent: smsSentCount,
         alertsCreated: overdueEmails.length
       }),
       { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }

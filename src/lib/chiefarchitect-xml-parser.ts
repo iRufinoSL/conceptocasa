@@ -256,14 +256,30 @@ function getCellNumber(cell: Element): number | null {
 /**
  * Strip XML namespace prefixes so querySelectorAll works on all elements.
  * Handles prefixed attributes (ss:ID → ss_ID) and element names (ss:Row → Row).
+ * Also removes processing instructions and DTDs that may confuse the parser.
  */
 function stripNamespaces(xml: string): string {
-  // Remove namespace declarations: xmlns:ss="..." and xmlns="..."
-  let cleaned = xml.replace(/\s+xmlns(?::\w+)?="[^"]*"/g, '');
-  // Replace prefixed element tags: <ss:Row → <Row, </ss:Row → </Row
-  cleaned = cleaned.replace(/<\/?(\w+):/g, (match, prefix) => match.replace(`${prefix}:`, ''));
-  // Replace prefixed attributes: ss:ID → ss_ID (keep the value accessible)
-  cleaned = cleaned.replace(/(\s)(\w+):(\w+)=/g, '$1$2_$3=');
+  // 1. Remove XML processing instructions: <?xml ...?>, <?mso-application ...?>
+  let cleaned = xml.replace(/<\?[\s\S]*?\?>/g, '');
+
+  // 2. Remove DOCTYPE declarations
+  cleaned = cleaned.replace(/<!DOCTYPE[\s\S]*?>/gi, '');
+
+  // 3. Remove ALL xmlns declarations (double- and single-quoted)
+  cleaned = cleaned.replace(/\s+xmlns(?::\w+)?\s*=\s*"[^"]*"/g, '');
+  cleaned = cleaned.replace(/\s+xmlns(?::\w+)?\s*=\s*'[^']*'/g, '');
+
+  // 4. Remove namespace prefixes from element names: <ss:Row → <Row, </ss:Row → </Row
+  cleaned = cleaned.replace(/<(\/?)(\w+):/g, '<$1');
+
+  // 5. Replace namespace prefixes in attributes with underscore: ss:ID → ss_ID
+  //    Loop until no more replacements (handles adjacent prefixed attributes)
+  let prev = '';
+  while (prev !== cleaned) {
+    prev = cleaned;
+    cleaned = cleaned.replace(/([\s])(\w+):(\w+)\s*=/g, '$1$2_$3=');
+  }
+
   return cleaned;
 }
 

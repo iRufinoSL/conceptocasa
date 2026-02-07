@@ -60,7 +60,7 @@ export interface ChiefArchitectMeasurement {
   finalUnit: string;    // Final unit (m2, ml, m3, ud)
   wasConverted: boolean; // Whether conversion was applied
   conversionNote: string; // Explanation of conversion if any
-  floor: number | null;
+  floor: number | string | null;
   supplier: string;
   accountingCode: string;
 }
@@ -244,7 +244,7 @@ function getCellText(cell: Element): string {
 function getCellNumber(cell: Element): number | null {
   const data = cell.querySelector('Data');
   if (!data) return null;
-  const type = data.getAttribute('ss:Type');
+  const type = data.getAttribute('ss_Type') || data.getAttribute('Type');
   if (type !== 'Number') return null;
   const val = parseFloat(data.textContent || '');
   return isNaN(val) ? null : val;
@@ -253,6 +253,20 @@ function getCellNumber(cell: Element): number | null {
 /**
  * Parse the ChiefArchitect XML content
  */
+/**
+ * Strip XML namespace prefixes so querySelectorAll works on all elements.
+ * Handles prefixed attributes (ss:ID → ss_ID) and element names (ss:Row → Row).
+ */
+function stripNamespaces(xml: string): string {
+  // Remove namespace declarations: xmlns:ss="..." and xmlns="..."
+  let cleaned = xml.replace(/\s+xmlns(?::\w+)?="[^"]*"/g, '');
+  // Replace prefixed element tags: <ss:Row → <Row, </ss:Row → </Row
+  cleaned = cleaned.replace(/<\/?(\w+):/g, (match, prefix) => match.replace(`${prefix}:`, ''));
+  // Replace prefixed attributes: ss:ID → ss_ID (keep the value accessible)
+  cleaned = cleaned.replace(/(\s)(\w+):(\w+)=/g, '$1$2_$3=');
+  return cleaned;
+}
+
 export function parseChiefArchitectXML(xmlContent: string): ChiefArchitectParseResult {
   const result: ChiefArchitectParseResult = {
     measurements: [],
@@ -262,8 +276,11 @@ export function parseChiefArchitectXML(xmlContent: string): ChiefArchitectParseR
   };
 
   try {
+    // Strip namespace prefixes so querySelectorAll works reliably
+    const cleanedXml = stripNamespaces(xmlContent);
+
     const parser = new DOMParser();
-    const doc = parser.parseFromString(xmlContent, 'text/xml');
+    const doc = parser.parseFromString(cleanedXml, 'text/xml');
 
     // Check for parse errors
     const parseError = doc.querySelector('parsererror');
@@ -276,11 +293,11 @@ export function parseChiefArchitectXML(xmlContent: string): ChiefArchitectParseR
     const styleMap = new Map<string, StyleInfo>();
     const styles = doc.querySelectorAll('Style');
     styles.forEach(style => {
-      const id = style.getAttribute('ss:ID') || '';
+      const id = style.getAttribute('ss_ID') || style.getAttribute('ID') || '';
       const numberFormatEl = style.querySelector('NumberFormat');
-      const numberFormat = numberFormatEl?.getAttribute('ss:Format') || null;
+      const numberFormat = numberFormatEl?.getAttribute('ss_Format') || numberFormatEl?.getAttribute('Format') || null;
       const fontEl = style.querySelector('Font');
-      const isBold = fontEl?.getAttribute('ss:Bold') === '1';
+      const isBold = fontEl?.getAttribute('ss_Bold') === '1' || fontEl?.getAttribute('Bold') === '1';
 
       styleMap.set(id, {
         id,
@@ -292,6 +309,7 @@ export function parseChiefArchitectXML(xmlContent: string): ChiefArchitectParseR
 
     // Process rows
     const rows = doc.querySelectorAll('Row');
+    console.log(`[ChiefArchitect Parser] Found ${styles.length} styles, ${rows.length} rows`);
     let currentClassification = '';
     let currentClassificationEs = '';
 
@@ -301,7 +319,7 @@ export function parseChiefArchitectXML(xmlContent: string): ChiefArchitectParseR
 
       // Get first cell
       const firstCell = cells[0];
-      const firstCellStyle = firstCell.getAttribute('ss:StyleID') || '';
+      const firstCellStyle = firstCell.getAttribute('ss_StyleID') || firstCell.getAttribute('StyleID') || '';
       const firstCellText = getCellText(firstCell);
       const firstCellStyleInfo = styleMap.get(firstCellStyle);
 
@@ -349,7 +367,7 @@ export function parseChiefArchitectXML(xmlContent: string): ChiefArchitectParseR
       const getCell = (idx: number): Element | null => {
         // Cells are 0-indexed in our array, but may have ss:Index attributes
         for (let i = 0; i < cells.length; i++) {
-          const indexAttr = cells[i].getAttribute('ss:Index');
+          const indexAttr = cells[i].getAttribute('ss_Index') || cells[i].getAttribute('Index');
           if (indexAttr && parseInt(indexAttr) === idx) {
             return cells[i];
           }
@@ -368,7 +386,9 @@ export function parseChiefArchitectXML(xmlContent: string): ChiefArchitectParseR
       const description = descriptionCell ? getCellText(descriptionCell) : '';
       const size = sizeCell ? getCellText(sizeCell) : '';
       const countRaw = countCell ? getCellNumber(countCell) : null;
-      const floor = floorCell ? getCellNumber(floorCell) : null;
+      const floorNum = floorCell ? getCellNumber(floorCell) : null;
+      const floorText = floorCell ? getCellText(floorCell) : '';
+      const floor = floorNum ?? (floorText || null);
       const supplier = supplierCell ? getCellText(supplierCell) : '';
       const accountingCode = accountingCodeCell ? getCellText(accountingCodeCell) : '';
 
@@ -378,7 +398,7 @@ export function parseChiefArchitectXML(xmlContent: string): ChiefArchitectParseR
       result.totalRows++;
 
       // Determine unit from the Count cell's style
-      const countCellStyle = countCell?.getAttribute('ss:StyleID') || '';
+      const countCellStyle = countCell?.getAttribute('ss_StyleID') || countCell?.getAttribute('StyleID') || '';
       const countStyleInfo = styleMap.get(countCellStyle);
       const countUnit: CountUnit = countStyleInfo?.unit || 'each';
 

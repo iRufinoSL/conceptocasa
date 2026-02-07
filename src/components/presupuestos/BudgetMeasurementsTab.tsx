@@ -969,6 +969,7 @@ export function BudgetMeasurementsTab({ budgetId, isAdmin }: BudgetMeasurementsT
               allMeasurements={measurements}
               isAdmin={isAdmin}
               onDataChanged={fetchData}
+              onOpenImport={() => setChiefImportOpen(true)}
             />
           ) : viewMode === 'grouped' ? (
             <MeasurementsWorkAreaGroupedView
@@ -1412,7 +1413,11 @@ export function BudgetMeasurementsTab({ budgetId, isAdmin }: BudgetMeasurementsT
         onOpenChange={setChiefImportOpen}
         budgetId={budgetId}
         existingMeasurementNames={new Set(measurements.map(m => m.name.toLowerCase().trim()))}
-        onImportComplete={fetchData}
+        onImportComplete={() => {
+          fetchData();
+          // Auto-switch to Chief view after successful import
+          setViewMode('chief');
+        }}
       />
     </div>
   );

@@ -25,6 +25,8 @@ import {
   type TextOverlay,
   type PageOverlays,
 } from '@/lib/pdf-overlay-export';
+import * as pdfjsLib from 'pdfjs-dist';
+import { ensurePdfjsWorker } from '@/lib/pdfjs-worker';
 
 interface Template {
   id: string;
@@ -32,6 +34,31 @@ interface Template {
   page_count: number;
   page_image_paths: string[];
   original_file_path: string;
+}
+
+/** Extracted text item with position and font info */
+interface PdfTextItem {
+  /** X position as percentage of page width (0-100) */
+  xPct: number;
+  /** Y position as percentage of page height (0-100) */
+  yPct: number;
+  text: string;
+  fontSize: number;
+  fontFamily: 'helvetica' | 'times' | 'courier';
+  bold: boolean;
+}
+
+/** Map font name from PDF to our supported families */
+function mapFontFamily(fontName: string): 'helvetica' | 'times' | 'courier' {
+  const lower = fontName.toLowerCase();
+  if (lower.includes('courier') || lower.includes('mono')) return 'courier';
+  if (lower.includes('times') || lower.includes('serif') || lower.includes('roman')) return 'times';
+  return 'helvetica';
+}
+
+function isBoldFont(fontName: string): boolean {
+  const lower = fontName.toLowerCase();
+  return lower.includes('bold') || lower.includes('black') || lower.includes('heavy');
 }
 
 interface PdfOverlayEditorProps {
@@ -56,9 +83,13 @@ export function PdfOverlayEditor({ template, onClose }: PdfOverlayEditorProps) {
 
   const imageContainerRef = useRef<HTMLDivElement>(null);
 
-  // Load all page images
+  /** Extracted text items per page for font detection */
+  const [textItemsByPage, setTextItemsByPage] = useState<Map<number, PdfTextItem[]>>(new Map());
+
+  // Load all page images + extract PDF text for font detection
   useEffect(() => {
     loadAllPageImages();
+    extractPdfTextItems();
   }, [template]);
 
   const loadAllPageImages = async () => {
@@ -88,6 +119,79 @@ export function PdfOverlayEditor({ template, onClose }: PdfOverlayEditorProps) {
       setLoading(false);
     }
   };
+
+  /** Extract text items from the original PDF for font detection */
+  const extractPdfTextItems = async () => {
+    try {
+      ensurePdfjsWorker();
+      const { data: urlData, error: urlError } = await supabase.storage
+        .from('project-documents')
+        .createSignedUrl(template.original_file_path, 3600);
+      if (urlError || !urlData?.signedUrl) return;
+
+      const loadingTask = pdfjsLib.getDocument(urlData.signedUrl);
+      const pdf = await loadingTask.promise;
+      const itemsMap = new Map<number, PdfTextItem[]>();
+
+      for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+        const page = await pdf.getPage(pageNum);
+        const viewport = page.getViewport({ scale: 1 });
+        const textContent = await page.getTextContent();
+        const items: PdfTextItem[] = [];
+
+        for (const item of textContent.items) {
+          if (!('str' in item) || !item.str.trim()) continue;
+          const tx = item.transform;
+          // tx[4] = x, tx[5] = y (from bottom), tx[0] = scaleX (≈fontSize)
+          const x = tx[4];
+          const y = tx[5];
+          const fontSize = Math.abs(tx[0]) || Math.abs(tx[3]) || 12;
+          const fontName = item.fontName || '';
+
+          items.push({
+            xPct: (x / viewport.width) * 100,
+            yPct: ((viewport.height - y) / viewport.height) * 100, // flip Y
+            text: item.str,
+            fontSize: Math.round(fontSize),
+            fontFamily: mapFontFamily(fontName),
+            bold: isBoldFont(fontName),
+          });
+        }
+        itemsMap.set(pageNum - 1, items);
+      }
+      setTextItemsByPage(itemsMap);
+    } catch (err) {
+      console.error('Error extracting PDF text for font detection:', err);
+      // Non-critical: overlays will use defaults
+    }
+  };
+
+  /** Find the nearest text item to a given position on the current page */
+  const findNearestTextItem = useCallback(
+    (xPct: number, yPct: number): PdfTextItem | null => {
+      const items = textItemsByPage.get(currentPage);
+      if (!items || items.length === 0) return null;
+
+      let nearest: PdfTextItem | null = null;
+      let minDist = Infinity;
+
+      for (const item of items) {
+        // Weight Y distance more since text lines are horizontal
+        const dx = item.xPct - xPct;
+        const dy = (item.yPct - yPct) * 2;
+        const dist = dx * dx + dy * dy;
+        if (dist < minDist) {
+          minDist = dist;
+          nearest = item;
+        }
+      }
+
+      // Only use if reasonably close (within ~8% of page)
+      if (minDist > 8 * 8 * 5) return null;
+      return nearest;
+    },
+    [currentPage, textItemsByPage]
+  );
 
   const currentOverlays = overlaysByPage.get(currentPage) || [];
 
@@ -135,15 +239,18 @@ export function PdfOverlayEditor({ template, onClose }: PdfOverlayEditorProps) {
       const xPct = ((e.clientX - imgRect.left) / imgRect.width) * 100;
       const yPct = ((e.clientY - imgRect.top) / imgRect.height) * 100;
 
+      // Detect font from nearest original text
+      const nearest = findNearestTextItem(xPct, yPct);
+
       const newOverlay: TextOverlay = {
         id: crypto.randomUUID(),
         x: Math.max(0, Math.min(xPct, 90)),
         y: Math.max(0, Math.min(yPct, 95)),
         width: 25,
-        text: 'Texto editable',
-        fontSize: 11,
-        fontFamily: 'helvetica',
-        bold: false,
+        text: nearest?.text || 'Texto editable',
+        fontSize: nearest?.fontSize || 11,
+        fontFamily: nearest?.fontFamily || 'helvetica',
+        bold: nearest?.bold || false,
         color: '#000000',
       };
 
@@ -157,7 +264,7 @@ export function PdfOverlayEditor({ template, onClose }: PdfOverlayEditorProps) {
       setSelectedOverlayId(newOverlay.id);
       setIsAddingMode(false);
     },
-    [isAddingMode, currentPage]
+    [isAddingMode, currentPage, findNearestTextItem]
   );
 
   // Drag state

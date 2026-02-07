@@ -369,14 +369,14 @@ export function DocumentTemplatesTab() {
   const [cloningWord, setCloningWord] = useState(false);
 
   const handleCloneToWord = async (template: Template) => {
-    if (template.page_image_paths.length === 0) {
-      toast.error('La plantilla no tiene páginas renderizadas');
+    if (!template.original_file_path) {
+      toast.error('La plantilla no tiene archivo PDF original');
       return;
     }
     setCloningWord(true);
     try {
-      await cloneTemplateToWord(template.page_image_paths, template.name);
-      toast.success('Documento Word generado correctamente');
+      await cloneTemplateToWord(template.original_file_path, template.name);
+      toast.success('Documento Word editable generado correctamente');
     } catch (err: any) {
       console.error('Error cloning to Word:', err);
       toast.error(err?.message || 'Error al clonar a Word');

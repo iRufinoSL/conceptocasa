@@ -3,11 +3,11 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { toast } from 'sonner';
-import { Search, Trash2, FileCode2, AlertTriangle, CheckCircle2, Layers } from 'lucide-react';
+import { Search, Trash2, FileCode2, AlertTriangle, CheckCircle2, Layers, ChevronRight, ChevronDown } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { formatNumber } from '@/lib/format-utils';
 import { searchMatch } from '@/lib/search-utils';
@@ -21,6 +21,9 @@ interface Measurement {
   measurement_unit: string | null;
   source: string | null;
   source_classification: string | null;
+  floor: string | null;
+  size_text: string | null;
+  count_raw: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -42,14 +45,14 @@ export function ChiefMeasurementsView({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [deleteMode, setDeleteMode] = useState<'selected' | 'duplicates'>('selected');
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set(['__all__']));
 
   // Filter measurements from ChiefArchitect source
   const chiefMeasurements = useMemo(() => {
     return measurements.filter(m => m.source === 'chief_architect');
   }, [measurements]);
 
-  // Detect duplicates: measurements with the same name (case-insensitive)
+  // Detect duplicates
   const duplicateMap = useMemo(() => {
     const nameCount = new Map<string, string[]>();
     allMeasurements.forEach(m => {
@@ -68,11 +71,9 @@ export function ChiefMeasurementsView({
     return ids.length > 1;
   }, [duplicateMap]);
 
-  // Get duplicate IDs for a measurement (excluding itself)
-  const getDuplicateIds = useCallback((measurement: Measurement): string[] => {
+  const getDuplicateCount = useCallback((measurement: Measurement): number => {
     const key = measurement.name.toLowerCase().trim();
-    const ids = duplicateMap.get(key) || [];
-    return ids.filter(id => id !== measurement.id);
+    return (duplicateMap.get(key) || []).length;
   }, [duplicateMap]);
 
   // Filter by search
@@ -81,7 +82,9 @@ export function ChiefMeasurementsView({
     return chiefMeasurements.filter(m =>
       searchMatch(m.name, searchTerm) ||
       searchMatch(m.source_classification, searchTerm) ||
-      searchMatch(m.measurement_unit, searchTerm)
+      searchMatch(m.measurement_unit, searchTerm) ||
+      searchMatch(m.size_text, searchTerm) ||
+      searchMatch(m.floor, searchTerm)
     );
   }, [chiefMeasurements, searchTerm]);
 
@@ -98,6 +101,15 @@ export function ChiefMeasurementsView({
     return groups;
   }, [filteredMeasurements]);
 
+  // Auto-expand all groups on first load
+  useMemo(() => {
+    if (expandedGroups.has('__all__')) {
+      const allKeys = new Set(Array.from(groupedMeasurements.keys()));
+      allKeys.add('__all__');
+      setExpandedGroups(allKeys);
+    }
+  }, [groupedMeasurements]);
+
   // Stats
   const totalCount = chiefMeasurements.length;
   const duplicateCount = chiefMeasurements.filter(m => isDuplicate(m)).length;
@@ -107,16 +119,21 @@ export function ChiefMeasurementsView({
   const toggleSelection = (id: string) => {
     setSelectedIds(prev => {
       const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       return next;
     });
   };
 
-  const toggleAll = () => {
+  const selectDuplicates = () => {
+    const duplicateIds = new Set<string>();
+    chiefMeasurements.forEach(m => {
+      if (isDuplicate(m)) duplicateIds.add(m.id);
+    });
+    setSelectedIds(duplicateIds);
+  };
+
+  const selectAll = () => {
     const allSelected = filteredMeasurements.every(m => selectedIds.has(m.id));
     if (allSelected) {
       setSelectedIds(new Set());
@@ -125,29 +142,35 @@ export function ChiefMeasurementsView({
     }
   };
 
-  const selectDuplicates = () => {
-    const duplicateIds = new Set<string>();
-    chiefMeasurements.forEach(m => {
-      if (isDuplicate(m)) {
-        duplicateIds.add(m.id);
-      }
+  const toggleGroup = (classification: string) => {
+    setExpandedGroups(prev => {
+      const next = new Set(prev);
+      if (next.has(classification)) next.delete(classification);
+      else next.add(classification);
+      return next;
     });
-    setSelectedIds(duplicateIds);
   };
 
-  // Delete handlers
+  const expandAll = () => {
+    const allKeys = new Set(Array.from(groupedMeasurements.keys()));
+    allKeys.add('__all__');
+    setExpandedGroups(allKeys);
+  };
+
+  const collapseAll = () => {
+    setExpandedGroups(new Set());
+  };
+
+  // Delete handler
   const handleDeleteSelected = async () => {
     if (selectedIds.size === 0) return;
-
     setIsDeleting(true);
     try {
       const { error } = await supabase
         .from('budget_measurements')
         .delete()
         .in('id', Array.from(selectedIds));
-
       if (error) throw error;
-
       toast.success(`${selectedIds.size} mediciones eliminadas`);
       setSelectedIds(new Set());
       setDeleteDialogOpen(false);
@@ -208,125 +231,154 @@ export function ChiefMeasurementsView({
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Buscar por nombre, clasificación..."
+            placeholder="Buscar por descripción, clasificación, planta, medida..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="pl-10"
           />
         </div>
-        {isAdmin && (
-          <div className="flex gap-2">
-            {duplicateCount > 0 && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={selectDuplicates}
-              >
-                <AlertTriangle className="h-4 w-4 mr-1" />
-                Seleccionar duplicadas ({duplicateCount})
-              </Button>
-            )}
-            {selectedIds.size > 0 && (
-              <Button
-                variant="destructive"
-                size="sm"
-                onClick={() => {
-                  setDeleteMode('selected');
-                  setDeleteDialogOpen(true);
-                }}
-              >
-                <Trash2 className="h-4 w-4 mr-1" />
-                Eliminar seleccionadas ({selectedIds.size})
-              </Button>
-            )}
-          </div>
-        )}
+        <div className="flex gap-2 flex-wrap">
+          <Button variant="outline" size="sm" onClick={expandAll}>
+            Expandir todo
+          </Button>
+          <Button variant="outline" size="sm" onClick={collapseAll}>
+            Contraer todo
+          </Button>
+          {isAdmin && duplicateCount > 0 && (
+            <Button variant="outline" size="sm" onClick={selectDuplicates}>
+              <AlertTriangle className="h-4 w-4 mr-1" />
+              Seleccionar duplicadas ({duplicateCount})
+            </Button>
+          )}
+          {isAdmin && (
+            <Button variant="outline" size="sm" onClick={selectAll}>
+              {filteredMeasurements.every(m => selectedIds.has(m.id)) ? 'Deseleccionar todo' : 'Seleccionar todo'}
+            </Button>
+          )}
+          {isAdmin && selectedIds.size > 0 && (
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => setDeleteDialogOpen(true)}
+            >
+              <Trash2 className="h-4 w-4 mr-1" />
+              Eliminar ({selectedIds.size})
+            </Button>
+          )}
+        </div>
       </div>
 
-      {/* Table */}
-      <div className="rounded-md border">
-        <ScrollArea className="max-h-[600px]">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                {isAdmin && (
-                  <TableHead className="w-10">
-                    <Checkbox
-                      checked={filteredMeasurements.length > 0 && filteredMeasurements.every(m => selectedIds.has(m.id))}
-                      onCheckedChange={toggleAll}
-                    />
-                  </TableHead>
-                )}
-                <TableHead>Nombre</TableHead>
-                <TableHead className="text-right">Uds</TableHead>
-                <TableHead>Ud Medida</TableHead>
-                <TableHead>Estado</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {Array.from(groupedMeasurements.entries()).map(([classification, items]) => (
-                <>
-                  {/* Classification header */}
-                  <TableRow key={`cls-${classification}`} className="bg-muted/50">
-                    <TableCell colSpan={isAdmin ? 5 : 4} className="font-semibold text-sm py-2">
-                      {classification}
-                      <Badge variant="secondary" className="ml-2 text-xs">
-                        {items.length}
+      {/* Hierarchical list */}
+      <ScrollArea className="max-h-[600px]">
+        <div className="space-y-2">
+          {Array.from(groupedMeasurements.entries()).map(([classification, items]) => {
+            const isExpanded = expandedGroups.has(classification);
+            const groupDuplicates = items.filter(m => isDuplicate(m)).length;
+            const groupSelectedCount = items.filter(m => selectedIds.has(m.id)).length;
+
+            return (
+              <Collapsible
+                key={classification}
+                open={isExpanded}
+                onOpenChange={() => toggleGroup(classification)}
+              >
+                {/* Classification Header */}
+                <CollapsibleTrigger asChild>
+                  <div className="flex items-center gap-2 px-3 py-2.5 bg-muted/60 rounded-md cursor-pointer hover:bg-muted/80 transition-colors border">
+                    {isExpanded ? (
+                      <ChevronDown className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                    ) : (
+                      <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                    )}
+                    <span className="font-semibold text-sm flex-1">{classification}</span>
+                    <Badge variant="secondary" className="text-xs">
+                      {items.length} mediciones
+                    </Badge>
+                    {groupDuplicates > 0 && (
+                      <Badge variant="outline" className="text-xs bg-orange-500/10 text-orange-700 border-orange-300">
+                        {groupDuplicates} dup.
                       </Badge>
-                    </TableCell>
-                  </TableRow>
+                    )}
+                    {groupSelectedCount > 0 && (
+                      <Badge variant="outline" className="text-xs bg-primary/10">
+                        {groupSelectedCount} sel.
+                      </Badge>
+                    )}
+                  </div>
+                </CollapsibleTrigger>
 
-                  {/* Measurement rows */}
-                  {items.map(m => {
-                    const hasDuplicates = isDuplicate(m);
-                    const dupeIds = getDuplicateIds(m);
+                {/* Measurement Items */}
+                <CollapsibleContent>
+                  <div className="ml-2 mt-1 border rounded-md overflow-hidden">
+                    {/* Table header */}
+                    <div className="grid grid-cols-[auto_1fr_80px_1fr_80px_80px_80px] gap-1 px-3 py-2 bg-muted/30 border-b text-xs font-medium text-muted-foreground">
+                      {isAdmin && <div className="w-6" />}
+                      <div>Descripción</div>
+                      <div>Planta</div>
+                      <div>Medida (Size)</div>
+                      <div className="text-right">Uds (Count)</div>
+                      <div className="text-right">Valor</div>
+                      <div className="text-center">Ud Medida</div>
+                    </div>
 
-                    return (
-                      <TableRow
-                        key={m.id}
-                        className={hasDuplicates ? 'bg-orange-500/5' : undefined}
-                      >
-                        {isAdmin && (
-                          <TableCell>
-                            <Checkbox
-                              checked={selectedIds.has(m.id)}
-                              onCheckedChange={() => toggleSelection(m.id)}
-                            />
-                          </TableCell>
-                        )}
-                        <TableCell className="font-medium text-sm max-w-[300px]">
-                          <span className="truncate block" title={m.name}>{m.name}</span>
-                        </TableCell>
-                        <TableCell className="text-right text-sm">
-                          {m.manual_units !== null ? formatNumber(m.manual_units) : '-'}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline" className="text-xs">
-                            {m.measurement_unit || 'ud'}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          {hasDuplicates ? (
-                            <Badge variant="outline" className="text-xs bg-orange-500/10 text-orange-700 border-orange-300">
-                              <AlertTriangle className="h-3 w-3 mr-1" />
-                              Duplicada ({dupeIds.length + 1} apariciones)
-                            </Badge>
-                          ) : (
-                            <Badge variant="outline" className="text-xs bg-green-500/10 text-green-700 border-green-300">
-                              <CheckCircle2 className="h-3 w-3 mr-1" />
-                              Única
-                            </Badge>
+                    {/* Data rows */}
+                    {items.map((m, idx) => {
+                      const hasDuplicates = isDuplicate(m);
+                      const dupeCount = getDuplicateCount(m);
+
+                      return (
+                        <div
+                          key={m.id}
+                          className={`grid grid-cols-[auto_1fr_80px_1fr_80px_80px_80px] gap-1 px-3 py-2 text-sm items-center border-b last:border-b-0 ${
+                            hasDuplicates ? 'bg-orange-500/5' : idx % 2 === 0 ? 'bg-background' : 'bg-muted/10'
+                          } hover:bg-accent/30 transition-colors`}
+                        >
+                          {isAdmin && (
+                            <div className="w-6">
+                              <Checkbox
+                                checked={selectedIds.has(m.id)}
+                                onCheckedChange={() => toggleSelection(m.id)}
+                              />
+                            </div>
                           )}
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </>
-              ))}
-            </TableBody>
-          </Table>
-        </ScrollArea>
-      </div>
+                          <div className="min-w-0">
+                            <div className="truncate font-medium" title={m.name}>
+                              {m.name}
+                            </div>
+                            {hasDuplicates && (
+                              <span className="text-xs text-orange-600 flex items-center gap-0.5 mt-0.5">
+                                <AlertTriangle className="h-3 w-3 flex-shrink-0" />
+                                Duplicada ({dupeCount} apariciones)
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {m.floor || '-'}
+                          </div>
+                          <div className="text-xs text-muted-foreground truncate min-w-0" title={m.size_text || ''}>
+                            {m.size_text || '-'}
+                          </div>
+                          <div className="text-right text-xs">
+                            {m.count_raw !== null ? formatNumber(m.count_raw) : '-'}
+                          </div>
+                          <div className="text-right font-medium text-xs">
+                            {m.manual_units !== null ? formatNumber(m.manual_units) : '-'}
+                          </div>
+                          <div className="text-center">
+                            <Badge variant="outline" className="text-xs">
+                              {m.measurement_unit || 'ud'}
+                            </Badge>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </CollapsibleContent>
+              </Collapsible>
+            );
+          })}
+        </div>
+      </ScrollArea>
 
       {/* Delete confirmation */}
       <DeleteConfirmDialog
@@ -335,7 +387,7 @@ export function ChiefMeasurementsView({
         onConfirm={handleDeleteSelected}
         isDeleting={isDeleting}
         title={`¿Eliminar ${selectedIds.size} mediciones?`}
-        description={`Se eliminarán permanentemente ${selectedIds.size} mediciones seleccionadas. Las actividades relacionadas serán desvinculadas. Esta acción no se puede deshacer.`}
+        description={`Se eliminarán permanentemente ${selectedIds.size} mediciones seleccionadas. Esta acción no se puede deshacer.`}
       />
     </div>
   );

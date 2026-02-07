@@ -26,6 +26,9 @@ interface Measurement {
   measurement_unit: string | null;
   source?: string | null;
   source_classification?: string | null;
+  floor?: string | null;
+  size_text?: string | null;
+  count_raw?: number | null;
   created_at: string;
   updated_at: string;
 }

@@ -156,6 +156,9 @@ export function ChiefArchitectImportDialog({
         measurement_unit: m.finalUnit,
         source: 'chief_architect' as string,
         source_classification: m.classificationEs,
+        floor: m.floor !== null ? String(m.floor) : null,
+        size_text: m.size || null,
+        count_raw: m.countRaw,
       }));
 
       const { data: inserted, error } = await supabase

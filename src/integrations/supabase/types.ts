@@ -2020,6 +2020,139 @@ export type Database = {
         }
         Relationships: []
       }
+      document_template_outputs: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          edited_data: Json
+          id: string
+          name: string
+          output_file_path: string | null
+          output_format: string
+          template_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          edited_data?: Json
+          id?: string
+          name: string
+          output_file_path?: string | null
+          output_format?: string
+          template_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          edited_data?: Json
+          id?: string
+          name?: string
+          output_file_path?: string | null
+          output_format?: string
+          template_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "document_template_outputs_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "document_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      document_template_zones: {
+        Row: {
+          created_at: string
+          default_data: Json
+          font_family: string
+          font_size: number
+          id: string
+          page_number: number
+          table_headers: Json
+          template_id: string
+          zone_height: number
+          zone_width: number
+          zone_x: number
+          zone_y: number
+        }
+        Insert: {
+          created_at?: string
+          default_data?: Json
+          font_family?: string
+          font_size?: number
+          id?: string
+          page_number?: number
+          table_headers?: Json
+          template_id: string
+          zone_height: number
+          zone_width: number
+          zone_x: number
+          zone_y: number
+        }
+        Update: {
+          created_at?: string
+          default_data?: Json
+          font_family?: string
+          font_size?: number
+          id?: string
+          page_number?: number
+          table_headers?: Json
+          template_id?: string
+          zone_height?: number
+          zone_width?: number
+          zone_x?: number
+          zone_y?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "document_template_zones_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "document_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      document_templates: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          description: string | null
+          id: string
+          name: string
+          original_file_path: string
+          original_file_type: string | null
+          page_count: number
+          page_image_paths: Json
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          name: string
+          original_file_path: string
+          original_file_type?: string | null
+          page_count?: number
+          page_image_paths?: Json
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          name?: string
+          original_file_path?: string
+          original_file_type?: string | null
+          page_count?: number
+          page_image_paths?: Json
+          updated_at?: string
+        }
+        Relationships: []
+      }
       email_attachments: {
         Row: {
           created_at: string

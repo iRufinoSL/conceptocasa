@@ -52,6 +52,7 @@ import {
 } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { DocumentTemplatesTab } from '@/components/documentos/DocumentTemplatesTab';
 import { RichTextEditor } from '@/components/ui/rich-text-editor';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import DOMPurify from 'dompurify';
@@ -156,6 +157,9 @@ export default function Documentos() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<string>('all');
   const [filterProject, setFilterProject] = useState<string>('all');
+
+  // Main section tab
+  const [mainTab, setMainTab] = useState<'documentos' | 'plantillas'>('documentos');
 
   // Custom document types
   const [customTypes, setCustomTypes] = useState<string[]>([]);
@@ -775,6 +779,19 @@ export default function Documentos() {
 
       {/* Main Content */}
       <main className="container mx-auto px-4 py-8">
+        <Tabs value={mainTab} onValueChange={(v) => setMainTab(v as 'documentos' | 'plantillas')} className="space-y-6">
+          <TabsList className="grid w-full grid-cols-2 max-w-md">
+            <TabsTrigger value="documentos" className="gap-2">
+              <FileText className="h-4 w-4" />
+              Documentos
+            </TabsTrigger>
+            <TabsTrigger value="plantillas" className="gap-2">
+              <Upload className="h-4 w-4" />
+              Plantillas
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="documentos" className="space-y-6 mt-0">
         {/* Filters */}
         <Card className="mb-6">
           <CardHeader className="pb-4">
@@ -1165,6 +1182,12 @@ export default function Documentos() {
             )}
           </CardContent>
         </Card>
+          </TabsContent>
+
+          <TabsContent value="plantillas" className="mt-0">
+            <DocumentTemplatesTab />
+          </TabsContent>
+        </Tabs>
       </main>
 
       {/* Upload Dialog */}

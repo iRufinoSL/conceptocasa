@@ -31,10 +31,12 @@ import {
   FileText,
   ArrowLeft,
   X,
+  FileDown,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { TemplateZoneCanvas } from './TemplateZoneCanvas';
 import { TemplateGenerateDialog } from './TemplateGenerateDialog';
+import { cloneTemplateToWord } from '@/lib/clone-to-word';
 
 ensurePdfjsWorker();
 
@@ -364,6 +366,25 @@ export function DocumentTemplatesTab() {
     setGenerateOpen(true);
   };
 
+  const [cloningWord, setCloningWord] = useState(false);
+
+  const handleCloneToWord = async (template: Template) => {
+    if (template.page_image_paths.length === 0) {
+      toast.error('La plantilla no tiene páginas renderizadas');
+      return;
+    }
+    setCloningWord(true);
+    try {
+      await cloneTemplateToWord(template.page_image_paths, template.name);
+      toast.success('Documento Word generado correctamente');
+    } catch (err: any) {
+      console.error('Error cloning to Word:', err);
+      toast.error(err?.message || 'Error al clonar a Word');
+    } finally {
+      setCloningWord(false);
+    }
+  };
+
   // Zone header/data editing helpers
   const addHeader = () => {
     setZoneHeaders([...zoneHeaders, '']);
@@ -416,7 +437,17 @@ export function DocumentTemplatesTab() {
               </p>
             </div>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => handleCloneToWord(selectedTemplate)}
+              disabled={cloningWord}
+              className="gap-1"
+            >
+              <FileDown className="h-4 w-4" />
+              {cloningWord ? 'Generando...' : 'Clonar a Word'}
+            </Button>
             <Button
               variant={isDefiningZone ? 'destructive' : 'outline'}
               onClick={() => setIsDefiningZone(!isDefiningZone)}
@@ -707,11 +738,13 @@ export function DocumentTemplatesTab() {
           {templates.map((template) => (
             <Card
               key={template.id}
-              className="cursor-pointer hover:border-primary/50 transition-colors"
-              onClick={() => openTemplate(template)}
+              className="hover:border-primary/50 transition-colors"
             >
               <CardContent className="p-4">
-                <div className="flex items-start gap-3">
+                <div
+                  className="flex items-start gap-3 cursor-pointer"
+                  onClick={() => openTemplate(template)}
+                >
                   <div className="p-2 rounded-lg bg-primary/10 shrink-0">
                     <FileText className="h-5 w-5 text-primary" />
                   </div>
@@ -729,6 +762,33 @@ export function DocumentTemplatesTab() {
                       </p>
                     )}
                   </div>
+                </div>
+                <div className="mt-3 pt-3 border-t flex gap-2">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    className="gap-1 flex-1"
+                    disabled={cloningWord}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleCloneToWord(template);
+                    }}
+                  >
+                    <FileDown className="h-3 w-3" />
+                    {cloningWord ? 'Generando...' : 'Clonar a Word'}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="gap-1"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openTemplate(template);
+                    }}
+                  >
+                    <FileText className="h-3 w-3" />
+                    Zonas
+                  </Button>
                 </div>
               </CardContent>
             </Card>

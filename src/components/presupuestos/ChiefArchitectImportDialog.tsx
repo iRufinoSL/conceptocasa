@@ -1,12 +1,11 @@
 import { useState, useRef, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from 'sonner';
 import { FileUp, X, AlertTriangle, CheckCircle2, ArrowRightLeft, Search } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
@@ -204,18 +203,22 @@ export function ChiefArchitectImportDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-5xl max-h-[90vh] flex flex-col">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <FileUp className="h-5 w-5" />
-            Importar Mediciones desde ChiefArchitect
-          </DialogTitle>
-          <DialogDescription>
-            Sube un archivo XML exportado desde ChiefArchitect. Las mediciones se analizarán y convertirán automáticamente a las unidades correctas.
-          </DialogDescription>
-        </DialogHeader>
+      <DialogContent className="max-w-5xl max-h-[90vh] overflow-hidden flex flex-col p-0">
+        {/* Header - fixed at top */}
+        <div className="flex-shrink-0 px-6 pt-6 pb-2">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileUp className="h-5 w-5" />
+              Importar Mediciones desde ChiefArchitect
+            </DialogTitle>
+            <DialogDescription>
+              Sube un archivo XML exportado desde ChiefArchitect. Las mediciones se analizarán y convertirán automáticamente a las unidades correctas.
+            </DialogDescription>
+          </DialogHeader>
+        </div>
 
-        <div className="flex-1 overflow-hidden flex flex-col gap-4 py-2">
+        {/* Controls area - fixed */}
+        <div className="flex-shrink-0 px-6 space-y-3">
           {/* File Input */}
           <div className="flex items-center gap-2">
             <Label className="sr-only">Archivo XML</Label>
@@ -281,27 +284,30 @@ export function ChiefArchitectImportDialog({
               />
             </div>
           )}
+        </div>
 
+        {/* Scrollable content area - takes remaining space */}
+        <div className="flex-1 min-h-0 overflow-y-auto px-6 py-2">
           {/* Measurements table */}
           {parseResult && parseResult.measurements.length > 0 && (
-            <ScrollArea className="flex-1 border rounded-md min-h-0">
+            <div className="border rounded-md">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-10">
+                    <TableHead className="w-10 sticky top-0 bg-background z-10">
                       <Checkbox
                         checked={filteredMeasurements.length > 0 && filteredMeasurements.every(m => selectedIds.has(m.id))}
                         onCheckedChange={toggleAll}
                       />
                     </TableHead>
-                    <TableHead className="w-14">ID</TableHead>
-                    <TableHead>Descripción</TableHead>
-                    <TableHead>Size</TableHead>
-                    <TableHead className="text-right">Count</TableHead>
-                    <TableHead className="text-right">Valor Final</TableHead>
-                    <TableHead>Ud</TableHead>
-                    <TableHead>Conversión</TableHead>
-                    <TableHead>Estado</TableHead>
+                    <TableHead className="w-14 sticky top-0 bg-background z-10">ID</TableHead>
+                    <TableHead className="sticky top-0 bg-background z-10">Descripción</TableHead>
+                    <TableHead className="sticky top-0 bg-background z-10">Size</TableHead>
+                    <TableHead className="text-right sticky top-0 bg-background z-10">Count</TableHead>
+                    <TableHead className="text-right sticky top-0 bg-background z-10">Valor Final</TableHead>
+                    <TableHead className="sticky top-0 bg-background z-10">Ud</TableHead>
+                    <TableHead className="sticky top-0 bg-background z-10">Conversión</TableHead>
+                    <TableHead className="sticky top-0 bg-background z-10">Estado</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -379,12 +385,12 @@ export function ChiefArchitectImportDialog({
                   ))}
                 </TableBody>
               </Table>
-            </ScrollArea>
+            </div>
           )}
 
           {/* No file yet */}
           {!parseResult && (
-            <div className="flex-1 flex items-center justify-center border-2 border-dashed rounded-lg p-8">
+            <div className="flex items-center justify-center border-2 border-dashed rounded-lg p-8 min-h-[200px]">
               <div className="text-center space-y-2">
                 <FileUp className="h-10 w-10 mx-auto text-muted-foreground" />
                 <p className="text-sm text-muted-foreground">
@@ -398,9 +404,9 @@ export function ChiefArchitectImportDialog({
           )}
         </div>
 
-        {/* STICKY IMPORT ACTION BAR - always visible */}
-        {parseResult && parseResult.measurements.length > 0 && (
-          <div className="flex-shrink-0 border-t bg-muted/30 -mx-6 -mb-6 px-6 py-4 rounded-b-lg">
+        {/* Footer - ALWAYS visible at bottom */}
+        <div className="flex-shrink-0 border-t bg-muted/30 px-6 py-4">
+          {parseResult && parseResult.measurements.length > 0 ? (
             <div className="flex items-center justify-between gap-4">
               <div className="text-sm text-muted-foreground">
                 <span className="font-medium text-foreground">{selectedIds.size}</span> de {parseResult.measurements.length} mediciones seleccionadas para importar
@@ -432,17 +438,14 @@ export function ChiefArchitectImportDialog({
                 </Button>
               </div>
             </div>
-          </div>
-        )}
-
-        {/* Show footer only when no parse result yet */}
-        {(!parseResult || parseResult.measurements.length === 0) && (
-          <DialogFooter className="flex-shrink-0">
-            <Button variant="outline" onClick={handleClose}>
-              Cancelar
-            </Button>
-          </DialogFooter>
-        )}
+          ) : (
+            <div className="flex justify-end">
+              <Button variant="outline" onClick={handleClose}>
+                Cancelar
+              </Button>
+            </div>
+          )}
+        </div>
       </DialogContent>
     </Dialog>
   );

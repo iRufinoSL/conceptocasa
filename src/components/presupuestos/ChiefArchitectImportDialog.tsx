@@ -54,13 +54,10 @@ export function ChiefArchitectImportDialog({
         result.errors.forEach(err => toast.error(err));
       }
 
-      // Auto-select all non-duplicate measurements
+      // Auto-select all measurements (duplicates shown with warning but selectable)
       const newSelected = new Set<string>();
       result.measurements.forEach(m => {
-        const isDuplicate = existingMeasurementNames.has(m.description.toLowerCase().trim());
-        if (!isDuplicate) {
-          newSelected.add(m.id);
-        }
+        newSelected.add(m.id);
       });
       setSelectedIds(newSelected);
 
@@ -335,7 +332,6 @@ export function ChiefArchitectImportDialog({
                               <Checkbox
                                 checked={selectedIds.has(m.id)}
                                 onCheckedChange={() => toggleSelection(m.id)}
-                                disabled={isDuplicate}
                               />
                             </TableCell>
                             <TableCell className="font-mono text-xs">{m.id}</TableCell>

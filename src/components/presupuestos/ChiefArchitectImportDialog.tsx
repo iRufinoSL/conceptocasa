@@ -252,7 +252,7 @@ export function ChiefArchitectImportDialog({
                 {parseResult.classifications.length} clasificaciones
               </Badge>
               <Badge variant="outline" className="bg-primary/10">
-                {selectedIds.size} seleccionadas
+                {selectedIds.size} seleccionadas para importar
               </Badge>
               {convertedCount > 0 && (
                 <Badge variant="outline" className="bg-amber-500/10 text-amber-700 border-amber-300">
@@ -263,7 +263,7 @@ export function ChiefArchitectImportDialog({
               {duplicateCount > 0 && (
                 <Badge variant="outline" className="bg-orange-500/10 text-orange-700 border-orange-300">
                   <AlertTriangle className="h-3 w-3 mr-1" />
-                  {duplicateCount} duplicadas
+                  {duplicateCount} duplicadas (ya existen)
                 </Badge>
               )}
             </div>
@@ -284,7 +284,7 @@ export function ChiefArchitectImportDialog({
 
           {/* Measurements table */}
           {parseResult && parseResult.measurements.length > 0 && (
-            <ScrollArea className="flex-1 border rounded-md">
+            <ScrollArea className="flex-1 border rounded-md min-h-0">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -398,27 +398,51 @@ export function ChiefArchitectImportDialog({
           )}
         </div>
 
-        <DialogFooter className="flex-shrink-0">
-          <Button variant="outline" onClick={handleClose}>
-            Cancelar
-          </Button>
-          <Button
-            onClick={handleImport}
-            disabled={!parseResult || selectedIds.size === 0 || isImporting}
-          >
-            {isImporting ? (
-              <>
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
-                Importando...
-              </>
-            ) : (
-              <>
-                <FileUp className="h-4 w-4 mr-2" />
-                Importar {selectedIds.size} mediciones
-              </>
-            )}
-          </Button>
-        </DialogFooter>
+        {/* STICKY IMPORT ACTION BAR - always visible */}
+        {parseResult && parseResult.measurements.length > 0 && (
+          <div className="flex-shrink-0 border-t bg-muted/30 -mx-6 -mb-6 px-6 py-4 rounded-b-lg">
+            <div className="flex items-center justify-between gap-4">
+              <div className="text-sm text-muted-foreground">
+                <span className="font-medium text-foreground">{selectedIds.size}</span> de {parseResult.measurements.length} mediciones seleccionadas para importar
+                {duplicateCount > 0 && (
+                  <span className="text-orange-600 ml-2">({duplicateCount} duplicadas excluidas)</span>
+                )}
+              </div>
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={handleClose}>
+                  Cancelar
+                </Button>
+                <Button
+                  onClick={handleImport}
+                  disabled={selectedIds.size === 0 || isImporting}
+                  size="lg"
+                  className="min-w-[200px]"
+                >
+                  {isImporting ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
+                      Importando...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="h-4 w-4 mr-2" />
+                      Guardar {selectedIds.size} mediciones
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Show footer only when no parse result yet */}
+        {(!parseResult || parseResult.measurements.length === 0) && (
+          <DialogFooter className="flex-shrink-0">
+            <Button variant="outline" onClick={handleClose}>
+              Cancelar
+            </Button>
+          </DialogFooter>
+        )}
       </DialogContent>
     </Dialog>
   );

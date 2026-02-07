@@ -33,6 +33,7 @@ interface ChiefMeasurementsViewProps {
   allMeasurements: Measurement[];
   isAdmin: boolean;
   onDataChanged: () => void;
+  onOpenImport?: () => void;
 }
 
 export function ChiefMeasurementsView({
@@ -40,6 +41,7 @@ export function ChiefMeasurementsView({
   allMeasurements,
   isAdmin,
   onDataChanged,
+  onOpenImport,
 }: ChiefMeasurementsViewProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -187,14 +189,20 @@ export function ChiefMeasurementsView({
     return (
       <Card>
         <CardContent className="py-12">
-          <div className="text-center space-y-2">
+          <div className="text-center space-y-4">
             <FileCode2 className="h-10 w-10 mx-auto text-muted-foreground" />
             <p className="text-muted-foreground">
               No hay mediciones importadas desde ChiefArchitect
             </p>
             <p className="text-xs text-muted-foreground">
-              Usa el botón "Mediciones Chief" para importar mediciones desde un archivo XML
+              Usa el botón "Importar Mediciones Chief" para importar desde un archivo XML
             </p>
+            {isAdmin && onOpenImport && (
+              <Button onClick={onOpenImport} variant="outline">
+                <FileCode2 className="h-4 w-4 mr-2" />
+                Importar Mediciones Chief
+              </Button>
+            )}
           </div>
         </CardContent>
       </Card>

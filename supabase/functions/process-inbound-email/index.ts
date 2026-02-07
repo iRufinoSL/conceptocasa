@@ -475,18 +475,24 @@ const handler = async (req: Request): Promise<Response> => {
       }
     }
 
-    // Send email notification to admins about new inbound email
+    // Send email/SMS notification to admins about new inbound email
     try {
       const resend = new Resend(resendApiKey);
       
-      // Get admin emails
+      // Get admin profiles with notification preferences
       const { data: adminProfiles } = await supabase
         .from("profiles")
-        .select("email, full_name")
+        .select("id, email, full_name, personal_notification_type, personal_notification_phone, personal_notification_email")
         .in("id", admins?.map(a => a.user_id) || []);
 
       if (adminProfiles && adminProfiles.length > 0) {
-        const adminEmails = adminProfiles.filter(p => p.email).map(p => p.email);
+        // --- Email notifications ---
+        const emailRecipients = adminProfiles.filter(p => {
+          const prefType = p.personal_notification_type || 'email';
+          return p.email && (prefType === 'email' || prefType === 'both');
+        });
+        
+        const adminEmails = emailRecipients.map(p => p.personal_notification_email || p.email);
         
         if (adminEmails.length > 0) {
           const attachmentInfo = attachmentRecords.length > 0 
@@ -519,10 +525,77 @@ const handler = async (req: Request): Promise<Response> => {
           
           console.log("Sent email notification to admins:", emailResult);
         }
+
+        // --- SMS notifications ---
+        const smsRecipients = adminProfiles.filter(p => {
+          const prefType = p.personal_notification_type || 'email';
+          return p.personal_notification_phone && (prefType === 'sms' || prefType === 'both');
+        });
+
+        if (smsRecipients.length > 0) {
+          const birdApiKey = Deno.env.get('BIRD_API_KEY');
+          
+          if (birdApiKey) {
+            // Get sender phone from company settings
+            const { data: companySettings } = await supabase
+              .from('company_settings')
+              .select('sms_sender_phone, whatsapp_phone')
+              .single();
+
+            const senderPhone = companySettings?.sms_sender_phone || 
+                                Deno.env.get('BIRD_SENDER_PHONE') || 
+                                companySettings?.whatsapp_phone;
+
+            if (senderPhone) {
+              let normalizedFrom = senderPhone.replace(/\s+/g, '');
+              if (!normalizedFrom.startsWith('+')) normalizedFrom = '+' + normalizedFrom;
+
+              const smsMessage = `📬 Nuevo email de ${fromName || fromEmail}: ${subjectField}`.substring(0, 160);
+
+              for (const recipient of smsRecipients) {
+                try {
+                  let normalizedTo = recipient.personal_notification_phone!.replace(/\s+/g, '');
+                  if (!normalizedTo.startsWith('+')) normalizedTo = '+' + normalizedTo;
+
+                  console.log(`Sending SMS alert to ${normalizedTo} for new email...`);
+
+                  const birdResponse = await fetch('https://api.bird.com/v2/send', {
+                    method: 'POST',
+                    headers: {
+                      'Authorization': `AccessKey ${birdApiKey}`,
+                      'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                      originator: normalizedFrom,
+                      recipients: [normalizedTo],
+                      body: smsMessage,
+                    }),
+                  });
+
+                  const birdData = await birdResponse.json();
+                  
+                  if (birdResponse.ok) {
+                    console.log(`SMS alert sent to ${normalizedTo}:`, birdData.id || birdData.messageId);
+                  } else {
+                    console.error(`SMS alert failed for ${normalizedTo}:`, JSON.stringify(birdData));
+                  }
+                } catch (smsErr) {
+                  console.error(`Error sending SMS to ${recipient.personal_notification_phone}:`, smsErr);
+                }
+              }
+            } else {
+              console.warn("No SMS sender phone configured - skipping SMS alerts");
+            }
+          } else {
+            console.warn("BIRD_API_KEY not configured - skipping SMS alerts");
+          }
+        } else {
+          console.log("No admins have SMS notifications enabled");
+        }
       }
     } catch (emailNotifError: any) {
-      console.error("Error sending email notification to admins:", emailNotifError);
-      // Don't fail the webhook if email notification fails
+      console.error("Error sending notifications to admins:", emailNotifError);
+      // Don't fail the webhook if notification fails
     }
 
     return new Response(

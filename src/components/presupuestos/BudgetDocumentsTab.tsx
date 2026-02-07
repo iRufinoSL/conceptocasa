@@ -1204,7 +1204,8 @@ export function BudgetDocumentsTab({ budgetId, projectId, projectName, isAdmin }
             </DialogTitle>
           </DialogHeader>
 
-          <div className="space-y-4">
+          <ScrollArea className="flex-1 min-h-0">
+          <div className="space-y-4 pr-4">
             <div className="space-y-2">
               <Label htmlFor="upload-name">Nombre del documento *</Label>
               <Input
@@ -1323,8 +1324,9 @@ export function BudgetDocumentsTab({ budgetId, projectId, projectName, isAdmin }
               <p className="text-xs text-muted-foreground">Máximo 50MB</p>
             </div>
           </div>
+          </ScrollArea>
 
-          <DialogFooter>
+          <DialogFooter className="flex-shrink-0 border-t pt-4 mt-2">
             <Button variant="outline" onClick={() => setUploadDialogOpen(false)}>
               Cancelar
             </Button>
@@ -1345,7 +1347,8 @@ export function BudgetDocumentsTab({ budgetId, projectId, projectName, isAdmin }
             </DialogTitle>
           </DialogHeader>
 
-          <div className="space-y-4">
+          <ScrollArea className="flex-1 min-h-0">
+          <div className="space-y-4 pr-4">
             <div className="space-y-2">
               <Label htmlFor="edit-name">Nombre del documento *</Label>
               <Input
@@ -1486,8 +1489,9 @@ export function BudgetDocumentsTab({ budgetId, projectId, projectName, isAdmin }
               </div>
             </div>
           </div>
+          </ScrollArea>
 
-          <DialogFooter>
+          <DialogFooter className="flex-shrink-0 border-t pt-4 mt-2">
             <Button variant="outline" onClick={() => setEditDialogOpen(false)}>
               Cancelar
             </Button>

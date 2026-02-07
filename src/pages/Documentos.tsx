@@ -1199,7 +1199,8 @@ export default function Documentos() {
               Nuevo documento
             </DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 py-4">
+          <ScrollArea className="flex-1 min-h-0">
+          <div className="space-y-4 py-4 pr-4">
             {/* Document Name */}
             <div className="space-y-2">
               <Label>Nombre del documento *</Label>
@@ -1355,7 +1356,8 @@ export default function Documentos() {
               </p>
             </div>
           </div>
-          <DialogFooter>
+          </ScrollArea>
+          <DialogFooter className="flex-shrink-0 border-t pt-4 mt-2">
             <Button
               variant="outline"
               onClick={() => {

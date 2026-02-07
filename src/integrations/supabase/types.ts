@@ -705,33 +705,42 @@ export type Database = {
       budget_measurements: {
         Row: {
           budget_id: string
+          count_raw: number | null
           created_at: string
+          floor: string | null
           id: string
           manual_units: number | null
           measurement_unit: string | null
           name: string
+          size_text: string | null
           source: string | null
           source_classification: string | null
           updated_at: string
         }
         Insert: {
           budget_id: string
+          count_raw?: number | null
           created_at?: string
+          floor?: string | null
           id?: string
           manual_units?: number | null
           measurement_unit?: string | null
           name: string
+          size_text?: string | null
           source?: string | null
           source_classification?: string | null
           updated_at?: string
         }
         Update: {
           budget_id?: string
+          count_raw?: number | null
           created_at?: string
+          floor?: string | null
           id?: string
           manual_units?: number | null
           measurement_unit?: string | null
           name?: string
+          size_text?: string | null
           source?: string | null
           source_classification?: string | null
           updated_at?: string

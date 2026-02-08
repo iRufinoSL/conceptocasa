@@ -536,8 +536,8 @@ const handler = async (req: Request): Promise<Response> => {
           const birdApiKey = Deno.env.get('BIRD_API_KEY');
           
           if (birdApiKey) {
-            const deepLink = `https://conceptocasa.lovable.app/crm?tab=comunicaciones&email=${emailRecord.id}`;
-            const smsMessage = `Nuevo email de ${fromName || fromEmail}: ${subjectField.substring(0, 60)}\n${deepLink}`.substring(0, 320);
+            const deepLink = `https://conceptocasa.lovable.app/r/email/${emailRecord.id}`;
+            const smsMessage = `Nuevo email de ${fromName || fromEmail}: ${subjectField.substring(0, 60)}\n${deepLink}`;
 
               for (const recipient of smsRecipients) {
                 try {

@@ -693,7 +693,7 @@ const handler = async (req: Request): Promise<Response> => {
         // Build a deep link: if there's an overdue task in a budget, link to it; otherwise link to agenda
         const firstTask = overdueTasks[0] || todayTasks[0];
         const taskDeepLink = firstTask?.budget_id 
-          ? `${appUrl}/presupuestos/${firstTask.budget_id}?tab=agenda&task=${firstTask.id}`
+          ? `${appUrl}/r/task/${firstTask.id}?b=${firstTask.budget_id}`
           : `${appUrl}/agenda`;
         const smsMessage = `ConceptoCasa: ${userTasks.length} tareas pendientes${overdueText}.\n${taskDeepLink}`;
         

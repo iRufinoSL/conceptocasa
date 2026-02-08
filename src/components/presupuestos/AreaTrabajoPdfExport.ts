@@ -13,6 +13,7 @@ interface AreaTask {
   activity_name: string;
   phase_code: string | null;
   task_status: string | null;
+  target_date: string | null;
   actual_start_date: string | null;
 }
 
@@ -170,7 +171,7 @@ export async function exportAreaTrabajoPdf(
     tableData.push([
       {
         content: `${displayName} (${group.tasks.length} ${group.tasks.length === 1 ? 'tarea' : 'tareas'})`,
-        colSpan: 4,
+        colSpan: 5,
         styles: {
           fillColor: [37, 99, 235] as [number, number, number],
           textColor: [255, 255, 255] as [number, number, number],
@@ -189,6 +190,10 @@ export async function exportAreaTrabajoPdf(
           })
         : 'Sin actividad';
 
+      const fechaObjetivo = task.target_date
+        ? format(parseISO(task.target_date), 'd MMM yyyy', { locale: es })
+        : '-';
+
       const fechaRealInicio = task.actual_start_date
         ? format(parseISO(task.actual_start_date), 'd MMM yyyy', { locale: es })
         : '-';
@@ -202,6 +207,7 @@ export async function exportAreaTrabajoPdf(
       tableData.push([
         { content: task.name, styles: task.task_status === 'realizada' ? { textColor: [120, 120, 120] as [number, number, number] } : {} },
         activityId,
+        fechaObjetivo,
         fechaRealInicio,
         { content: statusText, styles: statusStyle },
       ]);
@@ -210,7 +216,7 @@ export async function exportAreaTrabajoPdf(
 
   autoTable(doc, {
     startY: yPos,
-    head: [['Tarea', 'ActividadID', 'Fecha real inicio', 'Estado']],
+    head: [['Tarea', 'ActividadID', 'Fecha objetivo', 'Fecha real inicio', 'Estado']],
     body: tableData,
     theme: 'striped',
     headStyles: {
@@ -223,10 +229,11 @@ export async function exportAreaTrabajoPdf(
       fontSize: 8,
     },
     columnStyles: {
-      0: { cellWidth: 55 },
-      1: { cellWidth: 60 },
-      2: { cellWidth: 35 },
-      3: { cellWidth: 28 },
+      0: { cellWidth: 45 },
+      1: { cellWidth: 50 },
+      2: { cellWidth: 30 },
+      3: { cellWidth: 30 },
+      4: { cellWidth: 25 },
     },
     margin: { left: 14, right: 14, bottom: 25 },
   });

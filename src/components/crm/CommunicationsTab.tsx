@@ -20,6 +20,7 @@ import { TicketsList } from './TicketsList';
 import { ComposeEmail } from './ComposeEmail';
 import { CRMWhatsAppCompose } from './CRMWhatsAppCompose';
 import { UnifiedCommunicationsList } from '@/components/communications/UnifiedCommunicationsList';
+import { CRMSMSCompose } from './CRMSMSCompose';
 
 type Communication = Tables<'crm_communications'> & {
   crm_contacts?: { name: string; surname: string | null; email: string | null } | null;
@@ -89,7 +90,7 @@ export function CommunicationsTab() {
     <div className="space-y-4">
       {/* Sub-tabs navigation */}
       <Tabs value={activeSubTab} onValueChange={setActiveSubTab}>
-        <TabsList className="grid w-full max-w-2xl grid-cols-4">
+        <TabsList className="grid w-full max-w-3xl grid-cols-5">
           <TabsTrigger value="communications" className="gap-2">
             <Inbox className="h-4 w-4" />
             <span className="hidden sm:inline">Comunicaciones</span>
@@ -104,7 +105,11 @@ export function CommunicationsTab() {
           </TabsTrigger>
           <TabsTrigger value="whatsapp" className="gap-2">
             <MessageSquare className="h-4 w-4" />
-            <span className="hidden sm:inline">Enviar WhatsApp</span>
+            <span className="hidden sm:inline">WhatsApp</span>
+          </TabsTrigger>
+          <TabsTrigger value="sms" className="gap-2">
+            <Phone className="h-4 w-4" />
+            <span className="hidden sm:inline">Enviar SMS</span>
           </TabsTrigger>
         </TabsList>
 
@@ -140,6 +145,11 @@ export function CommunicationsTab() {
         {/* WhatsApp Compose Tab */}
         <TabsContent value="whatsapp" className="mt-4">
           <CRMWhatsAppCompose />
+        </TabsContent>
+
+        {/* SMS Compose Tab */}
+        <TabsContent value="sms" className="mt-4">
+          <CRMSMSCompose />
         </TabsContent>
       </Tabs>
     </div>

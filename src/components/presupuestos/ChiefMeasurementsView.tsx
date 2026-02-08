@@ -129,8 +129,27 @@ export function ChiefMeasurementsView({
 
   const selectDuplicates = () => {
     const duplicateIds = new Set<string>();
-    chiefMeasurements.forEach(m => {
-      if (isDuplicate(m)) duplicateIds.add(m.id);
+    // Group all measurements by normalized name
+    const nameGroups = new Map<string, Measurement[]>();
+    allMeasurements.forEach(m => {
+      const key = m.name.toLowerCase().trim();
+      if (!nameGroups.has(key)) nameGroups.set(key, []);
+      nameGroups.get(key)!.push(m);
+    });
+    // For each group with duplicates, keep the newest (by updated_at) and select the rest
+    nameGroups.forEach((group) => {
+      if (group.length <= 1) return;
+      // Sort descending by updated_at so the newest is first
+      const sorted = [...group].sort((a, b) =>
+        new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+      );
+      // Skip the first (newest), select the rest — but only if they're chief measurements
+      const chiefIds = new Set(chiefMeasurements.map(m => m.id));
+      for (let i = 1; i < sorted.length; i++) {
+        if (chiefIds.has(sorted[i].id)) {
+          duplicateIds.add(sorted[i].id);
+        }
+      }
     });
     setSelectedIds(duplicateIds);
   };

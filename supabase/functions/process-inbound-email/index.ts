@@ -537,7 +537,7 @@ const handler = async (req: Request): Promise<Response> => {
           
           if (birdApiKey) {
             const deepLink = `https://conceptocasa.lovable.app/crm?tab=comunicaciones&email=${emailRecord.id}`;
-            const smsMessage = `📬 Nuevo email de ${fromName || fromEmail}: ${subjectField.substring(0, 60)}. Ver: ${deepLink}`.substring(0, 320);
+            const smsMessage = `Nuevo email de ${fromName || fromEmail}: ${subjectField.substring(0, 60)}\n${deepLink}`.substring(0, 320);
 
               for (const recipient of smsRecipients) {
                 try {

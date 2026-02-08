@@ -332,7 +332,7 @@ const handler = async (req: Request): Promise<Response> => {
 
       // Send SMS
       if (shouldSendSms) {
-        const smsMessage = `ConceptoCasa: ${user.unread_count} email${user.unread_count > 1 ? 's' : ''} sin leer. Abre tu bandeja: https://conceptocasa.lovable.app/crm?tab=comunicaciones`;
+        const smsMessage = `ConceptoCasa: ${user.unread_count} email${user.unread_count > 1 ? 's' : ''} sin leer.\nhttps://conceptocasa.lovable.app/crm?tab=comunicaciones`;
         const smsResult = await sendSmsNotification(notificationPhone, smsMessage);
         if (smsResult) {
           smsSentCount++;

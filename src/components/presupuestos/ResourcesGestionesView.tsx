@@ -71,6 +71,7 @@ interface AreaTask {
   activity_name: string;
   phase_code: string | null;
   task_status: string | null;
+  target_date: string | null;
   actual_start_date: string | null;
 }
 
@@ -199,7 +200,7 @@ export function ResourcesGestionesView({
       const [tasksRes, waLinksRes, actRes] = await Promise.all([
         supabase
           .from('budget_activity_resources')
-          .select('id, name, activity_id, task_status')
+          .select('id, name, activity_id, task_status, start_date')
           .eq('budget_id', budgetId)
           .in('resource_type', ['Tarea', 'Cita']),
         waIds.length > 0
@@ -239,6 +240,7 @@ export function ResourcesGestionesView({
           activity_name: act?.name || '',
           phase_code: act?.phase_code || null,
           task_status: t.task_status,
+          target_date: (t as any).start_date || null,
           actual_start_date: act?.actual_start_date || null,
         };
       });
@@ -442,6 +444,10 @@ export function ResourcesGestionesView({
           const statusA = a.task_status === 'realizada' ? 1 : 0;
           const statusB = b.task_status === 'realizada' ? 1 : 0;
           if (statusA !== statusB) return statusA - statusB;
+          // Within pending, sort by target_date ascending
+          const dateA = a.target_date || '9999-12-31';
+          const dateB = b.target_date || '9999-12-31';
+          if (dateA !== dateB) return dateA.localeCompare(dateB);
           return a.name.localeCompare(b.name, 'es');
         });
         groups.push({ ...wa, tasks: sorted });
@@ -463,6 +469,9 @@ export function ResourcesGestionesView({
         const statusA = a.task_status === 'realizada' ? 1 : 0;
         const statusB = b.task_status === 'realizada' ? 1 : 0;
         if (statusA !== statusB) return statusA - statusB;
+        const dateA = a.target_date || '9999-12-31';
+        const dateB = b.target_date || '9999-12-31';
+        if (dateA !== dateB) return dateA.localeCompare(dateB);
         return a.name.localeCompare(b.name, 'es');
       });
       groups.push({ id: '__no_area__', name: 'Sin área de trabajo', level: '', work_area: '', tasks: sorted });
@@ -475,6 +484,9 @@ export function ResourcesGestionesView({
         const statusA = a.task_status === 'realizada' ? 1 : 0;
         const statusB = b.task_status === 'realizada' ? 1 : 0;
         if (statusA !== statusB) return statusA - statusB;
+        const dateA = a.target_date || '9999-12-31';
+        const dateB = b.target_date || '9999-12-31';
+        if (dateA !== dateB) return dateA.localeCompare(dateB);
         return a.name.localeCompare(b.name, 'es');
       });
       groups.push({ id: '__no_activity__', name: 'Sin actividad', level: '', work_area: '', tasks: sorted });
@@ -906,6 +918,7 @@ export function ResourcesGestionesView({
                                   <TableHead className="w-10"></TableHead>
                                   <TableHead>Tarea</TableHead>
                                   <TableHead>ActividadID</TableHead>
+                                  <TableHead>Fecha objetivo</TableHead>
                                   <TableHead>Fecha real inicio</TableHead>
                                   {isAdmin && onEdit && <TableHead className="w-[60px]"></TableHead>}
                                 </TableRow>
@@ -952,6 +965,15 @@ export function ResourcesGestionesView({
                                         </Button>
                                       ) : (
                                         <span className="text-sm text-muted-foreground">Sin actividad</span>
+                                      )}
+                                    </TableCell>
+                                    <TableCell>
+                                      {task.target_date ? (
+                                        <span className="text-sm">
+                                          {format(parseISO(task.target_date), 'd MMM yyyy', { locale: es })}
+                                        </span>
+                                      ) : (
+                                        <span className="text-sm text-muted-foreground">-</span>
                                       )}
                                     </TableCell>
                                     <TableCell>

@@ -687,12 +687,13 @@ const handler = async (req: Request): Promise<Response> => {
         }
       }
 
-      // Send SMS
+      // Send SMS - URL on its own line for reliable auto-linking
       if (shouldSendSms) {
-        const overdueText = overdueTasks.length > 0 ? ` (${overdueTasks.length} vencidas)` : '';
-        // Use short, clean URL for reliable SMS link detection (UUIDs/query params break auto-linking on many phones)
-        const smsLink = `${appUrl}/agenda`;
-        const smsMessage = `ConceptoCasa: ${userTasks.length} tareas pendientes${overdueText} ${smsLink}`;
+        const overdueCount = overdueTasks.length;
+        const parts: string[] = [`ConceptoCasa: ${userTasks.length} tareas pendientes`];
+        if (overdueCount > 0) parts.push(`${overdueCount} vencidas`);
+        // Put URL on a dedicated line for phone SMS parsers to detect it
+        const smsMessage = parts.join(', ') + '\n' + `${appUrl}/agenda`;
         
         const smsResult = await sendSmsNotification(notificationPhone, smsMessage);
         if (smsResult) {

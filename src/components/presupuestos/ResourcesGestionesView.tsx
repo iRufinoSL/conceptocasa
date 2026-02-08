@@ -499,6 +499,25 @@ export function ResourcesGestionesView({
     }
   };
 
+  // Load full resource data and open edit form for area_trabajo tasks
+  const handleEditAreaResource = async (taskId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('budget_activity_resources')
+        .select('*')
+        .eq('id', taskId)
+        .single();
+
+      if (error) throw error;
+      if (data && onEdit) {
+        onEdit(data as BudgetResource);
+      }
+    } catch (err) {
+      console.error('Error loading resource:', err);
+      toast.error('Error al cargar el recurso');
+    }
+  };
+
   // Task form handlers for area_trabajo view
   const handleNewAreaTask = () => {
     setEditingTask(null);
@@ -853,6 +872,7 @@ export function ResourcesGestionesView({
                                   <TableHead className="w-10"></TableHead>
                                   <TableHead>Tarea</TableHead>
                                   <TableHead>ActividadID</TableHead>
+                                  {isAdmin && onEdit && <TableHead className="w-[60px]"></TableHead>}
                                 </TableRow>
                               </TableHeader>
                               <TableBody>
@@ -863,7 +883,7 @@ export function ResourcesGestionesView({
                                       'cursor-pointer hover:bg-accent/50',
                                       task.task_status === 'realizada' && 'bg-green-50/50 dark:bg-green-900/10'
                                     )}
-                                    onClick={() => onEditTask?.(task.id)}
+                                    onClick={() => handleEditAreaResource(task.id)}
                                   >
                                     <TableCell onClick={(e) => e.stopPropagation()}>
                                       <Checkbox
@@ -899,10 +919,21 @@ export function ResourcesGestionesView({
                                         <span className="text-sm text-muted-foreground">Sin actividad</span>
                                       )}
                                     </TableCell>
+                                    {isAdmin && onEdit && (
+                                      <TableCell onClick={(e) => e.stopPropagation()}>
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
+                                          onClick={() => handleEditAreaResource(task.id)}
+                                        >
+                                          <Pencil className="h-4 w-4" />
+                                        </Button>
+                                      </TableCell>
+                                    )}
                                   </TableRow>
                                 ))}
                               </TableBody>
-                            </Table>
+                             </Table>
                           </div>
                         </CollapsibleContent>
                       </Card>

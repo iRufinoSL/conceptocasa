@@ -759,6 +759,7 @@ export function BudgetAgendaTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
               budgetId={budgetId}
               budgetName={budgetName}
               isAdmin={isAdmin}
+              onEdit={(resource) => setEditingResource(resource)}
               onEditActivity={onNavigateToActivity}
               onEditTask={(taskId) => {
                 const task = tasks.find(t => t.id === taskId);

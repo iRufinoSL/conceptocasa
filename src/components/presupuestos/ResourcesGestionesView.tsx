@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useEffect, useCallback } from 'react';
-import { ChevronDown, ChevronRight, User, Users, Calendar, ClipboardList, MapPin, Layers, X, Plus } from 'lucide-react';
+import { ChevronDown, ChevronRight, User, Users, Calendar, ClipboardList, MapPin, Layers, X, Plus, Printer } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -17,6 +17,8 @@ import { es } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { GestionesDateView } from './GestionesDateView';
 import { TaskForm } from './TaskForm';
+import { useCompanySettings } from '@/hooks/useCompanySettings';
+import { exportAreaTrabajoPdf } from './AreaTrabajoPdfExport';
 import type { BudgetTask } from './BudgetAgendaTab';
 
 interface BudgetResource {
@@ -69,6 +71,7 @@ interface AreaTask {
   activity_name: string;
   phase_code: string | null;
   task_status: string | null;
+  actual_start_date: string | null;
 }
 
 interface WorkAreaGroup {
@@ -109,6 +112,7 @@ export function ResourcesGestionesView({
 }: ResourcesGestionesViewProps) {
   const [resources, setResources] = useState<BudgetResource[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
+  const { settings: companySettings } = useCompanySettings();
   const [phases, setPhases] = useState<Phase[]>([]);
   const [suppliers, setSuppliers] = useState<Contact[]>([]);
   const [expandedSuppliers, setExpandedSuppliers] = useState<Set<string>>(new Set());
@@ -235,6 +239,7 @@ export function ResourcesGestionesView({
           activity_name: act?.name || '',
           phase_code: act?.phase_code || null,
           task_status: t.task_status,
+          actual_start_date: act?.actual_start_date || null,
         };
       });
 
@@ -432,7 +437,13 @@ export function ResourcesGestionesView({
       );
 
       if (tasksInArea.length > 0) {
-        const sorted = [...tasksInArea].sort((a, b) => a.name.localeCompare(b.name, 'es'));
+        const sorted = [...tasksInArea].sort((a, b) => {
+          // Pending first, then completed
+          const statusA = a.task_status === 'realizada' ? 1 : 0;
+          const statusB = b.task_status === 'realizada' ? 1 : 0;
+          if (statusA !== statusB) return statusA - statusB;
+          return a.name.localeCompare(b.name, 'es');
+        });
         groups.push({ ...wa, tasks: sorted });
       }
     });
@@ -448,14 +459,24 @@ export function ResourcesGestionesView({
       t => t.activity_id && !allLinkedActivityIds.has(t.activity_id) && isAreaActivityInDateRange(t.activity_id)
     );
     if (unlinkedTasks.length > 0) {
-      const sorted = [...unlinkedTasks].sort((a, b) => a.name.localeCompare(b.name, 'es'));
+      const sorted = [...unlinkedTasks].sort((a, b) => {
+        const statusA = a.task_status === 'realizada' ? 1 : 0;
+        const statusB = b.task_status === 'realizada' ? 1 : 0;
+        if (statusA !== statusB) return statusA - statusB;
+        return a.name.localeCompare(b.name, 'es');
+      });
       groups.push({ id: '__no_area__', name: 'Sin área de trabajo', level: '', work_area: '', tasks: sorted });
     }
 
     // Tasks without activity
     const noActivityTasks = areaTasks.filter(t => !t.activity_id);
     if (noActivityTasks.length > 0) {
-      const sorted = [...noActivityTasks].sort((a, b) => a.name.localeCompare(b.name, 'es'));
+      const sorted = [...noActivityTasks].sort((a, b) => {
+        const statusA = a.task_status === 'realizada' ? 1 : 0;
+        const statusB = b.task_status === 'realizada' ? 1 : 0;
+        if (statusA !== statusB) return statusA - statusB;
+        return a.name.localeCompare(b.name, 'es');
+      });
       groups.push({ id: '__no_activity__', name: 'Sin actividad', level: '', work_area: '', tasks: sorted });
     }
 
@@ -821,6 +842,19 @@ export function ResourcesGestionesView({
                   )}
                 </div>
                 <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5"
+                    onClick={() => {
+                      if (companySettings) {
+                        exportAreaTrabajoPdf(workAreaGroups, budgetName, companySettings);
+                      }
+                    }}
+                  >
+                    <Printer className="h-4 w-4" />
+                    Imprimir
+                  </Button>
                   <Button variant="ghost" size="sm" onClick={expandAllWorkAreas}>
                     Expandir todo
                   </Button>
@@ -872,6 +906,7 @@ export function ResourcesGestionesView({
                                   <TableHead className="w-10"></TableHead>
                                   <TableHead>Tarea</TableHead>
                                   <TableHead>ActividadID</TableHead>
+                                  <TableHead>Fecha real inicio</TableHead>
                                   {isAdmin && onEdit && <TableHead className="w-[60px]"></TableHead>}
                                 </TableRow>
                               </TableHeader>
@@ -917,6 +952,15 @@ export function ResourcesGestionesView({
                                         </Button>
                                       ) : (
                                         <span className="text-sm text-muted-foreground">Sin actividad</span>
+                                      )}
+                                    </TableCell>
+                                    <TableCell>
+                                      {task.actual_start_date ? (
+                                        <span className="text-sm">
+                                          {format(parseISO(task.actual_start_date), 'd MMM yyyy', { locale: es })}
+                                        </span>
+                                      ) : (
+                                        <span className="text-sm text-muted-foreground">-</span>
                                       )}
                                     </TableCell>
                                     {isAdmin && onEdit && (

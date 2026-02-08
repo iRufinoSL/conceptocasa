@@ -536,21 +536,7 @@ const handler = async (req: Request): Promise<Response> => {
           const birdApiKey = Deno.env.get('BIRD_API_KEY');
           
           if (birdApiKey) {
-            // Get sender phone from company settings
-            const { data: companySettings } = await supabase
-              .from('company_settings')
-              .select('sms_sender_phone, whatsapp_phone')
-              .single();
-
-            const senderPhone = companySettings?.sms_sender_phone || 
-                                Deno.env.get('BIRD_SENDER_PHONE') || 
-                                companySettings?.whatsapp_phone;
-
-            if (senderPhone) {
-              let normalizedFrom = senderPhone.replace(/\s+/g, '');
-              if (!normalizedFrom.startsWith('+')) normalizedFrom = '+' + normalizedFrom;
-
-              const smsMessage = `📬 Nuevo email de ${fromName || fromEmail}: ${subjectField}`.substring(0, 160);
+            const smsMessage = `📬 Nuevo email de ${fromName || fromEmail}: ${subjectField}`.substring(0, 160);
 
               for (const recipient of smsRecipients) {
                 try {
@@ -559,16 +545,29 @@ const handler = async (req: Request): Promise<Response> => {
 
                   console.log(`Sending SMS alert to ${normalizedTo} for new email...`);
 
-                  const birdResponse = await fetch('https://api.bird.com/v2/send', {
+                  const birdWorkspaceId = Deno.env.get('BIRD_WORKSPACE_ID');
+                  const birdChannelId = Deno.env.get('BIRD_CHANNEL_ID');
+                  
+                  if (!birdWorkspaceId || !birdChannelId) {
+                    console.warn('BIRD_WORKSPACE_ID or BIRD_CHANNEL_ID not configured');
+                    continue;
+                  }
+
+                  const birdUrl = `https://api.bird.com/workspaces/${birdWorkspaceId}/channels/${birdChannelId}/messages`;
+                  const birdResponse = await fetch(birdUrl, {
                     method: 'POST',
                     headers: {
                       'Authorization': `AccessKey ${birdApiKey}`,
                       'Content-Type': 'application/json',
                     },
                     body: JSON.stringify({
-                      originator: normalizedFrom,
-                      recipients: [normalizedTo],
-                      body: smsMessage,
+                      receiver: {
+                        contacts: [{ identifierKey: 'phonenumber', identifierValue: normalizedTo }],
+                      },
+                      body: {
+                        type: 'text',
+                        text: { text: smsMessage },
+                      },
                     }),
                   });
 
@@ -583,9 +582,6 @@ const handler = async (req: Request): Promise<Response> => {
                   console.error(`Error sending SMS to ${recipient.personal_notification_phone}:`, smsErr);
                 }
               }
-            } else {
-              console.warn("No SMS sender phone configured - skipping SMS alerts");
-            }
           } else {
             console.warn("BIRD_API_KEY not configured - skipping SMS alerts");
           }

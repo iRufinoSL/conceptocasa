@@ -695,7 +695,7 @@ const handler = async (req: Request): Promise<Response> => {
         const taskDeepLink = firstTask?.budget_id 
           ? `${appUrl}/r/task/${firstTask.id}?b=${firstTask.budget_id}`
           : `${appUrl}/agenda`;
-        const smsMessage = `ConceptoCasa: ${userTasks.length} tareas pendientes${overdueText}.\n${taskDeepLink}`;
+        const smsMessage = `ConceptoCasa: ${userTasks.length} tareas pendientes${overdueText}\n\n${taskDeepLink}`;
         
         const smsResult = await sendSmsNotification(notificationPhone, smsMessage);
         if (smsResult) {

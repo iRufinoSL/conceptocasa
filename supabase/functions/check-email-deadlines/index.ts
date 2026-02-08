@@ -279,7 +279,7 @@ const handler = async (req: Request): Promise<Response> => {
         const emailDeepLink = firstEmail?.budget_id
           ? `https://conceptocasa.lovable.app/r/budget/${firstEmail.budget_id}`
           : `https://conceptocasa.lovable.app/r/crm/comunicaciones`;
-        const smsMessage = `ConceptoCasa: ${emails.length} email(s) sin respuesta.\n${emailDeepLink}`;
+        const smsMessage = `ConceptoCasa: ${emails.length} email(s) sin respuesta\n\n${emailDeepLink}`;
         const smsResult = await sendSmsNotification(notificationPhone, smsMessage);
         if (smsResult) {
           smsSentCount++;

@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Calendar, List, ChevronLeft, ChevronRight, FileText, BarChart3, ClipboardList, CalendarClock, Hammer, ShoppingCart } from 'lucide-react';
+import { Plus, Calendar, List, ChevronLeft, ChevronRight, FileText, BarChart3, ClipboardList, CalendarClock, Hammer, ShoppingCart, MapPin } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, addMonths, subMonths, addWeeks, subWeeks, addDays, subDays, eachDayOfInterval, isSameMonth, isSameDay, isToday } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { toast } from 'sonner';
@@ -19,6 +19,7 @@ import { WorkReportsList } from './WorkReportsList';
 import { BuyingListUnified } from './BuyingListUnified';
 import { BudgetResourceForm } from './BudgetResourceForm';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
+import { TasksWorkAreaView } from './TasksWorkAreaView';
 
 // A Task is a resource with resource_type = 'Tarea' or 'Cita'
 export interface BudgetTask {
@@ -73,7 +74,7 @@ interface BudgetAgendaTabProps {
   onNavigateToActivity?: (activityId: string) => void;
 }
 
-type MainViewMode = 'agenda' | 'gantt' | 'gestiones' | 'partes' | 'listacompra';
+type MainViewMode = 'agenda' | 'gantt' | 'gestiones' | 'partes' | 'listacompra' | 'tareasarea';
 type ViewMode = 'month' | 'week' | 'day' | 'list';
 type FilterMode = 'all' | 'pendiente' | 'realizada';
 
@@ -690,6 +691,10 @@ export function BudgetAgendaTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
                 <ShoppingCart className="h-4 w-4" />
                 Lista compra
               </TabsTrigger>
+              <TabsTrigger value="tareasarea" className="flex items-center gap-1.5">
+                <MapPin className="h-4 w-4" />
+                Tareas/Área
+              </TabsTrigger>
             </TabsList>
           </Tabs>
           
@@ -797,6 +802,23 @@ export function BudgetAgendaTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
               }}
               onDeleteResource={handleDeleteResource}
               onRefresh={fetchBuyingListData}
+            />
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Tareas/Área trabajo View */}
+      {mainViewMode === 'tareasarea' && (
+        <Card>
+          <CardContent className="pt-6">
+            <TasksWorkAreaView
+              budgetId={budgetId}
+              tasks={tasks}
+              isAdmin={isAdmin}
+              onEdit={handleEditTask}
+              onDelete={handleDeleteTask}
+              onToggleStatus={handleToggleStatus}
+              onNavigateToActivity={onNavigateToActivity}
             />
           </CardContent>
         </Card>
@@ -915,19 +937,19 @@ export function BudgetAgendaTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
               />
             </TabsContent>
           </Tabs>
-
-          {/* Task Form Dialog */}
-          <TaskForm
-            open={showTaskForm}
-            onOpenChange={setShowTaskForm}
-            budgetId={budgetId}
-            activities={activities}
-            task={editingTask}
-            onSuccess={handleTaskSaved}
-            initialType={newEntryType}
-          />
         </>
       )}
+
+      {/* Task Form Dialog - outside of agenda view so it works from all views */}
+      <TaskForm
+        open={showTaskForm}
+        onOpenChange={setShowTaskForm}
+        budgetId={budgetId}
+        activities={activities}
+        task={editingTask}
+        onSuccess={handleTaskSaved}
+        initialType={newEntryType}
+      />
 
       {/* Delete Resource Confirmation Dialog */}
       <DeleteConfirmDialog

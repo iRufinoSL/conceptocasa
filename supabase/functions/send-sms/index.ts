@@ -84,28 +84,68 @@ Deno.serve(async (req: Request) => {
     }
 
     console.log(`Sending SMS to ${normalizedTo}: ${message.substring(0, 50)}...`);
+    console.log(`Bird config - Workspace: ${birdWorkspaceId}, Channel: ${birdChannelId}`);
+    console.log(`Bird API Key prefix: ${birdApiKey.substring(0, 8)}...`);
 
-    // Send SMS via Bird Channels API
+    // Step 1: Verify channel exists and is accessible
+    const verifyUrl = `https://api.bird.com/workspaces/${birdWorkspaceId}/channels/${birdChannelId}`;
+    console.log(`Verifying channel at: ${verifyUrl}`);
+    
+    const verifyResponse = await fetch(verifyUrl, {
+      method: 'GET',
+      headers: {
+        'Authorization': `AccessKey ${birdApiKey}`,
+        'Accept': 'application/json',
+      },
+    });
+    
+    if (!verifyResponse.ok) {
+      const verifyData = await verifyResponse.text();
+      console.error(`Channel verification failed (${verifyResponse.status}): ${verifyData}`);
+      console.error('This likely means: API key lacks permissions, or workspace/channel IDs are incorrect');
+      
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: `Configuración Bird incorrecta (${verifyResponse.status}). Verifica API Key (permisos "Application"), Workspace ID y Channel ID en el panel de Bird.`,
+          details: { status: verifyResponse.status, body: verifyData },
+        }),
+        {
+          status: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      );
+    }
+    
+    const channelInfo = await verifyResponse.json();
+    console.log(`Channel verified: ${channelInfo.name || channelInfo.id}, status: ${channelInfo.status || 'unknown'}`);
+
+    // Step 2: Send SMS via Bird Channels API
     const birdUrl = `https://api.bird.com/workspaces/${birdWorkspaceId}/channels/${birdChannelId}/messages`;
+    console.log(`Sending message to: ${birdUrl}`);
+    
+    const requestBody = {
+      receiver: {
+        contacts: [{ identifierKey: 'phonenumber', identifierValue: normalizedTo }],
+      },
+      body: {
+        type: 'text',
+        text: { text: message },
+      },
+    };
+    console.log('Request body:', JSON.stringify(requestBody));
+    
     const birdResponse = await fetch(birdUrl, {
       method: 'POST',
       headers: {
         'Authorization': `AccessKey ${birdApiKey}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        receiver: {
-          contacts: [{ identifierKey: 'phonenumber', identifierValue: normalizedTo }],
-        },
-        body: {
-          type: 'text',
-          text: { text: message },
-        },
-      }),
+      body: JSON.stringify(requestBody),
     });
 
     const birdData = await birdResponse.json();
-    console.log('Bird API response:', JSON.stringify(birdData, null, 2));
+    console.log(`Bird API response (${birdResponse.status}):`, JSON.stringify(birdData, null, 2));
 
      if (!birdResponse.ok) {
        console.error('Bird API error:', birdData);

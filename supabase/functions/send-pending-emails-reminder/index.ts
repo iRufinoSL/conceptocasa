@@ -330,9 +330,9 @@ const handler = async (req: Request): Promise<Response> => {
         }
       }
 
-      // Send SMS
+      // Send SMS - use short clean URL for reliable auto-linking on mobile
       if (shouldSendSms) {
-        const smsMessage = `ConceptoCasa: ${user.unread_count} email${user.unread_count > 1 ? 's' : ''} sin leer\n\nhttps://conceptocasa.lovable.app/r/crm/comunicaciones`;
+        const smsMessage = `ConceptoCasa: ${user.unread_count} email${user.unread_count > 1 ? 's' : ''} sin leer https://conceptocasa.lovable.app/crm`;
         const smsResult = await sendSmsNotification(notificationPhone, smsMessage);
         if (smsResult) {
           smsSentCount++;

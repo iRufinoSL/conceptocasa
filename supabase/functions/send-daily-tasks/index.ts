@@ -690,12 +690,9 @@ const handler = async (req: Request): Promise<Response> => {
       // Send SMS
       if (shouldSendSms) {
         const overdueText = overdueTasks.length > 0 ? ` (${overdueTasks.length} vencidas)` : '';
-        // Build a deep link: if there's an overdue task in a budget, link to it; otherwise link to agenda
-        const firstTask = overdueTasks[0] || todayTasks[0];
-        const taskDeepLink = firstTask?.budget_id 
-          ? `${appUrl}/r/task/${firstTask.id}?b=${firstTask.budget_id}`
-          : `${appUrl}/agenda`;
-        const smsMessage = `ConceptoCasa: ${userTasks.length} tareas pendientes${overdueText}\n\n${taskDeepLink}`;
+        // Use short, clean URL for reliable SMS link detection (UUIDs/query params break auto-linking on many phones)
+        const smsLink = `${appUrl}/agenda`;
+        const smsMessage = `ConceptoCasa: ${userTasks.length} tareas pendientes${overdueText} ${smsLink}`;
         
         const smsResult = await sendSmsNotification(notificationPhone, smsMessage);
         if (smsResult) {

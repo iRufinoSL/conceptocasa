@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Calendar, List, ChevronLeft, ChevronRight, FileText, BarChart3, ClipboardList, CalendarClock, Hammer, ShoppingCart, MapPin } from 'lucide-react';
+import { Plus, Calendar, List, ChevronLeft, ChevronRight, FileText, BarChart3, ClipboardList, CalendarClock, Hammer, ShoppingCart } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, addMonths, subMonths, addWeeks, subWeeks, addDays, subDays, eachDayOfInterval, isSameMonth, isSameDay, isToday } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { toast } from 'sonner';
@@ -19,7 +19,7 @@ import { WorkReportsList } from './WorkReportsList';
 import { BuyingListUnified } from './BuyingListUnified';
 import { BudgetResourceForm } from './BudgetResourceForm';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
-import { TasksWorkAreaView } from './TasksWorkAreaView';
+
 
 // A Task is a resource with resource_type = 'Tarea' or 'Cita'
 export interface BudgetTask {
@@ -74,7 +74,7 @@ interface BudgetAgendaTabProps {
   onNavigateToActivity?: (activityId: string) => void;
 }
 
-type MainViewMode = 'agenda' | 'gantt' | 'gestiones' | 'partes' | 'listacompra' | 'tareasarea';
+type MainViewMode = 'agenda' | 'gantt' | 'gestiones' | 'partes' | 'listacompra';
 type ViewMode = 'month' | 'week' | 'day' | 'list';
 type FilterMode = 'all' | 'pendiente' | 'realizada';
 
@@ -681,7 +681,7 @@ export function BudgetAgendaTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
               </TabsTrigger>
               <TabsTrigger value="gestiones" className="flex items-center gap-1.5">
                 <ClipboardList className="h-4 w-4" />
-                Gestiones
+                Gestiones/Área trabajo
               </TabsTrigger>
               <TabsTrigger value="partes" className="flex items-center gap-1.5">
                 <Hammer className="h-4 w-4" />
@@ -690,10 +690,6 @@ export function BudgetAgendaTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
               <TabsTrigger value="listacompra" className="flex items-center gap-1.5">
                 <ShoppingCart className="h-4 w-4" />
                 Lista compra
-              </TabsTrigger>
-              <TabsTrigger value="tareasarea" className="flex items-center gap-1.5">
-                <MapPin className="h-4 w-4" />
-                Tareas/Área
               </TabsTrigger>
             </TabsList>
           </Tabs>
@@ -807,22 +803,6 @@ export function BudgetAgendaTab({ budgetId, isAdmin, budgetStartDate, budgetEndD
         </Card>
       )}
 
-      {/* Tareas/Área trabajo View */}
-      {mainViewMode === 'tareasarea' && (
-        <Card>
-          <CardContent className="pt-6">
-            <TasksWorkAreaView
-              budgetId={budgetId}
-              tasks={tasks}
-              isAdmin={isAdmin}
-              onEdit={handleEditTask}
-              onDelete={handleDeleteTask}
-              onToggleStatus={handleToggleStatus}
-              onNavigateToActivity={onNavigateToActivity}
-            />
-          </CardContent>
-        </Card>
-      )}
 
       {/* Resource Edit Form (for Buying List) */}
       <BudgetResourceForm

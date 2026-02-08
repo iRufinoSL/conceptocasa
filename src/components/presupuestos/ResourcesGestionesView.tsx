@@ -1,10 +1,14 @@
 import React, { useMemo, useState, useEffect, useCallback } from 'react';
-import { ChevronDown, ChevronRight, User, Users, Calendar, ClipboardList } from 'lucide-react';
+import { ChevronDown, ChevronRight, User, Users, Calendar, ClipboardList, MapPin, Layers, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Input } from '@/components/ui/input';
+import { Card, CardContent } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { formatCurrency, formatNumber } from '@/lib/format-utils';
+import { formatActividadId } from '@/lib/activity-id';
 import { Pencil, Package, Wrench, Truck, Briefcase, CheckSquare } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
@@ -12,6 +16,7 @@ import { format, parseISO, addDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { GestionesDateView } from './GestionesDateView';
+
 interface BudgetResource {
   id: string;
   budget_id: string;
@@ -54,6 +59,24 @@ interface Contact {
   phone: string | null;
 }
 
+interface AreaTask {
+  id: string;
+  name: string;
+  activity_id: string | null;
+  activity_code: string;
+  activity_name: string;
+  phase_code: string | null;
+  task_status: string | null;
+}
+
+interface WorkAreaGroup {
+  id: string;
+  name: string;
+  level: string;
+  work_area: string;
+  tasks: AreaTask[];
+}
+
 interface ResourcesGestionesViewProps {
   budgetId: string;
   budgetName?: string;
@@ -72,7 +95,7 @@ const resourceTypeIcons: Record<string, React.ReactNode> = {
   'Herramienta': <Wrench className="h-4 w-4" />,
 };
 
-type SortMode = 'fecha_objetivo' | 'supplier' | 'activity_date';
+type SortMode = 'fecha_objetivo' | 'supplier' | 'activity_date' | 'area_trabajo';
 
 export function ResourcesGestionesView({
   budgetId,
@@ -90,7 +113,18 @@ export function ResourcesGestionesView({
   const [sortMode, setSortMode] = useState<SortMode>('fecha_objetivo');
   const [isLoading, setIsLoading] = useState(true);
   const [editingStartDate, setEditingStartDate] = useState<{ activityId: string; value: string } | null>(null);
-  // Fetch all data
+
+  // Area trabajo state
+  const [areaTasks, setAreaTasks] = useState<AreaTask[]>([]);
+  const [areaWorkAreas, setAreaWorkAreas] = useState<{ id: string; name: string; level: string; work_area: string }[]>([]);
+  const [areaWorkAreaLinks, setAreaWorkAreaLinks] = useState<{ work_area_id: string; activity_id: string }[]>([]);
+  const [areaActivityDates, setAreaActivityDates] = useState<{ id: string; actual_start_date: string | null; actual_end_date: string | null }[]>([]);
+  const [areaDateFrom, setAreaDateFrom] = useState('');
+  const [areaDateTo, setAreaDateTo] = useState('');
+  const [expandedWorkAreas, setExpandedWorkAreas] = useState<Set<string>>(new Set(['__all__']));
+  const [areaLoading, setAreaLoading] = useState(false);
+
+  // Fetch resources data (non-tasks)
   const fetchData = useCallback(async () => {
     setIsLoading(true);
     try {
@@ -99,7 +133,7 @@ export function ResourcesGestionesView({
           .from('budget_activity_resources')
           .select('*')
           .eq('budget_id', budgetId)
-          .neq('resource_type', 'Tarea'), // Exclude tasks, we only want resources
+          .neq('resource_type', 'Tarea'),
         supabase
           .from('budget_activities')
           .select('id, code, name, phase_id, start_date, duration_days, end_date')
@@ -139,24 +173,101 @@ export function ResourcesGestionesView({
     fetchData();
   }, [fetchData]);
 
+  // Fetch area trabajo data
+  const fetchAreaData = useCallback(async () => {
+    setAreaLoading(true);
+    try {
+      const [tasksRes, waRes, waLinksRes, actRes] = await Promise.all([
+        supabase
+          .from('budget_activity_resources')
+          .select('id, name, activity_id, task_status')
+          .eq('budget_id', budgetId)
+          .in('resource_type', ['Tarea', 'Cita']),
+        supabase
+          .from('budget_work_areas')
+          .select('id, name, level, work_area')
+          .eq('budget_id', budgetId),
+        supabase
+          .from('budget_work_area_activities')
+          .select('work_area_id, activity_id'),
+        supabase
+          .from('budget_activities')
+          .select('id, code, name, phase_id, actual_start_date, actual_end_date, budget_phases(code)')
+          .eq('budget_id', budgetId),
+      ]);
+
+      // Build activity info map
+      const activitiesMap = new Map<string, {
+        code: string; name: string; phase_code: string | null;
+        actual_start_date: string | null; actual_end_date: string | null;
+      }>();
+      (actRes.data || []).forEach((a: any) => {
+        activitiesMap.set(a.id, {
+          code: a.code,
+          name: a.name,
+          phase_code: a.budget_phases?.code || null,
+          actual_start_date: a.actual_start_date,
+          actual_end_date: a.actual_end_date,
+        });
+      });
+
+      const mappedTasks: AreaTask[] = (tasksRes.data || []).map(t => {
+        const act = t.activity_id ? activitiesMap.get(t.activity_id) : null;
+        return {
+          id: t.id,
+          name: t.name,
+          activity_id: t.activity_id,
+          activity_code: act?.code || '',
+          activity_name: act?.name || '',
+          phase_code: act?.phase_code || null,
+          task_status: t.task_status,
+        };
+      });
+
+      setAreaTasks(mappedTasks);
+      setAreaWorkAreas(waRes.data || []);
+
+      // Filter work area links to this budget's work areas
+      const waIds = new Set((waRes.data || []).map(wa => wa.id));
+      setAreaWorkAreaLinks((waLinksRes.data || []).filter(l => waIds.has(l.work_area_id)));
+
+      setAreaActivityDates((actRes.data || []).map((a: any) => ({
+        id: a.id,
+        actual_start_date: a.actual_start_date,
+        actual_end_date: a.actual_end_date,
+      })));
+    } catch (error) {
+      console.error('Error fetching area data:', error);
+      toast.error('Error al cargar datos de áreas');
+    } finally {
+      setAreaLoading(false);
+    }
+  }, [budgetId]);
+
+  useEffect(() => {
+    if (sortMode === 'area_trabajo') {
+      fetchAreaData();
+    }
+  }, [sortMode, fetchAreaData]);
+
   // Calculate fields for resource
   const calculateFields = (resource: BudgetResource) => {
     const externalCost = resource.external_unit_cost || 0;
     const safetyPercent = resource.safety_margin_percent ?? 15;
     const salesPercent = resource.sales_margin_percent ?? 25;
-    
+
     const safetyRatio = safetyPercent / 100;
     const salesRatio = salesPercent / 100;
-    
+
     const internalCostUd = externalCost * (1 + safetyRatio);
     const salesCostUd = internalCostUd * (1 + salesRatio);
-    
-    const calculatedUnits = resource.manual_units !== null 
-      ? resource.manual_units 
+
+    const calculatedUnits = resource.manual_units !== null
+      ? resource.manual_units
       : (resource.related_units || 0);
-    
+
     const subtotalSales = calculatedUnits * salesCostUd;
-    
+
     return { calculatedUnits, subtotalSales };
   };
 
@@ -166,7 +277,6 @@ export function ResourcesGestionesView({
     const activity = activities.find(a => a.id === activityId);
     if (!activity) return null;
 
-    // Get effective start date: activity's own start_date OR phase's start_date
     let effectiveStartDate = activity.start_date;
     if (!effectiveStartDate && activity.phase_id) {
       const phase = phases.find(p => p.id === activity.phase_id);
@@ -175,7 +285,6 @@ export function ResourcesGestionesView({
       }
     }
 
-    // Calculate end date if we have start date and duration
     let effectiveEndDate = activity.end_date;
     if (!effectiveEndDate && effectiveStartDate && activity.duration_days) {
       const endDate = addDays(parseISO(effectiveStartDate), activity.duration_days);
@@ -208,14 +317,13 @@ export function ResourcesGestionesView({
   // Group and sort resources
   const processedResources = useMemo(() => {
     if (sortMode === 'activity_date') {
-      // Sort all resources by activity start date
       return [...resources].sort((a, b) => {
         const activityA = getActivityInfo(a.activity_id);
         const activityB = getActivityInfo(b.activity_id);
-        
+
         const dateA = activityA?.effectiveStartDate || '9999-12-31';
         const dateB = activityB?.effectiveStartDate || '9999-12-31';
-        
+
         return dateA.localeCompare(dateB);
       });
     }
@@ -225,7 +333,7 @@ export function ResourcesGestionesView({
   // Group by supplier when in supplier mode
   const groupedBySupplier = useMemo(() => {
     if (sortMode !== 'supplier') return {};
-    
+
     const groups: Record<string, BudgetResource[]> = {};
     resources.forEach(resource => {
       const key = resource.supplier_id || '__no_supplier__';
@@ -233,7 +341,6 @@ export function ResourcesGestionesView({
       groups[key].push(resource);
     });
 
-    // Sort each group by name
     Object.keys(groups).forEach(key => {
       groups[key].sort((a, b) => a.name.localeCompare(b.name));
     });
@@ -267,6 +374,118 @@ export function ResourcesGestionesView({
     return totals;
   }, [groupedBySupplier]);
 
+  // === Area trabajo computed values ===
+  const areaActivityDatesMap = useMemo(() => {
+    const map = new Map<string, { actual_start_date: string | null; actual_end_date: string | null }>();
+    areaActivityDates.forEach(a => map.set(a.id, a));
+    return map;
+  }, [areaActivityDates]);
+
+  const isAreaActivityInDateRange = useCallback((activityId: string): boolean => {
+    if (!areaDateFrom && !areaDateTo) return true;
+    const dateInfo = areaActivityDatesMap.get(activityId);
+    if (!dateInfo) return !areaDateFrom && !areaDateTo;
+
+    const actStart = dateInfo.actual_start_date ? parseISO(dateInfo.actual_start_date) : null;
+    const actEnd = dateInfo.actual_end_date ? parseISO(dateInfo.actual_end_date) : null;
+
+    if (!actStart && !actEnd) return !areaDateFrom && !areaDateTo;
+
+    const filterFrom = areaDateFrom ? parseISO(areaDateFrom) : null;
+    const filterTo = areaDateTo ? parseISO(areaDateTo) : null;
+
+    if (filterFrom && filterTo) {
+      const rangeStart = actStart || actEnd!;
+      const rangeEnd = actEnd || actStart!;
+      return rangeStart <= filterTo && rangeEnd >= filterFrom;
+    }
+    if (filterFrom) return (actEnd || actStart!) >= filterFrom;
+    if (filterTo) return (actStart || actEnd!) <= filterTo;
+    return true;
+  }, [areaDateFrom, areaDateTo, areaActivityDatesMap]);
+
+  const workAreaGroups = useMemo((): WorkAreaGroup[] => {
+    const groups: WorkAreaGroup[] = [];
+
+    areaWorkAreas.forEach(wa => {
+      const activityIds = areaWorkAreaLinks
+        .filter(l => l.work_area_id === wa.id)
+        .map(l => l.activity_id);
+
+      const filteredActivityIds = activityIds.filter(isAreaActivityInDateRange);
+
+      const tasksInArea = areaTasks.filter(
+        t => t.activity_id && filteredActivityIds.includes(t.activity_id)
+      );
+
+      if (tasksInArea.length > 0) {
+        const sorted = [...tasksInArea].sort((a, b) => a.name.localeCompare(b.name, 'es'));
+        groups.push({ ...wa, tasks: sorted });
+      }
+    });
+
+    groups.sort((a, b) => {
+      if (a.level !== b.level) return a.level.localeCompare(b.level, 'es');
+      return a.name.localeCompare(b.name, 'es');
+    });
+
+    // Tasks with activities not linked to any work area
+    const allLinkedActivityIds = new Set(areaWorkAreaLinks.map(l => l.activity_id));
+    const unlinkedTasks = areaTasks.filter(
+      t => t.activity_id && !allLinkedActivityIds.has(t.activity_id) && isAreaActivityInDateRange(t.activity_id)
+    );
+    if (unlinkedTasks.length > 0) {
+      const sorted = [...unlinkedTasks].sort((a, b) => a.name.localeCompare(b.name, 'es'));
+      groups.push({ id: '__no_area__', name: 'Sin área de trabajo', level: '', work_area: '', tasks: sorted });
+    }
+
+    // Tasks without activity
+    const noActivityTasks = areaTasks.filter(t => !t.activity_id);
+    if (noActivityTasks.length > 0) {
+      const sorted = [...noActivityTasks].sort((a, b) => a.name.localeCompare(b.name, 'es'));
+      groups.push({ id: '__no_activity__', name: 'Sin actividad', level: '', work_area: '', tasks: sorted });
+    }
+
+    return groups;
+  }, [areaTasks, areaWorkAreas, areaWorkAreaLinks, isAreaActivityInDateRange]);
+
+  // Initialize expanded work areas
+  useEffect(() => {
+    if (expandedWorkAreas.has('__all__') && workAreaGroups.length > 0) {
+      setExpandedWorkAreas(new Set(workAreaGroups.map(g => g.id)));
+    }
+  }, [workAreaGroups.length]);
+
+  // Area trabajo helpers
+  const toggleWorkArea = (id: string) => {
+    setExpandedWorkAreas(prev => {
+      const next = new Set(prev);
+      next.delete('__all__');
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const expandAllWorkAreas = () => setExpandedWorkAreas(new Set(workAreaGroups.map(g => g.id)));
+  const collapseAllWorkAreas = () => setExpandedWorkAreas(new Set());
+
+  const handleToggleAreaTaskStatus = async (taskId: string, currentStatus: string | null) => {
+    const newStatus = currentStatus === 'realizada' ? 'pendiente' : 'realizada';
+    try {
+      const { error } = await supabase
+        .from('budget_activity_resources')
+        .update({ task_status: newStatus })
+        .eq('id', taskId);
+      if (error) throw error;
+      setAreaTasks(prev => prev.map(t => t.id === taskId ? { ...t, task_status: newStatus } : t));
+      toast.success(newStatus === 'realizada' ? 'Marcada como realizada' : 'Marcada como pendiente');
+    } catch (error) {
+      console.error('Error updating status:', error);
+      toast.error('Error al actualizar estado');
+    }
+  };
+
   const toggleSupplierExpanded = (supplierId: string) => {
     setExpandedSuppliers(prev => {
       const newSet = new Set(prev);
@@ -288,10 +507,10 @@ export function ResourcesGestionesView({
         .eq('id', activityId);
 
       if (error) throw error;
-      
+
       toast.success('Fecha de inicio actualizada');
       setEditingStartDate(null);
-      fetchData(); // Refresh data
+      fetchData();
     } catch (error) {
       console.error('Error updating start date:', error);
       toast.error('Error al actualizar la fecha');
@@ -363,7 +582,7 @@ export function ResourcesGestionesView({
               }}
               disabled={!isAdmin || !resource.activity_id}
             >
-              {activityInfo?.effectiveStartDate 
+              {activityInfo?.effectiveStartDate
                 ? format(parseISO(activityInfo.effectiveStartDate), 'dd/MM/yyyy', { locale: es })
                 : '-'
               }
@@ -400,7 +619,7 @@ export function ResourcesGestionesView({
     );
   }
 
-  if (resources.length === 0) {
+  if (sortMode !== 'area_trabajo' && sortMode !== 'fecha_objetivo' && resources.length === 0) {
     return (
       <div className="text-center py-8 text-muted-foreground">
         No hay recursos para mostrar
@@ -440,9 +659,18 @@ export function ResourcesGestionesView({
           <Calendar className="h-4 w-4" />
           Por Fecha Actividad
         </Button>
+        <Button
+          variant={sortMode === 'area_trabajo' ? 'default' : 'outline'}
+          size="sm"
+          onClick={() => setSortMode('area_trabajo')}
+          className="gap-1.5"
+        >
+          <MapPin className="h-4 w-4" />
+          Por Área trabajo
+        </Button>
       </div>
 
-      {/* Fecha Objetivo View (new) */}
+      {/* Fecha Objetivo View */}
       {sortMode === 'fecha_objetivo' && (
         <GestionesDateView
           budgetId={budgetId}
@@ -492,6 +720,167 @@ export function ResourcesGestionesView({
         </div>
       )}
 
+      {/* Area trabajo View */}
+      {sortMode === 'area_trabajo' && (
+        <div className="space-y-3">
+          {areaLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+            </div>
+          ) : (
+            <>
+              {/* Date range filter */}
+              <Card>
+                <CardContent className="py-3">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <span className="text-sm font-medium">Filtro fechas reales:</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-muted-foreground">Desde</span>
+                      <Input
+                        type="date"
+                        value={areaDateFrom}
+                        onChange={(e) => setAreaDateFrom(e.target.value)}
+                        className="h-8 w-40"
+                      />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-muted-foreground">Hasta</span>
+                      <Input
+                        type="date"
+                        value={areaDateTo}
+                        onChange={(e) => setAreaDateTo(e.target.value)}
+                        className="h-8 w-40"
+                      />
+                    </div>
+                    {(areaDateFrom || areaDateTo) && (
+                      <Button variant="ghost" size="sm" onClick={() => { setAreaDateFrom(''); setAreaDateTo(''); }}>
+                        <X className="h-4 w-4 mr-1" />
+                        Limpiar
+                      </Button>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Expand/Collapse controls */}
+              <div className="flex items-center justify-between">
+                <Badge variant="outline">
+                  {workAreaGroups.reduce((sum, g) => sum + g.tasks.length, 0)} tareas
+                </Badge>
+                <div className="flex gap-2">
+                  <Button variant="ghost" size="sm" onClick={expandAllWorkAreas}>
+                    Expandir todo
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={collapseAllWorkAreas}>
+                    Colapsar todo
+                  </Button>
+                </div>
+              </div>
+
+              {/* Work area groups */}
+              {workAreaGroups.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  {areaDateFrom || areaDateTo
+                    ? 'No hay tareas en el rango de fechas seleccionado'
+                    : 'No hay tareas con áreas de trabajo asignadas'}
+                </div>
+              ) : (
+                workAreaGroups.map(group => {
+                  const isExpanded = expandedWorkAreas.has(group.id);
+
+                  return (
+                    <Collapsible
+                      key={group.id}
+                      open={isExpanded}
+                      onOpenChange={() => toggleWorkArea(group.id)}
+                    >
+                      <Card>
+                        <CollapsibleTrigger asChild>
+                          <div className="flex items-center gap-2 p-4 cursor-pointer hover:bg-accent/50 transition-colors">
+                            {isExpanded ? (
+                              <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                            ) : (
+                              <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                            )}
+                            <Layers className="h-4 w-4 text-primary" />
+                            <span className="font-medium">
+                              {group.level ? `${group.level} - ${group.name}` : group.name}
+                            </span>
+                            <Badge variant="outline" className="ml-2">
+                              {group.tasks.length} {group.tasks.length === 1 ? 'tarea' : 'tareas'}
+                            </Badge>
+                          </div>
+                        </CollapsibleTrigger>
+                        <CollapsibleContent>
+                          <div className="border-t">
+                            <Table>
+                              <TableHeader>
+                                <TableRow>
+                                  <TableHead className="w-10"></TableHead>
+                                  <TableHead>Tarea</TableHead>
+                                  <TableHead>ActividadID</TableHead>
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                {group.tasks.map(task => (
+                                  <TableRow
+                                    key={task.id}
+                                    className={cn(
+                                      'cursor-pointer hover:bg-accent/50',
+                                      task.task_status === 'realizada' && 'bg-green-50/50 dark:bg-green-900/10'
+                                    )}
+                                    onClick={() => onEditTask?.(task.id)}
+                                  >
+                                    <TableCell onClick={(e) => e.stopPropagation()}>
+                                      <Checkbox
+                                        checked={task.task_status === 'realizada'}
+                                        onCheckedChange={() => handleToggleAreaTaskStatus(task.id, task.task_status)}
+                                      />
+                                    </TableCell>
+                                    <TableCell>
+                                      <span className={cn(
+                                        'font-medium',
+                                        task.task_status === 'realizada' && 'line-through text-muted-foreground'
+                                      )}>
+                                        {task.name}
+                                      </span>
+                                    </TableCell>
+                                    <TableCell>
+                                      {task.activity_id ? (
+                                        <Button
+                                          variant="link"
+                                          className="p-0 h-auto text-sm text-primary hover:underline"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            onEditActivity?.(task.activity_id!);
+                                          }}
+                                        >
+                                          {formatActividadId({
+                                            phaseCode: task.phase_code,
+                                            activityCode: task.activity_code,
+                                            name: task.activity_name,
+                                          })}
+                                        </Button>
+                                      ) : (
+                                        <span className="text-sm text-muted-foreground">Sin actividad</span>
+                                      )}
+                                    </TableCell>
+                                  </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
+                          </div>
+                        </CollapsibleContent>
+                      </Card>
+                    </Collapsible>
+                  );
+                })
+              )}
+            </>
+          )}
+        </div>
+      )}
+
       {/* Grouped by Supplier View */}
       {sortMode === 'supplier' && sortedSupplierIds.map(supplierId => {
         const supplierResources = groupedBySupplier[supplierId];
@@ -504,8 +893,8 @@ export function ResourcesGestionesView({
             <div
               className={cn(
                 "flex items-center justify-between p-4 cursor-pointer transition-colors",
-                supplierId === '__no_supplier__' 
-                  ? "bg-muted/50 hover:bg-muted" 
+                supplierId === '__no_supplier__'
+                  ? "bg-muted/50 hover:bg-muted"
                   : "bg-primary/5 hover:bg-primary/10"
               )}
               onClick={() => toggleSupplierExpanded(supplierId)}

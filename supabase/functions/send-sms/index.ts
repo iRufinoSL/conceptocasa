@@ -59,48 +59,11 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // Get company settings for sender info
+    // Admin client for storing communications
     const adminClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
-
-    const { data: companySettings, error: settingsError } = await adminClient
-      .from('company_settings')
-      .select('whatsapp_phone, sms_sender_phone, name')
-      .single();
-
-    if (settingsError) {
-      console.error('Error fetching company settings:', settingsError);
-    }
-
-    // Priority: 1. sms_sender_phone from company_settings, 2. BIRD_SENDER_PHONE env, 3. whatsapp_phone fallback
-    const fromPhone = companySettings?.sms_sender_phone || 
-                      Deno.env.get('BIRD_SENDER_PHONE') || 
-                      companySettings?.whatsapp_phone;
-    
-    console.log('Company settings:', { 
-      sms_sender_phone: companySettings?.sms_sender_phone,
-      whatsapp_phone: companySettings?.whatsapp_phone, 
-      bird_sender_env: Deno.env.get('BIRD_SENDER_PHONE') ? 'set' : 'not set',
-      fromPhone 
-    });
-    
-    if (!fromPhone) {
-      console.error('No sender phone configured - check company_settings.sms_sender_phone or BIRD_SENDER_PHONE env var');
-      return new Response(JSON.stringify({ 
-        error: 'No hay teléfono de remitente SMS configurado. Ve a Configuración > Empresa y configura el teléfono remitente SMS.' 
-      }), {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
-    // Normalize sender phone number
-    let normalizedFrom = fromPhone.replace(/\s+/g, '');
-    if (!normalizedFrom.startsWith('+')) {
-      normalizedFrom = '+' + normalizedFrom;
-    }
 
     // Normalize recipient phone number
     let normalizedTo = to.replace(/\s+/g, '');
@@ -108,20 +71,36 @@ Deno.serve(async (req: Request) => {
       normalizedTo = '+' + normalizedTo;
     }
 
-    console.log(`Sending SMS from ${normalizedFrom} to ${normalizedTo}: ${message.substring(0, 50)}...`);
+    // Bird workspace/channel config
+    const birdWorkspaceId = Deno.env.get('BIRD_WORKSPACE_ID');
+    const birdChannelId = Deno.env.get('BIRD_CHANNEL_ID');
 
-    // Send SMS via Bird API - Conversations API format
-    // See: https://docs.bird.com/api/channels-api/sms-api
-    const birdResponse = await fetch('https://api.bird.com/v2/send', {
+    if (!birdWorkspaceId || !birdChannelId) {
+      console.error('BIRD_WORKSPACE_ID or BIRD_CHANNEL_ID not configured');
+      return new Response(JSON.stringify({ error: 'SMS channel not configured' }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    console.log(`Sending SMS to ${normalizedTo}: ${message.substring(0, 50)}...`);
+
+    // Send SMS via Bird Channels API
+    const birdUrl = `https://api.bird.com/workspaces/${birdWorkspaceId}/channels/${birdChannelId}/messages`;
+    const birdResponse = await fetch(birdUrl, {
       method: 'POST',
       headers: {
         'Authorization': `AccessKey ${birdApiKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        originator: normalizedFrom,
-        recipients: [normalizedTo],
-        body: message,
+        receiver: {
+          contacts: [{ identifierKey: 'phonenumber', identifierValue: normalizedTo }],
+        },
+        body: {
+          type: 'text',
+          text: { text: message },
+        },
       }),
     });
 
@@ -143,12 +122,11 @@ Deno.serve(async (req: Request) => {
         status: 'failed',
         error_message: birdData.errors?.[0]?.message || birdData.message || birdData.code || 'Error sending SMS',
         created_by: user.id,
-        metadata: {
-          to_phone: normalizedTo,
-          from_phone: normalizedFrom,
-          budget_id: budget_id,
-          error_response: birdData,
-        },
+         metadata: {
+           to_phone: normalizedTo,
+           budget_id: budget_id,
+           error_response: birdData,
+         },
          })
          .select()
          .single();
@@ -181,13 +159,12 @@ Deno.serve(async (req: Request) => {
         status: 'sent',
         sent_at: new Date().toISOString(),
         created_by: user.id,
-        metadata: {
-          to_phone: normalizedTo,
-          from_phone: normalizedFrom,
-          budget_id: budget_id,
-          external_id: birdData.id || birdData.messageId,
-          bird_response: birdData,
-        },
+         metadata: {
+           to_phone: normalizedTo,
+           budget_id: budget_id,
+           external_id: birdData.id || birdData.messageId,
+           bird_response: birdData,
+         },
       })
       .select()
       .single();

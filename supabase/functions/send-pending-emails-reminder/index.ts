@@ -44,41 +44,38 @@ const handler = async (req: Request): Promise<Response> => {
 
     // Bird API for SMS
     const birdApiKey = Deno.env.get('BIRD_API_KEY');
-    const birdSenderPhone = Deno.env.get('BIRD_SENDER_PHONE');
+    const birdWorkspaceId = Deno.env.get('BIRD_WORKSPACE_ID');
+    const birdChannelId = Deno.env.get('BIRD_CHANNEL_ID');
 
     async function sendSmsNotification(toPhone: string, message: string) {
       if (!birdApiKey) {
         console.error('BIRD_API_KEY not configured, skipping SMS');
         return false;
       }
-
-      const { data: compSettings } = await supabase
-        .from('company_settings')
-        .select('sms_sender_phone, whatsapp_phone')
-        .single();
-
-      const fromPhone = compSettings?.sms_sender_phone || birdSenderPhone || compSettings?.whatsapp_phone;
-      if (!fromPhone) {
-        console.error('No SMS sender phone configured');
+      if (!birdWorkspaceId || !birdChannelId) {
+        console.error('BIRD_WORKSPACE_ID or BIRD_CHANNEL_ID not configured, skipping SMS');
         return false;
       }
 
-      let normalizedFrom = fromPhone.replace(/\s+/g, '');
-      if (!normalizedFrom.startsWith('+')) normalizedFrom = '+' + normalizedFrom;
       let normalizedTo = toPhone.replace(/\s+/g, '');
       if (!normalizedTo.startsWith('+')) normalizedTo = '+' + normalizedTo;
 
       try {
-        const response = await fetch('https://api.bird.com/v2/send', {
+        const birdUrl = `https://api.bird.com/workspaces/${birdWorkspaceId}/channels/${birdChannelId}/messages`;
+        const response = await fetch(birdUrl, {
           method: 'POST',
           headers: {
             'Authorization': `AccessKey ${birdApiKey}`,
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            originator: normalizedFrom,
-            recipients: [normalizedTo],
-            body: message,
+            receiver: {
+              contacts: [{ identifierKey: 'phonenumber', identifierValue: normalizedTo }],
+            },
+            body: {
+              type: 'text',
+              text: { text: message },
+            },
           }),
         });
 

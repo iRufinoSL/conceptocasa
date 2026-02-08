@@ -83,9 +83,10 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    console.log(`Sending SMS to ${normalizedTo}: ${message.substring(0, 50)}...`);
+    console.log(`Sending SMS to ${normalizedTo}`);
+    console.log(`Message length: ${message.length} chars`);
+    console.log(`Message content: ${JSON.stringify(message)}`);
     console.log(`Bird config - Workspace: ${birdWorkspaceId}, Channel: ${birdChannelId}`);
-    console.log(`Bird API Key prefix: ${birdApiKey.substring(0, 8)}...`);
 
     // Step 1: Verify channel exists and is accessible
     const verifyUrl = `https://api.bird.com/workspaces/${birdWorkspaceId}/channels/${birdChannelId}`;

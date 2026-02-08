@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useEffect, useCallback } from 'react';
-import { ChevronDown, ChevronRight, User, Users, Calendar, ClipboardList, MapPin, Layers, X } from 'lucide-react';
+import { ChevronDown, ChevronRight, User, Users, Calendar, ClipboardList, MapPin, Layers, X, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -16,6 +16,8 @@ import { format, parseISO, addDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { GestionesDateView } from './GestionesDateView';
+import { TaskForm } from './TaskForm';
+import type { BudgetTask } from './BudgetAgendaTab';
 
 interface BudgetResource {
   id: string;
@@ -123,6 +125,10 @@ export function ResourcesGestionesView({
   const [areaDateTo, setAreaDateTo] = useState('');
   const [expandedWorkAreas, setExpandedWorkAreas] = useState<Set<string>>(new Set(['__all__']));
   const [areaLoading, setAreaLoading] = useState(false);
+  
+  // Task form state
+  const [taskFormOpen, setTaskFormOpen] = useState(false);
+  const [editingTask, setEditingTask] = useState<BudgetTask | null>(null);
 
   // Fetch resources data (non-tasks)
   const fetchData = useCallback(async () => {
@@ -177,19 +183,27 @@ export function ResourcesGestionesView({
   const fetchAreaData = useCallback(async () => {
     setAreaLoading(true);
     try {
-      const [tasksRes, waRes, waLinksRes, actRes] = await Promise.all([
+      // First get work areas for this budget
+      const waRes = await supabase
+        .from('budget_work_areas')
+        .select('id, name, level, work_area')
+        .eq('budget_id', budgetId);
+
+      const waIds = (waRes.data || []).map(wa => wa.id);
+
+      // Now fetch tasks, links (filtered by budget's work areas), and activities in parallel
+      const [tasksRes, waLinksRes, actRes] = await Promise.all([
         supabase
           .from('budget_activity_resources')
           .select('id, name, activity_id, task_status')
           .eq('budget_id', budgetId)
           .in('resource_type', ['Tarea', 'Cita']),
-        supabase
-          .from('budget_work_areas')
-          .select('id, name, level, work_area')
-          .eq('budget_id', budgetId),
-        supabase
-          .from('budget_work_area_activities')
-          .select('work_area_id, activity_id'),
+        waIds.length > 0
+          ? supabase
+              .from('budget_work_area_activities')
+              .select('work_area_id, activity_id')
+              .in('work_area_id', waIds)
+          : Promise.resolve({ data: [], error: null }),
         supabase
           .from('budget_activities')
           .select('id, code, name, phase_id, actual_start_date, actual_end_date, budget_phases(code)')
@@ -227,9 +241,8 @@ export function ResourcesGestionesView({
       setAreaTasks(mappedTasks);
       setAreaWorkAreas(waRes.data || []);
 
-      // Filter work area links to this budget's work areas
-      const waIds = new Set((waRes.data || []).map(wa => wa.id));
-      setAreaWorkAreaLinks((waLinksRes.data || []).filter(l => waIds.has(l.work_area_id)));
+      // Links are already filtered by budget's work areas in the query
+      setAreaWorkAreaLinks(waLinksRes.data || []);
 
       setAreaActivityDates((actRes.data || []).map((a: any) => ({
         id: a.id,
@@ -484,6 +497,19 @@ export function ResourcesGestionesView({
       console.error('Error updating status:', error);
       toast.error('Error al actualizar estado');
     }
+  };
+
+  // Task form handlers for area_trabajo view
+  const handleNewAreaTask = () => {
+    setEditingTask(null);
+    setTaskFormOpen(true);
+  };
+
+  const handleTaskFormSuccess = () => {
+    setTaskFormOpen(false);
+    setEditingTask(null);
+    fetchAreaData();
+    fetchData();
   };
 
   const toggleSupplierExpanded = (supplierId: string) => {
@@ -762,11 +788,19 @@ export function ResourcesGestionesView({
                 </CardContent>
               </Card>
 
-              {/* Expand/Collapse controls */}
+              {/* Expand/Collapse controls + Nueva tarea */}
               <div className="flex items-center justify-between">
-                <Badge variant="outline">
-                  {workAreaGroups.reduce((sum, g) => sum + g.tasks.length, 0)} tareas
-                </Badge>
+                <div className="flex items-center gap-3">
+                  <Badge variant="outline">
+                    {workAreaGroups.reduce((sum, g) => sum + g.tasks.length, 0)} tareas
+                  </Badge>
+                  {isAdmin && (
+                    <Button size="sm" onClick={handleNewAreaTask} className="gap-1.5">
+                      <Plus className="h-4 w-4" />
+                      Nueva tarea
+                    </Button>
+                  )}
+                </div>
                 <div className="flex gap-2">
                   <Button variant="ghost" size="sm" onClick={expandAllWorkAreas}>
                     Expandir todo
@@ -958,6 +992,23 @@ export function ResourcesGestionesView({
           </div>
         );
       })}
+      {/* Task Form Dialog */}
+      <TaskForm
+        budgetId={budgetId}
+        activities={activities.map(a => {
+          const phase = phases.find(p => p.id === a.phase_id);
+          return {
+            id: a.id,
+            name: a.name,
+            code: a.code,
+            phase_code: phase?.code || null,
+          };
+        })}
+        task={editingTask}
+        open={taskFormOpen}
+        onOpenChange={setTaskFormOpen}
+        onSuccess={handleTaskFormSuccess}
+      />
     </div>
   );
 }

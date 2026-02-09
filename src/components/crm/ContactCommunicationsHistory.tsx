@@ -83,8 +83,8 @@ export function ContactCommunicationsHistory({ contactId, contactPhone, isAdmin 
   const queryClient = useQueryClient();
 
   // New state for email detail view
-  const [selectedEmail, setSelectedEmail] = useState<EmailMessage | null>(null);
-  const [emailDetailDialogOpen, setEmailDetailDialogOpen] = useState(false);
+  const [selectedComm, setSelectedComm] = useState<{ type: 'email' | 'whatsapp' | 'sms'; data: EmailMessage | WhatsAppMessage | SmsMessage } | null>(null);
+  const [commDetailOpen, setCommDetailOpen] = useState(false);
   const [actionsDialogOpen, setActionsDialogOpen] = useState(false);
   const [showCreateDocument, setShowCreateDocument] = useState(false);
   const [previewAttachment, setPreviewAttachment] = useState<{ url: string; name: string; type: string } | null>(null);
@@ -291,8 +291,8 @@ export function ContactCommunicationsHistory({ contactId, contactPhone, isAdmin 
     },
     onSuccess: () => {
       toast.success('Email movido a papelera');
-      setSelectedEmail(null);
-      setEmailDetailDialogOpen(false);
+      setSelectedComm(null);
+      setCommDetailOpen(false);
       refetchEmails();
     },
     onError: (error: any) => {
@@ -301,9 +301,9 @@ export function ContactCommunicationsHistory({ contactId, contactPhone, isAdmin 
   });
 
   // Handle email click to open detail view
-  const handleEmailClick = (email: EmailMessage) => {
-    setSelectedEmail(email);
-    setEmailDetailDialogOpen(true);
+  const handleCommClick = (item: EmailMessage | WhatsAppMessage | SmsMessage, type: 'email' | 'whatsapp' | 'sms') => {
+    setSelectedComm({ type, data: item });
+    setCommDetailOpen(true);
   };
 
   const isLoading = loadingEmails || loadingWhatsApp || loadingSms;
@@ -521,8 +521,8 @@ export function ContactCommunicationsHistory({ contactId, contactPhone, isAdmin 
                   return (
                     <div
                       key={`${item.type}-${item.id}`}
-                      className={`p-2 rounded-lg border ${isInbound ? 'border-l-2 border-l-green-500' : 'border-l-2 border-l-blue-500'} bg-card ${isEmail ? 'cursor-pointer hover:bg-accent/50 transition-colors' : ''}`}
-                      onClick={isEmail ? () => handleEmailClick(item as EmailMessage) : undefined}
+                      className={`p-2 rounded-lg border ${isInbound ? 'border-l-2 border-l-green-500' : 'border-l-2 border-l-blue-500'} bg-card cursor-pointer hover:bg-accent/50 transition-colors`}
+                      onClick={() => handleCommClick(item as any, item.type)}
                     >
                       <div className="flex items-start gap-2">
                         <div className={`p-1.5 rounded-full ${typeIconBg}`}>
@@ -797,82 +797,112 @@ export function ContactCommunicationsHistory({ contactId, contactPhone, isAdmin 
         </DialogContent>
       </Dialog>
 
-      {/* Email Detail Dialog */}
-      <Dialog open={emailDetailDialogOpen} onOpenChange={setEmailDetailDialogOpen}>
+      {/* Communication Detail Dialog */}
+      <Dialog open={commDetailOpen} onOpenChange={setCommDetailOpen}>
         <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
           <DialogHeader className="flex-shrink-0">
             <DialogTitle className="flex items-center gap-2">
-              <Mail className="h-5 w-5 text-blue-600" />
-              Detalle del Email
+              {selectedComm?.type === 'email' && <Mail className="h-5 w-5 text-blue-600" />}
+              {selectedComm?.type === 'whatsapp' && <MessageSquare className="h-5 w-5 text-green-600" />}
+              {selectedComm?.type === 'sms' && <Smartphone className="h-5 w-5 text-purple-600" />}
+              Detalle de {selectedComm?.type === 'email' ? 'Email' : selectedComm?.type === 'whatsapp' ? 'WhatsApp' : 'SMS'}
             </DialogTitle>
           </DialogHeader>
 
-          {selectedEmail && (
+          {selectedComm && (
             <div className="flex-1 flex flex-col gap-4 overflow-hidden py-2">
-              {/* Email metadata */}
+              {/* Metadata */}
               <div className="flex-shrink-0 space-y-2">
                 <div className="flex items-center gap-2 flex-wrap">
-                  {selectedEmail.direction === 'inbound' ? (
-                    <Badge variant="outline" className="text-green-600">
-                      <ArrowDownLeft className="h-3 w-3 mr-1" />
-                      Entrada
-                    </Badge>
-                  ) : (
-                    <Badge variant="outline" className="text-blue-600">
-                      <ArrowUpRight className="h-3 w-3 mr-1" />
-                      Salida
-                    </Badge>
-                  )}
-                  <Badge className={getStatusColor(selectedEmail.status)}>
-                    {selectedEmail.status}
+                  {(() => {
+                    const direction = (selectedComm.data as any).direction;
+                    return direction === 'inbound' ? (
+                      <Badge variant="outline" className="text-green-600">
+                        <ArrowDownLeft className="h-3 w-3 mr-1" />
+                        Entrada
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline" className="text-blue-600">
+                        <ArrowUpRight className="h-3 w-3 mr-1" />
+                        Salida
+                      </Badge>
+                    );
+                  })()}
+                  <Badge className={getStatusColor((selectedComm.data as any).status)}>
+                    {(selectedComm.data as any).status}
                   </Badge>
                   <span className="text-sm text-muted-foreground">
-                    {format(new Date(selectedEmail.created_at), "EEEE d 'de' MMMM yyyy, HH:mm", { locale: es })}
+                    {format(new Date((selectedComm.data as any).created_at), "EEEE d 'de' MMMM yyyy, HH:mm", { locale: es })}
                   </span>
                 </div>
                 
-                <div className="space-y-1 text-sm">
-                  <p><span className="font-medium">De:</span> {selectedEmail.from_email}</p>
-                  <p><span className="font-medium">Para:</span> {selectedEmail.to_emails?.join(', ')}</p>
-                  {selectedEmail.subject && (
-                    <p><span className="font-medium">Asunto:</span> {selectedEmail.subject}</p>
-                  )}
-                </div>
+                {selectedComm.type === 'email' && (() => {
+                  const email = selectedComm.data as EmailMessage;
+                  return (
+                    <div className="space-y-1 text-sm">
+                      <p><span className="font-medium">De:</span> {email.from_email}</p>
+                      <p><span className="font-medium">Para:</span> {email.to_emails?.join(', ')}</p>
+                      {email.subject && <p><span className="font-medium">Asunto:</span> {email.subject}</p>}
+                    </div>
+                  );
+                })()}
+
+                {selectedComm.type === 'whatsapp' && (
+                  <div className="space-y-1 text-sm">
+                    <p><span className="font-medium">Teléfono:</span> {(selectedComm.data as WhatsAppMessage).phone_number}</p>
+                  </div>
+                )}
+
+                {selectedComm.type === 'sms' && (() => {
+                  const sms = selectedComm.data as SmsMessage;
+                  const meta = sms.metadata as any;
+                  return (
+                    <div className="space-y-1 text-sm">
+                      {meta?.to_phone && <p><span className="font-medium">Para:</span> {meta.to_phone}</p>}
+                      {meta?.from_phone && <p><span className="font-medium">De:</span> {meta.from_phone}</p>}
+                      {sms.subject && <p><span className="font-medium">Asunto:</span> {sms.subject}</p>}
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* Action buttons */}
               <div className="flex items-center gap-2 flex-wrap flex-shrink-0 border-y py-3">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setEmailDetailDialogOpen(false);
-                    setTimeout(() => setActionsDialogOpen(true), 100);
-                  }}
-                  className="gap-1"
-                >
-                  <FolderOpen className="h-4 w-4" />
-                  Asociar/Tarea
-                </Button>
-                
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setEmailDetailDialogOpen(false);
-                    setTimeout(() => setShowCreateDocument(true), 100);
-                  }}
-                  className="gap-1"
-                >
-                  <FilePlus className="h-4 w-4" />
-                  Documento
-                </Button>
-
-                {selectedEmail.direction === 'outbound' && (
+                {(selectedComm.type === 'email' || selectedComm.type === 'whatsapp') && (
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => resendEmailMutation.mutate(selectedEmail.id)}
+                    onClick={() => {
+                      setCommDetailOpen(false);
+                      setTimeout(() => setActionsDialogOpen(true), 100);
+                    }}
+                    className="gap-1"
+                  >
+                    <FolderOpen className="h-4 w-4" />
+                    Asociar/Tarea
+                  </Button>
+                )}
+                
+                {selectedComm.type === 'email' && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setCommDetailOpen(false);
+                      setTimeout(() => setShowCreateDocument(true), 100);
+                    }}
+                    className="gap-1"
+                  >
+                    <FilePlus className="h-4 w-4" />
+                    Documento
+                  </Button>
+                )}
+
+                {selectedComm.type === 'email' && (selectedComm.data as EmailMessage).direction === 'outbound' && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => resendEmailMutation.mutate(selectedComm.data.id)}
                     disabled={resendEmailMutation.isPending}
                     className="gap-1"
                   >
@@ -885,14 +915,15 @@ export function ContactCommunicationsHistory({ contactId, contactPhone, isAdmin 
                   </Button>
                 )}
 
-                {isAdmin && (
+                {isAdmin && selectedComm.type === 'email' && (
                   <Button
                     variant="ghost"
                     size="sm"
                     className="text-destructive gap-1"
                     onClick={() => {
                       if (confirm('¿Estás seguro de que deseas eliminar este email?')) {
-                        deleteEmailMutation.mutate(selectedEmail.id);
+                        deleteEmailMutation.mutate(selectedComm.data.id);
+                        setCommDetailOpen(false);
                       }
                     }}
                   >
@@ -902,31 +933,56 @@ export function ContactCommunicationsHistory({ contactId, contactPhone, isAdmin 
                 )}
               </div>
 
-              {/* Email body */}
+              {/* Body content */}
               <ScrollArea className="flex-1 min-h-0">
                 <div className="overflow-x-auto pr-4">
-                  {selectedEmail.body_html ? (
-                    <div
-                      className="prose prose-sm dark:prose-invert max-w-none break-words [word-break:break-word] [overflow-wrap:anywhere] [&_*]:max-w-full [&_*]:break-words [&_img]:max-w-full [&_table]:max-w-full [&_table]:block [&_table]:overflow-x-auto [&_pre]:max-w-full [&_pre]:overflow-x-auto"
-                      dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(selectedEmail.body_html) }}
-                    />
-                  ) : (
+                  {selectedComm.type === 'email' && (() => {
+                    const email = selectedComm.data as EmailMessage;
+                    return email.body_html ? (
+                      <div
+                        className="prose prose-sm dark:prose-invert max-w-none break-words [word-break:break-word] [overflow-wrap:anywhere] [&_*]:max-w-full [&_*]:break-words [&_img]:max-w-full [&_table]:max-w-full [&_table]:block [&_table]:overflow-x-auto [&_pre]:max-w-full [&_pre]:overflow-x-auto"
+                        dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(email.body_html) }}
+                      />
+                    ) : (
+                      <div className="text-sm whitespace-pre-wrap break-words">
+                        {email.body_text}
+                      </div>
+                    );
+                  })()}
+
+                  {selectedComm.type === 'whatsapp' && (
                     <div className="text-sm whitespace-pre-wrap break-words">
-                      {selectedEmail.body_text}
+                      {(selectedComm.data as WhatsAppMessage).message}
+                      {(selectedComm.data as WhatsAppMessage).notes && (
+                        <p className="text-xs mt-4 text-muted-foreground italic bg-muted/50 p-2 rounded">
+                          📝 {(selectedComm.data as WhatsAppMessage).notes}
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {selectedComm.type === 'sms' && (
+                    <div className="text-sm whitespace-pre-wrap break-words">
+                      {(selectedComm.data as SmsMessage).content}
+                      {(selectedComm.data as SmsMessage).error_message && (selectedComm.data as SmsMessage).status === 'failed' && (
+                        <p className="text-xs mt-4 text-destructive">
+                          Error: {(selectedComm.data as SmsMessage).error_message}
+                        </p>
+                      )}
                     </div>
                   )}
                 </div>
               </ScrollArea>
 
-              {/* Attachments */}
-              {(selectedEmail.email_attachments?.length || 0) > 0 && (
+              {/* Attachments (email only) */}
+              {selectedComm.type === 'email' && ((selectedComm.data as EmailMessage).email_attachments?.length || 0) > 0 && (
                 <div className="flex-shrink-0 border-t pt-3 space-y-2">
                   <p className="text-xs text-muted-foreground flex items-center gap-1">
                     <Paperclip className="h-3 w-3" />
-                    Adjuntos ({selectedEmail.email_attachments?.length})
+                    Adjuntos ({(selectedComm.data as EmailMessage).email_attachments?.length})
                   </p>
                   <div className="space-y-2">
-                    {selectedEmail.email_attachments?.map((att) => {
+                    {(selectedComm.data as EmailMessage).email_attachments?.map((att) => {
                       const name = getEmailAttachmentDisplayName(att);
                       return (
                         <div key={att.id} className="flex items-center justify-between gap-2 p-2 bg-muted/50 rounded-md border">
@@ -955,7 +1011,7 @@ export function ContactCommunicationsHistory({ contactId, contactPhone, isAdmin 
           )}
 
           <DialogFooter className="flex-shrink-0 border-t pt-4">
-            <Button onClick={() => setEmailDetailDialogOpen(false)}>
+            <Button onClick={() => setCommDetailOpen(false)}>
               Cerrar
             </Button>
           </DialogFooter>
@@ -963,20 +1019,24 @@ export function ContactCommunicationsHistory({ contactId, contactPhone, isAdmin 
       </Dialog>
 
       {/* Communication Actions Dialog */}
-      {selectedEmail && (
+      {selectedComm && (selectedComm.type === 'email' || selectedComm.type === 'whatsapp') && (
         <CommunicationActionsDialog
           open={actionsDialogOpen}
           onOpenChange={setActionsDialogOpen}
-          communicationId={selectedEmail.id}
-          communicationType="email"
-          communicationSubject={selectedEmail.subject}
-          communicationContent={selectedEmail.body_text || selectedEmail.body_html || ''}
-          contactId={selectedEmail.contact_id}
+          communicationId={selectedComm.data.id}
+          communicationType={selectedComm.type}
+          communicationSubject={selectedComm.type === 'email' ? (selectedComm.data as EmailMessage).subject : undefined}
+          communicationContent={
+            selectedComm.type === 'email'
+              ? ((selectedComm.data as EmailMessage).body_text || (selectedComm.data as EmailMessage).body_html || '')
+              : (selectedComm.data as WhatsAppMessage).message
+          }
+          contactId={contactId}
         />
       )}
 
       {/* Create Document From Email Dialog */}
-      {selectedEmail && (
+      {selectedComm && selectedComm.type === 'email' && (
         <CreateDocumentFromEmailDialog
           open={showCreateDocument}
           onOpenChange={(open) => {
@@ -985,7 +1045,7 @@ export function ContactCommunicationsHistory({ contactId, contactPhone, isAdmin 
               toast.success('Email marcado como documento');
             }
           }}
-          email={selectedEmail as any}
+          email={selectedComm.data as any}
         />
       )}
 

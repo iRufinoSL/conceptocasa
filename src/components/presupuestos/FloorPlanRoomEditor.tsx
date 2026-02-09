@@ -6,12 +6,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Plus, Trash2, ChevronDown, DoorOpen, Square } from 'lucide-react';
+import { Progress } from '@/components/ui/progress';
+import { Plus, Trash2, ChevronDown, DoorOpen, Square, AlertTriangle } from 'lucide-react';
 import { OPENING_PRESETS, WALL_LABELS, ROOM_PRESETS } from '@/lib/floor-plan-calculations';
 import type { RoomData } from '@/lib/floor-plan-calculations';
 
 interface FloorPlanRoomEditorProps {
   rooms: RoomData[];
+  planArea: number;
   selectedRoomId?: string;
   onSelectRoom: (roomId: string) => void;
   onAddRoom: (name: string, width: number, length: number) => Promise<void>;
@@ -24,7 +26,7 @@ interface FloorPlanRoomEditorProps {
 }
 
 export function FloorPlanRoomEditor({
-  rooms, selectedRoomId, onSelectRoom,
+  rooms, planArea, selectedRoomId, onSelectRoom,
   onAddRoom, onUpdateRoom, onDeleteRoom,
   onUpdateWall, onAddOpening, onDeleteOpening,
   saving,
@@ -33,6 +35,10 @@ export function FloorPlanRoomEditor({
   const [newRoomWidth, setNewRoomWidth] = useState(4);
   const [newRoomLength, setNewRoomLength] = useState(3);
   const [showPresets, setShowPresets] = useState(false);
+
+  const roomsAreaSum = rooms.reduce((sum, r) => sum + r.width * r.length, 0);
+  const areaPercent = planArea > 0 ? Math.min((roomsAreaSum / planArea) * 100, 100) : 0;
+  const areaExceeded = roomsAreaSum > planArea * 1.001;
 
   const handleAddRoom = async () => {
     if (!newRoomName.trim()) return;
@@ -49,6 +55,24 @@ export function FloorPlanRoomEditor({
 
   return (
     <div className="space-y-4">
+      {/* Area usage indicator */}
+      <Card>
+        <CardContent className="py-3 px-3 space-y-1.5">
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-muted-foreground">Superficie ocupada</span>
+            <span className={areaExceeded ? 'text-destructive font-semibold' : 'font-medium'}>
+              {roomsAreaSum.toFixed(1)}m² / {planArea.toFixed(1)}m²
+            </span>
+          </div>
+          <Progress value={areaPercent} className={`h-2 ${areaExceeded ? '[&>div]:bg-destructive' : ''}`} />
+          {areaExceeded && (
+            <p className="text-[10px] text-destructive flex items-center gap-1">
+              <AlertTriangle className="h-3 w-3" /> Excede la superficie de la planta
+            </p>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Add room */}
       <Card>
         <CardHeader className="pb-2">
@@ -106,7 +130,7 @@ export function FloorPlanRoomEditor({
       {/* Room list */}
       <div className="space-y-2">
         {rooms.map(room => (
-          <Card key={room.id} 
+          <Card key={room.id}
             className={`cursor-pointer transition-colors ${selectedRoomId === room.id ? 'ring-2 ring-primary' : ''}`}
             onClick={() => onSelectRoom(room.id)}
           >
@@ -153,6 +177,20 @@ export function FloorPlanRoomEditor({
                 <Input type="number" step="0.1" value={selectedRoom.height || ''}
                   placeholder="Auto"
                   onChange={e => onUpdateRoom(selectedRoom.id, { height: Number(e.target.value) || undefined })} />
+              </div>
+            </div>
+
+            {/* Position */}
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <Label className="text-xs">Posición X (m)</Label>
+                <Input type="number" step="0.5" value={selectedRoom.posX}
+                  onChange={e => onUpdateRoom(selectedRoom.id, { posX: Number(e.target.value) })} />
+              </div>
+              <div>
+                <Label className="text-xs">Posición Y (m)</Label>
+                <Input type="number" step="0.5" value={selectedRoom.posY}
+                  onChange={e => onUpdateRoom(selectedRoom.id, { posY: Number(e.target.value) })} />
               </div>
             </div>
 

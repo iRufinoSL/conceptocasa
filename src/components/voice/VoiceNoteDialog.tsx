@@ -38,8 +38,12 @@ const stepLabels: Record<VoiceNoteStep, string> = {
   recording_date: '🎤 Dictando fecha...',
   asking_contact: 'Procesando...',
   recording_contact: '🎤 Dictando contacto...',
+  disambiguating_contact: 'Eligiendo contacto...',
+  recording_contact_choice: '🎤 ¿Cuál contacto?',
   asking_budget: 'Procesando...',
   recording_budget: '🎤 Dictando presupuesto...',
+  disambiguating_budget: 'Eligiendo presupuesto...',
+  recording_budget_choice: '🎤 ¿Cuál presupuesto?',
   processing: 'Procesando...',
   summary: 'Resumen de la nota',
   saving: 'Guardando...',
@@ -88,7 +92,7 @@ export function VoiceNoteDialog({ open, onOpenChange }: VoiceNoteDialogProps) {
   };
 
   const isRecording = step.startsWith('recording_');
-  const isAsking = step.startsWith('asking_');
+  const isAsking = step.startsWith('asking_') || step.startsWith('disambiguating_');
   const showPulse = isListening || isSpeaking;
 
   return (

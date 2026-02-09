@@ -126,6 +126,7 @@ export function VoiceNoteEditDialog({ open, onOpenChange, voiceNote, onSuccess }
               <option value="active">Activo</option>
               <option value="sent">Enviado</option>
               <option value="dismissed">Descartado</option>
+              <option value="archived">Archivado</option>
             </select>
           </div>
         </div>

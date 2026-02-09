@@ -18,6 +18,7 @@ interface CloneResult {
     budgetContacts: number;
     budgetItems: number;
     budgetConcepts: number;
+    documentLinks: number;
   };
 }
 
@@ -69,6 +70,7 @@ export async function cloneContentToExistingBudget(
     budgetContacts: 0,
     budgetItems: 0,
     budgetConcepts: 0,
+    documentLinks: 0,
   };
 
   try {
@@ -460,6 +462,24 @@ export async function cloneContentToExistingBudget(
       }
     }
 
+    // Clone budget_document_links
+    const { data: sourceDocLinks, error: docLinksError } = await supabase
+      .from("budget_document_links")
+      .select("*")
+      .eq("budget_id", sourceBudgetId);
+
+    if (docLinksError) throw new Error(docLinksError.message);
+
+    if (sourceDocLinks?.length) {
+      for (const link of sourceDocLinks) {
+        const { error } = await supabase.from("budget_document_links").insert({
+          budget_id: targetBudgetId,
+          document_id: link.document_id,
+        });
+        if (!error) stats.documentLinks++;
+      }
+    }
+
     return { success: true, newBudgetId: targetBudgetId, stats };
   } catch (error: any) {
     console.error("Error cloning content to existing budget:", error);
@@ -492,6 +512,7 @@ export async function cloneWorkAreasOnly(
     budgetContacts: 0,
     budgetItems: 0,
     budgetConcepts: 0,
+    documentLinks: 0,
   };
 
   try {
@@ -614,6 +635,7 @@ export async function cloneBudget(
     budgetContacts: 0,
     budgetItems: 0,
     budgetConcepts: 0,
+    documentLinks: 0,
   };
 
   let newBudgetId: string | undefined;
@@ -1072,6 +1094,24 @@ export async function cloneBudget(
           uploaded_by: null,
         });
         if (!error) stats.predesigns++;
+      }
+    }
+
+    // 13) Clone budget_document_links
+    const { data: sourceDocLinks, error: docLinksError } = await supabase
+      .from("budget_document_links")
+      .select("*")
+      .eq("budget_id", sourceBudgetId);
+
+    if (docLinksError) throw new Error(docLinksError.message);
+
+    if (sourceDocLinks?.length) {
+      for (const link of sourceDocLinks) {
+        const { error } = await supabase.from("budget_document_links").insert({
+          budget_id: newBudgetId,
+          document_id: link.document_id,
+        });
+        if (!error) stats.documentLinks++;
       }
     }
 

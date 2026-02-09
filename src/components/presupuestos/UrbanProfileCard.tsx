@@ -207,7 +207,7 @@ interface UrbanProfileCardProps {
   isAdmin: boolean;
 }
 
-const statusLabels: Record<string, { label: string; color: string; icon: React.ElementType }> = {
+const statusLabels: Record<string, { label: string; color: string; icon: React.ComponentType<{ className?: string }> }> = {
   pending: { label: 'Pendiente', color: 'bg-muted text-muted-foreground', icon: AlertCircle },
   catastro_loaded: { label: 'Catastro cargado', color: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200', icon: Search },
   regulations_loaded: { label: 'Normativa cargada', color: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200', icon: FileText },
@@ -326,7 +326,7 @@ function EditableFieldWithSource({
   source: string | null;
   unit: string;
   onSave: (value: number | null, source: string | null) => Promise<void>;
-  icon?: React.ElementType;
+  icon?: React.ComponentType<{ className?: string }>;
 }) {
   const [editValue, setEditValue] = useState<number | undefined>(value ?? undefined);
   const [editSource, setEditSource] = useState(source || '');

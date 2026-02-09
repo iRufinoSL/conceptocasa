@@ -3,7 +3,20 @@ import { supabase } from '@/integrations/supabase/client';
 import { useVoiceInput } from '@/hooks/useVoiceInput';
 import { toast } from '@/hooks/use-toast';
 
-export type VoiceNoteStep = 'idle' | 'asking_message' | 'recording_message' | 'asking_date' | 'recording_date' | 'asking_contact' | 'recording_contact' | 'asking_budget' | 'recording_budget' | 'processing' | 'summary' | 'saving' | 'done' | 'error';
+export type VoiceNoteStep =
+  | 'idle'
+  | 'asking_message' | 'recording_message'
+  | 'asking_date' | 'recording_date'
+  | 'asking_contact' | 'recording_contact'
+  | 'disambiguating_contact' | 'recording_contact_choice'
+  | 'asking_budget' | 'recording_budget'
+  | 'disambiguating_budget' | 'recording_budget_choice'
+  | 'processing' | 'summary' | 'saving' | 'done' | 'error';
+
+interface OptionItem {
+  id: string;
+  name: string;
+}
 
 interface VoiceNoteData {
   message: string;
@@ -30,6 +43,10 @@ export function useVoiceNoteFlow() {
   const [isProcessing, setIsProcessing] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const currentStepRef = useRef<VoiceNoteStep>('idle');
+
+  // Store pending disambiguation options
+  const pendingContactOptions = useRef<OptionItem[]>([]);
+  const pendingBudgetOptions = useRef<OptionItem[]>([]);
 
   const voiceInput = useVoiceInput({
     continuous: false,
@@ -64,7 +81,7 @@ export function useVoiceNoteFlow() {
 
       const audioBlob = await response.blob();
       const audioUrl = URL.createObjectURL(audioBlob);
-      
+
       return new Promise<void>((resolve) => {
         const audio = new Audio(audioUrl);
         audioRef.current = audio;
@@ -89,8 +106,11 @@ export function useVoiceNoteFlow() {
     }
   }, []);
 
-  const parseAction = useCallback(async (action: string, text: string) => {
+  const parseAction = useCallback(async (action: string, text: string, options?: OptionItem[]) => {
     const session = await supabase.auth.getSession();
+    const body: any = { action, text };
+    if (options) body.options = options;
+
     const response = await fetch(
       `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/parse-voice-note`,
       {
@@ -100,28 +120,35 @@ export function useVoiceNoteFlow() {
           'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
           'Authorization': `Bearer ${session.data.session?.access_token}`,
         },
-        body: JSON.stringify({ action, text }),
+        body: JSON.stringify(body),
       }
     );
     if (!response.ok) throw new Error('Parse failed');
     return response.json();
   }, []);
 
+  const startListeningForStep = useCallback((nextStep: VoiceNoteStep) => {
+    setStep(nextStep);
+    currentStepRef.current = nextStep;
+    voiceInput.resetTranscript();
+    setTimeout(() => voiceInput.startListening(), 500);
+  }, [voiceInput]);
+
   const handleVoiceResult = useCallback(async (currentStep: VoiceNoteStep, text: string) => {
     voiceInput.stopListening();
 
     switch (currentStep) {
+      // ─── Message ────────────────────────────────────────────
       case 'recording_message': {
         setData(prev => ({ ...prev, message: text }));
         setStep('asking_date');
         currentStepRef.current = 'asking_date';
         await speak('¿Cuándo quieres que te recuerde este mensaje?');
-        setStep('recording_date');
-        currentStepRef.current = 'recording_date';
-        voiceInput.resetTranscript();
-        setTimeout(() => voiceInput.startListening(), 500);
+        startListeningForStep('recording_date');
         break;
       }
+
+      // ─── Date ───────────────────────────────────────────────
       case 'recording_date': {
         setIsProcessing(true);
         try {
@@ -138,16 +165,30 @@ export function useVoiceNoteFlow() {
         setStep('asking_contact');
         currentStepRef.current = 'asking_contact';
         await speak('¿Está relacionado este mensaje con algún contacto?');
-        setStep('recording_contact');
-        currentStepRef.current = 'recording_contact';
-        voiceInput.resetTranscript();
-        setTimeout(() => voiceInput.startListening(), 500);
+        startListeningForStep('recording_contact');
         break;
       }
+
+      // ─── Contact ────────────────────────────────────────────
       case 'recording_contact': {
         setIsProcessing(true);
         try {
           const result = await parseAction('match_contact', text);
+
+          if (result.multiple && result.options?.length > 0) {
+            // Multiple matches → disambiguate
+            pendingContactOptions.current = result.options;
+            setIsProcessing(false);
+
+            const optionNames = result.options.map((o: OptionItem, i: number) => `${i + 1}, ${o.name}`).join('. ');
+            setStep('disambiguating_contact');
+            currentStepRef.current = 'disambiguating_contact';
+            await speak(`He encontrado varios contactos: ${optionNames}. ¿Cuál de ellos es?`);
+            startListeningForStep('recording_contact_choice');
+            return;
+          }
+
+          // Single or no match
           setData(prev => ({
             ...prev,
             contactId: result.contact_id || null,
@@ -160,16 +201,50 @@ export function useVoiceNoteFlow() {
         setStep('asking_budget');
         currentStepRef.current = 'asking_budget';
         await speak('¿Este mensaje está relacionado con algún presupuesto?');
-        setStep('recording_budget');
-        currentStepRef.current = 'recording_budget';
-        voiceInput.resetTranscript();
-        setTimeout(() => voiceInput.startListening(), 500);
+        startListeningForStep('recording_budget');
         break;
       }
+
+      // ─── Contact choice (disambiguation) ────────────────────
+      case 'recording_contact_choice': {
+        setIsProcessing(true);
+        try {
+          const result = await parseAction('pick_from_list', text, pendingContactOptions.current);
+          setData(prev => ({
+            ...prev,
+            contactId: result.selected_id || null,
+            contactName: result.selected_name || null,
+          }));
+        } catch (e) {
+          console.error('[VoiceNote] Contact pick error:', e);
+        }
+        pendingContactOptions.current = [];
+        setIsProcessing(false);
+        setStep('asking_budget');
+        currentStepRef.current = 'asking_budget';
+        await speak('¿Este mensaje está relacionado con algún presupuesto?');
+        startListeningForStep('recording_budget');
+        break;
+      }
+
+      // ─── Budget ─────────────────────────────────────────────
       case 'recording_budget': {
         setIsProcessing(true);
         try {
           const result = await parseAction('match_budget', text);
+
+          if (result.multiple && result.options?.length > 0) {
+            pendingBudgetOptions.current = result.options;
+            setIsProcessing(false);
+
+            const optionNames = result.options.map((o: OptionItem, i: number) => `${i + 1}, ${o.name}`).join('. ');
+            setStep('disambiguating_budget');
+            currentStepRef.current = 'disambiguating_budget';
+            await speak(`He encontrado varios presupuestos: ${optionNames}. ¿Cuál de ellos es?`);
+            startListeningForStep('recording_budget_choice');
+            return;
+          }
+
           setData(prev => ({
             ...prev,
             budgetId: result.budget_id || null,
@@ -183,8 +258,28 @@ export function useVoiceNoteFlow() {
         currentStepRef.current = 'summary';
         break;
       }
+
+      // ─── Budget choice (disambiguation) ─────────────────────
+      case 'recording_budget_choice': {
+        setIsProcessing(true);
+        try {
+          const result = await parseAction('pick_from_list', text, pendingBudgetOptions.current);
+          setData(prev => ({
+            ...prev,
+            budgetId: result.selected_id || null,
+            budgetName: result.selected_name || null,
+          }));
+        } catch (e) {
+          console.error('[VoiceNote] Budget pick error:', e);
+        }
+        pendingBudgetOptions.current = [];
+        setIsProcessing(false);
+        setStep('summary');
+        currentStepRef.current = 'summary';
+        break;
+      }
     }
-  }, [voiceInput, speak, parseAction]);
+  }, [voiceInput, speak, parseAction, startListeningForStep]);
 
   const startFlow = useCallback(async () => {
     setData({
@@ -196,16 +291,15 @@ export function useVoiceNoteFlow() {
       budgetId: null,
       budgetName: null,
     });
+    pendingContactOptions.current = [];
+    pendingBudgetOptions.current = [];
     setStep('asking_message');
     currentStepRef.current = 'asking_message';
-    
+
     await speak('¿Cuál es el mensaje que quieres grabar?');
-    
-    setStep('recording_message');
-    currentStepRef.current = 'recording_message';
-    voiceInput.resetTranscript();
-    setTimeout(() => voiceInput.startListening(), 500);
-  }, [speak, voiceInput]);
+
+    startListeningForStep('recording_message');
+  }, [speak, startListeningForStep]);
 
   const saveNote = useCallback(async () => {
     setStep('saving');
@@ -231,7 +325,7 @@ export function useVoiceNoteFlow() {
       await speak('Mensaje guardado correctamente.');
       setStep('done');
       currentStepRef.current = 'done';
-      
+
       toast({
         title: 'Nota de voz guardada',
         description: data.reminderAt ? `Recordatorio: ${data.reminderDescription}` : 'Sin recordatorio programado',
@@ -270,6 +364,8 @@ export function useVoiceNoteFlow() {
       budgetId: null,
       budgetName: null,
     });
+    pendingContactOptions.current = [];
+    pendingBudgetOptions.current = [];
   }, [cancel]);
 
   return {

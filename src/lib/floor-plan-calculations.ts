@@ -25,7 +25,7 @@ export interface RoomData {
 export interface WallData {
   id: string;
   wallIndex: number; // 1=top, 2=right, 3=bottom, 4=left
-  wallType: 'externa' | 'interna';
+  wallType: 'externa' | 'interna' | 'compartida';
   thickness?: number;
   height?: number;
   openings: OpeningData[];
@@ -42,7 +42,7 @@ export interface OpeningData {
 
 export interface WallCalculation {
   wallIndex: number;
-  wallType: 'externa' | 'interna';
+  wallType: 'externa' | 'interna' | 'compartida';
   wallLength: number;
   wallHeight: number;
   thickness: number;
@@ -144,7 +144,8 @@ export function calculateRoom(room: RoomData, plan: FloorPlanData): RoomCalculat
     if (wall.wallType === 'externa') {
       totalExternalWallArea += netArea;
     } else {
-      totalInternalWallArea += netArea;
+      const factor = wall.wallType === 'compartida' ? 0.5 : 1;
+      totalInternalWallArea += netArea * factor;
     }
     totalOpeningsArea += openingsArea;
     
@@ -232,7 +233,8 @@ export function calculateFloorPlanSummary(plan: FloorPlanData, rooms: RoomData[]
       if (w.wallType === 'externa') {
         totalExternalWallBaseM += w.baseLength;
       } else {
-        totalInternalWallBaseM += w.baseLength;
+        const factor = w.wallType === 'compartida' ? 0.5 : 1;
+        totalInternalWallBaseM += w.baseLength * factor;
       }
     });
   });
@@ -284,3 +286,57 @@ export const ROOM_PRESETS = [
   { name: 'Pasillo', width: 5, length: 1.2 },
   { name: 'Entrada', width: 2.5, length: 2 },
 ];
+
+// Detect shared walls between adjacent rooms
+export function detectSharedWalls(rooms: RoomData[]): Map<string, { neighborRoomId: string; neighborWallIndex: number }> {
+  const EPSILON = 0.05;
+  const shared = new Map<string, { neighborRoomId: string; neighborWallIndex: number }>();
+
+  for (let i = 0; i < rooms.length; i++) {
+    for (let j = i + 1; j < rooms.length; j++) {
+      const a = rooms[i], b = rooms[j];
+
+      // A's right edge = B's left edge
+      if (Math.abs((a.posX + a.width) - b.posX) < EPSILON) {
+        const os = Math.max(a.posY, b.posY);
+        const oe = Math.min(a.posY + a.length, b.posY + b.length);
+        if (oe - os > EPSILON) {
+          shared.set(`${a.id}::2`, { neighborRoomId: b.id, neighborWallIndex: 4 });
+          shared.set(`${b.id}::4`, { neighborRoomId: a.id, neighborWallIndex: 2 });
+        }
+      }
+
+      // A's left edge = B's right edge
+      if (Math.abs(a.posX - (b.posX + b.width)) < EPSILON) {
+        const os = Math.max(a.posY, b.posY);
+        const oe = Math.min(a.posY + a.length, b.posY + b.length);
+        if (oe - os > EPSILON) {
+          shared.set(`${a.id}::4`, { neighborRoomId: b.id, neighborWallIndex: 2 });
+          shared.set(`${b.id}::2`, { neighborRoomId: a.id, neighborWallIndex: 4 });
+        }
+      }
+
+      // A's bottom edge = B's top edge
+      if (Math.abs((a.posY + a.length) - b.posY) < EPSILON) {
+        const os = Math.max(a.posX, b.posX);
+        const oe = Math.min(a.posX + a.width, b.posX + b.width);
+        if (oe - os > EPSILON) {
+          shared.set(`${a.id}::3`, { neighborRoomId: b.id, neighborWallIndex: 1 });
+          shared.set(`${b.id}::1`, { neighborRoomId: a.id, neighborWallIndex: 3 });
+        }
+      }
+
+      // A's top edge = B's bottom edge
+      if (Math.abs(a.posY - (b.posY + b.length)) < EPSILON) {
+        const os = Math.max(a.posX, b.posX);
+        const oe = Math.min(a.posX + a.width, b.posX + b.width);
+        if (oe - os > EPSILON) {
+          shared.set(`${a.id}::1`, { neighborRoomId: b.id, neighborWallIndex: 3 });
+          shared.set(`${b.id}::3`, { neighborRoomId: a.id, neighborWallIndex: 1 });
+        }
+      }
+    }
+  }
+
+  return shared;
+}

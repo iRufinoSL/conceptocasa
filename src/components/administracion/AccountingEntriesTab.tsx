@@ -85,9 +85,10 @@ const emptyFilters: Filters = {
 interface Props {
   highlightCode?: string | null;
   onHighlightHandled?: () => void;
+  budgetId?: string;
 }
 
-export function AccountingEntriesTab({ highlightCode, onHighlightHandled }: Props) {
+export function AccountingEntriesTab({ highlightCode, onHighlightHandled, budgetId: fixedBudgetId }: Props) {
   const [entries, setEntries] = useState<AccountingEntry[]>([]);
   const [presupuestos, setPresupuestos] = useState<Presupuesto[]>([]);
   const [allPresupuestos, setAllPresupuestos] = useState<Presupuesto[]>([]);
@@ -150,12 +151,18 @@ export function AccountingEntriesTab({ highlightCode, onHighlightHandled }: Prop
       setAllPresupuestos(allPresData || []);
 
       // Fetch entries with presupuesto info
-      const { data: entriesData, error: entriesError } = await supabase
+      let entriesQuery = supabase
         .from('accounting_entries')
         .select(`
           *,
           presupuesto:presupuestos(id, nombre, codigo_correlativo, version)
-        `)
+        `);
+      
+      if (fixedBudgetId) {
+        entriesQuery = entriesQuery.eq('budget_id', fixedBudgetId);
+      }
+      
+      const { data: entriesData, error: entriesError } = await entriesQuery
         .order('entry_date', { ascending: false })
         .order('code', { ascending: false });
 
@@ -218,7 +225,8 @@ export function AccountingEntriesTab({ highlightCode, onHighlightHandled }: Prop
     setEditingEntry(null);
     setForm({
       ...emptyForm,
-      entry_date: format(new Date(), 'yyyy-MM-dd')
+      entry_date: format(new Date(), 'yyyy-MM-dd'),
+      budget_id: fixedBudgetId || ''
     });
     setDialogOpen(true);
   };
@@ -868,24 +876,26 @@ export function AccountingEntriesTab({ highlightCode, onHighlightHandled }: Prop
                 />
               </div>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="budget_id">Presupuesto *</Label>
-              <Select
-                value={form.budget_id}
-                onValueChange={(value) => setForm({ ...form, budget_id: value })}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecciona un presupuesto" />
-                </SelectTrigger>
-                <SelectContent>
-                  {presupuestos.map((p) => (
-                    <SelectItem key={p.id} value={p.id}>
-                      {p.codigo_correlativo} - {p.nombre} ({p.version})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            {!fixedBudgetId && (
+              <div className="space-y-2">
+                <Label htmlFor="budget_id">Presupuesto *</Label>
+                <Select
+                  value={form.budget_id}
+                  onValueChange={(value) => setForm({ ...form, budget_id: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecciona un presupuesto" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {presupuestos.map((p) => (
+                      <SelectItem key={p.id} value={p.id}>
+                        {p.codigo_correlativo} - {p.nombre} ({p.version})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>
@@ -932,6 +942,7 @@ export function AccountingEntriesTab({ highlightCode, onHighlightHandled }: Prop
         open={wizardOpen}
         onOpenChange={setWizardOpen}
         onEntryCreated={fetchData}
+        budgetId={fixedBudgetId}
       />
     </div>
   );

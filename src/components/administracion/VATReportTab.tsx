@@ -86,7 +86,7 @@ const MONTHS = [
   { value: '12', label: 'Diciembre' },
 ];
 
-export function VATReportTab() {
+export function VATReportTab({ budgetId: fixedBudgetId }: { budgetId?: string } = {}) {
   const [entries, setEntries] = useState<AccountingEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [year, setYear] = useState(new Date().getFullYear().toString());
@@ -117,7 +117,7 @@ export function VATReportTab() {
 
   const fetchEntries = async () => {
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('accounting_entries')
         .select(`
           id,
@@ -130,8 +130,13 @@ export function VATReportTab() {
           supplier_id,
           supplier:crm_contacts(name, surname)
         `)
-        .in('entry_type', ['compra', 'venta'])
-        .order('entry_date', { ascending: true });
+        .in('entry_type', ['compra', 'venta']);
+      
+      if (fixedBudgetId) {
+        query = query.eq('budget_id', fixedBudgetId);
+      }
+      
+      const { data, error } = await query.order('entry_date', { ascending: true });
 
       if (error) throw error;
       setEntries(data || []);

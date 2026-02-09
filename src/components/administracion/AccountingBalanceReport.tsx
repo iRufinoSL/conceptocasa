@@ -51,7 +51,7 @@ const getTypeBadgeVariant = (type: string): "default" | "secondary" | "destructi
   }
 };
 
-export function AccountingBalanceReport() {
+export function AccountingBalanceReport({ budgetId: fixedBudgetId }: { budgetId?: string } = {}) {
   const [accounts, setAccounts] = useState<AccountWithBalance[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -69,14 +69,18 @@ export function AccountingBalanceReport() {
 
       if (accountsError) throw accountsError;
 
-      const { data: linesData, error: linesError } = await supabase
+      let linesQuery = supabase
         .from('accounting_entry_lines')
-        .select('account_id, debit_amount, credit_amount');
+        .select('account_id, debit_amount, credit_amount, entry:accounting_entries(budget_id)');
+      
+      const { data: linesData, error: linesError } = await linesQuery;
 
       if (linesError) throw linesError;
 
       const accountTotals = new Map<string, { debit: number; credit: number }>();
-      linesData?.forEach(line => {
+      linesData?.forEach((line: any) => {
+        // Filter by budget if fixedBudgetId is set
+        if (fixedBudgetId && line.entry?.budget_id !== fixedBudgetId) return;
         const current = accountTotals.get(line.account_id) || { debit: 0, credit: 0 };
         current.debit += Number(line.debit_amount) || 0;
         current.credit += Number(line.credit_amount) || 0;

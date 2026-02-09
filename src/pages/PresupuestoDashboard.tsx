@@ -10,7 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ArrowLeft, Calculator, ClipboardList, Building2, FileText, Settings, Calendar, Ruler, FileDown, Image, RefreshCw, Copy, GanttChart, Upload, X, Loader2, Euro, Home, MapPin, Users, FolderOpen, CalendarCheck, Mail, Landmark, PenTool } from 'lucide-react';
+import { ArrowLeft, Calculator, ClipboardList, Building2, FileText, Settings, Calendar, Ruler, FileDown, Image, RefreshCw, Copy, GanttChart, Upload, X, Loader2, Euro, Home, MapPin, Users, FolderOpen, CalendarCheck, Mail, Landmark, PenTool, Wallet } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { AppNavDropdown } from '@/components/AppNavDropdown';
@@ -37,6 +37,7 @@ import { BudgetCommunicationsTab } from '@/components/presupuestos/BudgetCommuni
 import { BudgetPresenceIndicator } from '@/components/presupuestos/BudgetPresenceIndicator';
 import { FloorPlanTab } from '@/components/presupuestos/FloorPlanTab';
 import { toast } from 'sonner';
+import { BudgetAdministracionTab } from '@/components/presupuestos/BudgetAdministracionTab';
 
 interface Presupuesto {
   id: string;
@@ -513,6 +514,12 @@ export default function PresupuestoDashboard() {
                 <Mail className="h-3.5 w-3.5" />
                 <span>Comunicaciones</span>
               </TabsTrigger>
+              {isAdmin && (
+                <TabsTrigger value="administracion" className="flex items-center gap-1.5 text-xs px-2 py-1.5">
+                  <Wallet className="h-3.5 w-3.5" />
+                  <span>Administración</span>
+                </TabsTrigger>
+              )}
               {isTabVisible('resumen') && (
                 <TabsTrigger value="resumen" className="flex items-center gap-1.5 text-xs px-2 py-1.5">
                   <Calculator className="h-3.5 w-3.5" />
@@ -766,6 +773,12 @@ export default function PresupuestoDashboard() {
               isAdmin={isAdmin} 
             />
           </TabsContent>
+
+          {isAdmin && (
+            <TabsContent value="administracion" className="mt-6">
+              <BudgetAdministracionTab budgetId={presupuesto.id} isAdmin={isAdmin} />
+            </TabsContent>
+          )}
 
           <TabsContent value="resumen" className="mt-6">
             <BudgetVisualSummary budgetId={presupuesto.id} budgetName={presupuesto.nombre} />

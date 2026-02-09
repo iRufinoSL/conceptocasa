@@ -40,9 +40,10 @@ type SortDirection = 'asc' | 'desc';
 interface Props {
   onNavigateToEntry?: (entryCode: string) => void;
   onNavigateToAccount?: (accountId: string) => void;
+  budgetId?: string;
 }
 
-export function AccountingEntryLinesTab({ onNavigateToEntry, onNavigateToAccount }: Props) {
+export function AccountingEntryLinesTab({ onNavigateToEntry, onNavigateToAccount, budgetId: fixedBudgetId }: Props) {
   const [lines, setLines] = useState<EntryLine[]>([]);
   const [accounts, setAccounts] = useState<AccountingAccount[]>([]);
   const [loading, setLoading] = useState(true);
@@ -57,17 +58,23 @@ export function AccountingEntryLinesTab({ onNavigateToEntry, onNavigateToAccount
 
   const fetchData = async () => {
     try {
-      const { data: linesData, error: linesError } = await supabase
+      let linesQuery = supabase
         .from('accounting_entry_lines')
         .select(`
           *,
           account:accounting_accounts(id, name, account_type),
-          entry:accounting_entries(code, description)
-        `)
-        .order('code', { ascending: false });
+          entry:accounting_entries(code, description, budget_id)
+        `);
+      
+      const { data: rawLinesData, error: linesError } = await linesQuery.order('code', { ascending: false });
 
       if (linesError) throw linesError;
-      setLines(linesData || []);
+      
+      // Filter by budget if fixedBudgetId is set
+      const linesData = fixedBudgetId 
+        ? (rawLinesData || []).filter((line: any) => line.entry?.budget_id === fixedBudgetId)
+        : (rawLinesData || []);
+      setLines(linesData);
 
       const { data: accountsData, error: accountsError } = await supabase
         .from('accounting_accounts')

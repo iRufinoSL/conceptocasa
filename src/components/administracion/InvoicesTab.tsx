@@ -133,7 +133,7 @@ const getYearFromDate = (date: string): number => {
   return new Date(date).getFullYear();
 };
 
-export function InvoicesTab() {
+export function InvoicesTab({ budgetId: fixedBudgetId }: { budgetId?: string } = {}) {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [presupuestos, setPresupuestos] = useState<Presupuesto[]>([]);
   const [allPresupuestos, setAllPresupuestos] = useState<Presupuesto[]>([]);
@@ -189,14 +189,20 @@ export function InvoicesTab() {
       setAccounts(accountsData || []);
 
       // Fetch invoices with related data
-      const { data: invoicesData, error: invoicesError } = await supabase
+      let invoicesQuery = supabase
         .from('invoices')
         .select(`
           *,
           presupuesto:presupuestos(id, nombre, codigo_correlativo, version),
           issuer_account:accounting_accounts!invoices_issuer_account_id_fkey(id, name, account_type, contact_id, address, city, postal_code, province, nif_cif),
           receiver_account:accounting_accounts!invoices_receiver_account_id_fkey(id, name, account_type, contact_id, address, city, postal_code, province, nif_cif)
-        `)
+        `);
+      
+      if (fixedBudgetId) {
+        invoicesQuery = invoicesQuery.eq('budget_id', fixedBudgetId);
+      }
+      
+      const { data: invoicesData, error: invoicesError } = await invoicesQuery
         .order('invoice_date', { ascending: false })
         .order('invoice_number', { ascending: false });
 
@@ -251,7 +257,8 @@ export function InvoicesTab() {
       invoice_number: nextNumber.toString(),
       invoice_date: format(new Date(), 'yyyy-MM-dd'),
       document_type: docType,
-      vat_rate: docType === 'factura' ? '21.00' : '21.00'
+      vat_rate: docType === 'factura' ? '21.00' : '21.00',
+      budget_id: fixedBudgetId || ''
     });
     setDialogOpen(true);
   };

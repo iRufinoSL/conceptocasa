@@ -83,9 +83,10 @@ interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onEntryCreated: () => void;
+  budgetId?: string;
 }
 
-export function AccountingEntryWizard({ open, onOpenChange, onEntryCreated }: Props) {
+export function AccountingEntryWizard({ open, onOpenChange, onEntryCreated, budgetId: fixedBudgetId }: Props) {
   const [step, setStep] = useState(1);
   const [saving, setSaving] = useState(false);
   const [presupuestos, setPresupuestos] = useState<Presupuesto[]>([]);
@@ -110,7 +111,7 @@ export function AccountingEntryWizard({ open, onOpenChange, onEntryCreated }: Pr
 
   const [formData, setFormData] = useState<WizardFormData>({
     entry_type: 'compra',
-    budget_id: null,
+    budget_id: fixedBudgetId || null,
     description: '',
     entry_date: format(new Date(), 'yyyy-MM-dd'),
     total_amount: '',
@@ -134,7 +135,7 @@ export function AccountingEntryWizard({ open, onOpenChange, onEntryCreated }: Pr
     setStep(1);
     setFormData({
       entry_type: 'compra',
-      budget_id: null,
+      budget_id: fixedBudgetId || null,
       description: '',
       entry_date: format(new Date(), 'yyyy-MM-dd'),
       total_amount: '',
@@ -411,13 +412,19 @@ export function AccountingEntryWizard({ open, onOpenChange, onEntryCreated }: Pr
 
   const nextStep = () => {
     if (canProceed()) {
-      setStep(step + 1);
+      let next = step + 1;
+      // Skip budget step if budgetId is fixed
+      if (next === 2 && fixedBudgetId) next = 3;
+      setStep(next);
     }
   };
 
   const prevStep = () => {
     if (step > 1) {
-      setStep(step - 1);
+      let prev = step - 1;
+      // Skip budget step if budgetId is fixed
+      if (prev === 2 && fixedBudgetId) prev = 1;
+      setStep(prev);
     }
   };
 

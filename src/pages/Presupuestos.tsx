@@ -276,8 +276,8 @@ export default function Presupuestos() {
   const [isSaving, setIsSaving] = useState(false);
   const [recalculatingId, setRecalculatingId] = useState<string | null>(null);
   const [cloneDialogOpen, setCloneDialogOpen] = useState(false);
-  const [showActive, setShowActive] = useState(true);
-  const [showEnEjecucion, setShowEnEjecucion] = useState(true);
+  const [showActive, setShowActive] = useState(false);
+  const [showEnEjecucion, setShowEnEjecucion] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
 
   const isAdmin = roles.includes('administrador');

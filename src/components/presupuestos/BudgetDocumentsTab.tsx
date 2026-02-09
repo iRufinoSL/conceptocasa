@@ -485,11 +485,39 @@ export function BudgetDocumentsTab({ budgetId, projectId, projectName, isAdmin }
     setLoading(true);
     try {
       // Fetch regular documents
-      const regularDocsQuery = projectId 
-        ? supabase.from('project_documents').select('*').eq('project_id', projectId)
-        : supabase.from('project_documents').select('*').eq('budget_id', budgetId);
-      
-      const { data: regularDocs, error: regularError } = await regularDocsQuery.order('created_at', { ascending: false });
+      let regularDocs: any[] = [];
+
+      if (budgetId) {
+        // Use junction table to get documents linked to this budget
+        const { data: links, error: linksError } = await supabase
+          .from('budget_document_links')
+          .select('document_id')
+          .eq('budget_id', budgetId);
+
+        if (linksError) throw linksError;
+
+        const docIds = (links || []).map(l => l.document_id);
+
+        if (docIds.length > 0) {
+          const { data, error } = await supabase
+            .from('project_documents')
+            .select('*')
+            .in('id', docIds)
+            .order('created_at', { ascending: false });
+          if (error) throw error;
+          regularDocs = data || [];
+        }
+      } else if (projectId) {
+        const { data, error } = await supabase
+          .from('project_documents')
+          .select('*')
+          .eq('project_id', projectId)
+          .order('created_at', { ascending: false });
+        if (error) throw error;
+        regularDocs = data || [];
+      }
+
+      const regularError = null; // handled inline above
       if (regularError) throw regularError;
 
       // Fetch emails marked as documents for this project/budget
@@ -723,7 +751,7 @@ export function BudgetDocumentsTab({ budgetId, projectId, projectName, isAdmin }
         fileSize = selectedFile.size;
       }
 
-      const { error: dbError } = await supabase
+      const { data: newDoc, error: dbError } = await supabase
         .from('project_documents')
         .insert({
           project_id: projectId,
@@ -734,9 +762,19 @@ export function BudgetDocumentsTab({ budgetId, projectId, projectName, isAdmin }
           file_size: fileSize,
           document_type: uploadDocType,
           document_url: uploadUrl.trim() || null
-        });
+        })
+        .select('id')
+        .single();
 
       if (dbError) throw dbError;
+
+      // Create link in junction table for this budget
+      if (budgetId && newDoc) {
+        const { error: linkError } = await supabase
+          .from('budget_document_links')
+          .insert({ budget_id: budgetId, document_id: newDoc.id });
+        if (linkError) console.error('Error creating document link:', linkError);
+      }
 
       toast.success('Documento guardado correctamente');
       resetUploadForm();
@@ -819,8 +857,18 @@ export function BudgetDocumentsTab({ budgetId, projectId, projectName, isAdmin }
         
         if (error) throw error;
         toast.success('Email quitado de documentos');
+      } else if (budgetId) {
+        // In budget context: just unlink the document from this budget
+        const { error } = await supabase
+          .from('budget_document_links')
+          .delete()
+          .eq('budget_id', budgetId)
+          .eq('document_id', documentToDelete.id);
+
+        if (error) throw error;
+        toast.success('Documento desvinculado del presupuesto');
       } else {
-        // For regular documents, delete the file and record
+        // In project context (no budget): actually delete the document
         if (documentToDelete.file_path) {
           await supabase.storage
             .from('project-documents')
@@ -1542,12 +1590,18 @@ export function BudgetDocumentsTab({ budgetId, projectId, projectName, isAdmin }
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              {documentToDelete?.isEmailDocument ? '¿Quitar de documentos?' : '¿Eliminar documento?'}
+              {documentToDelete?.isEmailDocument 
+                ? '¿Quitar de documentos?' 
+                : budgetId 
+                  ? '¿Desvincular documento?' 
+                  : '¿Eliminar documento?'}
             </AlertDialogTitle>
             <AlertDialogDescription>
               {documentToDelete?.isEmailDocument 
                 ? `El email "${documentToDelete?.name}" dejará de aparecer en Documentos, pero seguirá disponible en Comunicaciones.`
-                : `Esta acción eliminará permanentemente el documento "${documentToDelete?.name}".`
+                : budgetId
+                  ? `El documento "${documentToDelete?.name}" se desvinculará de este presupuesto pero seguirá disponible en el repositorio del proyecto.`
+                  : `Esta acción eliminará permanentemente el documento "${documentToDelete?.name}".`
               }
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -1556,12 +1610,12 @@ export function BudgetDocumentsTab({ budgetId, projectId, projectName, isAdmin }
             <AlertDialogAction 
               onClick={handleConfirmDelete}
               disabled={deleting}
-              className={documentToDelete?.isEmailDocument 
+              className={documentToDelete?.isEmailDocument || budgetId
                 ? "bg-secondary text-secondary-foreground hover:bg-secondary/90"
                 : "bg-destructive text-destructive-foreground hover:bg-destructive/90"
               }
             >
-              {deleting ? 'Procesando...' : (documentToDelete?.isEmailDocument ? 'Quitar' : 'Eliminar')}
+              {deleting ? 'Procesando...' : (documentToDelete?.isEmailDocument ? 'Quitar' : budgetId ? 'Desvincular' : 'Eliminar')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

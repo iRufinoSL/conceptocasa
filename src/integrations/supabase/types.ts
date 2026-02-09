@@ -4762,6 +4762,69 @@ export type Database = {
         }
         Relationships: []
       }
+      voice_notes: {
+        Row: {
+          budget_id: string | null
+          budget_name: string | null
+          contact_id: string | null
+          contact_name: string | null
+          created_at: string
+          created_by: string
+          id: string
+          message: string
+          reminder_at: string | null
+          sms_sent: boolean
+          sms_sent_at: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          budget_id?: string | null
+          budget_name?: string | null
+          contact_id?: string | null
+          contact_name?: string | null
+          created_at?: string
+          created_by: string
+          id?: string
+          message: string
+          reminder_at?: string | null
+          sms_sent?: boolean
+          sms_sent_at?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          budget_id?: string | null
+          budget_name?: string | null
+          contact_id?: string | null
+          contact_name?: string | null
+          created_at?: string
+          created_by?: string
+          id?: string
+          message?: string
+          reminder_at?: string | null
+          sms_sent?: boolean
+          sms_sent_at?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "voice_notes_budget_id_fkey"
+            columns: ["budget_id"]
+            isOneToOne: false
+            referencedRelation: "presupuestos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "voice_notes_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contacts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       website_events: {
         Row: {
           contact_id: string | null

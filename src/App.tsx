@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { InactivityHandler } from "@/components/InactivityHandler";
 import { AuthProvider } from "@/context/AuthContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { FloatingVoiceNoteButton } from "@/components/voice/FloatingVoiceNoteButton";
 import Landing from "./pages/Landing";
 import Dashboard from "./pages/Dashboard";
 import Recursos from "./pages/Recursos";
@@ -33,6 +34,7 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <AuthProvider>
+          <FloatingVoiceNoteButton />
           <InactivityHandler />
           <Routes>
             {/* Public routes */}

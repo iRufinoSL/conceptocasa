@@ -65,3 +65,6 @@ verify_jwt = false
 
 [functions.check-voice-reminders]
 verify_jwt = false
+
+[functions.check-email-receipts]
+verify_jwt = false

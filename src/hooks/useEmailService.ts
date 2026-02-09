@@ -26,6 +26,7 @@ interface SendEmailParams {
   ticket_category?: string;
   attachments?: EmailAttachment[];
   response_deadline?: string;
+  request_read_receipt?: boolean;
 }
 
 interface SendEmailResult {

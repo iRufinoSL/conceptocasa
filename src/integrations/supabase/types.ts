@@ -2426,8 +2426,12 @@ export type Database = {
           metadata: Json | null
           project_id: string | null
           read_at: string | null
+          read_receipt_at: string | null
+          receipt_reminder_sent: boolean
+          receipt_reminder_sent_at: string | null
           received_at: string | null
           reminder_sent_at: string | null
+          request_read_receipt: boolean
           response_deadline: string | null
           response_received: boolean | null
           sent_at: string | null
@@ -2462,8 +2466,12 @@ export type Database = {
           metadata?: Json | null
           project_id?: string | null
           read_at?: string | null
+          read_receipt_at?: string | null
+          receipt_reminder_sent?: boolean
+          receipt_reminder_sent_at?: string | null
           received_at?: string | null
           reminder_sent_at?: string | null
+          request_read_receipt?: boolean
           response_deadline?: string | null
           response_received?: boolean | null
           sent_at?: string | null
@@ -2498,8 +2506,12 @@ export type Database = {
           metadata?: Json | null
           project_id?: string | null
           read_at?: string | null
+          read_receipt_at?: string | null
+          receipt_reminder_sent?: boolean
+          receipt_reminder_sent_at?: string | null
           received_at?: string | null
           reminder_sent_at?: string | null
+          request_read_receipt?: boolean
           response_deadline?: string | null
           response_received?: boolean | null
           sent_at?: string | null

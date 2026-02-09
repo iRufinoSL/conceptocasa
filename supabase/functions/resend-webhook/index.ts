@@ -48,8 +48,6 @@ const handler = async (req: Request): Promise<Response> => {
       if (!svixId || !svixTimestamp || !svixSignature) {
         console.warn("Missing Svix headers, skipping signature verification");
       }
-      // Note: Full signature verification would require the svix library
-      // For now, we log and continue
     }
 
     const payload: ResendWebhookPayload = await req.json();
@@ -79,15 +77,23 @@ const handler = async (req: Request): Promise<Response> => {
       );
     }
 
+    // Build update payload
+    const updateData: Record<string, any> = {
+      delivery_status: newStatus,
+      delivery_updated_at: new Date().toISOString(),
+    };
+
+    // If opened, also set read_receipt_at
+    if (newStatus === 'opened') {
+      updateData.read_receipt_at = new Date().toISOString();
+    }
+
     // Update the email record with the new delivery status
     const { data: updatedEmail, error: updateError } = await supabase
       .from("email_messages")
-      .update({
-        delivery_status: newStatus,
-        delivery_updated_at: new Date().toISOString(),
-      })
+      .update(updateData)
       .eq("external_id", emailId)
-      .select("id, subject, to_emails")
+      .select("id, subject, to_emails, request_read_receipt, contact_id, created_by, delivery_status")
       .maybeSingle();
 
     if (updateError) {
@@ -107,6 +113,30 @@ const handler = async (req: Request): Promise<Response> => {
     }
 
     console.log(`Updated email ${updatedEmail.id} to status: ${newStatus}`);
+
+    // Create system alerts for important events
+    if (newStatus === 'delivered') {
+      await supabase.from("system_alerts").insert({
+        alert_type: 'email_delivered',
+        title: 'Email entregado',
+        message: `El email "${updatedEmail.subject || 'Sin asunto'}" fue entregado al servidor de ${updatedEmail.to_emails?.[0] || 'destinatario'}.`,
+        action_url: "/crm",
+        priority: "low",
+        metadata: { email_id: updatedEmail.id },
+      });
+    }
+
+    if (newStatus === 'opened' && updatedEmail.request_read_receipt) {
+      await supabase.from("system_alerts").insert({
+        alert_type: 'email_read_receipt',
+        title: 'Confirmación de lectura recibida',
+        message: `El email "${updatedEmail.subject || 'Sin asunto'}" fue abierto por ${updatedEmail.to_emails?.[0] || 'destinatario'}.`,
+        action_url: "/crm",
+        priority: "medium",
+        metadata: { email_id: updatedEmail.id },
+      });
+      console.log(`Read receipt alert created for email ${updatedEmail.id}`);
+    }
 
     // For bounced or complained emails, create a system alert
     if (newStatus === 'bounced' || newStatus === 'complained') {

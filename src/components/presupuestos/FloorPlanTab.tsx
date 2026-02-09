@@ -6,13 +6,14 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { RefreshCw, Save, Layout, Box, BarChart3, Loader2, AlertTriangle, Trash2, DoorOpen } from 'lucide-react';
+import { RefreshCw, Save, Layout, Box, BarChart3, Loader2, AlertTriangle, Trash2, DoorOpen, ImageIcon } from 'lucide-react';
 import { useFloorPlan } from '@/hooks/useFloorPlan';
 import { calculateFloorPlanSummary, detectSharedWalls, WALL_LABELS, OPENING_PRESETS } from '@/lib/floor-plan-calculations';
 import { FloorPlanCanvas2D } from './FloorPlanCanvas2D';
 import { FloorPlanRoomEditor } from './FloorPlanRoomEditor';
 import { FloorPlanSummaryView } from './FloorPlanSummary';
 import { FloorPlan3DViewer } from './FloorPlan3DViewer';
+import { FloorPlanRenderView } from './FloorPlanRenderView';
 import type { FloorPlanData } from '@/lib/floor-plan-calculations';
 
 interface FloorPlanTabProps {
@@ -244,6 +245,9 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
             <TabsTrigger value="resumen" className="text-xs h-7 px-3">
               <BarChart3 className="h-3.5 w-3.5 mr-1" /> Resumen m²
             </TabsTrigger>
+            <TabsTrigger value="render" className="text-xs h-7 px-3">
+              <ImageIcon className="h-3.5 w-3.5 mr-1" /> Render IA
+            </TabsTrigger>
           </TabsList>
         </Tabs>
 
@@ -366,6 +370,9 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
           )}
           {viewTab === 'resumen' && (
             <FloorPlanSummaryView summary={summary} />
+          )}
+          {viewTab === 'render' && planData && (
+            <FloorPlanRenderView plan={planData} rooms={rooms} budgetId={budgetId} />
           )}
 
           {/* Plan settings */}

@@ -5,13 +5,14 @@ import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, CalendarDays, Clock, Plus, ChevronLeft, ChevronRight, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, CalendarDays, Clock, Plus, ChevronLeft, ChevronRight, CheckCircle2, Mic } from 'lucide-react';
 import { format, isSameDay, startOfWeek, endOfWeek, addWeeks, subWeeks, eachDayOfInterval, isToday, addDays, startOfMonth } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { ManagementForm } from '@/components/crm/ManagementForm';
 import { AppNavDropdown } from '@/components/AppNavDropdown';
 import { AgendaDayView } from '@/components/agenda/AgendaDayView';
 import { AgendaMonthView } from '@/components/agenda/AgendaMonthView';
+import { VoiceNotesSection } from '@/components/agenda/VoiceNotesSection';
 import { toast } from 'sonner';
 
 interface Management {
@@ -41,7 +42,7 @@ interface BudgetTask {
   source: 'budget_tasks' | 'budget_activity_resources';
 }
 
-type ViewMode = 'month' | 'week' | 'day' | 'list';
+type ViewMode = 'month' | 'week' | 'day' | 'list' | 'voice';
 type TaskFilterMode = 'pendiente' | 'todas';
 
 export default function Agenda() {
@@ -58,7 +59,7 @@ export default function Agenda() {
   const [taskFilterMode, setTaskFilterMode] = useState<TaskFilterMode>('pendiente');
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
     const saved = localStorage.getItem('agenda-view-mode');
-    return (saved === 'month' || saved === 'week' || saved === 'day' || saved === 'list') ? saved : 'week';
+    return (saved === 'month' || saved === 'week' || saved === 'day' || saved === 'list' || saved === 'voice') ? saved : 'week';
   });
 
   useEffect(() => {
@@ -374,9 +375,18 @@ export default function Agenda() {
                 variant={viewMode === 'list' ? 'default' : 'ghost'}
                 size="sm"
                 onClick={() => handleViewModeChange('list')}
-                className="rounded-l-none"
+                className="rounded-none border-r"
               >
                 Lista
+              </Button>
+              <Button
+                variant={viewMode === 'voice' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => handleViewModeChange('voice')}
+                className="rounded-l-none gap-1"
+              >
+                <Mic className="h-3.5 w-3.5" />
+                Notas
               </Button>
             </div>
             {canEdit && (
@@ -678,6 +688,18 @@ export default function Agenda() {
                 </Card>
               )}
             </div>
+          </div>
+        )}
+
+        {viewMode === 'voice' && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl font-semibold flex items-center gap-2">
+                <Mic className="h-5 w-5 text-primary" />
+                Notas de Voz
+              </h2>
+            </div>
+            <VoiceNotesSection />
           </div>
         )}
       </main>

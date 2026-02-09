@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { Plus, Pencil, Trash2, Upload, X, Maximize2, FileImage, FileText, LayoutGrid, Layers, ChevronDown, ChevronRight, Sparkles, Move, Home } from 'lucide-react';
+import { PdfThumbnail } from '@/components/ui/pdf-thumbnail';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import { Generate3DVisualization } from './Generate3DVisualization';
@@ -445,16 +446,12 @@ export function BudgetPredesignTab({ budgetId, isAdmin, projectId }: BudgetPrede
               </Button>
             </>
           ) : isPdfFile(item.file_type) ? (
-            <div 
-              className="w-full h-full flex items-center justify-center cursor-pointer hover:bg-muted/80 transition-colors"
+            <PdfThumbnail
+              url={getFileUrl(item.file_path!)}
+              alt={item.file_name || 'PDF'}
+              className="w-full h-full"
               onClick={() => window.open(getFileUrl(item.file_path!), '_blank')}
-            >
-              <div className="text-center">
-                <FileText className="h-12 w-12 mx-auto text-muted-foreground mb-2" />
-                <p className="text-sm text-muted-foreground">{item.file_name}</p>
-                <p className="text-xs text-muted-foreground mt-1">Clic para abrir PDF</p>
-              </div>
-            </div>
+            />
           ) : (
             <div className="w-full h-full flex items-center justify-center">
               <FileText className="h-12 w-12 text-muted-foreground" />

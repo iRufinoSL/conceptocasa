@@ -19,6 +19,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { formatBytes } from '@/lib/format-utils';
+import { PdfThumbnail } from '@/components/ui/pdf-thumbnail';
 
 interface ResourceFileManagerProps {
   resourceId: string;
@@ -210,6 +211,14 @@ export function ResourceFileManager({
                   src={fileUrls[file.file_path]}
                   alt={file.file_name}
                   className="h-10 w-10 rounded object-cover cursor-pointer"
+                  onClick={() => handlePreview(file)}
+                />
+              ) : file.file_type === 'application/pdf' && fileUrls[file.file_path] ? (
+                <PdfThumbnail
+                  url={fileUrls[file.file_path]}
+                  alt={file.file_name}
+                  className="h-10 w-10 rounded overflow-hidden"
+                  maxWidth={80}
                   onClick={() => handlePreview(file)}
                 />
               ) : (

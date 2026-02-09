@@ -661,6 +661,191 @@ export type Database = {
           },
         ]
       }
+      budget_floor_plan_openings: {
+        Row: {
+          created_at: string | null
+          height: number
+          id: string
+          name: string | null
+          opening_type: string
+          position_x: number | null
+          wall_id: string
+          width: number
+        }
+        Insert: {
+          created_at?: string | null
+          height?: number
+          id?: string
+          name?: string | null
+          opening_type?: string
+          position_x?: number | null
+          wall_id: string
+          width?: number
+        }
+        Update: {
+          created_at?: string | null
+          height?: number
+          id?: string
+          name?: string | null
+          opening_type?: string
+          position_x?: number | null
+          wall_id?: string
+          width?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "budget_floor_plan_openings_wall_id_fkey"
+            columns: ["wall_id"]
+            isOneToOne: false
+            referencedRelation: "budget_floor_plan_walls"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      budget_floor_plan_rooms: {
+        Row: {
+          created_at: string | null
+          floor_plan_id: string
+          height: number | null
+          id: string
+          length: number
+          name: string
+          order_index: number | null
+          pos_x: number
+          pos_y: number
+          updated_at: string | null
+          width: number
+        }
+        Insert: {
+          created_at?: string | null
+          floor_plan_id: string
+          height?: number | null
+          id?: string
+          length?: number
+          name: string
+          order_index?: number | null
+          pos_x?: number
+          pos_y?: number
+          updated_at?: string | null
+          width?: number
+        }
+        Update: {
+          created_at?: string | null
+          floor_plan_id?: string
+          height?: number | null
+          id?: string
+          length?: number
+          name?: string
+          order_index?: number | null
+          pos_x?: number
+          pos_y?: number
+          updated_at?: string | null
+          width?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "budget_floor_plan_rooms_floor_plan_id_fkey"
+            columns: ["floor_plan_id"]
+            isOneToOne: false
+            referencedRelation: "budget_floor_plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      budget_floor_plan_walls: {
+        Row: {
+          created_at: string | null
+          height: number | null
+          id: string
+          room_id: string
+          thickness: number | null
+          wall_index: number
+          wall_type: string
+        }
+        Insert: {
+          created_at?: string | null
+          height?: number | null
+          id?: string
+          room_id: string
+          thickness?: number | null
+          wall_index: number
+          wall_type?: string
+        }
+        Update: {
+          created_at?: string | null
+          height?: number | null
+          id?: string
+          room_id?: string
+          thickness?: number | null
+          wall_index?: number
+          wall_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "budget_floor_plan_walls_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "budget_floor_plan_rooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      budget_floor_plans: {
+        Row: {
+          budget_id: string
+          created_at: string | null
+          default_height: number
+          external_wall_thickness: number
+          id: string
+          internal_wall_thickness: number
+          length: number
+          name: string
+          roof_overhang: number | null
+          roof_slope_percent: number | null
+          roof_type: string | null
+          updated_at: string | null
+          width: number
+        }
+        Insert: {
+          budget_id: string
+          created_at?: string | null
+          default_height?: number
+          external_wall_thickness?: number
+          id?: string
+          internal_wall_thickness?: number
+          length?: number
+          name?: string
+          roof_overhang?: number | null
+          roof_slope_percent?: number | null
+          roof_type?: string | null
+          updated_at?: string | null
+          width?: number
+        }
+        Update: {
+          budget_id?: string
+          created_at?: string | null
+          default_height?: number
+          external_wall_thickness?: number
+          id?: string
+          internal_wall_thickness?: number
+          length?: number
+          name?: string
+          roof_overhang?: number | null
+          roof_slope_percent?: number | null
+          roof_type?: string | null
+          updated_at?: string | null
+          width?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "budget_floor_plans_budget_id_fkey"
+            columns: ["budget_id"]
+            isOneToOne: false
+            referencedRelation: "presupuestos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       budget_items: {
         Row: {
           budget_id: string

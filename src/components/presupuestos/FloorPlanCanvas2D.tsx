@@ -5,8 +5,12 @@ interface FloorPlanCanvas2DProps {
   plan: FloorPlanData;
   rooms: RoomData[];
   selectedRoomId?: string;
+  selectedWallKey?: string;
+  sharedWallKeys?: Set<string>;
   onSelectRoom?: (roomId: string) => void;
+  onSelectWall?: (wallKey: string | null) => void;
   onMoveRoom?: (roomId: string, posX: number, posY: number) => void;
+  onResizeWall?: (roomId: string, wallIndex: number, delta: number) => void;
 }
 
 const ROOM_COLORS: Record<string, string> = {
@@ -26,47 +30,141 @@ function getRoomColor(name: string): string {
   return 'hsl(220, 14%, 93%)';
 }
 
-const GRID_SNAP = 0.5; // snap to 0.5m grid
+const GRID_SNAP = 0.5;
 
 function snapToGrid(val: number): number {
   return Math.round(val / GRID_SNAP) * GRID_SNAP;
 }
 
-export function FloorPlanCanvas2D({ plan, rooms, selectedRoomId, onSelectRoom, onMoveRoom }: FloorPlanCanvas2DProps) {
+export function FloorPlanCanvas2D({
+  plan, rooms, selectedRoomId, selectedWallKey, sharedWallKeys,
+  onSelectRoom, onSelectWall, onMoveRoom, onResizeWall,
+}: FloorPlanCanvas2DProps) {
   const svgRef = useRef<SVGSVGElement>(null);
-  const [dragging, setDragging] = useState<{ roomId: string; startX: number; startY: number; origPosX: number; origPosY: number } | null>(null);
-  const [dragOffset, setDragOffset] = useState<{ dx: number; dy: number }>({ dx: 0, dy: 0 });
-
-  const scale = 40; // pixels per meter
+  const scale = 40;
   const padding = 1.5;
+
+  // Room drag state
+  const [roomDrag, setRoomDrag] = useState<{
+    roomId: string; startX: number; startY: number; origPosX: number; origPosY: number;
+  } | null>(null);
+  const [roomDragOffset, setRoomDragOffset] = useState({ dx: 0, dy: 0 });
+
+  // Wall resize drag state
+  const [wallDrag, setWallDrag] = useState<{
+    roomId: string; wallIndex: number; startVal: number; isHorizontal: boolean;
+  } | null>(null);
+  const [wallDragDelta, setWallDragDelta] = useState(0);
+
+  // Preview rooms with wall drag applied
+  const displayRooms = useMemo(() => {
+    if (!wallDrag || wallDragDelta === 0) return rooms;
+    return rooms.map(room => {
+      if (room.id !== wallDrag.roomId) return room;
+      const r = { ...room };
+      switch (wallDrag.wallIndex) {
+        case 1: r.posY += wallDragDelta; r.length = Math.max(0.5, r.length - wallDragDelta); break;
+        case 2: r.width = Math.max(0.5, r.width + wallDragDelta); break;
+        case 3: r.length = Math.max(0.5, r.length + wallDragDelta); break;
+        case 4: r.posX += wallDragDelta; r.width = Math.max(0.5, r.width - wallDragDelta); break;
+      }
+      return r;
+    });
+  }, [rooms, wallDrag, wallDragDelta]);
+
+  const svgPoint = useCallback((clientX: number, clientY: number) => {
+    const svg = svgRef.current;
+    if (!svg) return { x: 0, y: 0 };
+    const pt = svg.createSVGPoint();
+    pt.x = clientX; pt.y = clientY;
+    const ctm = svg.getScreenCTM();
+    if (!ctm) return { x: 0, y: 0 };
+    const svgPt = pt.matrixTransform(ctm.inverse());
+    return { x: svgPt.x / scale, y: svgPt.y / scale };
+  }, [scale]);
+
+  const handleRoomMouseDown = useCallback((e: React.MouseEvent, roomId: string, posX: number, posY: number) => {
+    if (!onMoveRoom || wallDrag) return;
+    e.preventDefault(); e.stopPropagation();
+    const pt = svgPoint(e.clientX, e.clientY);
+    setRoomDrag({ roomId, startX: pt.x, startY: pt.y, origPosX: posX, origPosY: posY });
+    setRoomDragOffset({ dx: 0, dy: 0 });
+    onSelectRoom?.(roomId);
+    onSelectWall?.(null);
+  }, [onMoveRoom, svgPoint, onSelectRoom, onSelectWall, wallDrag]);
+
+  const handleWallClick = useCallback((e: React.MouseEvent, roomId: string, wallIndex: number) => {
+    e.stopPropagation();
+    const key = `${roomId}::${wallIndex}`;
+    onSelectWall?.(selectedWallKey === key ? null : key);
+    onSelectRoom?.(roomId);
+  }, [onSelectWall, onSelectRoom, selectedWallKey]);
+
+  const handleWallHandleDown = useCallback((e: React.MouseEvent, roomId: string, wallIndex: number) => {
+    if (!onResizeWall) return;
+    e.preventDefault(); e.stopPropagation();
+    const pt = svgPoint(e.clientX, e.clientY);
+    const isHorizontal = wallIndex === 1 || wallIndex === 3;
+    setWallDrag({ roomId, wallIndex, startVal: isHorizontal ? pt.y : pt.x, isHorizontal });
+    setWallDragDelta(0);
+    onSelectRoom?.(roomId);
+  }, [onResizeWall, svgPoint, onSelectRoom]);
+
+  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    if (roomDrag) {
+      const pt = svgPoint(e.clientX, e.clientY);
+      setRoomDragOffset({ dx: snapToGrid(pt.x - roomDrag.startX), dy: snapToGrid(pt.y - roomDrag.startY) });
+    } else if (wallDrag) {
+      const pt = svgPoint(e.clientX, e.clientY);
+      const raw = wallDrag.isHorizontal ? pt.y - wallDrag.startVal : pt.x - wallDrag.startVal;
+      setWallDragDelta(snapToGrid(raw));
+    }
+  }, [roomDrag, wallDrag, svgPoint]);
+
+  const handleMouseUp = useCallback(() => {
+    if (roomDrag && onMoveRoom) {
+      const newX = snapToGrid(roomDrag.origPosX + roomDragOffset.dx);
+      const newY = snapToGrid(roomDrag.origPosY + roomDragOffset.dy);
+      if (newX !== roomDrag.origPosX || newY !== roomDrag.origPosY) {
+        onMoveRoom(roomDrag.roomId, newX, newY);
+      }
+    } else if (wallDrag && onResizeWall && wallDragDelta !== 0) {
+      onResizeWall(wallDrag.roomId, wallDrag.wallIndex, wallDragDelta);
+    }
+    setRoomDrag(null);
+    setRoomDragOffset({ dx: 0, dy: 0 });
+    setWallDrag(null);
+    setWallDragDelta(0);
+  }, [roomDrag, roomDragOffset, wallDrag, wallDragDelta, onMoveRoom, onResizeWall]);
 
   const { viewBox, elements } = useMemo(() => {
     let minX = 0, minY = 0, maxX = plan.width, maxY = plan.length;
-    rooms.forEach(r => {
+    displayRooms.forEach(r => {
       minX = Math.min(minX, r.posX);
       minY = Math.min(minY, r.posY);
       maxX = Math.max(maxX, r.posX + r.width);
       maxY = Math.max(maxY, r.posY + r.length);
     });
-
     const vbX = (minX - padding) * scale;
     const vbY = (minY - padding) * scale;
     const vbW = (maxX - minX + 2 * padding) * scale;
     const vbH = (maxY - minY + 2 * padding) * scale;
 
-    const elements = rooms.map(room => {
+    const elements = displayRooms.map(room => {
       const x = room.posX * scale;
       const y = room.posY * scale;
       const w = room.width * scale;
       const h = room.length * scale;
       const color = getRoomColor(room.name);
 
-      const wallElements = room.walls.map(wall => {
+      const wallData = room.walls.map(wall => {
+        const wallKey = `${room.id}::${wall.wallIndex}`;
+        const isShared = sharedWallKeys?.has(wallKey) || wall.wallType === 'compartida';
         const isExternal = wall.wallType === 'externa';
-        const thickness = isExternal
-          ? plan.externalWallThickness * scale
-          : plan.internalWallThickness * scale;
-        const strokeWidth = Math.max(thickness, isExternal ? 4 : 2);
+        const isWallSelected = selectedWallKey === wallKey;
+
+        const baseThickness = isExternal ? plan.externalWallThickness * scale : plan.internalWallThickness * scale;
+        const strokeWidth = Math.max(baseThickness, isExternal ? 4 : isShared ? 3 : 2);
 
         let x1: number, y1: number, x2: number, y2: number;
         switch (wall.wallIndex) {
@@ -76,14 +174,20 @@ export function FloorPlanCanvas2D({ plan, rooms, selectedRoomId, onSelectRoom, o
           case 4: default: x1 = x; y1 = y; x2 = x; y2 = y + h; break;
         }
 
-        const openingElements = wall.openings.map((op, oi) => {
+        const wallColor = isWallSelected ? 'hsl(var(--primary))'
+          : isExternal ? 'hsl(222, 47%, 20%)'
+          : isShared ? 'hsl(25, 95%, 53%)'
+          : 'hsl(220, 9%, 46%)';
+
+        // Openings
+        const openingEls = wall.openings.map((op, oi) => {
           const wallLen = (wall.wallIndex === 1 || wall.wallIndex === 3) ? room.width : room.length;
           const opWidth = op.width * scale;
           const pos = op.positionX * wallLen * scale;
-          const isHorizontal = wall.wallIndex === 1 || wall.wallIndex === 3;
+          const isHoriz = wall.wallIndex === 1 || wall.wallIndex === 3;
 
           if (op.openingType === 'puerta') {
-            if (isHorizontal) {
+            if (isHoriz) {
               const cx = x + pos;
               const cy = (wall.wallIndex === 1) ? y : y + h;
               const dir = wall.wallIndex === 1 ? 1 : -1;
@@ -109,7 +213,7 @@ export function FloorPlanCanvas2D({ plan, rooms, selectedRoomId, onSelectRoom, o
               );
             }
           } else {
-            if (isHorizontal) {
+            if (isHoriz) {
               const cx = x + pos;
               const cy = (wall.wallIndex === 1) ? y : y + h;
               return (
@@ -139,79 +243,29 @@ export function FloorPlanCanvas2D({ plan, rooms, selectedRoomId, onSelectRoom, o
           }
         });
 
-        return (
-          <g key={`wall-${wall.wallIndex}`}>
-            <line x1={x1} y1={y1} x2={x2} y2={y2}
-              stroke={isExternal ? 'hsl(222, 47%, 20%)' : 'hsl(220, 9%, 46%)'}
-              strokeWidth={strokeWidth}
-              strokeLinecap="round"
-            />
-            {openingElements}
-          </g>
-        );
+        const isHoriz = wall.wallIndex === 1 || wall.wallIndex === 3;
+        const handleX = isHoriz ? (x1 + x2) / 2 : x1;
+        const handleY = isHoriz ? y1 : (y1 + y2) / 2;
+
+        return {
+          wallIndex: wall.wallIndex, wallKey, isSelected: isWallSelected, isShared,
+          x1, y1, x2, y2, strokeWidth, color: wallColor,
+          dashArray: isShared ? '6,3' : undefined,
+          openingEls, handleX, handleY, isHoriz,
+        };
       });
 
-      const fontSize = 9;
-
       return {
-        roomId: room.id,
-        rect: { x, y, w, h, color },
-        wallElements,
+        roomId: room.id, x, y, w, h, color, wallData,
         label: room.name,
         dims: `${room.width}×${room.length}m`,
         area: `${(room.width * room.length).toFixed(1)}m²`,
-        fontSize,
-        posX: room.posX,
-        posY: room.posY,
+        posX: room.posX, posY: room.posY,
       };
     });
 
     return { viewBox: `${vbX} ${vbY} ${vbW} ${vbH}`, elements };
-  }, [plan, rooms]);
-
-  const svgPoint = useCallback((clientX: number, clientY: number) => {
-    const svg = svgRef.current;
-    if (!svg) return { x: 0, y: 0 };
-    const pt = svg.createSVGPoint();
-    pt.x = clientX;
-    pt.y = clientY;
-    const ctm = svg.getScreenCTM();
-    if (!ctm) return { x: 0, y: 0 };
-    const svgPt = pt.matrixTransform(ctm.inverse());
-    return { x: svgPt.x / scale, y: svgPt.y / scale };
-  }, [scale]);
-
-  const handleMouseDown = useCallback((e: React.MouseEvent, roomId: string, room: { posX: number; posY: number }) => {
-    if (!onMoveRoom) return;
-    e.preventDefault();
-    e.stopPropagation();
-    const pt = svgPoint(e.clientX, e.clientY);
-    setDragging({ roomId, startX: pt.x, startY: pt.y, origPosX: room.posX, origPosY: room.posY });
-    setDragOffset({ dx: 0, dy: 0 });
-    onSelectRoom?.(roomId);
-  }, [onMoveRoom, svgPoint, onSelectRoom]);
-
-  const handleMouseMove = useCallback((e: React.MouseEvent) => {
-    if (!dragging) return;
-    const pt = svgPoint(e.clientX, e.clientY);
-    const dx = pt.x - dragging.startX;
-    const dy = pt.y - dragging.startY;
-    setDragOffset({ dx: snapToGrid(dx), dy: snapToGrid(dy) });
-  }, [dragging, svgPoint]);
-
-  const handleMouseUp = useCallback(() => {
-    if (!dragging || !onMoveRoom) {
-      setDragging(null);
-      return;
-    }
-    const newX = snapToGrid(dragging.origPosX + dragOffset.dx);
-    const newY = snapToGrid(dragging.origPosY + dragOffset.dy);
-    if (newX !== dragging.origPosX || newY !== dragging.origPosY) {
-      onMoveRoom(dragging.roomId, newX, newY);
-    }
-    setDragging(null);
-    setDragOffset({ dx: 0, dy: 0 });
-  }, [dragging, dragOffset, onMoveRoom]);
+  }, [plan, displayRooms, selectedWallKey, sharedWallKeys]);
 
   if (rooms.length === 0) {
     return (
@@ -221,124 +275,26 @@ export function FloorPlanCanvas2D({ plan, rooms, selectedRoomId, onSelectRoom, o
     );
   }
 
+  const isDragging = !!roomDrag || !!wallDrag;
+
   return (
     <div className="w-full overflow-auto bg-background rounded-lg border border-border">
       <svg
         ref={svgRef}
         viewBox={viewBox}
         className="w-full h-auto min-h-[300px] max-h-[500px]"
-        style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', cursor: dragging ? 'grabbing' : 'default' }}
+        style={{
+          fontFamily: 'Plus Jakarta Sans, sans-serif',
+          cursor: isDragging ? (wallDrag ? (wallDrag.isHorizontal ? 'ns-resize' : 'ew-resize') : 'grabbing') : 'default',
+        }}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
       >
-        {/* Grid lines */}
         <defs>
           <pattern id="grid05" width={GRID_SNAP * scale} height={GRID_SNAP * scale} patternUnits="userSpaceOnUse">
             <path d={`M ${GRID_SNAP * scale} 0 L 0 0 0 ${GRID_SNAP * scale}`} fill="none" stroke="hsl(var(--border))" strokeWidth="0.3" opacity="0.4" />
           </pattern>
-        </defs>
-        <rect x={0} y={0} width={plan.width * scale} height={plan.length * scale} fill="url(#grid05)" />
-
-        {/* Plan outline */}
-        <rect
-          x={0} y={0}
-          width={plan.width * scale}
-          height={plan.length * scale}
-          fill="none"
-          stroke="hsl(var(--border))"
-          strokeWidth={1}
-          strokeDasharray="8,4"
-        />
-
-        {/* Rooms */}
-        {elements.map(el => {
-          const isDragging = dragging?.roomId === el.roomId;
-          const tx = isDragging ? dragOffset.dx * scale : 0;
-          const ty = isDragging ? dragOffset.dy * scale : 0;
-
-          return (
-            <g key={el.roomId}
-              transform={`translate(${tx}, ${ty})`}
-              onMouseDown={e => handleMouseDown(e, el.roomId, { posX: el.posX, posY: el.posY })}
-              className={onMoveRoom ? 'cursor-grab' : 'cursor-pointer'}
-              style={{ opacity: isDragging ? 0.75 : 1 }}
-            >
-              {/* Fill */}
-              <rect
-                x={el.rect.x} y={el.rect.y}
-                width={el.rect.w} height={el.rect.h}
-                fill={el.rect.color}
-                opacity={selectedRoomId === el.roomId ? 0.9 : 0.6}
-                rx={2}
-              />
-              {selectedRoomId === el.roomId && (
-                <rect
-                  x={el.rect.x} y={el.rect.y}
-                  width={el.rect.w} height={el.rect.h}
-                  fill="none"
-                  stroke="hsl(var(--primary))"
-                  strokeWidth={2}
-                  rx={2}
-                />
-              )}
-
-              {/* Walls */}
-              {el.wallElements}
-
-              {/* Labels */}
-              <text
-                x={el.rect.x + el.rect.w / 2}
-                y={el.rect.y + el.rect.h / 2 - 6}
-                textAnchor="middle"
-                fontSize={el.fontSize + 1}
-                fontWeight="600"
-                fill="hsl(222, 47%, 11%)"
-              >
-                {el.label}
-              </text>
-              <text
-                x={el.rect.x + el.rect.w / 2}
-                y={el.rect.y + el.rect.h / 2 + 6}
-                textAnchor="middle"
-                fontSize={el.fontSize - 1}
-                fill="hsl(220, 9%, 46%)"
-              >
-                {el.dims}
-              </text>
-              <text
-                x={el.rect.x + el.rect.w / 2}
-                y={el.rect.y + el.rect.h / 2 + 16}
-                textAnchor="middle"
-                fontSize={el.fontSize - 1}
-                fontWeight="500"
-                fill="hsl(217, 91%, 60%)"
-              >
-                {el.area}
-              </text>
-
-              {/* Width annotation at top */}
-              <line
-                x1={el.rect.x} y1={el.rect.y - 8}
-                x2={el.rect.x + el.rect.w} y2={el.rect.y - 8}
-                stroke="hsl(220, 9%, 70%)" strokeWidth={0.5}
-                markerStart="url(#arrowStart)" markerEnd="url(#arrowEnd)"
-              />
-              <text
-                x={el.rect.x + el.rect.w / 2}
-                y={el.rect.y - 11}
-                textAnchor="middle"
-                fontSize={7}
-                fill="hsl(220, 9%, 46%)"
-              >
-                {`${(el.rect.w / scale).toFixed(1)}m`}
-              </text>
-            </g>
-          );
-        })}
-
-        {/* Arrow markers */}
-        <defs>
           <marker id="arrowStart" markerWidth="4" markerHeight="4" refX="0" refY="2" orient="auto">
             <path d="M4,0 L0,2 L4,4" fill="none" stroke="hsl(220, 9%, 70%)" strokeWidth="0.5" />
           </marker>
@@ -347,16 +303,105 @@ export function FloorPlanCanvas2D({ plan, rooms, selectedRoomId, onSelectRoom, o
           </marker>
         </defs>
 
+        {/* Grid */}
+        <rect x={0} y={0} width={plan.width * scale} height={plan.length * scale} fill="url(#grid05)" />
+
+        {/* Plan outline */}
+        <rect x={0} y={0} width={plan.width * scale} height={plan.length * scale}
+          fill="none" stroke="hsl(var(--border))" strokeWidth={1} strokeDasharray="8,4" />
+
+        {/* Rooms */}
+        {elements.map(el => {
+          const isDraggingRoom = roomDrag?.roomId === el.roomId;
+          const tx = isDraggingRoom ? roomDragOffset.dx * scale : 0;
+          const ty = isDraggingRoom ? roomDragOffset.dy * scale : 0;
+          const isSelected = selectedRoomId === el.roomId;
+
+          return (
+            <g key={el.roomId} transform={`translate(${tx}, ${ty})`}
+              style={{ opacity: isDraggingRoom ? 0.75 : 1 }}>
+
+              {/* Fill */}
+              <rect x={el.x} y={el.y} width={el.w} height={el.h}
+                fill={el.color} opacity={isSelected ? 0.9 : 0.6} rx={2}
+                onMouseDown={e => handleRoomMouseDown(e, el.roomId, el.posX, el.posY)}
+                className={onMoveRoom ? 'cursor-grab' : 'cursor-pointer'}
+              />
+              {isSelected && (
+                <rect x={el.x} y={el.y} width={el.w} height={el.h}
+                  fill="none" stroke="hsl(var(--primary))" strokeWidth={2} rx={2}
+                  style={{ pointerEvents: 'none' }} />
+              )}
+
+              {/* Walls */}
+              {el.wallData.map(w => (
+                <g key={w.wallKey}>
+                  {/* Hit area */}
+                  <line x1={w.x1} y1={w.y1} x2={w.x2} y2={w.y2}
+                    stroke="transparent" strokeWidth={14}
+                    style={{ cursor: 'pointer' }}
+                    onClick={e => handleWallClick(e, el.roomId, w.wallIndex)}
+                  />
+                  {/* Selected glow */}
+                  {w.isSelected && (
+                    <line x1={w.x1} y1={w.y1} x2={w.x2} y2={w.y2}
+                      stroke="hsl(var(--primary))" strokeWidth={w.strokeWidth + 4}
+                      strokeLinecap="round" opacity={0.3} style={{ pointerEvents: 'none' }} />
+                  )}
+                  {/* Visible wall */}
+                  <line x1={w.x1} y1={w.y1} x2={w.x2} y2={w.y2}
+                    stroke={w.color} strokeWidth={w.strokeWidth}
+                    strokeLinecap="round" strokeDasharray={w.dashArray}
+                    style={{ pointerEvents: 'none' }} />
+                  {/* Openings */}
+                  {w.openingEls}
+                </g>
+              ))}
+
+              {/* Labels */}
+              <text x={el.x + el.w / 2} y={el.y + el.h / 2 - 6}
+                textAnchor="middle" fontSize={10} fontWeight="600" fill="hsl(222, 47%, 11%)"
+                style={{ pointerEvents: 'none' }}>{el.label}</text>
+              <text x={el.x + el.w / 2} y={el.y + el.h / 2 + 6}
+                textAnchor="middle" fontSize={8} fill="hsl(220, 9%, 46%)"
+                style={{ pointerEvents: 'none' }}>{el.dims}</text>
+              <text x={el.x + el.w / 2} y={el.y + el.h / 2 + 16}
+                textAnchor="middle" fontSize={8} fontWeight="500" fill="hsl(217, 91%, 60%)"
+                style={{ pointerEvents: 'none' }}>{el.area}</text>
+
+              {/* Dimension annotation */}
+              <line x1={el.x} y1={el.y - 8} x2={el.x + el.w} y2={el.y - 8}
+                stroke="hsl(220, 9%, 70%)" strokeWidth={0.5}
+                markerStart="url(#arrowStart)" markerEnd="url(#arrowEnd)"
+                style={{ pointerEvents: 'none' }} />
+              <text x={el.x + el.w / 2} y={el.y - 11}
+                textAnchor="middle" fontSize={7} fill="hsl(220, 9%, 46%)"
+                style={{ pointerEvents: 'none' }}>{`${(el.w / scale).toFixed(1)}m`}</text>
+
+              {/* Resize handles - only for selected room */}
+              {isSelected && onResizeWall && el.wallData.map(w => (
+                <circle key={`h-${w.wallKey}`}
+                  cx={w.handleX} cy={w.handleY} r={4}
+                  fill="hsl(var(--primary))" stroke="hsl(var(--background))" strokeWidth={1.5}
+                  style={{ cursor: w.isHoriz ? 'ns-resize' : 'ew-resize' }}
+                  onMouseDown={e => handleWallHandleDown(e, el.roomId, w.wallIndex)}
+                />
+              ))}
+            </g>
+          );
+        })}
+
         {/* Legend */}
         <g transform={`translate(${-0.5 * scale}, ${(plan.length + 0.8) * scale})`}>
           <rect x={0} y={0} width={12} height={4} fill="hsl(222, 47%, 20%)" />
-          <text x={16} y={4} fontSize={7} fill="hsl(220, 9%, 46%)">Pared externa</text>
-          <rect x={80} y={0} width={12} height={2} fill="hsl(220, 9%, 46%)" />
-          <text x={96} y={4} fontSize={7} fill="hsl(220, 9%, 46%)">Pared interna</text>
-          <line x1={160} y1={-1} x2={172} y2={-1} stroke="hsl(217, 91%, 60%)" strokeWidth={1.5} />
-          <line x1={160} y1={3} x2={172} y2={3} stroke="hsl(217, 91%, 60%)" strokeWidth={1.5} />
-          <text x={176} y={4} fontSize={7} fill="hsl(220, 9%, 46%)">Ventana</text>
-          <text x={220} y={4} fontSize={7} fill="hsl(var(--muted-foreground))">⤡ Arrastra para mover</text>
+          <text x={16} y={4} fontSize={7} fill="hsl(220, 9%, 46%)">Externa</text>
+          <rect x={65} y={0} width={12} height={2} fill="hsl(220, 9%, 46%)" />
+          <text x={81} y={4} fontSize={7} fill="hsl(220, 9%, 46%)">Interna</text>
+          <line x1={130} y1={1} x2={145} y2={1} stroke="hsl(25, 95%, 53%)" strokeWidth={3} strokeDasharray="6,3" />
+          <text x={149} y={4} fontSize={7} fill="hsl(220, 9%, 46%)">Compartida</text>
+          <line x1={220} y1={-1} x2={232} y2={-1} stroke="hsl(217, 91%, 60%)" strokeWidth={1.5} />
+          <line x1={220} y1={3} x2={232} y2={3} stroke="hsl(217, 91%, 60%)" strokeWidth={1.5} />
+          <text x={236} y={4} fontSize={7} fill="hsl(220, 9%, 46%)">Ventana</text>
         </g>
       </svg>
     </div>

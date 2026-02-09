@@ -116,7 +116,7 @@ export function useFloorPlan(budgetId: string) {
           .map((w: any) => ({
             id: w.id,
             wallIndex: w.wall_index,
-            wallType: w.wall_type as 'externa' | 'interna',
+            wallType: w.wall_type as 'externa' | 'interna' | 'compartida',
             thickness: w.thickness || undefined,
             height: w.height || undefined,
             openings: openingsData

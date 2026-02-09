@@ -6,9 +6,9 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { RefreshCw, Save, Layout, Box, BarChart3, Loader2, AlertTriangle } from 'lucide-react';
+import { RefreshCw, Save, Layout, Box, BarChart3, Loader2, AlertTriangle, Trash2, DoorOpen } from 'lucide-react';
 import { useFloorPlan } from '@/hooks/useFloorPlan';
-import { calculateFloorPlanSummary } from '@/lib/floor-plan-calculations';
+import { calculateFloorPlanSummary, detectSharedWalls, WALL_LABELS, OPENING_PRESETS } from '@/lib/floor-plan-calculations';
 import { FloorPlanCanvas2D } from './FloorPlanCanvas2D';
 import { FloorPlanRoomEditor } from './FloorPlanRoomEditor';
 import { FloorPlanSummaryView } from './FloorPlanSummary';
@@ -29,6 +29,7 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
   } = useFloorPlan(budgetId);
 
   const [selectedRoomId, setSelectedRoomId] = useState<string>();
+  const [selectedWallKey, setSelectedWallKey] = useState<string | null>(null);
   const [viewTab, setViewTab] = useState('plano');
 
   // Local form state for plan dimensions
@@ -73,9 +74,35 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
   const roomsAreaSum = rooms.reduce((sum, r) => sum + r.width * r.length, 0);
   const areaExceeded = roomsAreaSum > planArea * 1.001;
 
+  const sharedWallMap = useMemo(() => detectSharedWalls(rooms), [rooms]);
+  const sharedWallKeys = useMemo(() => new Set(sharedWallMap.keys()), [sharedWallMap]);
+
   const handleMoveRoom = useCallback((roomId: string, posX: number, posY: number) => {
     updateRoom(roomId, { posX, posY });
   }, [updateRoom]);
+
+  const handleResizeWall = useCallback(async (roomId: string, wallIndex: number, delta: number) => {
+    const room = rooms.find(r => r.id === roomId);
+    if (!room || delta === 0) return;
+    const applyResize = (r: { posX: number; posY: number; width: number; length: number }, wIdx: number, d: number) => {
+      switch (wIdx) {
+        case 1: return { posY: r.posY + d, length: Math.max(0.5, r.length - d) };
+        case 2: return { width: Math.max(0.5, r.width + d) };
+        case 3: return { length: Math.max(0.5, r.length + d) };
+        case 4: return { posX: r.posX + d, width: Math.max(0.5, r.width - d) };
+        default: return {};
+      }
+    };
+    await updateRoom(roomId, applyResize(room, wallIndex, delta));
+    const wallKey = `${roomId}::${wallIndex}`;
+    const neighbor = sharedWallMap.get(wallKey);
+    if (neighbor) {
+      const nRoom = rooms.find(r => r.id === neighbor.neighborRoomId);
+      if (nRoom) {
+        await updateRoom(neighbor.neighborRoomId, applyResize(nRoom, neighbor.neighborWallIndex, delta));
+      }
+    }
+  }, [rooms, updateRoom, sharedWallMap]);
 
   // Handle live plan dimension changes with m2 validation
   const handlePlanWidthChange = (value: number) => {
@@ -244,13 +271,91 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
         {/* Left: Canvas / Summary */}
         <div className="lg:col-span-2">
           {viewTab === 'plano' && planData && (
-            <FloorPlanCanvas2D
-              plan={planData}
-              rooms={rooms}
-              selectedRoomId={selectedRoomId}
-              onSelectRoom={setSelectedRoomId}
-              onMoveRoom={handleMoveRoom}
-            />
+            <>
+              <FloorPlanCanvas2D
+                plan={planData}
+                rooms={rooms}
+                selectedRoomId={selectedRoomId}
+                selectedWallKey={selectedWallKey ?? undefined}
+                sharedWallKeys={sharedWallKeys}
+                onSelectRoom={setSelectedRoomId}
+                onSelectWall={setSelectedWallKey}
+                onMoveRoom={handleMoveRoom}
+                onResizeWall={handleResizeWall}
+              />
+              {selectedWallKey && (() => {
+                const parts = selectedWallKey.split('::');
+                const roomId = parts[0];
+                const wallIdx = parseInt(parts[1]);
+                const room = rooms.find(r => r.id === roomId);
+                if (!room) return null;
+                const wall = room.walls.find(w => w.wallIndex === wallIdx);
+                if (!wall) return null;
+                const isShared = sharedWallKeys.has(selectedWallKey);
+                const neighborInfo = sharedWallMap.get(selectedWallKey);
+                const neighborRoom = neighborInfo ? rooms.find(r => r.id === neighborInfo.neighborRoomId) : null;
+                return (
+                  <Card className="mt-2">
+                    <CardHeader className="pb-2 py-2 px-3">
+                      <div className="flex items-center gap-2">
+                        <CardTitle className="text-xs">{WALL_LABELS[wallIdx]} — {room.name}</CardTitle>
+                        {isShared && neighborRoom && (
+                          <Badge variant="outline" className="text-[10px] h-4">Compartida con {neighborRoom.name}</Badge>
+                        )}
+                      </div>
+                    </CardHeader>
+                    <CardContent className="px-3 pb-2 space-y-2">
+                      <div className="flex gap-2 items-end">
+                        <div className="flex-1">
+                          <Label className="text-[10px]">Tipo</Label>
+                          <Select value={wall.wallType}
+                            onValueChange={v => { if (!wall.id.startsWith('temp-')) updateWall(wall.id, { wallType: v as any }); }}>
+                            <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="externa">Externa</SelectItem>
+                              <SelectItem value="interna">Interna</SelectItem>
+                              <SelectItem value="compartida">Compartida</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="w-20">
+                          <Label className="text-[10px]">Espesor (m)</Label>
+                          <Input type="number" step="0.01" className="h-7 text-xs"
+                            value={wall.thickness || ''} placeholder="Auto"
+                            onChange={e => { if (!wall.id.startsWith('temp-')) updateWall(wall.id, { thickness: Number(e.target.value) || undefined }); }} />
+                        </div>
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-[10px] font-semibold">Aberturas ({wall.openings.length})</Label>
+                        {wall.openings.map(op => (
+                          <div key={op.id} className="flex items-center gap-2 text-xs bg-muted/50 p-1.5 rounded">
+                            <DoorOpen className="h-3 w-3 text-muted-foreground" />
+                            <span className="flex-1">
+                              {OPENING_PRESETS[op.openingType as keyof typeof OPENING_PRESETS]?.label || op.openingType}
+                              {' '}({op.width}×{op.height}m)
+                            </span>
+                            <Button variant="ghost" size="sm" className="h-5 w-5 p-0 text-destructive"
+                              onClick={() => deleteOpening(op.id)}>
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        ))}
+                        {!wall.id.startsWith('temp-') && (
+                          <div className="flex gap-1 flex-wrap">
+                            {Object.entries(OPENING_PRESETS).map(([key, preset]) => (
+                              <Button key={key} variant="outline" size="sm" className="text-[10px] h-6"
+                                onClick={() => addOpening(wall.id, key, preset.width, preset.height)} disabled={saving}>
+                                + {preset.label}
+                              </Button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })()}
+            </>
           )}
           {viewTab === 'resumen' && (
             <FloorPlanSummaryView summary={summary} />

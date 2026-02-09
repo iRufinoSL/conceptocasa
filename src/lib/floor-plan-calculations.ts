@@ -33,7 +33,7 @@ export interface WallData {
 
 export interface OpeningData {
   id: string;
-  openingType: 'puerta' | 'ventana_grande' | 'ventana_mediana' | 'ventana_pequeña';
+  openingType: 'puerta' | 'puerta_externa' | 'ventana_grande' | 'ventana_mediana' | 'ventana_pequeña';
   name?: string;
   width: number;
   height: number;
@@ -124,7 +124,7 @@ export function calculateRoom(room: RoomData, plan: FloorPlanData): RoomCalculat
       const area = op.width * op.height;
       openingsArea += area;
       
-      if (op.openingType === 'puerta') {
+      if (op.openingType === 'puerta' || op.openingType === 'puerta_externa') {
         doorCount++;
       } else {
         windowCount++;
@@ -263,7 +263,8 @@ export function calculateFloorPlanSummary(plan: FloorPlanData, rooms: RoomData[]
 
 // Default opening presets
 export const OPENING_PRESETS = {
-  puerta: { width: 0.925, height: 2.15, label: 'Puerta estándar' },
+  puerta: { width: 0.925, height: 2.15, label: 'Puerta interior' },
+  puerta_externa: { width: 1.0, height: 2.20, label: 'Puerta externa' },
   ventana_grande: { width: 1.5, height: 1.2, label: 'Ventana grande' },
   ventana_mediana: { width: 1.2, height: 1.0, label: 'Ventana mediana' },
   ventana_pequeña: { width: 0.6, height: 0.6, label: 'Ventana pequeña' },

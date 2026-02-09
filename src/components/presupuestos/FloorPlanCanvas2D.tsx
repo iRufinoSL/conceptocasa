@@ -42,7 +42,7 @@ export function FloorPlanCanvas2D({
 }: FloorPlanCanvas2DProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const scale = 40;
-  const padding = 1.5;
+  const padding = 2.5; // increased padding for external dimension annotations
 
   // Room drag state
   const [roomDrag, setRoomDrag] = useState<{
@@ -137,7 +137,41 @@ export function FloorPlanCanvas2D({
     setWallDragDelta(0);
   }, [roomDrag, roomDragOffset, wallDrag, wallDragDelta, onMoveRoom, onResizeWall]);
 
+  // Compute external perimeter dimensions (outer bounds including wall thickness)
+  const perimeterDims = useMemo(() => {
+    if (displayRooms.length === 0) return null;
+    const extT = plan.externalWallThickness;
+
+    // Find bounding box of all rooms (interior bounds)
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    displayRooms.forEach(r => {
+      minX = Math.min(minX, r.posX);
+      minY = Math.min(minY, r.posY);
+      maxX = Math.max(maxX, r.posX + r.width);
+      maxY = Math.max(maxY, r.posY + r.length);
+    });
+
+    // Exterior bounds = interior bounds + wall thickness on each side
+    const extMinX = minX - extT;
+    const extMinY = minY - extT;
+    const extMaxX = maxX + extT;
+    const extMaxY = maxY + extT;
+
+    const topLen = extMaxX - extMinX; // Side A (top)
+    const rightLen = extMaxY - extMinY; // Side B (right)
+    const bottomLen = topLen; // Side C (bottom)
+    const leftLen = rightLen; // Side D (left)
+
+    return {
+      extMinX, extMinY, extMaxX, extMaxY,
+      topLen, rightLen, bottomLen, leftLen,
+      interiorWidth: maxX - minX,
+      interiorLength: maxY - minY,
+    };
+  }, [displayRooms, plan.externalWallThickness]);
+
   const { viewBox, elements } = useMemo(() => {
+    const extT = plan.externalWallThickness;
     let minX = 0, minY = 0, maxX = plan.width, maxY = plan.length;
     displayRooms.forEach(r => {
       minX = Math.min(minX, r.posX);
@@ -145,10 +179,11 @@ export function FloorPlanCanvas2D({
       maxX = Math.max(maxX, r.posX + r.width);
       maxY = Math.max(maxY, r.posY + r.length);
     });
-    const vbX = (minX - padding) * scale;
-    const vbY = (minY - padding) * scale;
-    const vbW = (maxX - minX + 2 * padding) * scale;
-    const vbH = (maxY - minY + 2 * padding) * scale;
+    // Extend viewBox to include external walls
+    const vbX = (minX - extT - padding) * scale;
+    const vbY = (minY - extT - padding) * scale;
+    const vbW = (maxX - minX + 2 * extT + 2 * padding) * scale;
+    const vbH = (maxY - minY + 2 * extT + 2 * padding + 1) * scale; // +1 for legend
 
     const elements = displayRooms.map(room => {
       const x = room.posX * scale;
@@ -179,6 +214,10 @@ export function FloorPlanCanvas2D({
           : isShared ? 'hsl(25, 95%, 53%)'
           : 'hsl(220, 9%, 46%)';
 
+        // External wall dimension (interior length + wall thickness on both ends for external walls)
+        const interiorLen = (wall.wallIndex === 1 || wall.wallIndex === 3) ? room.width : room.length;
+        const externalLen = isExternal ? interiorLen + 2 * extT : interiorLen;
+
         // Openings
         const openingEls = wall.openings.map((op, oi) => {
           const wallLen = (wall.wallIndex === 1 || wall.wallIndex === 3) ? room.width : room.length;
@@ -186,7 +225,7 @@ export function FloorPlanCanvas2D({
           const pos = op.positionX * wallLen * scale;
           const isHoriz = wall.wallIndex === 1 || wall.wallIndex === 3;
 
-          if (op.openingType === 'puerta') {
+          if (op.openingType === 'puerta' || op.openingType === 'puerta_externa') {
             if (isHoriz) {
               const cx = x + pos;
               const cy = (wall.wallIndex === 1) ? y : y + h;
@@ -249,9 +288,10 @@ export function FloorPlanCanvas2D({
 
         return {
           wallIndex: wall.wallIndex, wallKey, isSelected: isWallSelected, isShared,
-          x1, y1, x2, y2, strokeWidth, color: wallColor,
+          isExternal, x1, y1, x2, y2, strokeWidth, color: wallColor,
           dashArray: isShared ? '6,3' : undefined,
           openingEls, handleX, handleY, isHoriz,
+          interiorLen, externalLen,
         };
       });
 
@@ -276,6 +316,10 @@ export function FloorPlanCanvas2D({
   }
 
   const isDragging = !!roomDrag || !!wallDrag;
+  const extT = plan.externalWallThickness;
+  const dimColor = 'hsl(25, 95%, 45%)';
+  const dimFontSize = 7;
+  const perimColor = 'hsl(142, 76%, 30%)';
 
   return (
     <div className="w-full overflow-auto bg-background rounded-lg border border-border">
@@ -301,6 +345,18 @@ export function FloorPlanCanvas2D({
           <marker id="arrowEnd" markerWidth="4" markerHeight="4" refX="4" refY="2" orient="auto">
             <path d="M0,0 L4,2 L0,4" fill="none" stroke="hsl(220, 9%, 70%)" strokeWidth="0.5" />
           </marker>
+          <marker id="dimArrowStart" markerWidth="5" markerHeight="5" refX="0" refY="2.5" orient="auto">
+            <path d="M5,0 L0,2.5 L5,5" fill="none" stroke={dimColor} strokeWidth="0.5" />
+          </marker>
+          <marker id="dimArrowEnd" markerWidth="5" markerHeight="5" refX="5" refY="2.5" orient="auto">
+            <path d="M0,0 L5,2.5 L0,5" fill="none" stroke={dimColor} strokeWidth="0.5" />
+          </marker>
+          <marker id="perimArrowStart" markerWidth="5" markerHeight="5" refX="0" refY="2.5" orient="auto">
+            <path d="M5,0 L0,2.5 L5,5" fill="none" stroke={perimColor} strokeWidth="0.5" />
+          </marker>
+          <marker id="perimArrowEnd" markerWidth="5" markerHeight="5" refX="5" refY="2.5" orient="auto">
+            <path d="M0,0 L5,2.5 L0,5" fill="none" stroke={perimColor} strokeWidth="0.5" />
+          </marker>
         </defs>
 
         {/* Grid */}
@@ -309,6 +365,92 @@ export function FloorPlanCanvas2D({
         {/* Plan outline */}
         <rect x={0} y={0} width={plan.width * scale} height={plan.length * scale}
           fill="none" stroke="hsl(var(--border))" strokeWidth={1} strokeDasharray="8,4" />
+
+        {/* External perimeter dimensions (A=top, B=right, C=bottom, D=left) */}
+        {perimeterDims && (() => {
+          const p = perimeterDims;
+          const extMinXs = p.extMinX * scale;
+          const extMinYs = p.extMinY * scale;
+          const extMaxXs = p.extMaxX * scale;
+          const extMaxYs = p.extMaxY * scale;
+          const offset1 = 18; // distance for individual wall dim
+          const offset2 = 32; // distance for perimeter total
+
+          return (
+            <g style={{ pointerEvents: 'none' }}>
+              {/* External wall outline (thin dashed) */}
+              <rect x={extMinXs} y={extMinYs} width={(p.extMaxX - p.extMinX) * scale} height={(p.extMaxY - p.extMinY) * scale}
+                fill="none" stroke={dimColor} strokeWidth={0.8} strokeDasharray="4,3" opacity={0.5} />
+
+              {/* Side A - Top: external dimension */}
+              <line x1={extMinXs} y1={extMinYs - offset1} x2={extMaxXs} y2={extMinYs - offset1}
+                stroke={dimColor} strokeWidth={0.6}
+                markerStart="url(#dimArrowStart)" markerEnd="url(#dimArrowEnd)" />
+              <text x={(extMinXs + extMaxXs) / 2} y={extMinYs - offset1 - 3}
+                textAnchor="middle" fontSize={dimFontSize} fontWeight="600" fill={dimColor}>
+                A: {p.topLen.toFixed(2)}m
+              </text>
+
+              {/* Side A - Perimeter total above */}
+              <line x1={extMinXs} y1={extMinYs - offset2} x2={extMaxXs} y2={extMinYs - offset2}
+                stroke={perimColor} strokeWidth={0.6}
+                markerStart="url(#perimArrowStart)" markerEnd="url(#perimArrowEnd)" />
+              <text x={(extMinXs + extMaxXs) / 2} y={extMinYs - offset2 - 3}
+                textAnchor="middle" fontSize={dimFontSize} fontWeight="700" fill={perimColor}>
+                Perímetro A: {p.topLen.toFixed(2)}m
+              </text>
+
+              {/* Side B - Right: external dimension */}
+              <line x1={extMaxXs + offset1} y1={extMinYs} x2={extMaxXs + offset1} y2={extMaxYs}
+                stroke={dimColor} strokeWidth={0.6}
+                markerStart="url(#dimArrowStart)" markerEnd="url(#dimArrowEnd)" />
+              <text x={extMaxXs + offset1 + 3} y={(extMinYs + extMaxYs) / 2}
+                textAnchor="start" fontSize={dimFontSize} fontWeight="600" fill={dimColor}
+                transform={`rotate(90, ${extMaxXs + offset1 + 3}, ${(extMinYs + extMaxYs) / 2})`}>
+                B: {p.rightLen.toFixed(2)}m
+              </text>
+
+              {/* Side B - Perimeter total */}
+              <line x1={extMaxXs + offset2} y1={extMinYs} x2={extMaxXs + offset2} y2={extMaxYs}
+                stroke={perimColor} strokeWidth={0.6}
+                markerStart="url(#perimArrowStart)" markerEnd="url(#perimArrowEnd)" />
+              <text x={extMaxXs + offset2 + 3} y={(extMinYs + extMaxYs) / 2}
+                textAnchor="start" fontSize={dimFontSize} fontWeight="700" fill={perimColor}
+                transform={`rotate(90, ${extMaxXs + offset2 + 3}, ${(extMinYs + extMaxYs) / 2})`}>
+                Perímetro B: {p.rightLen.toFixed(2)}m
+              </text>
+
+              {/* Side C - Bottom: external dimension */}
+              <line x1={extMinXs} y1={extMaxYs + offset1} x2={extMaxXs} y2={extMaxYs + offset1}
+                stroke={dimColor} strokeWidth={0.6}
+                markerStart="url(#dimArrowStart)" markerEnd="url(#dimArrowEnd)" />
+              <text x={(extMinXs + extMaxXs) / 2} y={extMaxYs + offset1 + 9}
+                textAnchor="middle" fontSize={dimFontSize} fontWeight="600" fill={dimColor}>
+                C: {p.bottomLen.toFixed(2)}m
+              </text>
+
+              {/* Side D - Left: external dimension */}
+              <line x1={extMinXs - offset1} y1={extMinYs} x2={extMinXs - offset1} y2={extMaxYs}
+                stroke={dimColor} strokeWidth={0.6}
+                markerStart="url(#dimArrowStart)" markerEnd="url(#dimArrowEnd)" />
+              <text x={extMinXs - offset1 - 3} y={(extMinYs + extMaxYs) / 2}
+                textAnchor="end" fontSize={dimFontSize} fontWeight="600" fill={dimColor}
+                transform={`rotate(-90, ${extMinXs - offset1 - 3}, ${(extMinYs + extMaxYs) / 2})`}>
+                D: {p.leftLen.toFixed(2)}m
+              </text>
+
+              {/* Side D - Perimeter total */}
+              <line x1={extMinXs - offset2} y1={extMinYs} x2={extMinXs - offset2} y2={extMaxYs}
+                stroke={perimColor} strokeWidth={0.6}
+                markerStart="url(#perimArrowStart)" markerEnd="url(#perimArrowEnd)" />
+              <text x={extMinXs - offset2 - 3} y={(extMinYs + extMaxYs) / 2}
+                textAnchor="end" fontSize={dimFontSize} fontWeight="700" fill={perimColor}
+                transform={`rotate(-90, ${extMinXs - offset2 - 3}, ${(extMinYs + extMaxYs) / 2})`}>
+                Perímetro D: {p.leftLen.toFixed(2)}m
+              </text>
+            </g>
+          );
+        })()}
 
         {/* Rooms */}
         {elements.map(el => {
@@ -355,10 +497,49 @@ export function FloorPlanCanvas2D({
                     style={{ pointerEvents: 'none' }} />
                   {/* Openings */}
                   {w.openingEls}
+
+                  {/* External wall outer dimension annotation */}
+                  {w.isExternal && (
+                    <g style={{ pointerEvents: 'none' }}>
+                      {w.isHoriz ? (
+                        <>
+                          {/* Horizontal external wall: show dimension above/below */}
+                          {(() => {
+                            const extLen = w.externalLen;
+                            const midX = (w.x1 + w.x2) / 2;
+                            const outside = w.wallIndex === 1 ? w.y1 - extT * scale - 6 : w.y1 + extT * scale + 10;
+                            return (
+                              <text x={midX} y={outside}
+                                textAnchor="middle" fontSize={6.5} fontWeight="500" fill={dimColor}>
+                                {extLen.toFixed(2)}m (ext.)
+                              </text>
+                            );
+                          })()}
+                        </>
+                      ) : (
+                        <>
+                          {/* Vertical external wall: show dimension left/right */}
+                          {(() => {
+                            const extLen = w.externalLen;
+                            const midY = (w.y1 + w.y2) / 2;
+                            const outside = w.wallIndex === 4 ? w.x1 - extT * scale - 4 : w.x1 + extT * scale + 4;
+                            return (
+                              <text x={outside} y={midY}
+                                textAnchor={w.wallIndex === 4 ? 'end' : 'start'}
+                                fontSize={6.5} fontWeight="500" fill={dimColor}
+                                transform={`rotate(${w.wallIndex === 4 ? -90 : 90}, ${outside}, ${midY})`}>
+                                {extLen.toFixed(2)}m (ext.)
+                              </text>
+                            );
+                          })()}
+                        </>
+                      )}
+                    </g>
+                  )}
                 </g>
               ))}
 
-              {/* Labels */}
+              {/* Interior labels */}
               <text x={el.x + el.w / 2} y={el.y + el.h / 2 - 6}
                 textAnchor="middle" fontSize={10} fontWeight="600" fill="hsl(222, 47%, 11%)"
                 style={{ pointerEvents: 'none' }}>{el.label}</text>
@@ -369,7 +550,7 @@ export function FloorPlanCanvas2D({
                 textAnchor="middle" fontSize={8} fontWeight="500" fill="hsl(217, 91%, 60%)"
                 style={{ pointerEvents: 'none' }}>{el.area}</text>
 
-              {/* Dimension annotation */}
+              {/* Interior dimension annotation (top) */}
               <line x1={el.x} y1={el.y - 8} x2={el.x + el.w} y2={el.y - 8}
                 stroke="hsl(220, 9%, 70%)" strokeWidth={0.5}
                 markerStart="url(#arrowStart)" markerEnd="url(#arrowEnd)"
@@ -392,17 +573,21 @@ export function FloorPlanCanvas2D({
         })}
 
         {/* Legend */}
-        <g transform={`translate(${-0.5 * scale}, ${(plan.length + 0.8) * scale})`}>
-          <rect x={0} y={0} width={12} height={4} fill="hsl(222, 47%, 20%)" />
-          <text x={16} y={4} fontSize={7} fill="hsl(220, 9%, 46%)">Externa</text>
-          <rect x={65} y={0} width={12} height={2} fill="hsl(220, 9%, 46%)" />
-          <text x={81} y={4} fontSize={7} fill="hsl(220, 9%, 46%)">Interna</text>
-          <line x1={130} y1={1} x2={145} y2={1} stroke="hsl(25, 95%, 53%)" strokeWidth={3} strokeDasharray="6,3" />
-          <text x={149} y={4} fontSize={7} fill="hsl(220, 9%, 46%)">Compartida</text>
-          <line x1={220} y1={-1} x2={232} y2={-1} stroke="hsl(217, 91%, 60%)" strokeWidth={1.5} />
-          <line x1={220} y1={3} x2={232} y2={3} stroke="hsl(217, 91%, 60%)" strokeWidth={1.5} />
-          <text x={236} y={4} fontSize={7} fill="hsl(220, 9%, 46%)">Ventana</text>
-        </g>
+        {perimeterDims && (
+          <g transform={`translate(${(perimeterDims.extMinX) * scale}, ${(perimeterDims.extMaxY + 0.6) * scale})`}>
+            <rect x={0} y={0} width={12} height={4} fill="hsl(222, 47%, 20%)" />
+            <text x={16} y={4} fontSize={7} fill="hsl(220, 9%, 46%)">Externa</text>
+            <rect x={65} y={0} width={12} height={2} fill="hsl(220, 9%, 46%)" />
+            <text x={81} y={4} fontSize={7} fill="hsl(220, 9%, 46%)">Interna</text>
+            <line x1={130} y1={1} x2={145} y2={1} stroke="hsl(25, 95%, 53%)" strokeWidth={3} strokeDasharray="6,3" />
+            <text x={149} y={4} fontSize={7} fill="hsl(220, 9%, 46%)">Compartida</text>
+            <line x1={220} y1={-1} x2={232} y2={-1} stroke="hsl(217, 91%, 60%)" strokeWidth={1.5} />
+            <line x1={220} y1={3} x2={232} y2={3} stroke="hsl(217, 91%, 60%)" strokeWidth={1.5} />
+            <text x={236} y={4} fontSize={7} fill="hsl(220, 9%, 46%)">Ventana</text>
+            <rect x={280} y={-1} width={8} height={6} fill="none" stroke={dimColor} strokeWidth={0.6} strokeDasharray="3,2" />
+            <text x={292} y={4} fontSize={7} fill={dimColor}>Ext. (grosor)</text>
+          </g>
+        )}
       </svg>
     </div>
   );

@@ -1050,6 +1050,16 @@ export function EmailInbox({ onComposeReply, onComposeForward }: EmailInboxProps
               <span>
                 {format(new Date(email.created_at), "d MMM, HH:mm", { locale: es })}
               </span>
+              {!isInbound && (
+                (() => {
+                  const ds = (email as any).delivery_status || 'pending';
+                  const icons: Record<string, string> = {
+                    pending: '⏳', sent: '📤', delivered: '✅', opened: '👁️',
+                    clicked: '🔗', bounced: '❌', complained: '⚠️', delayed: '⏱️',
+                  };
+                  return <span title={`Entrega: ${ds}`}>{icons[ds] || '❓'}</span>;
+                })()
+              )}
               {email.presupuestos && (
                 <span className="flex items-center gap-1 text-primary">
                   <FolderOpen className="h-3 w-3" />
@@ -1454,6 +1464,67 @@ export function EmailInbox({ onComposeReply, onComposeForward }: EmailInboxProps
                       </Button>
                     </div>
                   ) : null}
+
+                  {/* Delivery tracking status for outbound emails */}
+                  {selectedEmail.direction === 'outbound' && (
+                    <div className="mt-3 p-3 rounded-lg bg-muted/50 space-y-1.5">
+                      <div className="flex items-center gap-2 text-sm font-medium">
+                        <Send className="h-3.5 w-3.5" />
+                        Estado de entrega
+                      </div>
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-muted-foreground">Estado:</span>
+                          {(() => {
+                            const ds = (selectedEmail as any).delivery_status || 'pending';
+                            const deliveryLabels: Record<string, { label: string; className: string }> = {
+                              pending: { label: '⏳ Pendiente', className: 'text-yellow-600' },
+                              sent: { label: '📤 Enviado', className: 'text-blue-600' },
+                              delivered: { label: '✅ Entregado al servidor', className: 'text-green-600' },
+                              opened: { label: '👁️ Abierto/Leído', className: 'text-purple-600' },
+                              clicked: { label: '🔗 Enlace clickeado', className: 'text-indigo-600' },
+                              bounced: { label: '❌ Rebotado', className: 'text-red-600' },
+                              complained: { label: '⚠️ Marcado spam', className: 'text-red-600' },
+                              delayed: { label: '⏱️ Retrasado', className: 'text-orange-600' },
+                            };
+                            const info = deliveryLabels[ds] || { label: ds, className: '' };
+                            return <span className={`font-medium ${info.className}`}>{info.label}</span>;
+                          })()}
+                        </div>
+                        {(selectedEmail as any).delivery_updated_at && (
+                          <div>
+                            <span className="text-muted-foreground">Actualizado: </span>
+                            <span>{format(new Date((selectedEmail as any).delivery_updated_at), "d MMM yyyy HH:mm", { locale: es })}</span>
+                          </div>
+                        )}
+                        {(selectedEmail as any).read_receipt_at && (
+                          <div className="col-span-2">
+                            <span className="text-muted-foreground">Confirmación de lectura: </span>
+                            <span className="text-purple-600 font-medium">
+                              {format(new Date((selectedEmail as any).read_receipt_at), "d MMM yyyy HH:mm", { locale: es })}
+                            </span>
+                          </div>
+                        )}
+                        {(selectedEmail as any).request_read_receipt && !(selectedEmail as any).read_receipt_at && (
+                          <div className="col-span-2 flex items-center gap-1.5 text-amber-600">
+                            <Bell className="h-3 w-3" />
+                            <span>Confirmación de lectura solicitada - pendiente</span>
+                          </div>
+                        )}
+                        {(selectedEmail as any).receipt_reminder_sent && (
+                          <div className="col-span-2 flex items-center gap-1.5 text-orange-600">
+                            <AlertCircle className="h-3 w-3" />
+                            <span>
+                              SMS de aviso enviado
+                              {(selectedEmail as any).receipt_reminder_sent_at && (
+                                <> el {format(new Date((selectedEmail as any).receipt_reminder_sent_at), "d MMM HH:mm", { locale: es })}</>
+                              )}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Email body - Preview */}
@@ -1715,6 +1786,67 @@ export function EmailInbox({ onComposeReply, onComposeForward }: EmailInboxProps
                         <UserPlus className="h-4 w-4" />
                         Registrar
                       </Button>
+                    </div>
+                  )}
+
+                  {/* Delivery tracking status for outbound emails - Fullscreen */}
+                  {selectedEmail.direction === 'outbound' && (
+                    <div className="mt-3 p-3 rounded-lg bg-muted/50 space-y-1.5">
+                      <div className="flex items-center gap-2 text-sm font-medium">
+                        <Send className="h-3.5 w-3.5" />
+                        Estado de entrega
+                      </div>
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-muted-foreground">Estado:</span>
+                          {(() => {
+                            const ds = (selectedEmail as any).delivery_status || 'pending';
+                            const deliveryLabels: Record<string, { label: string; className: string }> = {
+                              pending: { label: '⏳ Pendiente', className: 'text-yellow-600' },
+                              sent: { label: '📤 Enviado', className: 'text-blue-600' },
+                              delivered: { label: '✅ Entregado al servidor', className: 'text-green-600' },
+                              opened: { label: '👁️ Abierto/Leído', className: 'text-purple-600' },
+                              clicked: { label: '🔗 Enlace clickeado', className: 'text-indigo-600' },
+                              bounced: { label: '❌ Rebotado', className: 'text-red-600' },
+                              complained: { label: '⚠️ Marcado spam', className: 'text-red-600' },
+                              delayed: { label: '⏱️ Retrasado', className: 'text-orange-600' },
+                            };
+                            const info = deliveryLabels[ds] || { label: ds, className: '' };
+                            return <span className={`font-medium ${info.className}`}>{info.label}</span>;
+                          })()}
+                        </div>
+                        {(selectedEmail as any).delivery_updated_at && (
+                          <div>
+                            <span className="text-muted-foreground">Actualizado: </span>
+                            <span>{format(new Date((selectedEmail as any).delivery_updated_at), "d MMM yyyy HH:mm", { locale: es })}</span>
+                          </div>
+                        )}
+                        {(selectedEmail as any).read_receipt_at && (
+                          <div className="col-span-2">
+                            <span className="text-muted-foreground">Confirmación de lectura: </span>
+                            <span className="text-purple-600 font-medium">
+                              {format(new Date((selectedEmail as any).read_receipt_at), "d MMM yyyy HH:mm", { locale: es })}
+                            </span>
+                          </div>
+                        )}
+                        {(selectedEmail as any).request_read_receipt && !(selectedEmail as any).read_receipt_at && (
+                          <div className="col-span-2 flex items-center gap-1.5 text-amber-600">
+                            <Bell className="h-3 w-3" />
+                            <span>Confirmación de lectura solicitada - pendiente</span>
+                          </div>
+                        )}
+                        {(selectedEmail as any).receipt_reminder_sent && (
+                          <div className="col-span-2 flex items-center gap-1.5 text-orange-600">
+                            <AlertCircle className="h-3 w-3" />
+                            <span>
+                              SMS de aviso enviado
+                              {(selectedEmail as any).receipt_reminder_sent_at && (
+                                <> el {format(new Date((selectedEmail as any).receipt_reminder_sent_at), "d MMM HH:mm", { locale: es })}</>
+                              )}
+                            </span>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>

@@ -61,6 +61,7 @@ interface SendEmailRequest {
   ticket_category?: string;
   attachments?: EmailAttachment[];
   response_deadline?: string;
+  request_read_receipt?: boolean;
 }
 
 // Sanitize HTML content for email - whitelist-based approach
@@ -233,8 +234,12 @@ const handler = async (req: Request): Promise<Response> => {
       ticket_priority,
       ticket_category,
       attachments,
-      response_deadline
+      response_deadline,
+      request_read_receipt
     } = requestData;
+
+    // Default to requesting read receipt
+    const wantReceipt = request_read_receipt !== false;
 
     console.log("Email request - budget_id:", budget_id, "response_deadline:", response_deadline);
 
@@ -342,6 +347,15 @@ const handler = async (req: Request): Promise<Response> => {
       to: toEmails,
       subject: subject,
     };
+
+    // Add custom headers for read receipt request
+    if (wantReceipt) {
+      emailPayload.headers = {
+        'Disposition-Notification-To': senderEmail,
+        'Return-Receipt-To': senderEmail,
+        'X-Confirm-Reading-To': senderEmail,
+      };
+    }
     
     if (ccEmails.length > 0) emailPayload.cc = ccEmails;
     if (bccEmails.length > 0) emailPayload.bcc = bccEmails;
@@ -430,7 +444,8 @@ const handler = async (req: Request): Promise<Response> => {
         created_by: user.id,
         sent_at: new Date().toISOString(),
         response_deadline: response_deadline || null,
-        response_received: false
+        response_received: false,
+        request_read_receipt: wantReceipt,
       })
       .select()
       .single();

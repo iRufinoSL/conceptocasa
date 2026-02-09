@@ -16,7 +16,7 @@ import { useEmailService } from '@/hooks/useEmailService';
 import { useToast } from '@/hooks/use-toast';
 import { 
   Send, Mail, User, Paperclip, X, Plus, 
-  FileText, ChevronDown, Ticket as TicketIcon, File, Forward, Search, ArrowLeft
+  FileText, ChevronDown, Ticket as TicketIcon, File, Forward, Search, ArrowLeft, MailOpen
 } from 'lucide-react';
 import type { Tables } from '@/integrations/supabase/types';
 
@@ -81,6 +81,7 @@ export function ComposeEmail({ replyTo, onSent, onCancel }: ComposeEmailProps) {
     createTicket: false,
     ticketSubject: '',
     ticketPriority: 'medium',
+    requestReadReceipt: true,
   });
 
   const [showCcBcc, setShowCcBcc] = useState(false);
@@ -275,6 +276,7 @@ export function ComposeEmail({ replyTo, onSent, onCancel }: ComposeEmailProps) {
         ticket_subject: formData.createTicket ? formData.ticketSubject || formData.subject : undefined,
         ticket_priority: formData.createTicket ? formData.ticketPriority : undefined,
         attachments: attachmentData.length > 0 ? attachmentData : undefined,
+        request_read_receipt: formData.requestReadReceipt,
       });
 
       toast({ 
@@ -294,6 +296,7 @@ export function ComposeEmail({ replyTo, onSent, onCancel }: ComposeEmailProps) {
         createTicket: false,
         ticketSubject: '',
         ticketPriority: 'medium',
+        requestReadReceipt: true,
       });
       setSelectedTemplate('');
       setAttachments([]);
@@ -607,6 +610,25 @@ export function ComposeEmail({ replyTo, onSent, onCancel }: ComposeEmailProps) {
             )}
           </div>
 
+          {/* Read receipt option */}
+          <div className="border rounded-lg p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <MailOpen className="h-4 w-4 text-muted-foreground" />
+                <div>
+                  <Label>Solicitar confirmación de lectura</Label>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Recibirás un aviso cuando el destinatario abra el email. Si no se confirma en 24h, se enviará un SMS de aviso.
+                  </p>
+                </div>
+              </div>
+              <Switch
+                checked={formData.requestReadReceipt}
+                onCheckedChange={(checked) => setFormData({ ...formData, requestReadReceipt: checked })}
+              />
+            </div>
+          </div>
+
           {/* Submit buttons */}
           <div className="flex justify-between gap-3 pt-2 border-t mt-4">
             <div className="flex gap-2">
@@ -642,6 +664,7 @@ export function ComposeEmail({ replyTo, onSent, onCancel }: ComposeEmailProps) {
                       createTicket: false,
                       ticketSubject: '',
                       ticketPriority: 'medium',
+                      requestReadReceipt: true,
                     });
                     setSelectedTemplate('__none__');
                     setAttachments([]);

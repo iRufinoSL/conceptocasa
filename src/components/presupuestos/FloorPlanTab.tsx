@@ -12,6 +12,7 @@ import { calculateFloorPlanSummary, detectSharedWalls, WALL_LABELS, OPENING_PRES
 import { FloorPlanCanvas2D } from './FloorPlanCanvas2D';
 import { FloorPlanRoomEditor } from './FloorPlanRoomEditor';
 import { FloorPlanSummaryView } from './FloorPlanSummary';
+import { FloorPlan3DViewer } from './FloorPlan3DViewer';
 import type { FloorPlanData } from '@/lib/floor-plan-calculations';
 
 interface FloorPlanTabProps {
@@ -233,9 +234,12 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
       {/* Toolbar */}
       <div className="flex items-center justify-between flex-wrap gap-2">
         <Tabs value={viewTab} onValueChange={setViewTab}>
-          <TabsList className="h-8">
+           <TabsList className="h-8">
             <TabsTrigger value="plano" className="text-xs h-7 px-3">
               <Layout className="h-3.5 w-3.5 mr-1" /> Plano 2D
+            </TabsTrigger>
+            <TabsTrigger value="3d" className="text-xs h-7 px-3">
+              <Box className="h-3.5 w-3.5 mr-1" /> Vista 3D
             </TabsTrigger>
             <TabsTrigger value="resumen" className="text-xs h-7 px-3">
               <BarChart3 className="h-3.5 w-3.5 mr-1" /> Resumen m²
@@ -356,6 +360,9 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
                 );
               })()}
             </>
+          )}
+          {viewTab === '3d' && planData && (
+            <FloorPlan3DViewer plan={planData} rooms={rooms} />
           )}
           {viewTab === 'resumen' && (
             <FloorPlanSummaryView summary={summary} />

@@ -25,7 +25,7 @@ interface AppCard {
   id: string;
   title: string;
   description: string;
-  icon: React.ElementType;
+  icon: React.ComponentType<{ className?: string }>;
   route: string;
   available: boolean;
   adminOnly: boolean;

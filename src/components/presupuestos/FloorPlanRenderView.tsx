@@ -45,6 +45,7 @@ export function FloorPlanRenderView({ plan, rooms, budgetId }: FloorPlanRenderVi
             length: plan.length,
             height: plan.defaultHeight,
           },
+          roofType: plan.roofType,
         },
       });
 

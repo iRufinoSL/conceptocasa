@@ -42,7 +42,7 @@ interface LicenseRequirement {
   value?: string;
   source?: string;
   details?: string[];
-  icon: React.ElementType;
+  icon: React.ComponentType<{ className?: string }>;
 }
 
 interface SectoralAffection {
@@ -51,7 +51,7 @@ interface SectoralAffection {
   affected: boolean | null;
   distance?: number | null;
   source?: string;
-  icon: React.ElementType;
+  icon: React.ComponentType<{ className?: string }>;
   regulations?: string;
   regulatoryBody?: string; // Organismo regulador
   legalReference?: string; // Referencia legal (Ley, Decreto, etc.)

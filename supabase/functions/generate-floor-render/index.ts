@@ -9,7 +9,7 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { planDescription, style, rooms, dimensions } = await req.json();
+    const { planDescription, style, rooms, dimensions, roofType } = await req.json();
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
 
@@ -27,10 +27,18 @@ serve(async (req) => {
     const styleDesc = styleDescriptions[style] || styleDescriptions.moderno;
     const dims = dimensions ? `${dimensions.width}m x ${dimensions.length}m, ${dimensions.height}m ceiling height` : "";
 
+    const roofDescriptions: Record<string, string> = {
+      dos_aguas: "gable roof (two sloping sides meeting at a central ridge)",
+      cuatro_aguas: "hip roof (four sloping sides)",
+      plana: "flat roof",
+    };
+    const roofDesc = roofDescriptions[roofType] || "";
+
     const prompt = `Generate a photorealistic architectural exterior rendering of a single-family house with the following characteristics:
 
 Style: ${styleDesc}
 Dimensions: ${dims}
+${roofDesc ? `Roof type: ${roofDesc}` : ""}
 Rooms: ${roomList}
 ${planDescription ? `Additional details: ${planDescription}` : ""}
 

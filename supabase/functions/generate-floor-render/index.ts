@@ -9,7 +9,7 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { planDescription, style, rooms, dimensions, roofType } = await req.json();
+    const { planDescription, style, rooms, dimensions, roofType, numberOfFloors } = await req.json();
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
 
@@ -34,16 +34,21 @@ serve(async (req) => {
     };
     const roofDesc = roofDescriptions[roofType] || "";
 
-    const prompt = `Generate a photorealistic architectural exterior rendering of a single-family house with the following characteristics:
+    const floors = numberOfFloors || 1;
+    const floorDesc = floors === 1 ? "single-story (one floor only, ground level)" : `${floors}-story`;
+
+    const prompt = `Generate a photorealistic architectural exterior rendering of a ${floorDesc} single-family house with the following characteristics:
 
 Style: ${styleDesc}
 Dimensions: ${dims}
+Number of floors: ${floors} (IMPORTANT: the house must have exactly ${floors} floor${floors > 1 ? 's' : ''}, not more, not less)
 ${roofDesc ? `Roof type: ${roofDesc}` : ""}
 Rooms: ${roomList}
 ${planDescription ? `Additional details: ${planDescription}` : ""}
 
 The image should be a professional architectural visualization showing:
 - The complete exterior of the house from a 3/4 angle perspective
+- CRITICAL: The house must be ${floorDesc} — ${floors === 1 ? 'a ground-level building with NO upper floors' : `a building with exactly ${floors} visible floors`}
 - Realistic lighting (golden hour/afternoon sun)
 - Landscaping and surroundings appropriate to the style
 - High quality photorealistic rendering suitable for a client presentation

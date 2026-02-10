@@ -46,6 +46,7 @@ export function FloorPlanRenderView({ plan, rooms, budgetId }: FloorPlanRenderVi
             height: plan.defaultHeight,
           },
           roofType: plan.roofType,
+          numberOfFloors: 1, // Currently single-floor designs only
         },
       });
 

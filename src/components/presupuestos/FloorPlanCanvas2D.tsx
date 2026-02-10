@@ -44,7 +44,8 @@ export function FloorPlanCanvas2D({
 }: FloorPlanCanvas2DProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const scale = 40;
-  const padding = 2.5; // increased padding for external dimension annotations
+  const padding = 2.5;
+  const [zoomPercent, setZoomPercent] = useState(100);
 
   // Room drag state
   const [roomDrag, setRoomDrag] = useState<{
@@ -327,15 +328,37 @@ export function FloorPlanCanvas2D({
   const dimFontSize = 7;
   const perimColor = 'hsl(142, 76%, 30%)';
 
+  const zoomFactor = zoomPercent / 100;
+  const ZOOM_STEPS = [50, 75, 100, 125, 150, 200, 250, 300];
+
   return (
-    <div className="w-full overflow-auto bg-background rounded-lg border border-border">
+    <div className="w-full bg-background rounded-lg border border-border">
+      {/* Zoom toolbar */}
+      <div className="flex items-center gap-1.5 px-3 py-1.5 border-b border-border bg-muted/30">
+        <span className="text-[10px] font-medium text-muted-foreground mr-1">Zoom:</span>
+        {ZOOM_STEPS.map(z => (
+          <button key={z}
+            onClick={() => setZoomPercent(z)}
+            className={`text-[10px] px-1.5 py-0.5 rounded transition-colors ${
+              zoomPercent === z
+                ? 'bg-primary text-primary-foreground font-semibold'
+                : 'bg-background text-muted-foreground hover:bg-accent/20 border border-border'
+            }`}
+          >
+            {z}%
+          </button>
+        ))}
+      </div>
+      <div className="overflow-auto" style={{ maxHeight: zoomPercent > 100 ? '70vh' : undefined }}>
       <svg
         ref={svgRef}
         viewBox={viewBox}
-        className="w-full h-auto min-h-[300px] max-h-[500px]"
+        className="h-auto"
         style={{
           fontFamily: 'Plus Jakarta Sans, sans-serif',
           cursor: isDragging ? (wallDrag ? (wallDrag.isHorizontal ? 'ns-resize' : 'ew-resize') : 'grabbing') : 'default',
+          width: `${zoomFactor * 100}%`,
+          minHeight: `${Math.max(300, 300 * zoomFactor)}px`,
         }}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
@@ -613,6 +636,7 @@ export function FloorPlanCanvas2D({
           </g>
         )}
       </svg>
+      </div>
     </div>
   );
 }

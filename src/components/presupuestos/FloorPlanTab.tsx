@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { RefreshCw, Save, Layout, Box, BarChart3, Loader2, AlertTriangle, Trash2, DoorOpen, ImageIcon, Undo2 } from 'lucide-react';
+import { RefreshCw, Save, Layout, Box, BarChart3, Loader2, AlertTriangle, Trash2, DoorOpen, ImageIcon, Undo2, RotateCcw } from 'lucide-react';
 import { toast } from 'sonner';
 import { useFloorPlan } from '@/hooks/useFloorPlan';
 import { calculateFloorPlanSummary, detectSharedWalls, autoClassifyWalls, WALL_LABELS, OPENING_PRESETS, generateExternalWallNames } from '@/lib/floor-plan-calculations';
@@ -27,8 +27,8 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
     floorPlan, rooms, loading, saving,
     createFloorPlan, updateFloorPlan,
     addRoom, updateRoom, deleteRoom,
-    updateWall, addOpening, deleteOpening,
-    syncToMeasurements, getPlanData,
+    updateWall, addOpening, updateOpening, deleteOpening,
+    syncToMeasurements, getPlanData, refetch,
   } = useFloorPlan(budgetId);
 
   const [selectedRoomId, setSelectedRoomId] = useState<string>();
@@ -293,6 +293,11 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
             <Undo2 className="h-4 w-4 mr-1" />
             Deshacer
           </Button>
+          <Button variant="outline" size="sm" onClick={async () => { await refetch(); toast.success('Plano actualizado'); }} disabled={saving}
+            title="Actualizar plano con los últimos cambios">
+            <RotateCcw className="h-4 w-4 mr-1" />
+            Actualizar plano
+          </Button>
           <Button variant="outline" size="sm" onClick={async () => {
             // Force recalculate: re-sync roof config from the plan settings panel, then sync measurements
             if (planData) {
@@ -391,19 +396,53 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
                             onChange={e => { if (!wall.id.startsWith('temp-')) updateWall(wall.id, { thickness: Number(e.target.value) || undefined }); }} />
                         </div>
                       </div>
-                      <div className="space-y-1">
+                      <div className="space-y-2">
                         <Label className="text-[10px] font-semibold">Aberturas ({wall.openings.length})</Label>
                         {wall.openings.map(op => (
-                          <div key={op.id} className="flex items-center gap-2 text-xs bg-muted/50 p-1.5 rounded">
-                            <DoorOpen className="h-3 w-3 text-muted-foreground" />
-                            <span className="flex-1">
-                              {OPENING_PRESETS[op.openingType as keyof typeof OPENING_PRESETS]?.label || op.openingType}
-                              {' '}({op.width}×{op.height}m)
-                            </span>
-                            <Button variant="ghost" size="sm" className="h-5 w-5 p-0 text-destructive"
-                              onClick={() => deleteOpening(op.id)}>
-                              <Trash2 className="h-3 w-3" />
-                            </Button>
+                          <div key={op.id} className="bg-muted/50 p-2 rounded space-y-1.5">
+                            <div className="flex items-center gap-2">
+                              <DoorOpen className="h-3 w-3 text-muted-foreground shrink-0" />
+                              <span className="text-xs font-medium flex-1">
+                                {OPENING_PRESETS[op.openingType as keyof typeof OPENING_PRESETS]?.label || op.openingType}
+                              </span>
+                              <Button variant="ghost" size="sm" className="h-5 w-5 p-0 text-destructive"
+                                onClick={() => deleteOpening(op.id)}>
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
+                            </div>
+                            <div className="grid grid-cols-4 gap-1.5">
+                              <div>
+                                <Label className="text-[9px]">Tipo</Label>
+                                <Select value={op.openingType}
+                                  onValueChange={v => updateOpening(op.id, { openingType: v })}>
+                                  <SelectTrigger className="h-6 text-[10px]"><SelectValue /></SelectTrigger>
+                                  <SelectContent>
+                                    {Object.entries(OPENING_PRESETS).map(([key, preset]) => (
+                                      <SelectItem key={key} value={key} className="text-xs">{preset.label}</SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              <div>
+                                <Label className="text-[9px]">Ancho (m)</Label>
+                                <Input type="number" step="0.1" className="h-6 text-[10px]"
+                                  defaultValue={op.width}
+                                  onBlur={e => updateOpening(op.id, { width: Number(e.target.value) })} />
+                              </div>
+                              <div>
+                                <Label className="text-[9px]">Alto (m)</Label>
+                                <Input type="number" step="0.1" className="h-6 text-[10px]"
+                                  defaultValue={op.height}
+                                  onBlur={e => updateOpening(op.id, { height: Number(e.target.value) })} />
+                              </div>
+                              <div>
+                                <Label className="text-[9px]">Posición</Label>
+                                <Input type="number" step="0.05" min="0" max="1" className="h-6 text-[10px]"
+                                  defaultValue={op.positionX}
+                                  onBlur={e => updateOpening(op.id, { positionX: Math.max(0, Math.min(1, Number(e.target.value))) })}
+                                  title="0=inicio, 0.5=centro, 1=final" />
+                              </div>
+                            </div>
                           </div>
                         ))}
                         {!wall.id.startsWith('temp-') && (
@@ -425,7 +464,7 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
           )}
           {viewTab === '3d' && planData && (
             <FloorPlan3DViewer
-              key={`${planData.roofType}-${planData.roofOverhang}-${planData.roofSlopePercent}-${planData.defaultHeight}-${rooms.length}`}
+              key={`${planData.roofType}-${planData.roofOverhang}-${planData.roofSlopePercent}-${planData.defaultHeight}-${rooms.map(r => `${r.id}:${r.posX}:${r.posY}:${r.width}:${r.length}:${r.walls.map(w => `${w.wallIndex}${w.wallType}${w.openings.length}`).join(',')}`).join('|')}`}
               plan={planData}
               rooms={rooms}
             />

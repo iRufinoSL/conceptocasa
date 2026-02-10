@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { RefreshCw, Save, Layout, Box, BarChart3, Loader2, AlertTriangle, Trash2, DoorOpen, ImageIcon, Undo2, RotateCcw, RectangleVertical } from 'lucide-react';
 import { toast } from 'sonner';
 import { useFloorPlan } from '@/hooks/useFloorPlan';
-import { calculateFloorPlanSummary, detectSharedWalls, autoClassifyWalls, WALL_LABELS, OPENING_PRESETS, generateExternalWallNames } from '@/lib/floor-plan-calculations';
+import { calculateFloorPlanSummary, detectSharedWalls, autoClassifyWalls, WALL_LABELS, OPENING_PRESETS, generateExternalWallNames, computeWallSegments } from '@/lib/floor-plan-calculations';
 import { FloorPlanCanvas2D } from './FloorPlanCanvas2D';
 import { FloorPlanRoomEditor } from './FloorPlanRoomEditor';
 import { FloorPlanSummaryView } from './FloorPlanSummary';
@@ -109,6 +109,7 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
   const sharedWallKeys = useMemo(() => new Set(sharedWallMap.keys()), [sharedWallMap]);
   const wallClassification = useMemo(() => autoClassifyWalls(rooms), [rooms]);
   const externalWallNames = useMemo(() => generateExternalWallNames(rooms, wallClassification), [rooms, wallClassification]);
+  const wallSegmentsMap = useMemo(() => computeWallSegments(rooms), [rooms]);
 
   const handleMoveRoom = useCallback((roomId: string, posX: number, posY: number) => {
     pushUndo();
@@ -356,13 +357,20 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
                 const parts = selectedWallKey.split('::');
                 const roomId = parts[0];
                 const wallIdx = parseInt(parts[1]);
+                const segIdx = parts.length > 2 ? parseInt(parts[2]) : undefined;
+                const baseWallKey = `${roomId}::${wallIdx}`;
                 const room = rooms.find(r => r.id === roomId);
                 if (!room) return null;
                 const wall = room.walls.find(w => w.wallIndex === wallIdx);
                 if (!wall) return null;
-                const isInvisible = wallClassification.get(selectedWallKey) === 'invisible';
-                const autoType = wallClassification.get(selectedWallKey) || wall.wallType;
-                const neighborInfo = sharedWallMap.get(selectedWallKey);
+                const segments = wallSegmentsMap.get(baseWallKey) || [];
+                const segmentInfo = segIdx !== undefined && segments[segIdx] ? segments[segIdx] : null;
+                const segType = segmentInfo ? segmentInfo.segmentType : (wallClassification.get(baseWallKey) || wall.wallType);
+                const isInvisible = segType === 'invisible';
+                const autoType = segType;
+                const neighborInfo = segmentInfo?.neighborRoomId
+                  ? { neighborRoomId: segmentInfo.neighborRoomId, neighborWallIndex: segmentInfo.neighborWallIndex }
+                  : sharedWallMap.get(baseWallKey);
                 const neighborRoom = neighborInfo ? rooms.find(r => r.id === neighborInfo.neighborRoomId) : null;
                 return (
                   <Card className="mt-2">
@@ -370,8 +378,11 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
                       <div className="flex items-center gap-2">
                         <CardTitle className="text-xs">
                           {WALL_LABELS[wallIdx]} — {room.name}
-                          {autoType === 'externa' && externalWallNames.get(selectedWallKey) && (
-                            <span className="ml-1 text-primary font-bold">({externalWallNames.get(selectedWallKey)})</span>
+                          {segIdx !== undefined && segments.length > 1 && (
+                            <span className="ml-1 text-muted-foreground">(Seg. {segIdx + 1}/{segments.length})</span>
+                          )}
+                          {autoType === 'externa' && externalWallNames.get(baseWallKey) && (
+                            <span className="ml-1 text-primary font-bold">({externalWallNames.get(baseWallKey)})</span>
                           )}
                         </CardTitle>
                         <Badge variant="outline" className="text-[10px] h-4">{autoType === 'externa' ? 'Externa' : autoType === 'invisible' ? 'Invisible' : 'Interna'}</Badge>

@@ -257,8 +257,15 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
             {areaExceeded && <AlertTriangle className="h-3 w-3 mr-1" />}
             Estancias: {roomsAreaSum.toFixed(1)}m² / {planArea.toFixed(1)}m² planta
           </Badge>
-          <Button variant="outline" size="sm" onClick={syncToMeasurements} disabled={saving}>
+          <Button variant="outline" size="sm" onClick={() => {
+            // Force recalculate roof by triggering summary re-evaluation
+            syncToMeasurements();
+          }} disabled={saving} title="Recalcular tejado y mediciones">
             <RefreshCw className={`h-4 w-4 mr-1 ${saving ? 'animate-spin' : ''}`} />
+            Recalcular tejado
+          </Button>
+          <Button variant="outline" size="sm" onClick={syncToMeasurements} disabled={saving}>
+            <Save className={`h-4 w-4 mr-1 ${saving ? 'animate-spin' : ''}`} />
             Sincronizar mediciones
           </Button>
         </div>

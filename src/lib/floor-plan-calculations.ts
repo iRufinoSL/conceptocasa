@@ -33,7 +33,7 @@ export interface WallData {
 
 export interface OpeningData {
   id: string;
-  openingType: 'puerta' | 'puerta_externa' | 'ventana_grande' | 'ventana_mediana' | 'ventana_pequeña';
+  openingType: 'puerta' | 'puerta_externa' | 'ventana_grande' | 'ventana_mediana' | 'ventana_pequeña' | 'ventana_balconera';
   name?: string;
   width: number;
   height: number;
@@ -127,6 +127,7 @@ export function calculateRoom(room: RoomData, plan: FloorPlanData): RoomCalculat
       if (op.openingType === 'puerta' || op.openingType === 'puerta_externa') {
         doorCount++;
       } else {
+        // ventana_grande, ventana_mediana, ventana_pequeña, ventana_balconera
         windowCount++;
       }
       
@@ -319,6 +320,7 @@ export const OPENING_PRESETS = {
   ventana_grande: { width: 1.5, height: 1.2, label: 'Ventana grande' },
   ventana_mediana: { width: 1.2, height: 1.0, label: 'Ventana mediana' },
   ventana_pequeña: { width: 0.6, height: 0.6, label: 'Ventana pequeña' },
+  ventana_balconera: { width: 1.5, height: 2.10, label: 'Ventana balconera' },
 } as const;
 
 export const WALL_LABELS: Record<number, string> = {
@@ -337,6 +339,7 @@ export const ROOM_PRESETS = [
   { name: 'Despensa', width: 2, length: 1.5 },
   { name: 'Pasillo', width: 5, length: 1.2 },
   { name: 'Entrada', width: 2.5, length: 2 },
+  { name: 'Patio', width: 4, length: 4 },
 ];
 
 // Detect shared walls between adjacent rooms

@@ -21,6 +21,7 @@ const ROOM_COLORS: Record<string, string> = {
   'Despensa': 'hsl(280, 60%, 88%)',
   'Pasillo': 'hsl(220, 14%, 92%)',
   'Entrada': 'hsl(25, 95%, 88%)',
+  'Patio': 'hsl(120, 40%, 85%)',
 };
 
 function getRoomColor(name: string): string {
@@ -463,12 +464,16 @@ export function FloorPlanCanvas2D({
             <g key={el.roomId} transform={`translate(${tx}, ${ty})`}
               style={{ opacity: isDraggingRoom ? 0.75 : 1 }}>
 
-              {/* Fill */}
+              {/* Floor fill - always visible with distinct color */}
               <rect x={el.x} y={el.y} width={el.w} height={el.h}
-                fill={el.color} opacity={isSelected ? 0.9 : 0.6} rx={2}
+                fill={el.color} opacity={0.75} rx={2}
                 onMouseDown={e => handleRoomMouseDown(e, el.roomId, el.posX, el.posY)}
                 className={onMoveRoom ? 'cursor-grab' : 'cursor-pointer'}
               />
+              {/* Floor pattern indicator */}
+              <rect x={el.x + 2} y={el.y + 2} width={el.w - 4} height={el.h - 4}
+                fill="none" stroke={el.color} strokeWidth={0.5} rx={1}
+                style={{ pointerEvents: 'none' }} opacity={0.5} />
               {isSelected && (
                 <rect x={el.x} y={el.y} width={el.w} height={el.h}
                   fill="none" stroke="hsl(var(--primary))" strokeWidth={2} rx={2}
@@ -478,6 +483,22 @@ export function FloorPlanCanvas2D({
               {/* Walls */}
               {el.wallData.map(w => (
                 <g key={w.wallKey}>
+                  {/* External wall base thickness band */}
+                  {w.isExternal && (
+                    <g style={{ pointerEvents: 'none' }}>
+                      {w.isHoriz ? (
+                        <rect
+                          x={w.x1} y={w.wallIndex === 1 ? w.y1 - extT * scale : w.y1}
+                          width={Math.abs(w.x2 - w.x1)} height={extT * scale}
+                          fill="hsl(222, 47%, 20%)" opacity={0.12} />
+                      ) : (
+                        <rect
+                          x={w.wallIndex === 4 ? w.x1 - extT * scale : w.x1} y={w.y1}
+                          width={extT * scale} height={Math.abs(w.y2 - w.y1)}
+                          fill="hsl(222, 47%, 20%)" opacity={0.12} />
+                      )}
+                    </g>
+                  )}
                   {/* Hit area */}
                   <line x1={w.x1} y1={w.y1} x2={w.x2} y2={w.y2}
                     stroke="transparent" strokeWidth={14}
@@ -503,7 +524,6 @@ export function FloorPlanCanvas2D({
                     <g style={{ pointerEvents: 'none' }}>
                       {w.isHoriz ? (
                         <>
-                          {/* Horizontal external wall: show dimension above/below */}
                           {(() => {
                             const extLen = w.externalLen;
                             const midX = (w.x1 + w.x2) / 2;
@@ -518,7 +538,6 @@ export function FloorPlanCanvas2D({
                         </>
                       ) : (
                         <>
-                          {/* Vertical external wall: show dimension left/right */}
                           {(() => {
                             const extLen = w.externalLen;
                             const midY = (w.y1 + w.y2) / 2;
@@ -539,16 +558,16 @@ export function FloorPlanCanvas2D({
                 </g>
               ))}
 
-              {/* Interior labels */}
-              <text x={el.x + el.w / 2} y={el.y + el.h / 2 - 6}
-                textAnchor="middle" fontSize={10} fontWeight="600" fill="hsl(222, 47%, 11%)"
+              {/* Interior labels - Name, Dims, Floor area */}
+              <text x={el.x + el.w / 2} y={el.y + el.h / 2 - 8}
+                textAnchor="middle" fontSize={10} fontWeight="700" fill="hsl(222, 47%, 11%)"
                 style={{ pointerEvents: 'none' }}>{el.label}</text>
-              <text x={el.x + el.w / 2} y={el.y + el.h / 2 + 6}
+              <text x={el.x + el.w / 2} y={el.y + el.h / 2 + 4}
                 textAnchor="middle" fontSize={8} fill="hsl(220, 9%, 46%)"
                 style={{ pointerEvents: 'none' }}>{el.dims}</text>
-              <text x={el.x + el.w / 2} y={el.y + el.h / 2 + 16}
-                textAnchor="middle" fontSize={8} fontWeight="500" fill="hsl(217, 91%, 60%)"
-                style={{ pointerEvents: 'none' }}>{el.area}</text>
+              <text x={el.x + el.w / 2} y={el.y + el.h / 2 + 15}
+                textAnchor="middle" fontSize={8.5} fontWeight="600" fill="hsl(217, 91%, 50%)"
+                style={{ pointerEvents: 'none' }}>Suelo: {el.area}</text>
 
               {/* Interior dimension annotation (top) */}
               <line x1={el.x} y1={el.y - 8} x2={el.x + el.w} y2={el.y - 8}

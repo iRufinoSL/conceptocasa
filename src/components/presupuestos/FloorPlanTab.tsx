@@ -14,6 +14,7 @@ import { FloorPlanCanvas2D } from './FloorPlanCanvas2D';
 import { FloorPlanRoomEditor } from './FloorPlanRoomEditor';
 import { FloorPlanSummaryView } from './FloorPlanSummary';
 import { FloorPlan3DViewer } from './FloorPlan3DViewer';
+import { ElevationsGridViewer } from './ElevationsGridViewer';
 import { FloorPlanRenderView } from './FloorPlanRenderView';
 import { WallElevationView } from './WallElevationView';
 import type { FloorPlanData } from '@/lib/floor-plan-calculations';
@@ -277,7 +278,7 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
               <RectangleVertical className="h-3.5 w-3.5 mr-1" /> Alzados
             </TabsTrigger>
             <TabsTrigger value="3d" className="text-xs h-7 px-3">
-              <Box className="h-3.5 w-3.5 mr-1" /> Vista 3D
+              <Box className="h-3.5 w-3.5 mr-1" /> Alzados 2D
             </TabsTrigger>
             <TabsTrigger value="resumen" className="text-xs h-7 px-3">
               <BarChart3 className="h-3.5 w-3.5 mr-1" /> Resumen m²
@@ -531,7 +532,14 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
             />
           )}
           {viewTab === '3d' && planData && (
-            <FloorPlan3DViewer plan={planData} rooms={rooms} />
+            <ElevationsGridViewer
+              plan={planData}
+              rooms={rooms}
+              onUpdateOpening={updateOpening}
+              onAddOpening={addOpening}
+              onDeleteOpening={deleteOpening}
+              saving={saving}
+            />
           )}
           {viewTab === 'resumen' && (
             <FloorPlanSummaryView summary={summary} />

@@ -99,6 +99,10 @@ function RoomWalls({ room, plan, wallClassification }: { room: RoomData; plan: F
       {room.walls.map((wall) => {
         const wallKey = `${room.id}::${wall.wallIndex}`;
         const effectiveType = wallClassification?.get(wallKey) || wall.wallType;
+        
+        // Skip invisible walls - they don't render in 3D
+        if (effectiveType === 'invisible') return null;
+        
         const ext = effectiveType === 'externa';
         const thickness = wall.thickness || (ext ? plan.externalWallThickness : plan.internalWallThickness);
         const color = ext ? '#c4a882' : '#d8cfc0';

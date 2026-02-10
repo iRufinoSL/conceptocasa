@@ -113,23 +113,28 @@ export function useFloorPlan(budgetId: string) {
       const roomTree: RoomData[] = roomsData.map((r: any) => {
         const roomWalls = (wallsData || [])
           .filter((w: any) => w.room_id === r.id)
-          .map((w: any) => ({
-            id: w.id,
-            wallIndex: w.wall_index,
-            wallType: w.wall_type as 'externa' | 'interna' | 'compartida',
-            thickness: w.thickness || undefined,
-            height: w.height || undefined,
-            openings: openingsData
-              .filter(o => o.wall_id === w.id)
-              .map(o => ({
-                id: o.id,
-                openingType: o.opening_type as any,
-                name: o.name || undefined,
-                width: o.width,
-                height: o.height,
-                positionX: o.position_x,
-              })),
-          }));
+          .map((w: any) => {
+            // Migrate legacy 'compartida' to 'invisible'
+            const rawType = w.wall_type as string;
+            const wallType = rawType === 'compartida' ? 'invisible' : rawType;
+            return {
+              id: w.id,
+              wallIndex: w.wall_index,
+              wallType: wallType as 'externa' | 'interna' | 'invisible',
+              thickness: w.thickness || undefined,
+              height: w.height || undefined,
+              openings: openingsData
+                .filter(o => o.wall_id === w.id)
+                .map(o => ({
+                  id: o.id,
+                  openingType: o.opening_type as any,
+                  name: o.name || undefined,
+                  width: o.width,
+                  height: o.height,
+                  positionX: o.position_x,
+                })),
+            };
+          });
 
         // Ensure all 4 walls exist
         const walls: WallData[] = [1, 2, 3, 4].map(idx => {
@@ -320,7 +325,7 @@ export function useFloorPlan(budgetId: string) {
     }
   };
 
-  const updateWall = async (wallId: string, data: { wallType?: 'externa' | 'interna' | 'compartida'; thickness?: number; height?: number }) => {
+  const updateWall = async (wallId: string, data: { wallType?: 'externa' | 'interna' | 'invisible'; thickness?: number; height?: number }) => {
     setSaving(true);
     try {
       const updates: any = {};

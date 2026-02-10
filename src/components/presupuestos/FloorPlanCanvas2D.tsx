@@ -220,9 +220,12 @@ export function FloorPlanCanvas2D({
           const isSegSelected = selectedWallKey === segKey;
           const isInvisible = seg.segmentType === 'invisible';
           const isExternal = seg.segmentType === 'externa';
-          const isInternal = seg.segmentType === 'interna';
+
+          // Invisible segments are not rendered at all
+          if (isInvisible) return null;
+
           const baseThickness = isExternal ? plan.externalWallThickness * scale : plan.internalWallThickness * scale;
-          const strokeWidth = Math.max(baseThickness, isExternal ? 4 : isInvisible ? 1.5 : 3);
+          const strokeWidth = Math.max(baseThickness, isExternal ? 4 : 3);
 
           let sx1: number, sy1: number, sx2: number, sy2: number;
           if (isHoriz) {
@@ -239,7 +242,6 @@ export function FloorPlanCanvas2D({
 
           const segColor = isSegSelected ? 'hsl(var(--primary))'
             : isExternal ? 'hsl(222, 47%, 20%)'
-            : isInvisible ? 'hsl(0, 0%, 75%)'
             : 'hsl(25, 80%, 50%)';
 
           return (
@@ -261,12 +263,11 @@ export function FloorPlanCanvas2D({
               <line
                 x1={sx1} y1={sy1} x2={sx2} y2={sy2}
                 stroke={segColor} strokeWidth={strokeWidth}
-                strokeDasharray={isInvisible ? '4,3' : undefined}
                 style={{ pointerEvents: 'none' }}
               />
             </g>
           );
-        });
+        }).filter(Boolean);
 
         // Determine overall wall type for opening rendering (use first non-invisible segment, or invisible if all invisible)
         const hasVisibleSegment = segments.some(s => s.segmentType !== 'invisible');
@@ -687,15 +688,14 @@ export function FloorPlanCanvas2D({
           <g transform={`translate(${(perimeterDims.extMinX) * scale}, ${(perimeterDims.extMaxY + 0.6) * scale})`}>
             <rect x={0} y={0} width={12} height={4} fill="hsl(222, 47%, 20%)" />
             <text x={16} y={4} fontSize={7} fill="hsl(220, 9%, 46%)">Externa</text>
-            <rect x={65} y={0} width={12} height={2} fill="hsl(220, 9%, 46%)" />
+            <rect x={65} y={0} width={12} height={3} fill="hsl(25, 80%, 50%)" />
             <text x={81} y={4} fontSize={7} fill="hsl(220, 9%, 46%)">Interna</text>
-            <line x1={130} y1={1} x2={145} y2={1} stroke="hsl(0, 0%, 75%)" strokeWidth={1.5} strokeDasharray="4,3" />
-            <text x={149} y={4} fontSize={7} fill="hsl(220, 9%, 46%)">Invisible</text>
-            <line x1={220} y1={-1} x2={232} y2={-1} stroke="hsl(217, 91%, 60%)" strokeWidth={1.5} />
+            <line x1={130} y1={-1} x2={142} y2={-1} stroke="hsl(217, 91%, 60%)" strokeWidth={1.5} />
             <line x1={220} y1={3} x2={232} y2={3} stroke="hsl(217, 91%, 60%)" strokeWidth={1.5} />
-            <text x={236} y={4} fontSize={7} fill="hsl(220, 9%, 46%)">Ventana</text>
-            <rect x={280} y={-1} width={8} height={6} fill="none" stroke={dimColor} strokeWidth={0.6} strokeDasharray="3,2" />
-            <text x={292} y={4} fontSize={7} fill={dimColor}>Ext. (grosor)</text>
+            <line x1={130} y1={3} x2={142} y2={3} stroke="hsl(217, 91%, 60%)" strokeWidth={1.5} />
+            <text x={146} y={4} fontSize={7} fill="hsl(220, 9%, 46%)">Ventana</text>
+            <rect x={190} y={-1} width={8} height={6} fill="none" stroke={dimColor} strokeWidth={0.6} strokeDasharray="3,2" />
+            <text x={202} y={4} fontSize={7} fill={dimColor}>Ext. (grosor)</text>
           </g>
         )}
       </svg>

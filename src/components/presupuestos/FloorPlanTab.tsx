@@ -372,15 +372,37 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
                   ? { neighborRoomId: segmentInfo.neighborRoomId, neighborWallIndex: segmentInfo.neighborWallIndex }
                   : sharedWallMap.get(baseWallKey);
                 const neighborRoom = neighborInfo ? rooms.find(r => r.id === neighborInfo.neighborRoomId) : null;
+
+                // Count visible (non-invisible) segments for this wall to generate numbered names
+                const visibleSegments = segments.map((s, i) => ({ ...s, originalIndex: i })).filter(s => s.segmentType !== 'invisible');
+                const hasMultipleVisible = visibleSegments.length > 1;
+                const visibleNumber = segIdx !== undefined
+                  ? visibleSegments.findIndex(s => s.originalIndex === segIdx) + 1
+                  : 0;
+                const wallLabel = hasMultipleVisible && visibleNumber > 0
+                  ? `${WALL_LABELS[wallIdx]} ${visibleNumber}`
+                  : WALL_LABELS[wallIdx];
+
+                // If the selected segment is invisible, show message to edit from neighbor
+                if (isInvisible && neighborRoom) {
+                  return (
+                    <Card className="mt-2">
+                      <CardContent className="p-3">
+                        <p className="text-xs text-muted-foreground">
+                          Esta zona de la pared es compartida con <strong>{neighborRoom.name}</strong>. 
+                          Los objetos se gestionan desde la pared visible de la estancia vecina.
+                        </p>
+                      </CardContent>
+                    </Card>
+                  );
+                }
+
                 return (
                   <Card className="mt-2">
                     <CardHeader className="pb-2 py-2 px-3">
                       <div className="flex items-center gap-2">
                         <CardTitle className="text-xs">
-                          {WALL_LABELS[wallIdx]} — {room.name}
-                          {segIdx !== undefined && segments.length > 1 && (
-                            <span className="ml-1 text-muted-foreground">(Seg. {segIdx + 1}/{segments.length})</span>
-                          )}
+                          {wallLabel} — {room.name}
                           {autoType === 'externa' && externalWallNames.get(baseWallKey) && (
                             <span className="ml-1 text-primary font-bold">({externalWallNames.get(baseWallKey)})</span>
                           )}

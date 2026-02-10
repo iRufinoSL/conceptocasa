@@ -1,5 +1,5 @@
-import { useMemo, Suspense } from 'react';
-import { Canvas, useThree } from '@react-three/fiber';
+import { useMemo, useEffect, useState } from 'react';
+import { Canvas, useThree, useFrame } from '@react-three/fiber';
 import { OrbitControls, PerspectiveCamera, Text } from '@react-three/drei';
 import * as THREE from 'three';
 import type { FloorPlanData, RoomData } from '@/lib/floor-plan-calculations';
@@ -25,11 +25,8 @@ function getRoomColor(name: string): string {
 }
 
 /**
- * Build a wall as an ExtrudeGeometry lying flat along the X axis (width=wallLen),
- * standing up along Y (height=wallH), extruded along Z (depth=thickness).
- * Openings are cut as rectangular holes.
- *
- * The geometry origin is at (0,0,0) = bottom-left-front corner.
+ * Build a wall geometry: lies along X (0..wallLen), stands along Y (0..wallH),
+ * extruded along Z (0..thickness). Openings cut as rectangular holes.
  */
 function buildWallGeometry(
   wallLen: number,
@@ -46,11 +43,9 @@ function buildWallGeometry(
 
   openings.forEach((op) => {
     const hole = new THREE.Path();
-    // posX is fraction 0..1 of the wall length
     const center = op.posX * wallLen;
     const halfW = op.width / 2;
     let ox = center - halfW;
-    // Clamp so hole doesn't overflow wall edges
     ox = Math.max(0.02, Math.min(ox, wallLen - op.width - 0.02));
     const oy = op.isDoor ? 0 : 0.9;
     hole.moveTo(ox, oy);
@@ -65,15 +60,11 @@ function buildWallGeometry(
 }
 
 /**
- * Each wall is placed in world space using a <group> with position + rotation.
- * Wall indices: 1=top (north), 2=right (east), 3=bottom (south), 4=left (west).
+ * Wall placement convention (top-down view, +X = right, +Z = south):
+ *   Room occupies [posX..posX+width] on X, [posY..posY+length] on Z.
  *
- * Convention (top-down, Z = "into screen" = south):
- *   - Room occupies [posX .. posX+width] on X, [posY .. posY+length] on Z.
- *   - Wall 1 (top/north): runs along X at Z = posY, faces outward (toward -Z)
- *   - Wall 3 (bottom/south): runs along X at Z = posY + length, faces outward (toward +Z)
- *   - Wall 4 (left/west): runs along Z at X = posX, faces outward (toward -X)
- *   - Wall 2 (right/east): runs along Z at X = posX + width, faces outward (toward +X)
+ * Rotation -PI/2 around Y maps local (x,y,z) → world offset (-z, y, x)
+ * Rotation +PI/2 around Y maps local (x,y,z) → world offset (z, y, -x)
  */
 function RoomWalls({
   room,
@@ -105,48 +96,53 @@ function RoomWalls({
         isDoor: op.openingType.startsWith('puerta'),
       }));
 
-      // Determine wall length along its run direction
       const isHorizontal = wall.wallIndex === 1 || wall.wallIndex === 3;
       const wallLen = isHorizontal ? room.width : room.length;
 
       const geo = buildWallGeometry(wallLen, h, thickness, openings);
 
-      // Position and rotation for each wall so it sits correctly in world space.
-      // The geometry goes from x=0..wallLen, y=0..h, and extrudes z=0..thickness.
       let px: number, py: number, pz: number;
-      let ry = 0; // rotation around Y axis
+      let ry = 0;
 
       switch (wall.wallIndex) {
-        case 1: // Top (north) wall: runs along X at room's north edge
-          // Wall faces -Z. Place so the front face (z=0 of geo) is at room.posY,
-          // and the thickness goes into -Z. We achieve this by placing at z=posY and rotating 180° on Y
-          // OR simply offset: place geo at z = posY - thickness (extrude goes +Z toward posY).
+        case 1: // North wall: runs along X at Z = posY
+          // Geo goes x=0..width, z=0..thickness (toward +Z = into room)
+          // Place so front face is at posY, thickness goes outward (-Z)
           px = room.posX;
           py = 0;
           pz = room.posY - thickness;
           ry = 0;
           break;
-        case 3: // Bottom (south) wall: runs along X at room's south edge
+        case 3: // South wall: runs along X at Z = posY + length
+          // Geo goes x=0..width, z=0..thickness (toward +Z = outward)
           px = room.posX;
           py = 0;
           pz = room.posY + room.length;
           ry = 0;
           break;
-        case 4: // Left (west) wall: runs along Z at room's west edge
-          // Rotate -90° around Y: geo X→+Z, geo Z→-X.
-          // Wall spans Z from posY to posY+length, thickness extends toward -X.
+        case 4: {
+          // West wall: runs along Z at X = posX
+          // Rotate +PI/2: local(x,y,z) → world(z, y, -x)
+          // local x=0..wallLen → world z=0..wallLen → offset from posY
+          // local z=0..thickness → world x=0..-thickness → extends toward -X (outward)
           px = room.posX;
           py = 0;
           pz = room.posY;
-          ry = -Math.PI / 2;
+          ry = Math.PI / 2;
           break;
-        case 2: // Right (east) wall: runs along Z at room's east edge
-          // Same rotation. Thickness extends toward +X from posX+width.
+        }
+        case 2: {
+          // East wall: runs along Z at X = posX + width
+          // Rotate -PI/2: local(x,y,z) → world(-z, y, x)
+          // local x=0..wallLen → world z=x (from 0 to wallLen)
+          // local z=0..thickness → world x=-z (from 0 to -thickness)
+          // Position at (posX+width+thickness) so x spans [posX+width, posX+width+thickness]
           px = room.posX + room.width + thickness;
           py = 0;
           pz = room.posY;
           ry = -Math.PI / 2;
           break;
+        }
         default:
           return;
       }
@@ -171,7 +167,7 @@ function RoomWalls({
   return <>{wallElements}</>;
 }
 
-function RoomFloor({ room, plan }: { room: RoomData; plan: FloorPlanData }) {
+function RoomFloor({ room }: { room: RoomData }) {
   if (room.hasFloor === false) return null;
   const color = getRoomColor(room.name);
   return (
@@ -253,7 +249,6 @@ function Roof({ plan, rooms }: { plan: FloorPlanData; rooms: RoomData[] }) {
     };
   }, [roofRooms, overhang, slopeRatio]);
 
-  // All geometry hooks must be called unconditionally (React rules of hooks)
   const ridgeAlongZ = bounds ? bounds.l >= bounds.w : true;
 
   const gableGeo = useMemo(() => {
@@ -332,8 +327,21 @@ function Roof({ plan, rooms }: { plan: FloorPlanData; rooms: RoomData[] }) {
   return null;
 }
 
-function Scene({ plan, rooms }: { plan: FloorPlanData; rooms: RoomData[] }) {
+/** Sets up camera to frame the scene properly */
+function CameraSetup({ bounds, defaultHeight }: { bounds: { w: number; l: number; cx: number; cz: number }; defaultHeight: number }) {
   const { camera } = useThree();
+
+  useEffect(() => {
+    const dist = Math.max(bounds.w, bounds.l) * 1.8;
+    camera.position.set(bounds.cx + dist * 0.6, defaultHeight * 2.5, bounds.cz + dist * 0.6);
+    camera.lookAt(bounds.cx, defaultHeight / 2, bounds.cz);
+    camera.updateProjectionMatrix();
+  }, [camera, bounds, defaultHeight]);
+
+  return null;
+}
+
+function Scene({ plan, rooms }: { plan: FloorPlanData; rooms: RoomData[] }) {
   const wallClassification = useMemo(() => autoClassifyWalls(rooms), [rooms]);
 
   const bounds = useMemo(() => {
@@ -349,27 +357,22 @@ function Scene({ plan, rooms }: { plan: FloorPlanData; rooms: RoomData[] }) {
     return { minX, minZ, maxX, maxZ, w, l, cx: minX + w / 2, cz: minZ + l / 2 };
   }, [rooms, plan]);
 
-  useMemo(() => {
-    const dist = Math.max(bounds.w, bounds.l) * 1.8;
-    camera.position.set(bounds.cx + dist * 0.6, plan.defaultHeight * 2.5, bounds.cz + dist * 0.6);
-    camera.lookAt(bounds.cx, plan.defaultHeight / 2, bounds.cz);
-  }, [bounds, plan.defaultHeight]);
-
   return (
     <>
-      <ambientLight intensity={0.4} />
+      <ambientLight intensity={0.5} />
       <directionalLight
         position={[bounds.cx + bounds.w, plan.defaultHeight * 4, bounds.cz - bounds.l]}
-        intensity={1}
+        intensity={1.2}
         castShadow
         shadow-mapSize-width={2048}
         shadow-mapSize-height={2048}
       />
       <hemisphereLight args={['#87ceeb', '#8fbc8f', 0.3]} />
+      <CameraSetup bounds={bounds} defaultHeight={plan.defaultHeight} />
       <Ground cx={bounds.cx} cz={bounds.cz} size={Math.max(bounds.w, bounds.l) * 3} />
       {rooms.map((room) => (
         <group key={room.id}>
-          <RoomFloor room={room} plan={plan} />
+          <RoomFloor room={room} />
           <RoomCeiling room={room} plan={plan} />
           <RoomWalls room={room} plan={plan} wallClassification={wallClassification} />
         </group>
@@ -378,8 +381,10 @@ function Scene({ plan, rooms }: { plan: FloorPlanData; rooms: RoomData[] }) {
       <OrbitControls
         target={[bounds.cx, plan.defaultHeight / 2, bounds.cz]}
         maxPolarAngle={Math.PI / 2.1}
-        minDistance={3}
-        maxDistance={Math.max(bounds.w, bounds.l) * 4}
+        minDistance={2}
+        maxDistance={Math.max(bounds.w, bounds.l) * 5}
+        enableDamping
+        dampingFactor={0.1}
       />
     </>
   );
@@ -391,21 +396,50 @@ interface FloorPlan3DViewerProps {
 }
 
 export function FloorPlan3DViewer({ plan, rooms }: FloorPlan3DViewerProps) {
+  const [error, setError] = useState<string | null>(null);
+
+  if (error) {
+    return (
+      <div className="w-full h-[500px] rounded-lg overflow-hidden border flex items-center justify-center bg-muted/30">
+        <div className="text-center space-y-2 p-4">
+          <p className="text-sm text-destructive font-medium">Error al cargar vista 3D</p>
+          <p className="text-xs text-muted-foreground">{error}</p>
+          <button
+            className="text-xs underline text-primary"
+            onClick={() => setError(null)}
+          >
+            Reintentar
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!rooms || rooms.length === 0) {
+    return (
+      <div className="w-full h-[500px] rounded-lg overflow-hidden border flex items-center justify-center bg-muted/30">
+        <p className="text-sm text-muted-foreground">Añade estancias para ver la vista 3D</p>
+      </div>
+    );
+  }
+
   return (
-    <div
-      className="w-full h-[500px] rounded-lg overflow-hidden border"
-      style={{ background: 'linear-gradient(to bottom, #bae6fd, #e0f2fe)' }}
-    >
-      <Suspense
-        fallback={
-          <div className="flex items-center justify-center h-full text-muted-foreground">Cargando vista 3D…</div>
-        }
+    <div className="w-full h-[500px] rounded-lg overflow-hidden border relative" style={{ background: 'linear-gradient(to bottom, #bae6fd, #e0f2fe)' }}>
+      <Canvas
+        shadows
+        gl={{ antialias: true, alpha: false }}
+        onCreated={({ gl }) => {
+          gl.toneMapping = THREE.ACESFilmicToneMapping;
+          gl.toneMappingExposure = 1.2;
+        }}
+        onError={() => setError('WebGL no disponible o error de renderizado')}
       >
-        <Canvas shadows gl={{ antialias: true }}>
-          <PerspectiveCamera makeDefault fov={50} near={0.1} far={200} />
-          <Scene plan={plan} rooms={rooms} />
-        </Canvas>
-      </Suspense>
+        <PerspectiveCamera makeDefault fov={50} near={0.1} far={500} />
+        <Scene plan={plan} rooms={rooms} />
+      </Canvas>
+      <div className="absolute bottom-2 left-2 bg-background/80 backdrop-blur-sm rounded px-2 py-1 text-[10px] text-muted-foreground pointer-events-none">
+        🖱️ Arrastrar: rotar · Scroll: zoom · Clic derecho: desplazar
+      </div>
     </div>
   );
 }

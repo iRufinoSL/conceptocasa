@@ -222,9 +222,73 @@ export function calculateRoof(plan: FloorPlanData, rooms?: RoomData[]): number {
   return 2 * (0.5 * baseWidth * slopeLengthW) + 2 * (0.5 * baseLength * slopeLengthL);
 }
 
+// Auto-classify wall types based on geometry:
+// - Walls on the outer perimeter of all rooms = 'externa'
+// - Walls shared between two rooms = 'compartida'
+// - Other walls = 'interna'
+export function autoClassifyWalls(rooms: RoomData[]): Map<string, 'externa' | 'interna' | 'compartida'> {
+  const EPSILON = 0.05;
+  const classification = new Map<string, 'externa' | 'interna' | 'compartida'>();
+  const sharedWalls = detectSharedWalls(rooms);
+
+  if (rooms.length === 0) return classification;
+
+  rooms.forEach(room => {
+    [1, 2, 3, 4].forEach(wallIdx => {
+      const key = `${room.id}::${wallIdx}`;
+      
+      // Check if shared first
+      if (sharedWalls.has(key)) {
+        classification.set(key, 'compartida');
+        return;
+      }
+
+      // Check if any room is adjacent on that side (not shared but touching)
+      const hasNeighbor = rooms.some(other => {
+        if (other.id === room.id) return false;
+        switch (wallIdx) {
+          case 1: // top
+            return Math.abs(other.posY + other.length - room.posY) < EPSILON &&
+              Math.max(other.posX, room.posX) < Math.min(other.posX + other.width, room.posX + room.width) - EPSILON;
+          case 2: // right
+            return Math.abs(other.posX - (room.posX + room.width)) < EPSILON &&
+              Math.max(other.posY, room.posY) < Math.min(other.posY + other.length, room.posY + room.length) - EPSILON;
+          case 3: // bottom
+            return Math.abs(other.posY - (room.posY + room.length)) < EPSILON &&
+              Math.max(other.posX, room.posX) < Math.min(other.posX + other.width, room.posX + room.width) - EPSILON;
+          case 4: // left
+            return Math.abs(other.posX + other.width - room.posX) < EPSILON &&
+              Math.max(other.posY, room.posY) < Math.min(other.posY + other.length, room.posY + room.length) - EPSILON;
+          default: return false;
+        }
+      });
+
+      // If no neighbor, it's an external wall
+      classification.set(key, hasNeighbor ? 'interna' : 'externa');
+    });
+  });
+
+  return classification;
+}
+
 export function calculateFloorPlanSummary(plan: FloorPlanData, rooms: RoomData[]): FloorPlanSummary {
   const sharedWalls = detectSharedWalls(rooms);
-  const roomCalcs = rooms.map(r => calculateRoom(r, plan));
+  const wallClassification = autoClassifyWalls(rooms);
+
+  // Apply auto-classification to rooms before calculating
+  const classifiedRooms = rooms.map(room => ({
+    ...room,
+    walls: room.walls.map(wall => {
+      const key = `${room.id}::${wall.wallIndex}`;
+      const autoType = wallClassification.get(key);
+      return {
+        ...wall,
+        wallType: autoType || wall.wallType,
+      };
+    }),
+  }));
+
+  const roomCalcs = classifiedRooms.map(r => calculateRoom(r, plan));
   const roofM2 = calculateRoof(plan, rooms);
   
   let totalUsableM2 = 0;
@@ -237,27 +301,23 @@ export function calculateFloorPlanSummary(plan: FloorPlanData, rooms: RoomData[]
   let totalDoors = 0;
   let totalWindows = 0;
   
-  // Track which shared wall openings we've already counted (avoid double-counting)
   const countedSharedOpenings = new Set<string>();
 
   roomCalcs.forEach((rc, idx) => {
-    const room = rooms[idx];
+    const room = classifiedRooms[idx];
     totalUsableM2 += rc.floorArea;
     totalFloorM2 += rc.floorArea;
     totalCeilingM2 += rc.ceilingArea;
     totalExternalWallM2 += rc.totalExternalWallArea;
     totalInternalWallM2 += rc.totalInternalWallArea;
     
-    // Count doors/windows, but deduplicate for shared walls
     rc.walls.forEach(w => {
       const wallKey = `${room.id}::${w.wallIndex}`;
       const neighborInfo = sharedWalls.get(wallKey);
 
       if (w.wallType === 'compartida' && neighborInfo) {
-        // Only count openings on this shared wall if we haven't counted the neighbor side
         const neighborKey = `${neighborInfo.neighborRoomId}::${neighborInfo.neighborWallIndex}`;
         if (!countedSharedOpenings.has(neighborKey)) {
-          // Count openings for this side only
           w.openings.forEach(o => {
             if (o.type === 'puerta' || o.type === 'puerta_externa') {
               totalDoors += o.count;
@@ -267,7 +327,6 @@ export function calculateFloorPlanSummary(plan: FloorPlanData, rooms: RoomData[]
           });
           countedSharedOpenings.add(wallKey);
         }
-        // Shared wall: count half the base length
         totalInternalWallBaseM += w.baseLength * 0.5;
       } else if (w.wallType === 'externa') {
         totalExternalWallBaseM += w.baseLength;
@@ -291,7 +350,6 @@ export function calculateFloorPlanSummary(plan: FloorPlanData, rooms: RoomData[]
     });
   });
   
-  // Calculate wall footprint area for built m2
   const externalWallFootprint = totalExternalWallBaseM * plan.externalWallThickness;
   const internalWallFootprint = totalInternalWallBaseM * plan.internalWallThickness;
   const totalBuiltM2 = totalUsableM2 + externalWallFootprint + internalWallFootprint;

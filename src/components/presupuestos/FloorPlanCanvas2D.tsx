@@ -1,5 +1,6 @@
 import { useMemo, useState, useCallback, useRef } from 'react';
 import type { FloorPlanData, RoomData } from '@/lib/floor-plan-calculations';
+import { autoClassifyWalls } from '@/lib/floor-plan-calculations';
 
 interface FloorPlanCanvas2DProps {
   plan: FloorPlanData;
@@ -171,6 +172,8 @@ export function FloorPlanCanvas2D({
     };
   }, [displayRooms, plan.externalWallThickness]);
 
+  const wallClassification = useMemo(() => autoClassifyWalls(displayRooms), [displayRooms]);
+
   const { viewBox, elements } = useMemo(() => {
     const extT = plan.externalWallThickness;
     let minX = 0, minY = 0, maxX = plan.width, maxY = plan.length;
@@ -195,8 +198,10 @@ export function FloorPlanCanvas2D({
 
       const wallData = room.walls.map(wall => {
         const wallKey = `${room.id}::${wall.wallIndex}`;
-        const isShared = sharedWallKeys?.has(wallKey) || wall.wallType === 'compartida';
-        const isExternal = wall.wallType === 'externa';
+        // Use auto-classification instead of stored wall type
+        const autoType = wallClassification.get(wallKey) || wall.wallType;
+        const isShared = autoType === 'compartida';
+        const isExternal = autoType === 'externa';
         const isWallSelected = selectedWallKey === wallKey;
 
         const baseThickness = isExternal ? plan.externalWallThickness * scale : plan.internalWallThickness * scale;

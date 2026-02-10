@@ -8,7 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { RefreshCw, Save, Layout, Box, BarChart3, Loader2, AlertTriangle, Trash2, DoorOpen, ImageIcon } from 'lucide-react';
 import { useFloorPlan } from '@/hooks/useFloorPlan';
-import { calculateFloorPlanSummary, detectSharedWalls, WALL_LABELS, OPENING_PRESETS } from '@/lib/floor-plan-calculations';
+import { calculateFloorPlanSummary, detectSharedWalls, autoClassifyWalls, WALL_LABELS, OPENING_PRESETS } from '@/lib/floor-plan-calculations';
 import { FloorPlanCanvas2D } from './FloorPlanCanvas2D';
 import { FloorPlanRoomEditor } from './FloorPlanRoomEditor';
 import { FloorPlanSummaryView } from './FloorPlanSummary';
@@ -78,6 +78,7 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
 
   const sharedWallMap = useMemo(() => detectSharedWalls(rooms), [rooms]);
   const sharedWallKeys = useMemo(() => new Set(sharedWallMap.keys()), [sharedWallMap]);
+  const wallClassification = useMemo(() => autoClassifyWalls(rooms), [rooms]);
 
   const handleMoveRoom = useCallback((roomId: string, posX: number, posY: number) => {
     updateRoom(roomId, { posX, posY });
@@ -306,7 +307,8 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
                 if (!room) return null;
                 const wall = room.walls.find(w => w.wallIndex === wallIdx);
                 if (!wall) return null;
-                const isShared = sharedWallKeys.has(selectedWallKey);
+                const isShared = wallClassification.get(selectedWallKey) === 'compartida';
+                const autoType = wallClassification.get(selectedWallKey) || wall.wallType;
                 const neighborInfo = sharedWallMap.get(selectedWallKey);
                 const neighborRoom = neighborInfo ? rooms.find(r => r.id === neighborInfo.neighborRoomId) : null;
                 return (
@@ -314,8 +316,9 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
                     <CardHeader className="pb-2 py-2 px-3">
                       <div className="flex items-center gap-2">
                         <CardTitle className="text-xs">{WALL_LABELS[wallIdx]} — {room.name}</CardTitle>
+                        <Badge variant="outline" className="text-[10px] h-4">{autoType === 'externa' ? 'Externa' : autoType === 'compartida' ? 'Compartida' : 'Interna'}</Badge>
                         {isShared && neighborRoom && (
-                          <Badge variant="outline" className="text-[10px] h-4">Compartida con {neighborRoom.name}</Badge>
+                          <Badge variant="outline" className="text-[10px] h-4">con {neighborRoom.name}</Badge>
                         )}
                       </div>
                     </CardHeader>

@@ -240,6 +240,18 @@ export function autoClassifyWalls(rooms: RoomData[]): Map<string, 'externa' | 'i
   rooms.forEach(room => {
     [1, 2, 3, 4].forEach(wallIdx => {
       const key = `${room.id}::${wallIdx}`;
+      const wall = room.walls.find(w => w.wallIndex === wallIdx);
+
+      // If the user has manually set the wall type (stored in DB), respect it
+      if (wall && !wall.id.startsWith('temp-') && wall.wallType) {
+        // Still detect shared walls for geometry purposes, but respect manual override
+        if (sharedWalls.has(key)) {
+          classification.set(key, 'compartida');
+          return;
+        }
+        classification.set(key, wall.wallType);
+        return;
+      }
       
       // Check if shared first
       if (sharedWalls.has(key)) {

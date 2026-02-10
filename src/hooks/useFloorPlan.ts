@@ -385,6 +385,30 @@ export function useFloorPlan(budgetId: string) {
     }
   };
 
+  const updateOpening = async (openingId: string, data: { openingType?: string; width?: number; height?: number; positionX?: number }) => {
+    setSaving(true);
+    try {
+      const updates: any = {};
+      if (data.openingType !== undefined) updates.opening_type = data.openingType;
+      if (data.width !== undefined) updates.width = data.width;
+      if (data.height !== undefined) updates.height = data.height;
+      if (data.positionX !== undefined) updates.position_x = data.positionX;
+
+      const { error } = await supabase
+        .from('budget_floor_plan_openings')
+        .update(updates)
+        .eq('id', openingId);
+
+      if (error) throw error;
+      await fetchAll();
+    } catch (err) {
+      console.error('Error updating opening:', err);
+      toast.error('Error al actualizar abertura');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const syncToMeasurements = async () => {
     if (!floorPlan) return;
     setSaving(true);
@@ -509,6 +533,7 @@ export function useFloorPlan(budgetId: string) {
     deleteRoom,
     updateWall,
     addOpening,
+    updateOpening,
     deleteOpening,
     syncToMeasurements,
     getPlanData,

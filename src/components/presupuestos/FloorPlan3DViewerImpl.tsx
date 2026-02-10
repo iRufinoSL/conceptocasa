@@ -3,6 +3,7 @@ import { Canvas, useThree } from '@react-three/fiber';
 import { OrbitControls, PerspectiveCamera, Text } from '@react-three/drei';
 import * as THREE from 'three';
 import type { FloorPlanData, RoomData } from '@/lib/floor-plan-calculations';
+import { autoClassifyWalls } from '@/lib/floor-plan-calculations';
 
 const ROOM_COLORS: Record<string, string> = {
   salón: '#e8d5b7',
@@ -90,13 +91,15 @@ function RoomFloor({ room, plan }: { room: RoomData; plan: FloorPlanData }) {
   );
 }
 
-function RoomWalls({ room, plan }: { room: RoomData; plan: FloorPlanData }) {
+function RoomWalls({ room, plan, wallClassification }: { room: RoomData; plan: FloorPlanData; wallClassification?: Map<string, string> }) {
   const h = room.height || plan.defaultHeight;
 
   return (
     <>
       {room.walls.map((wall) => {
-        const ext = wall.wallType === 'externa';
+        const wallKey = `${room.id}::${wall.wallIndex}`;
+        const effectiveType = wallClassification?.get(wallKey) || wall.wallType;
+        const ext = effectiveType === 'externa';
         const thickness = wall.thickness || (ext ? plan.externalWallThickness : plan.internalWallThickness);
         const color = ext ? '#c4a882' : '#d8cfc0';
         const openings = wall.openings.map((op) => ({
@@ -238,6 +241,7 @@ function Roof({ plan, rooms }: { plan: FloorPlanData; rooms: RoomData[] }) {
 
 function Scene({ plan, rooms }: { plan: FloorPlanData; rooms: RoomData[] }) {
   const { camera } = useThree();
+  const wallClassification = useMemo(() => autoClassifyWalls(rooms), [rooms]);
 
   useMemo(() => {
     const dist = Math.max(plan.width, plan.length) * 1.8;
@@ -260,7 +264,7 @@ function Scene({ plan, rooms }: { plan: FloorPlanData; rooms: RoomData[] }) {
       {rooms.map((room) => (
         <group key={room.id}>
           <RoomFloor room={room} plan={plan} />
-          <RoomWalls room={room} plan={plan} />
+          <RoomWalls room={room} plan={plan} wallClassification={wallClassification} />
         </group>
       ))}
       <Roof plan={plan} rooms={rooms} />

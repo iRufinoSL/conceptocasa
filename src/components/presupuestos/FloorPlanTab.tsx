@@ -435,12 +435,16 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
                                   defaultValue={op.height}
                                   onBlur={e => updateOpening(op.id, { height: Number(e.target.value) })} />
                               </div>
-                              <div>
+              <div>
                                 <Label className="text-[9px]">Posición</Label>
-                                <Input type="number" step="0.05" min="0" max="1" className="h-6 text-[10px]"
-                                  defaultValue={op.positionX}
-                                  onBlur={e => updateOpening(op.id, { positionX: Math.max(0, Math.min(1, Number(e.target.value))) })}
-                                  title="0=inicio, 0.5=centro, 1=final" />
+                                <div className="flex items-center gap-1">
+                                  <input type="range" min="0" max="1" step="0.05"
+                                    className="flex-1 h-4 accent-primary cursor-pointer"
+                                    defaultValue={op.positionX}
+                                    onChange={e => updateOpening(op.id, { positionX: Number(e.target.value) })}
+                                    title="Arrastra para mover el objeto a lo largo de la pared" />
+                                  <span className="text-[9px] text-muted-foreground w-7 text-right">{(op.positionX * 100).toFixed(0)}%</span>
+                                </div>
                               </div>
                             </div>
                           </div>
@@ -464,7 +468,7 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
           )}
           {viewTab === '3d' && planData && (
             <FloorPlan3DViewer
-              key={`${planData.roofType}-${planData.roofOverhang}-${planData.roofSlopePercent}-${planData.defaultHeight}-${rooms.map(r => `${r.id}:${r.posX}:${r.posY}:${r.width}:${r.length}:${r.walls.map(w => `${w.wallIndex}${w.wallType}${w.openings.length}`).join(',')}`).join('|')}`}
+              key={`3d-${planData.roofType}-${planData.roofOverhang}-${planData.roofSlopePercent}-${planData.defaultHeight}-${planData.externalWallThickness}-${planData.internalWallThickness}-${rooms.map(r => `${r.id}:${r.posX}:${r.posY}:${r.width}:${r.length}:${r.height || ''}:${r.walls.map(w => `${w.wallIndex}${w.wallType}${w.thickness || ''}${w.openings.map(o => `${o.openingType}${o.positionX}${o.width}${o.height}`).join('')}`).join(',')}`).join('|')}`}
               plan={planData}
               rooms={rooms}
             />

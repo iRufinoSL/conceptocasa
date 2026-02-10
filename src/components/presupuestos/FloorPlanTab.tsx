@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -6,7 +6,8 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { RefreshCw, Save, Layout, Box, BarChart3, Loader2, AlertTriangle, Trash2, DoorOpen, ImageIcon } from 'lucide-react';
+import { RefreshCw, Save, Layout, Box, BarChart3, Loader2, AlertTriangle, Trash2, DoorOpen, ImageIcon, Undo2 } from 'lucide-react';
+import { toast } from 'sonner';
 import { useFloorPlan } from '@/hooks/useFloorPlan';
 import { calculateFloorPlanSummary, detectSharedWalls, autoClassifyWalls, WALL_LABELS, OPENING_PRESETS } from '@/lib/floor-plan-calculations';
 import { FloorPlanCanvas2D } from './FloorPlanCanvas2D';
@@ -33,6 +34,32 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
   const [selectedRoomId, setSelectedRoomId] = useState<string>();
   const [selectedWallKey, setSelectedWallKey] = useState<string | null>(null);
   const [viewTab, setViewTab] = useState('plano');
+
+  // Undo stack: stores snapshots of room positions/dimensions before changes
+  const undoStackRef = useRef<Array<{ rooms: Array<{ id: string; posX: number; posY: number; width: number; length: number }> }>>([]);
+  const MAX_UNDO = 20;
+
+  const pushUndo = useCallback(() => {
+    const snapshot = rooms.map(r => ({ id: r.id, posX: r.posX, posY: r.posY, width: r.width, length: r.length }));
+    undoStackRef.current = [...undoStackRef.current.slice(-(MAX_UNDO - 1)), { rooms: snapshot }];
+  }, [rooms]);
+
+  const handleUndo = useCallback(async () => {
+    const stack = undoStackRef.current;
+    if (stack.length === 0) {
+      toast.info('No hay cambios que deshacer');
+      return;
+    }
+    const last = stack[stack.length - 1];
+    undoStackRef.current = stack.slice(0, -1);
+    for (const snap of last.rooms) {
+      const current = rooms.find(r => r.id === snap.id);
+      if (current && (current.posX !== snap.posX || current.posY !== snap.posY || current.width !== snap.width || current.length !== snap.length)) {
+        await updateRoom(snap.id, { posX: snap.posX, posY: snap.posY, width: snap.width, length: snap.length });
+      }
+    }
+    toast.success('Cambio deshecho');
+  }, [rooms, updateRoom]);
 
   // Local form state for plan dimensions
   const [planForm, setPlanForm] = useState({
@@ -81,8 +108,9 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
   const wallClassification = useMemo(() => autoClassifyWalls(rooms), [rooms]);
 
   const handleMoveRoom = useCallback((roomId: string, posX: number, posY: number) => {
+    pushUndo();
     updateRoom(roomId, { posX, posY });
-  }, [updateRoom]);
+  }, [updateRoom, pushUndo]);
 
   const handleResizeWall = useCallback(async (roomId: string, wallIndex: number, delta: number) => {
     const room = rooms.find(r => r.id === roomId);
@@ -96,6 +124,7 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
         default: return {};
       }
     };
+    pushUndo();
     await updateRoom(roomId, applyResize(room, wallIndex, delta));
     const wallKey = `${roomId}::${wallIndex}`;
     const neighbor = sharedWallMap.get(wallKey);
@@ -258,10 +287,23 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
             {areaExceeded && <AlertTriangle className="h-3 w-3 mr-1" />}
             Estancias: {roomsAreaSum.toFixed(1)}m² / {planArea.toFixed(1)}m² planta
           </Badge>
-          <Button variant="outline" size="sm" onClick={() => {
-            // Force recalculate roof by triggering summary re-evaluation
-            syncToMeasurements();
-          }} disabled={saving} title="Recalcular tejado y mediciones">
+          <Button variant="outline" size="sm" onClick={handleUndo} disabled={saving || undoStackRef.current.length === 0}
+            title="Deshacer último cambio">
+            <Undo2 className="h-4 w-4 mr-1" />
+            Deshacer
+          </Button>
+          <Button variant="outline" size="sm" onClick={async () => {
+            // Force recalculate: re-sync roof config from the plan settings panel, then sync measurements
+            if (planData) {
+              await updateFloorPlan({
+                roofType: planData.roofType,
+                roofOverhang: planData.roofOverhang,
+                roofSlopePercent: planData.roofSlopePercent,
+              });
+            }
+            await syncToMeasurements();
+            toast.success('Tejado y mediciones recalculados');
+          }} disabled={saving} title="Recalcular tejado y sincronizar mediciones">
             <RefreshCw className={`h-4 w-4 mr-1 ${saving ? 'animate-spin' : ''}`} />
             Recalcular tejado
           </Button>
@@ -395,7 +437,7 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="pt-0 px-3 pb-2">
-                  <div className="grid grid-cols-4 gap-2">
+                  <div className="grid grid-cols-4 lg:grid-cols-8 gap-2">
                     <div>
                       <Label className="text-[10px]">Largo (m)</Label>
                       <Input type="number" step="0.1" className="h-7 text-xs"
@@ -419,6 +461,36 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
                       <Input type="number" step="1" className="h-7 text-xs"
                         defaultValue={planData.roofSlopePercent}
                         onBlur={e => updateFloorPlan({ roofSlopePercent: Number(e.target.value) })} />
+                    </div>
+                    <div>
+                      <Label className="text-[10px]">Tipo tejado</Label>
+                      <Select value={planData.roofType}
+                        onValueChange={v => updateFloorPlan({ roofType: v as any })}>
+                        <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="dos_aguas">Dos aguas</SelectItem>
+                          <SelectItem value="cuatro_aguas">Cuatro aguas</SelectItem>
+                          <SelectItem value="plana">Plana</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label className="text-[10px]">Alero (m)</Label>
+                      <Input type="number" step="0.1" className="h-7 text-xs"
+                        defaultValue={planData.roofOverhang}
+                        onBlur={e => updateFloorPlan({ roofOverhang: Number(e.target.value) })} />
+                    </div>
+                    <div>
+                      <Label className="text-[10px]">Pared ext. (m)</Label>
+                      <Input type="number" step="0.01" className="h-7 text-xs"
+                        defaultValue={planData.externalWallThickness}
+                        onBlur={e => updateFloorPlan({ externalWallThickness: Number(e.target.value) })} />
+                    </div>
+                    <div>
+                      <Label className="text-[10px]">Pared int. (m)</Label>
+                      <Input type="number" step="0.01" className="h-7 text-xs"
+                        defaultValue={planData.internalWallThickness}
+                        onBlur={e => updateFloorPlan({ internalWallThickness: Number(e.target.value) })} />
                     </div>
                   </div>
                 </CardContent>

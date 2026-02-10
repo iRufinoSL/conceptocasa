@@ -227,7 +227,8 @@ export function FloorPlanCanvas2D({
         const externalLen = isExternal ? interiorLen + 2 * extT : interiorLen;
 
         // Openings
-        const openingEls = wall.openings.map((op, oi) => {
+        // Skip openings on invisible walls
+        const openingEls = isInvisible ? [] : wall.openings.map((op, oi) => {
           const wallLen = (wall.wallIndex === 1 || wall.wallIndex === 3) ? room.width : room.length;
           const opWidth = op.width * scale;
           const pos = op.positionX * wallLen * scale;
@@ -267,9 +268,7 @@ export function FloorPlanCanvas2D({
                 <g key={`op-${oi}`}>
                   <line x1={cx} y1={cy} x2={cx + opWidth} y2={cy}
                     stroke="hsl(var(--background))" strokeWidth={strokeWidth + 2} />
-                  <line x1={cx} y1={cy - 1.5} x2={cx + opWidth} y2={cy - 1.5}
-                    stroke="hsl(217, 91%, 60%)" strokeWidth={1.5} />
-                  <line x1={cx} y1={cy + 1.5} x2={cx + opWidth} y2={cy + 1.5}
+                  <line x1={cx} y1={cy} x2={cx + opWidth} y2={cy}
                     stroke="hsl(217, 91%, 60%)" strokeWidth={1.5} />
                 </g>
               );
@@ -280,9 +279,7 @@ export function FloorPlanCanvas2D({
                 <g key={`op-${oi}`}>
                   <line x1={cx} y1={cy} x2={cx} y2={cy + opWidth}
                     stroke="hsl(var(--background))" strokeWidth={strokeWidth + 2} />
-                  <line x1={cx - 1.5} y1={cy} x2={cx - 1.5} y2={cy + opWidth}
-                    stroke="hsl(217, 91%, 60%)" strokeWidth={1.5} />
-                  <line x1={cx + 1.5} y1={cy} x2={cx + 1.5} y2={cy + opWidth}
+                  <line x1={cx} y1={cy} x2={cx} y2={cy + opWidth}
                     stroke="hsl(217, 91%, 60%)" strokeWidth={1.5} />
                 </g>
               );

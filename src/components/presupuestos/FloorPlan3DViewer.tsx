@@ -1,8 +1,6 @@
-import { lazy, Suspense } from 'react';
+import { Suspense, useState, useEffect } from 'react';
 import { Loader2 } from 'lucide-react';
 import type { FloorPlanData, RoomData } from '@/lib/floor-plan-calculations';
-
-const FloorPlan3DViewerImpl = lazy(() => import('./FloorPlan3DViewerImpl').then(m => ({ default: m.FloorPlan3DViewer })));
 
 interface FloorPlan3DViewerProps {
   plan: FloorPlanData;
@@ -10,18 +8,27 @@ interface FloorPlan3DViewerProps {
 }
 
 export function FloorPlan3DViewer({ plan, rooms }: FloorPlan3DViewerProps) {
-  return (
-    <Suspense
-      fallback={
-        <div className="w-full h-[500px] rounded-lg border flex items-center justify-center bg-muted/30">
-          <div className="flex flex-col items-center gap-2">
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-            <span className="text-sm text-muted-foreground">Cargando vista 3D…</span>
-          </div>
+  const [Impl, setImpl] = useState<React.ComponentType<FloorPlan3DViewerProps> | null>(null);
+
+  useEffect(() => {
+    // Dynamic import each time component mounts (key changes force remount)
+    let cancelled = false;
+    import('./FloorPlan3DViewerImpl').then(m => {
+      if (!cancelled) setImpl(() => m.FloorPlan3DViewer);
+    });
+    return () => { cancelled = true; };
+  }, []);
+
+  if (!Impl) {
+    return (
+      <div className="w-full h-[500px] rounded-lg border flex items-center justify-center bg-muted/30">
+        <div className="flex flex-col items-center gap-2">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          <span className="text-sm text-muted-foreground">Cargando vista 3D…</span>
         </div>
-      }
-    >
-      <FloorPlan3DViewerImpl plan={plan} rooms={rooms} />
-    </Suspense>
-  );
+      </div>
+    );
+  }
+
+  return <Impl plan={plan} rooms={rooms} />;
 }

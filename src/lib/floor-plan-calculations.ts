@@ -87,6 +87,9 @@ export interface FloorPlanSummary {
   totalDoors: number;
   totalWindows: number;
   
+  // Detailed opening counts by type
+  openingsByType: Record<string, number>;
+  
   rooms: RoomCalculation[];
 }
 
@@ -317,8 +320,7 @@ export function calculateFloorPlanSummary(plan: FloorPlanData, rooms: RoomData[]
   let totalInternalWallBaseM = 0;
   let totalDoors = 0;
   let totalWindows = 0;
-  
-  const countedSharedOpenings = new Set<string>();
+  const openingsByType: Record<string, number> = {};
 
   roomCalcs.forEach((rc, idx) => {
     const room = classifiedRooms[idx];
@@ -329,40 +331,30 @@ export function calculateFloorPlanSummary(plan: FloorPlanData, rooms: RoomData[]
     totalInternalWallM2 += rc.totalInternalWallArea;
     
     rc.walls.forEach(w => {
-      const wallKey = `${room.id}::${w.wallIndex}`;
-      const neighborInfo = sharedWalls.get(wallKey);
+      // Invisible walls: no wall area, no openings counted
+      if (w.wallType === 'invisible') return;
+
+      const countOpenings = () => {
+        w.openings.forEach(o => {
+          openingsByType[o.type] = (openingsByType[o.type] || 0) + o.count;
+          if (o.type === 'puerta' || o.type === 'puerta_externa') {
+            totalDoors += o.count;
+          } else {
+            totalWindows += o.count;
+          }
+        });
+      };
 
       if (w.wallType === 'externa') {
         totalExternalWallGrossM2 += w.grossArea;
         totalExternalWallOpeningsM2 += w.openingsArea;
         totalExternalWallBaseM += w.baseLength;
-        w.openings.forEach(o => {
-          if (o.type === 'puerta' || o.type === 'puerta_externa') {
-            totalDoors += o.count;
-          } else {
-            totalWindows += o.count;
-          }
-        });
-      } else if (w.wallType === 'invisible') {
-        // Invisible walls: count openings but no wall area
-        w.openings.forEach(o => {
-          if (o.type === 'puerta' || o.type === 'puerta_externa') {
-            totalDoors += o.count;
-          } else {
-            totalWindows += o.count;
-          }
-        });
+        countOpenings();
       } else {
         totalInternalWallGrossM2 += w.grossArea;
         totalInternalWallOpeningsM2 += w.openingsArea;
         totalInternalWallBaseM += w.baseLength;
-        w.openings.forEach(o => {
-          if (o.type === 'puerta' || o.type === 'puerta_externa') {
-            totalDoors += o.count;
-          } else {
-            totalWindows += o.count;
-          }
-        });
+        countOpenings();
       }
     });
   });
@@ -388,6 +380,7 @@ export function calculateFloorPlanSummary(plan: FloorPlanData, rooms: RoomData[]
     totalInternalWallBaseM,
     totalDoors,
     totalWindows,
+    openingsByType,
     rooms: roomCalcs,
   };
 }

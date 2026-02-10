@@ -133,21 +133,18 @@ function RoomWalls({
           ry = 0;
           break;
         case 4: // Left (west) wall: runs along Z at room's west edge
-          // Rotate -90° around Y so the wall length runs along Z.
-          // After rotation, geo's X axis maps to -Z and Z axis maps to X.
-          // We want the wall to span from posY to posY+length along Z.
-          // Place origin at (posX, 0, posY + length) and rotate -90°.
+          // Rotate -90° around Y: geo X→+Z, geo Z→-X.
+          // Wall spans Z from posY to posY+length, thickness extends toward -X.
           px = room.posX;
           py = 0;
-          pz = room.posY + room.length;
+          pz = room.posY;
           ry = -Math.PI / 2;
           break;
         case 2: // Right (east) wall: runs along Z at room's east edge
-          // Similar to left but on the right side.
-          // Place at (posX + width + thickness, 0, posY + length) and rotate -90°.
+          // Same rotation. Thickness extends toward +X from posX+width.
           px = room.posX + room.width + thickness;
           py = 0;
-          pz = room.posY + room.length;
+          pz = room.posY;
           ry = -Math.PI / 2;
           break;
         default:

@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Progress } from '@/components/ui/progress';
 import { Plus, Trash2, ChevronDown, DoorOpen, Square, AlertTriangle } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
 import { OPENING_PRESETS, WALL_LABELS, ROOM_PRESETS } from '@/lib/floor-plan-calculations';
 import type { RoomData } from '@/lib/floor-plan-calculations';
 
@@ -159,7 +160,7 @@ export function FloorPlanRoomEditor({
           <CardHeader className="pb-2">
             <CardTitle className="text-sm">Editar: {selectedRoom.name}</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3">
+           <CardContent className="space-y-3">
             {/* Room dimensions */}
             <div className="grid grid-cols-3 gap-2">
               <div>
@@ -192,6 +193,30 @@ export function FloorPlanRoomEditor({
                 <Input type="number" step="0.5" value={selectedRoom.posY}
                   onChange={e => onUpdateRoom(selectedRoom.id, { posY: Number(e.target.value) })} />
               </div>
+            </div>
+
+            {/* Room elements toggles */}
+            <div className="space-y-2">
+              <Label className="text-xs font-semibold">Elementos de la estancia</Label>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="flex items-center justify-between bg-muted/30 p-2 rounded">
+                  <span className="text-xs">Suelo</span>
+                  <Switch
+                    checked={selectedRoom.hasFloor !== false}
+                    onCheckedChange={v => onUpdateRoom(selectedRoom.id, { hasFloor: v })}
+                  />
+                </div>
+                <div className="flex items-center justify-between bg-muted/30 p-2 rounded">
+                  <span className="text-xs">Tejado</span>
+                  <Switch
+                    checked={selectedRoom.hasRoof !== false}
+                    onCheckedChange={v => onUpdateRoom(selectedRoom.id, { hasRoof: v })}
+                  />
+                </div>
+              </div>
+              <p className="text-[9px] text-muted-foreground">
+                Techo siempre presente. Tejado = cubierta sobre el techo.
+              </p>
             </div>
 
             {/* Walls */}

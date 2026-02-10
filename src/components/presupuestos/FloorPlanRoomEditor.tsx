@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Progress } from '@/components/ui/progress';
+import { Slider } from '@/components/ui/slider';
 import { Plus, Trash2, ChevronDown, DoorOpen, Square, AlertTriangle } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { OPENING_PRESETS, WALL_LABELS, ROOM_PRESETS } from '@/lib/floor-plan-calculations';
@@ -22,6 +23,7 @@ interface FloorPlanRoomEditorProps {
   onDeleteRoom: (roomId: string) => Promise<void>;
   onUpdateWall: (wallId: string, data: any) => Promise<void>;
   onAddOpening: (wallId: string, type: string, width: number, height: number) => Promise<void>;
+  onUpdateOpening?: (openingId: string, data: { width?: number; height?: number; positionX?: number }) => Promise<void>;
   onDeleteOpening: (openingId: string) => Promise<void>;
   saving: boolean;
 }
@@ -29,7 +31,7 @@ interface FloorPlanRoomEditorProps {
 export function FloorPlanRoomEditor({
   rooms, planArea, selectedRoomId, onSelectRoom,
   onAddRoom, onUpdateRoom, onDeleteRoom,
-  onUpdateWall, onAddOpening, onDeleteOpening,
+  onUpdateWall, onAddOpening, onUpdateOpening, onDeleteOpening,
   saving,
 }: FloorPlanRoomEditorProps) {
   const [newRoomName, setNewRoomName] = useState('');
@@ -198,7 +200,7 @@ export function FloorPlanRoomEditor({
             {/* Room elements toggles */}
             <div className="space-y-2">
               <Label className="text-xs font-semibold">Elementos de la estancia</Label>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-3 gap-2">
                 <div className="flex items-center justify-between bg-muted/30 p-2 rounded">
                   <span className="text-xs">Suelo</span>
                   <Switch
@@ -271,18 +273,53 @@ export function FloorPlanRoomEditor({
                     </div>
 
                     {/* Openings */}
-                    <div className="space-y-1">
+                    <div className="space-y-2">
+                      <Label className="text-[10px] font-semibold">Aberturas</Label>
                       {wall.openings.map(op => (
-                        <div key={op.id} className="flex items-center gap-2 text-xs bg-background p-1.5 rounded">
-                          <DoorOpen className="h-3 w-3 text-muted-foreground" />
-                          <span className="flex-1">
-                            {OPENING_PRESETS[op.openingType as keyof typeof OPENING_PRESETS]?.label || op.openingType}
-                            {' '}({op.width}×{op.height}m = {(op.width * op.height).toFixed(2)}m²)
-                          </span>
-                          <Button variant="ghost" size="sm" className="h-5 w-5 p-0 text-destructive"
-                            onClick={() => onDeleteOpening(op.id)}>
-                            <Trash2 className="h-3 w-3" />
-                          </Button>
+                        <div key={op.id} className="bg-background p-2 rounded border space-y-2">
+                          <div className="flex items-center gap-2 text-xs">
+                            <DoorOpen className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+                            <span className="flex-1 font-medium">
+                              {OPENING_PRESETS[op.openingType as keyof typeof OPENING_PRESETS]?.label || op.openingType}
+                            </span>
+                            <span className="text-muted-foreground">
+                              {(op.width * op.height).toFixed(2)}m²
+                            </span>
+                            <Button variant="ghost" size="sm" className="h-5 w-5 p-0 text-destructive"
+                              onClick={() => onDeleteOpening(op.id)}>
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </div>
+                          {/* Editable width & height */}
+                          {onUpdateOpening && (
+                            <>
+                              <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                  <Label className="text-[9px]">Ancho (m)</Label>
+                                  <Input type="number" step="0.05" className="h-6 text-xs"
+                                    value={op.width}
+                                    onChange={e => onUpdateOpening(op.id, { width: Number(e.target.value) })} />
+                                </div>
+                                <div>
+                                  <Label className="text-[9px]">Alto (m)</Label>
+                                  <Input type="number" step="0.05" className="h-6 text-xs"
+                                    value={op.height}
+                                    onChange={e => onUpdateOpening(op.id, { height: Number(e.target.value) })} />
+                                </div>
+                              </div>
+                              <div>
+                                <Label className="text-[9px]">📍 Posición (mover) — {Math.round(op.positionX * 100)}%</Label>
+                                <Slider
+                                  min={0}
+                                  max={100}
+                                  step={1}
+                                  value={[Math.round(op.positionX * 100)]}
+                                  onValueChange={([v]) => onUpdateOpening(op.id, { positionX: v / 100 })}
+                                  className="mt-1"
+                                />
+                              </div>
+                            </>
+                          )}
                         </div>
                       ))}
                     </div>

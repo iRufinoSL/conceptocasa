@@ -231,55 +231,70 @@ export function FloorPlanCanvas2D({
         const openingEls = isInvisible ? [] : wall.openings.map((op, oi) => {
           const wallLen = (wall.wallIndex === 1 || wall.wallIndex === 3) ? room.width : room.length;
           const opWidth = op.width * scale;
-          const pos = op.positionX * wallLen * scale;
+          // positionX is a fraction 0-1 along the wall - center the opening at that point
+          const centerPos = op.positionX * wallLen * scale;
+          const startPos = centerPos - opWidth / 2;
           const isHoriz = wall.wallIndex === 1 || wall.wallIndex === 3;
+          const isDoor = op.openingType === 'puerta' || op.openingType === 'puerta_externa';
 
-          if (op.openingType === 'puerta' || op.openingType === 'puerta_externa') {
+          if (isDoor) {
             if (isHoriz) {
-              const cx = x + pos;
+              const ox = x + startPos;
               const cy = (wall.wallIndex === 1) ? y : y + h;
               const dir = wall.wallIndex === 1 ? 1 : -1;
               return (
                 <g key={`op-${oi}`}>
-                  <line x1={cx} y1={cy} x2={cx + opWidth} y2={cy}
-                    stroke="hsl(var(--background))" strokeWidth={strokeWidth + 2} />
-                  <path d={`M ${cx} ${cy} A ${opWidth} ${opWidth} 0 0 ${dir > 0 ? 1 : 0} ${cx + opWidth} ${cy + dir * opWidth * 0.3}`}
+                  {/* White gap in wall */}
+                  <line x1={ox} y1={cy} x2={ox + opWidth} y2={cy}
+                    stroke="hsl(var(--background))" strokeWidth={strokeWidth + 4} />
+                  {/* Door swing arc (dashed) */}
+                  <path d={`M ${ox} ${cy} A ${opWidth} ${opWidth} 0 0 ${dir > 0 ? 1 : 0} ${ox + opWidth} ${cy + dir * opWidth * 0.4}`}
                     fill="none" stroke="hsl(var(--primary))" strokeWidth={1} strokeDasharray="3,2" />
+                  {/* Door leaf line */}
+                  <line x1={ox} y1={cy} x2={ox + opWidth * 0.7} y2={cy + dir * opWidth * 0.3}
+                    stroke="hsl(var(--primary))" strokeWidth={0.8} opacity={0.6} />
                 </g>
               );
             } else {
+              const oy = y + startPos;
               const cx = (wall.wallIndex === 4) ? x : x + w;
-              const cy = y + pos;
               const dir = wall.wallIndex === 4 ? 1 : -1;
               return (
                 <g key={`op-${oi}`}>
-                  <line x1={cx} y1={cy} x2={cx} y2={cy + opWidth}
-                    stroke="hsl(var(--background))" strokeWidth={strokeWidth + 2} />
-                  <path d={`M ${cx} ${cy} A ${opWidth} ${opWidth} 0 0 ${dir > 0 ? 0 : 1} ${cx + dir * opWidth * 0.3} ${cy + opWidth}`}
+                  <line x1={cx} y1={oy} x2={cx} y2={oy + opWidth}
+                    stroke="hsl(var(--background))" strokeWidth={strokeWidth + 4} />
+                  <path d={`M ${cx} ${oy} A ${opWidth} ${opWidth} 0 0 ${dir > 0 ? 0 : 1} ${cx + dir * opWidth * 0.4} ${oy + opWidth}`}
                     fill="none" stroke="hsl(var(--primary))" strokeWidth={1} strokeDasharray="3,2" />
+                  <line x1={cx} y1={oy} x2={cx + dir * opWidth * 0.3} y2={oy + opWidth * 0.7}
+                    stroke="hsl(var(--primary))" strokeWidth={0.8} opacity={0.6} />
                 </g>
               );
             }
           } else {
+            // Window
             if (isHoriz) {
-              const cx = x + pos;
+              const ox = x + startPos;
               const cy = (wall.wallIndex === 1) ? y : y + h;
               return (
                 <g key={`op-${oi}`}>
-                  <line x1={cx} y1={cy} x2={cx + opWidth} y2={cy}
-                    stroke="hsl(var(--background))" strokeWidth={strokeWidth + 2} />
-                  <line x1={cx} y1={cy} x2={cx + opWidth} y2={cy}
+                  <line x1={ox} y1={cy} x2={ox + opWidth} y2={cy}
+                    stroke="hsl(var(--background))" strokeWidth={strokeWidth + 4} />
+                  <line x1={ox} y1={cy - 1.5} x2={ox + opWidth} y2={cy - 1.5}
+                    stroke="hsl(217, 91%, 60%)" strokeWidth={1.5} />
+                  <line x1={ox} y1={cy + 1.5} x2={ox + opWidth} y2={cy + 1.5}
                     stroke="hsl(217, 91%, 60%)" strokeWidth={1.5} />
                 </g>
               );
             } else {
+              const oy = y + startPos;
               const cx = (wall.wallIndex === 4) ? x : x + w;
-              const cy = y + pos;
               return (
                 <g key={`op-${oi}`}>
-                  <line x1={cx} y1={cy} x2={cx} y2={cy + opWidth}
-                    stroke="hsl(var(--background))" strokeWidth={strokeWidth + 2} />
-                  <line x1={cx} y1={cy} x2={cx} y2={cy + opWidth}
+                  <line x1={cx} y1={oy} x2={cx} y2={oy + opWidth}
+                    stroke="hsl(var(--background))" strokeWidth={strokeWidth + 4} />
+                  <line x1={cx - 1.5} y1={oy} x2={cx - 1.5} y2={oy + opWidth}
+                    stroke="hsl(217, 91%, 60%)" strokeWidth={1.5} />
+                  <line x1={cx + 1.5} y1={oy} x2={cx + 1.5} y2={oy + opWidth}
                     stroke="hsl(217, 91%, 60%)" strokeWidth={1.5} />
                 </g>
               );

@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useMemo } from 'react';
+import { useState, useRef, useCallback, useMemo, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -22,12 +22,10 @@ interface ElevationSegmentInfo {
   segment: WallSegment;
   segmentIndex: number;
   totalSegments: number;
-  segmentLength: number; // meters
+  segmentLength: number;
   wallHeight: number;
   wallName?: string;
-  // Openings that fall within this segment
   ownOpenings: OpeningData[];
-  // For invisible segments: neighbor openings
   neighborRoom?: RoomData;
   neighborWall?: WallData;
   neighborOpenings: OpeningData[];
@@ -37,6 +35,8 @@ const SCALE = 120;
 const PADDING = 40;
 const DIM_OFFSET = 25;
 const MIN_CANVAS_HEIGHT = 200;
+const HANDLE_WIDTH = 6;
+const ARROW_STEP = 0.01; // 1cm per arrow press
 
 function getWallHeight(wall: WallData, room: RoomData, plan: FloorPlanData): number {
   return wall.height || room.height || plan.defaultHeight;
@@ -49,15 +49,21 @@ function getOpeningBaseY(op: OpeningData): number {
   return 0.9;
 }
 
+type DragMode = 'move' | 'resize-left' | 'resize-right';
+
 export function WallElevationView({
   plan, rooms, onUpdateOpening, onAddOpening, onDeleteOpening, saving,
 }: WallElevationViewProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const svgRef = useRef<SVGSVGElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [selectedOpeningId, setSelectedOpeningId] = useState<string | null>(null);
   const [dragState, setDragState] = useState<{
     openingId: string;
+    mode: DragMode;
     startX: number;
     startPosX: number;
+    startWidth: number;
     wallLength: number;
     opWidth: number;
   } | null>(null);
@@ -80,14 +86,11 @@ export function WallElevationView({
 
         segments.forEach((seg, si) => {
           const segLen = seg.endMeters - seg.startMeters;
-
-          // Find openings that fall within this segment
           const ownOpenings = wall.openings.filter(op => {
-            const opCenter = op.positionX; // 0-1 fraction of full wall
+            const opCenter = op.positionX;
             return opCenter >= seg.startFraction - 0.01 && opCenter <= seg.endFraction + 0.01;
           });
 
-          // For invisible segments: find neighbor openings
           let neighborRoom: RoomData | undefined;
           let neighborWall: WallData | undefined;
           let neighborOpenings: OpeningData[] = [];
@@ -99,16 +102,8 @@ export function WallElevationView({
               if (neighborWall) {
                 const neighborIsHoriz = seg.neighborWallIndex === 1 || seg.neighborWallIndex === 3;
                 const neighborFullLen = neighborIsHoriz ? neighborRoom.width : neighborRoom.length;
-
-                // Find the absolute range of this segment
-                const absStart = isHoriz
-                  ? room.posX + seg.startMeters
-                  : room.posY + seg.startMeters;
-                const absEnd = isHoriz
-                  ? room.posX + seg.endMeters
-                  : room.posY + seg.endMeters;
-
-                // Find neighbor openings whose absolute position falls within our segment range
+                const absStart = isHoriz ? room.posX + seg.startMeters : room.posY + seg.startMeters;
+                const absEnd = isHoriz ? room.posX + seg.endMeters : room.posY + seg.endMeters;
                 neighborOpenings = neighborWall.openings.filter(op => {
                   const opAbsCenter = neighborIsHoriz
                     ? neighborRoom!.posX + op.positionX * neighborFullLen
@@ -135,6 +130,56 @@ export function WallElevationView({
   }, [rooms, plan, wallSegmentsMap, externalWallNames, wallClassification]);
 
   const current = allSegments[currentIndex];
+
+  // Keyboard handler for arrow keys
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!selectedOpeningId || !current) return;
+      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+
+      e.preventDefault();
+      const step = e.shiftKey ? ARROW_STEP * 5 : ARROW_STEP; // Shift = 5cm
+      const direction = e.key === 'ArrowLeft' ? -1 : 1;
+
+      // Find the opening in displayOpenings
+      const isInvisible = current.segment.segmentType === 'invisible';
+      const openings = isInvisible ? current.neighborOpenings : current.ownOpenings;
+      const op = openings.find(o => o.id === selectedOpeningId);
+      if (!op) return;
+
+      const effLen = isInvisible
+        ? (() => {
+            const nwi = current.segment.neighborWallIndex;
+            if (nwi === undefined || !current.neighborRoom) return current.segmentLength;
+            const nh = nwi === 1 || nwi === 3;
+            return nh ? current.neighborRoom.width : current.neighborRoom.length;
+          })()
+        : (() => {
+            const ih = current.wall.wallIndex === 1 || current.wall.wallIndex === 3;
+            return ih ? current.room.width : current.room.length;
+          })();
+
+      const deltaFraction = (step * direction) / effLen;
+      const halfW = (op.width / 2) / effLen;
+      const newPosX = Math.max(halfW, Math.min(1 - halfW, op.positionX + deltaFraction));
+      onUpdateOpening(selectedOpeningId, { positionX: newPosX });
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedOpeningId, current, onUpdateOpening]);
+
+  // Click outside to deselect
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setSelectedOpeningId(null);
+      }
+    };
+    window.addEventListener('mousedown', handleClick);
+    return () => window.removeEventListener('mousedown', handleClick);
+  }, []);
+
   if (!current || allSegments.length === 0) {
     return (
       <div className="flex items-center justify-center h-48 bg-muted/30 rounded-lg border border-dashed">
@@ -145,9 +190,7 @@ export function WallElevationView({
 
   const { room, wall, segment, segmentIndex, totalSegments, segmentLength, wallHeight, wallName, ownOpenings, neighborRoom, neighborWall, neighborOpenings } = current;
 
-  // Display openings: own openings on visible segments, neighbor openings on invisible segments
   const displayOpenings: Array<OpeningData & { isNeighbor: boolean; segStartMeters: number; segLengthMeters: number; fullWallLen: number }> = [];
-
   const isHoriz = wall.wallIndex === 1 || wall.wallIndex === 3;
   const fullWallLen = isHoriz ? room.width : room.length;
 
@@ -155,23 +198,11 @@ export function WallElevationView({
     neighborOpenings.forEach(op => {
       const neighborIsHoriz = segment.neighborWallIndex === 1 || segment.neighborWallIndex === 3;
       const neighborFullLen = neighborRoom ? (neighborIsHoriz ? neighborRoom.width : neighborRoom.length) : segmentLength;
-      displayOpenings.push({
-        ...op,
-        isNeighbor: true,
-        segStartMeters: segment.startMeters,
-        segLengthMeters: segmentLength,
-        fullWallLen: neighborFullLen,
-      });
+      displayOpenings.push({ ...op, isNeighbor: true, segStartMeters: segment.startMeters, segLengthMeters: segmentLength, fullWallLen: neighborFullLen });
     });
   } else {
     ownOpenings.forEach(op => {
-      displayOpenings.push({
-        ...op,
-        isNeighbor: false,
-        segStartMeters: segment.startMeters,
-        segLengthMeters: segmentLength,
-        fullWallLen,
-      });
+      displayOpenings.push({ ...op, isNeighbor: false, segStartMeters: segment.startMeters, segLengthMeters: segmentLength, fullWallLen });
     });
   }
 
@@ -189,14 +220,17 @@ export function WallElevationView({
     return clientX - rect.left;
   };
 
-  const handleOpeningMouseDown = (e: React.MouseEvent, op: typeof displayOpenings[0]) => {
+  const handleOpeningMouseDown = (e: React.MouseEvent, op: typeof displayOpenings[0], mode: DragMode) => {
     e.preventDefault();
     e.stopPropagation();
+    setSelectedOpeningId(op.id);
     const effLen = op.isNeighbor ? op.fullWallLen : fullWallLen;
     setDragState({
       openingId: op.id,
+      mode,
       startX: svgPoint(e.clientX),
       startPosX: op.positionX,
+      startWidth: op.width,
       wallLength: effLen,
       opWidth: op.width,
     });
@@ -207,15 +241,42 @@ export function WallElevationView({
     const currentX = svgPoint(e.clientX);
     const deltaPixels = currentX - dragState.startX;
     const deltaMeters = deltaPixels / SCALE;
-    const deltaFraction = deltaMeters / dragState.wallLength;
-    let newPosX = dragState.startPosX + deltaFraction;
-    const halfWidthFraction = (dragState.opWidth / 2) / dragState.wallLength;
-    newPosX = Math.max(halfWidthFraction, Math.min(1 - halfWidthFraction, newPosX));
-    onUpdateOpening(dragState.openingId, { positionX: newPosX });
+
+    if (dragState.mode === 'move') {
+      const deltaFraction = deltaMeters / dragState.wallLength;
+      let newPosX = dragState.startPosX + deltaFraction;
+      const halfWidthFraction = (dragState.opWidth / 2) / dragState.wallLength;
+      newPosX = Math.max(halfWidthFraction, Math.min(1 - halfWidthFraction, newPosX));
+      onUpdateOpening(dragState.openingId, { positionX: newPosX });
+    } else if (dragState.mode === 'resize-left') {
+      // Left edge: move left edge → changes width and positionX
+      const newWidth = Math.max(0.3, dragState.startWidth - deltaMeters);
+      const widthDelta = newWidth - dragState.startWidth;
+      const posShift = -(widthDelta / 2) / dragState.wallLength;
+      const newPosX = Math.max(newWidth / 2 / dragState.wallLength, Math.min(1 - newWidth / 2 / dragState.wallLength, dragState.startPosX + posShift));
+      onUpdateOpening(dragState.openingId, { width: Math.round(newWidth * 100) / 100, positionX: newPosX });
+    } else if (dragState.mode === 'resize-right') {
+      const newWidth = Math.max(0.3, dragState.startWidth + deltaMeters);
+      const widthDelta = newWidth - dragState.startWidth;
+      const posShift = (widthDelta / 2) / dragState.wallLength;
+      const newPosX = Math.max(newWidth / 2 / dragState.wallLength, Math.min(1 - newWidth / 2 / dragState.wallLength, dragState.startPosX + posShift));
+      onUpdateOpening(dragState.openingId, { width: Math.round(newWidth * 100) / 100, positionX: newPosX });
+    }
   };
 
   const handleMouseUp = () => {
     setDragState(null);
+  };
+
+  const handleSvgClick = (e: React.MouseEvent) => {
+    // Click on empty space deselects
+    if ((e.target as Element).tagName === 'svg' || (e.target as Element).tagName === 'rect') {
+      const isWallRect = (e.target as Element).getAttribute('data-wall-bg') === 'true';
+      const isGround = (e.target as Element).getAttribute('data-ground') === 'true';
+      if (isWallRect || isGround || (e.target as Element).tagName === 'svg') {
+        setSelectedOpeningId(null);
+      }
+    }
   };
 
   const prevWall = () => setCurrentIndex(i => (i - 1 + allSegments.length) % allSegments.length);
@@ -224,12 +285,11 @@ export function WallElevationView({
   const typeLabel = segment.segmentType === 'externa' ? 'Externa' : segment.segmentType === 'invisible' ? 'Invisible' : 'Interna';
   const typeBadgeVariant = segment.segmentType === 'externa' ? 'default' as const : 'outline' as const;
 
-  // Determine which wall to add openings to
   const targetWallId = (segment.segmentType === 'invisible' && neighborWall) ? neighborWall.id : wall.id;
   const canAddOpenings = !targetWallId.startsWith('temp-') && segment.segmentType !== 'invisible';
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3" ref={containerRef}>
       {/* Navigation */}
       <div className="flex items-center justify-between">
         <Button variant="outline" size="sm" onClick={prevWall} disabled={allSegments.length <= 1}>
@@ -253,6 +313,7 @@ export function WallElevationView({
           )}
           <span className="text-xs text-muted-foreground">
             ({currentIndex + 1}/{allSegments.length})
+            {selectedOpeningId && <span className="ml-2 text-primary font-medium">← → mover • Shift+← → 5cm</span>}
           </span>
         </div>
         <Button variant="outline" size="sm" onClick={nextWall} disabled={allSegments.length <= 1}>
@@ -268,16 +329,18 @@ export function WallElevationView({
             width={canvasWidth}
             height={canvasHeight}
             className="mx-auto"
-            style={{ cursor: dragState ? 'grabbing' : 'default', fontFamily: 'Plus Jakarta Sans, sans-serif' }}
+            tabIndex={0}
+            style={{ cursor: dragState ? 'grabbing' : 'default', fontFamily: 'Plus Jakarta Sans, sans-serif', outline: 'none' }}
             onMouseMove={handleMouseMove}
             onMouseUp={handleMouseUp}
             onMouseLeave={handleMouseUp}
+            onClick={handleSvgClick}
           >
             {/* Ground line */}
             <line
               x1={wallX - 10} y1={wallY + wallH}
               x2={wallX + wallW + 10} y2={wallY + wallH}
-              stroke="hsl(25, 60%, 40%)" strokeWidth={2}
+              stroke="hsl(25, 60%, 40%)" strokeWidth={2} data-ground="true"
             />
             {Array.from({ length: Math.ceil((wallW + 20) / 8) }, (_, i) => (
               <line key={`gh-${i}`}
@@ -294,6 +357,7 @@ export function WallElevationView({
               stroke={segment.segmentType === 'invisible' ? 'hsl(0, 0%, 80%)' : 'hsl(220, 9%, 46%)'}
               strokeWidth={segment.segmentType === 'externa' ? 2 : 1}
               strokeDasharray={segment.segmentType === 'invisible' ? '6,3' : undefined}
+              data-wall-bg="true"
             />
 
             {/* Dimension: width (bottom) */}
@@ -327,10 +391,8 @@ export function WallElevationView({
 
             {/* Openings */}
             {displayOpenings.map((op) => {
-              // Calculate position within this segment
               let opCenterInSegment: number;
               if (op.isNeighbor) {
-                // Neighbor opening: map from neighbor wall coords to segment coords
                 const neighborIsHoriz = segment.neighborWallIndex === 1 || segment.neighborWallIndex === 3;
                 const neighborFullLen = neighborRoom ? (neighborIsHoriz ? neighborRoom.width : neighborRoom.length) : segmentLength;
                 const opAbsCenter = neighborRoom
@@ -339,11 +401,9 @@ export function WallElevationView({
                 const segAbsStart = isHoriz ? room.posX + segment.startMeters : room.posY + segment.startMeters;
                 opCenterInSegment = (opAbsCenter - segAbsStart) / segmentLength;
               } else {
-                // Own opening: map from full wall fraction to segment fraction
                 const opMeters = op.positionX * fullWallLen;
                 opCenterInSegment = (opMeters - segment.startMeters) / segmentLength;
               }
-
               opCenterInSegment = Math.max(0.05, Math.min(0.95, opCenterInSegment));
 
               const opWidthPx = op.width * SCALE;
@@ -352,49 +412,87 @@ export function WallElevationView({
               const opX = wallX + opCenterInSegment * wallW - opWidthPx / 2;
               const opY = wallY + wallH - opHeightPx - baseY * SCALE;
               const isDoor = op.openingType === 'puerta' || op.openingType === 'puerta_externa' || op.openingType === 'ventana_balconera';
+              const isSelected = selectedOpeningId === op.id;
 
               return (
-                <g key={op.id}
-                  style={{ cursor: 'grab' }}
-                  onMouseDown={e => handleOpeningMouseDown(e, op)}
-                >
+                <g key={op.id}>
+                  {/* Selection highlight */}
+                  {isSelected && (
+                    <rect
+                      x={opX - 3} y={opY - 3} width={opWidthPx + 6} height={opHeightPx + 6}
+                      fill="none" stroke="hsl(var(--primary))" strokeWidth={2}
+                      strokeDasharray="4,2" rx={3}
+                    />
+                  )}
+
+                  {/* Main opening body - click to select, drag to move */}
                   <rect
                     x={opX} y={opY} width={opWidthPx} height={opHeightPx}
                     fill={op.isNeighbor ? 'hsl(280, 60%, 95%)' : isDoor ? 'hsl(30, 80%, 95%)' : 'hsl(210, 80%, 95%)'}
-                    stroke={op.isNeighbor ? 'hsl(280, 60%, 50%)' : isDoor ? 'hsl(30, 80%, 45%)' : 'hsl(210, 80%, 45%)'}
-                    strokeWidth={1.5}
+                    stroke={isSelected ? 'hsl(var(--primary))' : op.isNeighbor ? 'hsl(280, 60%, 50%)' : isDoor ? 'hsl(30, 80%, 45%)' : 'hsl(210, 80%, 45%)'}
+                    strokeWidth={isSelected ? 2 : 1.5}
                     rx={2}
+                    style={{ cursor: dragState?.mode === 'move' ? 'grabbing' : 'grab' }}
+                    onMouseDown={e => handleOpeningMouseDown(e, op, 'move')}
                   />
+
+                  {/* Window cross lines */}
                   {!isDoor && (
                     <>
                       <line x1={opX} y1={opY + opHeightPx / 2} x2={opX + opWidthPx} y2={opY + opHeightPx / 2}
-                        stroke={op.isNeighbor ? 'hsl(280, 60%, 70%)' : 'hsl(210, 80%, 70%)'} strokeWidth={0.8} />
+                        stroke={op.isNeighbor ? 'hsl(280, 60%, 70%)' : 'hsl(210, 80%, 70%)'} strokeWidth={0.8} pointerEvents="none" />
                       <line x1={opX + opWidthPx / 2} y1={opY} x2={opX + opWidthPx / 2} y2={opY + opHeightPx}
-                        stroke={op.isNeighbor ? 'hsl(280, 60%, 70%)' : 'hsl(210, 80%, 70%)'} strokeWidth={0.8} />
+                        stroke={op.isNeighbor ? 'hsl(280, 60%, 70%)' : 'hsl(210, 80%, 70%)'} strokeWidth={0.8} pointerEvents="none" />
                     </>
                   )}
+
+                  {/* Door handle */}
                   {isDoor && (
                     <circle cx={opX + opWidthPx * 0.8} cy={opY + opHeightPx * 0.55} r={2.5}
-                      fill={op.isNeighbor ? 'hsl(280, 60%, 50%)' : 'hsl(30, 80%, 45%)'} />
+                      fill={op.isNeighbor ? 'hsl(280, 60%, 50%)' : 'hsl(30, 80%, 45%)'} pointerEvents="none" />
                   )}
+
+                  {/* Dimension labels */}
                   <text x={opX + opWidthPx / 2} y={opY - 4} textAnchor="middle"
-                    fontSize={8} fill="hsl(var(--foreground))" fontWeight={500}>
+                    fontSize={8} fill="hsl(var(--foreground))" fontWeight={500} pointerEvents="none">
                     {op.width.toFixed(2)}m
                   </text>
                   <text x={opX + opWidthPx + 4} y={opY + opHeightPx / 2} textAnchor="start"
                     fontSize={8} fill="hsl(var(--foreground))" fontWeight={500}
-                    dominantBaseline="middle">
+                    dominantBaseline="middle" pointerEvents="none">
                     {op.height.toFixed(2)}m
                   </text>
                   <text x={opX + opWidthPx / 2} y={opY + opHeightPx / 2 + 4} textAnchor="middle"
-                    fontSize={7} fill="hsl(var(--muted-foreground))" dominantBaseline="middle">
+                    fontSize={7} fill="hsl(var(--muted-foreground))" dominantBaseline="middle" pointerEvents="none">
                     {OPENING_PRESETS[op.openingType as keyof typeof OPENING_PRESETS]?.label || op.openingType}
                   </text>
                   {op.isNeighbor && (
                     <text x={opX + opWidthPx / 2} y={opY + opHeightPx / 2 + 14} textAnchor="middle"
-                      fontSize={6} fill="hsl(280, 60%, 50%)" dominantBaseline="middle" fontStyle="italic">
+                      fontSize={6} fill="hsl(280, 60%, 50%)" dominantBaseline="middle" fontStyle="italic" pointerEvents="none">
                       (de {neighborRoom?.name})
                     </text>
+                  )}
+
+                  {/* Resize handles - only when selected */}
+                  {isSelected && (
+                    <>
+                      {/* Left resize handle */}
+                      <rect
+                        x={opX - HANDLE_WIDTH / 2} y={opY + opHeightPx * 0.2}
+                        width={HANDLE_WIDTH} height={opHeightPx * 0.6}
+                        fill="hsl(var(--primary))" rx={2} opacity={0.8}
+                        style={{ cursor: 'ew-resize' }}
+                        onMouseDown={e => handleOpeningMouseDown(e, op, 'resize-left')}
+                      />
+                      {/* Right resize handle */}
+                      <rect
+                        x={opX + opWidthPx - HANDLE_WIDTH / 2} y={opY + opHeightPx * 0.2}
+                        width={HANDLE_WIDTH} height={opHeightPx * 0.6}
+                        fill="hsl(var(--primary))" rx={2} opacity={0.8}
+                        style={{ cursor: 'ew-resize' }}
+                        onMouseDown={e => handleOpeningMouseDown(e, op, 'resize-right')}
+                      />
+                    </>
                   )}
                 </g>
               );
@@ -432,7 +530,12 @@ export function WallElevationView({
       {displayOpenings.length > 0 && (
         <div className="space-y-1">
           {displayOpenings.map(op => (
-            <div key={op.id} className="flex items-center gap-2 text-xs bg-muted/30 p-1.5 rounded">
+            <div key={op.id}
+              className={`flex items-center gap-2 text-xs p-1.5 rounded cursor-pointer transition-colors ${
+                selectedOpeningId === op.id ? 'bg-primary/10 ring-1 ring-primary/30' : 'bg-muted/30 hover:bg-muted/50'
+              }`}
+              onClick={() => setSelectedOpeningId(selectedOpeningId === op.id ? null : op.id)}
+            >
               <DoorOpen className="h-3 w-3 text-muted-foreground shrink-0" />
               <Select value={op.openingType}
                 onValueChange={v => onUpdateOpening(op.id, { openingType: v })}>
@@ -450,7 +553,7 @@ export function WallElevationView({
                 <Badge variant="outline" className="text-[9px] h-4">de {neighborRoom?.name}</Badge>
               )}
               <Button variant="ghost" size="sm" className="h-5 w-5 p-0 text-destructive ml-auto"
-                onClick={() => onDeleteOpening(op.id)}>
+                onClick={(e) => { e.stopPropagation(); onDeleteOpening(op.id); }}>
                 <Trash2 className="h-3 w-3" />
               </Button>
             </div>

@@ -34,7 +34,7 @@ function WallMesh({
   position: [number, number, number];
   size: [number, number, number];
   color: string;
-  openings: { posX: number; width: number; height: number }[];
+  openings: { posX: number; width: number; height: number; isDoor: boolean }[];
   rotation?: [number, number, number];
 }) {
   const geometry = useMemo(() => {
@@ -48,8 +48,11 @@ function WallMesh({
 
     openings.forEach((op) => {
       const hole = new THREE.Path();
-      const ox = Math.max(0.05, Math.min(op.posX, w - op.width - 0.05));
-      const oy = op.height > 1.5 ? 0 : 0.9;
+      // posX is a fraction 0-1 of the wall length - convert to absolute
+      const absPos = op.posX * w;
+      const ox = Math.max(0.02, Math.min(absPos - op.width / 2, w - op.width - 0.02));
+      // Doors start from floor (y=0), windows start at ~0.9m
+      const oy = op.isDoor ? 0 : 0.9;
       hole.moveTo(ox, oy);
       hole.lineTo(ox + op.width, oy);
       hole.lineTo(ox + op.width, oy + op.height);
@@ -69,6 +72,7 @@ function WallMesh({
 }
 
 function RoomFloor({ room, plan }: { room: RoomData; plan: FloorPlanData }) {
+  if (room.hasFloor === false) return null;
   const color = getRoomColor(room.name);
   return (
     <group>
@@ -91,14 +95,25 @@ function RoomFloor({ room, plan }: { room: RoomData; plan: FloorPlanData }) {
   );
 }
 
-function RoomWalls({ room, plan, wallClassification }: { room: RoomData; plan: FloorPlanData; wallClassification?: Map<string, string> }) {
+function RoomCeiling({ room, plan }: { room: RoomData; plan: FloorPlanData }) {
+  if (room.hasCeiling === false) return null;
+  const h = room.height || plan.defaultHeight;
+  return (
+    <mesh position={[room.posX + room.width / 2, h - 0.01, room.posY + room.length / 2]} rotation={[-Math.PI / 2, 0, 0]}>
+      <planeGeometry args={[room.width, room.length]} />
+      <meshStandardMaterial color="#f5f0e8" roughness={0.9} side={THREE.DoubleSide} transparent opacity={0.6} />
+    </mesh>
+  );
+}
+
+function RoomWalls({ room, plan, wallClassification }: { room: RoomData; plan: FloorPlanData; wallClassification: Map<string, string> }) {
   const h = room.height || plan.defaultHeight;
 
   return (
     <>
       {room.walls.map((wall) => {
         const wallKey = `${room.id}::${wall.wallIndex}`;
-        const effectiveType = wallClassification?.get(wallKey) || wall.wallType;
+        const effectiveType = wallClassification.get(wallKey) || wall.wallType;
         
         // Skip invisible walls - they don't render in 3D
         if (effectiveType === 'invisible') return null;
@@ -106,10 +121,15 @@ function RoomWalls({ room, plan, wallClassification }: { room: RoomData; plan: F
         const ext = effectiveType === 'externa';
         const thickness = wall.thickness || (ext ? plan.externalWallThickness : plan.internalWallThickness);
         const color = ext ? '#c4a882' : '#d8cfc0';
+
+        // Get wall length based on wall index
+        const wallLen = (wall.wallIndex === 1 || wall.wallIndex === 3) ? room.width : room.length;
+
         const openings = wall.openings.map((op) => ({
-          posX: op.positionX,
+          posX: op.positionX, // fraction 0-1
           width: op.width,
           height: op.height,
+          isDoor: op.openingType === 'puerta' || op.openingType === 'puerta_externa',
         }));
 
         let pos: [number, number, number];
@@ -189,44 +209,54 @@ function HipRoof({ cx, cz, h, halfW, halfL, rise }: { cx: number; cz: number; h:
 }
 
 function Roof({ plan, rooms }: { plan: FloorPlanData; rooms: RoomData[] }) {
+  // Only include rooms that have hasRoof === true (default)
+  const roofRooms = rooms.filter(r => r.hasRoof !== false);
+
   const h = plan.defaultHeight;
   const overhang = plan.roofOverhang;
   const slopeRatio = plan.roofSlopePercent / 100;
 
-  // Compute bounding box from actual rooms instead of plan dimensions
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-  rooms.forEach(r => {
-    minX = Math.min(minX, r.posX);
-    minY = Math.min(minY, r.posY);
-    maxX = Math.max(maxX, r.posX + r.width);
-    maxY = Math.max(maxY, r.posY + r.length);
-  });
-  if (!isFinite(minX)) { minX = 0; minY = 0; maxX = plan.width; maxY = plan.length; }
-
-  const roomsW = maxX - minX;
-  const roomsL = maxY - minY;
-  const w = roomsW + 2 * overhang;
-  const l = roomsL + 2 * overhang;
-  const cx = minX + roomsW / 2;
-  const cz = minY + roomsL / 2;
-  const halfW = w / 2;
-  const halfL = l / 2;
-  const rise = halfW * slopeRatio;
+  // Compute bounding box from rooms that have roof
+  const bounds = useMemo(() => {
+    if (roofRooms.length === 0) return null;
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    roofRooms.forEach(r => {
+      minX = Math.min(minX, r.posX);
+      minY = Math.min(minY, r.posY);
+      maxX = Math.max(maxX, r.posX + r.width);
+      maxY = Math.max(maxY, r.posY + r.length);
+    });
+    if (!isFinite(minX)) return null;
+    const roomsW = maxX - minX;
+    const roomsL = maxY - minY;
+    const w = roomsW + 2 * overhang;
+    const l = roomsL + 2 * overhang;
+    return {
+      cx: minX + roomsW / 2,
+      cz: minY + roomsL / 2,
+      w, l,
+      halfW: w / 2,
+      halfL: l / 2,
+      rise: (w / 2) * slopeRatio,
+    };
+  }, [roofRooms, overhang, slopeRatio]);
 
   const gableGeometry = useMemo(() => {
-    if (plan.roofType !== 'dos_aguas') return null;
+    if (!bounds || plan.roofType !== 'dos_aguas') return null;
     const shape = new THREE.Shape();
-    shape.moveTo(-halfW, 0);
-    shape.lineTo(0, rise);
-    shape.lineTo(halfW, 0);
+    shape.moveTo(-bounds.halfW, 0);
+    shape.lineTo(0, bounds.rise);
+    shape.lineTo(bounds.halfW, 0);
     shape.closePath();
-    return new THREE.ExtrudeGeometry(shape, { depth: l, bevelEnabled: false });
-  }, [plan.roofType, halfW, rise, l]);
+    return new THREE.ExtrudeGeometry(shape, { depth: bounds.l, bevelEnabled: false });
+  }, [bounds, plan.roofType]);
+
+  if (!bounds) return null;
 
   if (plan.roofType === 'plana') {
     return (
-      <mesh position={[cx, h + 0.05, cz]} rotation={[-Math.PI / 2, 0, 0]} castShadow>
-        <planeGeometry args={[w, l]} />
+      <mesh position={[bounds.cx, h + 0.05, bounds.cz]} rotation={[-Math.PI / 2, 0, 0]} castShadow>
+        <planeGeometry args={[bounds.w, bounds.l]} />
         <meshStandardMaterial color="#8b7355" roughness={0.7} side={THREE.DoubleSide} />
       </mesh>
     );
@@ -234,49 +264,67 @@ function Roof({ plan, rooms }: { plan: FloorPlanData; rooms: RoomData[] }) {
 
   if (plan.roofType === 'dos_aguas' && gableGeometry) {
     return (
-      <mesh position={[cx, h, cz - l / 2]} geometry={gableGeometry} castShadow>
+      <mesh position={[bounds.cx, h, bounds.cz - bounds.l / 2]} geometry={gableGeometry} castShadow>
         <meshStandardMaterial color="#8b4513" roughness={0.6} side={THREE.DoubleSide} />
       </mesh>
     );
   }
 
-  return <HipRoof cx={cx} cz={cz} h={h} halfW={halfW} halfL={halfL} rise={rise} />;
+  return <HipRoof cx={bounds.cx} cz={bounds.cz} h={h} halfW={bounds.halfW} halfL={bounds.halfL} rise={bounds.rise} />;
 }
 
 function Scene({ plan, rooms }: { plan: FloorPlanData; rooms: RoomData[] }) {
   const { camera } = useThree();
   const wallClassification = useMemo(() => autoClassifyWalls(rooms), [rooms]);
 
+  // Compute bounding box from actual rooms
+  const bounds = useMemo(() => {
+    let minX = 0, minY = 0, maxX = plan.width, maxY = plan.length;
+    rooms.forEach(r => {
+      minX = Math.min(minX, r.posX);
+      minY = Math.min(minY, r.posY);
+      maxX = Math.max(maxX, r.posX + r.width);
+      maxY = Math.max(maxY, r.posY + r.length);
+    });
+    return { minX, minY, maxX, maxY, w: maxX - minX, l: maxY - minY };
+  }, [rooms, plan]);
+
   useMemo(() => {
-    const dist = Math.max(plan.width, plan.length) * 1.8;
-    camera.position.set(plan.width / 2 + dist * 0.6, plan.defaultHeight * 2.5, plan.length / 2 + dist * 0.6);
-    camera.lookAt(plan.width / 2, plan.defaultHeight / 2, plan.length / 2);
-  }, [plan.width, plan.length, plan.defaultHeight]);
+    const cx = bounds.minX + bounds.w / 2;
+    const cz = bounds.minY + bounds.l / 2;
+    const dist = Math.max(bounds.w, bounds.l) * 1.8;
+    camera.position.set(cx + dist * 0.6, plan.defaultHeight * 2.5, cz + dist * 0.6);
+    camera.lookAt(cx, plan.defaultHeight / 2, cz);
+  }, [bounds, plan.defaultHeight]);
+
+  const cx = bounds.minX + bounds.w / 2;
+  const cz = bounds.minY + bounds.l / 2;
 
   return (
     <>
       <ambientLight intensity={0.4} />
       <directionalLight
-        position={[plan.width * 2, plan.defaultHeight * 4, -plan.length]}
+        position={[cx + bounds.w, plan.defaultHeight * 4, cz - bounds.l]}
         intensity={1}
         castShadow
         shadow-mapSize-width={2048}
         shadow-mapSize-height={2048}
       />
       <hemisphereLight args={['#87ceeb', '#8fbc8f', 0.3]} />
-      <Ground width={plan.width} length={plan.length} />
+      <Ground width={bounds.w} length={bounds.l} />
       {rooms.map((room) => (
         <group key={room.id}>
           <RoomFloor room={room} plan={plan} />
+          <RoomCeiling room={room} plan={plan} />
           <RoomWalls room={room} plan={plan} wallClassification={wallClassification} />
         </group>
       ))}
       <Roof plan={plan} rooms={rooms} />
       <OrbitControls
-        target={[plan.width / 2, plan.defaultHeight / 2, plan.length / 2]}
+        target={[cx, plan.defaultHeight / 2, cz]}
         maxPolarAngle={Math.PI / 2.1}
         minDistance={3}
-        maxDistance={Math.max(plan.width, plan.length) * 4}
+        maxDistance={Math.max(bounds.w, bounds.l) * 4}
       />
     </>
   );

@@ -572,6 +572,7 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
             onDeleteRoom={deleteRoom}
             onUpdateWall={updateWall}
             onAddOpening={addOpening}
+            onUpdateOpening={updateOpening}
             onDeleteOpening={deleteOpening}
             saving={saving}
           />

@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Plus, Pencil, Trash2, List, Layers, Search, X, Eye } from 'lucide-react';
+import { Plus, Pencil, Trash2, List, Layers, Search, X, Eye, ChevronDown, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import { AccountDetailView } from './AccountDetailView';
@@ -78,6 +78,7 @@ export function AccountingAccountsTab({ highlightAccountId, onHighlightHandled, 
   const [viewMode, setViewMode] = useState<'alphabetic' | 'grouped'>('alphabetic');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedAccount, setSelectedAccount] = useState<AccountingAccount | null>(null);
+  const [expandedTypes, setExpandedTypes] = useState<Set<string>>(new Set(ACCOUNT_TYPES));
 
   useEffect(() => {
     fetchAccounts();
@@ -457,47 +458,64 @@ export function AccountingAccountsTab({ highlightAccountId, onHighlightHandled, 
               </CardContent>
             </Card>
           ) : (
-            accountsGroupedByType.map((group) => (
-              <Card key={group.type}>
-                <CardHeader className="py-3 bg-muted/30">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Badge variant={getTypeBadgeColor(group.type) as any}>
-                        {group.type}
-                      </Badge>
-                      <span className="text-sm text-muted-foreground">
-                        ({group.accounts.length} cuentas)
-                      </span>
+            accountsGroupedByType.map((group) => {
+              const isExpanded = expandedTypes.has(group.type);
+              const toggleExpand = () => {
+                setExpandedTypes(prev => {
+                  const next = new Set(prev);
+                  if (next.has(group.type)) next.delete(group.type);
+                  else next.add(group.type);
+                  return next;
+                });
+              };
+              return (
+                <Card key={group.type}>
+                  <CardHeader
+                    className="py-3 bg-muted/30 cursor-pointer select-none"
+                    onClick={toggleExpand}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                        <Badge variant={getTypeBadgeColor(group.type) as any}>
+                          {group.type}
+                        </Badge>
+                        <span className="text-sm text-muted-foreground">
+                          ({group.accounts.length} cuentas)
+                        </span>
+                      </div>
+                      <div className="text-right text-sm">
+                        <span className="text-muted-foreground mr-4">
+                          Debe: {formatCurrency(group.totalDebit)} | Haber: {formatCurrency(group.totalCredit)}
+                        </span>
+                        <span className={`font-semibold ${group.totalBalance < 0 ? 'text-destructive' : ''}`}>
+                          Saldo: {formatCurrency(group.totalBalance)}
+                        </span>
+                      </div>
                     </div>
-                    <div className="text-right text-sm">
-                      <span className="text-muted-foreground mr-4">
-                        Debe: {formatCurrency(group.totalDebit)} | Haber: {formatCurrency(group.totalCredit)}
-                      </span>
-                      <span className={`font-semibold ${group.totalBalance < 0 ? 'text-destructive' : ''}`}>
-                        Saldo: {formatCurrency(group.totalBalance)}
-                      </span>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent className="p-0">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Nombre</TableHead>
-                        <TableHead>Tipo</TableHead>
-                        <TableHead className="text-right">Debe (€)</TableHead>
-                        <TableHead className="text-right">Haber (€)</TableHead>
-                        <TableHead className="text-right">Saldo (€)</TableHead>
-                        <TableHead className="w-[100px]">Acciones</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {group.accounts.map(renderAccountRow)}
-                    </TableBody>
-                  </Table>
-                </CardContent>
-              </Card>
-            ))
+                  </CardHeader>
+                  {isExpanded && (
+                    <CardContent className="p-0">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Nombre</TableHead>
+                            <TableHead>Tipo</TableHead>
+                            <TableHead className="text-right">Debe (€)</TableHead>
+                            <TableHead className="text-right">Haber (€)</TableHead>
+                            <TableHead className="text-right">Saldo (€)</TableHead>
+                            <TableHead className="w-[100px]">Acciones</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {group.accounts.map(renderAccountRow)}
+                        </TableBody>
+                      </Table>
+                    </CardContent>
+                  )}
+                </Card>
+              );
+            })
           )}
         </div>
       )}

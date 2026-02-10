@@ -243,13 +243,28 @@ export function FloorPlanCanvas2D({
             : 'hsl(25, 80%, 50%)';
 
           return (
-            <line key={`seg-${si}`}
-              x1={sx1} y1={sy1} x2={sx2} y2={sy2}
-              stroke={segColor} strokeWidth={strokeWidth}
-              strokeDasharray={isInvisible ? '4,3' : undefined}
-              onClick={e => handleWallClick(e, room.id, wall.wallIndex, si)}
-              style={{ cursor: 'pointer' }}
-            />
+            <g key={`seg-${si}`}>
+              {/* Hit area per segment */}
+              <line
+                x1={sx1} y1={sy1} x2={sx2} y2={sy2}
+                stroke="transparent" strokeWidth={14}
+                onClick={e => handleWallClick(e, room.id, wall.wallIndex, si)}
+                style={{ cursor: 'pointer' }}
+              />
+              {/* Selection glow per segment */}
+              {isSegSelected && (
+                <line x1={sx1} y1={sy1} x2={sx2} y2={sy2}
+                  stroke="hsl(var(--primary))" strokeWidth={8}
+                  strokeLinecap="round" opacity={0.3} style={{ pointerEvents: 'none' }} />
+              )}
+              {/* Visible segment line */}
+              <line
+                x1={sx1} y1={sy1} x2={sx2} y2={sy2}
+                stroke={segColor} strokeWidth={strokeWidth}
+                strokeDasharray={isInvisible ? '4,3' : undefined}
+                style={{ pointerEvents: 'none' }}
+              />
+            </g>
           );
         });
 
@@ -589,18 +604,7 @@ export function FloorPlanCanvas2D({
                       )}
                     </g>
                   )}
-                  {/* Hit area */}
-                  <line x1={w.x1} y1={w.y1} x2={w.x2} y2={w.y2}
-                    stroke="transparent" strokeWidth={14}
-                    style={{ cursor: 'pointer' }}
-                    onClick={e => handleWallClick(e, el.roomId, w.wallIndex)}
-                  />
-                  {/* Selected glow */}
-                  {w.isSelected && (
-                    <line x1={w.x1} y1={w.y1} x2={w.x2} y2={w.y2}
-                      stroke="hsl(var(--primary))" strokeWidth={8}
-                      strokeLinecap="round" opacity={0.3} style={{ pointerEvents: 'none' }} />
-                  )}
+                  {/* Hit areas and selection glows are now per-segment inside segmentEls */}
                   {/* Wall segments (replaces single wall line) */}
                   {w.segmentEls}
                   {/* Openings */}

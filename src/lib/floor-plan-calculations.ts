@@ -20,6 +20,7 @@ export interface RoomData {
   length: number;
   height?: number;
   hasFloor: boolean;
+  hasCeiling: boolean;
   hasRoof: boolean;
   walls: WallData[];
 }
@@ -62,6 +63,7 @@ export interface RoomCalculation {
   ceilingArea: number; // m2 de techo
   roomHeight: number; // altura de la estancia
   hasFloor: boolean;
+  hasCeiling: boolean;
   hasRoof: boolean;
   walls: WallCalculation[];
   totalExternalWallArea: number;
@@ -184,6 +186,7 @@ export function calculateRoom(room: RoomData, plan: FloorPlanData): RoomCalculat
     ceilingArea,
     roomHeight: room.height || plan.defaultHeight,
     hasFloor: room.hasFloor !== false,
+    hasCeiling: room.hasCeiling !== false,
     hasRoof: room.hasRoof !== false,
     walls: wallCalcs,
     totalExternalWallArea,

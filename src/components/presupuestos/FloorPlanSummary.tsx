@@ -170,7 +170,7 @@ export function FloorPlanSummaryView({ summary }: FloorPlanSummaryProps) {
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">6. Techo</span>
-                <span>{fmt(rc.ceilingArea)}</span>
+                <span>{rc.hasCeiling !== false ? fmt(rc.ceilingArea) : <span className="italic text-muted-foreground">Sin techo</span>}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">7. Tejado</span>

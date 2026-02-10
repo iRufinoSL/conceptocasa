@@ -156,6 +156,7 @@ export function useFloorPlan(budgetId: string) {
           length: Number(r.length),
           height: r.height ? Number(r.height) : undefined,
           hasFloor: r.has_floor !== false,
+          hasCeiling: r.has_ceiling !== false,
           hasRoof: r.has_roof !== false,
           walls,
         };
@@ -282,7 +283,7 @@ export function useFloorPlan(budgetId: string) {
     }
   };
 
-  const updateRoom = async (roomId: string, data: { name?: string; width?: number; length?: number; height?: number; posX?: number; posY?: number; hasFloor?: boolean; hasRoof?: boolean }) => {
+  const updateRoom = async (roomId: string, data: { name?: string; width?: number; length?: number; height?: number; posX?: number; posY?: number; hasFloor?: boolean; hasCeiling?: boolean; hasRoof?: boolean }) => {
     setSaving(true);
     try {
       const updates: any = {};
@@ -293,6 +294,7 @@ export function useFloorPlan(budgetId: string) {
       if (data.posX !== undefined) updates.pos_x = data.posX;
       if (data.posY !== undefined) updates.pos_y = data.posY;
       if (data.hasFloor !== undefined) updates.has_floor = data.hasFloor;
+      if (data.hasCeiling !== undefined) updates.has_ceiling = data.hasCeiling;
       if (data.hasRoof !== undefined) updates.has_roof = data.hasRoof;
 
       const { error } = await supabase

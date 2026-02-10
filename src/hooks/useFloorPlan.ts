@@ -320,7 +320,7 @@ export function useFloorPlan(budgetId: string) {
     }
   };
 
-  const updateWall = async (wallId: string, data: { wallType?: 'externa' | 'interna'; thickness?: number; height?: number }) => {
+  const updateWall = async (wallId: string, data: { wallType?: 'externa' | 'interna' | 'compartida'; thickness?: number; height?: number }) => {
     setSaving(true);
     try {
       const updates: any = {};

@@ -225,7 +225,7 @@ export function FloorPlanRoomEditor({
                           <SelectContent>
                             <SelectItem value="externa">Externa</SelectItem>
                             <SelectItem value="interna">Interna</SelectItem>
-                            <SelectItem value="compartida">Compartida</SelectItem>
+                            <SelectItem value="invisible">Invisible</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>

@@ -202,12 +202,12 @@ export function FloorPlanCanvas2D({
         const wallKey = `${room.id}::${wall.wallIndex}`;
         // Use auto-classification instead of stored wall type
         const autoType = wallClassification.get(wallKey) || wall.wallType;
-        const isShared = autoType === 'compartida';
+        const isInvisible = autoType === 'invisible';
         const isExternal = autoType === 'externa';
         const isWallSelected = selectedWallKey === wallKey;
 
         const baseThickness = isExternal ? plan.externalWallThickness * scale : plan.internalWallThickness * scale;
-        const strokeWidth = Math.max(baseThickness, isExternal ? 4 : isShared ? 3 : 2);
+        const strokeWidth = Math.max(baseThickness, isExternal ? 4 : isInvisible ? 1.5 : 2);
 
         let x1: number, y1: number, x2: number, y2: number;
         switch (wall.wallIndex) {
@@ -219,7 +219,7 @@ export function FloorPlanCanvas2D({
 
         const wallColor = isWallSelected ? 'hsl(var(--primary))'
           : isExternal ? 'hsl(222, 47%, 20%)'
-          : isShared ? 'hsl(25, 95%, 53%)'
+          : isInvisible ? 'hsl(0, 0%, 75%)'
           : 'hsl(220, 9%, 46%)';
 
         // External wall dimension (interior length + wall thickness on both ends for external walls)
@@ -297,9 +297,9 @@ export function FloorPlanCanvas2D({
         const wallName = externalWallNames.get(wallKey);
 
         return {
-          wallIndex: wall.wallIndex, wallKey, isSelected: isWallSelected, isShared,
+          wallIndex: wall.wallIndex, wallKey, isSelected: isWallSelected, isInvisible,
           isExternal, x1, y1, x2, y2, strokeWidth, color: wallColor,
-          dashArray: isShared ? '6,3' : undefined,
+          dashArray: isInvisible ? '4,3' : undefined,
           openingEls, handleX, handleY, isHoriz,
           interiorLen, externalLen, wallName,
         };
@@ -631,8 +631,8 @@ export function FloorPlanCanvas2D({
             <text x={16} y={4} fontSize={7} fill="hsl(220, 9%, 46%)">Externa</text>
             <rect x={65} y={0} width={12} height={2} fill="hsl(220, 9%, 46%)" />
             <text x={81} y={4} fontSize={7} fill="hsl(220, 9%, 46%)">Interna</text>
-            <line x1={130} y1={1} x2={145} y2={1} stroke="hsl(25, 95%, 53%)" strokeWidth={3} strokeDasharray="6,3" />
-            <text x={149} y={4} fontSize={7} fill="hsl(220, 9%, 46%)">Compartida</text>
+            <line x1={130} y1={1} x2={145} y2={1} stroke="hsl(0, 0%, 75%)" strokeWidth={1.5} strokeDasharray="4,3" />
+            <text x={149} y={4} fontSize={7} fill="hsl(220, 9%, 46%)">Invisible</text>
             <line x1={220} y1={-1} x2={232} y2={-1} stroke="hsl(217, 91%, 60%)" strokeWidth={1.5} />
             <line x1={220} y1={3} x2={232} y2={3} stroke="hsl(217, 91%, 60%)" strokeWidth={1.5} />
             <text x={236} y={4} fontSize={7} fill="hsl(220, 9%, 46%)">Ventana</text>

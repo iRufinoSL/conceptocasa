@@ -25,7 +25,7 @@ export interface RoomData {
 export interface WallData {
   id: string;
   wallIndex: number; // 1=top, 2=right, 3=bottom, 4=left
-  wallType: 'externa' | 'interna' | 'compartida';
+  wallType: 'externa' | 'interna' | 'invisible';
   thickness?: number;
   height?: number;
   openings: OpeningData[];
@@ -42,7 +42,7 @@ export interface OpeningData {
 
 export interface WallCalculation {
   wallIndex: number;
-  wallType: 'externa' | 'interna' | 'compartida';
+  wallType: 'externa' | 'interna' | 'invisible';
   wallLength: number;
   wallHeight: number;
   thickness: number;
@@ -146,11 +146,12 @@ export function calculateRoom(room: RoomData, plan: FloorPlanData): RoomCalculat
     
     const netArea = grossArea - openingsArea;
     
-    if (wall.wallType === 'externa') {
+    if (wall.wallType === 'invisible') {
+      // Invisible walls don't count as wall area
+    } else if (wall.wallType === 'externa') {
       totalExternalWallArea += netArea;
     } else {
-      const factor = wall.wallType === 'compartida' ? 0.5 : 1;
-      totalInternalWallArea += netArea * factor;
+      totalInternalWallArea += netArea;
     }
     totalOpeningsArea += openingsArea;
     
@@ -230,9 +231,9 @@ export function calculateRoof(plan: FloorPlanData, rooms?: RoomData[]): number {
 // - Walls on the outer perimeter of all rooms = 'externa'
 // - Walls shared between two rooms = 'compartida'
 // - Other walls = 'interna'
-export function autoClassifyWalls(rooms: RoomData[]): Map<string, 'externa' | 'interna' | 'compartida'> {
+export function autoClassifyWalls(rooms: RoomData[]): Map<string, 'externa' | 'interna' | 'invisible'> {
   const EPSILON = 0.05;
-  const classification = new Map<string, 'externa' | 'interna' | 'compartida'>();
+  const classification = new Map<string, 'externa' | 'interna' | 'invisible'>();
   const sharedWalls = detectSharedWalls(rooms);
 
   if (rooms.length === 0) return classification;
@@ -244,13 +245,14 @@ export function autoClassifyWalls(rooms: RoomData[]): Map<string, 'externa' | 'i
 
       // If the user has manually set the wall type (stored in DB), always respect it
       if (wall && !wall.id.startsWith('temp-') && wall.wallType) {
-        classification.set(key, wall.wallType);
+        const type = (wall.wallType as string) === 'compartida' ? 'invisible' : wall.wallType;
+        classification.set(key, type as 'externa' | 'interna' | 'invisible');
         return;
       }
       
-      // Check if shared first
+      // Check if shared (auto-classify as invisible)
       if (sharedWalls.has(key)) {
-        classification.set(key, 'compartida');
+        classification.set(key, 'invisible');
         return;
       }
 
@@ -341,21 +343,15 @@ export function calculateFloorPlanSummary(plan: FloorPlanData, rooms: RoomData[]
             totalWindows += o.count;
           }
         });
-      } else if (w.wallType === 'compartida' && neighborInfo) {
-        const neighborKey = `${neighborInfo.neighborRoomId}::${neighborInfo.neighborWallIndex}`;
-        if (!countedSharedOpenings.has(neighborKey)) {
-          totalInternalWallGrossM2 += w.grossArea * 0.5;
-          totalInternalWallOpeningsM2 += w.openingsArea * 0.5;
-          w.openings.forEach(o => {
-            if (o.type === 'puerta' || o.type === 'puerta_externa') {
-              totalDoors += o.count;
-            } else {
-              totalWindows += o.count;
-            }
-          });
-          countedSharedOpenings.add(wallKey);
-        }
-        totalInternalWallBaseM += w.baseLength * 0.5;
+      } else if (w.wallType === 'invisible') {
+        // Invisible walls: count openings but no wall area
+        w.openings.forEach(o => {
+          if (o.type === 'puerta' || o.type === 'puerta_externa') {
+            totalDoors += o.count;
+          } else {
+            totalWindows += o.count;
+          }
+        });
       } else {
         totalInternalWallGrossM2 += w.grossArea;
         totalInternalWallOpeningsM2 += w.openingsArea;
@@ -428,7 +424,7 @@ export const WALL_SIDE_LETTERS: Record<number, string> = {
  */
 export function generateExternalWallNames(
   rooms: RoomData[],
-  wallClassification: Map<string, 'externa' | 'interna' | 'compartida'>
+  wallClassification: Map<string, 'externa' | 'interna' | 'invisible'>
 ): Map<string, string> {
   const names = new Map<string, string>();
   

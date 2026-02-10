@@ -355,7 +355,7 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
                 if (!room) return null;
                 const wall = room.walls.find(w => w.wallIndex === wallIdx);
                 if (!wall) return null;
-                const isShared = wallClassification.get(selectedWallKey) === 'compartida';
+                const isInvisible = wallClassification.get(selectedWallKey) === 'invisible';
                 const autoType = wallClassification.get(selectedWallKey) || wall.wallType;
                 const neighborInfo = sharedWallMap.get(selectedWallKey);
                 const neighborRoom = neighborInfo ? rooms.find(r => r.id === neighborInfo.neighborRoomId) : null;
@@ -369,8 +369,8 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
                             <span className="ml-1 text-primary font-bold">({externalWallNames.get(selectedWallKey)})</span>
                           )}
                         </CardTitle>
-                        <Badge variant="outline" className="text-[10px] h-4">{autoType === 'externa' ? 'Externa' : autoType === 'compartida' ? 'Compartida' : 'Interna'}</Badge>
-                        {isShared && neighborRoom && (
+                        <Badge variant="outline" className="text-[10px] h-4">{autoType === 'externa' ? 'Externa' : autoType === 'invisible' ? 'Invisible' : 'Interna'}</Badge>
+                        {isInvisible && neighborRoom && (
                           <Badge variant="outline" className="text-[10px] h-4">con {neighborRoom.name}</Badge>
                         )}
                       </div>
@@ -385,7 +385,7 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
                             <SelectContent>
                               <SelectItem value="externa">Externa</SelectItem>
                               <SelectItem value="interna">Interna</SelectItem>
-                              <SelectItem value="compartida">Compartida</SelectItem>
+                              <SelectItem value="invisible">Invisible</SelectItem>
                             </SelectContent>
                           </Select>
                         </div>
@@ -440,7 +440,7 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
                                 <div className="flex items-center gap-1">
                                   <input type="range" min="0" max="1" step="0.05"
                                     className="flex-1 h-4 accent-primary cursor-pointer"
-                                    defaultValue={op.positionX}
+                                    value={op.positionX}
                                     onChange={e => updateOpening(op.id, { positionX: Number(e.target.value) })}
                                     title="Arrastra para mover el objeto a lo largo de la pared" />
                                   <span className="text-[9px] text-muted-foreground w-7 text-right">{(op.positionX * 100).toFixed(0)}%</span>

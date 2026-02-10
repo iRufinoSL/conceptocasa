@@ -1,6 +1,6 @@
 import { useMemo, useState, useCallback, useRef } from 'react';
 import type { FloorPlanData, RoomData } from '@/lib/floor-plan-calculations';
-import { autoClassifyWalls, generateExternalWallNames } from '@/lib/floor-plan-calculations';
+import { autoClassifyWalls, generateExternalWallNames, computeWallSegments } from '@/lib/floor-plan-calculations';
 
 interface FloorPlanCanvas2DProps {
   plan: FloorPlanData;
@@ -175,6 +175,7 @@ export function FloorPlanCanvas2D({
 
   const wallClassification = useMemo(() => autoClassifyWalls(displayRooms), [displayRooms]);
   const externalWallNames = useMemo(() => generateExternalWallNames(displayRooms, wallClassification), [displayRooms, wallClassification]);
+  const wallSegmentsMap = useMemo(() => computeWallSegments(displayRooms), [displayRooms]);
 
   const { viewBox, elements } = useMemo(() => {
     const extT = plan.externalWallThickness;
@@ -185,11 +186,10 @@ export function FloorPlanCanvas2D({
       maxX = Math.max(maxX, r.posX + r.width);
       maxY = Math.max(maxY, r.posY + r.length);
     });
-    // Extend viewBox to include external walls
     const vbX = (minX - extT - padding) * scale;
     const vbY = (minY - extT - padding) * scale;
     const vbW = (maxX - minX + 2 * extT + 2 * padding) * scale;
-    const vbH = (maxY - minY + 2 * extT + 2 * padding + 1) * scale; // +1 for legend
+    const vbH = (maxY - minY + 2 * extT + 2 * padding + 1) * scale;
 
     const elements = displayRooms.map(room => {
       const x = room.posX * scale;
@@ -200,41 +200,73 @@ export function FloorPlanCanvas2D({
 
       const wallData = room.walls.map(wall => {
         const wallKey = `${room.id}::${wall.wallIndex}`;
-        // Use auto-classification instead of stored wall type
-        const autoType = wallClassification.get(wallKey) || wall.wallType;
-        const isInvisible = autoType === 'invisible';
-        const isExternal = autoType === 'externa';
+        const segments = wallSegmentsMap.get(wallKey) || [];
         const isWallSelected = selectedWallKey === wallKey;
+        const wallName = externalWallNames.get(wallKey);
+        const isHoriz = wall.wallIndex === 1 || wall.wallIndex === 3;
 
-        const baseThickness = isExternal ? plan.externalWallThickness * scale : plan.internalWallThickness * scale;
-        const strokeWidth = Math.max(baseThickness, isExternal ? 4 : isInvisible ? 1.5 : 2);
-
-        let x1: number, y1: number, x2: number, y2: number;
+        // Wall line endpoints
+        let wx1: number, wy1: number, wx2: number, wy2: number;
         switch (wall.wallIndex) {
-          case 1: x1 = x; y1 = y; x2 = x + w; y2 = y; break;
-          case 2: x1 = x + w; y1 = y; x2 = x + w; y2 = y + h; break;
-          case 3: x1 = x; y1 = y + h; x2 = x + w; y2 = y + h; break;
-          case 4: default: x1 = x; y1 = y; x2 = x; y2 = y + h; break;
+          case 1: wx1 = x; wy1 = y; wx2 = x + w; wy2 = y; break;
+          case 2: wx1 = x + w; wy1 = y; wx2 = x + w; wy2 = y + h; break;
+          case 3: wx1 = x; wy1 = y + h; wx2 = x + w; wy2 = y + h; break;
+          case 4: default: wx1 = x; wy1 = y; wx2 = x; wy2 = y + h; break;
         }
 
-        const wallColor = isWallSelected ? 'hsl(var(--primary))'
-          : isExternal ? 'hsl(222, 47%, 20%)'
-          : isInvisible ? 'hsl(0, 0%, 75%)'
-          : 'hsl(220, 9%, 46%)';
+        // Render each segment
+        const segmentEls = segments.map((seg, si) => {
+          const isInvisible = seg.segmentType === 'invisible';
+          const isExternal = seg.segmentType === 'externa';
+          const baseThickness = isExternal ? plan.externalWallThickness * scale : plan.internalWallThickness * scale;
+          const strokeWidth = Math.max(baseThickness, isExternal ? 4 : isInvisible ? 1.5 : 2);
 
-        // External wall dimension (interior length + wall thickness on both ends for external walls)
-        const interiorLen = (wall.wallIndex === 1 || wall.wallIndex === 3) ? room.width : room.length;
-        const externalLen = isExternal ? interiorLen + 2 * extT : interiorLen;
+          let sx1: number, sy1: number, sx2: number, sy2: number;
+          if (isHoriz) {
+            sx1 = wx1 + seg.startFraction * (wx2 - wx1);
+            sy1 = wy1;
+            sx2 = wx1 + seg.endFraction * (wx2 - wx1);
+            sy2 = wy2;
+          } else {
+            sx1 = wx1;
+            sy1 = wy1 + seg.startFraction * (wy2 - wy1);
+            sx2 = wx2;
+            sy2 = wy1 + seg.endFraction * (wy2 - wy1);
+          }
 
-        // Openings
-        // Skip openings on invisible walls
-        const openingEls = isInvisible ? [] : wall.openings.map((op, oi) => {
-          const wallLen = (wall.wallIndex === 1 || wall.wallIndex === 3) ? room.width : room.length;
+          const segColor = isWallSelected ? 'hsl(var(--primary))'
+            : isExternal ? 'hsl(222, 47%, 20%)'
+            : isInvisible ? 'hsl(0, 0%, 75%)'
+            : 'hsl(220, 9%, 46%)';
+
+          return (
+            <line key={`seg-${si}`}
+              x1={sx1} y1={sy1} x2={sx2} y2={sy2}
+              stroke={segColor} strokeWidth={strokeWidth}
+              strokeDasharray={isInvisible ? '4,3' : undefined}
+              onClick={e => handleWallClick(e, room.id, wall.wallIndex)}
+              style={{ cursor: 'pointer' }}
+            />
+          );
+        });
+
+        // Determine overall wall type for opening rendering (use first non-invisible segment, or invisible if all invisible)
+        const hasVisibleSegment = segments.some(s => s.segmentType !== 'invisible');
+
+        // Openings - render on non-invisible segments
+        const openingEls = wall.openings.map((op, oi) => {
+          // Check which segment this opening falls in
+          const opCenter = op.positionX;
+          const opSeg = segments.find(s => opCenter >= s.startFraction - 0.01 && opCenter <= s.endFraction + 0.01);
+          const isOnInvisible = opSeg?.segmentType === 'invisible';
+
+          // Skip openings on invisible segments
+          if (isOnInvisible) return null;
+
+          const wallLen = isHoriz ? room.width : room.length;
           const opWidth = op.width * scale;
-          // positionX is a fraction 0-1 along the wall - center the opening at that point
           const centerPos = op.positionX * wallLen * scale;
           const startPos = centerPos - opWidth / 2;
-          const isHoriz = wall.wallIndex === 1 || wall.wallIndex === 3;
           const isDoor = op.openingType === 'puerta' || op.openingType === 'puerta_externa';
 
           if (isDoor) {
@@ -242,15 +274,14 @@ export function FloorPlanCanvas2D({
               const ox = x + startPos;
               const cy = (wall.wallIndex === 1) ? y : y + h;
               const dir = wall.wallIndex === 1 ? 1 : -1;
+              const segStroke = opSeg ? (opSeg.segmentType === 'externa' ? plan.externalWallThickness * scale : plan.internalWallThickness * scale) : 2;
+              const sw = Math.max(segStroke, 2);
               return (
                 <g key={`op-${oi}`}>
-                  {/* White gap in wall */}
                   <line x1={ox} y1={cy} x2={ox + opWidth} y2={cy}
-                    stroke="hsl(var(--background))" strokeWidth={strokeWidth + 4} />
-                  {/* Door swing arc (dashed) */}
+                    stroke="hsl(var(--background))" strokeWidth={sw + 4} />
                   <path d={`M ${ox} ${cy} A ${opWidth} ${opWidth} 0 0 ${dir > 0 ? 1 : 0} ${ox + opWidth} ${cy + dir * opWidth * 0.4}`}
                     fill="none" stroke="hsl(var(--primary))" strokeWidth={1} strokeDasharray="3,2" />
-                  {/* Door leaf line */}
                   <line x1={ox} y1={cy} x2={ox + opWidth * 0.7} y2={cy + dir * opWidth * 0.3}
                     stroke="hsl(var(--primary))" strokeWidth={0.8} opacity={0.6} />
                 </g>
@@ -259,10 +290,12 @@ export function FloorPlanCanvas2D({
               const oy = y + startPos;
               const cx = (wall.wallIndex === 4) ? x : x + w;
               const dir = wall.wallIndex === 4 ? 1 : -1;
+              const segStroke = opSeg ? (opSeg.segmentType === 'externa' ? plan.externalWallThickness * scale : plan.internalWallThickness * scale) : 2;
+              const sw = Math.max(segStroke, 2);
               return (
                 <g key={`op-${oi}`}>
                   <line x1={cx} y1={oy} x2={cx} y2={oy + opWidth}
-                    stroke="hsl(var(--background))" strokeWidth={strokeWidth + 4} />
+                    stroke="hsl(var(--background))" strokeWidth={sw + 4} />
                   <path d={`M ${cx} ${oy} A ${opWidth} ${opWidth} 0 0 ${dir > 0 ? 0 : 1} ${cx + dir * opWidth * 0.4} ${oy + opWidth}`}
                     fill="none" stroke="hsl(var(--primary))" strokeWidth={1} strokeDasharray="3,2" />
                   <line x1={cx} y1={oy} x2={cx + dir * opWidth * 0.3} y2={oy + opWidth * 0.7}
@@ -271,14 +304,15 @@ export function FloorPlanCanvas2D({
               );
             }
           } else {
-            // Window
             if (isHoriz) {
               const ox = x + startPos;
               const cy = (wall.wallIndex === 1) ? y : y + h;
+              const segStroke = opSeg ? (opSeg.segmentType === 'externa' ? plan.externalWallThickness * scale : plan.internalWallThickness * scale) : 2;
+              const sw = Math.max(segStroke, 2);
               return (
                 <g key={`op-${oi}`}>
                   <line x1={ox} y1={cy} x2={ox + opWidth} y2={cy}
-                    stroke="hsl(var(--background))" strokeWidth={strokeWidth + 4} />
+                    stroke="hsl(var(--background))" strokeWidth={sw + 4} />
                   <line x1={ox} y1={cy - 1.5} x2={ox + opWidth} y2={cy - 1.5}
                     stroke="hsl(217, 91%, 60%)" strokeWidth={1.5} />
                   <line x1={ox} y1={cy + 1.5} x2={ox + opWidth} y2={cy + 1.5}
@@ -288,10 +322,12 @@ export function FloorPlanCanvas2D({
             } else {
               const oy = y + startPos;
               const cx = (wall.wallIndex === 4) ? x : x + w;
+              const segStroke = opSeg ? (opSeg.segmentType === 'externa' ? plan.externalWallThickness * scale : plan.internalWallThickness * scale) : 2;
+              const sw = Math.max(segStroke, 2);
               return (
                 <g key={`op-${oi}`}>
                   <line x1={cx} y1={oy} x2={cx} y2={oy + opWidth}
-                    stroke="hsl(var(--background))" strokeWidth={strokeWidth + 4} />
+                    stroke="hsl(var(--background))" strokeWidth={sw + 4} />
                   <line x1={cx - 1.5} y1={oy} x2={cx - 1.5} y2={oy + opWidth}
                     stroke="hsl(217, 91%, 60%)" strokeWidth={1.5} />
                   <line x1={cx + 1.5} y1={oy} x2={cx + 1.5} y2={oy + opWidth}
@@ -300,18 +336,26 @@ export function FloorPlanCanvas2D({
               );
             }
           }
-        });
+        }).filter(Boolean);
 
-        const isHoriz = wall.wallIndex === 1 || wall.wallIndex === 3;
-        const handleX = isHoriz ? (x1 + x2) / 2 : x1;
-        const handleY = isHoriz ? y1 : (y1 + y2) / 2;
+        const handleX = isHoriz ? (wx1 + wx2) / 2 : wx1;
+        const handleY = isHoriz ? wy1 : (wy1 + wy2) / 2;
 
-        const wallName = externalWallNames.get(wallKey);
+        // For dimensions, use the overall wall classification
+        const overallType = wallClassification.get(wallKey) || wall.wallType;
+        const isExternal = overallType === 'externa';
+        const isInvisible = overallType === 'invisible';
+        const interiorLen = isHoriz ? room.width : room.length;
+        const externalLen = isExternal ? interiorLen + 2 * extT : interiorLen;
 
         return {
-          wallIndex: wall.wallIndex, wallKey, isSelected: isWallSelected, isInvisible,
-          isExternal, x1, y1, x2, y2, strokeWidth, color: wallColor,
-          dashArray: isInvisible ? '4,3' : undefined,
+          wallIndex: wall.wallIndex, wallKey, isSelected: isWallSelected,
+          isInvisible, isExternal,
+          x1: wx1, y1: wy1, x2: wx2, y2: wy2,
+          strokeWidth: 0, // not used anymore for single line
+          color: 'transparent',
+          dashArray: undefined,
+          segmentEls,
           openingEls, handleX, handleY, isHoriz,
           interiorLen, externalLen, wallName,
         };
@@ -327,7 +371,7 @@ export function FloorPlanCanvas2D({
     });
 
     return { viewBox: `${vbX} ${vbY} ${vbW} ${vbH}`, elements };
-  }, [plan, displayRooms, selectedWallKey, sharedWallKeys]);
+  }, [plan, displayRooms, selectedWallKey, sharedWallKeys, wallClassification, wallSegmentsMap, externalWallNames]);
 
   if (rooms.length === 0) {
     return (
@@ -526,7 +570,7 @@ export function FloorPlanCanvas2D({
               {/* Walls */}
               {el.wallData.map(w => (
                 <g key={w.wallKey}>
-                  {/* External wall base thickness band */}
+                  {/* External wall base thickness band - per segment */}
                   {w.isExternal && (
                     <g style={{ pointerEvents: 'none' }}>
                       {w.isHoriz ? (
@@ -551,14 +595,11 @@ export function FloorPlanCanvas2D({
                   {/* Selected glow */}
                   {w.isSelected && (
                     <line x1={w.x1} y1={w.y1} x2={w.x2} y2={w.y2}
-                      stroke="hsl(var(--primary))" strokeWidth={w.strokeWidth + 4}
+                      stroke="hsl(var(--primary))" strokeWidth={8}
                       strokeLinecap="round" opacity={0.3} style={{ pointerEvents: 'none' }} />
                   )}
-                  {/* Visible wall */}
-                  <line x1={w.x1} y1={w.y1} x2={w.x2} y2={w.y2}
-                    stroke={w.color} strokeWidth={w.strokeWidth}
-                    strokeLinecap="round" strokeDasharray={w.dashArray}
-                    style={{ pointerEvents: 'none' }} />
+                  {/* Wall segments (replaces single wall line) */}
+                  {w.segmentEls}
                   {/* Openings */}
                   {w.openingEls}
 
@@ -572,12 +613,10 @@ export function FloorPlanCanvas2D({
                             const midX = (w.x1 + w.x2) / 2;
                             const outside = w.wallIndex === 1 ? w.y1 - extT * scale - 6 : w.y1 + extT * scale + 10;
                             return (
-                              <>
-                                <text x={midX} y={outside}
-                                  textAnchor="middle" fontSize={6.5} fontWeight="500" fill={dimColor}>
-                                  {w.wallName ? `${w.wallName}: ` : ''}{extLen.toFixed(2)}m (ext.)
-                                </text>
-                              </>
+                              <text x={midX} y={outside}
+                                textAnchor="middle" fontSize={6.5} fontWeight="500" fill={dimColor}>
+                                {w.wallName ? `${w.wallName}: ` : ''}{extLen.toFixed(2)}m (ext.)
+                              </text>
                             );
                           })()}
                         </>

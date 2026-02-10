@@ -706,6 +706,7 @@ export type Database = {
         Row: {
           created_at: string | null
           floor_plan_id: string
+          has_ceiling: boolean
           has_floor: boolean
           has_roof: boolean
           height: number | null
@@ -721,6 +722,7 @@ export type Database = {
         Insert: {
           created_at?: string | null
           floor_plan_id: string
+          has_ceiling?: boolean
           has_floor?: boolean
           has_roof?: boolean
           height?: number | null
@@ -736,6 +738,7 @@ export type Database = {
         Update: {
           created_at?: string | null
           floor_plan_id?: string
+          has_ceiling?: boolean
           has_floor?: boolean
           has_roof?: boolean
           height?: number | null

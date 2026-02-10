@@ -181,14 +181,27 @@ function HipRoof({ cx, cz, h, halfW, halfL, rise }: { cx: number; cz: number; h:
   );
 }
 
-function Roof({ plan }: { plan: FloorPlanData }) {
+function Roof({ plan, rooms }: { plan: FloorPlanData; rooms: RoomData[] }) {
   const h = plan.defaultHeight;
   const overhang = plan.roofOverhang;
   const slopeRatio = plan.roofSlopePercent / 100;
-  const w = plan.width + 2 * overhang;
-  const l = plan.length + 2 * overhang;
-  const cx = plan.width / 2;
-  const cz = plan.length / 2;
+
+  // Compute bounding box from actual rooms instead of plan dimensions
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  rooms.forEach(r => {
+    minX = Math.min(minX, r.posX);
+    minY = Math.min(minY, r.posY);
+    maxX = Math.max(maxX, r.posX + r.width);
+    maxY = Math.max(maxY, r.posY + r.length);
+  });
+  if (!isFinite(minX)) { minX = 0; minY = 0; maxX = plan.width; maxY = plan.length; }
+
+  const roomsW = maxX - minX;
+  const roomsL = maxY - minY;
+  const w = roomsW + 2 * overhang;
+  const l = roomsL + 2 * overhang;
+  const cx = minX + roomsW / 2;
+  const cz = minY + roomsL / 2;
   const halfW = w / 2;
   const halfL = l / 2;
   const rise = halfW * slopeRatio;
@@ -250,7 +263,7 @@ function Scene({ plan, rooms }: { plan: FloorPlanData; rooms: RoomData[] }) {
           <RoomWalls room={room} plan={plan} />
         </group>
       ))}
-      <Roof plan={plan} />
+      <Roof plan={plan} rooms={rooms} />
       <OrbitControls
         target={[plan.width / 2, plan.defaultHeight / 2, plan.length / 2]}
         maxPolarAngle={Math.PI / 2.1}

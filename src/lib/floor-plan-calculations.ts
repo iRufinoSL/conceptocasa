@@ -177,9 +177,26 @@ export function calculateRoom(room: RoomData, plan: FloorPlanData): RoomCalculat
   };
 }
 
-export function calculateRoof(plan: FloorPlanData): number {
-  const baseWidth = plan.width + 2 * plan.roofOverhang;
-  const baseLength = plan.length + 2 * plan.roofOverhang;
+export function calculateRoof(plan: FloorPlanData, rooms?: RoomData[]): number {
+  // Use actual rooms bounding box if available, otherwise plan dimensions
+  let planW = plan.width;
+  let planL = plan.length;
+  if (rooms && rooms.length > 0) {
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    rooms.forEach(r => {
+      minX = Math.min(minX, r.posX);
+      minY = Math.min(minY, r.posY);
+      maxX = Math.max(maxX, r.posX + r.width);
+      maxY = Math.max(maxY, r.posY + r.length);
+    });
+    if (isFinite(minX)) {
+      planW = maxX - minX;
+      planL = maxY - minY;
+    }
+  }
+
+  const baseWidth = planW + 2 * plan.roofOverhang;
+  const baseLength = planL + 2 * plan.roofOverhang;
   
   if (plan.roofType === 'plana') {
     return baseWidth * baseLength;
@@ -188,27 +205,26 @@ export function calculateRoof(plan: FloorPlanData): number {
   const slopeRatio = plan.roofSlopePercent / 100;
   
   if (plan.roofType === 'dos_aguas') {
-    // Two slopes along the width, ridge along the length
     const halfWidth = baseWidth / 2;
     const rise = halfWidth * slopeRatio;
     const slopeLength = Math.sqrt(halfWidth * halfWidth + rise * rise);
     return 2 * slopeLength * baseLength;
   }
   
-  // cuatro_aguas (hip roof) - approximate
+  // cuatro_aguas (hip roof)
   const halfWidth = baseWidth / 2;
   const halfLength = baseLength / 2;
   const riseW = halfWidth * slopeRatio;
   const riseL = halfLength * slopeRatio;
   const slopeLengthW = Math.sqrt(halfWidth * halfWidth + riseW * riseW);
   const slopeLengthL = Math.sqrt(halfLength * halfLength + riseL * riseL);
-  // Two triangular ends + two trapezoidal sides (approximate)
   return 2 * (0.5 * baseWidth * slopeLengthW) + 2 * (0.5 * baseLength * slopeLengthL);
 }
 
 export function calculateFloorPlanSummary(plan: FloorPlanData, rooms: RoomData[]): FloorPlanSummary {
+  const sharedWalls = detectSharedWalls(rooms);
   const roomCalcs = rooms.map(r => calculateRoom(r, plan));
-  const roofM2 = calculateRoof(plan);
+  const roofM2 = calculateRoof(plan, rooms);
   
   let totalUsableM2 = 0;
   let totalExternalWallM2 = 0;
@@ -220,21 +236,56 @@ export function calculateFloorPlanSummary(plan: FloorPlanData, rooms: RoomData[]
   let totalDoors = 0;
   let totalWindows = 0;
   
-  roomCalcs.forEach(rc => {
+  // Track which shared wall openings we've already counted (avoid double-counting)
+  const countedSharedOpenings = new Set<string>();
+
+  roomCalcs.forEach((rc, idx) => {
+    const room = rooms[idx];
     totalUsableM2 += rc.floorArea;
     totalFloorM2 += rc.floorArea;
     totalCeilingM2 += rc.ceilingArea;
     totalExternalWallM2 += rc.totalExternalWallArea;
     totalInternalWallM2 += rc.totalInternalWallArea;
-    totalDoors += rc.doorCount;
-    totalWindows += rc.windowCount;
     
+    // Count doors/windows, but deduplicate for shared walls
     rc.walls.forEach(w => {
-      if (w.wallType === 'externa') {
+      const wallKey = `${room.id}::${w.wallIndex}`;
+      const neighborInfo = sharedWalls.get(wallKey);
+
+      if (w.wallType === 'compartida' && neighborInfo) {
+        // Only count openings on this shared wall if we haven't counted the neighbor side
+        const neighborKey = `${neighborInfo.neighborRoomId}::${neighborInfo.neighborWallIndex}`;
+        if (!countedSharedOpenings.has(neighborKey)) {
+          // Count openings for this side only
+          w.openings.forEach(o => {
+            if (o.type === 'puerta' || o.type === 'puerta_externa') {
+              totalDoors += o.count;
+            } else {
+              totalWindows += o.count;
+            }
+          });
+          countedSharedOpenings.add(wallKey);
+        }
+        // Shared wall: count half the base length
+        totalInternalWallBaseM += w.baseLength * 0.5;
+      } else if (w.wallType === 'externa') {
         totalExternalWallBaseM += w.baseLength;
+        w.openings.forEach(o => {
+          if (o.type === 'puerta' || o.type === 'puerta_externa') {
+            totalDoors += o.count;
+          } else {
+            totalWindows += o.count;
+          }
+        });
       } else {
-        const factor = w.wallType === 'compartida' ? 0.5 : 1;
-        totalInternalWallBaseM += w.baseLength * factor;
+        totalInternalWallBaseM += w.baseLength;
+        w.openings.forEach(o => {
+          if (o.type === 'puerta' || o.type === 'puerta_externa') {
+            totalDoors += o.count;
+          } else {
+            totalWindows += o.count;
+          }
+        });
       }
     });
   });

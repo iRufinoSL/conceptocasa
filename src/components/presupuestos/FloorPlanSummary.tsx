@@ -128,7 +128,10 @@ export function FloorPlanSummaryView({ summary }: FloorPlanSummaryProps) {
       </Card>
 
       {/* Per room */}
-      {summary.rooms.map(rc => (
+      {summary.rooms.map((rc, idx) => {
+        const room = summary.rooms[idx];
+        // We need the original room data for hasFloor/hasRoof — pass through roomCalc
+        return (
         <Card key={rc.roomId}>
           <CardHeader className="pb-2">
             <div className="flex items-center gap-2">
@@ -139,23 +142,21 @@ export function FloorPlanSummaryView({ summary }: FloorPlanSummaryProps) {
           </CardHeader>
           <CardContent>
             <div className="space-y-1 text-xs">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Suelo / Techo</span>
-                <span>{fmt(rc.floorArea)} / {fmt(rc.ceilingArea)}</span>
-              </div>
+              <span className="font-semibold text-muted-foreground">8 elementos de la estancia:</span>
               {rc.walls.map(w => (
                 <div key={w.wallIndex} className="flex justify-between">
                   <span className="text-muted-foreground">
-                    Pared {w.wallIndex} ({w.wallType})
+                    {w.wallIndex === 1 ? '1. Pared Superior' : w.wallIndex === 2 ? '2. Pared Derecha' : w.wallIndex === 3 ? '3. Pared Inferior' : '4. Pared Izquierda'}
+                    {' '}({w.wallType})
                     {w.openings.length > 0 && (
                       <span className="ml-1 text-primary">
-                        ({w.openings.map(o => `${o.count}×${o.type}`).join(', ')})
+                        ({w.openings.map(o => `${o.count}×${OPENING_PRESETS[o.type as keyof typeof OPENING_PRESETS]?.label || o.type}`).join(', ')})
                       </span>
                     )}
                   </span>
                   <span>
-                    {fmt(w.netArea)}
-                    {w.openingsArea > 0 && (
+                    {w.wallType === 'invisible' ? <span className="text-muted-foreground italic">0.00 m² (invisible)</span> : fmt(w.netArea)}
+                    {w.openingsArea > 0 && w.wallType !== 'invisible' && (
                       <span className="text-muted-foreground ml-1">
                         (bruto: {fmt(w.grossArea)}, huecos: -{fmt(w.openingsArea)})
                       </span>
@@ -163,10 +164,27 @@ export function FloorPlanSummaryView({ summary }: FloorPlanSummaryProps) {
                   </span>
                 </div>
               ))}
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">5. Suelo</span>
+                <span>{rc.hasFloor !== false ? fmt(rc.floorArea) : <span className="italic text-muted-foreground">Sin suelo</span>}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">6. Techo</span>
+                <span>{fmt(rc.ceilingArea)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">7. Tejado</span>
+                <span>{rc.hasRoof !== false ? <span className="text-primary">Sí</span> : <span className="italic text-muted-foreground">Sin tejado</span>}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">8. Espacio</span>
+                <span>{fmt(rc.floorArea)} (volumen: {fmt(rc.floorArea * (rc.roomHeight || 2.7), 'm³')})</span>
+              </div>
             </div>
           </CardContent>
         </Card>
-      ))}
+        );
+      })}
     </div>
   );
 }

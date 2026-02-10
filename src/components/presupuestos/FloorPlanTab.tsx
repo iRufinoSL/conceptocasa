@@ -479,11 +479,7 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
             </>
           )}
           {viewTab === '3d' && planData && (
-            <FloorPlan3DViewer
-              key={`3d-v${refreshKey}-${JSON.stringify({ r: planData.roofType, o: planData.roofOverhang, s: planData.roofSlopePercent, h: planData.defaultHeight, et: planData.externalWallThickness, it: planData.internalWallThickness, rooms: rooms.map(r => ({ id: r.id, x: r.posX, y: r.posY, w: r.width, l: r.length, h: r.height, walls: r.walls.map(w => ({ i: w.wallIndex, t: w.wallType, ops: w.openings.map(o => ({ t: o.openingType, p: o.positionX, w: o.width, h: o.height })) })) })) })}`}
-              plan={planData}
-              rooms={rooms}
-            />
+            <FloorPlan3DViewer plan={planData} rooms={rooms} />
           )}
           {viewTab === 'resumen' && (
             <FloorPlanSummaryView summary={summary} />

@@ -19,6 +19,8 @@ export interface RoomData {
   width: number;
   length: number;
   height?: number;
+  hasFloor: boolean;
+  hasRoof: boolean;
   walls: WallData[];
 }
 
@@ -58,6 +60,9 @@ export interface RoomCalculation {
   roomName: string;
   floorArea: number; // m2 de suelo útil
   ceilingArea: number; // m2 de techo
+  roomHeight: number; // altura de la estancia
+  hasFloor: boolean;
+  hasRoof: boolean;
   walls: WallCalculation[];
   totalExternalWallArea: number;
   totalInternalWallArea: number;
@@ -177,6 +182,9 @@ export function calculateRoom(room: RoomData, plan: FloorPlanData): RoomCalculat
     roomName: room.name,
     floorArea,
     ceilingArea,
+    roomHeight: room.height || plan.defaultHeight,
+    hasFloor: room.hasFloor !== false,
+    hasRoof: room.hasRoof !== false,
     walls: wallCalcs,
     totalExternalWallArea,
     totalInternalWallArea,

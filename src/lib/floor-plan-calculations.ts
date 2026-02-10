@@ -671,15 +671,16 @@ export function computeWallSegments(rooms: RoomData[]): Map<string, WallSegment[
           });
         }
 
-        // The overlap itself
+        // The overlap itself — show as 'interna' on one side (lower room id wins), 'invisible' on the other
         const startF = (Math.max(cursor, ol.overlapStart) - wallStart) / wallLen;
         const endF = (ol.overlapEnd - wallStart) / wallLen;
+        const isOwner = room.id < ol.neighborRoomId;
         segments.push({
           startFraction: startF,
           endFraction: endF,
           startMeters: Math.max(cursor, ol.overlapStart) - wallStart,
           endMeters: ol.overlapEnd - wallStart,
-          segmentType: 'invisible',
+          segmentType: isOwner ? 'interna' : 'invisible',
           neighborRoomId: ol.neighborRoomId,
           neighborWallIndex: ol.neighborWallIndex,
         });

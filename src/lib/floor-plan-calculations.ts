@@ -336,8 +336,8 @@ export function calculateFloorPlanSummary(plan: FloorPlanData, rooms: RoomData[]
   roomCalcs.forEach((rc, idx) => {
     const room = classifiedRooms[idx];
     totalUsableM2 += rc.floorArea;
-    totalFloorM2 += rc.floorArea;
-    totalCeilingM2 += rc.ceilingArea;
+    if (rc.hasFloor) totalFloorM2 += rc.floorArea;
+    if (rc.hasCeiling) totalCeilingM2 += rc.ceilingArea;
     totalExternalWallM2 += rc.totalExternalWallArea;
     totalInternalWallM2 += rc.totalInternalWallArea;
     

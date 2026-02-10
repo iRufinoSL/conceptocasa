@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { RefreshCw, Save, Layout, Box, BarChart3, Loader2, AlertTriangle, Trash2, DoorOpen, ImageIcon, Undo2, RotateCcw } from 'lucide-react';
+import { RefreshCw, Save, Layout, Box, BarChart3, Loader2, AlertTriangle, Trash2, DoorOpen, ImageIcon, Undo2, RotateCcw, RectangleVertical } from 'lucide-react';
 import { toast } from 'sonner';
 import { useFloorPlan } from '@/hooks/useFloorPlan';
 import { calculateFloorPlanSummary, detectSharedWalls, autoClassifyWalls, WALL_LABELS, OPENING_PRESETS, generateExternalWallNames } from '@/lib/floor-plan-calculations';
@@ -15,6 +15,7 @@ import { FloorPlanRoomEditor } from './FloorPlanRoomEditor';
 import { FloorPlanSummaryView } from './FloorPlanSummary';
 import { FloorPlan3DViewer } from './FloorPlan3DViewer';
 import { FloorPlanRenderView } from './FloorPlanRenderView';
+import { WallElevationView } from './WallElevationView';
 import type { FloorPlanData } from '@/lib/floor-plan-calculations';
 
 interface FloorPlanTabProps {
@@ -271,6 +272,9 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
             <TabsTrigger value="plano" className="text-xs h-7 px-3">
               <Layout className="h-3.5 w-3.5 mr-1" /> Plano 2D
             </TabsTrigger>
+            <TabsTrigger value="alzados" className="text-xs h-7 px-3">
+              <RectangleVertical className="h-3.5 w-3.5 mr-1" /> Alzados
+            </TabsTrigger>
             <TabsTrigger value="3d" className="text-xs h-7 px-3">
               <Box className="h-3.5 w-3.5 mr-1" /> Vista 3D
             </TabsTrigger>
@@ -398,8 +402,13 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
                         </div>
                       </div>
                       {isInvisible ? (
-                        <div className="text-xs text-muted-foreground italic bg-muted/30 p-2 rounded">
-                          Las paredes invisibles no pueden tener objetos. Los objetos se insertan en la pared visible correspondiente.
+                      <div className="text-xs text-muted-foreground bg-muted/30 p-2 rounded space-y-1">
+                          <p>Pared invisible — los objetos se gestionan desde la pared visible vecina.</p>
+                          {neighborRoom && (
+                            <p className="font-medium">
+                              Usa la pestaña <button className="text-primary underline" onClick={() => setViewTab('alzados')}>Alzados</button> para ver y arrastrar los objetos de esta pared compartida con <strong>{neighborRoom.name}</strong>.
+                            </p>
+                          )}
                         </div>
                       ) : (
                       <div className="space-y-2">
@@ -477,6 +486,16 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
                 );
               })()}
             </>
+          )}
+          {viewTab === 'alzados' && planData && (
+            <WallElevationView
+              plan={planData}
+              rooms={rooms}
+              onUpdateOpening={updateOpening}
+              onAddOpening={addOpening}
+              onDeleteOpening={deleteOpening}
+              saving={saving}
+            />
           )}
           {viewTab === '3d' && planData && (
             <FloorPlan3DViewer plan={planData} rooms={rooms} />

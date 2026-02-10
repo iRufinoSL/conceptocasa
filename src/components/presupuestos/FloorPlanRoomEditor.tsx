@@ -207,6 +207,13 @@ export function FloorPlanRoomEditor({
                   />
                 </div>
                 <div className="flex items-center justify-between bg-muted/30 p-2 rounded">
+                  <span className="text-xs">Techo</span>
+                  <Switch
+                    checked={selectedRoom.hasCeiling !== false}
+                    onCheckedChange={v => onUpdateRoom(selectedRoom.id, { hasCeiling: v })}
+                  />
+                </div>
+                <div className="flex items-center justify-between bg-muted/30 p-2 rounded">
                   <span className="text-xs">Tejado</span>
                   <Switch
                     checked={selectedRoom.hasRoof !== false}
@@ -215,7 +222,7 @@ export function FloorPlanRoomEditor({
                 </div>
               </div>
               <p className="text-[9px] text-muted-foreground">
-                Techo siempre presente. Tejado = cubierta sobre el techo.
+                Tejado = cubierta sobre el techo.
               </p>
             </div>
 

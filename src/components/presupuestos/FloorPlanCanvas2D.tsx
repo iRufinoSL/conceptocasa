@@ -96,9 +96,9 @@ export function FloorPlanCanvas2D({
     onSelectWall?.(null);
   }, [onMoveRoom, svgPoint, onSelectRoom, onSelectWall, wallDrag]);
 
-  const handleWallClick = useCallback((e: React.MouseEvent, roomId: string, wallIndex: number) => {
+  const handleWallClick = useCallback((e: React.MouseEvent, roomId: string, wallIndex: number, segIndex?: number) => {
     e.stopPropagation();
-    const key = `${roomId}::${wallIndex}`;
+    const key = segIndex !== undefined ? `${roomId}::${wallIndex}::${segIndex}` : `${roomId}::${wallIndex}`;
     onSelectWall?.(selectedWallKey === key ? null : key);
     onSelectRoom?.(roomId);
   }, [onSelectWall, onSelectRoom, selectedWallKey]);
@@ -201,7 +201,7 @@ export function FloorPlanCanvas2D({
       const wallData = room.walls.map(wall => {
         const wallKey = `${room.id}::${wall.wallIndex}`;
         const segments = wallSegmentsMap.get(wallKey) || [];
-        const isWallSelected = selectedWallKey === wallKey;
+        const isWallSelected = selectedWallKey === wallKey || selectedWallKey?.startsWith(wallKey + '::');
         const wallName = externalWallNames.get(wallKey);
         const isHoriz = wall.wallIndex === 1 || wall.wallIndex === 3;
 
@@ -216,10 +216,13 @@ export function FloorPlanCanvas2D({
 
         // Render each segment
         const segmentEls = segments.map((seg, si) => {
+          const segKey = `${wallKey}::${si}`;
+          const isSegSelected = selectedWallKey === segKey;
           const isInvisible = seg.segmentType === 'invisible';
           const isExternal = seg.segmentType === 'externa';
+          const isInternal = seg.segmentType === 'interna';
           const baseThickness = isExternal ? plan.externalWallThickness * scale : plan.internalWallThickness * scale;
-          const strokeWidth = Math.max(baseThickness, isExternal ? 4 : isInvisible ? 1.5 : 2);
+          const strokeWidth = Math.max(baseThickness, isExternal ? 4 : isInvisible ? 1.5 : 3);
 
           let sx1: number, sy1: number, sx2: number, sy2: number;
           if (isHoriz) {
@@ -234,17 +237,17 @@ export function FloorPlanCanvas2D({
             sy2 = wy1 + seg.endFraction * (wy2 - wy1);
           }
 
-          const segColor = isWallSelected ? 'hsl(var(--primary))'
+          const segColor = isSegSelected ? 'hsl(var(--primary))'
             : isExternal ? 'hsl(222, 47%, 20%)'
             : isInvisible ? 'hsl(0, 0%, 75%)'
-            : 'hsl(220, 9%, 46%)';
+            : 'hsl(25, 80%, 50%)';
 
           return (
             <line key={`seg-${si}`}
               x1={sx1} y1={sy1} x2={sx2} y2={sy2}
               stroke={segColor} strokeWidth={strokeWidth}
               strokeDasharray={isInvisible ? '4,3' : undefined}
-              onClick={e => handleWallClick(e, room.id, wall.wallIndex)}
+              onClick={e => handleWallClick(e, room.id, wall.wallIndex, si)}
               style={{ cursor: 'pointer' }}
             />
           );

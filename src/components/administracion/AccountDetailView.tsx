@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { ArrowLeft, Save, TrendingDown, TrendingUp, Scale } from 'lucide-react';
 import { toast } from 'sonner';
@@ -83,29 +84,28 @@ export function AccountDetailView({ account, onBack, onNavigateToEntry, onAccoun
     }
   };
 
-  const { debitLines, creditLines, totalDebit, totalCredit, balance } = useMemo(() => {
-    const debit: EntryLine[] = [];
-    const credit: EntryLine[] = [];
+  const { totalDebit, totalCredit, balance, linesWithBalance } = useMemo(() => {
     let sumDebit = 0;
     let sumCredit = 0;
 
-    lines.forEach(line => {
-      if (Number(line.debit_amount) > 0) {
-        debit.push(line);
-        sumDebit += Number(line.debit_amount);
-      }
-      if (Number(line.credit_amount) > 0) {
-        credit.push(line);
-        sumCredit += Number(line.credit_amount);
-      }
+    // Sort ascending by date then code for running balance
+    const sorted = [...lines].sort((a, b) => {
+      const dateCompare = a.line_date.localeCompare(b.line_date);
+      if (dateCompare !== 0) return dateCompare;
+      return a.code.localeCompare(b.code);
+    });
+
+    const withBalance = sorted.map(line => {
+      sumDebit += Number(line.debit_amount) || 0;
+      sumCredit += Number(line.credit_amount) || 0;
+      return { ...line, runningBalance: sumDebit - sumCredit };
     });
 
     return {
-      debitLines: debit,
-      creditLines: credit,
       totalDebit: sumDebit,
       totalCredit: sumCredit,
-      balance: sumDebit - sumCredit
+      balance: sumDebit - sumCredit,
+      linesWithBalance: withBalance.reverse() // show newest first
     };
   }, [lines]);
 
@@ -270,144 +270,59 @@ export function AccountDetailView({ account, onBack, onNavigateToEntry, onAccoun
         </CardContent>
       </Card>
 
-      {/* Two-column layout for Debit and Credit entries */}
-      <div className="grid gap-6 lg:grid-cols-2">
-        {/* Debit Column (Debe) */}
-        <Card>
-          <CardHeader className="bg-emerald-500/10 border-b border-emerald-500/20">
-            <CardTitle className="flex items-center justify-between text-emerald-700 dark:text-emerald-400">
-              <span className="flex items-center gap-2">
-                <TrendingUp className="h-5 w-5" />
-                Apuntes al Debe
-              </span>
-              <Badge variant="outline" className="text-emerald-700 dark:text-emerald-400 border-emerald-500/30">
-                {debitLines.length} apuntes
-              </Badge>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            {debitLines.length === 0 ? (
-              <div className="p-8 text-center text-muted-foreground">
-                No hay apuntes al debe
-              </div>
-            ) : (
-              <div className="divide-y">
-                {debitLines.map((line) => (
-                  <div
-                    key={line.id}
-                    className="p-4 hover:bg-muted/50 transition-colors cursor-pointer"
-                    onClick={() => handleLineClick(line)}
-                  >
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono text-sm font-medium text-primary hover:underline">
-                            #{line.code}
-                          </span>
-                          <span className="text-xs text-muted-foreground">
-                            (Asiento #{line.entry?.code})
-                          </span>
-                        </div>
-                        <p className="text-sm text-muted-foreground mt-1">
-                          {formatDate(line.line_date)}
-                        </p>
-                        {line.description && (
-                          <p className="text-sm text-muted-foreground truncate mt-1">
-                            {line.description}
-                          </p>
-                        )}
-                      </div>
-                      <div className="text-right shrink-0">
-                        <p className="font-mono font-semibold text-emerald-600">
-                          {formatCurrency(Number(line.debit_amount))}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
+      {/* Unified movements table */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Movimientos</CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          {linesWithBalance.length === 0 ? (
+            <div className="p-8 text-center text-muted-foreground">
+              No hay movimientos en esta cuenta
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Fecha</TableHead>
+                  <TableHead>Asiento</TableHead>
+                  <TableHead>Descripción</TableHead>
+                  <TableHead className="text-right">Debe (€)</TableHead>
+                  <TableHead className="text-right">Haber (€)</TableHead>
+                  <TableHead className="text-right">Saldo (€)</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {linesWithBalance.map((line) => (
+                  <TableRow key={line.id}>
+                    <TableCell className="text-sm">{formatDate(line.line_date)}</TableCell>
+                    <TableCell>
+                      <button
+                        className="font-mono text-sm text-primary hover:underline cursor-pointer"
+                        onClick={() => line.entry?.code && onNavigateToEntry(line.entry.code)}
+                      >
+                        {line.entry?.code || '-'}
+                      </button>
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground max-w-[300px] truncate">
+                      {line.description || line.entry?.description || '-'}
+                    </TableCell>
+                    <TableCell className="text-right font-mono text-emerald-600">
+                      {Number(line.debit_amount) > 0 ? formatCurrency(Number(line.debit_amount)) : ''}
+                    </TableCell>
+                    <TableCell className="text-right font-mono text-rose-600">
+                      {Number(line.credit_amount) > 0 ? formatCurrency(Number(line.credit_amount)) : ''}
+                    </TableCell>
+                    <TableCell className={`text-right font-mono font-semibold ${line.runningBalance < 0 ? 'text-destructive' : ''}`}>
+                      {formatCurrency(line.runningBalance)}
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </div>
-            )}
-            {debitLines.length > 0 && (
-              <div className="p-4 bg-emerald-500/5 border-t border-emerald-500/20">
-                <div className="flex items-center justify-between">
-                  <span className="font-medium text-emerald-700 dark:text-emerald-400">Total Debe</span>
-                  <span className="font-mono font-bold text-emerald-600">
-                    {formatCurrency(totalDebit)}
-                  </span>
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Credit Column (Haber) */}
-        <Card>
-          <CardHeader className="bg-rose-500/10 border-b border-rose-500/20">
-            <CardTitle className="flex items-center justify-between text-rose-700 dark:text-rose-400">
-              <span className="flex items-center gap-2">
-                <TrendingDown className="h-5 w-5" />
-                Apuntes al Haber
-              </span>
-              <Badge variant="outline" className="text-rose-700 dark:text-rose-400 border-rose-500/30">
-                {creditLines.length} apuntes
-              </Badge>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            {creditLines.length === 0 ? (
-              <div className="p-8 text-center text-muted-foreground">
-                No hay apuntes al haber
-              </div>
-            ) : (
-              <div className="divide-y">
-                {creditLines.map((line) => (
-                  <div
-                    key={line.id}
-                    className="p-4 hover:bg-muted/50 transition-colors cursor-pointer"
-                    onClick={() => handleLineClick(line)}
-                  >
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono text-sm font-medium text-primary hover:underline">
-                            #{line.code}
-                          </span>
-                          <span className="text-xs text-muted-foreground">
-                            (Asiento #{line.entry?.code})
-                          </span>
-                        </div>
-                        <p className="text-sm text-muted-foreground mt-1">
-                          {formatDate(line.line_date)}
-                        </p>
-                        {line.description && (
-                          <p className="text-sm text-muted-foreground truncate mt-1">
-                            {line.description}
-                          </p>
-                        )}
-                      </div>
-                      <div className="text-right shrink-0">
-                        <p className="font-mono font-semibold text-rose-600">
-                          {formatCurrency(Number(line.credit_amount))}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-            {creditLines.length > 0 && (
-              <div className="p-4 bg-rose-500/5 border-t border-rose-500/20">
-                <div className="flex items-center justify-between">
-                  <span className="font-medium text-rose-700 dark:text-rose-400">Total Haber</span>
-                  <span className="font-mono font-bold text-rose-600">
-                    {formatCurrency(totalCredit)}
-                  </span>
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

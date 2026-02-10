@@ -1,11 +1,11 @@
 import { useState, useRef, useCallback, useMemo } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ChevronLeft, ChevronRight, Plus, Trash2, DoorOpen, Maximize2 } from 'lucide-react';
-import { OPENING_PRESETS, WALL_LABELS, detectSharedWalls, autoClassifyWalls, generateExternalWallNames } from '@/lib/floor-plan-calculations';
-import type { RoomData, WallData, OpeningData, FloorPlanData } from '@/lib/floor-plan-calculations';
+import { ChevronLeft, ChevronRight, Plus, Trash2, DoorOpen } from 'lucide-react';
+import { OPENING_PRESETS, WALL_LABELS, computeWallSegments, generateExternalWallNames, autoClassifyWalls } from '@/lib/floor-plan-calculations';
+import type { RoomData, WallData, OpeningData, FloorPlanData, WallSegment } from '@/lib/floor-plan-calculations';
 
 interface WallElevationViewProps {
   plan: FloorPlanData;
@@ -16,38 +16,36 @@ interface WallElevationViewProps {
   saving: boolean;
 }
 
-interface ElevationWallInfo {
+interface ElevationSegmentInfo {
   room: RoomData;
   wall: WallData;
-  wallLength: number;
+  segment: WallSegment;
+  segmentIndex: number;
+  totalSegments: number;
+  segmentLength: number; // meters
   wallHeight: number;
-  wallType: 'externa' | 'interna' | 'invisible';
   wallName?: string;
-  // For invisible walls: the neighbor wall whose openings to show
+  // Openings that fall within this segment
+  ownOpenings: OpeningData[];
+  // For invisible segments: neighbor openings
   neighborRoom?: RoomData;
   neighborWall?: WallData;
-  neighborWallLength?: number;
+  neighborOpenings: OpeningData[];
 }
 
-const SCALE = 120; // pixels per meter
+const SCALE = 120;
 const PADDING = 40;
 const DIM_OFFSET = 25;
 const MIN_CANVAS_HEIGHT = 200;
-
-function getWallLength(room: RoomData, wallIndex: number): number {
-  return (wallIndex === 1 || wallIndex === 3) ? room.width : room.length;
-}
 
 function getWallHeight(wall: WallData, room: RoomData, plan: FloorPlanData): number {
   return wall.height || room.height || plan.defaultHeight;
 }
 
-// Get Y position from floor for the opening (doors at 0, windows typically at ~0.9m)
 function getOpeningBaseY(op: OpeningData): number {
   if (op.openingType === 'puerta' || op.openingType === 'puerta_externa' || op.openingType === 'ventana_balconera') {
     return 0;
   }
-  // Windows: position from floor = wallHeight - windowHeight - some offset (standard ~0.9m from floor)
   return 0.9;
 }
 
@@ -62,52 +60,82 @@ export function WallElevationView({
     startPosX: number;
     wallLength: number;
     opWidth: number;
-    isNeighbor: boolean;
   } | null>(null);
 
-  const sharedWallMap = useMemo(() => detectSharedWalls(rooms), [rooms]);
+  const wallSegmentsMap = useMemo(() => computeWallSegments(rooms), [rooms]);
   const wallClassification = useMemo(() => autoClassifyWalls(rooms), [rooms]);
   const externalWallNames = useMemo(() => generateExternalWallNames(rooms, wallClassification), [rooms, wallClassification]);
 
-  // Build flat list of all walls with their info
-  const allWalls: ElevationWallInfo[] = useMemo(() => {
-    const result: ElevationWallInfo[] = [];
+  // Build flat list of wall segments for navigation
+  const allSegments: ElevationSegmentInfo[] = useMemo(() => {
+    const result: ElevationSegmentInfo[] = [];
     rooms.forEach(room => {
       room.walls.forEach(wall => {
         const key = `${room.id}::${wall.wallIndex}`;
-        const autoType = wallClassification.get(key) || wall.wallType;
-        const wallLength = getWallLength(room, wall.wallIndex);
+        const segments = wallSegmentsMap.get(key) || [];
         const wallHeight = getWallHeight(wall, room, plan);
         const wallName = externalWallNames.get(key);
+        const isHoriz = wall.wallIndex === 1 || wall.wallIndex === 3;
+        const fullWallLen = isHoriz ? room.width : room.length;
 
-        let neighborRoom: RoomData | undefined;
-        let neighborWall: WallData | undefined;
-        let neighborWallLength: number | undefined;
+        segments.forEach((seg, si) => {
+          const segLen = seg.endMeters - seg.startMeters;
 
-        if (autoType === 'invisible') {
-          const neighborInfo = sharedWallMap.get(key);
-          if (neighborInfo) {
-            neighborRoom = rooms.find(r => r.id === neighborInfo.neighborRoomId);
-            if (neighborRoom) {
-              neighborWall = neighborRoom.walls.find(w => w.wallIndex === neighborInfo.neighborWallIndex);
-              neighborWallLength = getWallLength(neighborRoom, neighborInfo.neighborWallIndex);
+          // Find openings that fall within this segment
+          const ownOpenings = wall.openings.filter(op => {
+            const opCenter = op.positionX; // 0-1 fraction of full wall
+            return opCenter >= seg.startFraction - 0.01 && opCenter <= seg.endFraction + 0.01;
+          });
+
+          // For invisible segments: find neighbor openings
+          let neighborRoom: RoomData | undefined;
+          let neighborWall: WallData | undefined;
+          let neighborOpenings: OpeningData[] = [];
+
+          if (seg.segmentType === 'invisible' && seg.neighborRoomId) {
+            neighborRoom = rooms.find(r => r.id === seg.neighborRoomId);
+            if (neighborRoom && seg.neighborWallIndex !== undefined) {
+              neighborWall = neighborRoom.walls.find(w => w.wallIndex === seg.neighborWallIndex);
+              if (neighborWall) {
+                const neighborIsHoriz = seg.neighborWallIndex === 1 || seg.neighborWallIndex === 3;
+                const neighborFullLen = neighborIsHoriz ? neighborRoom.width : neighborRoom.length;
+
+                // Find the absolute range of this segment
+                const absStart = isHoriz
+                  ? room.posX + seg.startMeters
+                  : room.posY + seg.startMeters;
+                const absEnd = isHoriz
+                  ? room.posX + seg.endMeters
+                  : room.posY + seg.endMeters;
+
+                // Find neighbor openings whose absolute position falls within our segment range
+                neighborOpenings = neighborWall.openings.filter(op => {
+                  const opAbsCenter = neighborIsHoriz
+                    ? neighborRoom!.posX + op.positionX * neighborFullLen
+                    : neighborRoom!.posY + op.positionX * neighborFullLen;
+                  return opAbsCenter >= absStart - 0.05 && opAbsCenter <= absEnd + 0.05;
+                });
+              }
             }
           }
-        }
 
-        result.push({
-          room, wall, wallLength, wallHeight,
-          wallType: autoType as 'externa' | 'interna' | 'invisible',
-          wallName,
-          neighborRoom, neighborWall, neighborWallLength,
+          result.push({
+            room, wall, segment: seg, segmentIndex: si,
+            totalSegments: segments.length,
+            segmentLength: segLen,
+            wallHeight, wallName,
+            ownOpenings,
+            neighborRoom, neighborWall,
+            neighborOpenings,
+          });
         });
       });
     });
     return result;
-  }, [rooms, plan, wallClassification, externalWallNames, sharedWallMap]);
+  }, [rooms, plan, wallSegmentsMap, externalWallNames, wallClassification]);
 
-  const current = allWalls[currentIndex];
-  if (!current || allWalls.length === 0) {
+  const current = allSegments[currentIndex];
+  if (!current || allSegments.length === 0) {
     return (
       <div className="flex items-center justify-center h-48 bg-muted/30 rounded-lg border border-dashed">
         <p className="text-sm text-muted-foreground">No hay paredes para mostrar alzados</p>
@@ -115,28 +143,43 @@ export function WallElevationView({
     );
   }
 
-  const { room, wall, wallLength, wallHeight, wallType, wallName, neighborRoom, neighborWall, neighborWallLength } = current;
+  const { room, wall, segment, segmentIndex, totalSegments, segmentLength, wallHeight, wallName, ownOpenings, neighborRoom, neighborWall, neighborOpenings } = current;
 
-  // The openings to display: own openings + neighbor openings for invisible walls
-  const displayOpenings: Array<OpeningData & { isNeighbor: boolean; effectiveWallLength: number }> = [];
+  // Display openings: own openings on visible segments, neighbor openings on invisible segments
+  const displayOpenings: Array<OpeningData & { isNeighbor: boolean; segStartMeters: number; segLengthMeters: number; fullWallLen: number }> = [];
 
-  if (wallType === 'invisible' && neighborWall) {
-    // Show neighbor wall's openings
-    neighborWall.openings.forEach(op => {
-      displayOpenings.push({ ...op, isNeighbor: true, effectiveWallLength: neighborWallLength || wallLength });
+  const isHoriz = wall.wallIndex === 1 || wall.wallIndex === 3;
+  const fullWallLen = isHoriz ? room.width : room.length;
+
+  if (segment.segmentType === 'invisible') {
+    neighborOpenings.forEach(op => {
+      const neighborIsHoriz = segment.neighborWallIndex === 1 || segment.neighborWallIndex === 3;
+      const neighborFullLen = neighborRoom ? (neighborIsHoriz ? neighborRoom.width : neighborRoom.length) : segmentLength;
+      displayOpenings.push({
+        ...op,
+        isNeighbor: true,
+        segStartMeters: segment.startMeters,
+        segLengthMeters: segmentLength,
+        fullWallLen: neighborFullLen,
+      });
     });
   } else {
-    wall.openings.forEach(op => {
-      displayOpenings.push({ ...op, isNeighbor: false, effectiveWallLength: wallLength });
+    ownOpenings.forEach(op => {
+      displayOpenings.push({
+        ...op,
+        isNeighbor: false,
+        segStartMeters: segment.startMeters,
+        segLengthMeters: segmentLength,
+        fullWallLen,
+      });
     });
   }
 
-  const canvasWidth = wallLength * SCALE + PADDING * 2 + DIM_OFFSET;
+  const canvasWidth = segmentLength * SCALE + PADDING * 2 + DIM_OFFSET;
   const canvasHeight = Math.max(MIN_CANVAS_HEIGHT, wallHeight * SCALE + PADDING * 2 + DIM_OFFSET);
-
   const wallX = PADDING + DIM_OFFSET;
   const wallY = PADDING;
-  const wallW = wallLength * SCALE;
+  const wallW = segmentLength * SCALE;
   const wallH = wallHeight * SCALE;
 
   const svgPoint = (clientX: number): number => {
@@ -146,16 +189,16 @@ export function WallElevationView({
     return clientX - rect.left;
   };
 
-  const handleOpeningMouseDown = (e: React.MouseEvent, op: OpeningData & { isNeighbor: boolean; effectiveWallLength: number }) => {
+  const handleOpeningMouseDown = (e: React.MouseEvent, op: typeof displayOpenings[0]) => {
     e.preventDefault();
     e.stopPropagation();
+    const effLen = op.isNeighbor ? op.fullWallLen : fullWallLen;
     setDragState({
       openingId: op.id,
       startX: svgPoint(e.clientX),
       startPosX: op.positionX,
-      wallLength: op.effectiveWallLength,
+      wallLength: effLen,
       opWidth: op.width,
-      isNeighbor: op.isNeighbor,
     });
   };
 
@@ -166,11 +209,8 @@ export function WallElevationView({
     const deltaMeters = deltaPixels / SCALE;
     const deltaFraction = deltaMeters / dragState.wallLength;
     let newPosX = dragState.startPosX + deltaFraction;
-
-    // Clamp so opening stays within wall
     const halfWidthFraction = (dragState.opWidth / 2) / dragState.wallLength;
     newPosX = Math.max(halfWidthFraction, Math.min(1 - halfWidthFraction, newPosX));
-
     onUpdateOpening(dragState.openingId, { positionX: newPosX });
   };
 
@@ -178,35 +218,44 @@ export function WallElevationView({
     setDragState(null);
   };
 
-  const prevWall = () => setCurrentIndex(i => (i - 1 + allWalls.length) % allWalls.length);
-  const nextWall = () => setCurrentIndex(i => (i + 1) % allWalls.length);
+  const prevWall = () => setCurrentIndex(i => (i - 1 + allSegments.length) % allSegments.length);
+  const nextWall = () => setCurrentIndex(i => (i + 1) % allSegments.length);
 
-  const typeLabel = wallType === 'externa' ? 'Externa' : wallType === 'invisible' ? 'Invisible' : 'Interna';
-  const typeBadgeVariant = wallType === 'externa' ? 'default' as const : 'outline' as const;
+  const typeLabel = segment.segmentType === 'externa' ? 'Externa' : segment.segmentType === 'invisible' ? 'Invisible' : 'Interna';
+  const typeBadgeVariant = segment.segmentType === 'externa' ? 'default' as const : 'outline' as const;
 
   // Determine which wall to add openings to
-  const targetWallId = (wallType === 'invisible' && neighborWall) ? neighborWall.id : wall.id;
-  const canAddOpenings = !targetWallId.startsWith('temp-');
+  const targetWallId = (segment.segmentType === 'invisible' && neighborWall) ? neighborWall.id : wall.id;
+  const canAddOpenings = !targetWallId.startsWith('temp-') && segment.segmentType !== 'invisible';
 
   return (
     <div className="space-y-3">
       {/* Navigation */}
       <div className="flex items-center justify-between">
-        <Button variant="outline" size="sm" onClick={prevWall} disabled={allWalls.length <= 1}>
+        <Button variant="outline" size="sm" onClick={prevWall} disabled={allSegments.length <= 1}>
           <ChevronLeft className="h-4 w-4" />
         </Button>
-        <div className="flex items-center gap-2 text-sm">
-          <span className="font-medium">{room.name} — {WALL_LABELS[wall.wallIndex]}</span>
-          <Badge variant={typeBadgeVariant} className="text-[10px]">{typeLabel}</Badge>
-          {wallName && <Badge variant="secondary" className="text-[10px] font-bold">{wallName}</Badge>}
-          {wallType === 'invisible' && neighborRoom && (
-            <Badge variant="outline" className="text-[10px]">compartida con {neighborRoom.name}</Badge>
+        <div className="flex flex-col items-center gap-1">
+          <div className="flex items-center gap-2 text-sm">
+            <span className="font-medium">{room.name} — {WALL_LABELS[wall.wallIndex]}</span>
+            {totalSegments > 1 && (
+              <Badge variant="secondary" className="text-[10px]">
+                Segmento {segmentIndex + 1}/{totalSegments}
+              </Badge>
+            )}
+            <Badge variant={typeBadgeVariant} className="text-[10px]">{typeLabel}</Badge>
+            {wallName && <Badge variant="secondary" className="text-[10px] font-bold">{wallName}</Badge>}
+          </div>
+          {segment.segmentType === 'invisible' && neighborRoom && (
+            <span className="text-[10px] text-muted-foreground">
+              Compartida con <strong>{neighborRoom.name}</strong> — los objetos son de la pared vecina
+            </span>
           )}
           <span className="text-xs text-muted-foreground">
-            ({currentIndex + 1}/{allWalls.length})
+            ({currentIndex + 1}/{allSegments.length})
           </span>
         </div>
-        <Button variant="outline" size="sm" onClick={nextWall} disabled={allWalls.length <= 1}>
+        <Button variant="outline" size="sm" onClick={nextWall} disabled={allSegments.length <= 1}>
           <ChevronRight className="h-4 w-4" />
         </Button>
       </div>
@@ -230,7 +279,6 @@ export function WallElevationView({
               x2={wallX + wallW + 10} y2={wallY + wallH}
               stroke="hsl(25, 60%, 40%)" strokeWidth={2}
             />
-            {/* Ground hatch */}
             {Array.from({ length: Math.ceil((wallW + 20) / 8) }, (_, i) => (
               <line key={`gh-${i}`}
                 x1={wallX - 10 + i * 8} y1={wallY + wallH + 2}
@@ -242,10 +290,10 @@ export function WallElevationView({
             {/* Wall rectangle */}
             <rect
               x={wallX} y={wallY} width={wallW} height={wallH}
-              fill={wallType === 'invisible' ? 'hsl(0, 0%, 95%)' : wallType === 'externa' ? 'hsl(30, 30%, 92%)' : 'hsl(220, 14%, 95%)'}
-              stroke={wallType === 'invisible' ? 'hsl(0, 0%, 80%)' : 'hsl(220, 9%, 46%)'}
-              strokeWidth={wallType === 'externa' ? 2 : 1}
-              strokeDasharray={wallType === 'invisible' ? '6,3' : undefined}
+              fill={segment.segmentType === 'invisible' ? 'hsl(0, 0%, 95%)' : segment.segmentType === 'externa' ? 'hsl(30, 30%, 92%)' : 'hsl(220, 14%, 95%)'}
+              stroke={segment.segmentType === 'invisible' ? 'hsl(0, 0%, 80%)' : 'hsl(220, 9%, 46%)'}
+              strokeWidth={segment.segmentType === 'externa' ? 2 : 1}
+              strokeDasharray={segment.segmentType === 'invisible' ? '6,3' : undefined}
             />
 
             {/* Dimension: width (bottom) */}
@@ -259,7 +307,7 @@ export function WallElevationView({
               x={wallX + wallW / 2} y={wallY + wallH + 28}
               textAnchor="middle" fontSize={10} fill="hsl(25, 95%, 45%)" fontWeight={600}
             >
-              {wallLength.toFixed(2)}m
+              {segmentLength.toFixed(2)}m
             </text>
 
             {/* Dimension: height (left) */}
@@ -279,10 +327,29 @@ export function WallElevationView({
 
             {/* Openings */}
             {displayOpenings.map((op) => {
+              // Calculate position within this segment
+              let opCenterInSegment: number;
+              if (op.isNeighbor) {
+                // Neighbor opening: map from neighbor wall coords to segment coords
+                const neighborIsHoriz = segment.neighborWallIndex === 1 || segment.neighborWallIndex === 3;
+                const neighborFullLen = neighborRoom ? (neighborIsHoriz ? neighborRoom.width : neighborRoom.length) : segmentLength;
+                const opAbsCenter = neighborRoom
+                  ? (neighborIsHoriz ? neighborRoom.posX : neighborRoom.posY) + op.positionX * neighborFullLen
+                  : op.positionX * segmentLength;
+                const segAbsStart = isHoriz ? room.posX + segment.startMeters : room.posY + segment.startMeters;
+                opCenterInSegment = (opAbsCenter - segAbsStart) / segmentLength;
+              } else {
+                // Own opening: map from full wall fraction to segment fraction
+                const opMeters = op.positionX * fullWallLen;
+                opCenterInSegment = (opMeters - segment.startMeters) / segmentLength;
+              }
+
+              opCenterInSegment = Math.max(0.05, Math.min(0.95, opCenterInSegment));
+
               const opWidthPx = op.width * SCALE;
               const opHeightPx = op.height * SCALE;
               const baseY = getOpeningBaseY(op);
-              const opX = wallX + op.positionX * wallW - opWidthPx / 2;
+              const opX = wallX + opCenterInSegment * wallW - opWidthPx / 2;
               const opY = wallY + wallH - opHeightPx - baseY * SCALE;
               const isDoor = op.openingType === 'puerta' || op.openingType === 'puerta_externa' || op.openingType === 'ventana_balconera';
 
@@ -291,7 +358,6 @@ export function WallElevationView({
                   style={{ cursor: 'grab' }}
                   onMouseDown={e => handleOpeningMouseDown(e, op)}
                 >
-                  {/* Opening rectangle */}
                   <rect
                     x={opX} y={opY} width={opWidthPx} height={opHeightPx}
                     fill={op.isNeighbor ? 'hsl(280, 60%, 95%)' : isDoor ? 'hsl(30, 80%, 95%)' : 'hsl(210, 80%, 95%)'}
@@ -299,7 +365,6 @@ export function WallElevationView({
                     strokeWidth={1.5}
                     rx={2}
                   />
-                  {/* Cross for windows */}
                   {!isDoor && (
                     <>
                       <line x1={opX} y1={opY + opHeightPx / 2} x2={opX + opWidthPx} y2={opY + opHeightPx / 2}
@@ -308,23 +373,19 @@ export function WallElevationView({
                         stroke={op.isNeighbor ? 'hsl(280, 60%, 70%)' : 'hsl(210, 80%, 70%)'} strokeWidth={0.8} />
                     </>
                   )}
-                  {/* Door handle */}
                   {isDoor && (
                     <circle cx={opX + opWidthPx * 0.8} cy={opY + opHeightPx * 0.55} r={2.5}
                       fill={op.isNeighbor ? 'hsl(280, 60%, 50%)' : 'hsl(30, 80%, 45%)'} />
                   )}
-                  {/* Dimension: width */}
                   <text x={opX + opWidthPx / 2} y={opY - 4} textAnchor="middle"
                     fontSize={8} fill="hsl(var(--foreground))" fontWeight={500}>
                     {op.width.toFixed(2)}m
                   </text>
-                  {/* Dimension: height */}
                   <text x={opX + opWidthPx + 4} y={opY + opHeightPx / 2} textAnchor="start"
                     fontSize={8} fill="hsl(var(--foreground))" fontWeight={500}
                     dominantBaseline="middle">
                     {op.height.toFixed(2)}m
                   </text>
-                  {/* Label */}
                   <text x={opX + opWidthPx / 2} y={opY + opHeightPx / 2 + 4} textAnchor="middle"
                     fontSize={7} fill="hsl(var(--muted-foreground))" dominantBaseline="middle">
                     {OPENING_PRESETS[op.openingType as keyof typeof OPENING_PRESETS]?.label || op.openingType}
@@ -367,7 +428,7 @@ export function WallElevationView({
         </div>
       )}
 
-      {/* Opening list for editing/deleting */}
+      {/* Opening list */}
       {displayOpenings.length > 0 && (
         <div className="space-y-1">
           {displayOpenings.map(op => (
@@ -385,9 +446,6 @@ export function WallElevationView({
               <span className="text-muted-foreground">
                 {op.width.toFixed(2)}×{op.height.toFixed(2)}m
               </span>
-              <span className="text-muted-foreground">
-                pos: {(op.positionX * 100).toFixed(0)}%
-              </span>
               {op.isNeighbor && (
                 <Badge variant="outline" className="text-[9px] h-4">de {neighborRoom?.name}</Badge>
               )}
@@ -400,15 +458,9 @@ export function WallElevationView({
         </div>
       )}
 
-      {wallType === 'invisible' && !neighborWall && (
-        <p className="text-xs text-muted-foreground italic">
-          Esta pared invisible no tiene vecina detectada. Las aberturas se muestran desde la pared visible correspondiente.
-        </p>
-      )}
-
       {displayOpenings.length === 0 && (
         <p className="text-xs text-muted-foreground text-center py-2">
-          Arrastra los objetos en el alzado para reposicionarlos. Sin aberturas en esta pared.
+          Sin aberturas en este segmento
         </p>
       )}
     </div>

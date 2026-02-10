@@ -40,7 +40,17 @@ export interface OpeningData {
   name?: string;
   width: number;
   height: number;
-  positionX: number;
+  positionX: number; // 0-1 fraction along the wall
+}
+
+export interface WallSegment {
+  startFraction: number; // 0-1 along the wall
+  endFraction: number;   // 0-1 along the wall
+  startMeters: number;
+  endMeters: number;
+  segmentType: 'externa' | 'interna' | 'invisible';
+  neighborRoomId?: string;
+  neighborWallIndex?: number;
 }
 
 export interface WallCalculation {
@@ -539,4 +549,176 @@ export function detectSharedWalls(rooms: RoomData[]): Map<string, { neighborRoom
   }
 
   return shared;
+}
+
+/**
+ * Compute wall segments for each wall, splitting at intersection points with other rooms.
+ * A wall may be partially shared with one room and partially external/internal.
+ * Returns a map from wallKey ("roomId::wallIndex") to an array of segments.
+ */
+export function computeWallSegments(rooms: RoomData[]): Map<string, WallSegment[]> {
+  const EPSILON = 0.05;
+  const result = new Map<string, WallSegment[]>();
+
+  rooms.forEach(room => {
+    [1, 2, 3, 4].forEach(wallIdx => {
+      const key = `${room.id}::${wallIdx}`;
+      const isHoriz = wallIdx === 1 || wallIdx === 3;
+      const wallLen = isHoriz ? room.width : room.length;
+
+      // Wall line in absolute coordinates
+      // wallStart/wallEnd = the range along the axis parallel to the wall
+      let wallStart: number, wallEnd: number, wallEdge: number;
+      if (wallIdx === 1) { // top
+        wallStart = room.posX; wallEnd = room.posX + room.width; wallEdge = room.posY;
+      } else if (wallIdx === 2) { // right
+        wallStart = room.posY; wallEnd = room.posY + room.length; wallEdge = room.posX + room.width;
+      } else if (wallIdx === 3) { // bottom
+        wallStart = room.posX; wallEnd = room.posX + room.width; wallEdge = room.posY + room.length;
+      } else { // left
+        wallStart = room.posY; wallEnd = room.posY + room.length; wallEdge = room.posX;
+      }
+
+      // Find all neighbor overlaps on this wall edge
+      interface Overlap {
+        overlapStart: number; // absolute coord
+        overlapEnd: number;
+        neighborRoomId: string;
+        neighborWallIndex: number;
+      }
+      const overlaps: Overlap[] = [];
+
+      rooms.forEach(other => {
+        if (other.id === room.id) return;
+
+        let otherEdge: number, otherStart: number, otherEnd: number, otherWallIdx: number;
+
+        if (wallIdx === 1) { // room top — look for other.bottom
+          otherEdge = other.posY + other.length;
+          otherStart = other.posX; otherEnd = other.posX + other.width;
+          otherWallIdx = 3;
+        } else if (wallIdx === 2) { // room right — look for other.left
+          otherEdge = other.posX;
+          otherStart = other.posY; otherEnd = other.posY + other.length;
+          otherWallIdx = 4;
+        } else if (wallIdx === 3) { // room bottom — look for other.top
+          otherEdge = other.posY;
+          otherStart = other.posX; otherEnd = other.posX + other.width;
+          otherWallIdx = 1;
+        } else { // room left — look for other.right
+          otherEdge = other.posX + other.width;
+          otherStart = other.posY; otherEnd = other.posY + other.length;
+          otherWallIdx = 2;
+        }
+
+        if (Math.abs(otherEdge - wallEdge) < EPSILON) {
+          const oStart = Math.max(wallStart, otherStart);
+          const oEnd = Math.min(wallEnd, otherEnd);
+          if (oEnd - oStart > EPSILON) {
+            overlaps.push({
+              overlapStart: oStart,
+              overlapEnd: oEnd,
+              neighborRoomId: other.id,
+              neighborWallIndex: otherWallIdx,
+            });
+          }
+        }
+      });
+
+      // Sort overlaps by start position
+      overlaps.sort((a, b) => a.overlapStart - b.overlapStart);
+
+      // Build segments
+      const segments: WallSegment[] = [];
+      let cursor = wallStart;
+
+      // Check if this wall side has any room on the outer perimeter
+      const isOnPerimeter = (absStart: number, absEnd: number): boolean => {
+        // Check if any other room is adjacent on the other side of this edge (not sharing, but blocking)
+        // For simplicity: if no overlap → check if on bounding box perimeter
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        rooms.forEach(r => {
+          minX = Math.min(minX, r.posX);
+          minY = Math.min(minY, r.posY);
+          maxX = Math.max(maxX, r.posX + r.width);
+          maxY = Math.max(maxY, r.posY + r.length);
+        });
+        if (wallIdx === 1) return Math.abs(wallEdge - minY) < EPSILON;
+        if (wallIdx === 3) return Math.abs(wallEdge - maxY) < EPSILON;
+        if (wallIdx === 4) return Math.abs(wallEdge - minX) < EPSILON;
+        if (wallIdx === 2) return Math.abs(wallEdge - maxX) < EPSILON;
+        return false;
+      };
+
+      // Check if the DB wall has a manual override
+      const wall = room.walls.find(w => w.wallIndex === wallIdx);
+      const hasManualType = wall && !wall.id.startsWith('temp-');
+
+      overlaps.forEach(ol => {
+        // Gap before this overlap
+        if (ol.overlapStart - cursor > EPSILON) {
+          const startF = (cursor - wallStart) / wallLen;
+          const endF = (ol.overlapStart - wallStart) / wallLen;
+          const gapType = hasManualType && wall!.wallType !== 'invisible'
+            ? wall!.wallType
+            : (isOnPerimeter(cursor, ol.overlapStart) ? 'externa' : 'interna');
+          segments.push({
+            startFraction: startF,
+            endFraction: endF,
+            startMeters: cursor - wallStart,
+            endMeters: ol.overlapStart - wallStart,
+            segmentType: gapType as 'externa' | 'interna',
+          });
+        }
+
+        // The overlap itself
+        const startF = (Math.max(cursor, ol.overlapStart) - wallStart) / wallLen;
+        const endF = (ol.overlapEnd - wallStart) / wallLen;
+        segments.push({
+          startFraction: startF,
+          endFraction: endF,
+          startMeters: Math.max(cursor, ol.overlapStart) - wallStart,
+          endMeters: ol.overlapEnd - wallStart,
+          segmentType: 'invisible',
+          neighborRoomId: ol.neighborRoomId,
+          neighborWallIndex: ol.neighborWallIndex,
+        });
+
+        cursor = ol.overlapEnd;
+      });
+
+      // Remaining gap after all overlaps
+      if (wallEnd - cursor > EPSILON) {
+        const startF = (cursor - wallStart) / wallLen;
+        const gapType = hasManualType && wall!.wallType !== 'invisible'
+          ? wall!.wallType
+          : (isOnPerimeter(cursor, wallEnd) ? 'externa' : 'interna');
+        segments.push({
+          startFraction: startF,
+          endFraction: 1,
+          startMeters: cursor - wallStart,
+          endMeters: wallLen,
+          segmentType: gapType as 'externa' | 'interna',
+        });
+      }
+
+      // If no segments created (no overlaps and wall is full length)
+      if (segments.length === 0) {
+        const fullType = hasManualType
+          ? wall!.wallType
+          : (isOnPerimeter(wallStart, wallEnd) ? 'externa' : 'interna');
+        segments.push({
+          startFraction: 0,
+          endFraction: 1,
+          startMeters: 0,
+          endMeters: wallLen,
+          segmentType: fullType as 'externa' | 'interna' | 'invisible',
+        });
+      }
+
+      result.set(key, segments);
+    });
+  });
+
+  return result;
 }

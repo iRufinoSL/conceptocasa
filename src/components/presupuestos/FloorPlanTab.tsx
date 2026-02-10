@@ -34,6 +34,7 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
   const [selectedRoomId, setSelectedRoomId] = useState<string>();
   const [selectedWallKey, setSelectedWallKey] = useState<string | null>(null);
   const [viewTab, setViewTab] = useState('plano');
+  const [refreshKey, setRefreshKey] = useState(0);
 
   // Undo stack: stores snapshots of room positions/dimensions before changes
   const undoStackRef = useRef<Array<{ rooms: Array<{ id: string; posX: number; posY: number; width: number; length: number }> }>>([]);
@@ -293,7 +294,7 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
             <Undo2 className="h-4 w-4 mr-1" />
             Deshacer
           </Button>
-          <Button variant="outline" size="sm" onClick={async () => { await refetch(); toast.success('Plano actualizado'); }} disabled={saving}
+          <Button variant="outline" size="sm" onClick={async () => { await refetch(); setRefreshKey(k => k + 1); toast.success('Plano actualizado'); }} disabled={saving}
             title="Actualizar plano con los últimos cambios">
             <RotateCcw className="h-4 w-4 mr-1" />
             Actualizar plano
@@ -396,8 +397,18 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
                             onChange={e => { if (!wall.id.startsWith('temp-')) updateWall(wall.id, { thickness: Number(e.target.value) || undefined }); }} />
                         </div>
                       </div>
+                      {isInvisible ? (
+                        <div className="text-xs text-muted-foreground italic bg-muted/30 p-2 rounded">
+                          Las paredes invisibles no pueden tener objetos. Los objetos se insertan en la pared visible correspondiente.
+                        </div>
+                      ) : (
                       <div className="space-y-2">
                         <Label className="text-[10px] font-semibold">Aberturas ({wall.openings.length})</Label>
+                        {wall.openings.length > 0 && (
+                          <p className="text-[9px] text-muted-foreground">
+                            🔄 Usa el slider «Posición» para mover cada objeto a lo largo de la pared
+                          </p>
+                        )}
                         {wall.openings.map(op => (
                           <div key={op.id} className="bg-muted/50 p-2 rounded space-y-1.5">
                             <div className="flex items-center gap-2">
@@ -435,11 +446,11 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
                                   defaultValue={op.height}
                                   onBlur={e => updateOpening(op.id, { height: Number(e.target.value) })} />
                               </div>
-              <div>
-                                <Label className="text-[9px]">Posición</Label>
+                              <div>
+                                <Label className="text-[9px]">📍 Posición (mover)</Label>
                                 <div className="flex items-center gap-1">
                                   <input type="range" min="0" max="1" step="0.05"
-                                    className="flex-1 h-4 accent-primary cursor-pointer"
+                                    className="flex-1 h-5 accent-primary cursor-pointer"
                                     value={op.positionX}
                                     onChange={e => updateOpening(op.id, { positionX: Number(e.target.value) })}
                                     title="Arrastra para mover el objeto a lo largo de la pared" />
@@ -460,6 +471,7 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
                           </div>
                         )}
                       </div>
+                      )}
                     </CardContent>
                   </Card>
                 );
@@ -468,7 +480,7 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
           )}
           {viewTab === '3d' && planData && (
             <FloorPlan3DViewer
-              key={`3d-${planData.roofType}-${planData.roofOverhang}-${planData.roofSlopePercent}-${planData.defaultHeight}-${planData.externalWallThickness}-${planData.internalWallThickness}-${rooms.map(r => `${r.id}:${r.posX}:${r.posY}:${r.width}:${r.length}:${r.height || ''}:${r.walls.map(w => `${w.wallIndex}${w.wallType}${w.thickness || ''}${w.openings.map(o => `${o.openingType}${o.positionX}${o.width}${o.height}`).join('')}`).join(',')}`).join('|')}`}
+              key={`3d-v${refreshKey}-${JSON.stringify({ r: planData.roofType, o: planData.roofOverhang, s: planData.roofSlopePercent, h: planData.defaultHeight, et: planData.externalWallThickness, it: planData.internalWallThickness, rooms: rooms.map(r => ({ id: r.id, x: r.posX, y: r.posY, w: r.width, l: r.length, h: r.height, walls: r.walls.map(w => ({ i: w.wallIndex, t: w.wallType, ops: w.openings.map(o => ({ t: o.openingType, p: o.positionX, w: o.width, h: o.height })) })) })) })}`}
               plan={planData}
               rooms={rooms}
             />

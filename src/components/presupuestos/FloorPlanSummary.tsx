@@ -1,6 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import type { FloorPlanSummary as Summary } from '@/lib/floor-plan-calculations';
+import { OPENING_PRESETS } from '@/lib/floor-plan-calculations';
 
 interface FloorPlanSummaryProps {
   summary: Summary;
@@ -53,6 +54,22 @@ export function FloorPlanSummaryView({ summary }: FloorPlanSummaryProps) {
               <p className="font-semibold text-foreground">{summary.totalWindows} ud</p>
             </div>
           </div>
+          {/* Detailed opening breakdown */}
+          {Object.keys(summary.openingsByType).length > 0 && (
+            <div className="mt-3 pt-3 border-t border-border">
+              <span className="text-xs font-semibold text-muted-foreground mb-2 block">Desglose por tipo</span>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
+                {Object.entries(summary.openingsByType).map(([type, count]) => (
+                  <div key={type} className="flex items-center justify-between bg-muted/30 px-2 py-1 rounded">
+                    <span className="text-xs text-muted-foreground">
+                      {OPENING_PRESETS[type as keyof typeof OPENING_PRESETS]?.label || type}
+                    </span>
+                    <Badge variant="secondary" className="text-[10px] h-4">{count} ud</Badge>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 

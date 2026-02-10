@@ -446,9 +446,21 @@ export function useFloorPlan(budgetId: string) {
         { name: 'Techos', manual_units: summary.totalCeilingM2, measurement_unit: 'm2', source: 'plano' },
         { name: 'Base paredes externas', manual_units: summary.totalExternalWallBaseM, measurement_unit: 'ml', source: 'plano' },
         { name: 'Base paredes internas', manual_units: summary.totalInternalWallBaseM, measurement_unit: 'ml', source: 'plano' },
-        { name: 'Puertas (unidades)', manual_units: summary.totalDoors, measurement_unit: 'ud', source: 'plano' },
-        { name: 'Ventanas (unidades)', manual_units: summary.totalWindows, measurement_unit: 'ud', source: 'plano' },
+        { name: 'Puertas (total)', manual_units: summary.totalDoors, measurement_unit: 'ud', source: 'plano' },
+        { name: 'Ventanas (total)', manual_units: summary.totalWindows, measurement_unit: 'ud', source: 'plano' },
       ];
+
+      // Add detailed per-type opening measurements
+      const { OPENING_PRESETS } = await import('@/lib/floor-plan-calculations');
+      Object.entries(summary.openingsByType).forEach(([type, count]) => {
+        const label = OPENING_PRESETS[type as keyof typeof OPENING_PRESETS]?.label || type;
+        measurements.push({
+          name: `${label} (unidades)`,
+          manual_units: count,
+          measurement_unit: 'ud',
+          source: 'plano',
+        });
+      });
 
       // Per-room measurements
       summary.rooms.forEach(rc => {

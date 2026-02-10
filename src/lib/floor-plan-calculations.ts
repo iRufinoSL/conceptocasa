@@ -74,8 +74,12 @@ export interface FloorPlanSummary {
   // Aggregated from rooms
   totalUsableM2: number; // sum of room floor areas
   totalBuiltM2: number; // usable + wall footprints
-  totalExternalWallM2: number;
-  totalInternalWallM2: number;
+  totalExternalWallM2: number; // net (after subtracting openings)
+  totalExternalWallGrossM2: number; // gross (before openings)
+  totalExternalWallOpeningsM2: number; // total openings area in external walls
+  totalInternalWallM2: number; // net
+  totalInternalWallGrossM2: number;
+  totalInternalWallOpeningsM2: number;
   totalFloorM2: number; // sum of all room floors
   totalCeilingM2: number; // sum of all room ceilings
   totalExternalWallBaseM: number; // linear meters of external wall bases
@@ -293,7 +297,11 @@ export function calculateFloorPlanSummary(plan: FloorPlanData, rooms: RoomData[]
   
   let totalUsableM2 = 0;
   let totalExternalWallM2 = 0;
+  let totalExternalWallGrossM2 = 0;
+  let totalExternalWallOpeningsM2 = 0;
   let totalInternalWallM2 = 0;
+  let totalInternalWallGrossM2 = 0;
+  let totalInternalWallOpeningsM2 = 0;
   let totalFloorM2 = 0;
   let totalCeilingM2 = 0;
   let totalExternalWallBaseM = 0;
@@ -315,9 +323,22 @@ export function calculateFloorPlanSummary(plan: FloorPlanData, rooms: RoomData[]
       const wallKey = `${room.id}::${w.wallIndex}`;
       const neighborInfo = sharedWalls.get(wallKey);
 
-      if (w.wallType === 'compartida' && neighborInfo) {
+      if (w.wallType === 'externa') {
+        totalExternalWallGrossM2 += w.grossArea;
+        totalExternalWallOpeningsM2 += w.openingsArea;
+        totalExternalWallBaseM += w.baseLength;
+        w.openings.forEach(o => {
+          if (o.type === 'puerta' || o.type === 'puerta_externa') {
+            totalDoors += o.count;
+          } else {
+            totalWindows += o.count;
+          }
+        });
+      } else if (w.wallType === 'compartida' && neighborInfo) {
         const neighborKey = `${neighborInfo.neighborRoomId}::${neighborInfo.neighborWallIndex}`;
         if (!countedSharedOpenings.has(neighborKey)) {
+          totalInternalWallGrossM2 += w.grossArea * 0.5;
+          totalInternalWallOpeningsM2 += w.openingsArea * 0.5;
           w.openings.forEach(o => {
             if (o.type === 'puerta' || o.type === 'puerta_externa') {
               totalDoors += o.count;
@@ -328,16 +349,9 @@ export function calculateFloorPlanSummary(plan: FloorPlanData, rooms: RoomData[]
           countedSharedOpenings.add(wallKey);
         }
         totalInternalWallBaseM += w.baseLength * 0.5;
-      } else if (w.wallType === 'externa') {
-        totalExternalWallBaseM += w.baseLength;
-        w.openings.forEach(o => {
-          if (o.type === 'puerta' || o.type === 'puerta_externa') {
-            totalDoors += o.count;
-          } else {
-            totalWindows += o.count;
-          }
-        });
       } else {
+        totalInternalWallGrossM2 += w.grossArea;
+        totalInternalWallOpeningsM2 += w.openingsArea;
         totalInternalWallBaseM += w.baseLength;
         w.openings.forEach(o => {
           if (o.type === 'puerta' || o.type === 'puerta_externa') {
@@ -360,7 +374,11 @@ export function calculateFloorPlanSummary(plan: FloorPlanData, rooms: RoomData[]
     totalUsableM2,
     totalBuiltM2,
     totalExternalWallM2,
+    totalExternalWallGrossM2,
+    totalExternalWallOpeningsM2,
     totalInternalWallM2,
+    totalInternalWallGrossM2,
+    totalInternalWallOpeningsM2,
     totalFloorM2,
     totalCeilingM2,
     totalExternalWallBaseM,
@@ -387,6 +405,68 @@ export const WALL_LABELS: Record<number, string> = {
   3: 'Pared Inferior',
   4: 'Pared Izquierda',
 };
+
+// Side letters for external wall naming: A=top, B=right, C=bottom, D=left
+export const WALL_SIDE_LETTERS: Record<number, string> = {
+  1: 'A', // top
+  2: 'B', // right
+  3: 'C', // bottom
+  4: 'D', // left
+};
+
+/**
+ * Generate named wall segments for external walls.
+ * Convention: single segment on top = "AB", two segments = "A1B", "A2B"
+ * The letter is the side letter, the suffix is the next side letter clockwise.
+ */
+export function generateExternalWallNames(
+  rooms: RoomData[],
+  wallClassification: Map<string, 'externa' | 'interna' | 'compartida'>
+): Map<string, string> {
+  const names = new Map<string, string>();
+  
+  // Group external walls by side (wallIndex)
+  const sideWalls: Record<number, Array<{ roomId: string; wallIndex: number; key: string }>> = {
+    1: [], 2: [], 3: [], 4: [],
+  };
+  
+  rooms.forEach(room => {
+    [1, 2, 3, 4].forEach(wallIdx => {
+      const key = `${room.id}::${wallIdx}`;
+      if (wallClassification.get(key) === 'externa') {
+        sideWalls[wallIdx].push({ roomId: room.id, wallIndex: wallIdx, key });
+      }
+    });
+  });
+  
+  // Sort walls on each side by position
+  const sortByPosition = (side: number) => {
+    return sideWalls[side].sort((a, b) => {
+      const ra = rooms.find(r => r.id === a.roomId)!;
+      const rb = rooms.find(r => r.id === b.roomId)!;
+      // For top/bottom walls, sort by X position
+      if (side === 1 || side === 3) return ra.posX - rb.posX;
+      // For right/left walls, sort by Y position
+      return ra.posY - rb.posY;
+    });
+  };
+  
+  [1, 2, 3, 4].forEach(side => {
+    const sorted = sortByPosition(side);
+    const letter = WALL_SIDE_LETTERS[side];
+    const nextLetter = WALL_SIDE_LETTERS[side === 4 ? 1 : side + 1];
+    
+    if (sorted.length === 1) {
+      names.set(sorted[0].key, `${letter}${nextLetter}`);
+    } else {
+      sorted.forEach((w, i) => {
+        names.set(w.key, `${letter}${i + 1}${nextLetter}`);
+      });
+    }
+  });
+  
+  return names;
+}
 
 export const ROOM_PRESETS = [
   { name: 'Salón', width: 5, length: 4 },

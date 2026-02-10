@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { RefreshCw, Save, Layout, Box, BarChart3, Loader2, AlertTriangle, Trash2, DoorOpen, ImageIcon, Undo2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useFloorPlan } from '@/hooks/useFloorPlan';
-import { calculateFloorPlanSummary, detectSharedWalls, autoClassifyWalls, WALL_LABELS, OPENING_PRESETS } from '@/lib/floor-plan-calculations';
+import { calculateFloorPlanSummary, detectSharedWalls, autoClassifyWalls, WALL_LABELS, OPENING_PRESETS, generateExternalWallNames } from '@/lib/floor-plan-calculations';
 import { FloorPlanCanvas2D } from './FloorPlanCanvas2D';
 import { FloorPlanRoomEditor } from './FloorPlanRoomEditor';
 import { FloorPlanSummaryView } from './FloorPlanSummary';
@@ -106,6 +106,7 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
   const sharedWallMap = useMemo(() => detectSharedWalls(rooms), [rooms]);
   const sharedWallKeys = useMemo(() => new Set(sharedWallMap.keys()), [sharedWallMap]);
   const wallClassification = useMemo(() => autoClassifyWalls(rooms), [rooms]);
+  const externalWallNames = useMemo(() => generateExternalWallNames(rooms, wallClassification), [rooms, wallClassification]);
 
   const handleMoveRoom = useCallback((roomId: string, posX: number, posY: number) => {
     pushUndo();
@@ -357,7 +358,12 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
                   <Card className="mt-2">
                     <CardHeader className="pb-2 py-2 px-3">
                       <div className="flex items-center gap-2">
-                        <CardTitle className="text-xs">{WALL_LABELS[wallIdx]} — {room.name}</CardTitle>
+                        <CardTitle className="text-xs">
+                          {WALL_LABELS[wallIdx]} — {room.name}
+                          {autoType === 'externa' && externalWallNames.get(selectedWallKey) && (
+                            <span className="ml-1 text-primary font-bold">({externalWallNames.get(selectedWallKey)})</span>
+                          )}
+                        </CardTitle>
                         <Badge variant="outline" className="text-[10px] h-4">{autoType === 'externa' ? 'Externa' : autoType === 'compartida' ? 'Compartida' : 'Interna'}</Badge>
                         {isShared && neighborRoom && (
                           <Badge variant="outline" className="text-[10px] h-4">con {neighborRoom.name}</Badge>
@@ -418,7 +424,11 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
             </>
           )}
           {viewTab === '3d' && planData && (
-            <FloorPlan3DViewer plan={planData} rooms={rooms} />
+            <FloorPlan3DViewer
+              key={`${planData.roofType}-${planData.roofOverhang}-${planData.roofSlopePercent}-${planData.defaultHeight}-${rooms.length}`}
+              plan={planData}
+              rooms={rooms}
+            />
           )}
           {viewTab === 'resumen' && (
             <FloorPlanSummaryView summary={summary} />

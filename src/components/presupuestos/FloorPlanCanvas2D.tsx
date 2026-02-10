@@ -1,6 +1,6 @@
 import { useMemo, useState, useCallback, useRef } from 'react';
 import type { FloorPlanData, RoomData } from '@/lib/floor-plan-calculations';
-import { autoClassifyWalls } from '@/lib/floor-plan-calculations';
+import { autoClassifyWalls, generateExternalWallNames } from '@/lib/floor-plan-calculations';
 
 interface FloorPlanCanvas2DProps {
   plan: FloorPlanData;
@@ -174,6 +174,7 @@ export function FloorPlanCanvas2D({
   }, [displayRooms, plan.externalWallThickness]);
 
   const wallClassification = useMemo(() => autoClassifyWalls(displayRooms), [displayRooms]);
+  const externalWallNames = useMemo(() => generateExternalWallNames(displayRooms, wallClassification), [displayRooms, wallClassification]);
 
   const { viewBox, elements } = useMemo(() => {
     const extT = plan.externalWallThickness;
@@ -293,12 +294,14 @@ export function FloorPlanCanvas2D({
         const handleX = isHoriz ? (x1 + x2) / 2 : x1;
         const handleY = isHoriz ? y1 : (y1 + y2) / 2;
 
+        const wallName = externalWallNames.get(wallKey);
+
         return {
           wallIndex: wall.wallIndex, wallKey, isSelected: isWallSelected, isShared,
           isExternal, x1, y1, x2, y2, strokeWidth, color: wallColor,
           dashArray: isShared ? '6,3' : undefined,
           openingEls, handleX, handleY, isHoriz,
-          interiorLen, externalLen,
+          interiorLen, externalLen, wallName,
         };
       });
 
@@ -549,7 +552,7 @@ export function FloorPlanCanvas2D({
 
                   {/* External wall outer dimension annotation */}
                   {w.isExternal && (
-                    <g style={{ pointerEvents: 'none' }}>
+                     <g style={{ pointerEvents: 'none' }}>
                       {w.isHoriz ? (
                         <>
                           {(() => {
@@ -557,10 +560,12 @@ export function FloorPlanCanvas2D({
                             const midX = (w.x1 + w.x2) / 2;
                             const outside = w.wallIndex === 1 ? w.y1 - extT * scale - 6 : w.y1 + extT * scale + 10;
                             return (
-                              <text x={midX} y={outside}
-                                textAnchor="middle" fontSize={6.5} fontWeight="500" fill={dimColor}>
-                                {extLen.toFixed(2)}m (ext.)
-                              </text>
+                              <>
+                                <text x={midX} y={outside}
+                                  textAnchor="middle" fontSize={6.5} fontWeight="500" fill={dimColor}>
+                                  {w.wallName ? `${w.wallName}: ` : ''}{extLen.toFixed(2)}m (ext.)
+                                </text>
+                              </>
                             );
                           })()}
                         </>
@@ -575,7 +580,7 @@ export function FloorPlanCanvas2D({
                                 textAnchor={w.wallIndex === 4 ? 'end' : 'start'}
                                 fontSize={6.5} fontWeight="500" fill={dimColor}
                                 transform={`rotate(${w.wallIndex === 4 ? -90 : 90}, ${outside}, ${midY})`}>
-                                {extLen.toFixed(2)}m (ext.)
+                                {w.wallName ? `${w.wallName}: ` : ''}{extLen.toFixed(2)}m (ext.)
                               </text>
                             );
                           })()}

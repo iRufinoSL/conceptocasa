@@ -37,14 +37,6 @@ export function FloorPlanSummaryView({ summary }: FloorPlanSummaryProps) {
               <p className="font-semibold text-foreground">{fmt(summary.roofM2)}</p>
             </div>
             <div>
-              <span className="text-muted-foreground">Paredes externas</span>
-              <p className="font-semibold text-foreground">{fmt(summary.totalExternalWallM2)}</p>
-            </div>
-            <div>
-              <span className="text-muted-foreground">Paredes internas</span>
-              <p className="font-semibold text-foreground">{fmt(summary.totalInternalWallM2)}</p>
-            </div>
-            <div>
               <span className="text-muted-foreground">Suelos útiles</span>
               <p className="font-semibold text-foreground">{fmt(summary.totalFloorM2)}</p>
             </div>
@@ -53,20 +45,66 @@ export function FloorPlanSummaryView({ summary }: FloorPlanSummaryProps) {
               <p className="font-semibold text-foreground">{fmt(summary.totalCeilingM2)}</p>
             </div>
             <div>
-              <span className="text-muted-foreground">Base paredes ext.</span>
-              <p className="font-semibold text-foreground">{fmt(summary.totalExternalWallBaseM, 'ml')}</p>
-            </div>
-            <div>
-              <span className="text-muted-foreground">Base paredes int.</span>
-              <p className="font-semibold text-foreground">{fmt(summary.totalInternalWallBaseM, 'ml')}</p>
-            </div>
-            <div>
               <span className="text-muted-foreground">Puertas</span>
               <p className="font-semibold text-foreground">{summary.totalDoors} ud</p>
             </div>
             <div>
               <span className="text-muted-foreground">Ventanas</span>
               <p className="font-semibold text-foreground">{summary.totalWindows} ud</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* External walls breakdown */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-semibold">Paredes Externas</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+            <div>
+              <span className="text-muted-foreground">Total bruto</span>
+              <p className="font-semibold text-foreground">{fmt(summary.totalExternalWallGrossM2)}</p>
+            </div>
+            <div>
+              <span className="text-muted-foreground">Huecos (puertas/ventanas)</span>
+              <p className="font-semibold text-destructive">-{fmt(summary.totalExternalWallOpeningsM2)}</p>
+            </div>
+            <div>
+              <span className="text-muted-foreground">Superficie neta</span>
+              <p className="font-semibold text-primary">{fmt(summary.totalExternalWallM2)}</p>
+            </div>
+            <div>
+              <span className="text-muted-foreground">Base (ml)</span>
+              <p className="font-semibold text-foreground">{fmt(summary.totalExternalWallBaseM, 'ml')}</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Internal walls breakdown */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-semibold">Paredes Internas</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+            <div>
+              <span className="text-muted-foreground">Total bruto</span>
+              <p className="font-semibold text-foreground">{fmt(summary.totalInternalWallGrossM2)}</p>
+            </div>
+            <div>
+              <span className="text-muted-foreground">Huecos (puertas/ventanas)</span>
+              <p className="font-semibold text-destructive">-{fmt(summary.totalInternalWallOpeningsM2)}</p>
+            </div>
+            <div>
+              <span className="text-muted-foreground">Superficie neta</span>
+              <p className="font-semibold text-primary">{fmt(summary.totalInternalWallM2)}</p>
+            </div>
+            <div>
+              <span className="text-muted-foreground">Base (ml)</span>
+              <p className="font-semibold text-foreground">{fmt(summary.totalInternalWallBaseM, 'ml')}</p>
             </div>
           </div>
         </CardContent>

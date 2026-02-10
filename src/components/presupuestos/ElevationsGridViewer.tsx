@@ -1,12 +1,12 @@
-import { useState, useRef, useCallback, useMemo, useEffect } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Plus, Trash2, DoorOpen, X } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Plus, Trash2, Box, Layers, ArrowUpDown } from 'lucide-react';
 import { OPENING_PRESETS, WALL_LABELS, computeWallSegments, autoClassifyWalls, generateExternalWallNames } from '@/lib/floor-plan-calculations';
 import type { RoomData, WallData, OpeningData, FloorPlanData, WallSegment } from '@/lib/floor-plan-calculations';
 
@@ -19,27 +19,33 @@ interface ElevationsGridViewerProps {
   saving: boolean;
 }
 
+type SurfaceCategory = 'cimentacion' | 'suelo' | 'techo' | 'pared' | 'volumen' | 'tejado';
+
 interface ElevationCard {
   id: string;
   label: string;
   sublabel?: string;
-  category: 'cimentacion' | 'pared' | 'tejado';
-  width: number; // meters
-  height: number; // meters
+  category: SurfaceCategory;
+  width: number;
+  height: number;
   room?: RoomData;
   wall?: WallData;
   segment?: WallSegment;
   segmentIndex?: number;
   openings: OpeningData[];
-  wallId?: string; // for adding openings
+  wallId?: string;
   canAddOpenings: boolean;
   fill: string;
   stroke: string;
   badgeLabel?: string;
   badgeVariant?: 'default' | 'secondary' | 'outline';
+  // Extra data for detail dialog
+  surfaceArea?: number;
+  volume?: number;
+  roomHeight?: number;
 }
 
-const CARD_SCALE = 60; // px per meter for card SVGs
+const CARD_SCALE = 60;
 const CARD_PADDING = 20;
 const MAX_CARD_WIDTH = 400;
 
@@ -59,6 +65,8 @@ export function ElevationsGridViewer({
 }: ElevationsGridViewerProps) {
   const [selectedOpening, setSelectedOpening] = useState<OpeningData | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [selectedSurface, setSelectedSurface] = useState<ElevationCard | null>(null);
+  const [surfaceDialogOpen, setSurfaceDialogOpen] = useState(false);
 
   const wallSegmentsMap = useMemo(() => computeWallSegments(rooms), [rooms]);
   const wallClassification = useMemo(() => autoClassifyWalls(rooms), [rooms]);
@@ -93,11 +101,72 @@ export function ElevationsGridViewer({
         stroke: 'hsl(25, 40%, 50%)',
         badgeLabel: 'Cimentación',
         badgeVariant: 'secondary',
+        surfaceArea: foundW * foundL,
       });
     }
 
-    // 2. Wall cards - one per visible segment
+    // 2. Per-room surfaces: suelo, techo, paredes, volumen
     rooms.forEach(room => {
+      const roomH = room.height || plan.defaultHeight;
+      const floorArea = room.width * room.length;
+
+      // Suelo
+      result.push({
+        id: `suelo-${room.id}`,
+        label: 'Suelo',
+        sublabel: room.name,
+        category: 'suelo',
+        width: room.width,
+        height: room.length,
+        room,
+        openings: [],
+        canAddOpenings: false,
+        fill: 'hsl(142, 40%, 90%)',
+        stroke: 'hsl(142, 50%, 40%)',
+        badgeLabel: 'Suelo',
+        badgeVariant: 'secondary',
+        surfaceArea: floorArea,
+      });
+
+      // Techo
+      result.push({
+        id: `techo-${room.id}`,
+        label: room.hasCeiling ? 'Techo' : (room.hasRoof ? 'Techo (cubierta)' : 'Techo'),
+        sublabel: room.name,
+        category: 'techo',
+        width: room.width,
+        height: room.length,
+        room,
+        openings: [],
+        canAddOpenings: false,
+        fill: 'hsl(200, 30%, 92%)',
+        stroke: 'hsl(200, 40%, 50%)',
+        badgeLabel: room.hasCeiling ? 'Techo' : 'Cubierta',
+        badgeVariant: 'outline',
+        surfaceArea: floorArea,
+      });
+
+      // Volumen
+      result.push({
+        id: `volumen-${room.id}`,
+        label: 'Volumen',
+        sublabel: room.name,
+        category: 'volumen',
+        width: room.width,
+        height: roomH,
+        room,
+        openings: [],
+        canAddOpenings: false,
+        fill: 'hsl(280, 20%, 94%)',
+        stroke: 'hsl(280, 30%, 55%)',
+        badgeLabel: 'Volumen',
+        badgeVariant: 'outline',
+        surfaceArea: floorArea,
+        volume: floorArea * roomH,
+        roomHeight: roomH,
+      });
+
+      // Paredes - one per visible segment
       room.walls.forEach(wall => {
         const key = `${room.id}::${wall.wallIndex}`;
         const segments = wallSegmentsMap.get(key) || [];
@@ -105,12 +174,11 @@ export function ElevationsGridViewer({
         const isHoriz = wall.wallIndex === 1 || wall.wallIndex === 3;
         const fullWallLen = isHoriz ? room.width : room.length;
 
-        // Count visible segments for numbering
         const visibleSegments = segments.map((s, i) => ({ ...s, idx: i })).filter(s => s.segmentType !== 'invisible');
         const hasMultiple = visibleSegments.length > 1;
 
         segments.forEach((seg, si) => {
-          if (seg.segmentType === 'invisible') return; // Skip invisible
+          if (seg.segmentType === 'invisible') return;
 
           const segLen = seg.endMeters - seg.startMeters;
           const visibleNumber = visibleSegments.findIndex(vs => vs.idx === si) + 1;
@@ -129,7 +197,7 @@ export function ElevationsGridViewer({
 
           result.push({
             id: `wall-${room.id}-${wall.wallIndex}-${si}`,
-            label: `${wallLabel}`,
+            label: wallLabel,
             sublabel: room.name,
             category: 'pared',
             width: segLen,
@@ -145,6 +213,7 @@ export function ElevationsGridViewer({
             stroke: isExternal ? 'hsl(222, 47%, 30%)' : 'hsl(25, 80%, 50%)',
             badgeLabel: isExternal ? (wallName ? `Ext. ${wallName}` : 'Externa') : 'Interna',
             badgeVariant: isExternal ? 'default' : 'outline',
+            surfaceArea: segLen * wallHeight,
           });
         });
       });
@@ -177,42 +246,30 @@ export function ElevationsGridViewer({
           stroke: 'hsl(200, 30%, 50%)',
           badgeLabel: 'Cubierta',
           badgeVariant: 'secondary',
+          surfaceArea: baseW * baseL,
         });
       } else if (plan.roofType === 'dos_aguas') {
         const halfW = baseW / 2;
         const rise = halfW * slope;
         const slopeLen = Math.sqrt(halfW * halfW + rise * rise);
-        // Two slopes
-        result.push({
-          id: 'roof-slope-1',
-          label: 'Faldón Izquierdo',
-          sublabel: 'Dos Aguas',
-          category: 'tejado',
-          width: baseL,
-          height: slopeLen,
-          openings: [],
-          canAddOpenings: false,
-          fill: 'hsl(15, 40%, 88%)',
-          stroke: 'hsl(15, 50%, 45%)',
-          badgeLabel: 'Cubierta',
-          badgeVariant: 'secondary',
-        });
-        result.push({
-          id: 'roof-slope-2',
-          label: 'Faldón Derecho',
-          sublabel: 'Dos Aguas',
-          category: 'tejado',
-          width: baseL,
-          height: slopeLen,
-          openings: [],
-          canAddOpenings: false,
-          fill: 'hsl(15, 40%, 88%)',
-          stroke: 'hsl(15, 50%, 45%)',
-          badgeLabel: 'Cubierta',
-          badgeVariant: 'secondary',
+        ['Faldón Izquierdo', 'Faldón Derecho'].forEach((lbl, i) => {
+          result.push({
+            id: `roof-slope-${i}`,
+            label: lbl,
+            sublabel: 'Dos Aguas',
+            category: 'tejado',
+            width: baseL,
+            height: slopeLen,
+            openings: [],
+            canAddOpenings: false,
+            fill: 'hsl(15, 40%, 88%)',
+            stroke: 'hsl(15, 50%, 45%)',
+            badgeLabel: 'Cubierta',
+            badgeVariant: 'secondary',
+            surfaceArea: baseL * slopeLen,
+          });
         });
       } else {
-        // cuatro_aguas: 4 slopes
         const halfW = baseW / 2;
         const halfL = baseL / 2;
         const riseW = halfW * slope;
@@ -236,6 +293,7 @@ export function ElevationsGridViewer({
             stroke: 'hsl(15, 50%, 45%)',
             badgeLabel: 'Cubierta',
             badgeVariant: 'secondary',
+            surfaceArea: widths[i] * heights[i],
           });
         });
       }
@@ -255,57 +313,67 @@ export function ElevationsGridViewer({
     setSelectedOpening(prev => prev ? { ...prev, ...data } as OpeningData : null);
   }, [selectedOpening, onUpdateOpening]);
 
-  // Group cards by category
-  const cimentacion = cards.filter(c => c.category === 'cimentacion');
-  const paredes = cards.filter(c => c.category === 'pared');
-  const tejado = cards.filter(c => c.category === 'tejado');
+  const handleCardClick = useCallback((card: ElevationCard) => {
+    setSelectedSurface(card);
+    setSurfaceDialogOpen(true);
+  }, []);
 
-  // Group paredes by room
-  const paredesByRoom = useMemo(() => {
-    const map = new Map<string, ElevationCard[]>();
-    paredes.forEach(c => {
+  // Group cards by room
+  const groupedByRoom = useMemo(() => {
+    const cimentacion = cards.filter(c => c.category === 'cimentacion');
+    const tejado = cards.filter(c => c.category === 'tejado');
+
+    const roomMap = new Map<string, ElevationCard[]>();
+    cards.forEach(c => {
+      if (c.category === 'cimentacion' || c.category === 'tejado') return;
       const roomName = c.sublabel || 'Sin estancia';
-      if (!map.has(roomName)) map.set(roomName, []);
-      map.get(roomName)!.push(c);
+      if (!roomMap.has(roomName)) roomMap.set(roomName, []);
+      roomMap.get(roomName)!.push(c);
     });
-    return map;
-  }, [paredes]);
+
+    return { cimentacion, tejado, roomMap };
+  }, [cards]);
 
   return (
     <div className="space-y-6">
       {/* Foundation */}
-      {cimentacion.length > 0 && (
+      {groupedByRoom.cimentacion.length > 0 && (
         <div>
           <h3 className="text-sm font-semibold text-muted-foreground mb-2">Cimentación</h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {cimentacion.map(card => (
-              <ElevationCardView key={card.id} card={card} onOpeningClick={handleOpeningClick} onAddOpening={onAddOpening} onDeleteOpening={onDeleteOpening} saving={saving} />
+            {groupedByRoom.cimentacion.map(card => (
+              <ElevationCardView key={card.id} card={card} onOpeningClick={handleOpeningClick} onAddOpening={onAddOpening} onCardClick={handleCardClick} saving={saving} />
             ))}
           </div>
         </div>
       )}
 
-      {/* Walls grouped by room */}
-      {Array.from(paredesByRoom.entries()).map(([roomName, roomCards]) => (
-        <div key={roomName}>
-          <h3 className="text-sm font-semibold text-muted-foreground mb-2">
-            {roomName}
-          </h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {roomCards.map(card => (
-              <ElevationCardView key={card.id} card={card} onOpeningClick={handleOpeningClick} onAddOpening={onAddOpening} onDeleteOpening={onDeleteOpening} saving={saving} />
-            ))}
+      {/* Rooms: suelo, techo, volumen, paredes */}
+      {Array.from(groupedByRoom.roomMap.entries()).map(([roomName, roomCards]) => {
+        // Sort: suelo, techo, volumen, then walls
+        const order: SurfaceCategory[] = ['suelo', 'techo', 'volumen', 'pared'];
+        const sorted = [...roomCards].sort((a, b) => order.indexOf(a.category) - order.indexOf(b.category));
+        return (
+          <div key={roomName}>
+            <h3 className="text-sm font-semibold text-muted-foreground mb-2">
+              {roomName}
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+              {sorted.map(card => (
+                <ElevationCardView key={card.id} card={card} onOpeningClick={handleOpeningClick} onAddOpening={onAddOpening} onCardClick={handleCardClick} saving={saving} />
+              ))}
+            </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
 
       {/* Roof */}
-      {tejado.length > 0 && (
+      {groupedByRoom.tejado.length > 0 && (
         <div>
           <h3 className="text-sm font-semibold text-muted-foreground mb-2">Tejado</h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {tejado.map(card => (
-              <ElevationCardView key={card.id} card={card} onOpeningClick={handleOpeningClick} onAddOpening={onAddOpening} onDeleteOpening={onDeleteOpening} saving={saving} />
+            {groupedByRoom.tejado.map(card => (
+              <ElevationCardView key={card.id} card={card} onOpeningClick={handleOpeningClick} onAddOpening={onAddOpening} onCardClick={handleCardClick} saving={saving} />
             ))}
           </div>
         </div>
@@ -326,21 +394,28 @@ export function ElevationsGridViewer({
           saving={saving}
         />
       )}
+
+      {/* Surface detail dialog */}
+      {selectedSurface && (
+        <SurfaceDetailDialog
+          open={surfaceDialogOpen}
+          onOpenChange={setSurfaceDialogOpen}
+          card={selectedSurface}
+        />
+      )}
     </div>
   );
 }
 
 // Individual elevation card
-function ElevationCardView({ card, onOpeningClick, onAddOpening, onDeleteOpening, saving }: {
+function ElevationCardView({ card, onOpeningClick, onAddOpening, onCardClick, saving }: {
   card: ElevationCard;
   onOpeningClick: (op: OpeningData) => void;
   onAddOpening: (wallId: string, type: string, width: number, height: number) => Promise<void>;
-  onDeleteOpening: (openingId: string) => Promise<void>;
+  onCardClick: (card: ElevationCard) => void;
   saving: boolean;
 }) {
-  const aspect = card.width / card.height;
-  const maxW = MAX_CARD_WIDTH;
-  const scale = Math.min(CARD_SCALE, (maxW - CARD_PADDING * 2 - 30) / card.width);
+  const scale = Math.min(CARD_SCALE, (MAX_CARD_WIDTH - CARD_PADDING * 2 - 30) / card.width);
   const svgW = card.width * scale + CARD_PADDING * 2 + 30;
   const svgH = card.height * scale + CARD_PADDING * 2 + 30;
   const rectX = CARD_PADDING + 20;
@@ -349,15 +424,24 @@ function ElevationCardView({ card, onOpeningClick, onAddOpening, onDeleteOpening
   const rectH = card.height * scale;
   const area = (card.width * card.height).toFixed(2);
 
+  const categoryIcon = card.category === 'suelo' ? <Layers className="h-3 w-3" />
+    : card.category === 'techo' ? <ArrowUpDown className="h-3 w-3" />
+    : card.category === 'volumen' ? <Box className="h-3 w-3" />
+    : null;
+
   return (
-    <Card className="overflow-hidden hover:shadow-md transition-shadow">
+    <Card className="overflow-hidden hover:shadow-md transition-shadow cursor-pointer group"
+      onClick={() => onCardClick(card)}>
       <CardHeader className="py-2 px-3 border-b border-border/50">
         <div className="flex items-center justify-between gap-2">
-          <div className="min-w-0">
-            <CardTitle className="text-xs font-semibold truncate">{card.label}</CardTitle>
-            {card.sublabel && (
-              <p className="text-[10px] text-muted-foreground truncate">{card.sublabel}</p>
-            )}
+          <div className="min-w-0 flex items-center gap-1.5">
+            {categoryIcon}
+            <div>
+              <CardTitle className="text-xs font-semibold truncate">{card.label}</CardTitle>
+              {card.sublabel && (
+                <p className="text-[10px] text-muted-foreground truncate">{card.sublabel}</p>
+              )}
+            </div>
           </div>
           <div className="flex items-center gap-1 shrink-0">
             {card.badgeLabel && (
@@ -372,122 +456,123 @@ function ElevationCardView({ card, onOpeningClick, onAddOpening, onDeleteOpening
         </div>
       </CardHeader>
       <CardContent className="p-2">
-        <svg
-          width="100%"
-          viewBox={`0 0 ${svgW} ${svgH}`}
-          className="mx-auto"
-          style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', maxHeight: '220px' }}
-        >
-          {/* Ground line for walls */}
-          {card.category === 'pared' && (
-            <>
-              <line
-                x1={rectX - 5} y1={rectY + rectH}
-                x2={rectX + rectW + 5} y2={rectY + rectH}
-                stroke="hsl(25, 60%, 40%)" strokeWidth={1.5}
-              />
-              {Array.from({ length: Math.ceil((rectW + 10) / 6) }, (_, i) => (
-                <line key={`gh-${i}`}
-                  x1={rectX - 5 + i * 6} y1={rectY + rectH + 1.5}
-                  x2={rectX - 5 + i * 6 - 4} y2={rectY + rectH + 5}
-                  stroke="hsl(25, 60%, 40%)" strokeWidth={0.4} opacity={0.5}
-                />
-              ))}
-            </>
-          )}
-
-          {/* Main rectangle */}
-          <rect
-            x={rectX} y={rectY} width={rectW} height={rectH}
-            fill={card.fill} stroke={card.stroke}
-            strokeWidth={1.5} rx={1}
-          />
-
-          {/* Width dimension (bottom) */}
-          <line
-            x1={rectX} y1={rectY + rectH + 12}
-            x2={rectX + rectW} y2={rectY + rectH + 12}
-            stroke="hsl(25, 95%, 45%)" strokeWidth={0.6}
-          />
-          <line x1={rectX} y1={rectY + rectH + 8} x2={rectX} y2={rectY + rectH + 16} stroke="hsl(25, 95%, 45%)" strokeWidth={0.4} />
-          <line x1={rectX + rectW} y1={rectY + rectH + 8} x2={rectX + rectW} y2={rectY + rectH + 16} stroke="hsl(25, 95%, 45%)" strokeWidth={0.4} />
-          <text
-            x={rectX + rectW / 2} y={rectY + rectH + 24}
-            textAnchor="middle" fontSize={8} fill="hsl(25, 95%, 45%)" fontWeight={600}
+        {/* Volume card shows text info instead of SVG */}
+        {card.category === 'volumen' ? (
+          <div className="flex flex-col items-center justify-center py-4 gap-1 text-center">
+            <Box className="h-8 w-8 text-muted-foreground/40" />
+            <p className="text-lg font-bold text-foreground">{card.volume?.toFixed(2)} m³</p>
+            <p className="text-[10px] text-muted-foreground">
+              {card.width.toFixed(2)} × {(card.room?.length || 0).toFixed(2)} × {card.roomHeight?.toFixed(2)} m
+            </p>
+          </div>
+        ) : (
+          <svg
+            width="100%"
+            viewBox={`0 0 ${svgW} ${svgH}`}
+            className="mx-auto"
+            style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', maxHeight: '180px' }}
           >
-            {card.width.toFixed(2)}m
-          </text>
-
-          {/* Height dimension (left) */}
-          <line
-            x1={rectX - 12} y1={rectY}
-            x2={rectX - 12} y2={rectY + rectH}
-            stroke="hsl(25, 95%, 45%)" strokeWidth={0.6}
-          />
-          <line x1={rectX - 16} y1={rectY} x2={rectX - 8} y2={rectY} stroke="hsl(25, 95%, 45%)" strokeWidth={0.4} />
-          <line x1={rectX - 16} y1={rectY + rectH} x2={rectX - 8} y2={rectY + rectH} stroke="hsl(25, 95%, 45%)" strokeWidth={0.4} />
-          <text
-            x={rectX - 18} y={rectY + rectH / 2}
-            textAnchor="middle" fontSize={8} fill="hsl(25, 95%, 45%)" fontWeight={600}
-            transform={`rotate(-90, ${rectX - 18}, ${rectY + rectH / 2})`}
-          >
-            {card.height.toFixed(2)}m
-          </text>
-
-          {/* Openings */}
-          {card.openings.map(op => {
-            const isHoriz = card.wall ? (card.wall.wallIndex === 1 || card.wall.wallIndex === 3) : true;
-            const fullWallLen = card.room ? (isHoriz ? card.room.width : card.room.length) : card.width;
-            const seg = card.segment;
-
-            let opCenterInSegment: number;
-            if (seg) {
-              const opMeters = op.positionX * fullWallLen;
-              opCenterInSegment = (opMeters - seg.startMeters) / (seg.endMeters - seg.startMeters);
-            } else {
-              opCenterInSegment = op.positionX;
-            }
-            opCenterInSegment = Math.max(0.05, Math.min(0.95, opCenterInSegment));
-
-            const opWidthPx = op.width * scale;
-            const opHeightPx = op.height * scale;
-            const baseY = getOpeningBaseY(op);
-            const opX = rectX + opCenterInSegment * rectW - opWidthPx / 2;
-            const opY = rectY + rectH - opHeightPx - baseY * scale;
-            const isDoor = op.openingType === 'puerta' || op.openingType === 'puerta_externa' || op.openingType === 'ventana_balconera';
-
-            return (
-              <g key={op.id} style={{ cursor: 'pointer' }} onClick={() => onOpeningClick(op)}>
-                <rect
-                  x={opX} y={opY} width={opWidthPx} height={opHeightPx}
-                  fill={isDoor ? 'hsl(30, 80%, 95%)' : 'hsl(210, 80%, 95%)'}
-                  stroke={isDoor ? 'hsl(30, 80%, 45%)' : 'hsl(210, 80%, 45%)'}
-                  strokeWidth={1.2} rx={1}
+            {/* Ground line for walls */}
+            {card.category === 'pared' && (
+              <>
+                <line
+                  x1={rectX - 5} y1={rectY + rectH}
+                  x2={rectX + rectW + 5} y2={rectY + rectH}
+                  stroke="hsl(25, 60%, 40%)" strokeWidth={1.5}
                 />
-                {!isDoor && (
-                  <>
-                    <line x1={opX} y1={opY + opHeightPx / 2} x2={opX + opWidthPx} y2={opY + opHeightPx / 2}
-                      stroke="hsl(210, 80%, 70%)" strokeWidth={0.5} pointerEvents="none" />
-                    <line x1={opX + opWidthPx / 2} y1={opY} x2={opX + opWidthPx / 2} y2={opY + opHeightPx}
-                      stroke="hsl(210, 80%, 70%)" strokeWidth={0.5} pointerEvents="none" />
-                  </>
-                )}
-                {isDoor && (
-                  <circle cx={opX + opWidthPx * 0.8} cy={opY + opHeightPx * 0.55} r={1.5}
-                    fill="hsl(30, 80%, 45%)" pointerEvents="none" />
-                )}
-                <text x={opX + opWidthPx / 2} y={opY + opHeightPx / 2 + 3} textAnchor="middle"
-                  fontSize={6} fill="hsl(var(--foreground))" pointerEvents="none" opacity={0.8}>
-                  {OPENING_PRESETS[op.openingType as keyof typeof OPENING_PRESETS]?.label || op.openingType}
-                </text>
-              </g>
-            );
-          })}
-        </svg>
+                {Array.from({ length: Math.ceil((rectW + 10) / 6) }, (_, i) => (
+                  <line key={`gh-${i}`}
+                    x1={rectX - 5 + i * 6} y1={rectY + rectH + 1.5}
+                    x2={rectX - 5 + i * 6 - 4} y2={rectY + rectH + 5}
+                    stroke="hsl(25, 60%, 40%)" strokeWidth={0.4} opacity={0.5}
+                  />
+                ))}
+              </>
+            )}
+
+            {/* Main rectangle */}
+            <rect
+              x={rectX} y={rectY} width={rectW} height={rectH}
+              fill={card.fill} stroke={card.stroke}
+              strokeWidth={1.5} rx={1}
+            />
+
+            {/* Width dimension (bottom) */}
+            <line x1={rectX} y1={rectY + rectH + 12} x2={rectX + rectW} y2={rectY + rectH + 12}
+              stroke="hsl(25, 95%, 45%)" strokeWidth={0.6} />
+            <line x1={rectX} y1={rectY + rectH + 8} x2={rectX} y2={rectY + rectH + 16} stroke="hsl(25, 95%, 45%)" strokeWidth={0.4} />
+            <line x1={rectX + rectW} y1={rectY + rectH + 8} x2={rectX + rectW} y2={rectY + rectH + 16} stroke="hsl(25, 95%, 45%)" strokeWidth={0.4} />
+            <text x={rectX + rectW / 2} y={rectY + rectH + 24} textAnchor="middle" fontSize={8} fill="hsl(25, 95%, 45%)" fontWeight={600}>
+              {card.width.toFixed(2)}m
+            </text>
+
+            {/* Height dimension (left) */}
+            <line x1={rectX - 12} y1={rectY} x2={rectX - 12} y2={rectY + rectH}
+              stroke="hsl(25, 95%, 45%)" strokeWidth={0.6} />
+            <line x1={rectX - 16} y1={rectY} x2={rectX - 8} y2={rectY} stroke="hsl(25, 95%, 45%)" strokeWidth={0.4} />
+            <line x1={rectX - 16} y1={rectY + rectH} x2={rectX - 8} y2={rectY + rectH} stroke="hsl(25, 95%, 45%)" strokeWidth={0.4} />
+            <text x={rectX - 18} y={rectY + rectH / 2} textAnchor="middle" fontSize={8} fill="hsl(25, 95%, 45%)" fontWeight={600}
+              transform={`rotate(-90, ${rectX - 18}, ${rectY + rectH / 2})`}>
+              {card.height.toFixed(2)}m
+            </text>
+
+            {/* Openings (walls only) */}
+            {card.openings.map(op => {
+              const isHoriz = card.wall ? (card.wall.wallIndex === 1 || card.wall.wallIndex === 3) : true;
+              const fullWallLen = card.room ? (isHoriz ? card.room.width : card.room.length) : card.width;
+              const seg = card.segment;
+
+              let opCenterInSegment: number;
+              if (seg) {
+                const opMeters = op.positionX * fullWallLen;
+                opCenterInSegment = (opMeters - seg.startMeters) / (seg.endMeters - seg.startMeters);
+              } else {
+                opCenterInSegment = op.positionX;
+              }
+              opCenterInSegment = Math.max(0.05, Math.min(0.95, opCenterInSegment));
+
+              const opWidthPx = op.width * scale;
+              const opHeightPx = op.height * scale;
+              const baseY = getOpeningBaseY(op);
+              const opX = rectX + opCenterInSegment * rectW - opWidthPx / 2;
+              const opY = rectY + rectH - opHeightPx - baseY * scale;
+              const isDoor = op.openingType === 'puerta' || op.openingType === 'puerta_externa' || op.openingType === 'ventana_balconera';
+
+              return (
+                <g key={op.id} style={{ cursor: 'pointer' }}
+                  onClick={e => { e.stopPropagation(); onOpeningClick(op); }}>
+                  <rect
+                    x={opX} y={opY} width={opWidthPx} height={opHeightPx}
+                    fill={isDoor ? 'hsl(30, 80%, 95%)' : 'hsl(210, 80%, 95%)'}
+                    stroke={isDoor ? 'hsl(30, 80%, 45%)' : 'hsl(210, 80%, 45%)'}
+                    strokeWidth={1.2} rx={1}
+                  />
+                  {!isDoor && (
+                    <>
+                      <line x1={opX} y1={opY + opHeightPx / 2} x2={opX + opWidthPx} y2={opY + opHeightPx / 2}
+                        stroke="hsl(210, 80%, 70%)" strokeWidth={0.5} pointerEvents="none" />
+                      <line x1={opX + opWidthPx / 2} y1={opY} x2={opX + opWidthPx / 2} y2={opY + opHeightPx}
+                        stroke="hsl(210, 80%, 70%)" strokeWidth={0.5} pointerEvents="none" />
+                    </>
+                  )}
+                  {isDoor && (
+                    <circle cx={opX + opWidthPx * 0.8} cy={opY + opHeightPx * 0.55} r={1.5}
+                      fill="hsl(30, 80%, 45%)" pointerEvents="none" />
+                  )}
+                  <text x={opX + opWidthPx / 2} y={opY + opHeightPx / 2 + 3} textAnchor="middle"
+                    fontSize={6} fill="hsl(var(--foreground))" pointerEvents="none" opacity={0.8}>
+                    {OPENING_PRESETS[op.openingType as keyof typeof OPENING_PRESETS]?.label || op.openingType}
+                  </text>
+                </g>
+              );
+            })}
+          </svg>
+        )}
 
         {/* Add openings for wall cards */}
         {card.canAddOpenings && card.wallId && (
-          <div className="flex items-center gap-1 flex-wrap mt-1 pt-1 border-t border-border/30">
+          <div className="flex items-center gap-1 flex-wrap mt-1 pt-1 border-t border-border/30"
+            onClick={e => e.stopPropagation()}>
             {Object.entries(OPENING_PRESETS).map(([key, preset]) => (
               <Button key={key} variant="ghost" size="sm" className="text-[9px] h-5 px-1.5"
                 onClick={() => onAddOpening(card.wallId!, key, preset.width, preset.height)}
@@ -500,6 +585,117 @@ function ElevationCardView({ card, onOpeningClick, onAddOpening, onDeleteOpening
         )}
       </CardContent>
     </Card>
+  );
+}
+
+// Surface detail dialog - ficha de la superficie
+function SurfaceDetailDialog({ open, onOpenChange, card }: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  card: ElevationCard;
+}) {
+  const categoryLabels: Record<SurfaceCategory, string> = {
+    cimentacion: 'Cimentación',
+    suelo: 'Suelo',
+    techo: 'Techo',
+    pared: 'Pared',
+    volumen: 'Volumen',
+    tejado: 'Tejado',
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="text-sm flex items-center gap-2">
+            {card.label}
+            {card.sublabel && <span className="text-muted-foreground font-normal">— {card.sublabel}</span>}
+          </DialogTitle>
+          <DialogDescription className="text-xs">
+            Ficha de {categoryLabels[card.category]}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="rounded-md border border-border p-2.5">
+              <p className="text-[10px] text-muted-foreground">Categoría</p>
+              <p className="text-sm font-medium">{categoryLabels[card.category]}</p>
+            </div>
+            {card.badgeLabel && (
+              <div className="rounded-md border border-border p-2.5">
+                <p className="text-[10px] text-muted-foreground">Tipo</p>
+                <p className="text-sm font-medium">{card.badgeLabel}</p>
+              </div>
+            )}
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="rounded-md border border-border p-2.5">
+              <p className="text-[10px] text-muted-foreground">
+                {card.category === 'pared' || card.category === 'tejado' ? 'Largo' : 'Ancho'}
+              </p>
+              <p className="text-sm font-semibold">{card.width.toFixed(2)} m</p>
+            </div>
+            <div className="rounded-md border border-border p-2.5">
+              <p className="text-[10px] text-muted-foreground">
+                {card.category === 'pared' ? 'Alto' : card.category === 'tejado' ? 'Pendiente' : 'Largo'}
+              </p>
+              <p className="text-sm font-semibold">{card.height.toFixed(2)} m</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="rounded-md border border-border p-2.5 bg-muted/30">
+              <p className="text-[10px] text-muted-foreground">Superficie</p>
+              <p className="text-sm font-bold">{(card.surfaceArea || card.width * card.height).toFixed(2)} m²</p>
+            </div>
+            {card.volume !== undefined && (
+              <div className="rounded-md border border-border p-2.5 bg-muted/30">
+                <p className="text-[10px] text-muted-foreground">Volumen</p>
+                <p className="text-sm font-bold">{card.volume.toFixed(2)} m³</p>
+              </div>
+            )}
+          </div>
+
+          {card.roomHeight !== undefined && card.category === 'volumen' && card.room && (
+            <div className="rounded-md border border-border p-2.5">
+              <p className="text-[10px] text-muted-foreground">Dimensiones</p>
+              <p className="text-sm">
+                {card.room.width.toFixed(2)} × {card.room.length.toFixed(2)} × {card.roomHeight.toFixed(2)} m
+              </p>
+            </div>
+          )}
+
+          {card.openings.length > 0 && (
+            <div className="rounded-md border border-border p-2.5">
+              <p className="text-[10px] text-muted-foreground mb-1">Huecos ({card.openings.length})</p>
+              <div className="space-y-1">
+                {card.openings.map(op => (
+                  <div key={op.id} className="flex items-center justify-between text-xs">
+                    <span>{OPENING_PRESETS[op.openingType as keyof typeof OPENING_PRESETS]?.label || op.openingType}</span>
+                    <span className="text-muted-foreground">{op.width.toFixed(2)} × {op.height.toFixed(2)} m</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {card.segment && (
+            <div className="rounded-md border border-border p-2.5">
+              <p className="text-[10px] text-muted-foreground">Tramo</p>
+              <p className="text-xs">
+                Desde {card.segment.startMeters.toFixed(2)}m hasta {card.segment.endMeters.toFixed(2)}m
+                ({card.segment.segmentType === 'externa' ? 'externa' : 'interna'})
+              </p>
+            </div>
+          )}
+
+          <p className="text-[10px] text-muted-foreground italic pt-1">
+            El contenido detallado de este formulario se definirá próximamente.
+          </p>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 

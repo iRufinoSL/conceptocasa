@@ -24,6 +24,33 @@ Deno.serve(async (req) => {
   }
 
   try {
+    // --- Authentication & Authorization ---
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+
+    const userSupabase = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } },
+    });
+
+    const token = authHeader.replace('Bearer ', '');
+    const { data: claimsData, error: claimsError } = await userSupabase.auth.getClaims(token);
+    if (claimsError || !claimsData?.claims) {
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    const userId = claimsData.claims.sub;
+
     const { 
       budgetId, 
       municipality, 
@@ -31,8 +58,8 @@ Deno.serve(async (req) => {
       autonomousCommunity, 
       landClass, 
       cadastralReference,
-      specificSearch,  // Optional: specific plan/sector to search for
-      urbanClassification // Optional: from existing profile
+      specificSearch,
+      urbanClassification
     } = await req.json();
 
     if (!budgetId || !municipality) {
@@ -42,11 +69,34 @@ Deno.serve(async (req) => {
       );
     }
 
+    // Verify user has access to this budget
+    const { data: budgetAccess } = await userSupabase
+      .from('user_presupuestos')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('presupuesto_id', budgetId)
+      .maybeSingle();
+
+    // Also check if user is admin
+    const { data: adminRole } = await userSupabase
+      .from('user_roles')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('role', 'administrador')
+      .maybeSingle();
+
+    if (!budgetAccess && !adminRole) {
+      return new Response(
+        JSON.stringify({ error: 'Forbidden: no access to this budget' }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Use service role client for privileged operations
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
     const FIRECRAWL_API_KEY = Deno.env.get('FIRECRAWL_API_KEY');
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     if (!LOVABLE_API_KEY) {
       return new Response(

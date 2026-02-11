@@ -155,8 +155,8 @@ export function FloorPlanSummaryView({ summary }: FloorPlanSummaryProps) {
                     )}
                   </span>
                   <span>
-                    {w.wallType === 'invisible' ? <span className="text-muted-foreground italic">0.00 m² (invisible)</span> : fmt(w.netArea)}
-                    {w.openingsArea > 0 && w.wallType !== 'invisible' && (
+                    {w.wallType.endsWith('_invisible') ? <span className="text-muted-foreground italic">0.00 m² (invisible)</span> : fmt(w.netArea)}
+                    {w.openingsArea > 0 && !w.wallType.endsWith('_invisible') && (
                       <span className="text-muted-foreground ml-1">
                         (bruto: {fmt(w.grossArea)}, huecos: -{fmt(w.openingsArea)})
                       </span>

@@ -3306,9 +3306,13 @@ export type Database = {
           coordenadas_lat: number | null
           coordenadas_lng: number | null
           created_at: string | null
+          default_external_wall_thickness: number | null
+          default_internal_wall_thickness: number | null
+          default_room_height: number | null
           direccion: string | null
           end_date: string | null
           estimated_budget: number | null
+          estimated_surface_m2: number | null
           google_maps_url: string | null
           id: string
           is_signed: boolean
@@ -3326,6 +3330,9 @@ export type Database = {
           signed_at: string | null
           start_date: string | null
           status: string
+          terreno_length: number | null
+          terreno_m2: number | null
+          terreno_width: number | null
           updated_at: string | null
           version: string
         }
@@ -3336,9 +3343,13 @@ export type Database = {
           coordenadas_lat?: number | null
           coordenadas_lng?: number | null
           created_at?: string | null
+          default_external_wall_thickness?: number | null
+          default_internal_wall_thickness?: number | null
+          default_room_height?: number | null
           direccion?: string | null
           end_date?: string | null
           estimated_budget?: number | null
+          estimated_surface_m2?: number | null
           google_maps_url?: string | null
           id?: string
           is_signed?: boolean
@@ -3356,6 +3367,9 @@ export type Database = {
           signed_at?: string | null
           start_date?: string | null
           status?: string
+          terreno_length?: number | null
+          terreno_m2?: number | null
+          terreno_width?: number | null
           updated_at?: string | null
           version: string
         }
@@ -3366,9 +3380,13 @@ export type Database = {
           coordenadas_lat?: number | null
           coordenadas_lng?: number | null
           created_at?: string | null
+          default_external_wall_thickness?: number | null
+          default_internal_wall_thickness?: number | null
+          default_room_height?: number | null
           direccion?: string | null
           end_date?: string | null
           estimated_budget?: number | null
+          estimated_surface_m2?: number | null
           google_maps_url?: string | null
           id?: string
           is_signed?: boolean
@@ -3386,6 +3404,9 @@ export type Database = {
           signed_at?: string | null
           start_date?: string | null
           status?: string
+          terreno_length?: number | null
+          terreno_m2?: number | null
+          terreno_width?: number | null
           updated_at?: string | null
           version?: string
         }

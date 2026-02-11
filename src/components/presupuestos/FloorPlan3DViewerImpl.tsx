@@ -3,7 +3,7 @@ import { Canvas, useThree, useFrame } from '@react-three/fiber';
 import { OrbitControls, PerspectiveCamera, Text } from '@react-three/drei';
 import * as THREE from 'three';
 import type { FloorPlanData, RoomData } from '@/lib/floor-plan-calculations';
-import { autoClassifyWalls } from '@/lib/floor-plan-calculations';
+import { autoClassifyWalls, isExteriorType, isInvisibleType } from '@/lib/floor-plan-calculations';
 
 const ROOM_COLORS: Record<string, string> = {
   salón: '#e8d5b7',
@@ -83,9 +83,9 @@ function RoomWalls({
     room.walls.forEach((wall) => {
       const wallKey = `${room.id}::${wall.wallIndex}`;
       const effectiveType = wallClassification.get(wallKey) || wall.wallType;
-      if (effectiveType === 'invisible') return;
+      if (isInvisibleType(effectiveType)) return;
 
-      const ext = effectiveType === 'externa';
+      const ext = isExteriorType(effectiveType);
       const thickness = wall.thickness || (ext ? plan.externalWallThickness : plan.internalWallThickness);
       const color = ext ? '#c4a882' : '#d8cfc0';
 

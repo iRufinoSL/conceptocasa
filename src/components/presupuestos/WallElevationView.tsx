@@ -4,7 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ChevronLeft, ChevronRight, Plus, Trash2, DoorOpen } from 'lucide-react';
-import { OPENING_PRESETS, WALL_LABELS, computeWallSegments, generateExternalWallNames, autoClassifyWalls } from '@/lib/floor-plan-calculations';
+import { OPENING_PRESETS, WALL_LABELS, computeWallSegments, generateExternalWallNames, autoClassifyWalls, isExteriorType, isInvisibleType } from '@/lib/floor-plan-calculations';
 import type { RoomData, WallData, OpeningData, FloorPlanData, WallSegment } from '@/lib/floor-plan-calculations';
 
 interface WallElevationViewProps {
@@ -95,7 +95,7 @@ export function WallElevationView({
           let neighborWall: WallData | undefined;
           let neighborOpenings: OpeningData[] = [];
 
-          if (seg.segmentType === 'invisible' && seg.neighborRoomId) {
+          if (isInvisibleType(seg.segmentType) && seg.neighborRoomId) {
             neighborRoom = rooms.find(r => r.id === seg.neighborRoomId);
             if (neighborRoom && seg.neighborWallIndex !== undefined) {
               neighborWall = neighborRoom.walls.find(w => w.wallIndex === seg.neighborWallIndex);
@@ -142,7 +142,7 @@ export function WallElevationView({
       const direction = e.key === 'ArrowLeft' ? -1 : 1;
 
       // Find the opening in displayOpenings
-      const isInvisible = current.segment.segmentType === 'invisible';
+      const isInvisible = isInvisibleType(current.segment.segmentType);
       const openings = isInvisible ? current.neighborOpenings : current.ownOpenings;
       const op = openings.find(o => o.id === selectedOpeningId);
       if (!op) return;
@@ -194,7 +194,7 @@ export function WallElevationView({
   const isHoriz = wall.wallIndex === 1 || wall.wallIndex === 3;
   const fullWallLen = isHoriz ? room.width : room.length;
 
-  if (segment.segmentType === 'invisible') {
+  if (isInvisibleType(segment.segmentType)) {
     neighborOpenings.forEach(op => {
       const neighborIsHoriz = segment.neighborWallIndex === 1 || segment.neighborWallIndex === 3;
       const neighborFullLen = neighborRoom ? (neighborIsHoriz ? neighborRoom.width : neighborRoom.length) : segmentLength;
@@ -282,11 +282,11 @@ export function WallElevationView({
   const prevWall = () => setCurrentIndex(i => (i - 1 + allSegments.length) % allSegments.length);
   const nextWall = () => setCurrentIndex(i => (i + 1) % allSegments.length);
 
-  const typeLabel = segment.segmentType === 'externa' ? 'Externa' : segment.segmentType === 'invisible' ? 'Invisible' : 'Interna';
-  const typeBadgeVariant = segment.segmentType === 'externa' ? 'default' as const : 'outline' as const;
+  const typeLabel = isExteriorType(segment.segmentType) ? 'Exterior' : isInvisibleType(segment.segmentType) ? 'Invisible' : 'Interior';
+  const typeBadgeVariant = isExteriorType(segment.segmentType) ? 'default' as const : 'outline' as const;
 
-  const targetWallId = (segment.segmentType === 'invisible' && neighborWall) ? neighborWall.id : wall.id;
-  const canAddOpenings = !targetWallId.startsWith('temp-') && segment.segmentType !== 'invisible';
+  const targetWallId = (isInvisibleType(segment.segmentType) && neighborWall) ? neighborWall.id : wall.id;
+  const canAddOpenings = !targetWallId.startsWith('temp-') && !isInvisibleType(segment.segmentType);
 
   return (
     <div className="space-y-3" ref={containerRef}>
@@ -306,7 +306,7 @@ export function WallElevationView({
             <Badge variant={typeBadgeVariant} className="text-[10px]">{typeLabel}</Badge>
             {wallName && <Badge variant="secondary" className="text-[10px] font-bold">{wallName}</Badge>}
           </div>
-          {segment.segmentType === 'invisible' && neighborRoom && (
+          {isInvisibleType(segment.segmentType) && neighborRoom && (
             <span className="text-[10px] text-muted-foreground">
               Compartida con <strong>{neighborRoom.name}</strong> — los objetos son de la pared vecina
             </span>
@@ -353,10 +353,10 @@ export function WallElevationView({
             {/* Wall rectangle */}
             <rect
               x={wallX} y={wallY} width={wallW} height={wallH}
-              fill={segment.segmentType === 'invisible' ? 'hsl(0, 0%, 95%)' : segment.segmentType === 'externa' ? 'hsl(30, 30%, 92%)' : 'hsl(220, 14%, 95%)'}
-              stroke={segment.segmentType === 'invisible' ? 'hsl(0, 0%, 80%)' : 'hsl(220, 9%, 46%)'}
-              strokeWidth={segment.segmentType === 'externa' ? 2 : 1}
-              strokeDasharray={segment.segmentType === 'invisible' ? '6,3' : undefined}
+              fill={isInvisibleType(segment.segmentType) ? 'hsl(0, 0%, 95%)' : isExteriorType(segment.segmentType) ? 'hsl(30, 30%, 92%)' : 'hsl(220, 14%, 95%)'}
+              stroke={isInvisibleType(segment.segmentType) ? 'hsl(0, 0%, 80%)' : 'hsl(220, 9%, 46%)'}
+              strokeWidth={isExteriorType(segment.segmentType) ? 2 : 1}
+              strokeDasharray={isInvisibleType(segment.segmentType) ? '6,3' : undefined}
               data-wall-bg="true"
             />
 

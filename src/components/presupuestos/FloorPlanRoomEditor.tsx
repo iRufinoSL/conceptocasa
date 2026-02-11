@@ -236,7 +236,7 @@ export function FloorPlanRoomEditor({
                   <CollapsibleTrigger className="flex items-center justify-between w-full text-xs p-2 rounded bg-muted/50 hover:bg-muted">
                     <div className="flex items-center gap-2">
                       <span className="font-medium">{WALL_LABELS[wall.wallIndex]}</span>
-                      <Badge variant={wall.wallType === 'externa' ? 'default' : 'outline'} className="text-[10px] h-4">
+                      <Badge variant={wall.wallType.startsWith('exterior') ? 'default' : 'outline'} className="text-[10px] h-4">
                         {wall.wallType}
                       </Badge>
                       {wall.openings.length > 0 && (

@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import type { FloorPlanData, RoomData, WallData, OpeningData } from '@/lib/floor-plan-calculations';
+import type { FloorPlanData, RoomData, WallData, OpeningData, WallType } from '@/lib/floor-plan-calculations';
+import { migrateLegacyWallType } from '@/lib/floor-plan-calculations';
 
 interface DbFloorPlan {
   id: string;
@@ -114,13 +115,12 @@ export function useFloorPlan(budgetId: string) {
         const roomWalls = (wallsData || [])
           .filter((w: any) => w.room_id === r.id)
           .map((w: any) => {
-            // Migrate legacy 'compartida' to 'invisible'
-            const rawType = w.wall_type as string;
-            const wallType = rawType === 'compartida' ? 'invisible' : rawType;
+            // Migrate legacy wall type names
+            const wallType = migrateLegacyWallType(w.wall_type as string);
             return {
               id: w.id,
               wallIndex: w.wall_index,
-              wallType: wallType as 'externa' | 'interna' | 'invisible',
+              wallType,
               thickness: w.thickness || undefined,
               height: w.height || undefined,
               openings: openingsData
@@ -142,7 +142,7 @@ export function useFloorPlan(budgetId: string) {
           return existing || {
             id: `temp-${r.id}-${idx}`,
             wallIndex: idx,
-            wallType: 'interna' as const,
+            wallType: 'interior' as WallType,
             openings: [],
           };
         });
@@ -263,7 +263,7 @@ export function useFloorPlan(budgetId: string) {
       const wallInserts = [1, 2, 3, 4].map(idx => ({
         room_id: room.id,
         wall_index: idx,
-        wall_type: 'interna',
+        wall_type: 'interior',
       }));
 
       const { data: walls, error: wallError } = await supabase
@@ -331,7 +331,7 @@ export function useFloorPlan(budgetId: string) {
     }
   };
 
-  const updateWall = async (wallId: string, data: { wallType?: 'externa' | 'interna' | 'invisible'; thickness?: number; height?: number }) => {
+  const updateWall = async (wallId: string, data: { wallType?: WallType; thickness?: number; height?: number }) => {
     setSaving(true);
     try {
       const updates: any = {};

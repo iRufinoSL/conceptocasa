@@ -25,6 +25,7 @@ import Auth from "./pages/Auth";
 import Install from "./pages/Install";
 import SmsRedirect from "./pages/SmsRedirect";
 import NotFound from "./pages/NotFound";
+import FloorPlanPopout from "./pages/FloorPlanPopout";
 
 const queryClient = new QueryClient();
 
@@ -48,6 +49,7 @@ const App = () => {
             <Route path="/setup" element={<Setup />} />
             <Route path="/install" element={<Install />} />
             <Route path="/r/:type/:id" element={<SmsRedirect />} />
+            <Route path="/floorplan-popout" element={<ProtectedRoute appName="presupuestos"><FloorPlanPopout /></ProtectedRoute>} />
             
             {/* Protected routes - require authentication */}
             <Route path="/dashboard" element={<ProtectedRoute appName="dashboard"><Dashboard /></ProtectedRoute>} />

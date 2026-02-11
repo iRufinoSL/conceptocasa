@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { RefreshCw, Save, Layout, Box, BarChart3, Loader2, AlertTriangle, Trash2, DoorOpen, ImageIcon, Undo2, RotateCcw, RectangleVertical, Wand2 } from 'lucide-react';
+import { RefreshCw, Save, Layout, Box, BarChart3, Loader2, AlertTriangle, Trash2, DoorOpen, ImageIcon, Undo2, RotateCcw, RectangleVertical, Wand2, Maximize2, ExternalLink, X } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
 import { useFloorPlan } from '@/hooks/useFloorPlan';
@@ -41,6 +41,7 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
   const [refreshKey, setRefreshKey] = useState(0);
   const [roomDialogId, setRoomDialogId] = useState<string | null>(null);
   const [wallDialogKey, setWallDialogKey] = useState<{ roomId: string; wallIndex: number; segIndex?: number } | null>(null);
+  const [floatingOpen, setFloatingOpen] = useState(false);
 
   // Undo stack: stores snapshots of room positions/dimensions before changes
   const undoStackRef = useRef<Array<{ rooms: Array<{ id: string; posX: number; posY: number; width: number; length: number }> }>>([]);
@@ -336,6 +337,23 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
             <Save className={`h-4 w-4 mr-1 ${saving ? 'animate-spin' : ''}`} />
             Sincronizar mediciones
           </Button>
+          {viewTab === 'plano' && planData && (
+            <>
+              <Button variant="outline" size="sm" onClick={() => setFloatingOpen(true)}
+                title="Abrir plano en ventana flotante a pantalla completa">
+                <Maximize2 className="h-4 w-4 mr-1" />
+                Flotante
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => {
+                const url = `${window.location.origin}/floorplan-popout?floorplan-popout=${budgetId}`;
+                const popup = window.open(url, `floorplan_${budgetId}`, 'width=1200,height=800,resizable=yes,scrollbars=yes');
+                if (!popup) toast.error('El navegador bloqueó la ventana emergente. Permite ventanas emergentes para este sitio.');
+              }} title="Abrir plano en ventana externa (puedes moverla a otra pantalla)">
+                <ExternalLink className="h-4 w-4 mr-1" />
+                Ventana ext.
+              </Button>
+            </>
+          )}
         </div>
       </div>
 
@@ -869,6 +887,39 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
               </>
             );
           })()}
+        </DialogContent>
+      </Dialog>
+
+      {/* Floating fullscreen dialog for floor plan */}
+      <Dialog open={floatingOpen} onOpenChange={setFloatingOpen}>
+        <DialogContent className="max-w-[95vw] w-[95vw] h-[90vh] max-h-[90vh] flex flex-col p-0">
+          <DialogHeader className="flex flex-row items-center justify-between px-4 py-2 border-b shrink-0">
+            <DialogTitle className="text-sm font-semibold">Plano 2D — Vista ampliada</DialogTitle>
+            <Button variant="ghost" size="sm" onClick={() => setFloatingOpen(false)}>
+              <X className="h-4 w-4" />
+            </Button>
+          </DialogHeader>
+          <div className="flex-1 overflow-auto p-2">
+            {planData && (
+              <FloorPlanCanvas2D
+                plan={planData}
+                rooms={rooms}
+                selectedRoomId={selectedRoomId}
+                selectedWallKey={selectedWallKey ?? undefined}
+                sharedWallKeys={sharedWallKeys}
+                onSelectRoom={setSelectedRoomId}
+                onSelectWall={setSelectedWallKey}
+                onMoveRoom={handleMoveRoom}
+                onResizeWall={handleResizeWall}
+                onDoubleClickRoom={(roomId) => { setSelectedRoomId(roomId); setRoomDialogId(roomId); }}
+                onDoubleClickWall={(roomId, wallIndex, segIndex) => {
+                  setSelectedRoomId(roomId);
+                  setSelectedWallKey(segIndex !== undefined ? `${roomId}::${wallIndex}::${segIndex}` : `${roomId}::${wallIndex}`);
+                  setWallDialogKey({ roomId, wallIndex, segIndex });
+                }}
+              />
+            )}
+          </div>
         </DialogContent>
       </Dialog>
     </div>

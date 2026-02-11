@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 
 const VERSION_KEY = 'app_version_timestamp';
 const AUTO_UPDATE_KEY = 'app_auto_updated';
@@ -7,45 +7,78 @@ export function useVersionCheck(autoUpdate: boolean = false) {
   const [hasUpdate, setHasUpdate] = useState(false);
   const [checking, setChecking] = useState(true);
 
+  const detectHash = useCallback(async (): Promise<string | null> => {
+    try {
+      const response = await fetch(`/?_=${Date.now()}`, {
+        cache: 'no-store',
+        headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate', 'Pragma': 'no-cache' }
+      });
+      if (!response.ok) return null;
+      const html = await response.text();
+      // Vite adds content hash to built JS files
+      const scriptMatch = html.match(/src="\/assets\/index-([a-zA-Z0-9]+)\.js"/);
+      return scriptMatch ? scriptMatch[1] : null;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  // Force any waiting service worker to activate immediately
+  useEffect(() => {
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistration().then(reg => {
+        if (reg?.waiting) {
+          reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+        }
+        reg?.addEventListener('updatefound', () => {
+          const newWorker = reg.installing;
+          newWorker?.addEventListener('statechange', () => {
+            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+              // New SW installed while old one is active — activate it now
+              newWorker.postMessage({ type: 'SKIP_WAITING' });
+            }
+          });
+        });
+      });
+
+      // When the new SW takes over, reload to get fresh code
+      let refreshing = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (!refreshing) {
+          refreshing = true;
+          window.location.reload();
+        }
+      });
+    }
+  }, []);
+
   useEffect(() => {
     const checkVersion = async () => {
       try {
-        // Fetch a cache-busted version of index.html to detect changes
-        const response = await fetch(`/?_=${Date.now()}`, {
-          cache: 'no-store',
-          headers: { 'Cache-Control': 'no-cache' }
-        });
-        
-        if (response.ok) {
-          const html = await response.text();
-          // Extract script src with hash (Vite adds hash to built files)
-          const scriptMatch = html.match(/src="\/assets\/index-([a-zA-Z0-9]+)\.js"/);
-          const currentHash = scriptMatch ? scriptMatch[1] : null;
-          
-          const storedHash = localStorage.getItem(VERSION_KEY);
-          
-          if (currentHash && storedHash && currentHash !== storedHash) {
-            // Check if we just auto-updated to prevent infinite loop
-            const justUpdated = sessionStorage.getItem(AUTO_UPDATE_KEY);
-            
-            if (autoUpdate && !justUpdated) {
-              // Mark that we're auto-updating
-              sessionStorage.setItem(AUTO_UPDATE_KEY, 'true');
-              localStorage.setItem(VERSION_KEY, currentHash);
-              // Force reload
-              window.location.reload();
-              return;
-            }
-            
-            setHasUpdate(true);
-          } else if (currentHash && !storedHash) {
-            // First visit, store the current hash
+        const currentHash = await detectHash();
+        const storedHash = localStorage.getItem(VERSION_KEY);
+
+        if (currentHash && storedHash && currentHash !== storedHash) {
+          const justUpdated = sessionStorage.getItem(AUTO_UPDATE_KEY);
+
+          if (autoUpdate && !justUpdated) {
+            sessionStorage.setItem(AUTO_UPDATE_KEY, 'true');
             localStorage.setItem(VERSION_KEY, currentHash);
+            // Clear all caches before reload
+            if ('caches' in window) {
+              const keys = await caches.keys();
+              await Promise.all(keys.map(k => caches.delete(k)));
+            }
+            window.location.reload();
+            return;
           }
-          
-          // Clear the auto-update flag after successful load
-          sessionStorage.removeItem(AUTO_UPDATE_KEY);
+
+          setHasUpdate(true);
+        } else if (currentHash && !storedHash) {
+          localStorage.setItem(VERSION_KEY, currentHash);
         }
+
+        sessionStorage.removeItem(AUTO_UPDATE_KEY);
       } catch (error) {
         console.log('Version check skipped:', error);
       } finally {
@@ -54,26 +87,36 @@ export function useVersionCheck(autoUpdate: boolean = false) {
     };
 
     checkVersion();
-  }, [autoUpdate]);
 
-  const updateApp = () => {
-    // Clear the stored version so next load saves the new one
+    // Also recheck when the tab regains focus (user comes back to the app)
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        checkVersion();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, [autoUpdate, detectHash]);
+
+  const updateApp = async () => {
     localStorage.removeItem(VERSION_KEY);
-    // Force a hard reload bypassing cache
+    // Clear all service worker caches
+    if ('caches' in window) {
+      const keys = await caches.keys();
+      await Promise.all(keys.map(k => caches.delete(k)));
+    }
+    // Unregister SW to force clean start
+    if ('serviceWorker' in navigator) {
+      const reg = await navigator.serviceWorker.getRegistration();
+      if (reg) await reg.unregister();
+    }
     window.location.reload();
   };
 
   const saveCurrentVersion = () => {
-    // Save current version hash after successful login
-    fetch(`/?_=${Date.now()}`, { cache: 'no-store' })
-      .then(res => res.text())
-      .then(html => {
-        const scriptMatch = html.match(/src="\/assets\/index-([a-zA-Z0-9]+)\.js"/);
-        if (scriptMatch) {
-          localStorage.setItem(VERSION_KEY, scriptMatch[1]);
-        }
-      })
-      .catch(() => {});
+    detectHash().then(hash => {
+      if (hash) localStorage.setItem(VERSION_KEY, hash);
+    });
   };
 
   return { hasUpdate, checking, updateApp, saveCurrentVersion };

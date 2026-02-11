@@ -12,6 +12,7 @@ interface FloorPlanCanvas2DProps {
   onSelectWall?: (wallKey: string | null) => void;
   onMoveRoom?: (roomId: string, posX: number, posY: number) => void;
   onResizeWall?: (roomId: string, wallIndex: number, delta: number) => void;
+  onDoubleClickRoom?: (roomId: string) => void;
 }
 
 const ROOM_COLORS: Record<string, string> = {
@@ -113,7 +114,7 @@ function magneticSnap(
 
 export function FloorPlanCanvas2D({
   plan, rooms, selectedRoomId, selectedWallKey, sharedWallKeys,
-  onSelectRoom, onSelectWall, onMoveRoom, onResizeWall,
+  onSelectRoom, onSelectWall, onMoveRoom, onResizeWall, onDoubleClickRoom,
 }: FloorPlanCanvas2DProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const scale = 40;
@@ -682,6 +683,7 @@ export function FloorPlanCanvas2D({
               <rect x={el.x} y={el.y} width={el.w} height={el.h}
                 fill={el.color} opacity={0.75} rx={2}
                 onMouseDown={e => handleRoomMouseDown(e, el.roomId, el.posX, el.posY)}
+                onDoubleClick={e => { e.stopPropagation(); onDoubleClickRoom?.(el.roomId); }}
                 className={onMoveRoom ? 'cursor-grab' : 'cursor-pointer'}
               />
               {/* Floor pattern indicator */}

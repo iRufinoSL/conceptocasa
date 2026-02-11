@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback, useRef } from 'react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -7,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { RefreshCw, Save, Layout, Box, BarChart3, Loader2, AlertTriangle, Trash2, DoorOpen, ImageIcon, Undo2, RotateCcw, RectangleVertical, Wand2 } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
 import { useFloorPlan } from '@/hooks/useFloorPlan';
 import { calculateFloorPlanSummary, detectSharedWalls, autoClassifyWalls, WALL_LABELS, OPENING_PRESETS, generateExternalWallNames, computeWallSegments, isExteriorType, isInvisibleType } from '@/lib/floor-plan-calculations';
@@ -37,6 +39,7 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
   const [selectedWallKey, setSelectedWallKey] = useState<string | null>(null);
   const [viewTab, setViewTab] = useState('plano');
   const [refreshKey, setRefreshKey] = useState(0);
+  const [roomDialogId, setRoomDialogId] = useState<string | null>(null);
 
   // Undo stack: stores snapshots of room positions/dimensions before changes
   const undoStackRef = useRef<Array<{ rooms: Array<{ id: string; posX: number; posY: number; width: number; length: number }> }>>([]);
@@ -112,10 +115,12 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
   const externalWallNames = useMemo(() => generateExternalWallNames(rooms, wallClassification), [rooms, wallClassification]);
   const wallSegmentsMap = useMemo(() => computeWallSegments(rooms), [rooms]);
 
-  const handleMoveRoom = useCallback((roomId: string, posX: number, posY: number) => {
+  const handleMoveRoom = useCallback(async (roomId: string, posX: number, posY: number) => {
     pushUndo();
-    updateRoom(roomId, { posX, posY });
-  }, [updateRoom, pushUndo]);
+    await updateRoom(roomId, { posX, posY });
+    // Auto-classify perimeter walls after move
+    classifyPerimeterWalls();
+  }, [updateRoom, pushUndo, classifyPerimeterWalls]);
 
   const handleResizeWall = useCallback(async (roomId: string, wallIndex: number, delta: number) => {
     const room = rooms.find(r => r.id === roomId);
@@ -139,7 +144,9 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
         await updateRoom(neighbor.neighborRoomId, applyResize(nRoom, neighbor.neighborWallIndex, delta));
       }
     }
-  }, [rooms, updateRoom, sharedWallMap]);
+    // Auto-classify perimeter walls after resize
+    classifyPerimeterWalls();
+  }, [rooms, updateRoom, sharedWallMap, classifyPerimeterWalls]);
 
   // Handle live plan dimension changes with m2 validation
   const handlePlanWidthChange = (value: number) => {
@@ -357,6 +364,7 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
                 onSelectWall={setSelectedWallKey}
                 onMoveRoom={handleMoveRoom}
                 onResizeWall={handleResizeWall}
+                onDoubleClickRoom={(roomId) => { setSelectedRoomId(roomId); setRoomDialogId(roomId); }}
               />
               {selectedWallKey && (() => {
                 const parts = selectedWallKey.split('::');
@@ -643,6 +651,97 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
           />
         </div>
       </div>
+
+      {/* Room detail dialog (double-click) */}
+      <Dialog open={!!roomDialogId} onOpenChange={(open) => { if (!open) setRoomDialogId(null); }}>
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+          {(() => {
+            const dialogRoom = rooms.find(r => r.id === roomDialogId);
+            if (!dialogRoom) return null;
+            return (
+              <>
+                <DialogHeader>
+                  <DialogTitle className="text-base">Editar espacio: {dialogRoom.name}</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4 pt-2">
+                  {/* Name */}
+                  <div>
+                    <Label className="text-xs font-semibold">Nombre</Label>
+                    <Input
+                      value={dialogRoom.name}
+                      onChange={e => updateRoom(dialogRoom.id, { name: e.target.value })}
+                      placeholder="Nombre del espacio"
+                    />
+                  </div>
+                  {/* Dimensions */}
+                  <div className="grid grid-cols-3 gap-3">
+                    <div>
+                      <Label className="text-xs">Ancho (m)</Label>
+                      <Input type="number" step="0.1" value={dialogRoom.width}
+                        onChange={e => updateRoom(dialogRoom.id, { width: Number(e.target.value) })} />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Largo (m)</Label>
+                      <Input type="number" step="0.1" value={dialogRoom.length}
+                        onChange={e => updateRoom(dialogRoom.id, { length: Number(e.target.value) })} />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Alto (m)</Label>
+                      <Input type="number" step="0.1" value={dialogRoom.height || ''}
+                        placeholder="Auto"
+                        onChange={e => updateRoom(dialogRoom.id, { height: Number(e.target.value) || undefined })} />
+                    </div>
+                  </div>
+                  {/* Position */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label className="text-xs">Posición X (m)</Label>
+                      <Input type="number" step="0.01" value={dialogRoom.posX}
+                        onChange={e => updateRoom(dialogRoom.id, { posX: Number(e.target.value) })} />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Posición Y (m)</Label>
+                      <Input type="number" step="0.01" value={dialogRoom.posY}
+                        onChange={e => updateRoom(dialogRoom.id, { posY: Number(e.target.value) })} />
+                    </div>
+                  </div>
+                  {/* Surface elements */}
+                  <div className="space-y-2">
+                    <Label className="text-xs font-semibold">Elementos</Label>
+                    <div className="grid grid-cols-3 gap-2">
+                      <div className="flex items-center justify-between bg-muted/30 p-2 rounded">
+                        <span className="text-xs">Suelo</span>
+                        <Switch
+                          checked={dialogRoom.hasFloor !== false}
+                          onCheckedChange={v => updateRoom(dialogRoom.id, { hasFloor: v })}
+                        />
+                      </div>
+                      <div className="flex items-center justify-between bg-muted/30 p-2 rounded">
+                        <span className="text-xs">Techo</span>
+                        <Switch
+                          checked={dialogRoom.hasCeiling !== false}
+                          onCheckedChange={v => updateRoom(dialogRoom.id, { hasCeiling: v })}
+                        />
+                      </div>
+                      <div className="flex items-center justify-between bg-muted/30 p-2 rounded">
+                        <span className="text-xs">Tejado</span>
+                        <Switch
+                          checked={dialogRoom.hasRoof !== false}
+                          onCheckedChange={v => updateRoom(dialogRoom.id, { hasRoof: v })}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  {/* Area info */}
+                  <div className="text-sm text-muted-foreground bg-muted/30 p-3 rounded">
+                    Superficie: <strong>{(dialogRoom.width * dialogRoom.length).toFixed(1)}m²</strong>
+                  </div>
+                </div>
+              </>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

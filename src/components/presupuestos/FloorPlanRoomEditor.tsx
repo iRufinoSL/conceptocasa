@@ -170,9 +170,18 @@ export function FloorPlanRoomEditor({
       {selectedRoom && (
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm">Editar: {selectedRoom.name}</CardTitle>
+          <CardTitle className="text-sm">Editar: {selectedRoom.name}</CardTitle>
           </CardHeader>
            <CardContent className="space-y-3">
+            {/* Room name */}
+            <div>
+              <Label className="text-xs">Nombre</Label>
+              <Input
+                value={selectedRoom.name}
+                onChange={e => onUpdateRoom(selectedRoom.id, { name: e.target.value })}
+                placeholder="Nombre del espacio"
+              />
+            </div>
             {/* Room dimensions */}
             <div className="grid grid-cols-3 gap-2">
               <div>

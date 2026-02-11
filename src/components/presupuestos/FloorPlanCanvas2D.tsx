@@ -188,8 +188,10 @@ export function FloorPlanCanvas2D({
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) return;
       // Don't intercept if focus is on an input
-      if ((e.target as HTMLElement)?.tagName === 'INPUT' || (e.target as HTMLElement)?.tagName === 'TEXTAREA') return;
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
       e.preventDefault();
+      e.stopPropagation();
       const step = e.shiftKey ? 0.05 : 0.01; // Shift = 5cm, normal = 1cm
       const room = rooms.find(r => r.id === selectedRoomId);
       if (!room) return;
@@ -203,8 +205,8 @@ export function FloorPlanCanvas2D({
       newY = Math.round(newY * 100) / 100;
       onMoveRoom(selectedRoomId, newX, newY);
     };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener('keydown', handleKeyDown, true);
+    return () => window.removeEventListener('keydown', handleKeyDown, true);
   }, [selectedRoomId, onMoveRoom, rooms]);
 
   // Compute external perimeter dimensions (outer bounds including wall thickness)

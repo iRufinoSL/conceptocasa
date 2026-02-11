@@ -187,12 +187,12 @@ export function FloorPlanRoomEditor({
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <Label className="text-xs">Posición X (m)</Label>
-                <Input type="number" step="0.5" value={selectedRoom.posX}
+                <Input type="number" step="0.01" value={selectedRoom.posX}
                   onChange={e => onUpdateRoom(selectedRoom.id, { posX: Number(e.target.value) })} />
               </div>
               <div>
                 <Label className="text-xs">Posición Y (m)</Label>
-                <Input type="number" step="0.5" value={selectedRoom.posY}
+                <Input type="number" step="0.01" value={selectedRoom.posY}
                   onChange={e => onUpdateRoom(selectedRoom.id, { posY: Number(e.target.value) })} />
               </div>
             </div>

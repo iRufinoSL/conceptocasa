@@ -528,7 +528,6 @@ export function calculateInternalGableExtension(
 }
 
 export function calculateFloorPlanSummary(plan: FloorPlanData, rooms: RoomData[], floors?: FloorLevel[]): FloorPlanSummary {
-  const sharedWalls = detectSharedWalls(rooms);
   const wallClassification = autoClassifyWalls(rooms);
 
   // Apply auto-classification to rooms before calculating
@@ -544,7 +543,60 @@ export function calculateFloorPlanSummary(plan: FloorPlanData, rooms: RoomData[]
     }),
   }));
 
+  // Use segment-based wall calculation to properly handle partial overlaps
+  // and multi-neighbor walls (computeWallSegments handles deduplication correctly)
+  const wallSegments = computeWallSegments(rooms);
+
   const roomCalcs = classifiedRooms.map(r => calculateRoom(r, plan));
+
+  // Override room wall areas using segment-based calculation
+  // This fixes double-counting when walls have multiple neighbors
+  roomCalcs.forEach((rc, idx) => {
+    const room = classifiedRooms[idx];
+    let segExtArea = 0;
+    let segIntArea = 0;
+
+    rc.walls.forEach(wallCalc => {
+      const key = `${room.id}::${wallCalc.wallIndex}`;
+      const segments = wallSegments.get(key);
+      if (!segments || segments.length === 0) return;
+
+      // Calculate area per segment instead of using whole-wall type
+      let wallExtArea = 0;
+      let wallIntArea = 0;
+      segments.forEach(seg => {
+        const segLength = seg.endMeters - seg.startMeters;
+        const segGrossArea = segLength * wallCalc.wallHeight;
+        // Distribute openings proportionally across segments
+        const segFraction = segLength / Math.max(wallCalc.wallLength, 0.001);
+        const segOpeningsArea = wallCalc.openingsArea * segFraction;
+        const segNetArea = Math.max(0, segGrossArea - segOpeningsArea);
+
+        if (isInvisibleType(seg.segmentType)) {
+          // Don't count invisible segments
+        } else if (isExteriorType(seg.segmentType)) {
+          wallExtArea += segNetArea;
+        } else {
+          wallIntArea += segNetArea;
+        }
+      });
+
+      segExtArea += wallExtArea;
+      segIntArea += wallIntArea;
+
+      // Update wallCalc.wallType to the dominant visible segment type for display
+      const visibleSegs = segments.filter(s => !isInvisibleType(s.segmentType));
+      if (visibleSegs.length > 0) {
+        wallCalc.wallType = visibleSegs[0].segmentType;
+      } else if (segments.length > 0) {
+        wallCalc.wallType = segments[0].segmentType;
+      }
+    });
+
+    rc.totalExternalWallArea = segExtArea;
+    rc.totalInternalWallArea = segIntArea;
+  });
+
   const roofM2 = calculateRoof(plan, rooms);
   
   // Calculate gables
@@ -590,11 +642,33 @@ export function calculateFloorPlanSummary(plan: FloorPlanData, rooms: RoomData[]
     totalExternalWallM2 += rc.totalExternalWallArea;
     totalInternalWallM2 += rc.totalInternalWallArea;
     
-    rc.walls.forEach(w => {
-      if (isInvisibleType(w.wallType)) return;
+    // Use segments for gross/base calculations too
+    rc.walls.forEach(wallCalc => {
+      const key = `${room.id}::${wallCalc.wallIndex}`;
+      const segments = wallSegments.get(key) || [];
 
-      const countOpenings = () => {
-        w.openings.forEach(o => {
+      segments.forEach(seg => {
+        if (isInvisibleType(seg.segmentType)) return;
+        const segLength = seg.endMeters - seg.startMeters;
+        const segGrossArea = segLength * wallCalc.wallHeight;
+        const segFraction = segLength / Math.max(wallCalc.wallLength, 0.001);
+        const segOpeningsArea = wallCalc.openingsArea * segFraction;
+
+        if (isExteriorType(seg.segmentType)) {
+          totalExternalWallGrossM2 += segGrossArea;
+          totalExternalWallOpeningsM2 += segOpeningsArea;
+          totalExternalWallBaseM += segLength;
+        } else {
+          totalInternalWallGrossM2 += segGrossArea;
+          totalInternalWallOpeningsM2 += segOpeningsArea;
+          totalInternalWallBaseM += segLength;
+        }
+      });
+
+      // Count openings (only for visible walls to avoid double-counting)
+      const hasVisibleSegment = segments.some(s => !isInvisibleType(s.segmentType));
+      if (hasVisibleSegment) {
+        wallCalc.openings.forEach(o => {
           openingsByType[o.type] = (openingsByType[o.type] || 0) + o.count;
           if (o.type === 'puerta' || o.type === 'puerta_externa') {
             totalDoors += o.count;
@@ -602,18 +676,6 @@ export function calculateFloorPlanSummary(plan: FloorPlanData, rooms: RoomData[]
             totalWindows += o.count;
           }
         });
-      };
-
-      if (isExteriorType(w.wallType)) {
-        totalExternalWallGrossM2 += w.grossArea;
-        totalExternalWallOpeningsM2 += w.openingsArea;
-        totalExternalWallBaseM += w.baseLength;
-        countOpenings();
-      } else {
-        totalInternalWallGrossM2 += w.grossArea;
-        totalInternalWallOpeningsM2 += w.openingsArea;
-        totalInternalWallBaseM += w.baseLength;
-        countOpenings();
       }
     });
   });

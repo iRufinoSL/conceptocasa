@@ -1,6 +1,4 @@
 import { useMemo, useState, useCallback, useRef, useEffect } from 'react';
-import { Stage, Layer, Rect, Line, Circle, Text, Group } from 'react-konva';
-import type { KonvaEventObject } from 'konva/lib/Node';
 import type { FloorPlanData, RoomData } from '@/lib/floor-plan-calculations';
 import { autoClassifyWalls, generateExternalWallNames, computeWallSegments, isExteriorType, isInvisibleType } from '@/lib/floor-plan-calculations';
 
@@ -38,7 +36,7 @@ function getRoomColor(name: string): string {
 
 const GRID_SNAP = 0.05;
 const MAGNET_THRESHOLD = 0.15;
-const SCALE = 40; // pixels per meter
+const SCALE = 40;
 
 function snapToGrid(val: number): number {
   return Math.round(val / GRID_SNAP) * GRID_SNAP;
@@ -96,112 +94,111 @@ function magneticSnap(
   };
 }
 
-// Wall colors
 const WALL_EXT_COLOR = '#1e2d4d';
 const WALL_INT_COLOR = '#d97706';
 const WALL_INVIS_COLOR = '#9ca3af';
 const WALL_SELECTED_COLOR = '#6366f1';
 const DIM_COLOR = '#c2410c';
-const PERIM_COLOR = '#166534';
 
 export function FloorPlanCanvas2D({
   plan, rooms, selectedRoomId, selectedWallKey, sharedWallKeys,
   onSelectRoom, onSelectWall, onMoveRoom, onResizeWall, onDoubleClickRoom, onDoubleClickWall,
 }: FloorPlanCanvas2DProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const stageRef = useRef<any>(null);
-  const [stageSize, setStageSize] = useState({ width: 800, height: 500 });
+  const svgRef = useRef<SVGSVGElement>(null);
   const [zoom, setZoom] = useState(1);
-  const [stagePos, setStagePos] = useState({ x: 80, y: 80 });
+  const [pan, setPan] = useState({ x: 80, y: 80 });
+  const [dragging, setDragging] = useState<{ type: 'pan' | 'room' | 'resize'; roomId?: string; wallIndex?: number; isHoriz?: boolean; startMouse: { x: number; y: number }; startVal: { x: number; y: number } } | null>(null);
 
-  // Resize observer for container
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    const ro = new ResizeObserver((entries) => {
-      const { width, height } = entries[0].contentRect;
-      setStageSize({ width, height: Math.max(height, 400) });
-    });
-    ro.observe(el);
-    setStageSize({ width: el.clientWidth, height: Math.max(el.clientHeight, 400) });
-    return () => ro.disconnect();
-  }, []);
-
-  // Wall classification
   const wallClassification = useMemo(() => autoClassifyWalls(rooms), [rooms]);
-  const externalWallNames = useMemo(() => generateExternalWallNames(rooms, wallClassification), [rooms, wallClassification]);
   const wallSegmentsMap = useMemo(() => computeWallSegments(rooms), [rooms]);
 
-  // Zoom with mouse wheel
-  const handleWheel = useCallback((e: KonvaEventObject<WheelEvent>) => {
-    e.evt.preventDefault();
-    const stage = stageRef.current;
-    if (!stage) return;
+  const toSvgCoords = useCallback((clientX: number, clientY: number) => {
+    const svg = svgRef.current;
+    if (!svg) return { x: 0, y: 0 };
+    const rect = svg.getBoundingClientRect();
+    return {
+      x: (clientX - rect.left - pan.x) / zoom,
+      y: (clientY - rect.top - pan.y) / zoom,
+    };
+  }, [zoom, pan]);
+
+  // Mouse wheel zoom
+  const handleWheel = useCallback((e: React.WheelEvent) => {
+    e.preventDefault();
+    const svg = svgRef.current;
+    if (!svg) return;
+    const rect = svg.getBoundingClientRect();
+    const pointerX = e.clientX - rect.left;
+    const pointerY = e.clientY - rect.top;
     const oldScale = zoom;
-    const pointer = stage.getPointerPosition();
-    if (!pointer) return;
     const scaleBy = 1.08;
-    const newScale = e.evt.deltaY < 0 ? oldScale * scaleBy : oldScale / scaleBy;
+    const newScale = e.deltaY < 0 ? oldScale * scaleBy : oldScale / scaleBy;
     const clampedScale = Math.max(0.3, Math.min(5, newScale));
     const mousePointTo = {
-      x: (pointer.x - stagePos.x) / oldScale,
-      y: (pointer.y - stagePos.y) / oldScale,
+      x: (pointerX - pan.x) / oldScale,
+      y: (pointerY - pan.y) / oldScale,
     };
     setZoom(clampedScale);
-    setStagePos({
-      x: pointer.x - mousePointTo.x * clampedScale,
-      y: pointer.y - mousePointTo.y * clampedScale,
+    setPan({
+      x: pointerX - mousePointTo.x * clampedScale,
+      y: pointerY - mousePointTo.y * clampedScale,
     });
-  }, [zoom, stagePos]);
+  }, [zoom, pan]);
 
-  // Room drag end
-  const handleRoomDragEnd = useCallback((roomId: string, room: RoomData, e: KonvaEventObject<DragEvent>) => {
-    if (!onMoveRoom) return;
-    const rawX = snapToGrid(e.target.x() / SCALE);
-    const rawY = snapToGrid(e.target.y() / SCALE);
-    const snapped = magneticSnap(roomId, rawX, rawY, room.width, room.length, rooms);
-    // Reset node position - the parent will re-render with new data
-    e.target.x(snapped.x * SCALE);
-    e.target.y(snapped.y * SCALE);
-    if (snapped.x !== room.posX || snapped.y !== room.posY) {
-      onMoveRoom(roomId, snapped.x, snapped.y);
-    }
-  }, [rooms, onMoveRoom]);
+  // Global mouse move/up for dragging
+  useEffect(() => {
+    if (!dragging) return;
+    const handleMouseMove = (e: MouseEvent) => {
+      const dx = e.clientX - dragging.startMouse.x;
+      const dy = e.clientY - dragging.startMouse.y;
 
-  // Room drag move (live snap preview)
-  const handleRoomDragMove = useCallback((roomId: string, room: RoomData, e: KonvaEventObject<DragEvent>) => {
-    const rawX = snapToGrid(e.target.x() / SCALE);
-    const rawY = snapToGrid(e.target.y() / SCALE);
-    // Snap to grid during drag
-    e.target.x(rawX * SCALE);
-    e.target.y(rawY * SCALE);
-  }, []);
+      if (dragging.type === 'pan') {
+        setPan({ x: dragging.startVal.x + dx, y: dragging.startVal.y + dy });
+      } else if (dragging.type === 'room' && dragging.roomId && onMoveRoom) {
+        const room = rooms.find(r => r.id === dragging.roomId);
+        if (!room) return;
+        const rawX = snapToGrid(dragging.startVal.x + dx / zoom / SCALE);
+        const rawY = snapToGrid(dragging.startVal.y + dy / zoom / SCALE);
+        // Live preview via CSS transform would be complex; we commit on mouseUp
+      } else if (dragging.type === 'resize') {
+        // handled on mouseUp
+      }
+    };
 
-  // Wall resize via drag handle
-  const handleResizeHandleDrag = useCallback((roomId: string, wallIndex: number, isHoriz: boolean, startVal: number, e: KonvaEventObject<DragEvent>) => {
-    // Constrain handle to axis
-    if (isHoriz) {
-      e.target.x(0); // keep x fixed relative to group
-    } else {
-      e.target.y(0);
-    }
-  }, []);
+    const handleMouseUp = (e: MouseEvent) => {
+      const dx = e.clientX - dragging.startMouse.x;
+      const dy = e.clientY - dragging.startMouse.y;
 
-  const handleResizeHandleDragEnd = useCallback((roomId: string, wallIndex: number, isHoriz: boolean, startVal: number, e: KonvaEventObject<DragEvent>) => {
-    if (!onResizeWall) return;
-    const raw = isHoriz
-      ? e.target.y() / SCALE
-      : e.target.x() / SCALE;
-    const delta = snapToGrid(raw);
-    // Reset handle position
-    e.target.x(0);
-    e.target.y(0);
-    if (delta !== 0) {
-      onResizeWall(roomId, wallIndex, delta);
-    }
-  }, [onResizeWall]);
+      if (dragging.type === 'room' && dragging.roomId && onMoveRoom) {
+        const room = rooms.find(r => r.id === dragging.roomId);
+        if (room) {
+          const rawX = snapToGrid(room.posX + dx / zoom / SCALE);
+          const rawY = snapToGrid(room.posY + dy / zoom / SCALE);
+          const snapped = magneticSnap(dragging.roomId, rawX, rawY, room.width, room.length, rooms);
+          if (snapped.x !== room.posX || snapped.y !== room.posY) {
+            onMoveRoom(dragging.roomId, snapped.x, snapped.y);
+          }
+        }
+      } else if (dragging.type === 'resize' && dragging.roomId && dragging.wallIndex !== undefined && onResizeWall) {
+        const delta = dragging.isHoriz
+          ? snapToGrid(dy / zoom / SCALE)
+          : snapToGrid(dx / zoom / SCALE);
+        if (delta !== 0) {
+          onResizeWall(dragging.roomId, dragging.wallIndex, delta);
+        }
+      }
+      setDragging(null);
+    };
 
-  // Keyboard arrow key movement
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [dragging, rooms, zoom, onMoveRoom, onResizeWall]);
+
+  // Keyboard movement
   useEffect(() => {
     if (!selectedRoomId || !onMoveRoom) return;
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -209,7 +206,6 @@ export function FloorPlanCanvas2D({
       const tag = (e.target as HTMLElement)?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
       e.preventDefault();
-      e.stopPropagation();
       const step = e.shiftKey ? 0.05 : 0.01;
       const room = rooms.find(r => r.id === selectedRoomId);
       if (!room) return;
@@ -227,7 +223,6 @@ export function FloorPlanCanvas2D({
     return () => window.removeEventListener('keydown', handleKeyDown, true);
   }, [selectedRoomId, onMoveRoom, rooms]);
 
-  // Compute perimeter dimensions
   const perimeterDims = useMemo(() => {
     if (rooms.length === 0) return null;
     const extT = plan.externalWallThickness;
@@ -245,21 +240,11 @@ export function FloorPlanCanvas2D({
       extMaxY: (maxY + extT) * SCALE,
       topLen: (maxX - minX + 2 * extT),
       rightLen: (maxY - minY + 2 * extT),
-      interiorWidth: maxX - minX,
-      interiorLength: maxY - minY,
     };
   }, [rooms, plan.externalWallThickness]);
 
-  // Zoom buttons
   const ZOOM_STEPS = [50, 75, 100, 125, 150, 200, 250, 300];
-
-  // Click on empty stage deselects
-  const handleStageClick = useCallback((e: KonvaEventObject<MouseEvent>) => {
-    if (e.target === e.target.getStage()) {
-      onSelectRoom?.('');
-      onSelectWall?.(null);
-    }
-  }, [onSelectRoom, onSelectWall]);
+  const extT = plan.externalWallThickness;
 
   if (rooms.length === 0) {
     return (
@@ -269,7 +254,12 @@ export function FloorPlanCanvas2D({
     );
   }
 
-  const extT = plan.externalWallThickness;
+  // Compute drag offset for the room being dragged
+  const getDragOffset = (roomId: string) => {
+    if (!dragging || dragging.type !== 'room' || dragging.roomId !== roomId) return { dx: 0, dy: 0 };
+    // We don't have live mouse pos in render, so drag commits on mouseUp. Return 0.
+    return { dx: 0, dy: 0 };
+  };
 
   return (
     <div className="w-full bg-background rounded-lg border border-border">
@@ -291,125 +281,84 @@ export function FloorPlanCanvas2D({
         <span className="text-[10px] text-muted-foreground ml-2">🖱️ Rueda = zoom · Arrastrar fondo = pan</span>
       </div>
 
-      <div ref={containerRef} style={{ width: '100%', height: '500px', cursor: 'default' }}>
-        <Stage
-          ref={stageRef}
-          width={stageSize.width}
-          height={stageSize.height}
-          scaleX={zoom}
-          scaleY={zoom}
-          x={stagePos.x}
-          y={stagePos.y}
-          draggable
+      <div style={{ width: '100%', height: '500px', overflow: 'hidden' }}>
+        <svg
+          ref={svgRef}
+          width="100%"
+          height="100%"
+          style={{ cursor: dragging?.type === 'pan' ? 'grabbing' : 'default' }}
           onWheel={handleWheel}
-          onDragEnd={(e) => {
-            if (e.target === stageRef.current) {
-              setStagePos({ x: e.target.x(), y: e.target.y() });
+          onMouseDown={(e) => {
+            if (e.target === svgRef.current || (e.target as SVGElement).dataset?.bg === 'true') {
+              e.preventDefault();
+              setDragging({ type: 'pan', startMouse: { x: e.clientX, y: e.clientY }, startVal: { ...pan } });
+              onSelectRoom?.('');
+              onSelectWall?.(null);
             }
           }}
-          onClick={handleStageClick}
         >
-          <Layer>
+          <g transform={`translate(${pan.x}, ${pan.y}) scale(${zoom})`}>
             {/* Grid */}
             {(() => {
-              const gridLines: JSX.Element[] = [];
+              const lines: JSX.Element[] = [];
               const gridW = plan.width * SCALE;
               const gridH = plan.length * SCALE;
               const step = GRID_SNAP * SCALE;
               for (let x = 0; x <= gridW; x += step) {
-                gridLines.push(
-                  <Line key={`gv-${x}`} points={[x, 0, x, gridH]}
-                    stroke="#e5e7eb" strokeWidth={0.3} opacity={0.5} listening={false} />
-                );
+                lines.push(<line key={`gv-${x}`} x1={x} y1={0} x2={x} y2={gridH} stroke="#e5e7eb" strokeWidth={0.3} opacity={0.5} />);
               }
               for (let y = 0; y <= gridH; y += step) {
-                gridLines.push(
-                  <Line key={`gh-${y}`} points={[0, y, gridW, y]}
-                    stroke="#e5e7eb" strokeWidth={0.3} opacity={0.5} listening={false} />
-                );
+                lines.push(<line key={`gh-${y}`} x1={0} y1={y} x2={gridW} y2={y} stroke="#e5e7eb" strokeWidth={0.3} opacity={0.5} />);
               }
-              return gridLines;
+              return lines;
             })()}
 
+            {/* Background hit area for pan */}
+            <rect data-bg="true" x={-500} y={-500} width={plan.width * SCALE + 1000} height={plan.length * SCALE + 1000} fill="transparent" />
+
             {/* Plan outline */}
-            <Rect
-              x={0} y={0}
-              width={plan.width * SCALE}
-              height={plan.length * SCALE}
-              stroke="#d1d5db"
-              strokeWidth={1}
-              dash={[8, 4]}
-              listening={false}
-            />
+            <rect x={0} y={0} width={plan.width * SCALE} height={plan.length * SCALE}
+              stroke="#d1d5db" strokeWidth={1} strokeDasharray="8 4" fill="none" />
 
-            {/* External perimeter outline */}
-            {perimeterDims && (
-              <Rect
-                x={perimeterDims.extMinX}
-                y={perimeterDims.extMinY}
-                width={perimeterDims.extMaxX - perimeterDims.extMinX}
-                height={perimeterDims.extMaxY - perimeterDims.extMinY}
-                stroke={DIM_COLOR}
-                strokeWidth={0.8}
-                dash={[4, 3]}
-                opacity={0.5}
-                listening={false}
-              />
-            )}
-
-            {/* Perimeter dimension annotations */}
+            {/* External perimeter */}
             {perimeterDims && (
               <>
-                {/* Top dimension - Side A */}
-                <Line
-                  points={[perimeterDims.extMinX, perimeterDims.extMinY - 18, perimeterDims.extMaxX, perimeterDims.extMinY - 18]}
-                  stroke={DIM_COLOR} strokeWidth={0.6} listening={false}
-                />
-                <Text
-                  x={perimeterDims.extMinX}
-                  y={perimeterDims.extMinY - 30}
+                <rect
+                  x={perimeterDims.extMinX} y={perimeterDims.extMinY}
                   width={perimeterDims.extMaxX - perimeterDims.extMinX}
-                  align="center"
-                  text={`A: ${perimeterDims.topLen.toFixed(2)}m`}
-                  fontSize={7} fontStyle="bold" fill={DIM_COLOR} listening={false}
+                  height={perimeterDims.extMaxY - perimeterDims.extMinY}
+                  stroke={DIM_COLOR} strokeWidth={0.8} strokeDasharray="4 3" fill="none" opacity={0.5}
                 />
-                {/* Right dimension - Side B */}
-                <Line
-                  points={[perimeterDims.extMaxX + 18, perimeterDims.extMinY, perimeterDims.extMaxX + 18, perimeterDims.extMaxY]}
-                  stroke={DIM_COLOR} strokeWidth={0.6} listening={false}
-                />
-                <Text
-                  x={perimeterDims.extMaxX + 22}
-                  y={(perimeterDims.extMinY + perimeterDims.extMaxY) / 2 - 4}
-                  text={`B: ${perimeterDims.rightLen.toFixed(2)}m`}
-                  fontSize={7} fontStyle="bold" fill={DIM_COLOR}
-                  rotation={90} listening={false}
-                />
-                {/* Bottom dimension - Side C */}
-                <Line
-                  points={[perimeterDims.extMinX, perimeterDims.extMaxY + 18, perimeterDims.extMaxX, perimeterDims.extMaxY + 18]}
-                  stroke={DIM_COLOR} strokeWidth={0.6} listening={false}
-                />
-                <Text
-                  x={perimeterDims.extMinX}
-                  y={perimeterDims.extMaxY + 22}
-                  width={perimeterDims.extMaxX - perimeterDims.extMinX}
-                  align="center"
-                  text={`C: ${perimeterDims.topLen.toFixed(2)}m`}
-                  fontSize={7} fontStyle="bold" fill={DIM_COLOR} listening={false}
-                />
-                {/* Left dimension - Side D */}
-                <Line
-                  points={[perimeterDims.extMinX - 18, perimeterDims.extMinY, perimeterDims.extMinX - 18, perimeterDims.extMaxY]}
-                  stroke={DIM_COLOR} strokeWidth={0.6} listening={false}
-                />
-                <Text
-                  x={perimeterDims.extMinX - 28}
-                  y={(perimeterDims.extMinY + perimeterDims.extMaxY) / 2 + 4}
-                  text={`D: ${perimeterDims.rightLen.toFixed(2)}m`}
-                  fontSize={7} fontStyle="bold" fill={DIM_COLOR}
-                  rotation={-90} listening={false}
-                />
+                {/* Top dim */}
+                <line x1={perimeterDims.extMinX} y1={perimeterDims.extMinY - 18} x2={perimeterDims.extMaxX} y2={perimeterDims.extMinY - 18}
+                  stroke={DIM_COLOR} strokeWidth={0.6} />
+                <text x={(perimeterDims.extMinX + perimeterDims.extMaxX) / 2} y={perimeterDims.extMinY - 22}
+                  textAnchor="middle" fontSize={7} fontWeight="bold" fill={DIM_COLOR}>
+                  A: {perimeterDims.topLen.toFixed(2)}m
+                </text>
+                {/* Right dim */}
+                <line x1={perimeterDims.extMaxX + 18} y1={perimeterDims.extMinY} x2={perimeterDims.extMaxX + 18} y2={perimeterDims.extMaxY}
+                  stroke={DIM_COLOR} strokeWidth={0.6} />
+                <text x={perimeterDims.extMaxX + 22} y={(perimeterDims.extMinY + perimeterDims.extMaxY) / 2}
+                  textAnchor="start" fontSize={7} fontWeight="bold" fill={DIM_COLOR}
+                  transform={`rotate(90, ${perimeterDims.extMaxX + 22}, ${(perimeterDims.extMinY + perimeterDims.extMaxY) / 2})`}>
+                  B: {perimeterDims.rightLen.toFixed(2)}m
+                </text>
+                {/* Bottom dim */}
+                <line x1={perimeterDims.extMinX} y1={perimeterDims.extMaxY + 18} x2={perimeterDims.extMaxX} y2={perimeterDims.extMaxY + 18}
+                  stroke={DIM_COLOR} strokeWidth={0.6} />
+                <text x={(perimeterDims.extMinX + perimeterDims.extMaxX) / 2} y={perimeterDims.extMaxY + 28}
+                  textAnchor="middle" fontSize={7} fontWeight="bold" fill={DIM_COLOR}>
+                  C: {perimeterDims.topLen.toFixed(2)}m
+                </text>
+                {/* Left dim */}
+                <line x1={perimeterDims.extMinX - 18} y1={perimeterDims.extMinY} x2={perimeterDims.extMinX - 18} y2={perimeterDims.extMaxY}
+                  stroke={DIM_COLOR} strokeWidth={0.6} />
+                <text x={perimeterDims.extMinX - 22} y={(perimeterDims.extMinY + perimeterDims.extMaxY) / 2}
+                  textAnchor="start" fontSize={7} fontWeight="bold" fill={DIM_COLOR}
+                  transform={`rotate(-90, ${perimeterDims.extMinX - 22}, ${(perimeterDims.extMinY + perimeterDims.extMaxY) / 2})`}>
+                  D: {perimeterDims.rightLen.toFixed(2)}m
+                </text>
               </>
             )}
 
@@ -422,13 +371,10 @@ export function FloorPlanCanvas2D({
               const color = getRoomColor(room.name);
               const isSelected = selectedRoomId === room.id;
 
-              // Wall segments for this room
               const roomWallSegments = room.walls.map(wall => {
                 const wallKey = `${room.id}::${wall.wallIndex}`;
                 const segments = wallSegmentsMap.get(wallKey) || [];
                 const isHoriz = wall.wallIndex === 1 || wall.wallIndex === 3;
-
-                // Wall endpoints relative to room
                 let wx1: number, wy1: number, wx2: number, wy2: number;
                 switch (wall.wallIndex) {
                   case 1: wx1 = 0; wy1 = 0; wx2 = w; wy2 = 0; break;
@@ -436,52 +382,41 @@ export function FloorPlanCanvas2D({
                   case 3: wx1 = 0; wy1 = h; wx2 = w; wy2 = h; break;
                   case 4: default: wx1 = 0; wy1 = 0; wx2 = 0; wy2 = h; break;
                 }
-
                 return { wall, wallKey, segments, isHoriz, wx1, wy1, wx2, wy2 };
               });
 
               return (
-                <Group
-                  key={room.id}
-                  x={x}
-                  y={y}
-                  draggable={!!onMoveRoom}
-                  onDragMove={(e) => handleRoomDragMove(room.id, room, e)}
-                  onDragEnd={(e) => handleRoomDragEnd(room.id, room, e)}
-                  onClick={(e) => {
-                    e.cancelBubble = true;
-                    onSelectRoom?.(room.id);
-                    onSelectWall?.(null);
-                  }}
-                  onDblClick={(e) => {
-                    e.cancelBubble = true;
-                    onDoubleClickRoom?.(room.id);
-                  }}
-                >
+                <g key={room.id} transform={`translate(${x}, ${y})`}>
                   {/* Floor fill */}
-                  <Rect
-                    x={0} y={0}
-                    width={w} height={h}
-                    fill={color}
-                    opacity={0.75}
-                    cornerRadius={2}
+                  <rect x={0} y={0} width={w} height={h} fill={color} opacity={0.75} rx={2}
+                    style={{ cursor: onMoveRoom ? 'move' : 'pointer' }}
+                    onMouseDown={(e) => {
+                      e.stopPropagation();
+                      if (onMoveRoom) {
+                        setDragging({
+                          type: 'room', roomId: room.id,
+                          startMouse: { x: e.clientX, y: e.clientY },
+                          startVal: { x: room.posX, y: room.posY },
+                        });
+                      }
+                      onSelectRoom?.(room.id);
+                      onSelectWall?.(null);
+                    }}
+                    onDoubleClick={(e) => {
+                      e.stopPropagation();
+                      onDoubleClickRoom?.(room.id);
+                    }}
                   />
 
                   {/* Selection highlight */}
                   {isSelected && (
-                    <Rect
-                      x={0} y={0}
-                      width={w} height={h}
-                      stroke={WALL_SELECTED_COLOR}
-                      strokeWidth={2}
-                      cornerRadius={2}
-                      listening={false}
-                    />
+                    <rect x={0} y={0} width={w} height={h}
+                      stroke={WALL_SELECTED_COLOR} strokeWidth={2} fill="none" rx={2} pointerEvents="none" />
                   )}
 
                   {/* Wall segments */}
                   {roomWallSegments.map(({ wall, wallKey, segments, isHoriz, wx1, wy1, wx2, wy2 }) => (
-                    <Group key={wallKey}>
+                    <g key={wallKey}>
                       {segments.map((seg, si) => {
                         const segKey = `${wallKey}::${si}`;
                         const isSegSelected = selectedWallKey === segKey;
@@ -512,43 +447,31 @@ export function FloorPlanCanvas2D({
                           : WALL_INT_COLOR;
 
                         return (
-                          <Group key={`seg-${si}`}>
+                          <g key={`seg-${si}`}>
                             {/* Hit area */}
-                            <Line
-                              points={[sx1, sy1, sx2, sy2]}
-                              stroke="transparent"
-                              strokeWidth={14}
+                            <line x1={sx1} y1={sy1} x2={sx2} y2={sy2}
+                              stroke="transparent" strokeWidth={14} style={{ cursor: 'pointer' }}
                               onClick={(e) => {
-                                e.cancelBubble = true;
-                                const key = `${wallKey}::${si}`;
-                                onSelectWall?.(selectedWallKey === key ? null : key);
+                                e.stopPropagation();
+                                onSelectWall?.(selectedWallKey === segKey ? null : segKey);
                                 onSelectRoom?.(room.id);
                               }}
-                              onDblClick={(e) => {
-                                e.cancelBubble = true;
+                              onDoubleClick={(e) => {
+                                e.stopPropagation();
                                 onDoubleClickWall?.(room.id, wall.wallIndex, si);
                               }}
                             />
                             {/* Selection glow */}
                             {isSegSelected && (
-                              <Line
-                                points={[sx1, sy1, sx2, sy2]}
-                                stroke={WALL_SELECTED_COLOR}
-                                strokeWidth={8}
-                                lineCap="round"
-                                opacity={0.3}
-                                listening={false}
-                              />
+                              <line x1={sx1} y1={sy1} x2={sx2} y2={sy2}
+                                stroke={WALL_SELECTED_COLOR} strokeWidth={8} strokeLinecap="round" opacity={0.3} pointerEvents="none" />
                             )}
-                            {/* Visible wall line */}
-                            <Line
-                              points={[sx1, sy1, sx2, sy2]}
-                              stroke={segColor}
-                              strokeWidth={strokeWidth}
-                              dash={isInvisible ? [4, 3] : undefined}
-                              listening={false}
-                            />
-                          </Group>
+                            {/* Visible wall */}
+                            <line x1={sx1} y1={sy1} x2={sx2} y2={sy2}
+                              stroke={segColor} strokeWidth={strokeWidth}
+                              strokeDasharray={isInvisible ? '4 3' : undefined}
+                              pointerEvents="none" />
+                          </g>
                         );
                       })}
 
@@ -572,136 +495,91 @@ export function FloorPlanCanvas2D({
                             const ox = startPos;
                             const cy = wall.wallIndex === 1 ? 0 : h;
                             return (
-                              <Group key={`op-${oi}`} listening={false}>
-                                {/* Clear wall for door */}
-                                <Line points={[ox, cy, ox + opWidth, cy]}
-                                  stroke="#ffffff" strokeWidth={sw + 4} />
-                                {/* Door swing arc approximation */}
-                                <Line points={[ox, cy, ox + opWidth * 0.7, cy + (wall.wallIndex === 1 ? 1 : -1) * opWidth * 0.3]}
+                              <g key={`op-${oi}`} pointerEvents="none">
+                                <line x1={ox} y1={cy} x2={ox + opWidth} y2={cy} stroke="#ffffff" strokeWidth={sw + 4} />
+                                <line x1={ox} y1={cy} x2={ox + opWidth * 0.7} y2={cy + (wall.wallIndex === 1 ? 1 : -1) * opWidth * 0.3}
                                   stroke={WALL_SELECTED_COLOR} strokeWidth={0.8} opacity={0.6} />
-                              </Group>
+                              </g>
                             );
                           } else {
                             const oy = startPos;
                             const cx = wall.wallIndex === 4 ? 0 : w;
                             return (
-                              <Group key={`op-${oi}`} listening={false}>
-                                <Line points={[cx, oy, cx, oy + opWidth]}
-                                  stroke="#ffffff" strokeWidth={sw + 4} />
-                                <Line points={[cx, oy, cx + (wall.wallIndex === 4 ? 1 : -1) * opWidth * 0.3, oy + opWidth * 0.7]}
+                              <g key={`op-${oi}`} pointerEvents="none">
+                                <line x1={cx} y1={oy} x2={cx} y2={oy + opWidth} stroke="#ffffff" strokeWidth={sw + 4} />
+                                <line x1={cx} y1={oy} x2={cx + (wall.wallIndex === 4 ? 1 : -1) * opWidth * 0.3} y2={oy + opWidth * 0.7}
                                   stroke={WALL_SELECTED_COLOR} strokeWidth={0.8} opacity={0.6} />
-                              </Group>
+                              </g>
                             );
                           }
                         } else {
-                          // Window
                           if (isHoriz) {
                             const ox = startPos;
                             const cy = wall.wallIndex === 1 ? 0 : h;
                             return (
-                              <Group key={`op-${oi}`} listening={false}>
-                                <Line points={[ox, cy, ox + opWidth, cy]}
-                                  stroke="#ffffff" strokeWidth={sw + 4} />
-                                <Line points={[ox, cy - 1.5, ox + opWidth, cy - 1.5]}
-                                  stroke="#3b82f6" strokeWidth={1.5} />
-                                <Line points={[ox, cy + 1.5, ox + opWidth, cy + 1.5]}
-                                  stroke="#3b82f6" strokeWidth={1.5} />
-                              </Group>
+                              <g key={`op-${oi}`} pointerEvents="none">
+                                <line x1={ox} y1={cy} x2={ox + opWidth} y2={cy} stroke="#ffffff" strokeWidth={sw + 4} />
+                                <line x1={ox} y1={cy - 1.5} x2={ox + opWidth} y2={cy - 1.5} stroke="#3b82f6" strokeWidth={1.5} />
+                                <line x1={ox} y1={cy + 1.5} x2={ox + opWidth} y2={cy + 1.5} stroke="#3b82f6" strokeWidth={1.5} />
+                              </g>
                             );
                           } else {
                             const oy = startPos;
                             const cx = wall.wallIndex === 4 ? 0 : w;
                             return (
-                              <Group key={`op-${oi}`} listening={false}>
-                                <Line points={[cx, oy, cx, oy + opWidth]}
-                                  stroke="#ffffff" strokeWidth={sw + 4} />
-                                <Line points={[cx - 1.5, oy, cx - 1.5, oy + opWidth]}
-                                  stroke="#3b82f6" strokeWidth={1.5} />
-                                <Line points={[cx + 1.5, oy, cx + 1.5, oy + opWidth]}
-                                  stroke="#3b82f6" strokeWidth={1.5} />
-                              </Group>
+                              <g key={`op-${oi}`} pointerEvents="none">
+                                <line x1={cx} y1={oy} x2={cx} y2={oy + opWidth} stroke="#ffffff" strokeWidth={sw + 4} />
+                                <line x1={cx - 1.5} y1={oy} x2={cx - 1.5} y2={oy + opWidth} stroke="#3b82f6" strokeWidth={1.5} />
+                                <line x1={cx + 1.5} y1={oy} x2={cx + 1.5} y2={oy + opWidth} stroke="#3b82f6" strokeWidth={1.5} />
+                              </g>
                             );
                           }
                         }
                       })}
-                    </Group>
+                    </g>
                   ))}
 
                   {/* External wall thickness bands */}
-                  {roomWallSegments.map(({ wallKey, segments, isHoriz, wall }) => {
+                  {roomWallSegments.map(({ wallKey, wall, isHoriz }) => {
                     const overallType = wallClassification.get(wallKey) || wall.wallType;
                     if (!isExteriorType(overallType)) return null;
                     const extThick = extT * SCALE;
                     if (isHoriz) {
                       return (
-                        <Rect key={`ext-${wallKey}`}
-                          x={0}
-                          y={wall.wallIndex === 1 ? -extThick : h}
+                        <rect key={`ext-${wallKey}`}
+                          x={0} y={wall.wallIndex === 1 ? -extThick : h}
                           width={w} height={extThick}
-                          fill={WALL_EXT_COLOR} opacity={0.12}
-                          listening={false}
-                        />
+                          fill={WALL_EXT_COLOR} opacity={0.12} pointerEvents="none" />
                       );
                     } else {
                       return (
-                        <Rect key={`ext-${wallKey}`}
-                          x={wall.wallIndex === 4 ? -extThick : w}
-                          y={0}
+                        <rect key={`ext-${wallKey}`}
+                          x={wall.wallIndex === 4 ? -extThick : w} y={0}
                           width={extThick} height={h}
-                          fill={WALL_EXT_COLOR} opacity={0.12}
-                          listening={false}
-                        />
+                          fill={WALL_EXT_COLOR} opacity={0.12} pointerEvents="none" />
                       );
                     }
                   })}
 
-                  {/* Interior labels */}
-                  <Text
-                    x={0} y={h / 2 - 14}
-                    width={w}
-                    align="center"
-                    text={room.name}
-                    fontSize={10} fontStyle="bold"
-                    fill="#1e293b"
-                    listening={false}
-                  />
-                  <Text
-                    x={0} y={h / 2 - 2}
-                    width={w}
-                    align="center"
-                    text={`${room.width}×${room.length}m`}
-                    fontSize={8}
-                    fill="#64748b"
-                    listening={false}
-                  />
-                  <Text
-                    x={0} y={h / 2 + 9}
-                    width={w}
-                    align="center"
-                    text={`Suelo: ${(room.width * room.length).toFixed(1)}m²`}
-                    fontSize={8.5} fontStyle="bold"
-                    fill="#3b82f6"
-                    listening={false}
-                  />
+                  {/* Labels */}
+                  <text x={w / 2} y={h / 2 - 10} textAnchor="middle" fontSize={10} fontWeight="bold" fill="#1e293b" pointerEvents="none">
+                    {room.name}
+                  </text>
+                  <text x={w / 2} y={h / 2 + 2} textAnchor="middle" fontSize={8} fill="#64748b" pointerEvents="none">
+                    {room.width}×{room.length}m
+                  </text>
+                  <text x={w / 2} y={h / 2 + 14} textAnchor="middle" fontSize={8.5} fontWeight="bold" fill="#3b82f6" pointerEvents="none">
+                    Suelo: {(room.width * room.length).toFixed(1)}m²
+                  </text>
 
-                  {/* Interior dimension annotation (top) */}
-                  <Line
-                    points={[0, -8, w, -8]}
-                    stroke="#9ca3af" strokeWidth={0.5}
-                    listening={false}
-                  />
-                  <Text
-                    x={0} y={-18}
-                    width={w}
-                    align="center"
-                    text={`${room.width.toFixed(1)}m`}
-                    fontSize={7}
-                    fill="#64748b"
-                    listening={false}
-                  />
+                  {/* Interior dimension (top) */}
+                  <line x1={0} y1={-8} x2={w} y2={-8} stroke="#9ca3af" strokeWidth={0.5} pointerEvents="none" />
+                  <text x={w / 2} y={-12} textAnchor="middle" fontSize={7} fill="#64748b" pointerEvents="none">
+                    {room.width.toFixed(1)}m
+                  </text>
 
-                  {/* Resize handles - only for selected room */}
-                  {isSelected && onResizeWall && roomWallSegments.map(({ wall, isHoriz }) => {
+                  {/* Resize handles */}
+                  {isSelected && onResizeWall && roomWallSegments.map(({ wall, isHoriz: ih }) => {
                     let hx: number, hy: number;
                     switch (wall.wallIndex) {
                       case 1: hx = w / 2; hy = 0; break;
@@ -710,66 +588,41 @@ export function FloorPlanCanvas2D({
                       case 4: default: hx = 0; hy = h / 2; break;
                     }
                     return (
-                      <Circle
-                        key={`h-${wall.wallIndex}`}
-                        x={hx} y={hy}
-                        radius={4}
-                        fill={WALL_SELECTED_COLOR}
-                        stroke="#ffffff"
-                        strokeWidth={1.5}
-                        draggable
-                        dragBoundFunc={(pos) => {
-                          // Constrain to axis
-                          const stage = stageRef.current;
-                          if (!stage) return pos;
-                          const absGroup = stage.findOne(`#room-${room.id}`);
-                          if (isHoriz) {
-                            return { x: pos.x, y: pos.y }; // Allow vertical movement
-                          }
-                          return { x: pos.x, y: pos.y }; // Allow horizontal movement
-                        }}
-                        onDragEnd={(e) => {
-                          const delta = isHoriz
-                            ? snapToGrid(e.target.y() / SCALE)
-                            : snapToGrid(e.target.x() / SCALE);
-                          // Reset handle
-                          e.target.x(hx);
-                          e.target.y(hy);
-                          if (delta !== 0 && onResizeWall) {
-                            onResizeWall(room.id, wall.wallIndex, delta);
-                          }
-                        }}
-                        onMouseEnter={(e) => {
-                          const container = e.target.getStage()?.container();
-                          if (container) container.style.cursor = isHoriz ? 'ns-resize' : 'ew-resize';
-                        }}
-                        onMouseLeave={(e) => {
-                          const container = e.target.getStage()?.container();
-                          if (container) container.style.cursor = 'default';
+                      <circle key={`h-${wall.wallIndex}`}
+                        cx={hx} cy={hy} r={4}
+                        fill={WALL_SELECTED_COLOR} stroke="#ffffff" strokeWidth={1.5}
+                        style={{ cursor: ih ? 'ns-resize' : 'ew-resize' }}
+                        onMouseDown={(e) => {
+                          e.stopPropagation();
+                          setDragging({
+                            type: 'resize', roomId: room.id, wallIndex: wall.wallIndex, isHoriz: ih,
+                            startMouse: { x: e.clientX, y: e.clientY },
+                            startVal: { x: 0, y: 0 },
+                          });
                         }}
                       />
                     );
                   })}
-                </Group>
+                </g>
               );
             })}
 
             {/* Legend */}
             {perimeterDims && (
-              <Group x={perimeterDims.extMinX} y={perimeterDims.extMaxY + 24} listening={false}>
-                <Rect x={0} y={0} width={12} height={4} fill={WALL_EXT_COLOR} />
-                <Text x={16} y={-2} text="Externa" fontSize={7} fill="#64748b" />
-                <Rect x={65} y={0} width={12} height={3} fill={WALL_INT_COLOR} />
-                <Text x={81} y={-2} text="Interna" fontSize={7} fill="#64748b" />
-                <Line points={[130, 1.5, 142, 1.5]} stroke={WALL_INVIS_COLOR} strokeWidth={1.5} dash={[4, 3]} />
-                <Text x={146} y={-2} text="Invisible" fontSize={7} fill="#64748b" />
-                <Line points={[195, -1, 207, -1]} stroke="#3b82f6" strokeWidth={1.5} />
-                <Line points={[195, 3, 207, 3]} stroke="#3b82f6" strokeWidth={1.5} />
-                <Text x={211} y={-2} text="Ventana" fontSize={7} fill="#64748b" />
-              </Group>
+              <g transform={`translate(${perimeterDims.extMinX}, ${perimeterDims.extMaxY + 24})`} pointerEvents="none">
+                <rect x={0} y={0} width={12} height={4} fill={WALL_EXT_COLOR} />
+                <text x={16} y={4} fontSize={7} fill="#64748b">Externa</text>
+                <rect x={65} y={0} width={12} height={3} fill={WALL_INT_COLOR} />
+                <text x={81} y={4} fontSize={7} fill="#64748b">Interna</text>
+                <line x1={130} y1={1.5} x2={142} y2={1.5} stroke={WALL_INVIS_COLOR} strokeWidth={1.5} strokeDasharray="4 3" />
+                <text x={146} y={4} fontSize={7} fill="#64748b">Invisible</text>
+                <line x1={195} y1={-1} x2={207} y2={-1} stroke="#3b82f6" strokeWidth={1.5} />
+                <line x1={195} y1={3} x2={207} y2={3} stroke="#3b82f6" strokeWidth={1.5} />
+                <text x={211} y={4} fontSize={7} fill="#64748b">Ventana</text>
+              </g>
             )}
-          </Layer>
-        </Stage>
+          </g>
+        </svg>
       </div>
     </div>
   );

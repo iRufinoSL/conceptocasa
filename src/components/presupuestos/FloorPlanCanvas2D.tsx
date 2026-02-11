@@ -1,6 +1,6 @@
 import { useMemo, useState, useCallback, useRef, useEffect } from 'react';
 import type { FloorPlanData, RoomData } from '@/lib/floor-plan-calculations';
-import { autoClassifyWalls, generateExternalWallNames, computeWallSegments, isExteriorType, isInvisibleType } from '@/lib/floor-plan-calculations';
+import { autoClassifyWalls, generateExternalWallNames, computeWallSegments, isExteriorType, isInvisibleType, isCompartidaType } from '@/lib/floor-plan-calculations';
 
 interface FloorPlanCanvas2DProps {
   plan: FloorPlanData;
@@ -507,9 +507,12 @@ export function FloorPlanCanvas2D({
                       {segments.map((seg, si) => {
                         const segKey = `${wallKey}::${si}`;
                         const isSegSelected = selectedWallKey === segKey;
-                        const isShared = sharedWallKeys?.has(wallKey) || false;
-                        const isInvisible = isInvisibleType(seg.segmentType);
-                        const isExternal = isExteriorType(seg.segmentType);
+                        // Detect shared from segment type OR from prop
+                        const isShared = isCompartidaType(seg.segmentType) || (sharedWallKeys?.has(wallKey) ?? false);
+                        // Detect invisible from segment type OR from wall's manual override
+                        const wallManualInvisible = isInvisibleType(wall.wallType);
+                        const isInvisible = isInvisibleType(seg.segmentType) || wallManualInvisible;
+                        const isExternal = !isInvisible && isExteriorType(seg.segmentType);
 
                         const baseThickness = isInvisible ? plan.internalWallThickness * SCALE * 0.5
                           : isExternal ? plan.externalWallThickness * SCALE : plan.internalWallThickness * SCALE;
@@ -530,8 +533,8 @@ export function FloorPlanCanvas2D({
                         }
 
                         const segColor = isSegSelected ? WALL_SELECTED_COLOR
-                          : isShared ? SHARED_WALL_COLOR
                           : isInvisible ? WALL_INVIS_COLOR
+                          : isShared ? SHARED_WALL_COLOR
                           : isExternal ? WALL_EXT_COLOR
                           : WALL_INT_COLOR;
 

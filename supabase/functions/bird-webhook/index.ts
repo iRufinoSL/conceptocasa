@@ -26,6 +26,48 @@ interface BirdSMSEvent {
   createdDatetime: string;
 }
 
+async function verifyBirdSignature(req: Request, body: string): Promise<boolean> {
+  const secret = Deno.env.get('BIRD_WEBHOOK_SECRET');
+  if (!secret) {
+    console.error('BIRD_WEBHOOK_SECRET not configured');
+    return false;
+  }
+
+  const signature = req.headers.get('x-bird-signature') || 
+                    req.headers.get('x-messageBird-signature-jwt') ||
+                    req.headers.get('messagebird-signature');
+  if (!signature) {
+    console.error('No signature header found in webhook request');
+    return false;
+  }
+
+  try {
+    const encoder = new TextEncoder();
+    const key = await crypto.subtle.importKey(
+      'raw',
+      encoder.encode(secret),
+      { name: 'HMAC', hash: 'SHA-256' },
+      false,
+      ['sign']
+    );
+    const mac = await crypto.subtle.sign('HMAC', key, encoder.encode(body));
+    const expectedSignature = Array.from(new Uint8Array(mac))
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('');
+
+    // Constant-time comparison
+    if (signature.length !== expectedSignature.length) return false;
+    let result = 0;
+    for (let i = 0; i < signature.length; i++) {
+      result |= signature.charCodeAt(i) ^ expectedSignature.charCodeAt(i);
+    }
+    return result === 0;
+  } catch (err) {
+    console.error('Signature verification error:', err);
+    return false;
+  }
+}
+
 Deno.serve(async (req: Request) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
@@ -33,13 +75,26 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
+    // Read body once for signature verification
+    const rawBody = await req.text();
+
+    // Verify webhook signature
+    const isValid = await verifyBirdSignature(req, rawBody);
+    if (!isValid) {
+      console.error('Invalid webhook signature - rejecting request');
+      return new Response(JSON.stringify({ error: 'Invalid signature' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    const payload = await req.json();
-    console.log('Bird webhook received:', JSON.stringify(payload, null, 2));
+    const payload = JSON.parse(rawBody);
+    console.log('Bird webhook verified and received:', JSON.stringify(payload, null, 2));
 
     // Bird sends events in different formats depending on the event type
     // Handle message.created event for inbound SMS

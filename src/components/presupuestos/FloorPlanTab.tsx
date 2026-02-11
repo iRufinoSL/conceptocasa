@@ -28,11 +28,12 @@ interface FloorPlanTabProps {
 
 export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
   const {
-    floorPlan, rooms, loading, saving,
+    floorPlan, rooms, floors, loading, saving,
     createFloorPlan, updateFloorPlan,
     addRoom, updateRoom, deleteRoom, duplicateRoom,
     updateWall, addOpening, updateOpening, deleteOpening,
     classifyPerimeterWalls, syncToMeasurements, getPlanData, refetch,
+    addFloor, deleteFloor, autoCreateFloors,
   } = useFloorPlan(budgetId);
 
   const [selectedRoomId, setSelectedRoomId] = useState<string>();
@@ -104,8 +105,8 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
 
   const summary = useMemo(() => {
     const pd = planData || planForm;
-    return calculateFloorPlanSummary(pd as FloorPlanData, rooms);
-  }, [planData, planForm, rooms]);
+    return calculateFloorPlanSummary(pd as FloorPlanData, rooms, floors);
+  }, [planData, planForm, rooms, floors]);
 
   const planArea = planData ? planData.width * planData.length : planForm.m2;
   const roomsAreaSum = rooms.reduce((sum, r) => sum + r.width * r.length, 0);
@@ -571,6 +572,7 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
             <ElevationsGridViewer
               plan={planData}
               rooms={rooms}
+              floors={floors}
               onUpdateOpening={updateOpening}
               onAddOpening={addOpening}
               onDeleteOpening={deleteOpening}

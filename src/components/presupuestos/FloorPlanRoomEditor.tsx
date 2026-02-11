@@ -11,11 +11,12 @@ import { Slider } from '@/components/ui/slider';
 import { Plus, Trash2, ChevronDown, DoorOpen, Square, AlertTriangle, Copy } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { OPENING_PRESETS, WALL_LABELS, ROOM_PRESETS } from '@/lib/floor-plan-calculations';
-import type { RoomData } from '@/lib/floor-plan-calculations';
+import type { RoomData, FloorLevel } from '@/lib/floor-plan-calculations';
 
 interface FloorPlanRoomEditorProps {
   rooms: RoomData[];
   planArea: number;
+  floors?: FloorLevel[];
   selectedRoomId?: string;
   onSelectRoom: (roomId: string) => void;
   onAddRoom: (name: string, width: number, length: number) => Promise<void>;
@@ -30,7 +31,7 @@ interface FloorPlanRoomEditorProps {
 }
 
 export function FloorPlanRoomEditor({
-  rooms, planArea, selectedRoomId, onSelectRoom,
+  rooms, planArea, floors, selectedRoomId, onSelectRoom,
   onAddRoom, onUpdateRoom, onDeleteRoom, onDuplicateRoom,
   onUpdateWall, onAddOpening, onUpdateOpening, onDeleteOpening,
   saving,
@@ -215,6 +216,27 @@ export function FloorPlanRoomEditor({
                   onChange={e => onUpdateRoom(selectedRoom.id, { posY: Number(e.target.value) })} />
               </div>
             </div>
+
+            {/* Floor assignment */}
+            {floors && floors.length > 0 && (
+              <div>
+                <Label className="text-xs">Planta</Label>
+                <Select
+                  value={selectedRoom.floorId || 'none'}
+                  onValueChange={v => onUpdateRoom(selectedRoom.id, { floorId: v === 'none' ? null : v })}
+                >
+                  <SelectTrigger className="h-8 text-xs">
+                    <SelectValue placeholder="Sin asignar" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Sin asignar</SelectItem>
+                    {floors.map(f => (
+                      <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
 
             {/* Room elements toggles */}
             <div className="space-y-2">

@@ -10,11 +10,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Plus, Trash2, Box, Layers, ArrowUpDown } from 'lucide-react';
 import { OPENING_PRESETS, WALL_LABELS, computeWallSegments, autoClassifyWalls, generateExternalWallNames, isExteriorType, isInvisibleType } from '@/lib/floor-plan-calculations';
-import type { RoomData, WallData, OpeningData, FloorPlanData, WallSegment } from '@/lib/floor-plan-calculations';
+import type { RoomData, WallData, OpeningData, FloorPlanData, WallSegment, FloorLevel } from '@/lib/floor-plan-calculations';
 
 interface ElevationsGridViewerProps {
   plan: FloorPlanData;
   rooms: RoomData[];
+  floors?: FloorLevel[];
   onUpdateOpening: (openingId: string, data: { width?: number; height?: number; positionX?: number; openingType?: string }) => Promise<void>;
   onAddOpening: (wallId: string, type: string, width: number, height: number) => Promise<void>;
   onDeleteOpening: (openingId: string) => Promise<void>;
@@ -63,7 +64,7 @@ function getWallHeight(wall: WallData, room: RoomData, plan: FloorPlanData): num
 }
 
 export function ElevationsGridViewer({
-  plan, rooms, onUpdateOpening, onAddOpening, onDeleteOpening, saving,
+  plan, rooms, floors, onUpdateOpening, onAddOpening, onDeleteOpening, saving,
 }: ElevationsGridViewerProps) {
   const [selectedOpening, setSelectedOpening] = useState<OpeningData | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -325,68 +326,129 @@ export function ElevationsGridViewer({
     setSurfaceDialogOpen(true);
   }, []);
 
-  // Group cards by room
-  const groupedByRoom = useMemo(() => {
+  // Group cards by floor > room
+  const groupedByFloor = useMemo(() => {
     const cimentacion = cards.filter(c => c.category === 'cimentacion');
     const tejado = cards.filter(c => c.category === 'tejado');
 
-    const roomMap = new Map<string, ElevationCard[]>();
-    cards.forEach(c => {
-      if (c.category === 'cimentacion' || c.category === 'tejado') return;
-      const roomName = c.sublabel || 'Sin estancia';
-      if (!roomMap.has(roomName)) roomMap.set(roomName, []);
-      roomMap.get(roomName)!.push(c);
-    });
+    // Build floor-based hierarchy
+    const sortedFloors = floors ? [...floors].sort((a, b) => a.orderIndex - b.orderIndex) : [];
+    
+    const floorGroups: Array<{ floorId: string; floorName: string; roomGroups: Map<string, ElevationCard[]> }> = [];
 
-    return { cimentacion, tejado, roomMap };
-  }, [cards]);
+    if (sortedFloors.length > 0) {
+      sortedFloors.forEach(floor => {
+        const floorRoomIds = new Set(rooms.filter(r => r.floorId === floor.id).map(r => r.name));
+        const roomMap = new Map<string, ElevationCard[]>();
+        cards.forEach(c => {
+          if (c.category === 'cimentacion' || c.category === 'tejado') return;
+          const roomName = c.sublabel || 'Sin estancia';
+          if (!floorRoomIds.has(roomName)) return;
+          if (!roomMap.has(roomName)) roomMap.set(roomName, []);
+          roomMap.get(roomName)!.push(c);
+        });
+        if (roomMap.size > 0) {
+          floorGroups.push({ floorId: floor.id, floorName: floor.name, roomGroups: roomMap });
+        }
+      });
+
+      // Unassigned rooms
+      const assignedRoomNames = new Set(
+        rooms.filter(r => r.floorId && sortedFloors.some(f => f.id === r.floorId)).map(r => r.name)
+      );
+      const unassignedMap = new Map<string, ElevationCard[]>();
+      cards.forEach(c => {
+        if (c.category === 'cimentacion' || c.category === 'tejado') return;
+        const roomName = c.sublabel || 'Sin estancia';
+        if (assignedRoomNames.has(roomName)) return;
+        if (!unassignedMap.has(roomName)) unassignedMap.set(roomName, []);
+        unassignedMap.get(roomName)!.push(c);
+      });
+      if (unassignedMap.size > 0) {
+        floorGroups.push({ floorId: 'unassigned', floorName: 'Sin planta asignada', roomGroups: unassignedMap });
+      }
+    } else {
+      // No floors defined: flat list grouped by room
+      const roomMap = new Map<string, ElevationCard[]>();
+      cards.forEach(c => {
+        if (c.category === 'cimentacion' || c.category === 'tejado') return;
+        const roomName = c.sublabel || 'Sin estancia';
+        if (!roomMap.has(roomName)) roomMap.set(roomName, []);
+        roomMap.get(roomName)!.push(c);
+      });
+      floorGroups.push({ floorId: 'all', floorName: '', roomGroups: roomMap });
+    }
+
+    return { cimentacion, tejado, floorGroups };
+  }, [cards, floors, rooms]);
 
   return (
     <div className="space-y-6">
       {/* Foundation */}
-      {groupedByRoom.cimentacion.length > 0 && (
+      {groupedByFloor.cimentacion.length > 0 && (
         <div>
           <h3 className="text-sm font-semibold text-muted-foreground mb-2">Cimentación</h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {groupedByRoom.cimentacion.map(card => (
+            {groupedByFloor.cimentacion.map(card => (
               <ElevationCardView key={card.id} card={card} onOpeningClick={handleOpeningClick} onAddOpening={onAddOpening} onCardClick={handleCardClick} saving={saving} />
             ))}
           </div>
         </div>
       )}
 
-      {/* Rooms: suelo, techo, volumen, paredes */}
-      {Array.from(groupedByRoom.roomMap.entries()).map(([roomName, roomCards]) => {
-        // Sort: suelo, techo, volumen, then walls
-        const order: SurfaceCategory[] = ['suelo', 'techo', 'volumen', 'pared'];
-        const sorted = [...roomCards].sort((a, b) => order.indexOf(a.category) - order.indexOf(b.category));
-        const wallCount = sorted.filter(c => c.category === 'pared').length;
-        return (
-          <Collapsible key={roomName} defaultOpen={false}>
-            <CollapsibleTrigger className="flex items-center gap-2 w-full text-left group hover:bg-muted/50 rounded px-2 py-1 transition-colors">
-              <ChevronRight className="h-4 w-4 text-muted-foreground transition-transform group-data-[state=open]:rotate-90" />
-              <h3 className="text-sm font-semibold text-muted-foreground">
-                {roomName}
-              </h3>
-              <Badge variant="outline" className="text-[10px] h-4">{sorted.length} sup. / {wallCount} paredes</Badge>
-            </CollapsibleTrigger>
-            <CollapsibleContent>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 mt-2">
-                {sorted.map(card => (
-                  <ElevationCardView key={card.id} card={card} onOpeningClick={handleOpeningClick} onAddOpening={onAddOpening} onCardClick={handleCardClick} saving={saving} />
-                ))}
-              </div>
-            </CollapsibleContent>
-          </Collapsible>
+      {/* Floor > Room > Surfaces hierarchy */}
+      {groupedByFloor.floorGroups.map(({ floorId, floorName, roomGroups }) => {
+        const hasFloorHeader = floorName !== '';
+        const floorContent = (
+          <div className="space-y-3">
+            {Array.from(roomGroups.entries()).map(([roomName, roomCards]) => {
+              const order: SurfaceCategory[] = ['suelo', 'techo', 'volumen', 'pared'];
+              const sorted = [...roomCards].sort((a, b) => order.indexOf(a.category) - order.indexOf(b.category));
+              const wallCount = sorted.filter(c => c.category === 'pared').length;
+              return (
+                <Collapsible key={roomName} defaultOpen={false}>
+                  <CollapsibleTrigger className="flex items-center gap-2 w-full text-left group hover:bg-muted/50 rounded px-2 py-1 transition-colors">
+                    <ChevronRight className="h-4 w-4 text-muted-foreground transition-transform group-data-[state=open]:rotate-90" />
+                    <h4 className="text-sm font-semibold text-muted-foreground">{roomName}</h4>
+                    <Badge variant="outline" className="text-[10px] h-4">{sorted.length} sup. / {wallCount} paredes</Badge>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 mt-2 ml-4">
+                      {sorted.map(card => (
+                        <ElevationCardView key={card.id} card={card} onOpeningClick={handleOpeningClick} onAddOpening={onAddOpening} onCardClick={handleCardClick} saving={saving} />
+                      ))}
+                    </div>
+                  </CollapsibleContent>
+                </Collapsible>
+              );
+            })}
+          </div>
         );
+
+        if (hasFloorHeader) {
+          return (
+            <Collapsible key={floorId} defaultOpen={true}>
+              <CollapsibleTrigger className="flex items-center gap-2 w-full text-left group hover:bg-muted/50 rounded px-2 py-1.5 transition-colors border-b border-border/50 mb-2">
+                <ChevronRight className="h-4 w-4 text-foreground transition-transform group-data-[state=open]:rotate-90" />
+                <h3 className="text-sm font-bold text-foreground">{floorName}</h3>
+                <Badge variant="secondary" className="text-[10px] h-4">{roomGroups.size} espacios</Badge>
+              </CollapsibleTrigger>
+              <CollapsibleContent className="ml-2">
+                {floorContent}
+              </CollapsibleContent>
+            </Collapsible>
+          );
+        }
+
+        return <div key={floorId}>{floorContent}</div>;
       })}
 
       {/* Roof */}
-      {groupedByRoom.tejado.length > 0 && (
+      {groupedByFloor.tejado.length > 0 && (
         <div>
           <h3 className="text-sm font-semibold text-muted-foreground mb-2">Tejado</h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {groupedByRoom.tejado.map(card => (
+            {groupedByFloor.tejado.map(card => (
               <ElevationCardView key={card.id} card={card} onOpeningClick={handleOpeningClick} onAddOpening={onAddOpening} onCardClick={handleCardClick} saving={saving} />
             ))}
           </div>

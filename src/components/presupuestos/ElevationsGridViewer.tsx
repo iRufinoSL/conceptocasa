@@ -1,6 +1,8 @@
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -110,41 +112,45 @@ export function ElevationsGridViewer({
       const roomH = room.height || plan.defaultHeight;
       const floorArea = room.width * room.length;
 
-      // Suelo
-      result.push({
-        id: `suelo-${room.id}`,
-        label: 'Suelo',
-        sublabel: room.name,
-        category: 'suelo',
-        width: room.width,
-        height: room.length,
-        room,
-        openings: [],
-        canAddOpenings: false,
-        fill: 'hsl(142, 40%, 90%)',
-        stroke: 'hsl(142, 50%, 40%)',
-        badgeLabel: 'Suelo',
-        badgeVariant: 'secondary',
-        surfaceArea: floorArea,
-      });
+      // Suelo - only if hasFloor
+      if (room.hasFloor !== false) {
+        result.push({
+          id: `suelo-${room.id}`,
+          label: 'Suelo',
+          sublabel: room.name,
+          category: 'suelo',
+          width: room.width,
+          height: room.length,
+          room,
+          openings: [],
+          canAddOpenings: false,
+          fill: 'hsl(142, 40%, 90%)',
+          stroke: 'hsl(142, 50%, 40%)',
+          badgeLabel: 'Suelo',
+          badgeVariant: 'secondary',
+          surfaceArea: floorArea,
+        });
+      }
 
-      // Techo
-      result.push({
-        id: `techo-${room.id}`,
-        label: room.hasCeiling ? 'Techo' : (room.hasRoof ? 'Techo (cubierta)' : 'Techo'),
-        sublabel: room.name,
-        category: 'techo',
-        width: room.width,
-        height: room.length,
-        room,
-        openings: [],
-        canAddOpenings: false,
-        fill: 'hsl(200, 30%, 92%)',
-        stroke: 'hsl(200, 40%, 50%)',
-        badgeLabel: room.hasCeiling ? 'Techo' : 'Cubierta',
-        badgeVariant: 'outline',
-        surfaceArea: floorArea,
-      });
+      // Techo - only if hasCeiling or hasRoof
+      if (room.hasCeiling !== false || room.hasRoof) {
+        result.push({
+          id: `techo-${room.id}`,
+          label: room.hasCeiling !== false ? 'Techo' : 'Techo (cubierta)',
+          sublabel: room.name,
+          category: 'techo',
+          width: room.width,
+          height: room.length,
+          room,
+          openings: [],
+          canAddOpenings: false,
+          fill: 'hsl(200, 30%, 92%)',
+          stroke: 'hsl(200, 40%, 50%)',
+          badgeLabel: room.hasCeiling !== false ? 'Techo' : 'Cubierta',
+          badgeVariant: 'outline',
+          surfaceArea: floorArea,
+        });
+      }
 
       // Volumen
       result.push({
@@ -178,19 +184,20 @@ export function ElevationsGridViewer({
         const hasMultiple = visibleSegments.length > 1;
 
         segments.forEach((seg, si) => {
-          if (isInvisibleType(seg.segmentType)) return;
-
           const segLen = seg.endMeters - seg.startMeters;
-          const visibleNumber = visibleSegments.findIndex(vs => vs.idx === si) + 1;
-          const wallLabel = hasMultiple
-            ? `${WALL_LABELS[wall.wallIndex]} ${visibleNumber}`
-            : WALL_LABELS[wall.wallIndex];
 
           const ownOpenings = wall.openings.filter(op => {
             const opCenter = op.positionX;
             return opCenter >= seg.startFraction - 0.01 && opCenter <= seg.endFraction + 0.01;
           });
 
+          // Skip invisible segments ONLY if they have no openings on this wall
+          if (isInvisibleType(seg.segmentType) && ownOpenings.length === 0) return;
+
+          const visibleNumber = visibleSegments.findIndex(vs => vs.idx === si) + 1;
+          const wallLabel = hasMultiple && visibleNumber > 0
+            ? `${WALL_LABELS[wall.wallIndex]} ${visibleNumber}`
+            : WALL_LABELS[wall.wallIndex];
           const isExternal = isExteriorType(seg.segmentType);
           const wallName = externalWallNames.get(key);
           const canAdd = !wall.id.startsWith('temp-');
@@ -353,17 +360,24 @@ export function ElevationsGridViewer({
         // Sort: suelo, techo, volumen, then walls
         const order: SurfaceCategory[] = ['suelo', 'techo', 'volumen', 'pared'];
         const sorted = [...roomCards].sort((a, b) => order.indexOf(a.category) - order.indexOf(b.category));
+        const wallCount = sorted.filter(c => c.category === 'pared').length;
         return (
-          <div key={roomName}>
-            <h3 className="text-sm font-semibold text-muted-foreground mb-2">
-              {roomName}
-            </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-              {sorted.map(card => (
-                <ElevationCardView key={card.id} card={card} onOpeningClick={handleOpeningClick} onAddOpening={onAddOpening} onCardClick={handleCardClick} saving={saving} />
-              ))}
-            </div>
-          </div>
+          <Collapsible key={roomName} defaultOpen={false}>
+            <CollapsibleTrigger className="flex items-center gap-2 w-full text-left group hover:bg-muted/50 rounded px-2 py-1 transition-colors">
+              <ChevronRight className="h-4 w-4 text-muted-foreground transition-transform group-data-[state=open]:rotate-90" />
+              <h3 className="text-sm font-semibold text-muted-foreground">
+                {roomName}
+              </h3>
+              <Badge variant="outline" className="text-[10px] h-4">{sorted.length} sup. / {wallCount} paredes</Badge>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 mt-2">
+                {sorted.map(card => (
+                  <ElevationCardView key={card.id} card={card} onOpeningClick={handleOpeningClick} onAddOpening={onAddOpening} onCardClick={handleCardClick} saving={saving} />
+                ))}
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
         );
       })}
 

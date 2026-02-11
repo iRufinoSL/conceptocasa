@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import type { FloorPlanData, RoomData, WallData, OpeningData, WallType } from '@/lib/floor-plan-calculations';
-import { migrateLegacyWallType } from '@/lib/floor-plan-calculations';
+import { migrateLegacyWallType, autoClassifyWalls, isExteriorType } from '@/lib/floor-plan-calculations';
 
 interface DbFloorPlan {
   id: string;
@@ -530,6 +530,120 @@ export function useFloorPlan(budgetId: string) {
     }
   };
 
+  // Auto-classify perimeter walls as 'externa' in DB
+  const classifyPerimeterWalls = async () => {
+    if (!floorPlan || rooms.length === 0) return;
+    setSaving(true);
+    try {
+      const classification = autoClassifyWalls(rooms);
+      let updated = 0;
+      for (const room of rooms) {
+        for (const wall of room.walls) {
+          if (wall.id.startsWith('temp-')) continue;
+          const key = `${room.id}::${wall.wallIndex}`;
+          const autoType = classification.get(key);
+          if (!autoType) continue;
+          // Only update if the auto-classification differs from stored type
+          if (wall.wallType !== autoType) {
+            const { error } = await supabase
+              .from('budget_floor_plan_walls')
+              .update({ wall_type: autoType })
+              .eq('id', wall.id);
+            if (error) throw error;
+            updated++;
+          }
+        }
+      }
+      await fetchAll();
+      toast.success(`${updated} paredes actualizadas automáticamente`);
+    } catch (err) {
+      console.error('Error classifying walls:', err);
+      toast.error('Error al clasificar paredes');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Duplicate a room with all its characteristics (walls, openings)
+  const duplicateRoom = async (roomId: string) => {
+    if (!floorPlan) return;
+    const sourceRoom = rooms.find(r => r.id === roomId);
+    if (!sourceRoom) return;
+    setSaving(true);
+    try {
+      // Generate new name
+      const baseName = sourceRoom.name.replace(/\s*\(copia.*\)$/, '');
+      const existingCopies = rooms.filter(r => r.name.startsWith(baseName) && r.id !== roomId).length;
+      const newName = `${baseName} (copia${existingCopies > 0 ? ` ${existingCopies + 1}` : ''})`;
+
+      // Offset position so it doesn't overlap
+      const offsetX = sourceRoom.width + 0.5;
+
+      const { data: newRoom, error: roomError } = await supabase
+        .from('budget_floor_plan_rooms')
+        .insert({
+          floor_plan_id: floorPlan.id,
+          name: newName,
+          width: sourceRoom.width,
+          length: sourceRoom.length,
+          height: sourceRoom.height || null,
+          pos_x: sourceRoom.posX + offsetX,
+          pos_y: sourceRoom.posY,
+          order_index: rooms.length,
+          has_floor: sourceRoom.hasFloor !== false,
+          has_ceiling: sourceRoom.hasCeiling !== false,
+          has_roof: sourceRoom.hasRoof !== false,
+        })
+        .select()
+        .single();
+
+      if (roomError) throw roomError;
+
+      // Copy walls
+      for (const wall of sourceRoom.walls) {
+        const wallData: any = {
+          room_id: newRoom.id,
+          wall_index: wall.wallIndex,
+          wall_type: wall.wallType || 'interior',
+        };
+        if (wall.thickness) wallData.thickness = wall.thickness;
+        if (wall.height) wallData.height = wall.height;
+
+        const { data: newWall, error: wallError } = await supabase
+          .from('budget_floor_plan_walls')
+          .insert(wallData)
+          .select()
+          .single();
+
+        if (wallError) throw wallError;
+
+        // Copy openings
+        for (const op of wall.openings) {
+          const { error: opError } = await supabase
+            .from('budget_floor_plan_openings')
+            .insert({
+              wall_id: newWall.id,
+              opening_type: op.openingType,
+              name: op.name || null,
+              width: op.width,
+              height: op.height,
+              position_x: op.positionX,
+            });
+          if (opError) throw opError;
+        }
+      }
+
+      await fetchAll();
+      toast.success(`Habitación "${newName}" duplicada`);
+      return newRoom.id;
+    } catch (err) {
+      console.error('Error duplicating room:', err);
+      toast.error('Error al duplicar habitación');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const getPlanData = (): FloorPlanData | null => {
     if (!floorPlan) return null;
     return {
@@ -554,10 +668,12 @@ export function useFloorPlan(budgetId: string) {
     addRoom,
     updateRoom,
     deleteRoom,
+    duplicateRoom,
     updateWall,
     addOpening,
     updateOpening,
     deleteOpening,
+    classifyPerimeterWalls,
     syncToMeasurements,
     getPlanData,
     refetch: fetchAll,

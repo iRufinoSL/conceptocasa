@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { RefreshCw, Save, Layout, Box, BarChart3, Loader2, AlertTriangle, Trash2, DoorOpen, ImageIcon, Undo2, RotateCcw, RectangleVertical } from 'lucide-react';
+import { RefreshCw, Save, Layout, Box, BarChart3, Loader2, AlertTriangle, Trash2, DoorOpen, ImageIcon, Undo2, RotateCcw, RectangleVertical, Wand2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useFloorPlan } from '@/hooks/useFloorPlan';
 import { calculateFloorPlanSummary, detectSharedWalls, autoClassifyWalls, WALL_LABELS, OPENING_PRESETS, generateExternalWallNames, computeWallSegments, isExteriorType, isInvisibleType } from '@/lib/floor-plan-calculations';
@@ -28,9 +28,9 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
   const {
     floorPlan, rooms, loading, saving,
     createFloorPlan, updateFloorPlan,
-    addRoom, updateRoom, deleteRoom,
+    addRoom, updateRoom, deleteRoom, duplicateRoom,
     updateWall, addOpening, updateOpening, deleteOpening,
-    syncToMeasurements, getPlanData, refetch,
+    classifyPerimeterWalls, syncToMeasurements, getPlanData, refetch,
   } = useFloorPlan(budgetId);
 
   const [selectedRoomId, setSelectedRoomId] = useState<string>();
@@ -289,12 +289,17 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
           </TabsList>
         </Tabs>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           {/* Area indicator */}
           <Badge variant={areaExceeded ? 'destructive' : 'secondary'} className="text-xs">
             {areaExceeded && <AlertTriangle className="h-3 w-3 mr-1" />}
             Estancias: {roomsAreaSum.toFixed(1)}m² / {planArea.toFixed(1)}m² planta
           </Badge>
+          <Button variant="outline" size="sm" onClick={classifyPerimeterWalls} disabled={saving || rooms.length === 0}
+            title="Clasificar automáticamente las paredes del perímetro como externas">
+            <Wand2 className="h-4 w-4 mr-1" />
+            Auto ext.
+          </Button>
           <Button variant="outline" size="sm" onClick={handleUndo} disabled={saving || undoStackRef.current.length === 0}
             title="Deshacer último cambio">
             <Undo2 className="h-4 w-4 mr-1" />
@@ -306,7 +311,6 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
             Actualizar plano
           </Button>
           <Button variant="outline" size="sm" onClick={async () => {
-            // Force recalculate: re-sync roof config from the plan settings panel, then sync measurements
             if (planData) {
               await updateFloorPlan({
                 roofType: planData.roofType,
@@ -630,6 +634,7 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
             onAddRoom={addRoom}
             onUpdateRoom={updateRoom}
             onDeleteRoom={deleteRoom}
+            onDuplicateRoom={duplicateRoom}
             onUpdateWall={updateWall}
             onAddOpening={addOpening}
             onUpdateOpening={updateOpening}

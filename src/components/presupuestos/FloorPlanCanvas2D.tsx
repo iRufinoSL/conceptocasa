@@ -1,6 +1,6 @@
 import { useMemo, useState, useCallback, useRef } from 'react';
 import type { FloorPlanData, RoomData } from '@/lib/floor-plan-calculations';
-import { autoClassifyWalls, generateExternalWallNames, computeWallSegments } from '@/lib/floor-plan-calculations';
+import { autoClassifyWalls, generateExternalWallNames, computeWallSegments, isExteriorType, isInvisibleType } from '@/lib/floor-plan-calculations';
 
 interface FloorPlanCanvas2DProps {
   plan: FloorPlanData;
@@ -218,8 +218,8 @@ export function FloorPlanCanvas2D({
         const segmentEls = segments.map((seg, si) => {
           const segKey = `${wallKey}::${si}`;
           const isSegSelected = selectedWallKey === segKey;
-          const isInvisible = seg.segmentType === 'invisible';
-          const isExternal = seg.segmentType === 'externa';
+          const isInvisible = isInvisibleType(seg.segmentType);
+          const isExternal = isExteriorType(seg.segmentType);
 
           // Invisible segments are not rendered at all
           if (isInvisible) return null;
@@ -270,14 +270,14 @@ export function FloorPlanCanvas2D({
         }).filter(Boolean);
 
         // Determine overall wall type for opening rendering (use first non-invisible segment, or invisible if all invisible)
-        const hasVisibleSegment = segments.some(s => s.segmentType !== 'invisible');
+        const hasVisibleSegment = segments.some(s => !isInvisibleType(s.segmentType));
 
         // Openings - render on non-invisible segments
         const openingEls = wall.openings.map((op, oi) => {
           // Check which segment this opening falls in
           const opCenter = op.positionX;
           const opSeg = segments.find(s => opCenter >= s.startFraction - 0.01 && opCenter <= s.endFraction + 0.01);
-          const isOnInvisible = opSeg?.segmentType === 'invisible';
+          const isOnInvisible = opSeg ? isInvisibleType(opSeg.segmentType) : false;
 
           // Skip openings on invisible segments
           if (isOnInvisible) return null;
@@ -293,7 +293,7 @@ export function FloorPlanCanvas2D({
               const ox = x + startPos;
               const cy = (wall.wallIndex === 1) ? y : y + h;
               const dir = wall.wallIndex === 1 ? 1 : -1;
-              const segStroke = opSeg ? (opSeg.segmentType === 'externa' ? plan.externalWallThickness * scale : plan.internalWallThickness * scale) : 2;
+              const segStroke = opSeg ? (isExteriorType(opSeg.segmentType) ? plan.externalWallThickness * scale : plan.internalWallThickness * scale) : 2;
               const sw = Math.max(segStroke, 2);
               return (
                 <g key={`op-${oi}`}>
@@ -309,7 +309,7 @@ export function FloorPlanCanvas2D({
               const oy = y + startPos;
               const cx = (wall.wallIndex === 4) ? x : x + w;
               const dir = wall.wallIndex === 4 ? 1 : -1;
-              const segStroke = opSeg ? (opSeg.segmentType === 'externa' ? plan.externalWallThickness * scale : plan.internalWallThickness * scale) : 2;
+              const segStroke = opSeg ? (isExteriorType(opSeg.segmentType) ? plan.externalWallThickness * scale : plan.internalWallThickness * scale) : 2;
               const sw = Math.max(segStroke, 2);
               return (
                 <g key={`op-${oi}`}>
@@ -326,7 +326,7 @@ export function FloorPlanCanvas2D({
             if (isHoriz) {
               const ox = x + startPos;
               const cy = (wall.wallIndex === 1) ? y : y + h;
-              const segStroke = opSeg ? (opSeg.segmentType === 'externa' ? plan.externalWallThickness * scale : plan.internalWallThickness * scale) : 2;
+              const segStroke = opSeg ? (isExteriorType(opSeg.segmentType) ? plan.externalWallThickness * scale : plan.internalWallThickness * scale) : 2;
               const sw = Math.max(segStroke, 2);
               return (
                 <g key={`op-${oi}`}>
@@ -341,7 +341,7 @@ export function FloorPlanCanvas2D({
             } else {
               const oy = y + startPos;
               const cx = (wall.wallIndex === 4) ? x : x + w;
-              const segStroke = opSeg ? (opSeg.segmentType === 'externa' ? plan.externalWallThickness * scale : plan.internalWallThickness * scale) : 2;
+              const segStroke = opSeg ? (isExteriorType(opSeg.segmentType) ? plan.externalWallThickness * scale : plan.internalWallThickness * scale) : 2;
               const sw = Math.max(segStroke, 2);
               return (
                 <g key={`op-${oi}`}>
@@ -362,8 +362,8 @@ export function FloorPlanCanvas2D({
 
         // For dimensions, use the overall wall classification
         const overallType = wallClassification.get(wallKey) || wall.wallType;
-        const isExternal = overallType === 'externa';
-        const isInvisible = overallType === 'invisible';
+        const isExternal = isExteriorType(overallType);
+        const isInvisible = isInvisibleType(overallType);
         const interiorLen = isHoriz ? room.width : room.length;
         const externalLen = isExternal ? interiorLen + 2 * extT : interiorLen;
 

@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { RefreshCw, Save, Layout, Box, BarChart3, Loader2, AlertTriangle, Trash2, DoorOpen, ImageIcon, Undo2, RotateCcw, RectangleVertical } from 'lucide-react';
 import { toast } from 'sonner';
 import { useFloorPlan } from '@/hooks/useFloorPlan';
-import { calculateFloorPlanSummary, detectSharedWalls, autoClassifyWalls, WALL_LABELS, OPENING_PRESETS, generateExternalWallNames, computeWallSegments } from '@/lib/floor-plan-calculations';
+import { calculateFloorPlanSummary, detectSharedWalls, autoClassifyWalls, WALL_LABELS, OPENING_PRESETS, generateExternalWallNames, computeWallSegments, isExteriorType, isInvisibleType } from '@/lib/floor-plan-calculations';
 import { FloorPlanCanvas2D } from './FloorPlanCanvas2D';
 import { FloorPlanRoomEditor } from './FloorPlanRoomEditor';
 import { FloorPlanSummaryView } from './FloorPlanSummary';
@@ -367,7 +367,7 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
                 const segments = wallSegmentsMap.get(baseWallKey) || [];
                 const segmentInfo = segIdx !== undefined && segments[segIdx] ? segments[segIdx] : null;
                 const segType = segmentInfo ? segmentInfo.segmentType : (wallClassification.get(baseWallKey) || wall.wallType);
-                const isInvisible = segType === 'invisible';
+                const isInvisible = isInvisibleType(segType);
                 const autoType = segType;
                 const neighborInfo = segmentInfo?.neighborRoomId
                   ? { neighborRoomId: segmentInfo.neighborRoomId, neighborWallIndex: segmentInfo.neighborWallIndex }
@@ -375,7 +375,7 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
                 const neighborRoom = neighborInfo ? rooms.find(r => r.id === neighborInfo.neighborRoomId) : null;
 
                 // Count visible (non-invisible) segments for this wall to generate numbered names
-                const visibleSegments = segments.map((s, i) => ({ ...s, originalIndex: i })).filter(s => s.segmentType !== 'invisible');
+                const visibleSegments = segments.map((s, i) => ({ ...s, originalIndex: i })).filter(s => !isInvisibleType(s.segmentType));
                 const hasMultipleVisible = visibleSegments.length > 1;
                 const visibleNumber = segIdx !== undefined
                   ? visibleSegments.findIndex(s => s.originalIndex === segIdx) + 1
@@ -404,11 +404,11 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
                       <div className="flex items-center gap-2">
                         <CardTitle className="text-xs">
                           {wallLabel} — {room.name}
-                          {autoType === 'externa' && externalWallNames.get(baseWallKey) && (
+                          {isExteriorType(autoType) && externalWallNames.get(baseWallKey) && (
                             <span className="ml-1 text-primary font-bold">({externalWallNames.get(baseWallKey)})</span>
                           )}
                         </CardTitle>
-                        <Badge variant="outline" className="text-[10px] h-4">{autoType === 'externa' ? 'Externa' : autoType === 'invisible' ? 'Invisible' : 'Interna'}</Badge>
+                        <Badge variant="outline" className="text-[10px] h-4">{isExteriorType(autoType) ? 'Exterior' : isInvisibleType(autoType) ? 'Invisible' : 'Interior'}</Badge>
                         {isInvisible && neighborRoom && (
                           <Badge variant="outline" className="text-[10px] h-4">con {neighborRoom.name}</Badge>
                         )}

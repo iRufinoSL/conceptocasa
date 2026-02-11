@@ -25,10 +25,27 @@ export interface RoomData {
   walls: WallData[];
 }
 
+// 6 wall types: exterior/interior × normal/compartida/invisible
+export type WallType = 'exterior' | 'exterior_compartida' | 'exterior_invisible' | 'interior' | 'interior_compartida' | 'interior_invisible';
+
+export function isExteriorType(t: string): boolean { return t.startsWith('exterior'); }
+export function isInvisibleType(t: string): boolean { return t.endsWith('_invisible'); }
+export function isCompartidaType(t: string): boolean { return t.endsWith('_compartida'); }
+export function isVisibleWall(t: string): boolean { return !isInvisibleType(t); }
+
+// Map legacy DB values to new types
+export function migrateLegacyWallType(t: string): WallType {
+  if (t === 'externa') return 'exterior';
+  if (t === 'interna') return 'interior';
+  if (t === 'invisible') return 'interior_invisible';
+  if (t === 'compartida') return 'interior_compartida';
+  return t as WallType;
+}
+
 export interface WallData {
   id: string;
   wallIndex: number; // 1=top, 2=right, 3=bottom, 4=left
-  wallType: 'externa' | 'interna' | 'invisible';
+  wallType: WallType;
   thickness?: number;
   height?: number;
   openings: OpeningData[];
@@ -48,14 +65,14 @@ export interface WallSegment {
   endFraction: number;   // 0-1 along the wall
   startMeters: number;
   endMeters: number;
-  segmentType: 'externa' | 'interna' | 'invisible';
+  segmentType: WallType;
   neighborRoomId?: string;
   neighborWallIndex?: number;
 }
 
 export interface WallCalculation {
   wallIndex: number;
-  wallType: 'externa' | 'interna' | 'invisible';
+  wallType: WallType;
   wallLength: number;
   wallHeight: number;
   thickness: number;
@@ -122,7 +139,7 @@ function getWallHeight(wall: WallData, room: RoomData, plan: FloorPlanData): num
 
 function getWallThickness(wall: WallData, plan: FloorPlanData): number {
   if (wall.thickness) return wall.thickness;
-  return wall.wallType === 'externa' ? plan.externalWallThickness : plan.internalWallThickness;
+  return isExteriorType(wall.wallType) ? plan.externalWallThickness : plan.internalWallThickness;
 }
 
 export function calculateRoom(room: RoomData, plan: FloorPlanData): RoomCalculation {
@@ -166,9 +183,9 @@ export function calculateRoom(room: RoomData, plan: FloorPlanData): RoomCalculat
     
     const netArea = grossArea - openingsArea;
     
-    if (wall.wallType === 'invisible') {
+    if (isInvisibleType(wall.wallType)) {
       // Invisible walls don't count as wall area
-    } else if (wall.wallType === 'externa') {
+    } else if (isExteriorType(wall.wallType)) {
       totalExternalWallArea += netArea;
     } else {
       totalInternalWallArea += netArea;
@@ -255,28 +272,52 @@ export function calculateRoof(plan: FloorPlanData, rooms?: RoomData[]): number {
 // - Walls on the outer perimeter of all rooms = 'externa'
 // - Walls shared between two rooms = 'compartida'
 // - Other walls = 'interna'
-export function autoClassifyWalls(rooms: RoomData[]): Map<string, 'externa' | 'interna' | 'invisible'> {
+export function autoClassifyWalls(rooms: RoomData[]): Map<string, WallType> {
   const EPSILON = 0.05;
-  const classification = new Map<string, 'externa' | 'interna' | 'invisible'>();
+  const classification = new Map<string, WallType>();
   const sharedWalls = detectSharedWalls(rooms);
 
   if (rooms.length === 0) return classification;
+
+  // Compute bounding box to determine perimeter
+  let bbMinX = Infinity, bbMinY = Infinity, bbMaxX = -Infinity, bbMaxY = -Infinity;
+  rooms.forEach(r => {
+    bbMinX = Math.min(bbMinX, r.posX);
+    bbMinY = Math.min(bbMinY, r.posY);
+    bbMaxX = Math.max(bbMaxX, r.posX + r.width);
+    bbMaxY = Math.max(bbMaxY, r.posY + r.length);
+  });
+
+  const isOnPerimeter = (room: RoomData, wallIdx: number): boolean => {
+    switch (wallIdx) {
+      case 1: return Math.abs(room.posY - bbMinY) < EPSILON;
+      case 2: return Math.abs(room.posX + room.width - bbMaxX) < EPSILON;
+      case 3: return Math.abs(room.posY + room.length - bbMaxY) < EPSILON;
+      case 4: return Math.abs(room.posX - bbMinX) < EPSILON;
+      default: return false;
+    }
+  };
 
   rooms.forEach(room => {
     [1, 2, 3, 4].forEach(wallIdx => {
       const key = `${room.id}::${wallIdx}`;
       const wall = room.walls.find(w => w.wallIndex === wallIdx);
+      const onPerimeter = isOnPerimeter(room, wallIdx);
 
       // If the user has manually set the wall type (stored in DB), always respect it
       if (wall && !wall.id.startsWith('temp-') && wall.wallType) {
-        const type = (wall.wallType as string) === 'compartida' ? 'invisible' : wall.wallType;
-        classification.set(key, type as 'externa' | 'interna' | 'invisible');
+        classification.set(key, migrateLegacyWallType(wall.wallType as string));
         return;
       }
       
-      // Check if shared (auto-classify as invisible)
+      // Check if shared
       if (sharedWalls.has(key)) {
-        classification.set(key, 'invisible');
+        const isOwner = room.id < sharedWalls.get(key)!.neighborRoomId;
+        if (onPerimeter) {
+          classification.set(key, isOwner ? 'exterior_compartida' : 'exterior_invisible');
+        } else {
+          classification.set(key, isOwner ? 'interior_compartida' : 'interior_invisible');
+        }
         return;
       }
 
@@ -284,24 +325,27 @@ export function autoClassifyWalls(rooms: RoomData[]): Map<string, 'externa' | 'i
       const hasNeighbor = rooms.some(other => {
         if (other.id === room.id) return false;
         switch (wallIdx) {
-          case 1: // top
+          case 1:
             return Math.abs(other.posY + other.length - room.posY) < EPSILON &&
               Math.max(other.posX, room.posX) < Math.min(other.posX + other.width, room.posX + room.width) - EPSILON;
-          case 2: // right
+          case 2:
             return Math.abs(other.posX - (room.posX + room.width)) < EPSILON &&
               Math.max(other.posY, room.posY) < Math.min(other.posY + other.length, room.posY + room.length) - EPSILON;
-          case 3: // bottom
+          case 3:
             return Math.abs(other.posY - (room.posY + room.length)) < EPSILON &&
               Math.max(other.posX, room.posX) < Math.min(other.posX + other.width, room.posX + room.width) - EPSILON;
-          case 4: // left
+          case 4:
             return Math.abs(other.posX + other.width - room.posX) < EPSILON &&
               Math.max(other.posY, room.posY) < Math.min(other.posY + other.length, room.posY + room.length) - EPSILON;
           default: return false;
         }
       });
 
-      // If no neighbor, it's an external wall
-      classification.set(key, hasNeighbor ? 'interna' : 'externa');
+      if (hasNeighbor) {
+        classification.set(key, 'interior');
+      } else {
+        classification.set(key, onPerimeter ? 'exterior' : 'interior');
+      }
     });
   });
 
@@ -353,7 +397,7 @@ export function calculateFloorPlanSummary(plan: FloorPlanData, rooms: RoomData[]
     
     rc.walls.forEach(w => {
       // Invisible walls: no wall area, no openings counted
-      if (w.wallType === 'invisible') return;
+      if (isInvisibleType(w.wallType)) return;
 
       const countOpenings = () => {
         w.openings.forEach(o => {
@@ -366,7 +410,7 @@ export function calculateFloorPlanSummary(plan: FloorPlanData, rooms: RoomData[]
         });
       };
 
-      if (w.wallType === 'externa') {
+      if (isExteriorType(w.wallType)) {
         totalExternalWallGrossM2 += w.grossArea;
         totalExternalWallOpeningsM2 += w.openingsArea;
         totalExternalWallBaseM += w.baseLength;
@@ -438,7 +482,7 @@ export const WALL_SIDE_LETTERS: Record<number, string> = {
  */
 export function generateExternalWallNames(
   rooms: RoomData[],
-  wallClassification: Map<string, 'externa' | 'interna' | 'invisible'>
+  wallClassification: Map<string, WallType>
 ): Map<string, string> {
   const names = new Map<string, string>();
   
@@ -450,7 +494,7 @@ export function generateExternalWallNames(
   rooms.forEach(room => {
     [1, 2, 3, 4].forEach(wallIdx => {
       const key = `${room.id}::${wallIdx}`;
-      if (wallClassification.get(key) === 'externa') {
+      if (isExteriorType(wallClassification.get(key) || '')) {
         sideWalls[wallIdx].push({ roomId: room.id, wallIndex: wallIdx, key });
       }
     });
@@ -659,28 +703,36 @@ export function computeWallSegments(rooms: RoomData[]): Map<string, WallSegment[
         if (ol.overlapStart - cursor > EPSILON) {
           const startF = (cursor - wallStart) / wallLen;
           const endF = (ol.overlapStart - wallStart) / wallLen;
-          const gapType = hasManualType && wall!.wallType !== 'invisible'
+          const onPeri = isOnPerimeter(cursor, ol.overlapStart);
+          const gapType: WallType = hasManualType && !isInvisibleType(wall!.wallType)
             ? wall!.wallType
-            : (isOnPerimeter(cursor, ol.overlapStart) ? 'externa' : 'interna');
+            : (onPeri ? 'exterior' : 'interior');
           segments.push({
             startFraction: startF,
             endFraction: endF,
             startMeters: cursor - wallStart,
             endMeters: ol.overlapStart - wallStart,
-            segmentType: gapType as 'externa' | 'interna',
+            segmentType: gapType,
           });
         }
 
-        // The overlap itself — show as 'interna' on one side (lower room id wins), 'invisible' on the other
+        // The overlap itself — one side is compartida (visible), the other is invisible
         const startF = (Math.max(cursor, ol.overlapStart) - wallStart) / wallLen;
         const endF = (ol.overlapEnd - wallStart) / wallLen;
         const isOwner = room.id < ol.neighborRoomId;
+        const onPeri = isOnPerimeter(Math.max(cursor, ol.overlapStart), ol.overlapEnd);
+        let segType: WallType;
+        if (isOwner) {
+          segType = onPeri ? 'exterior_compartida' : 'interior_compartida';
+        } else {
+          segType = onPeri ? 'exterior_invisible' : 'interior_invisible';
+        }
         segments.push({
           startFraction: startF,
           endFraction: endF,
           startMeters: Math.max(cursor, ol.overlapStart) - wallStart,
           endMeters: ol.overlapEnd - wallStart,
-          segmentType: isOwner ? 'interna' : 'invisible',
+          segmentType: segType,
           neighborRoomId: ol.neighborRoomId,
           neighborWallIndex: ol.neighborWallIndex,
         });
@@ -691,29 +743,31 @@ export function computeWallSegments(rooms: RoomData[]): Map<string, WallSegment[
       // Remaining gap after all overlaps
       if (wallEnd - cursor > EPSILON) {
         const startF = (cursor - wallStart) / wallLen;
-        const gapType = hasManualType && wall!.wallType !== 'invisible'
+        const onPeri = isOnPerimeter(cursor, wallEnd);
+        const gapType: WallType = hasManualType && !isInvisibleType(wall!.wallType)
           ? wall!.wallType
-          : (isOnPerimeter(cursor, wallEnd) ? 'externa' : 'interna');
+          : (onPeri ? 'exterior' : 'interior');
         segments.push({
           startFraction: startF,
           endFraction: 1,
           startMeters: cursor - wallStart,
           endMeters: wallLen,
-          segmentType: gapType as 'externa' | 'interna',
+          segmentType: gapType,
         });
       }
 
       // If no segments created (no overlaps and wall is full length)
       if (segments.length === 0) {
-        const fullType = hasManualType
+        const onPeri = isOnPerimeter(wallStart, wallEnd);
+        const fullType: WallType = hasManualType
           ? wall!.wallType
-          : (isOnPerimeter(wallStart, wallEnd) ? 'externa' : 'interna');
+          : (onPeri ? 'exterior' : 'interior');
         segments.push({
           startFraction: 0,
           endFraction: 1,
           startMeters: 0,
           endMeters: wallLen,
-          segmentType: fullType as 'externa' | 'interna' | 'invisible',
+          segmentType: fullType,
         });
       }
 

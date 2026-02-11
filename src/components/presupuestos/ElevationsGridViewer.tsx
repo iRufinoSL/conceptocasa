@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Plus, Trash2, Box, Layers, ArrowUpDown } from 'lucide-react';
-import { OPENING_PRESETS, WALL_LABELS, computeWallSegments, autoClassifyWalls, generateExternalWallNames } from '@/lib/floor-plan-calculations';
+import { OPENING_PRESETS, WALL_LABELS, computeWallSegments, autoClassifyWalls, generateExternalWallNames, isExteriorType, isInvisibleType } from '@/lib/floor-plan-calculations';
 import type { RoomData, WallData, OpeningData, FloorPlanData, WallSegment } from '@/lib/floor-plan-calculations';
 
 interface ElevationsGridViewerProps {
@@ -174,11 +174,11 @@ export function ElevationsGridViewer({
         const isHoriz = wall.wallIndex === 1 || wall.wallIndex === 3;
         const fullWallLen = isHoriz ? room.width : room.length;
 
-        const visibleSegments = segments.map((s, i) => ({ ...s, idx: i })).filter(s => s.segmentType !== 'invisible');
+        const visibleSegments = segments.map((s, i) => ({ ...s, idx: i })).filter(s => !isInvisibleType(s.segmentType));
         const hasMultiple = visibleSegments.length > 1;
 
         segments.forEach((seg, si) => {
-          if (seg.segmentType === 'invisible') return;
+          if (isInvisibleType(seg.segmentType)) return;
 
           const segLen = seg.endMeters - seg.startMeters;
           const visibleNumber = visibleSegments.findIndex(vs => vs.idx === si) + 1;
@@ -191,7 +191,7 @@ export function ElevationsGridViewer({
             return opCenter >= seg.startFraction - 0.01 && opCenter <= seg.endFraction + 0.01;
           });
 
-          const isExternal = seg.segmentType === 'externa';
+          const isExternal = isExteriorType(seg.segmentType);
           const wallName = externalWallNames.get(key);
           const canAdd = !wall.id.startsWith('temp-');
 
@@ -685,7 +685,7 @@ function SurfaceDetailDialog({ open, onOpenChange, card }: {
               <p className="text-[10px] text-muted-foreground">Tramo</p>
               <p className="text-xs">
                 Desde {card.segment.startMeters.toFixed(2)}m hasta {card.segment.endMeters.toFixed(2)}m
-                ({card.segment.segmentType === 'externa' ? 'externa' : 'interna'})
+                ({isExteriorType(card.segment.segmentType) ? 'exterior' : 'interior'})
               </p>
             </div>
           )}

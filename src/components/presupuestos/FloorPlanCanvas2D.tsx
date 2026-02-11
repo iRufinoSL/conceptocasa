@@ -39,39 +39,76 @@ function snapToGrid(val: number): number {
   return Math.round(val / GRID_SNAP) * GRID_SNAP;
 }
 
-/** Snap room position to adjacent room edges (magnetic snap) */
+/** Snap room position to adjacent room edges (magnetic snap).
+ *  Picks the closest snap candidate per axis so that later matches don't override better earlier ones.
+ *  Prioritises flush snaps (right→left, bottom→top) over alignment snaps (left→left) so that
+ *  adjacent rooms always produce a single shared wall. */
 function magneticSnap(
   roomId: string, posX: number, posY: number, width: number, length: number,
   allRooms: RoomData[]
 ): { x: number; y: number } {
-  let snapX = posX;
-  let snapY = posY;
   const edges = { left: posX, right: posX + width, top: posY, bottom: posY + length };
+
+  // Collect snap candidates per axis: { targetX, distance }
+  const xCandidates: { target: number; dist: number; flush: boolean }[] = [];
+  const yCandidates: { target: number; dist: number; flush: boolean }[] = [];
 
   for (const other of allRooms) {
     if (other.id === roomId) continue;
     const oEdges = { left: other.posX, right: other.posX + other.width, top: other.posY, bottom: other.posY + other.length };
 
-    // Snap right edge to other's left
-    if (Math.abs(edges.right - oEdges.left) < MAGNET_THRESHOLD) snapX = oEdges.left - width;
-    // Snap left edge to other's right
-    if (Math.abs(edges.left - oEdges.right) < MAGNET_THRESHOLD) snapX = oEdges.right;
-    // Snap left edge to other's left (align)
-    if (Math.abs(edges.left - oEdges.left) < MAGNET_THRESHOLD) snapX = oEdges.left;
-    // Snap right edge to other's right (align)
-    if (Math.abs(edges.right - oEdges.right) < MAGNET_THRESHOLD) snapX = oEdges.right - width;
+    // Check vertical overlap to ensure rooms are actually adjacent (not just horizontally aligned but far apart)
+    const vOverlap = Math.min(edges.bottom, oEdges.bottom) - Math.max(edges.top, oEdges.top);
+    const hOverlap = Math.min(edges.right, oEdges.right) - Math.max(edges.left, oEdges.left);
 
-    // Snap bottom edge to other's top
-    if (Math.abs(edges.bottom - oEdges.top) < MAGNET_THRESHOLD) snapY = oEdges.top - length;
-    // Snap top edge to other's bottom
-    if (Math.abs(edges.top - oEdges.bottom) < MAGNET_THRESHOLD) snapY = oEdges.bottom;
-    // Snap top edge to other's top (align)
-    if (Math.abs(edges.top - oEdges.top) < MAGNET_THRESHOLD) snapY = oEdges.top;
-    // Snap bottom edge to other's bottom (align)
-    if (Math.abs(edges.bottom - oEdges.bottom) < MAGNET_THRESHOLD) snapY = oEdges.bottom - length;
+    // X-axis snaps (only if there's some vertical overlap or close to it)
+    if (vOverlap > -MAGNET_THRESHOLD) {
+      // Flush: right→left (rooms side by side)
+      const d1 = Math.abs(edges.right - oEdges.left);
+      if (d1 < MAGNET_THRESHOLD) xCandidates.push({ target: oEdges.left - width, dist: d1, flush: true });
+      // Flush: left→right
+      const d2 = Math.abs(edges.left - oEdges.right);
+      if (d2 < MAGNET_THRESHOLD) xCandidates.push({ target: oEdges.right, dist: d2, flush: true });
+      // Align: left→left
+      const d3 = Math.abs(edges.left - oEdges.left);
+      if (d3 < MAGNET_THRESHOLD) xCandidates.push({ target: oEdges.left, dist: d3, flush: false });
+      // Align: right→right
+      const d4 = Math.abs(edges.right - oEdges.right);
+      if (d4 < MAGNET_THRESHOLD) xCandidates.push({ target: oEdges.right - width, dist: d4, flush: false });
+    }
+
+    // Y-axis snaps (only if there's some horizontal overlap or close to it)
+    if (hOverlap > -MAGNET_THRESHOLD) {
+      // Flush: bottom→top
+      const d5 = Math.abs(edges.bottom - oEdges.top);
+      if (d5 < MAGNET_THRESHOLD) yCandidates.push({ target: oEdges.top - length, dist: d5, flush: true });
+      // Flush: top→bottom
+      const d6 = Math.abs(edges.top - oEdges.bottom);
+      if (d6 < MAGNET_THRESHOLD) yCandidates.push({ target: oEdges.bottom, dist: d6, flush: true });
+      // Align: top→top
+      const d7 = Math.abs(edges.top - oEdges.top);
+      if (d7 < MAGNET_THRESHOLD) yCandidates.push({ target: oEdges.top, dist: d7, flush: false });
+      // Align: bottom→bottom
+      const d8 = Math.abs(edges.bottom - oEdges.bottom);
+      if (d8 < MAGNET_THRESHOLD) yCandidates.push({ target: oEdges.bottom - length, dist: d8, flush: false });
+    }
   }
 
-  return { x: snapX, y: snapY };
+  // Pick best snap: flush snaps win ties, then closest distance
+  const pickBest = (candidates: { target: number; dist: number; flush: boolean }[], fallback: number) => {
+    if (candidates.length === 0) return fallback;
+    candidates.sort((a, b) => {
+      // Flush snaps have priority over alignment snaps
+      if (a.flush !== b.flush) return a.flush ? -1 : 1;
+      return a.dist - b.dist;
+    });
+    return candidates[0].target;
+  };
+
+  return {
+    x: pickBest(xCandidates, posX),
+    y: pickBest(yCandidates, posY),
+  };
 }
 
 export function FloorPlanCanvas2D({
@@ -203,7 +240,9 @@ export function FloorPlanCanvas2D({
       // Round to avoid floating point drift
       newX = Math.round(newX * 100) / 100;
       newY = Math.round(newY * 100) / 100;
-      onMoveRoom(selectedRoomId, newX, newY);
+      // Apply magnetic snap so arrow-key movement also produces shared walls
+      const snapped = magneticSnap(selectedRoomId, newX, newY, room.width, room.length, rooms);
+      onMoveRoom(selectedRoomId, snapped.x, snapped.y);
     };
     window.addEventListener('keydown', handleKeyDown, true);
     return () => window.removeEventListener('keydown', handleKeyDown, true);

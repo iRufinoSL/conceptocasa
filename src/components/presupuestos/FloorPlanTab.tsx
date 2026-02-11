@@ -40,6 +40,7 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
   const [viewTab, setViewTab] = useState('plano');
   const [refreshKey, setRefreshKey] = useState(0);
   const [roomDialogId, setRoomDialogId] = useState<string | null>(null);
+  const [wallDialogKey, setWallDialogKey] = useState<{ roomId: string; wallIndex: number; segIndex?: number } | null>(null);
 
   // Undo stack: stores snapshots of room positions/dimensions before changes
   const undoStackRef = useRef<Array<{ rooms: Array<{ id: string; posX: number; posY: number; width: number; length: number }> }>>([]);
@@ -365,6 +366,11 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
                 onMoveRoom={handleMoveRoom}
                 onResizeWall={handleResizeWall}
                 onDoubleClickRoom={(roomId) => { setSelectedRoomId(roomId); setRoomDialogId(roomId); }}
+                onDoubleClickWall={(roomId, wallIndex, segIndex) => {
+                  setSelectedRoomId(roomId);
+                  setSelectedWallKey(segIndex !== undefined ? `${roomId}::${wallIndex}::${segIndex}` : `${roomId}::${wallIndex}`);
+                  setWallDialogKey({ roomId, wallIndex, segIndex });
+                }}
               />
               {selectedWallKey && (() => {
                 const parts = selectedWallKey.split('::');
@@ -735,6 +741,129 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
                   {/* Area info */}
                   <div className="text-sm text-muted-foreground bg-muted/30 p-3 rounded">
                     Superficie: <strong>{(dialogRoom.width * dialogRoom.length).toFixed(1)}m²</strong>
+                  </div>
+                </div>
+              </>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
+
+      {/* Wall detail dialog (double-click on wall) */}
+      <Dialog open={!!wallDialogKey} onOpenChange={(open) => { if (!open) setWallDialogKey(null); }}>
+        <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto">
+          {(() => {
+            if (!wallDialogKey) return null;
+            const room = rooms.find(r => r.id === wallDialogKey.roomId);
+            if (!room) return null;
+            const wall = room.walls.find(w => w.wallIndex === wallDialogKey.wallIndex);
+            if (!wall) return null;
+            const baseWallKey = `${wallDialogKey.roomId}::${wallDialogKey.wallIndex}`;
+            const segments = wallSegmentsMap.get(baseWallKey) || [];
+            const segInfo = wallDialogKey.segIndex !== undefined ? segments[wallDialogKey.segIndex] : null;
+            const segType = segInfo ? segInfo.segmentType : (wallClassification.get(baseWallKey) || wall.wallType);
+            const isHoriz = wall.wallIndex === 1 || wall.wallIndex === 3;
+            const wallLen = isHoriz ? room.width : room.length;
+
+            return (
+              <>
+                <DialogHeader>
+                  <DialogTitle className="text-base">
+                    {WALL_LABELS[wall.wallIndex]} — {room.name}
+                    {isExteriorType(segType) && externalWallNames.get(baseWallKey) && (
+                      <span className="ml-1 text-primary font-bold">({externalWallNames.get(baseWallKey)})</span>
+                    )}
+                  </DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4 pt-2">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label className="text-xs font-semibold">Tipo de pared</Label>
+                      <Select value={wall.wallType}
+                        onValueChange={v => { if (!wall.id.startsWith('temp-')) updateWall(wall.id, { wallType: v as any }); }}>
+                        <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="externa">Externa</SelectItem>
+                          <SelectItem value="interna">Interna</SelectItem>
+                          <SelectItem value="invisible">Invisible</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label className="text-xs font-semibold">Espesor (m)</Label>
+                      <Input type="number" step="0.01" className="h-9 text-sm"
+                        value={wall.thickness || ''} placeholder="Auto"
+                        onChange={e => { if (!wall.id.startsWith('temp-')) updateWall(wall.id, { thickness: Number(e.target.value) || undefined }); }} />
+                    </div>
+                  </div>
+                  <div className="text-sm text-muted-foreground bg-muted/30 p-3 rounded space-y-1">
+                    <p><strong>Longitud interior:</strong> {wallLen.toFixed(2)}m</p>
+                    <p><strong>Clasificación auto:</strong> {isExteriorType(segType) ? 'Exterior' : isInvisibleType(segType) ? 'Invisible' : 'Interior'}</p>
+                    <p><strong>Orientación:</strong> {isHoriz ? 'Horizontal' : 'Vertical'}</p>
+                  </div>
+                  {/* Openings */}
+                  <div className="space-y-2">
+                    <Label className="text-xs font-semibold">Aberturas ({wall.openings.length})</Label>
+                    {wall.openings.map(op => (
+                      <div key={op.id} className="bg-muted/50 p-2 rounded space-y-1.5">
+                        <div className="flex items-center gap-2">
+                          <DoorOpen className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                          <span className="text-sm font-medium flex-1">
+                            {OPENING_PRESETS[op.openingType as keyof typeof OPENING_PRESETS]?.label || op.openingType}
+                          </span>
+                          <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-destructive"
+                            onClick={() => deleteOpening(op.id)}>
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                        <div className="grid grid-cols-3 gap-2">
+                          <div>
+                            <Label className="text-[10px]">Tipo</Label>
+                            <Select value={op.openingType}
+                              onValueChange={v => updateOpening(op.id, { openingType: v })}>
+                              <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                {Object.entries(OPENING_PRESETS).map(([key, preset]) => (
+                                  <SelectItem key={key} value={key} className="text-xs">{preset.label}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div>
+                            <Label className="text-[10px]">Ancho (m)</Label>
+                            <Input type="number" step="0.1" className="h-7 text-xs"
+                              defaultValue={op.width}
+                              onBlur={e => updateOpening(op.id, { width: Number(e.target.value) })} />
+                          </div>
+                          <div>
+                            <Label className="text-[10px]">Alto (m)</Label>
+                            <Input type="number" step="0.1" className="h-7 text-xs"
+                              defaultValue={op.height}
+                              onBlur={e => updateOpening(op.id, { height: Number(e.target.value) })} />
+                          </div>
+                        </div>
+                        <div>
+                          <Label className="text-[10px]">📍 Posición</Label>
+                          <div className="flex items-center gap-1">
+                            <input type="range" min="0" max="1" step="0.05"
+                              className="flex-1 h-5 accent-primary cursor-pointer"
+                              value={op.positionX}
+                              onChange={e => updateOpening(op.id, { positionX: Number(e.target.value) })} />
+                            <span className="text-[10px] text-muted-foreground w-7 text-right">{(op.positionX * 100).toFixed(0)}%</span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                    {!wall.id.startsWith('temp-') && !isInvisibleType(segType) && (
+                      <div className="flex gap-1 flex-wrap">
+                        {Object.entries(OPENING_PRESETS).map(([key, preset]) => (
+                          <Button key={key} variant="outline" size="sm" className="text-[10px] h-6"
+                            onClick={() => addOpening(wall.id, key, preset.width, preset.height)} disabled={saving}>
+                            + {preset.label}
+                          </Button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
               </>

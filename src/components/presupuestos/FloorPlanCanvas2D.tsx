@@ -13,6 +13,7 @@ interface FloorPlanCanvas2DProps {
   onMoveRoom?: (roomId: string, posX: number, posY: number) => void;
   onResizeWall?: (roomId: string, wallIndex: number, delta: number) => void;
   onDoubleClickRoom?: (roomId: string) => void;
+  onDoubleClickWall?: (roomId: string, wallIndex: number, segIndex?: number) => void;
 }
 
 const ROOM_COLORS: Record<string, string> = {
@@ -114,7 +115,7 @@ function magneticSnap(
 
 export function FloorPlanCanvas2D({
   plan, rooms, selectedRoomId, selectedWallKey, sharedWallKeys,
-  onSelectRoom, onSelectWall, onMoveRoom, onResizeWall, onDoubleClickRoom,
+  onSelectRoom, onSelectWall, onMoveRoom, onResizeWall, onDoubleClickRoom, onDoubleClickWall,
 }: FloorPlanCanvas2DProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const scale = 40;
@@ -330,11 +331,9 @@ export function FloorPlanCanvas2D({
           const isInvisible = isInvisibleType(seg.segmentType);
           const isExternal = isExteriorType(seg.segmentType);
 
-          // Invisible segments are not rendered at all
-          if (isInvisible) return null;
-
-          const baseThickness = isExternal ? plan.externalWallThickness * scale : plan.internalWallThickness * scale;
-          const strokeWidth = Math.max(baseThickness, isExternal ? 4 : 3);
+          const baseThickness = isInvisible ? plan.internalWallThickness * scale * 0.5
+            : isExternal ? plan.externalWallThickness * scale : plan.internalWallThickness * scale;
+          const strokeWidth = isInvisible ? Math.max(baseThickness, 1.5) : Math.max(baseThickness, isExternal ? 4 : 3);
 
           let sx1: number, sy1: number, sx2: number, sy2: number;
           if (isHoriz) {
@@ -350,6 +349,7 @@ export function FloorPlanCanvas2D({
           }
 
           const segColor = isSegSelected ? 'hsl(var(--primary))'
+            : isInvisible ? 'hsl(220, 9%, 65%)'
             : isExternal ? 'hsl(222, 47%, 20%)'
             : 'hsl(25, 80%, 50%)';
 
@@ -360,6 +360,7 @@ export function FloorPlanCanvas2D({
                 x1={sx1} y1={sy1} x2={sx2} y2={sy2}
                 stroke="transparent" strokeWidth={14}
                 onClick={e => handleWallClick(e, room.id, wall.wallIndex, si)}
+                onDoubleClick={e => { e.stopPropagation(); onDoubleClickWall?.(room.id, wall.wallIndex, si); }}
                 style={{ cursor: 'pointer' }}
               />
               {/* Selection glow per segment */}
@@ -372,6 +373,7 @@ export function FloorPlanCanvas2D({
               <line
                 x1={sx1} y1={sy1} x2={sx2} y2={sy2}
                 stroke={segColor} strokeWidth={strokeWidth}
+                strokeDasharray={isInvisible ? '4,3' : undefined}
                 style={{ pointerEvents: 'none' }}
               />
             </g>
@@ -800,12 +802,13 @@ export function FloorPlanCanvas2D({
             <text x={16} y={4} fontSize={7} fill="hsl(220, 9%, 46%)">Externa</text>
             <rect x={65} y={0} width={12} height={3} fill="hsl(25, 80%, 50%)" />
             <text x={81} y={4} fontSize={7} fill="hsl(220, 9%, 46%)">Interna</text>
-            <line x1={130} y1={-1} x2={142} y2={-1} stroke="hsl(217, 91%, 60%)" strokeWidth={1.5} />
-            <line x1={220} y1={3} x2={232} y2={3} stroke="hsl(217, 91%, 60%)" strokeWidth={1.5} />
-            <line x1={130} y1={3} x2={142} y2={3} stroke="hsl(217, 91%, 60%)" strokeWidth={1.5} />
-            <text x={146} y={4} fontSize={7} fill="hsl(220, 9%, 46%)">Ventana</text>
-            <rect x={190} y={-1} width={8} height={6} fill="none" stroke={dimColor} strokeWidth={0.6} strokeDasharray="3,2" />
-            <text x={202} y={4} fontSize={7} fill={dimColor}>Ext. (grosor)</text>
+            <line x1={130} y1={1.5} x2={142} y2={1.5} stroke="hsl(220, 9%, 65%)" strokeWidth={1.5} strokeDasharray="4,3" />
+            <text x={146} y={4} fontSize={7} fill="hsl(220, 9%, 46%)">Invisible</text>
+            <line x1={195} y1={-1} x2={207} y2={-1} stroke="hsl(217, 91%, 60%)" strokeWidth={1.5} />
+            <line x1={195} y1={3} x2={207} y2={3} stroke="hsl(217, 91%, 60%)" strokeWidth={1.5} />
+            <text x={211} y={4} fontSize={7} fill="hsl(220, 9%, 46%)">Ventana</text>
+            <rect x={255} y={-1} width={8} height={6} fill="none" stroke={dimColor} strokeWidth={0.6} strokeDasharray="3,2" />
+            <text x={267} y={4} fontSize={7} fill={dimColor}>Ext. (grosor)</text>
           </g>
         )}
       </svg>

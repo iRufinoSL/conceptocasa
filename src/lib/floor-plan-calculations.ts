@@ -704,7 +704,7 @@ export function computeWallSegments(rooms: RoomData[]): Map<string, WallSegment[
           const startF = (cursor - wallStart) / wallLen;
           const endF = (ol.overlapStart - wallStart) / wallLen;
           const onPeri = isOnPerimeter(cursor, ol.overlapStart);
-          const gapType: WallType = hasManualType && !isInvisibleType(wall!.wallType)
+          const gapType: WallType = hasManualType
             ? wall!.wallType
             : (onPeri ? 'exterior' : 'interior');
           segments.push({
@@ -722,7 +722,12 @@ export function computeWallSegments(rooms: RoomData[]): Map<string, WallSegment[
         const isOwner = room.id < ol.neighborRoomId;
         const onPeri = isOnPerimeter(Math.max(cursor, ol.overlapStart), ol.overlapEnd);
         let segType: WallType;
-        if (isOwner) {
+        // If the wall has a manual type override, respect it for shared segments too
+        if (hasManualType && isInvisibleType(wall!.wallType)) {
+          segType = wall!.wallType;
+        } else if (hasManualType && isExteriorType(wall!.wallType)) {
+          segType = isOwner ? 'exterior_compartida' : 'exterior_invisible';
+        } else if (isOwner) {
           segType = onPeri ? 'exterior_compartida' : 'interior_compartida';
         } else {
           segType = onPeri ? 'exterior_invisible' : 'interior_invisible';
@@ -744,7 +749,7 @@ export function computeWallSegments(rooms: RoomData[]): Map<string, WallSegment[
       if (wallEnd - cursor > EPSILON) {
         const startF = (cursor - wallStart) / wallLen;
         const onPeri = isOnPerimeter(cursor, wallEnd);
-        const gapType: WallType = hasManualType && !isInvisibleType(wall!.wallType)
+        const gapType: WallType = hasManualType
           ? wall!.wallType
           : (onPeri ? 'exterior' : 'interior');
         segments.push({

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import type { FloorPlanData, RoomData, WallData, OpeningData, WallType } from '@/lib/floor-plan-calculations';
+import type { FloorPlanData, RoomData, WallData, OpeningData, WallType, FloorLevel } from '@/lib/floor-plan-calculations';
 import { migrateLegacyWallType, autoClassifyWalls, isExteriorType } from '@/lib/floor-plan-calculations';
 
 interface DbFloorPlan {
@@ -52,6 +52,7 @@ interface DbOpening {
 export function useFloorPlan(budgetId: string) {
   const [floorPlan, setFloorPlan] = useState<(DbFloorPlan) | null>(null);
   const [rooms, setRooms] = useState<RoomData[]>([]);
+  const [floors, setFloors] = useState<FloorLevel[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -70,11 +71,27 @@ export function useFloorPlan(budgetId: string) {
       if (!fp) {
         setFloorPlan(null);
         setRooms([]);
+        setFloors([]);
         setLoading(false);
         return;
       }
 
       setFloorPlan(fp as DbFloorPlan);
+
+      // Fetch floors
+      const { data: floorsData } = await supabase
+        .from('budget_floors')
+        .select('*')
+        .eq('floor_plan_id', fp.id)
+        .order('order_index');
+
+      const floorLevels: FloorLevel[] = (floorsData || []).map((f: any) => ({
+        id: f.id,
+        name: f.name,
+        level: f.level,
+        orderIndex: f.order_index,
+      }));
+      setFloors(floorLevels);
 
       // Fetch rooms
       const { data: roomsData } = await supabase
@@ -158,6 +175,7 @@ export function useFloorPlan(budgetId: string) {
           hasFloor: r.has_floor !== false,
           hasCeiling: r.has_ceiling !== false,
           hasRoof: r.has_roof !== false,
+          floorId: (r as any).floor_id || undefined,
           walls,
         };
       });
@@ -283,7 +301,7 @@ export function useFloorPlan(budgetId: string) {
     }
   };
 
-  const updateRoom = async (roomId: string, data: { name?: string; width?: number; length?: number; height?: number; posX?: number; posY?: number; hasFloor?: boolean; hasCeiling?: boolean; hasRoof?: boolean }) => {
+  const updateRoom = async (roomId: string, data: { name?: string; width?: number; length?: number; height?: number; posX?: number; posY?: number; hasFloor?: boolean; hasCeiling?: boolean; hasRoof?: boolean; floorId?: string | null }) => {
     setSaving(true);
     try {
       const updates: any = {};
@@ -296,6 +314,7 @@ export function useFloorPlan(budgetId: string) {
       if (data.hasFloor !== undefined) updates.has_floor = data.hasFloor;
       if (data.hasCeiling !== undefined) updates.has_ceiling = data.hasCeiling;
       if (data.hasRoof !== undefined) updates.has_roof = data.hasRoof;
+      if (data.floorId !== undefined) updates.floor_id = data.floorId;
 
       const { error } = await supabase
         .from('budget_floor_plan_rooms')
@@ -658,9 +677,93 @@ export function useFloorPlan(budgetId: string) {
     };
   };
 
+  // Floor CRUD
+  const addFloor = async (name: string, level: string) => {
+    if (!floorPlan) return;
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from('budget_floors')
+        .insert({
+          floor_plan_id: floorPlan.id,
+          name,
+          level,
+          order_index: floors.length,
+        });
+      if (error) throw error;
+      await fetchAll();
+      toast.success(`Planta "${name}" creada`);
+    } catch (err) {
+      console.error('Error adding floor:', err);
+      toast.error('Error al añadir planta');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const updateFloor = async (floorId: string, data: { name?: string; level?: string; orderIndex?: number }) => {
+    setSaving(true);
+    try {
+      const updates: any = {};
+      if (data.name !== undefined) updates.name = data.name;
+      if (data.level !== undefined) updates.level = data.level;
+      if (data.orderIndex !== undefined) updates.order_index = data.orderIndex;
+      const { error } = await supabase.from('budget_floors').update(updates).eq('id', floorId);
+      if (error) throw error;
+      await fetchAll();
+    } catch (err) {
+      console.error('Error updating floor:', err);
+      toast.error('Error al actualizar planta');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const deleteFloor = async (floorId: string) => {
+    setSaving(true);
+    try {
+      const { error } = await supabase.from('budget_floors').delete().eq('id', floorId);
+      if (error) throw error;
+      await fetchAll();
+      toast.success('Planta eliminada');
+    } catch (err) {
+      console.error('Error deleting floor:', err);
+      toast.error('Error al eliminar planta');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Auto-create default floors based on roof type
+  const autoCreateFloors = async () => {
+    if (!floorPlan || floors.length > 0) return;
+    setSaving(true);
+    try {
+      const planData = getPlanData();
+      const isFlat = planData?.roofType === 'plana' || planData?.roofSlopePercent === 0;
+      
+      const defaultFloors = [
+        { floor_plan_id: floorPlan.id, name: 'Planta 1', level: 'planta_1', order_index: 0 },
+      ];
+      if (!isFlat) {
+        defaultFloors.push({ floor_plan_id: floorPlan.id, name: 'Bajo cubierta', level: 'bajo_cubierta', order_index: 1 });
+      }
+      
+      const { error } = await supabase.from('budget_floors').insert(defaultFloors);
+      if (error) throw error;
+      await fetchAll();
+      toast.success('Plantas creadas automáticamente');
+    } catch (err) {
+      console.error('Error auto-creating floors:', err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return {
     floorPlan,
     rooms,
+    floors,
     loading,
     saving,
     createFloorPlan,
@@ -676,6 +779,10 @@ export function useFloorPlan(budgetId: string) {
     classifyPerimeterWalls,
     syncToMeasurements,
     getPlanData,
+    addFloor,
+    updateFloor,
+    deleteFloor,
+    autoCreateFloors,
     refetch: fetchAll,
   };
 }

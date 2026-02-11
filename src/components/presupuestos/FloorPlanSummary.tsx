@@ -1,5 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { ChevronRight } from 'lucide-react';
 import type { FloorPlanSummary as Summary } from '@/lib/floor-plan-calculations';
 import { OPENING_PRESETS } from '@/lib/floor-plan-calculations';
 
@@ -9,6 +11,26 @@ interface FloorPlanSummaryProps {
 
 function fmt(n: number, unit = 'm²'): string {
   return `${n.toFixed(2)} ${unit}`;
+}
+
+function SummaryGrid({ label, data }: { label: string; data: Array<{ label: string; value: string; color?: string }> }) {
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-sm font-semibold">{label}</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
+          {data.map(d => (
+            <div key={d.label}>
+              <span className="text-muted-foreground">{d.label}</span>
+              <p className={`font-semibold ${d.color || 'text-foreground'}`}>{d.value}</p>
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  );
 }
 
 export function FloorPlanSummaryView({ summary }: FloorPlanSummaryProps) {
@@ -54,7 +76,39 @@ export function FloorPlanSummaryView({ summary }: FloorPlanSummaryProps) {
               <p className="font-semibold text-foreground">{summary.totalWindows} ud</p>
             </div>
           </div>
-          {/* Detailed opening breakdown */}
+
+          {/* Gable info */}
+          {(summary.totalGableExternalM2 > 0 || summary.totalGableInternalM2 > 0) && (
+            <div className="mt-3 pt-3 border-t border-border">
+              <span className="text-xs font-semibold text-muted-foreground mb-2 block">Hastiales (triángulos bajo cubierta)</span>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
+                {summary.totalGableExternalM2 > 0 && (
+                  <div>
+                    <span className="text-muted-foreground">Hastiales ext.</span>
+                    <p className="font-semibold text-foreground">{fmt(summary.totalGableExternalM2)}</p>
+                  </div>
+                )}
+                {summary.totalGableInternalM2 > 0 && (
+                  <div>
+                    <span className="text-muted-foreground">Hastiales int.</span>
+                    <p className="font-semibold text-foreground">{fmt(summary.totalGableInternalM2)}</p>
+                  </div>
+                )}
+                {summary.gables.map((g, i) => (
+                  <div key={i}>
+                    <span className="text-muted-foreground">
+                      {g.side === 'front' ? 'Hastial frontal' : 'Hastial trasero'}
+                    </span>
+                    <p className="font-semibold text-foreground">
+                      {fmt(g.triangleArea)} (h={g.peakHeight.toFixed(2)}m)
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Opening breakdown */}
           {Object.keys(summary.openingsByType).length > 0 && (
             <div className="mt-3 pt-3 border-t border-border">
               <span className="text-xs font-semibold text-muted-foreground mb-2 block">Desglose por tipo</span>
@@ -74,64 +128,86 @@ export function FloorPlanSummaryView({ summary }: FloorPlanSummaryProps) {
       </Card>
 
       {/* External walls breakdown */}
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-semibold">Paredes Externas</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-            <div>
-              <span className="text-muted-foreground">Total bruto</span>
-              <p className="font-semibold text-foreground">{fmt(summary.totalExternalWallGrossM2)}</p>
-            </div>
-            <div>
-              <span className="text-muted-foreground">Huecos (puertas/ventanas)</span>
-              <p className="font-semibold text-destructive">-{fmt(summary.totalExternalWallOpeningsM2)}</p>
-            </div>
-            <div>
-              <span className="text-muted-foreground">Superficie neta</span>
-              <p className="font-semibold text-primary">{fmt(summary.totalExternalWallM2)}</p>
-            </div>
-            <div>
-              <span className="text-muted-foreground">Base (ml)</span>
-              <p className="font-semibold text-foreground">{fmt(summary.totalExternalWallBaseM, 'ml')}</p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      <SummaryGrid
+        label="Paredes Externas"
+        data={[
+          { label: 'Total bruto', value: fmt(summary.totalExternalWallGrossM2) },
+          { label: 'Huecos', value: `-${fmt(summary.totalExternalWallOpeningsM2)}`, color: 'text-destructive' },
+          { label: 'Superficie neta', value: fmt(summary.totalExternalWallM2), color: 'text-primary' },
+          { label: 'Base (ml)', value: fmt(summary.totalExternalWallBaseM, 'ml') },
+        ]}
+      />
 
       {/* Internal walls breakdown */}
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-semibold">Paredes Internas</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-            <div>
-              <span className="text-muted-foreground">Total bruto</span>
-              <p className="font-semibold text-foreground">{fmt(summary.totalInternalWallGrossM2)}</p>
-            </div>
-            <div>
-              <span className="text-muted-foreground">Huecos (puertas/ventanas)</span>
-              <p className="font-semibold text-destructive">-{fmt(summary.totalInternalWallOpeningsM2)}</p>
-            </div>
-            <div>
-              <span className="text-muted-foreground">Superficie neta</span>
-              <p className="font-semibold text-primary">{fmt(summary.totalInternalWallM2)}</p>
-            </div>
-            <div>
-              <span className="text-muted-foreground">Base (ml)</span>
-              <p className="font-semibold text-foreground">{fmt(summary.totalInternalWallBaseM, 'ml')}</p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      <SummaryGrid
+        label="Paredes Internas"
+        data={[
+          { label: 'Total bruto', value: fmt(summary.totalInternalWallGrossM2) },
+          { label: 'Huecos', value: `-${fmt(summary.totalInternalWallOpeningsM2)}`, color: 'text-destructive' },
+          { label: 'Superficie neta', value: fmt(summary.totalInternalWallM2), color: 'text-primary' },
+          { label: 'Base (ml)', value: fmt(summary.totalInternalWallBaseM, 'ml') },
+        ]}
+      />
+
+      {/* Per-floor summaries */}
+      {summary.floorSummaries.length > 0 && (
+        <div className="space-y-3">
+          <h3 className="text-sm font-semibold text-foreground">Resumen por Planta</h3>
+          {summary.floorSummaries.map(fs => (
+            <Collapsible key={fs.floorId} defaultOpen={true}>
+              <CollapsibleTrigger className="flex items-center gap-2 w-full text-left group hover:bg-muted/50 rounded px-2 py-1 transition-colors">
+                <ChevronRight className="h-4 w-4 text-muted-foreground transition-transform group-data-[state=open]:rotate-90" />
+                <span className="text-sm font-semibold">{fs.floorName}</span>
+                <Badge variant="outline" className="text-[10px] h-4">{fs.rooms.length} espacios</Badge>
+                <Badge variant="secondary" className="text-[10px] h-4">{fmt(fs.totalUsableM2)}</Badge>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <Card className="mt-1">
+                  <CardContent className="pt-3">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                      <div>
+                        <span className="text-muted-foreground">Superficie útil</span>
+                        <p className="font-semibold text-primary">{fmt(fs.totalUsableM2)}</p>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Paredes ext.</span>
+                        <p className="font-semibold text-foreground">{fmt(fs.totalExternalWallM2)}</p>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Paredes int.</span>
+                        <p className="font-semibold text-foreground">{fmt(fs.totalInternalWallM2)}</p>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Suelos</span>
+                        <p className="font-semibold text-foreground">{fmt(fs.totalFloorM2)}</p>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Techos</span>
+                        <p className="font-semibold text-foreground">{fmt(fs.totalCeilingM2)}</p>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Puertas / Ventanas</span>
+                        <p className="font-semibold text-foreground">{fs.totalDoors}P / {fs.totalWindows}V</p>
+                      </div>
+                      {(fs.gableExternalM2 > 0 || fs.gableInternalM2 > 0) && (
+                        <div>
+                          <span className="text-muted-foreground">Hastiales</span>
+                          <p className="font-semibold text-foreground">
+                            {fmt(fs.gableExternalM2 + fs.gableInternalM2)}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              </CollapsibleContent>
+            </Collapsible>
+          ))}
+        </div>
+      )}
 
       {/* Per room */}
-      {summary.rooms.map((rc, idx) => {
-        const room = summary.rooms[idx];
-        // We need the original room data for hasFloor/hasRoof — pass through roomCalc
-        return (
+      {summary.rooms.map((rc) => (
         <Card key={rc.roomId}>
           <CardHeader className="pb-2">
             <div className="flex items-center gap-2">
@@ -164,6 +240,13 @@ export function FloorPlanSummaryView({ summary }: FloorPlanSummaryProps) {
                   </span>
                 </div>
               ))}
+              {/* Gable areas */}
+              {(rc.gableExternalArea > 0 || rc.gableInternalArea > 0) && (
+                <div className="flex justify-between text-primary">
+                  <span>Hastial (bajo cubierta)</span>
+                  <span>{fmt(rc.gableExternalArea + rc.gableInternalArea)}</span>
+                </div>
+              )}
               <div className="flex justify-between">
                 <span className="text-muted-foreground">5. Suelo</span>
                 <span>{rc.hasFloor !== false ? fmt(rc.floorArea) : <span className="italic text-muted-foreground">Sin suelo</span>}</span>
@@ -183,8 +266,7 @@ export function FloorPlanSummaryView({ summary }: FloorPlanSummaryProps) {
             </div>
           </CardContent>
         </Card>
-        );
-      })}
+      ))}
     </div>
   );
 }

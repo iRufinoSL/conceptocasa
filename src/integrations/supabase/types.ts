@@ -705,6 +705,7 @@ export type Database = {
       budget_floor_plan_rooms: {
         Row: {
           created_at: string | null
+          floor_id: string | null
           floor_plan_id: string
           has_ceiling: boolean
           has_floor: boolean
@@ -721,6 +722,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string | null
+          floor_id?: string | null
           floor_plan_id: string
           has_ceiling?: boolean
           has_floor?: boolean
@@ -737,6 +739,7 @@ export type Database = {
         }
         Update: {
           created_at?: string | null
+          floor_id?: string | null
           floor_plan_id?: string
           has_ceiling?: boolean
           has_floor?: boolean
@@ -752,6 +755,13 @@ export type Database = {
           width?: number
         }
         Relationships: [
+          {
+            foreignKeyName: "budget_floor_plan_rooms_floor_id_fkey"
+            columns: ["floor_id"]
+            isOneToOne: false
+            referencedRelation: "budget_floors"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "budget_floor_plan_rooms_floor_plan_id_fkey"
             columns: ["floor_plan_id"]
@@ -851,6 +861,44 @@ export type Database = {
             columns: ["budget_id"]
             isOneToOne: false
             referencedRelation: "presupuestos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      budget_floors: {
+        Row: {
+          created_at: string
+          floor_plan_id: string
+          id: string
+          level: string
+          name: string
+          order_index: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          floor_plan_id: string
+          id?: string
+          level?: string
+          name: string
+          order_index?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          floor_plan_id?: string
+          id?: string
+          level?: string
+          name?: string
+          order_index?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "budget_floors_floor_plan_id_fkey"
+            columns: ["floor_plan_id"]
+            isOneToOne: false
+            referencedRelation: "budget_floor_plans"
             referencedColumns: ["id"]
           },
         ]

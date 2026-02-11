@@ -11,6 +11,13 @@ export interface FloorPlanData {
   roofType: 'dos_aguas' | 'cuatro_aguas' | 'plana';
 }
 
+export interface FloorLevel {
+  id: string;
+  name: string;
+  level: string; // planta_1, planta_2, bajo_cubierta
+  orderIndex: number;
+}
+
 export interface RoomData {
   id: string;
   name: string;
@@ -22,6 +29,7 @@ export interface RoomData {
   hasFloor: boolean;
   hasCeiling: boolean;
   hasRoof: boolean;
+  floorId?: string;
   walls: WallData[];
 }
 
@@ -83,21 +91,49 @@ export interface WallCalculation {
   openings: { type: string; area: number; count: number }[];
 }
 
+export interface GableCalculation {
+  side: 'front' | 'back'; // which gable end
+  baseWidth: number; // width of the gable base at wall height
+  peakHeight: number; // height from wall top to roof peak
+  triangleArea: number; // m2 of the gable triangle
+  roomPortions: { roomId: string; roomName: string; proportionalArea: number; isExternal: boolean }[];
+}
+
 export interface RoomCalculation {
   roomId: string;
   roomName: string;
+  floorId?: string;
   floorArea: number; // m2 de suelo útil
   ceilingArea: number; // m2 de techo
   roomHeight: number; // altura de la estancia
   hasFloor: boolean;
   hasCeiling: boolean;
   hasRoof: boolean;
+  gableExternalArea: number; // m2 of gable triangle on external walls for this room
+  gableInternalArea: number; // m2 of gable triangle on internal walls (rooms without ceiling)
   walls: WallCalculation[];
   totalExternalWallArea: number;
   totalInternalWallArea: number;
   totalOpeningsArea: number;
   doorCount: number;
   windowCount: number;
+}
+
+export interface FloorSummary {
+  floorId: string;
+  floorName: string;
+  floorLevel: string;
+  totalUsableM2: number;
+  totalBuiltM2: number;
+  totalExternalWallM2: number;
+  totalInternalWallM2: number;
+  totalFloorM2: number;
+  totalCeilingM2: number;
+  totalDoors: number;
+  totalWindows: number;
+  gableExternalM2: number;
+  gableInternalM2: number;
+  rooms: RoomCalculation[];
 }
 
 export interface FloorPlanSummary {
@@ -121,8 +157,16 @@ export interface FloorPlanSummary {
   totalDoors: number;
   totalWindows: number;
   
+  // Gable totals
+  totalGableExternalM2: number;
+  totalGableInternalM2: number;
+  gables: GableCalculation[];
+  
   // Detailed opening counts by type
   openingsByType: Record<string, number>;
+  
+  // Per-floor summaries
+  floorSummaries: FloorSummary[];
   
   rooms: RoomCalculation[];
 }
@@ -168,7 +212,6 @@ export function calculateRoom(room: RoomData, plan: FloorPlanData): RoomCalculat
       if (op.openingType === 'puerta' || op.openingType === 'puerta_externa') {
         doorCount++;
       } else {
-        // ventana_grande, ventana_mediana, ventana_pequeña, ventana_balconera
         windowCount++;
       }
       
@@ -209,12 +252,15 @@ export function calculateRoom(room: RoomData, plan: FloorPlanData): RoomCalculat
   return {
     roomId: room.id,
     roomName: room.name,
+    floorId: room.floorId,
     floorArea,
     ceilingArea,
     roomHeight: room.height || plan.defaultHeight,
     hasFloor: room.hasFloor !== false,
     hasCeiling: room.hasCeiling !== false,
     hasRoof: room.hasRoof !== false,
+    gableExternalArea: 0, // filled in by calculateGables
+    gableInternalArea: 0,
     walls: wallCalcs,
     totalExternalWallArea,
     totalInternalWallArea,
@@ -352,7 +398,122 @@ export function autoClassifyWalls(rooms: RoomData[]): Map<string, WallType> {
   return classification;
 }
 
-export function calculateFloorPlanSummary(plan: FloorPlanData, rooms: RoomData[]): FloorPlanSummary {
+/**
+ * Calculate gable walls (hastiales) for a gable roof (dos_aguas).
+ * The gable triangle appears on the front and back walls.
+ * For rooms without ceiling, internal walls extend up into the gable.
+ */
+export function calculateGables(plan: FloorPlanData, rooms: RoomData[], wallClassification: Map<string, WallType>): GableCalculation[] {
+  if (plan.roofType === 'plana' || plan.roofSlopePercent === 0 || rooms.length === 0) return [];
+  
+  // For dos_aguas: gables on the front (wallIndex 1) and back (wallIndex 3) sides
+  // For cuatro_aguas: no gables (hip roof has slopes on all sides)
+  if (plan.roofType === 'cuatro_aguas') return [];
+
+  // Get bounding box
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  rooms.forEach(r => {
+    minX = Math.min(minX, r.posX);
+    minY = Math.min(minY, r.posY);
+    maxX = Math.max(maxX, r.posX + r.width);
+    maxY = Math.max(maxY, r.posY + r.length);
+  });
+
+  const extT = plan.externalWallThickness;
+  const totalWidth = (maxX - minX) + 2 * extT;
+  const slope = plan.roofSlopePercent / 100;
+  const halfWidth = totalWidth / 2;
+  const peakHeight = halfWidth * slope;
+  const gableBaseWidth = totalWidth;
+  const triangleArea = (gableBaseWidth * peakHeight) / 2;
+
+  const EPSILON = 0.05;
+  const gables: GableCalculation[] = [];
+
+  // Front gable (top side, wallIndex 1) and Back gable (bottom side, wallIndex 3)
+  const sides: Array<{ side: 'front' | 'back'; wallIndex: number; edgeY: number }> = [
+    { side: 'front', wallIndex: 1, edgeY: minY },
+    { side: 'back', wallIndex: 3, edgeY: maxY },
+  ];
+
+  sides.forEach(({ side, wallIndex, edgeY }) => {
+    // Find rooms touching this gable edge
+    const touchingRooms = rooms.filter(r => {
+      if (wallIndex === 1) return Math.abs(r.posY - edgeY) < EPSILON;
+      return Math.abs(r.posY + r.length - edgeY) < EPSILON;
+    });
+
+    if (touchingRooms.length === 0) {
+      gables.push({ side, baseWidth: gableBaseWidth, peakHeight, triangleArea, roomPortions: [] });
+      return;
+    }
+
+    // Distribute gable area proportionally by room width
+    const totalTouchingWidth = touchingRooms.reduce((s, r) => s + r.width, 0);
+    const roomPortions = touchingRooms.map(r => {
+      const proportion = r.width / Math.max(totalTouchingWidth, 0.01);
+      const portionArea = triangleArea * proportion;
+      const key = `${r.id}::${wallIndex}`;
+      const wt = wallClassification.get(key) || 'interior';
+      const isExternal = isExteriorType(wt);
+
+      return {
+        roomId: r.id,
+        roomName: r.name,
+        proportionalArea: portionArea,
+        isExternal,
+      };
+    });
+
+    gables.push({ side, baseWidth: gableBaseWidth, peakHeight, triangleArea, roomPortions });
+  });
+
+  return gables;
+}
+
+/**
+ * For rooms without ceiling (hasCeiling=false), internal walls extend up 
+ * into the roof space. Calculate the extra wall area above standard height.
+ */
+export function calculateInternalGableExtension(
+  room: RoomData,
+  plan: FloorPlanData,
+  wallIndex: number
+): number {
+  if (plan.roofType === 'plana' || plan.roofSlopePercent === 0) return 0;
+  if (room.hasCeiling !== false) return 0; // has ceiling, walls stop at ceiling
+
+  const slope = plan.roofSlopePercent / 100;
+  const isHoriz = wallIndex === 1 || wallIndex === 3;
+  const wallLen = isHoriz ? room.width : room.length;
+
+  if (plan.roofType === 'dos_aguas') {
+    // For perpendicular walls (left/right, wallIndex 2,4): rectangular extension
+    // The height above the wall depends on position relative to ridge
+    if (!isHoriz) {
+      // Wall runs front-to-back under the ridge; average extra height
+      // At center the height is max, at edges it's 0
+      // For simplicity: extra area = wallLen * (peakHeight / 2) for walls parallel to slope
+      // Actually these walls get a trapezoidal extension - simplified as rectangle at average height
+      return 0; // These walls don't get gable extension in a simple model
+    }
+
+    // For horizontal walls (top/bottom, wallIndex 1,3): triangular cross-section
+    // The gable triangle has base=room.width and height depends on room position
+    // Simplified: the internal wall gets the same triangular area
+    const rooms_bbox_width = plan.width; // approximate
+    const halfW = (rooms_bbox_width + 2 * plan.externalWallThickness) / 2;
+    const peakH = halfW * slope;
+    // The wall triangle: base = wallLen, height = peakH * (wallLen / (2 * halfW))
+    // For a wall centered under the ridge:
+    const wallTriangleH = peakH; // max height at center
+    return (wallLen * wallTriangleH) / 2;
+  }
+
+  return 0;
+}
+
+export function calculateFloorPlanSummary(plan: FloorPlanData, rooms: RoomData[], floors?: FloorLevel[]): FloorPlanSummary {
   const sharedWalls = detectSharedWalls(rooms);
   const wallClassification = autoClassifyWalls(rooms);
 
@@ -372,6 +533,26 @@ export function calculateFloorPlanSummary(plan: FloorPlanData, rooms: RoomData[]
   const roomCalcs = classifiedRooms.map(r => calculateRoom(r, plan));
   const roofM2 = calculateRoof(plan, rooms);
   
+  // Calculate gables
+  const gables = calculateGables(plan, classifiedRooms, wallClassification);
+  let totalGableExternalM2 = 0;
+  let totalGableInternalM2 = 0;
+
+  gables.forEach(g => {
+    g.roomPortions.forEach(rp => {
+      const rc = roomCalcs.find(r => r.roomId === rp.roomId);
+      if (rc) {
+        if (rp.isExternal) {
+          rc.gableExternalArea += rp.proportionalArea;
+          totalGableExternalM2 += rp.proportionalArea;
+        } else {
+          rc.gableInternalArea += rp.proportionalArea;
+          totalGableInternalM2 += rp.proportionalArea;
+        }
+      }
+    });
+  });
+
   let totalUsableM2 = 0;
   let totalExternalWallM2 = 0;
   let totalExternalWallGrossM2 = 0;
@@ -396,7 +577,6 @@ export function calculateFloorPlanSummary(plan: FloorPlanData, rooms: RoomData[]
     totalInternalWallM2 += rc.totalInternalWallArea;
     
     rc.walls.forEach(w => {
-      // Invisible walls: no wall area, no openings counted
       if (isInvisibleType(w.wallType)) return;
 
       const countOpenings = () => {
@@ -423,10 +603,64 @@ export function calculateFloorPlanSummary(plan: FloorPlanData, rooms: RoomData[]
       }
     });
   });
+
+  // Add gable areas to wall totals
+  totalExternalWallM2 += totalGableExternalM2;
+  totalExternalWallGrossM2 += totalGableExternalM2;
+  totalInternalWallM2 += totalGableInternalM2;
+  totalInternalWallGrossM2 += totalGableInternalM2;
   
   const externalWallFootprint = totalExternalWallBaseM * plan.externalWallThickness;
   const internalWallFootprint = totalInternalWallBaseM * plan.internalWallThickness;
   const totalBuiltM2 = totalUsableM2 + externalWallFootprint + internalWallFootprint;
+
+  // Build per-floor summaries
+  const floorSummaries: FloorSummary[] = [];
+  if (floors && floors.length > 0) {
+    const sortedFloors = [...floors].sort((a, b) => a.orderIndex - b.orderIndex);
+    sortedFloors.forEach(floor => {
+      const floorRooms = roomCalcs.filter(rc => rc.floorId === floor.id);
+      const fs: FloorSummary = {
+        floorId: floor.id,
+        floorName: floor.name,
+        floorLevel: floor.level,
+        totalUsableM2: floorRooms.reduce((s, r) => s + r.floorArea, 0),
+        totalBuiltM2: 0,
+        totalExternalWallM2: floorRooms.reduce((s, r) => s + r.totalExternalWallArea + r.gableExternalArea, 0),
+        totalInternalWallM2: floorRooms.reduce((s, r) => s + r.totalInternalWallArea + r.gableInternalArea, 0),
+        totalFloorM2: floorRooms.filter(r => r.hasFloor).reduce((s, r) => s + r.floorArea, 0),
+        totalCeilingM2: floorRooms.filter(r => r.hasCeiling).reduce((s, r) => s + r.ceilingArea, 0),
+        totalDoors: floorRooms.reduce((s, r) => s + r.doorCount, 0),
+        totalWindows: floorRooms.reduce((s, r) => s + r.windowCount, 0),
+        gableExternalM2: floorRooms.reduce((s, r) => s + r.gableExternalArea, 0),
+        gableInternalM2: floorRooms.reduce((s, r) => s + r.gableInternalArea, 0),
+        rooms: floorRooms,
+      };
+      fs.totalBuiltM2 = fs.totalUsableM2; // simplified
+      floorSummaries.push(fs);
+    });
+
+    // Add unassigned rooms
+    const unassigned = roomCalcs.filter(rc => !rc.floorId || !floors.some(f => f.id === rc.floorId));
+    if (unassigned.length > 0) {
+      floorSummaries.push({
+        floorId: 'unassigned',
+        floorName: 'Sin planta asignada',
+        floorLevel: 'unassigned',
+        totalUsableM2: unassigned.reduce((s, r) => s + r.floorArea, 0),
+        totalBuiltM2: unassigned.reduce((s, r) => s + r.floorArea, 0),
+        totalExternalWallM2: unassigned.reduce((s, r) => s + r.totalExternalWallArea + r.gableExternalArea, 0),
+        totalInternalWallM2: unassigned.reduce((s, r) => s + r.totalInternalWallArea + r.gableInternalArea, 0),
+        totalFloorM2: unassigned.filter(r => r.hasFloor).reduce((s, r) => s + r.floorArea, 0),
+        totalCeilingM2: unassigned.filter(r => r.hasCeiling).reduce((s, r) => s + r.ceilingArea, 0),
+        totalDoors: unassigned.reduce((s, r) => s + r.doorCount, 0),
+        totalWindows: unassigned.reduce((s, r) => s + r.windowCount, 0),
+        gableExternalM2: unassigned.reduce((s, r) => s + r.gableExternalArea, 0),
+        gableInternalM2: unassigned.reduce((s, r) => s + r.gableInternalArea, 0),
+        rooms: unassigned,
+      });
+    }
+  }
   
   return {
     plantaTotalM2: plan.width * plan.length,
@@ -445,7 +679,11 @@ export function calculateFloorPlanSummary(plan: FloorPlanData, rooms: RoomData[]
     totalInternalWallBaseM,
     totalDoors,
     totalWindows,
+    totalGableExternalM2,
+    totalGableInternalM2,
+    gables,
     openingsByType,
+    floorSummaries,
     rooms: roomCalcs,
   };
 }

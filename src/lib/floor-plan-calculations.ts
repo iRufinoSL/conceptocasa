@@ -350,20 +350,34 @@ export function autoClassifyWalls(rooms: RoomData[]): Map<string, WallType> {
       const wall = room.walls.find(w => w.wallIndex === wallIdx);
       const onPerimeter = isOnPerimeter(room, wallIdx);
 
-      // If the user has manually set the wall type (stored in DB), always respect it
-      if (wall && !wall.id.startsWith('temp-') && wall.wallType) {
-        classification.set(key, migrateLegacyWallType(wall.wallType as string));
-        return;
-      }
-      
-      // Check if shared
+      // CRITICAL: Check shared walls FIRST to avoid double-counting.
+      // When two rooms share a wall, only the "owner" (smaller id) counts the area;
+      // the other side is always invisible, regardless of what's stored in DB.
       if (sharedWalls.has(key)) {
         const isOwner = room.id < sharedWalls.get(key)!.neighborRoomId;
-        if (onPerimeter) {
-          classification.set(key, isOwner ? 'exterior_compartida' : 'exterior_invisible');
-        } else {
-          classification.set(key, isOwner ? 'interior_compartida' : 'interior_invisible');
+        if (!isOwner) {
+          // Non-owner side is ALWAYS invisible to prevent double-counting
+          classification.set(key, onPerimeter ? 'exterior_invisible' : 'interior_invisible');
+          return;
         }
+        // Owner side: use manual type if set, otherwise auto-classify
+        if (wall && !wall.id.startsWith('temp-') && wall.wallType) {
+          const manualType = migrateLegacyWallType(wall.wallType as string);
+          // Ensure it's the compartida variant of whatever the user chose
+          if (isExteriorType(manualType)) {
+            classification.set(key, 'exterior_compartida');
+          } else {
+            classification.set(key, 'interior_compartida');
+          }
+        } else {
+          classification.set(key, onPerimeter ? 'exterior_compartida' : 'interior_compartida');
+        }
+        return;
+      }
+
+      // If the user has manually set the wall type (stored in DB), respect it
+      if (wall && !wall.id.startsWith('temp-') && wall.wallType) {
+        classification.set(key, migrateLegacyWallType(wall.wallType as string));
         return;
       }
 

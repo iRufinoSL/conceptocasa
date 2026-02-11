@@ -1,4 +1,4 @@
-import { useMemo, useState, useCallback, useRef } from 'react';
+import { useMemo, useState, useCallback, useRef, useEffect } from 'react';
 import type { FloorPlanData, RoomData } from '@/lib/floor-plan-calculations';
 import { autoClassifyWalls, generateExternalWallNames, computeWallSegments, isExteriorType, isInvisibleType } from '@/lib/floor-plan-calculations';
 
@@ -32,10 +32,46 @@ function getRoomColor(name: string): string {
   return 'hsl(220, 14%, 93%)';
 }
 
-const GRID_SNAP = 0.5;
+const GRID_SNAP = 0.05;
+const MAGNET_THRESHOLD = 0.15; // snap to adjacent edges within 15cm
 
 function snapToGrid(val: number): number {
   return Math.round(val / GRID_SNAP) * GRID_SNAP;
+}
+
+/** Snap room position to adjacent room edges (magnetic snap) */
+function magneticSnap(
+  roomId: string, posX: number, posY: number, width: number, length: number,
+  allRooms: RoomData[]
+): { x: number; y: number } {
+  let snapX = posX;
+  let snapY = posY;
+  const edges = { left: posX, right: posX + width, top: posY, bottom: posY + length };
+
+  for (const other of allRooms) {
+    if (other.id === roomId) continue;
+    const oEdges = { left: other.posX, right: other.posX + other.width, top: other.posY, bottom: other.posY + other.length };
+
+    // Snap right edge to other's left
+    if (Math.abs(edges.right - oEdges.left) < MAGNET_THRESHOLD) snapX = oEdges.left - width;
+    // Snap left edge to other's right
+    if (Math.abs(edges.left - oEdges.right) < MAGNET_THRESHOLD) snapX = oEdges.right;
+    // Snap left edge to other's left (align)
+    if (Math.abs(edges.left - oEdges.left) < MAGNET_THRESHOLD) snapX = oEdges.left;
+    // Snap right edge to other's right (align)
+    if (Math.abs(edges.right - oEdges.right) < MAGNET_THRESHOLD) snapX = oEdges.right - width;
+
+    // Snap bottom edge to other's top
+    if (Math.abs(edges.bottom - oEdges.top) < MAGNET_THRESHOLD) snapY = oEdges.top - length;
+    // Snap top edge to other's bottom
+    if (Math.abs(edges.top - oEdges.bottom) < MAGNET_THRESHOLD) snapY = oEdges.bottom;
+    // Snap top edge to other's top (align)
+    if (Math.abs(edges.top - oEdges.top) < MAGNET_THRESHOLD) snapY = oEdges.top;
+    // Snap bottom edge to other's bottom (align)
+    if (Math.abs(edges.bottom - oEdges.bottom) < MAGNET_THRESHOLD) snapY = oEdges.bottom - length;
+  }
+
+  return { x: snapX, y: snapY };
 }
 
 export function FloorPlanCanvas2D({
@@ -126,10 +162,16 @@ export function FloorPlanCanvas2D({
 
   const handleMouseUp = useCallback(() => {
     if (roomDrag && onMoveRoom) {
-      const newX = snapToGrid(roomDrag.origPosX + roomDragOffset.dx);
-      const newY = snapToGrid(roomDrag.origPosY + roomDragOffset.dy);
-      if (newX !== roomDrag.origPosX || newY !== roomDrag.origPosY) {
-        onMoveRoom(roomDrag.roomId, newX, newY);
+      const rawX = snapToGrid(roomDrag.origPosX + roomDragOffset.dx);
+      const rawY = snapToGrid(roomDrag.origPosY + roomDragOffset.dy);
+      const draggedRoom = rooms.find(r => r.id === roomDrag.roomId);
+      if (draggedRoom) {
+        const snapped = magneticSnap(roomDrag.roomId, rawX, rawY, draggedRoom.width, draggedRoom.length, rooms);
+        if (snapped.x !== roomDrag.origPosX || snapped.y !== roomDrag.origPosY) {
+          onMoveRoom(roomDrag.roomId, snapped.x, snapped.y);
+        }
+      } else if (rawX !== roomDrag.origPosX || rawY !== roomDrag.origPosY) {
+        onMoveRoom(roomDrag.roomId, rawX, rawY);
       }
     } else if (wallDrag && onResizeWall && wallDragDelta !== 0) {
       onResizeWall(wallDrag.roomId, wallDrag.wallIndex, wallDragDelta);
@@ -138,7 +180,32 @@ export function FloorPlanCanvas2D({
     setRoomDragOffset({ dx: 0, dy: 0 });
     setWallDrag(null);
     setWallDragDelta(0);
-  }, [roomDrag, roomDragOffset, wallDrag, wallDragDelta, onMoveRoom, onResizeWall]);
+  }, [roomDrag, roomDragOffset, wallDrag, wallDragDelta, onMoveRoom, onResizeWall, rooms]);
+
+  // Keyboard arrow key movement for selected room
+  useEffect(() => {
+    if (!selectedRoomId || !onMoveRoom) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) return;
+      // Don't intercept if focus is on an input
+      if ((e.target as HTMLElement)?.tagName === 'INPUT' || (e.target as HTMLElement)?.tagName === 'TEXTAREA') return;
+      e.preventDefault();
+      const step = e.shiftKey ? 0.05 : 0.01; // Shift = 5cm, normal = 1cm
+      const room = rooms.find(r => r.id === selectedRoomId);
+      if (!room) return;
+      let newX = room.posX, newY = room.posY;
+      if (e.key === 'ArrowLeft') newX -= step;
+      if (e.key === 'ArrowRight') newX += step;
+      if (e.key === 'ArrowUp') newY -= step;
+      if (e.key === 'ArrowDown') newY += step;
+      // Round to avoid floating point drift
+      newX = Math.round(newX * 100) / 100;
+      newY = Math.round(newY * 100) / 100;
+      onMoveRoom(selectedRoomId, newX, newY);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedRoomId, onMoveRoom, rooms]);
 
   // Compute external perimeter dimensions (outer bounds including wall thickness)
   const perimeterDims = useMemo(() => {

@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Progress } from '@/components/ui/progress';
 import { Slider } from '@/components/ui/slider';
-import { Plus, Trash2, ChevronDown, DoorOpen, Square, AlertTriangle } from 'lucide-react';
+import { Plus, Trash2, ChevronDown, DoorOpen, Square, AlertTriangle, Copy } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { OPENING_PRESETS, WALL_LABELS, ROOM_PRESETS } from '@/lib/floor-plan-calculations';
 import type { RoomData } from '@/lib/floor-plan-calculations';
@@ -21,6 +21,7 @@ interface FloorPlanRoomEditorProps {
   onAddRoom: (name: string, width: number, length: number) => Promise<void>;
   onUpdateRoom: (roomId: string, data: any) => Promise<void>;
   onDeleteRoom: (roomId: string) => Promise<void>;
+  onDuplicateRoom?: (roomId: string) => Promise<string | undefined>;
   onUpdateWall: (wallId: string, data: any) => Promise<void>;
   onAddOpening: (wallId: string, type: string, width: number, height: number) => Promise<void>;
   onUpdateOpening?: (openingId: string, data: { width?: number; height?: number; positionX?: number }) => Promise<void>;
@@ -30,7 +31,7 @@ interface FloorPlanRoomEditorProps {
 
 export function FloorPlanRoomEditor({
   rooms, planArea, selectedRoomId, onSelectRoom,
-  onAddRoom, onUpdateRoom, onDeleteRoom,
+  onAddRoom, onUpdateRoom, onDeleteRoom, onDuplicateRoom,
   onUpdateWall, onAddOpening, onUpdateOpening, onDeleteOpening,
   saving,
 }: FloorPlanRoomEditorProps) {
@@ -146,10 +147,19 @@ export function FloorPlanRoomEditor({
                     {room.width}×{room.length}m = {(room.width * room.length).toFixed(1)}m²
                   </Badge>
                 </div>
-                <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-destructive"
-                  onClick={e => { e.stopPropagation(); onDeleteRoom(room.id); }}>
-                  <Trash2 className="h-3.5 w-3.5" />
-                </Button>
+                <div className="flex items-center gap-1">
+                  {onDuplicateRoom && (
+                    <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-muted-foreground hover:text-primary"
+                      title="Duplicar habitación"
+                      onClick={e => { e.stopPropagation(); onDuplicateRoom(room.id); }}>
+                      <Copy className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
+                  <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-destructive"
+                    onClick={e => { e.stopPropagation(); onDeleteRoom(room.id); }}>
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
               </div>
             </CardHeader>
           </Card>

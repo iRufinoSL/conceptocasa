@@ -938,14 +938,14 @@ export function ContactCommunicationsHistory({ contactId, contactPhone, isAdmin 
                 <div className="overflow-x-auto pr-4">
                   {selectedComm.type === 'email' && (() => {
                     const email = selectedComm.data as EmailMessage;
-                    return email.body_html ? (
+                    return (email.body_html || email.body_text) ? (
                       <div
                         className="prose prose-sm dark:prose-invert max-w-none break-words [word-break:break-word] [overflow-wrap:anywhere] [&_*]:max-w-full [&_*]:break-words [&_img]:max-w-full [&_table]:max-w-full [&_table]:block [&_table]:overflow-x-auto [&_pre]:max-w-full [&_pre]:overflow-x-auto"
-                        dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(email.body_html) }}
+                        dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(email.body_html || email.body_text?.replace(/\n/g, '<br>') || '') }}
                       />
                     ) : (
                       <div className="text-sm whitespace-pre-wrap break-words">
-                        {email.body_text}
+                        (Sin contenido)
                       </div>
                     );
                   })()}

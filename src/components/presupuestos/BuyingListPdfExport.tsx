@@ -120,7 +120,8 @@ export function exportBuyingListPdf(
   // Header - Budget info
   doc.setFontSize(14);
   doc.setFont('helvetica', 'bold');
-  doc.text(`Presupuesto: ${budget.nombre}`, margin, yPos);
+  const displayName = options.isExampleMode ? 'Ejemplo' : budget.nombre;
+  doc.text(`Presupuesto: ${displayName}`, margin, yPos);
   yPos += 6;
 
   // Address

@@ -343,14 +343,14 @@ export function BudgetEmailInbox({ budgetId, onComposeReply, onComposeForward }:
         <CardContent className="flex-1 overflow-hidden overflow-x-hidden">
           <ScrollArea className={isFullscreen ? "h-full max-h-[70vh]" : "h-full max-h-[400px]"}>
             <div className="pr-4 overflow-x-hidden">
-              {sanitizedHtml ? (
+              {(sanitizedHtml || email.body_text) ? (
                 <div 
                   className="prose prose-sm dark:prose-invert max-w-none break-words overflow-hidden [word-break:break-word] [overflow-wrap:anywhere] [&_*]:max-w-full [&_*]:overflow-hidden [&_*]:break-words [&_img]:max-w-full [&_table]:max-w-full [&_table]:overflow-x-auto [&_table]:block [&_pre]:overflow-x-auto [&_pre]:max-w-full"
-                  dangerouslySetInnerHTML={{ __html: sanitizedHtml }}
+                  dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(sanitizedHtml || email.body_text?.replace(/\n/g, '<br>') || '') }}
                 />
               ) : (
                 <div className="whitespace-pre-wrap text-sm break-words overflow-hidden" style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
-                  {email.body_text || '(Sin contenido)'}
+                  (Sin contenido)
                 </div>
               )}
             </div>

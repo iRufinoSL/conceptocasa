@@ -387,7 +387,8 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
               const floorRooms = rooms.filter(r => (r.floorId || '_none_') === roomFloorId);
               const positioned = deriveGridPositions(floorRooms);
               const pos = positioned.find(p => p.room.id === selectedRoom.id);
-              const coordinate = pos ? `${pos.gridCol}.${pos.gridRow}` : undefined;
+              const coordCol = pos?.gridCol;
+              const coordRow = pos?.gridRow;
               const floorObj = floors.find(f => f.id === selectedRoom.floorId);
               const floorName = floorObj?.name;
 
@@ -413,14 +414,15 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
                 
                 await updateRoom(selectedRoom.id, { posX: Math.round(posX * 100) / 100, posY: Math.round(posY * 100) / 100 });
                 await refetch();
-                toast.success(`${selectedRoom.name} movido a coordenada ${targetCol}.${targetRow}`);
+                toast.success(`${selectedRoom.name} movido a Col ${targetCol} · Fila ${targetRow}`);
               };
 
               return (
                 <FloorPlanSpaceForm
                   room={selectedRoom}
                   planData={planData}
-                  coordinate={coordinate}
+                  coordCol={coordCol}
+                  coordRow={coordRow}
                   floorName={floorName}
                   onUpdateRoom={(data) => updateRoom(selectedRoom.id, data)}
                   onUpdateWall={(wallId, data) => updateWall(wallId, data)}

@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -15,6 +16,7 @@ interface FloorPlanSpaceFormProps {
   floorName?: string;
   onUpdateRoom: (data: { name?: string; width?: number; length?: number; hasFloor?: boolean; hasCeiling?: boolean }) => void;
   onUpdateWall: (wallId: string, data: { wallType?: WallType }) => void;
+  onChangeCoordinate?: (col: number, row: number) => void;
   onDeleteRoom: () => void;
   saving: boolean;
 }
@@ -30,8 +32,27 @@ const WALL_TYPE_OPTIONS: { value: WallType; label: string }[] = [
   { value: 'interior_invisible', label: 'Int. invisible' },
 ];
 
-export function FloorPlanSpaceForm({ room, planData, coordinate, floorName, onUpdateRoom, onUpdateWall, onDeleteRoom, saving }: FloorPlanSpaceFormProps) {
+export function FloorPlanSpaceForm({ room, planData, coordinate, floorName, onUpdateRoom, onUpdateWall, onChangeCoordinate, onDeleteRoom, saving }: FloorPlanSpaceFormProps) {
   const m2 = room.width * room.length;
+  const [coordInput, setCoordInput] = useState(coordinate || '');
+
+  useEffect(() => {
+    setCoordInput(coordinate || '');
+  }, [coordinate]);
+
+  const handleCoordBlur = () => {
+    if (!onChangeCoordinate || coordInput === coordinate) return;
+    const parts = coordInput.split('.');
+    if (parts.length === 2) {
+      const col = parseInt(parts[0]);
+      const row = parseInt(parts[1]);
+      if (col > 0 && row > 0) {
+        onChangeCoordinate(col, row);
+        return;
+      }
+    }
+    setCoordInput(coordinate || '');
+  };
 
   return (
     <Card>
@@ -42,10 +63,9 @@ export function FloorPlanSpaceForm({ room, planData, coordinate, floorName, onUp
             <Trash2 className="h-3.5 w-3.5 text-destructive" />
           </Button>
         </div>
-        {(coordinate || floorName) && (
+        {floorName && (
           <div className="flex items-center gap-2 mt-1">
-            {floorName && <Badge variant="secondary" className="text-[10px]">{floorName}</Badge>}
-            {coordinate && <Badge variant="outline" className="text-[10px]">Coordenada: {coordinate}</Badge>}
+            <Badge variant="secondary" className="text-[10px]">{floorName}</Badge>
           </div>
         )}
       </CardHeader>
@@ -58,6 +78,21 @@ export function FloorPlanSpaceForm({ room, planData, coordinate, floorName, onUp
             onChange={e => onUpdateRoom({ name: e.target.value })}
             disabled={saving}
           />
+        </div>
+
+        {/* Coordinate */}
+        <div>
+          <Label className="text-xs">Coordenada (col.fila)</Label>
+          <Input
+            value={coordInput}
+            onChange={e => setCoordInput(e.target.value)}
+            onBlur={handleCoordBlur}
+            onKeyDown={e => { if (e.key === 'Enter') handleCoordBlur(); }}
+            placeholder="ej: 1.1"
+            disabled={saving}
+            className="w-24"
+          />
+          <p className="text-[10px] text-muted-foreground mt-0.5">Editar para mover el espacio en la cuadrícula</p>
         </div>
 
         {/* Dimensions */}

@@ -201,6 +201,8 @@ export function useFloorPlan(budgetId: string) {
           hasCeiling: r.has_ceiling !== false,
           hasRoof: r.has_roof !== false,
           floorId: (r as any).floor_id || undefined,
+          groupId: (r as any).group_id || undefined,
+          groupName: (r as any).group_name || undefined,
           walls,
         };
       });
@@ -918,6 +920,45 @@ export function useFloorPlan(budgetId: string) {
     }
   };
 
+  // Group/ungroup rooms
+  const groupRooms = async (roomIds: string[], groupName: string) => {
+    if (roomIds.length < 2) return;
+    setSaving(true);
+    try {
+      const groupId = crypto.randomUUID();
+      const { error } = await supabase
+        .from('budget_floor_plan_rooms')
+        .update({ group_id: groupId, group_name: groupName } as any)
+        .in('id', roomIds);
+      if (error) throw error;
+      await fetchAll();
+      toast.success(`${roomIds.length} espacios agrupados como "${groupName}"`);
+    } catch (err) {
+      console.error('Error grouping rooms:', err);
+      toast.error('Error al agrupar espacios');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const ungroupRooms = async (groupId: string) => {
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from('budget_floor_plan_rooms')
+        .update({ group_id: null, group_name: null } as any)
+        .eq('group_id', groupId);
+      if (error) throw error;
+      await fetchAll();
+      toast.success('Grupo disuelto');
+    } catch (err) {
+      console.error('Error ungrouping rooms:', err);
+      toast.error('Error al desagrupar');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return {
     floorPlan,
     rooms,
@@ -943,6 +984,8 @@ export function useFloorPlan(budgetId: string) {
     autoCreateFloors,
     deleteFloorPlan,
     generateFromTemplate,
+    groupRooms,
+    ungroupRooms,
     refetch: fetchAll,
   };
 }

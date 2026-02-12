@@ -3,12 +3,14 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ChevronDown, ChevronRight, Pencil, Trash2, Package, Wrench, Truck, Briefcase, CheckSquare } from 'lucide-react';
+import { ChevronDown, ChevronRight, Pencil, Trash2, Package, Wrench, Truck, Briefcase, CheckSquare, Ruler } from 'lucide-react';
 import { formatCurrency, formatNumber, formatPercent } from '@/lib/format-utils';
 import { ResourceInlineEdit } from './ResourceInlineEdit';
 import { InlineDatePicker } from '@/components/ui/inline-date-picker';
 import { format, parseISO, isValid } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { formatActividadId } from '@/lib/activity-id';
+import { OPTION_COLORS, getDisplayOptions, getAllAvailableOptions } from '@/lib/options-utils';
 
 interface BudgetResource {
   id: string;
@@ -34,13 +36,20 @@ interface Activity {
   code: string;
   name: string;
   phase_id: string | null;
+  opciones?: string[];
   actual_start_date?: string | null;
   actual_end_date?: string | null;
+  measurement_id?: string | null;
 }
 
 interface Phase {
   id: string;
   code: string | null;
+  name: string;
+}
+
+interface Measurement {
+  id: string;
   name: string;
 }
 
@@ -58,6 +67,7 @@ interface ResourcesTypePhaseActivityGroupedViewProps {
   resources: BudgetResource[];
   activities: Activity[];
   phases: Phase[];
+  measurements?: Measurement[];
   permissions: any;
   selectedIds: Set<string>;
   onToggleSelect: (id: string) => void;
@@ -71,14 +81,17 @@ interface ResourcesTypePhaseActivityGroupedViewProps {
   canEditResource: (resource: BudgetResource) => boolean;
 }
 
-const RESOURCE_TYPES = ['Producto', 'Mano de obra', 'Alquiler', 'Servicio', 'Herramienta', 'Impuestos', 'Tarea'];
+const RESOURCE_TYPES = ['Alquiler', 'Equipo', 'Mano de obra', 'Material', 'Producto', 'Servicio', 'Utiles y herramientas'];
 const UNITS = ['m2', 'm3', 'ml', 'ud', 'h', 'día', 'mes', 'kg', 'l', 'km'];
 
 const resourceTypeIcons: Record<string, React.ReactNode> = {
   'Producto': <Package className="h-4 w-4" />,
+  'Material': <Package className="h-4 w-4" />,
   'Mano de obra': <Wrench className="h-4 w-4" />,
   'Alquiler': <Truck className="h-4 w-4" />,
   'Servicio': <Briefcase className="h-4 w-4" />,
+  'Equipo': <Wrench className="h-4 w-4" />,
+  'Utiles y herramientas': <Wrench className="h-4 w-4" />,
   'Herramienta': <Wrench className="h-4 w-4" />,
   'Impuestos': <Package className="h-4 w-4" />,
   'Tarea': <CheckSquare className="h-4 w-4" />,
@@ -86,9 +99,12 @@ const resourceTypeIcons: Record<string, React.ReactNode> = {
 
 const resourceTypeColors: Record<string, string> = {
   'Producto': 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
+  'Material': 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
   'Mano de obra': 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
   'Alquiler': 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300',
   'Servicio': 'bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-300',
+  'Equipo': 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-300',
+  'Utiles y herramientas': 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300',
   'Herramienta': 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300',
   'Impuestos': 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300',
   'Tarea': 'bg-slate-100 text-slate-800 dark:bg-slate-900/30 dark:text-slate-300',
@@ -99,6 +115,7 @@ export function ResourcesTypePhaseActivityGroupedView({
   resources,
   activities,
   phases,
+  measurements = [],
   permissions,
   selectedIds,
   onToggleSelect,
@@ -114,98 +131,89 @@ export function ResourcesTypePhaseActivityGroupedView({
   const [expandedTypes, setExpandedTypes] = useState<Set<string>>(new Set(RESOURCE_TYPES));
   const [expandedPhases, setExpandedPhases] = useState<Set<string>>(new Set());
   const [expandedActivities, setExpandedActivities] = useState<Set<string>>(new Set());
-  
+  const [selectedOption, setSelectedOption] = useState<string>('A');
+
   const isAdmin = permissions?.isAdmin;
+
+  // Get all available options from activities
+  const availableOptions = useMemo(() => {
+    return getAllAvailableOptions(activities as { opciones?: string[] | null }[]);
+  }, [activities]);
+
+  // Filter resources by selected option: only resources whose activity includes the selected option
+  const filteredResources = useMemo(() => {
+    return resources.filter(r => {
+      if (!r.activity_id) return true; // unassigned resources show in all options
+      const activity = activities.find(a => a.id === r.activity_id);
+      if (!activity) return true;
+      const opts = activity.opciones || ['A', 'B', 'C'];
+      return opts.includes(selectedOption);
+    });
+  }, [resources, activities, selectedOption]);
+
+  // Measurement lookup
+  const measurementMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    measurements.forEach(m => { map[m.id] = m.name; });
+    return map;
+  }, [measurements]);
 
   // Build hierarchical structure: Type -> Phase -> Activity -> Resources
   const hierarchicalData = useMemo(() => {
     const structure: Record<string, Record<string, Record<string, BudgetResource[]>>> = {};
-    
-    // Initialize all known types
-    RESOURCE_TYPES.forEach(type => {
-      structure[type] = {};
-    });
-    structure['Sin tipo'] = {};
-    
-    // Group resources
-    resources.forEach(resource => {
+
+    filteredResources.forEach(resource => {
       const type = resource.resource_type || 'Sin tipo';
-      if (!structure[type]) {
-        structure[type] = {};
-      }
-      
-      // Get activity and phase info
+      if (!structure[type]) structure[type] = {};
+
       const activity = resource.activity_id ? activities.find(a => a.id === resource.activity_id) : null;
       const phaseId = activity?.phase_id || '__no_phase__';
       const activityId = resource.activity_id || '__no_activity__';
-      
-      if (!structure[type][phaseId]) {
-        structure[type][phaseId] = {};
-      }
-      if (!structure[type][phaseId][activityId]) {
-        structure[type][phaseId][activityId] = [];
-      }
-      
+
+      if (!structure[type][phaseId]) structure[type][phaseId] = {};
+      if (!structure[type][phaseId][activityId]) structure[type][phaseId][activityId] = [];
+
       structure[type][phaseId][activityId].push(resource);
     });
-    
-    // Sort resources within each activity alphabetically
+
+    // Sort resources alphabetically within each activity
     Object.keys(structure).forEach(type => {
       Object.keys(structure[type]).forEach(phaseId => {
         Object.keys(structure[type][phaseId]).forEach(activityId => {
-          structure[type][phaseId][activityId].sort((a, b) => 
+          structure[type][phaseId][activityId].sort((a, b) =>
             a.name.localeCompare(b.name, 'es')
           );
         });
       });
     });
-    
+
     return structure;
-  }, [resources, activities]);
+  }, [filteredResources, activities]);
 
-  // Use full hierarchical data (no implicit filtering)
-  const filteredHierarchicalData = hierarchicalData;
-
-  // Default expansion behavior: show groups WITH assignment first/expanded,
-  // keep "Sin tipo" / "Sin fase" / "Sin actividad" collapsed unless the user expands them.
+  // Auto-expand on load
   useEffect(() => {
-    if (resources.length === 0) return;
-
-    // Only initialize once per load (don't override user's manual toggles)
+    if (filteredResources.length === 0) return;
     if (expandedPhases.size > 0 || expandedActivities.size > 0) return;
 
-    // Types that actually have resources
-    const typesWithResources = Object.entries(filteredHierarchicalData)
+    const typesWithResources = Object.entries(hierarchicalData)
       .filter(([, phasesById]) =>
-        Object.values(phasesById).some((activitiesById) =>
-          Object.values(activitiesById).some((list) => list.length > 0)
+        Object.values(phasesById).some(activitiesById =>
+          Object.values(activitiesById).some(list => list.length > 0)
         )
       )
       .map(([type]) => type);
 
-    const realTypes = typesWithResources.filter((t) => t !== 'Sin tipo');
-
-    // Expand all real types (including unknown/new types) by default.
-    const hasDefaultExpandedTypes =
-      expandedTypes.size === RESOURCE_TYPES.length &&
-      Array.from(expandedTypes).every((t) => RESOURCE_TYPES.includes(t));
-
-    if (hasDefaultExpandedTypes) {
-      setExpandedTypes(new Set(realTypes));
-    }
+    const realTypes = typesWithResources.filter(t => t !== 'Sin tipo');
+    setExpandedTypes(new Set(realTypes));
 
     const phaseKeys: string[] = [];
     const activityKeys: string[] = [];
-
-    realTypes.forEach((type) => {
-      const typePhases = filteredHierarchicalData[type] || {};
-
-      Object.keys(typePhases).forEach((phaseId) => {
+    realTypes.forEach(type => {
+      const typePhases = hierarchicalData[type] || {};
+      Object.keys(typePhases).forEach(phaseId => {
         if (phaseId === '__no_phase__') return;
         phaseKeys.push(`${type}-${phaseId}`);
-
-        const phaseActivities = typePhases[phaseId] || {};
-        Object.keys(phaseActivities).forEach((activityId) => {
+        Object.keys(typePhases[phaseId]).forEach(activityId => {
           if (activityId === '__no_activity__') return;
           activityKeys.push(`${type}-${phaseId}-${activityId}`);
         });
@@ -214,153 +222,142 @@ export function ResourcesTypePhaseActivityGroupedView({
 
     setExpandedPhases(new Set(phaseKeys));
     setExpandedActivities(new Set(activityKeys));
-  }, [resources.length, filteredHierarchicalData, expandedPhases.size, expandedActivities.size, expandedTypes]);
+  }, [filteredResources.length, hierarchicalData, expandedPhases.size, expandedActivities.size]);
 
-  // Calculate totals per type
+  // Totals
   const typeTotals = useMemo(() => {
     const totals: Record<string, number> = {};
-    Object.entries(filteredHierarchicalData).forEach(([type, phases]) => {
+    Object.entries(hierarchicalData).forEach(([type, phaseMap]) => {
       let total = 0;
-      Object.values(phases).forEach(activities => {
-        Object.values(activities).forEach(resourceList => {
-          resourceList.forEach(r => {
-            total += calculateFields(r).subtotalSales;
-          });
+      Object.values(phaseMap).forEach(actMap => {
+        Object.values(actMap).forEach(list => {
+          list.forEach(r => { total += calculateFields(r).subtotalSales; });
         });
       });
       totals[type] = total;
     });
     return totals;
-  }, [filteredHierarchicalData, calculateFields]);
+  }, [hierarchicalData, calculateFields]);
 
-  // Calculate totals per phase within a type
   const phaseTotals = useMemo(() => {
     const totals: Record<string, Record<string, number>> = {};
-    Object.entries(filteredHierarchicalData).forEach(([type, phases]) => {
+    Object.entries(hierarchicalData).forEach(([type, phaseMap]) => {
       totals[type] = {};
-      Object.entries(phases).forEach(([phaseId, activities]) => {
-        let phaseTotal = 0;
-        Object.values(activities).forEach(resourceList => {
-          resourceList.forEach(r => {
-            phaseTotal += calculateFields(r).subtotalSales;
-          });
-        });
-        totals[type][phaseId] = phaseTotal;
+      Object.entries(phaseMap).forEach(([phaseId, actMap]) => {
+        let t = 0;
+        Object.values(actMap).forEach(list => { list.forEach(r => { t += calculateFields(r).subtotalSales; }); });
+        totals[type][phaseId] = t;
       });
     });
     return totals;
-  }, [filteredHierarchicalData, calculateFields]);
+  }, [hierarchicalData, calculateFields]);
 
-  // Calculate totals per activity within a phase
   const activityTotals = useMemo(() => {
     const totals: Record<string, Record<string, Record<string, number>>> = {};
-    Object.entries(filteredHierarchicalData).forEach(([type, phases]) => {
+    Object.entries(hierarchicalData).forEach(([type, phaseMap]) => {
       totals[type] = {};
-      Object.entries(phases).forEach(([phaseId, activities]) => {
+      Object.entries(phaseMap).forEach(([phaseId, actMap]) => {
         totals[type][phaseId] = {};
-        Object.entries(activities).forEach(([activityId, resourceList]) => {
-          let activityTotal = 0;
-          resourceList.forEach(r => {
-            activityTotal += calculateFields(r).subtotalSales;
-          });
-          totals[type][phaseId][activityId] = activityTotal;
+        Object.entries(actMap).forEach(([actId, list]) => {
+          totals[type][phaseId][actId] = list.reduce((s, r) => s + calculateFields(r).subtotalSales, 0);
         });
       });
     });
     return totals;
-  }, [filteredHierarchicalData, calculateFields]);
+  }, [hierarchicalData, calculateFields]);
 
-  // Count resources per type
   const typeResourceCounts = useMemo(() => {
     const counts: Record<string, number> = {};
-    Object.entries(filteredHierarchicalData).forEach(([type, phases]) => {
+    Object.entries(hierarchicalData).forEach(([type, phaseMap]) => {
       let count = 0;
-      Object.values(phases).forEach(activities => {
-        Object.values(activities).forEach(resourceList => {
-          count += resourceList.length;
-        });
+      Object.values(phaseMap).forEach(actMap => {
+        Object.values(actMap).forEach(list => { count += list.length; });
       });
       counts[type] = count;
     });
     return counts;
-  }, [filteredHierarchicalData]);
+  }, [hierarchicalData]);
 
   const toggleType = (type: string) => {
-    const newExpanded = new Set(expandedTypes);
-    if (newExpanded.has(type)) {
-      newExpanded.delete(type);
-    } else {
-      newExpanded.add(type);
-    }
-    setExpandedTypes(newExpanded);
+    const n = new Set(expandedTypes);
+    n.has(type) ? n.delete(type) : n.add(type);
+    setExpandedTypes(n);
   };
-
   const togglePhase = (key: string) => {
-    const newExpanded = new Set(expandedPhases);
-    if (newExpanded.has(key)) {
-      newExpanded.delete(key);
-    } else {
-      newExpanded.add(key);
-    }
-    setExpandedPhases(newExpanded);
+    const n = new Set(expandedPhases);
+    n.has(key) ? n.delete(key) : n.add(key);
+    setExpandedPhases(n);
   };
-
   const toggleActivity = (key: string) => {
-    const newExpanded = new Set(expandedActivities);
-    if (newExpanded.has(key)) {
-      newExpanded.delete(key);
-    } else {
-      newExpanded.add(key);
-    }
-    setExpandedActivities(newExpanded);
+    const n = new Set(expandedActivities);
+    n.has(key) ? n.delete(key) : n.add(key);
+    setExpandedActivities(n);
   };
 
-
-  // Get phase name
   const getPhaseName = (phaseId: string) => {
     if (phaseId === '__no_phase__') return 'Sin fase';
     const phase = phases.find(p => p.id === phaseId);
     return phase ? `${phase.code || ''} ${phase.name}` : 'Sin fase';
   };
 
-  // Get activity name
-  const getActivityName = (activityId: string) => {
+  const getActivityDisplayName = (activityId: string) => {
     if (activityId === '__no_activity__') return 'Sin actividad';
     const activity = activities.find(a => a.id === activityId);
     if (!activity) return 'Sin actividad';
-    return `${activity.code}.-${activity.name}`;
+    const phase = activity.phase_id ? phases.find(p => p.id === activity.phase_id) : null;
+    return formatActividadId({
+      phaseCode: phase?.code,
+      activityCode: activity.code,
+      name: activity.name,
+    });
   };
 
-  // Order types: first the predefined ones, then any additional types found in data, then "Sin tipo"
+  const getActivityMeasurementName = (activityId: string): string | null => {
+    if (activityId === '__no_activity__') return null;
+    const activity = activities.find(a => a.id === activityId);
+    if (!activity?.measurement_id) return null;
+    return measurementMap[activity.measurement_id] || null;
+  };
+
+  // Ordered types: alphabetical among those with resources, "Sin tipo" last
   const orderedTypes = useMemo(() => {
-    // Get all types that have resources
-    const typesWithResources = Object.keys(typeResourceCounts).filter(type => (typeResourceCounts[type] || 0) > 0);
-    
-    // Start with predefined types that have resources
-    const result: string[] = [];
-    RESOURCE_TYPES.forEach(type => {
-      if (typesWithResources.includes(type)) {
-        result.push(type);
-      }
-    });
-    
-    // Add any additional types found in data (not in RESOURCE_TYPES) except 'Sin tipo'
-    typesWithResources.forEach(type => {
-      if (!RESOURCE_TYPES.includes(type) && type !== 'Sin tipo' && !result.includes(type)) {
-        result.push(type);
-      }
-    });
-    
-    // Add 'Sin tipo' at the end if it has resources
-    if (typesWithResources.includes('Sin tipo')) {
-      result.push('Sin tipo');
-    }
-    
+    const typesWithResources = Object.keys(typeResourceCounts).filter(t => (typeResourceCounts[t] || 0) > 0);
+    const known = RESOURCE_TYPES.filter(t => typesWithResources.includes(t));
+    const extra = typesWithResources.filter(t => !RESOURCE_TYPES.includes(t) && t !== 'Sin tipo').sort((a, b) => a.localeCompare(b, 'es'));
+    const result = [...known, ...extra];
+    if (typesWithResources.includes('Sin tipo')) result.push('Sin tipo');
     return result;
   }, [typeResourceCounts]);
 
+  const grandTotal = useMemo(() => {
+    return filteredResources.reduce((s, r) => s + calculateFields(r).subtotalSales, 0);
+  }, [filteredResources, calculateFields]);
+
   return (
     <div className="space-y-4">
+      {/* Option selector */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-sm font-medium text-muted-foreground">Opción:</span>
+        {availableOptions.map(opt => {
+          const colors = OPTION_COLORS[opt];
+          const isSelected = selectedOption === opt;
+          return (
+            <Button
+              key={opt}
+              variant={isSelected ? 'default' : 'outline'}
+              size="sm"
+              className={isSelected && colors ? `${colors.bg} ${colors.hover} text-white border-0` : ''}
+              onClick={() => setSelectedOption(opt)}
+            >
+              Opción {opt}
+            </Button>
+          );
+        })}
+        <span className="ml-auto text-sm font-semibold">
+          Total Opción {selectedOption}: {formatCurrency(grandTotal)}
+        </span>
+      </div>
+
       <div className="rounded-md border overflow-x-auto">
         <Table>
           <TableHeader>
@@ -368,7 +365,7 @@ export function ResourcesTypePhaseActivityGroupedView({
               {isAdmin && (
                 <TableHead className="w-[40px]">
                   <Checkbox
-                    checked={selectedIds.size === resources.length && resources.length > 0}
+                    checked={selectedIds.size === filteredResources.length && filteredResources.length > 0}
                     onCheckedChange={onToggleSelectAll}
                   />
                 </TableHead>
@@ -388,10 +385,10 @@ export function ResourcesTypePhaseActivityGroupedView({
           </TableHeader>
           <TableBody>
             {orderedTypes.map(type => {
-              const typePhases = filteredHierarchicalData[type] || {};
+              const typePhases = hierarchicalData[type] || {};
               const typeCount = typeResourceCounts[type] || 0;
               if (typeCount === 0) return null;
-              
+
               const isTypeExpanded = expandedTypes.has(type);
               const typeTotal = typeTotals[type] || 0;
               const colorClass = resourceTypeColors[type] || resourceTypeColors['Sin tipo'];
@@ -407,14 +404,14 @@ export function ResourcesTypePhaseActivityGroupedView({
 
               return (
                 <Fragment key={`type-${type}`}>
-                  {/* Type Header Row */}
+                  {/* Type Header */}
                   <TableRow className="cursor-pointer hover:bg-muted/50 bg-muted/30">
-                  {isAdmin && <TableCell className="py-2" />}
-                  <TableCell 
-                    colSpan={isAdmin ? 10 : 11}
-                    className="py-2"
-                    onClick={() => toggleType(type)}
-                  >
+                    {isAdmin && <TableCell className="py-2" />}
+                    <TableCell
+                      colSpan={isAdmin ? 10 : 11}
+                      className="py-2"
+                      onClick={() => toggleType(type)}
+                    >
                       <div className="flex items-center gap-3">
                         <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0">
                           {isTypeExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
@@ -436,33 +433,33 @@ export function ResourcesTypePhaseActivityGroupedView({
 
                   {/* Phases within type */}
                   {isTypeExpanded && sortedPhaseIds.map(phaseId => {
-                    const phaseActivities = typePhases[phaseId] || {};
+                    const phaseActivitiesMap = typePhases[phaseId] || {};
                     const phaseKey = `${type}-${phaseId}`;
                     const isPhaseExpanded = expandedPhases.has(phaseKey);
                     const phaseTotal = phaseTotals[type]?.[phaseId] || 0;
                     const phaseName = getPhaseName(phaseId);
+                    const phaseResourceCount = Object.values(phaseActivitiesMap).reduce((s, l) => s + l.length, 0);
 
-                    // Count resources in this phase
-                    const phaseResourceCount = Object.values(phaseActivities).reduce(
-                      (sum, resources) => sum + resources.length, 0
-                    );
-
-                    // Sort activities by code
-                    const sortedActivityIds = Object.keys(phaseActivities).sort((a, b) => {
+                    // Sort activities by ActividadID
+                    const sortedActivityIds = Object.keys(phaseActivitiesMap).sort((a, b) => {
                       if (a === '__no_activity__') return 1;
                       if (b === '__no_activity__') return -1;
                       const actA = activities.find(act => act.id === a);
                       const actB = activities.find(act => act.id === b);
-                      return (actA?.code || '').localeCompare(actB?.code || '', 'es');
+                      const phA = actA?.phase_id ? phases.find(p => p.id === actA.phase_id) : null;
+                      const phB = actB?.phase_id ? phases.find(p => p.id === actB.phase_id) : null;
+                      const idA = formatActividadId({ phaseCode: phA?.code, activityCode: actA?.code, name: actA?.name });
+                      const idB = formatActividadId({ phaseCode: phB?.code, activityCode: actB?.code, name: actB?.name });
+                      return idA.localeCompare(idB, 'es');
                     });
 
                     return (
                       <Fragment key={phaseKey}>
-                        {/* Phase Header Row */}
+                        {/* Phase Header */}
                         <TableRow className="cursor-pointer hover:bg-accent/50 bg-accent/20">
                           {isAdmin && <TableCell className="py-1.5" />}
-                          <TableCell 
-                            colSpan={isAdmin ? 9 : 10}
+                          <TableCell
+                            colSpan={isAdmin ? 10 : 11}
                             className="py-1.5 pl-12"
                             onClick={() => togglePhase(phaseKey)}
                           >
@@ -484,35 +481,42 @@ export function ResourcesTypePhaseActivityGroupedView({
 
                         {/* Activities within phase */}
                         {isPhaseExpanded && sortedActivityIds.map(activityId => {
-                          const activityResources = phaseActivities[activityId] || [];
+                          const activityResources = phaseActivitiesMap[activityId] || [];
                           const activityKey = `${type}-${phaseId}-${activityId}`;
                           const isActivityExpanded = expandedActivities.has(activityKey);
                           const activityTotal = activityTotals[type]?.[phaseId]?.[activityId] || 0;
-                          const activityName = getActivityName(activityId);
+                          const activityDisplayName = getActivityDisplayName(activityId);
+                          const measurementName = getActivityMeasurementName(activityId);
                           const activityData = activityId !== '__no_activity__' ? activities.find(a => a.id === activityId) : null;
-                          
+
                           const formatDateDisplay = (dateStr: string | null | undefined) => {
                             if (!dateStr) return '-';
                             const parsed = parseISO(dateStr);
                             return isValid(parsed) ? format(parsed, 'dd/MM/yy', { locale: es }) : '-';
                           };
-                          
+
                           return (
                             <Fragment key={activityKey}>
-                              {/* Activity Header Row */}
+                              {/* Activity Header */}
                               <TableRow className="cursor-pointer hover:bg-primary/5 bg-primary/10">
                                 {isAdmin && <TableCell className="py-1" />}
-                                <TableCell 
+                                <TableCell
                                   className="py-1 pl-20"
                                   onClick={() => toggleActivity(activityKey)}
                                 >
-                                  <div className="flex items-center gap-3">
+                                  <div className="flex items-center gap-2">
                                     <Button variant="ghost" size="icon" className="h-5 w-5 shrink-0">
                                       {isActivityExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
                                     </Button>
-                                    <span className="text-sm">{activityName}</span>
+                                    <span className="text-sm font-medium">{activityDisplayName}</span>
+                                    {measurementName && (
+                                      <Badge variant="outline" className="text-[10px] gap-1 py-0 h-5">
+                                        <Ruler className="h-3 w-3" />
+                                        {measurementName}
+                                      </Badge>
+                                    )}
                                     <span className="text-xs text-muted-foreground">
-                                      ({activityResources.length} recursos)
+                                      ({activityResources.length} rec.)
                                     </span>
                                   </div>
                                 </TableCell>
@@ -560,15 +564,7 @@ export function ResourcesTypePhaseActivityGroupedView({
                               {isActivityExpanded && activityResources.map(resource => {
                                 const fields = calculateFields(resource);
                                 const canEdit = canEditResource(resource);
-                                
                                 const unitOptions = UNITS.map(u => ({ value: u, label: u }));
-                                const activityOptions = activities.map(a => {
-                                  const phase = a.phase_id ? phases.find(p => p.id === a.phase_id) : null;
-                                  return {
-                                    value: a.id,
-                                    label: `${phase?.code || ''} ${a.code}.-${a.name}`,
-                                  };
-                                });
 
                                 return (
                                   <TableRow key={resource.id} className={selectedIds.has(resource.id) ? 'bg-muted/50' : ''}>
@@ -660,20 +656,10 @@ export function ResourcesTypePhaseActivityGroupedView({
                                     {isAdmin && (
                                       <TableCell>
                                         <div className="flex items-center gap-1">
-                                          <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            onClick={() => onEdit(resource)}
-                                            className="h-8 w-8"
-                                          >
+                                          <Button variant="ghost" size="icon" onClick={() => onEdit(resource)} className="h-8 w-8">
                                             <Pencil className="h-4 w-4" />
                                           </Button>
-                                          <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            onClick={() => onDelete(resource)}
-                                            className="h-8 w-8 text-destructive"
-                                          >
+                                          <Button variant="ghost" size="icon" onClick={() => onDelete(resource)} className="h-8 w-8 text-destructive">
                                             <Trash2 className="h-4 w-4" />
                                           </Button>
                                         </div>
@@ -691,10 +677,10 @@ export function ResourcesTypePhaseActivityGroupedView({
                 </Fragment>
               );
             })}
-            {resources.length === 0 && (
+            {filteredResources.length === 0 && (
               <TableRow>
                 <TableCell colSpan={isAdmin ? 12 : 11} className="text-center text-muted-foreground py-8">
-                  No hay recursos. Añade uno nuevo o importa desde CSV/Excel.
+                  No hay recursos para la Opción {selectedOption}.
                 </TableCell>
               </TableRow>
             )}

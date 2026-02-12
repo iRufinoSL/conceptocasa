@@ -67,6 +67,12 @@ interface Activity {
   actual_end_date?: string | null;
   // En BD es boolean NOT NULL ("Uso en Presupuesto")
   uses_measurement: boolean;
+  measurement_id?: string | null;
+}
+
+interface Measurement {
+  id: string;
+  name: string;
 }
 
 interface Phase {
@@ -130,6 +136,7 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
   const [resources, setResources] = useState<BudgetResource[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
   const [phases, setPhases] = useState<Phase[]>([]);
+  const [measurements, setMeasurements] = useState<Measurement[]>([]);
   const [supplierNames, setSupplierNames] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -230,7 +237,7 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
           .order('name'),
         supabase
           .from('budget_activities')
-          .select('id, code, name, phase_id, opciones, actual_start_date, actual_end_date, uses_measurement')
+          .select('id, code, name, phase_id, opciones, actual_start_date, actual_end_date, uses_measurement, measurement_id')
           .eq('budget_id', budgetId)
           .order('code'),
         supabase
@@ -245,9 +252,24 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
       if (phasesRes.error) throw phasesRes.error;
 
       const resourcesData = resourcesRes.data || [];
+      const activitiesData = (activitiesRes.data || []) as Activity[];
       setResources(resourcesData);
-      setActivities(activitiesRes.data || []);
+      setActivities(activitiesData);
       setPhases(phasesRes.data || []);
+
+      // Fetch measurements for activities that have measurement_id
+      const measurementIds = [...new Set(activitiesData.filter(a => a.measurement_id).map(a => a.measurement_id as string))];
+      if (measurementIds.length > 0) {
+        const { data: measurementsData } = await supabase
+          .from('budget_measurements')
+          .select('id, name')
+          .in('id', measurementIds);
+        if (measurementsData) {
+          setMeasurements(measurementsData);
+        }
+      } else {
+        setMeasurements([]);
+      }
 
       // Fetch supplier names for resources with supplier_id
       const supplierIds = [...new Set(resourcesData.filter(r => r.supplier_id).map(r => r.supplier_id as string))];
@@ -1696,6 +1718,7 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
               resources={filteredResources}
               activities={activities}
               phases={phases}
+              measurements={measurements}
               permissions={permissions}
               selectedIds={selectedIds}
               onToggleSelect={toggleSelect}

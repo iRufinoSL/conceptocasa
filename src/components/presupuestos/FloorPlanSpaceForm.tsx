@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
-import { Trash2 } from 'lucide-react';
+import { Trash2, MapPin } from 'lucide-react';
 import type { RoomData, WallType, FloorPlanData } from '@/lib/floor-plan-calculations';
 
 interface FloorPlanSpaceFormProps {
@@ -40,18 +40,26 @@ export function FloorPlanSpaceForm({ room, planData, coordinate, floorName, onUp
     setCoordInput(coordinate || '');
   }, [coordinate]);
 
-  const handleCoordBlur = () => {
-    if (!onChangeCoordinate || coordInput === coordinate) return;
-    const parts = coordInput.split('.');
+  const parseCoord = (input: string): { col: number; row: number } | null => {
+    const parts = input.split('.');
     if (parts.length === 2) {
       const col = parseInt(parts[0]);
       const row = parseInt(parts[1]);
-      if (col > 0 && row > 0) {
-        onChangeCoordinate(col, row);
-        return;
-      }
+      if (col > 0 && row > 0) return { col, row };
     }
-    setCoordInput(coordinate || '');
+    return null;
+  };
+
+  const coordChanged = coordInput !== (coordinate || '') && parseCoord(coordInput) !== null;
+
+  const handleApplyCoordinate = () => {
+    if (!onChangeCoordinate) return;
+    const parsed = parseCoord(coordInput);
+    if (parsed) {
+      onChangeCoordinate(parsed.col, parsed.row);
+    } else {
+      setCoordInput(coordinate || '');
+    }
   };
 
   return (
@@ -83,16 +91,33 @@ export function FloorPlanSpaceForm({ room, planData, coordinate, floorName, onUp
         {/* Coordinate */}
         <div>
           <Label className="text-xs">Coordenada (col.fila)</Label>
-          <Input
-            value={coordInput}
-            onChange={e => setCoordInput(e.target.value)}
-            onBlur={handleCoordBlur}
-            onKeyDown={e => { if (e.key === 'Enter') handleCoordBlur(); }}
-            placeholder="ej: 1.1"
-            disabled={saving}
-            className="w-24"
-          />
-          <p className="text-[10px] text-muted-foreground mt-0.5">Editar para mover el espacio en la cuadrícula</p>
+          <div className="flex items-center gap-2">
+            <Input
+              value={coordInput}
+              onChange={e => setCoordInput(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') handleApplyCoordinate(); }}
+              placeholder="ej: 1.1"
+              disabled={saving}
+              className="w-24"
+            />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleApplyCoordinate}
+              disabled={saving || !coordChanged}
+              title="Aplicar coordenada y mover espacio"
+            >
+              <MapPin className="h-3.5 w-3.5 mr-1" /> Mover
+            </Button>
+          </div>
+          {coordChanged && (
+            <p className="text-[10px] text-primary font-medium mt-0.5">
+              Pulsa «Mover» para reposicionar de {coordinate} a {coordInput}
+            </p>
+          )}
+          {!coordChanged && (
+            <p className="text-[10px] text-muted-foreground mt-0.5">Editar y pulsar «Mover» para reposicionar</p>
+          )}
         </div>
 
         {/* Dimensions */}

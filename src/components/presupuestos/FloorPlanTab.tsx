@@ -386,19 +386,28 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
               const floorName = floorObj?.name;
 
               const handleChangeCoordinate = async (targetCol: number, targetRow: number) => {
-                const { colWidths, rowHeights, colAccum, rowAccum } = computeGridRuler(positioned);
-                // Compute target posX as accumulated width up to targetCol
+                const { colWidths, rowHeights } = computeGridRuler(positioned);
+                
+                // Build target posX: sum of widths of columns before targetCol
                 let posX = 0;
-                for (let c = 1; c < targetCol; c++) posX += (colWidths[c - 1] || selectedRoom.width);
-                // Compute target posY as accumulated height up to targetRow
+                for (let c = 1; c < targetCol; c++) {
+                  posX += (c <= colWidths.length ? colWidths[c - 1] : selectedRoom.width);
+                }
+                // Build target posY: sum of heights of rows before targetRow
                 let posY = 0;
-                for (let r = 1; r < targetRow; r++) posY += (rowHeights[r - 1] || selectedRoom.length);
+                for (let r = 1; r < targetRow; r++) {
+                  posY += (r <= rowHeights.length ? rowHeights[r - 1] : selectedRoom.length);
+                }
+
                 // If there's a room at the target, swap positions
                 const occupant = positioned.find(p => p.gridCol === targetCol && p.gridRow === targetRow && p.room.id !== selectedRoom.id);
                 if (occupant) {
                   await updateRoom(occupant.room.id, { posX: selectedRoom.posX, posY: selectedRoom.posY });
                 }
+                
                 await updateRoom(selectedRoom.id, { posX: Math.round(posX * 100) / 100, posY: Math.round(posY * 100) / 100 });
+                await refetch();
+                toast.success(`${selectedRoom.name} movido a coordenada ${targetCol}.${targetRow}`);
               };
 
               return (

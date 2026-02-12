@@ -393,26 +393,47 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
               const floorName = floorObj?.name;
 
               const handleChangeCoordinate = async (targetCol: number, targetRow: number) => {
-                const { colWidths, rowHeights } = computeGridRuler(positioned);
-                
-                // Build target posX: sum of widths of columns before targetCol
-                let posX = 0;
-                for (let c = 1; c < targetCol; c++) {
-                  posX += (c <= colWidths.length ? colWidths[c - 1] : selectedRoom.width);
-                }
-                // Build target posY: sum of heights of rows before targetRow
-                let posY = 0;
-                for (let r = 1; r < targetRow; r++) {
-                  posY += (r <= rowHeights.length ? rowHeights[r - 1] : selectedRoom.length);
-                }
-
-                // If there's a room at the target, swap positions
+                // Check if there's a room at the target position
                 const occupant = positioned.find(p => p.gridCol === targetCol && p.gridRow === targetRow && p.room.id !== selectedRoom.id);
+                
                 if (occupant) {
-                  await updateRoom(occupant.room.id, { posX: selectedRoom.posX, posY: selectedRoom.posY });
+                  // Swap: exchange posX/posY directly between the two rooms
+                  const oldPosX = selectedRoom.posX;
+                  const oldPosY = selectedRoom.posY;
+                  await updateRoom(selectedRoom.id, { posX: occupant.room.posX, posY: occupant.room.posY });
+                  await updateRoom(occupant.room.id, { posX: oldPosX, posY: oldPosY });
+                } else {
+                  // No occupant: calculate target position from existing rooms in that col/row
+                  const roomInTargetCol = positioned.find(p => p.gridCol === targetCol);
+                  const roomInTargetRow = positioned.find(p => p.gridRow === targetRow);
+                  
+                  let posX: number;
+                  let posY: number;
+                  
+                  if (roomInTargetCol) {
+                    posX = roomInTargetCol.room.posX;
+                  } else {
+                    // New column: accumulate widths from ruler
+                    const { colWidths } = computeGridRuler(positioned);
+                    posX = 0;
+                    for (let c = 1; c < targetCol; c++) {
+                      posX += (c <= colWidths.length ? colWidths[c - 1] : selectedRoom.width);
+                    }
+                  }
+                  
+                  if (roomInTargetRow) {
+                    posY = roomInTargetRow.room.posY;
+                  } else {
+                    const { rowHeights } = computeGridRuler(positioned);
+                    posY = 0;
+                    for (let r = 1; r < targetRow; r++) {
+                      posY += (r <= rowHeights.length ? rowHeights[r - 1] : selectedRoom.length);
+                    }
+                  }
+                  
+                  await updateRoom(selectedRoom.id, { posX: Math.round(posX * 100) / 100, posY: Math.round(posY * 100) / 100 });
                 }
                 
-                await updateRoom(selectedRoom.id, { posX: Math.round(posX * 100) / 100, posY: Math.round(posY * 100) / 100 });
                 await refetch();
                 toast.success(`${selectedRoom.name} movido a Col ${targetCol} · Fila ${targetRow}`);
               };

@@ -287,15 +287,21 @@ export function FloorPlanGridView({ rooms, floors, selectedRoomId, onSelectRoom,
               </div>
               <div>
                 <Label className="text-xs">Columna</Label>
-                <Input type="number" min={1} value={newCol}
-                  onChange={e => setNewCol(Math.max(1, parseInt(e.target.value) || 1))}
-                  className="w-16 h-8 text-sm text-center" />
+                <input type="text" inputMode="numeric" pattern="[0-9]*" value={newCol}
+                  onChange={e => {
+                    const v = e.target.value.replace(/[^0-9]/g, '');
+                    setNewCol(Math.max(1, parseInt(v) || 1));
+                  }}
+                  className="flex h-8 w-16 rounded-md border border-input bg-background px-2 py-1 text-sm text-center ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2" />
               </div>
               <div>
                 <Label className="text-xs">Fila</Label>
-                <Input type="number" min={1} value={newRow}
-                  onChange={e => setNewRow(Math.max(1, parseInt(e.target.value) || 1))}
-                  className="w-16 h-8 text-sm text-center" />
+                <input type="text" inputMode="numeric" pattern="[0-9]*" value={newRow}
+                  onChange={e => {
+                    const v = e.target.value.replace(/[^0-9]/g, '');
+                    setNewRow(Math.max(1, parseInt(v) || 1));
+                  }}
+                  className="flex h-8 w-16 rounded-md border border-input bg-background px-2 py-1 text-sm text-center ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2" />
               </div>
               <Button size="sm" onClick={handleAddSpace} disabled={saving || !newName.trim()}>
                 <Plus className="h-4 w-4 mr-1" /> Añadir

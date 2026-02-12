@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
-import { Trash2, MapPin } from 'lucide-react';
+import { Trash2, Save } from 'lucide-react';
 import type { RoomData, WallType, FloorPlanData } from '@/lib/floor-plan-calculations';
 
 interface FloorPlanSpaceFormProps {
@@ -34,21 +34,78 @@ const WALL_TYPE_OPTIONS: { value: WallType; label: string }[] = [
 ];
 
 export function FloorPlanSpaceForm({ room, planData, coordCol, coordRow, floorName, onUpdateRoom, onUpdateWall, onChangeCoordinate, onDeleteRoom, saving }: FloorPlanSpaceFormProps) {
-  const m2 = room.width * room.length;
-  const [inputCol, setInputCol] = useState(coordCol || 1);
-  const [inputRow, setInputRow] = useState(coordRow || 1);
+  // Local buffered state for all editable fields
+  const [localName, setLocalName] = useState(room.name);
+  const [localWidth, setLocalWidth] = useState(String(room.width));
+  const [localLength, setLocalLength] = useState(String(room.length));
+  const [localHasFloor, setLocalHasFloor] = useState(room.hasFloor !== false);
+  const [localHasCeiling, setLocalHasCeiling] = useState(room.hasCeiling !== false);
+  const [localCol, setLocalCol] = useState(String(coordCol || 1));
+  const [localRow, setLocalRow] = useState(String(coordRow || 1));
+  const [localWalls, setLocalWalls] = useState<Record<string, WallType>>(() => {
+    const map: Record<string, WallType> = {};
+    room.walls.forEach(w => { map[w.id] = w.wallType; });
+    return map;
+  });
 
+  // Reset local state when a different room is selected
   useEffect(() => {
-    setInputCol(coordCol || 1);
-    setInputRow(coordRow || 1);
-  }, [coordCol, coordRow]);
+    setLocalName(room.name);
+    setLocalWidth(String(room.width));
+    setLocalLength(String(room.length));
+    setLocalHasFloor(room.hasFloor !== false);
+    setLocalHasCeiling(room.hasCeiling !== false);
+    setLocalCol(String(coordCol || 1));
+    setLocalRow(String(coordRow || 1));
+    const map: Record<string, WallType> = {};
+    room.walls.forEach(w => { map[w.id] = w.wallType; });
+    setLocalWalls(map);
+  }, [room.id, coordCol, coordRow]);
 
-  const coordChanged = inputCol !== (coordCol || 1) || inputRow !== (coordRow || 1);
+  const parsedWidth = parseFloat(localWidth) || room.width;
+  const parsedLength = parseFloat(localLength) || room.length;
+  const parsedCol = parseInt(localCol) || 1;
+  const parsedRow = parseInt(localRow) || 1;
+  const m2 = parsedWidth * parsedLength;
 
-  const handleApplyCoordinate = () => {
-    if (!onChangeCoordinate || !coordChanged) return;
-    if (inputCol > 0 && inputRow > 0) {
-      onChangeCoordinate(inputCol, inputRow);
+  // Detect if anything changed
+  const roomChanged =
+    localName !== room.name ||
+    parsedWidth !== room.width ||
+    parsedLength !== room.length ||
+    localHasFloor !== (room.hasFloor !== false) ||
+    localHasCeiling !== (room.hasCeiling !== false);
+
+  const coordChanged = parsedCol !== (coordCol || 1) || parsedRow !== (coordRow || 1);
+
+  const wallsChanged = room.walls.some(w => localWalls[w.id] !== w.wallType);
+
+  const hasChanges = roomChanged || coordChanged || wallsChanged;
+
+  const handleSave = async () => {
+    // Save room property changes
+    if (roomChanged) {
+      const updates: Record<string, unknown> = {};
+      if (localName !== room.name) updates.name = localName;
+      if (parsedWidth !== room.width) updates.width = parsedWidth;
+      if (parsedLength !== room.length) updates.length = parsedLength;
+      if (localHasFloor !== (room.hasFloor !== false)) updates.hasFloor = localHasFloor;
+      if (localHasCeiling !== (room.hasCeiling !== false)) updates.hasCeiling = localHasCeiling;
+      onUpdateRoom(updates as { name?: string; width?: number; length?: number; hasFloor?: boolean; hasCeiling?: boolean });
+    }
+
+    // Save wall changes
+    if (wallsChanged) {
+      for (const wall of room.walls) {
+        if (localWalls[wall.id] !== wall.wallType) {
+          onUpdateWall(wall.id, { wallType: localWalls[wall.id] });
+        }
+      }
+    }
+
+    // Save coordinate changes
+    if (coordChanged && onChangeCoordinate && parsedCol > 0 && parsedRow > 0) {
+      onChangeCoordinate(parsedCol, parsedRow);
     }
   };
 
@@ -75,55 +132,47 @@ export function FloorPlanSpaceForm({ room, planData, coordCol, coordRow, floorNa
         <div>
           <Label className="text-xs">Nombre</Label>
           <Input
-            value={room.name}
-            onChange={e => onUpdateRoom({ name: e.target.value })}
+            value={localName}
+            onChange={e => setLocalName(e.target.value)}
             disabled={saving}
           />
         </div>
 
-        {/* Coordinate - separate Col / Row inputs */}
+        {/* Coordinate - plain text inputs without spinners */}
         <div>
           <Label className="text-xs font-semibold">Coordenadas</Label>
           <div className="flex items-end gap-2 mt-1">
             <div>
               <Label className="text-[10px] text-muted-foreground">Columna</Label>
-              <Input
-                type="number"
-                min={1}
-                value={inputCol}
-                onChange={e => setInputCol(Math.max(1, parseInt(e.target.value) || 1))}
-                onKeyDown={e => { if (e.key === 'Enter') handleApplyCoordinate(); }}
+              <input
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                value={localCol}
+                onChange={e => {
+                  const v = e.target.value.replace(/[^0-9]/g, '');
+                  setLocalCol(v);
+                }}
                 disabled={saving}
-                className="w-16 h-8 text-sm text-center"
+                className="flex h-8 w-16 rounded-md border border-input bg-background px-3 py-1 text-sm text-center ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
               />
             </div>
             <div>
               <Label className="text-[10px] text-muted-foreground">Fila</Label>
-              <Input
-                type="number"
-                min={1}
-                value={inputRow}
-                onChange={e => setInputRow(Math.max(1, parseInt(e.target.value) || 1))}
-                onKeyDown={e => { if (e.key === 'Enter') handleApplyCoordinate(); }}
+              <input
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                value={localRow}
+                onChange={e => {
+                  const v = e.target.value.replace(/[^0-9]/g, '');
+                  setLocalRow(v);
+                }}
                 disabled={saving}
-                className="w-16 h-8 text-sm text-center"
+                className="flex h-8 w-16 rounded-md border border-input bg-background px-3 py-1 text-sm text-center ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
               />
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleApplyCoordinate}
-              disabled={saving || !coordChanged}
-              title="Mover espacio a la coordenada indicada"
-            >
-              <MapPin className="h-3.5 w-3.5 mr-1" /> Mover
-            </Button>
           </div>
-          {coordChanged && (
-            <p className="text-[10px] text-primary font-medium mt-1">
-              Pulsa «Mover» para reposicionar de Col {coordCol} · Fila {coordRow} → Col {inputCol} · Fila {inputRow}
-            </p>
-          )}
         </div>
 
         {/* Dimensions */}
@@ -131,16 +180,16 @@ export function FloorPlanSpaceForm({ room, planData, coordCol, coordRow, floorNa
           <div>
             <Label className="text-xs">Ancho (m)</Label>
             <Input
-              type="number" step="0.1" value={room.width}
-              onChange={e => onUpdateRoom({ width: Number(e.target.value) })}
+              type="number" step="0.1" value={localWidth}
+              onChange={e => setLocalWidth(e.target.value)}
               disabled={saving}
             />
           </div>
           <div>
             <Label className="text-xs">Largo (m)</Label>
             <Input
-              type="number" step="0.1" value={room.length}
-              onChange={e => onUpdateRoom({ length: Number(e.target.value) })}
+              type="number" step="0.1" value={localLength}
+              onChange={e => setLocalLength(e.target.value)}
               disabled={saving}
             />
           </div>
@@ -154,16 +203,16 @@ export function FloorPlanSpaceForm({ room, planData, coordCol, coordRow, floorNa
           <div className="flex items-center justify-between">
             <Label className="text-xs">Tiene suelo</Label>
             <Switch
-              checked={room.hasFloor !== false}
-              onCheckedChange={v => onUpdateRoom({ hasFloor: v })}
+              checked={localHasFloor}
+              onCheckedChange={v => setLocalHasFloor(v)}
               disabled={saving}
             />
           </div>
           <div className="flex items-center justify-between">
             <Label className="text-xs">Tiene techo</Label>
             <Switch
-              checked={room.hasCeiling !== false}
-              onCheckedChange={v => onUpdateRoom({ hasCeiling: v })}
+              checked={localHasCeiling}
+              onCheckedChange={v => setLocalHasCeiling(v)}
               disabled={saving}
             />
           </div>
@@ -182,8 +231,8 @@ export function FloorPlanSpaceForm({ room, planData, coordCol, coordRow, floorNa
                     {WALL_NAMES[wall.wallIndex - 1]}
                   </span>
                   <Select
-                    value={wall.wallType}
-                    onValueChange={v => onUpdateWall(wall.id, { wallType: v as WallType })}
+                    value={localWalls[wall.id] || wall.wallType}
+                    onValueChange={v => setLocalWalls(prev => ({ ...prev, [wall.id]: v as WallType }))}
                     disabled={saving}
                   >
                     <SelectTrigger className="h-8 text-xs">
@@ -201,6 +250,15 @@ export function FloorPlanSpaceForm({ room, planData, coordCol, coordRow, floorNa
               ))}
           </div>
         </div>
+
+        {/* Save button */}
+        <Button
+          onClick={handleSave}
+          disabled={saving || !hasChanges}
+          className="w-full"
+        >
+          <Save className="h-4 w-4 mr-1" /> Guardar
+        </Button>
 
         <p className="text-[10px] text-muted-foreground">
           Las paredes sin nada adyacente (arriba, derecha, abajo, izquierda) se consideran externas por defecto.

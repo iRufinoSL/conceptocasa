@@ -30,6 +30,8 @@ export interface RoomData {
   hasCeiling: boolean;
   hasRoof: boolean;
   floorId?: string;
+  groupId?: string;
+  groupName?: string;
   walls: WallData[];
 }
 

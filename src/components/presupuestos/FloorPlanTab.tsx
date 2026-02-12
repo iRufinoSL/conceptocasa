@@ -63,7 +63,7 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
     floorPlan, rooms, floors, loading, saving,
     addRoom, updateRoom, updateWall, deleteRoom,
     classifyPerimeterWalls, syncToMeasurements, getPlanData, refetch,
-    generateFromTemplate, deleteFloorPlan,
+    generateFromTemplate, deleteFloorPlan, groupRooms, ungroupRooms,
   } = useFloorPlan(budgetId);
 
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
@@ -377,6 +377,8 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
               selectedRoomId={selectedRoomId}
               onSelectRoom={setSelectedRoomId}
               onAddRoom={addRoom}
+              onGroupRooms={groupRooms}
+              onUngroupRooms={ungroupRooms}
               saving={saving}
             />
           </div>
@@ -441,6 +443,7 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
               return (
                 <FloorPlanSpaceForm
                   room={selectedRoom}
+                  allRooms={rooms}
                   planData={planData}
                   coordCol={coordCol}
                   coordRow={coordRow}
@@ -448,6 +451,7 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
                   onUpdateRoom={(data) => updateRoom(selectedRoom.id, data)}
                   onUpdateWall={(wallId, data) => updateWall(wallId, data)}
                   onChangeCoordinate={handleChangeCoordinate}
+                  onUngroupRoom={selectedRoom.groupId ? () => ungroupRooms(selectedRoom.groupId!) : undefined}
                   onDeleteRoom={() => { deleteRoom(selectedRoom.id); setSelectedRoomId(null); }}
                   saving={saving}
                 />

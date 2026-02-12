@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Plus } from 'lucide-react';
+import { Plus, Link, Unlink } from 'lucide-react';
 import type { RoomData, FloorLevel } from '@/lib/floor-plan-calculations';
 import { autoClassifyWalls, isExteriorType } from '@/lib/floor-plan-calculations';
 
@@ -15,6 +15,8 @@ interface FloorPlanGridViewProps {
   selectedRoomId: string | null;
   onSelectRoom: (id: string | null) => void;
   onAddRoom?: (name: string, width: number, length: number, floorId?: string, gridCol?: number, gridRow?: number) => Promise<void>;
+  onGroupRooms?: (roomIds: string[], groupName: string) => Promise<void>;
+  onUngroupRooms?: (groupId: string) => Promise<void>;
   saving?: boolean;
 }
 
@@ -46,13 +48,11 @@ export function deriveGridPositions(floorRooms: RoomData[]): PositionedRoom[] {
   }));
 }
 
-/** Compute accumulated ruler ticks per column/row based on actual room sizes */
 export function computeGridRuler(positioned: PositionedRoom[]) {
   if (positioned.length === 0) return { colWidths: [], rowHeights: [], colAccum: [], rowAccum: [] };
   const cols = Math.max(...positioned.map(p => p.gridCol));
   const rows = Math.max(...positioned.map(p => p.gridRow));
 
-  // Max width per column, max length per row
   const colWidths: number[] = [];
   for (let c = 1; c <= cols; c++) {
     const roomsInCol = positioned.filter(p => p.gridCol === c);
@@ -64,7 +64,6 @@ export function computeGridRuler(positioned: PositionedRoom[]) {
     rowHeights.push(roomsInRow.length > 0 ? Math.max(...roomsInRow.map(p => p.room.length)) : 0);
   }
 
-  // Accumulated positions
   const colAccum: number[] = [0];
   colWidths.forEach((w, i) => colAccum.push(colAccum[i] + w));
   const rowAccum: number[] = [0];
@@ -84,7 +83,14 @@ const getSpaceColor = (name: string): string => {
   return 'bg-purple-100 border-purple-300 dark:bg-purple-900/30 dark:border-purple-700';
 };
 
-export function FloorPlanGridView({ rooms, floors, selectedRoomId, onSelectRoom, onAddRoom, saving = false }: FloorPlanGridViewProps) {
+const getGroupColor = (groupId: string): string => {
+  let hash = 0;
+  for (let i = 0; i < groupId.length; i++) hash = ((hash << 5) - hash) + groupId.charCodeAt(i);
+  const hue = Math.abs(hash) % 360;
+  return `hsl(${hue}, 70%, 85%)`;
+};
+
+export function FloorPlanGridView({ rooms, floors, selectedRoomId, onSelectRoom, onAddRoom, onGroupRooms, onUngroupRooms, saving = false }: FloorPlanGridViewProps) {
   const [activeFloorId, setActiveFloorId] = useState<string>(floors[0]?.id || '_none_');
   const [showAddForm, setShowAddForm] = useState(false);
   const [newName, setNewName] = useState('');
@@ -92,6 +98,10 @@ export function FloorPlanGridView({ rooms, floors, selectedRoomId, onSelectRoom,
   const [newLength, setNewLength] = useState(3);
   const [newCol, setNewCol] = useState(1);
   const [newRow, setNewRow] = useState(1);
+  const [multiSelectMode, setMultiSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [groupNameInput, setGroupNameInput] = useState('');
+
   const wallClassification = useMemo(() => autoClassifyWalls(rooms), [rooms]);
 
   const roomsByFloor = useMemo(() => {
@@ -104,6 +114,33 @@ export function FloorPlanGridView({ rooms, floors, selectedRoomId, onSelectRoom,
     return map;
   }, [rooms]);
 
+  const groupsMap = useMemo(() => {
+    const map = new Map<string, { name: string; rooms: RoomData[] }>();
+    rooms.forEach(r => {
+      if (r.groupId) {
+        if (!map.has(r.groupId)) map.set(r.groupId, { name: r.groupName || 'Grupo', rooms: [] });
+        map.get(r.groupId)!.rooms.push(r);
+      }
+    });
+    return map;
+  }, [rooms]);
+
+  const effectiveFloors = floors.length > 0 ? floors : [{ id: '_none_', name: 'Planta', level: '0', orderIndex: 0 }];
+  const currentFloorId = effectiveFloors.find(f => f.id === activeFloorId) ? activeFloorId : effectiveFloors[0]?.id;
+  const currentFloor = effectiveFloors.find(f => f.id === currentFloorId);
+  const currentFloorRooms = floors.length > 0 ? (roomsByFloor.get(currentFloorId) || []) : rooms;
+
+  const currentFloorGroups = useMemo(() => {
+    const groups = new Map<string, { name: string; rooms: RoomData[] }>();
+    currentFloorRooms.forEach(r => {
+      if (r.groupId) {
+        if (!groups.has(r.groupId)) groups.set(r.groupId, { name: r.groupName || 'Grupo', rooms: [] });
+        groups.get(r.groupId)!.rooms.push(r);
+      }
+    });
+    return groups;
+  }, [currentFloorRooms]);
+
   const getExternalWalls = (room: RoomData): Set<number> => {
     const ext = new Set<number>();
     [1, 2, 3, 4].forEach(idx => {
@@ -114,12 +151,41 @@ export function FloorPlanGridView({ rooms, floors, selectedRoomId, onSelectRoom,
     return ext;
   };
 
+  const toggleMultiSelect = (roomId: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(roomId)) next.delete(roomId);
+      else next.add(roomId);
+      return next;
+    });
+  };
+
+  const handleGroup = async () => {
+    if (!onGroupRooms || selectedIds.size < 2 || !groupNameInput.trim()) return;
+    await onGroupRooms(Array.from(selectedIds), groupNameInput.trim());
+    setSelectedIds(new Set());
+    setGroupNameInput('');
+    setMultiSelectMode(false);
+  };
+
+  const handleAddSpace = async () => {
+    if (!onAddRoom || !newName.trim()) return;
+    const floorId = currentFloorId !== '_none_' ? currentFloorId : undefined;
+    await onAddRoom(newName.trim(), newWidth, newLength, floorId, newCol, newRow);
+    setNewName('');
+    setNewWidth(4);
+    setNewLength(3);
+    setNewCol(1);
+    setNewRow(1);
+    setShowAddForm(false);
+  };
+
   const renderFloor = (floorId: string, floorName: string, floorRooms: RoomData[]) => {
     const positioned = deriveGridPositions(floorRooms);
     const cols = positioned.length > 0 ? Math.max(...positioned.map(p => p.gridCol)) : 1;
     const rows = positioned.length > 0 ? Math.max(...positioned.map(p => p.gridRow)) : 1;
     const totalM2 = floorRooms.reduce((s, r) => s + r.width * r.length, 0);
-    const { colWidths, rowHeights, colAccum, rowAccum } = computeGridRuler(positioned);
+    const { colAccum, rowAccum } = computeGridRuler(positioned);
 
     return (
       <Card key={floorId}>
@@ -130,12 +196,11 @@ export function FloorPlanGridView({ rooms, floors, selectedRoomId, onSelectRoom,
           </div>
         </CardHeader>
         <CardContent>
-          {/* Column coordinate headers with ruler */}
           <div
             className="grid gap-1.5 mb-0.5"
             style={{ gridTemplateColumns: `48px repeat(${cols}, minmax(100px, 1fr))` }}
           >
-            <div /> {/* empty corner */}
+            <div />
             {Array.from({ length: cols }, (_, i) => (
               <div key={i} className="text-center">
                 <div className="text-xs font-bold text-muted-foreground">Col {i + 1}</div>
@@ -145,12 +210,10 @@ export function FloorPlanGridView({ rooms, floors, selectedRoomId, onSelectRoom,
               </div>
             ))}
           </div>
-          {/* Grid with row headers + ruler */}
           <div
             className="grid gap-1.5"
             style={{ gridTemplateColumns: `48px repeat(${cols}, minmax(100px, 1fr))`, gridTemplateRows: `repeat(${rows}, auto)` }}
           >
-            {/* Row headers with ruler */}
             {Array.from({ length: rows }, (_, ri) => (
               <div
                 key={`rh-${ri}`}
@@ -166,9 +229,13 @@ export function FloorPlanGridView({ rooms, floors, selectedRoomId, onSelectRoom,
             {positioned.map(({ room, gridCol, gridRow }) => {
               const extWalls = getExternalWalls(room);
               const isSelected = room.id === selectedRoomId;
+              const isMultiSelected = selectedIds.has(room.id);
               const m2 = (room.width * room.length).toFixed(1);
               const colorClass = getSpaceColor(room.name);
               const coord = `C${gridCol}·F${gridRow}`;
+              const groupColor = room.groupId ? getGroupColor(room.groupId) : undefined;
+              const groupInfo = room.groupId ? groupsMap.get(room.groupId) : null;
+              const groupTotalM2 = groupInfo ? groupInfo.rooms.reduce((s, r) => s + r.width * r.length, 0) : null;
 
               return (
                 <div
@@ -177,6 +244,7 @@ export function FloorPlanGridView({ rooms, floors, selectedRoomId, onSelectRoom,
                     relative p-3 rounded cursor-pointer transition-all border-2
                     ${colorClass}
                     ${isSelected ? 'ring-2 ring-primary ring-offset-1 shadow-lg scale-[1.02]' : 'hover:shadow-md'}
+                    ${isMultiSelected ? 'ring-2 ring-blue-500 ring-offset-1' : ''}
                   `}
                   style={{
                     gridColumn: gridCol + 1,
@@ -190,8 +258,15 @@ export function FloorPlanGridView({ rooms, floors, selectedRoomId, onSelectRoom,
                     borderRightColor: extWalls.has(2) ? 'hsl(var(--foreground))' : undefined,
                     borderBottomColor: extWalls.has(3) ? 'hsl(var(--foreground))' : undefined,
                     borderLeftColor: extWalls.has(4) ? 'hsl(var(--foreground))' : undefined,
+                    ...(groupColor ? { boxShadow: `inset 0 0 0 3px ${groupColor}` } : {}),
                   }}
-                  onClick={() => onSelectRoom(room.id === selectedRoomId ? null : room.id)}
+                  onClick={() => {
+                    if (multiSelectMode) {
+                      toggleMultiSelect(room.id);
+                    } else {
+                      onSelectRoom(room.id === selectedRoomId ? null : room.id);
+                    }
+                  }}
                 >
                   <div className="flex items-center justify-between">
                     <div className="text-xs font-semibold truncate">{room.name}</div>
@@ -201,6 +276,20 @@ export function FloorPlanGridView({ rooms, floors, selectedRoomId, onSelectRoom,
                   <div className="text-[10px] text-muted-foreground mt-0.5">
                     {room.width.toFixed(1)} × {room.length.toFixed(1)}m
                   </div>
+                  {groupInfo && (
+                    <div className="mt-1">
+                      <Badge
+                        variant="secondary"
+                        className="text-[9px] px-1 py-0 h-3.5"
+                        style={{ backgroundColor: groupColor, color: '#333' }}
+                      >
+                        🔗 {groupInfo.name} ({groupTotalM2?.toFixed(1)} m²)
+                      </Badge>
+                    </div>
+                  )}
+                  {multiSelectMode && (
+                    <div className={`absolute top-1 right-1 w-4 h-4 rounded-full border-2 ${isMultiSelected ? 'bg-blue-500 border-blue-500' : 'border-muted-foreground/50 bg-background'}`} />
+                  )}
                 </div>
               );
             })}
@@ -220,26 +309,8 @@ export function FloorPlanGridView({ rooms, floors, selectedRoomId, onSelectRoom,
     );
   }
 
-  const effectiveFloors = floors.length > 0 ? floors : [{ id: '_none_', name: 'Planta', level: '0', orderIndex: 0 }];
-  const currentFloorId = effectiveFloors.find(f => f.id === activeFloorId) ? activeFloorId : effectiveFloors[0]?.id;
-  const currentFloor = effectiveFloors.find(f => f.id === currentFloorId);
-  const currentFloorRooms = floors.length > 0 ? (roomsByFloor.get(currentFloorId) || []) : rooms;
-
-  const handleAddSpace = async () => {
-    if (!onAddRoom || !newName.trim()) return;
-    const floorId = currentFloorId !== '_none_' ? currentFloorId : undefined;
-    await onAddRoom(newName.trim(), newWidth, newLength, floorId, newCol, newRow);
-    setNewName('');
-    setNewWidth(4);
-    setNewLength(3);
-    setNewCol(1);
-    setNewRow(1);
-    setShowAddForm(false);
-  };
-
   return (
     <div className="space-y-3">
-      {/* Floor tabs + Add button */}
       <div className="flex items-center justify-between gap-2 flex-wrap">
         {effectiveFloors.length > 1 && (
           <Tabs value={currentFloorId} onValueChange={setActiveFloorId}>
@@ -250,14 +321,90 @@ export function FloorPlanGridView({ rooms, floors, selectedRoomId, onSelectRoom,
             </TabsList>
           </Tabs>
         )}
-        {onAddRoom && (
-          <Button variant="outline" size="sm" onClick={() => setShowAddForm(!showAddForm)} disabled={saving}>
-            <Plus className="h-4 w-4 mr-1" /> Nuevo Espacio
-          </Button>
-        )}
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {onGroupRooms && (
+            <Button
+              variant={multiSelectMode ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => {
+                setMultiSelectMode(!multiSelectMode);
+                setSelectedIds(new Set());
+                setGroupNameInput('');
+              }}
+              disabled={saving}
+            >
+              <Link className="h-4 w-4 mr-1" />
+              {multiSelectMode ? 'Cancelar selección' : 'Agrupar espacios'}
+            </Button>
+          )}
+          {onAddRoom && (
+            <Button variant="outline" size="sm" onClick={() => setShowAddForm(!showAddForm)} disabled={saving}>
+              <Plus className="h-4 w-4 mr-1" /> Nuevo Espacio
+            </Button>
+          )}
+        </div>
       </div>
 
-      {/* Inline add space form */}
+      {multiSelectMode && (
+        <Card>
+          <CardContent className="py-3">
+            <p className="text-xs text-muted-foreground mb-2">
+              Selecciona 2 o más espacios haciendo clic sobre ellos, luego asígnales un nombre de grupo.
+            </p>
+            <div className="flex items-end gap-2 flex-wrap">
+              <div>
+                <Label className="text-xs">Nombre del grupo</Label>
+                <Input
+                  value={groupNameInput}
+                  onChange={e => setGroupNameInput(e.target.value)}
+                  placeholder="Ej: Porche 1"
+                  className="w-40 h-8 text-sm"
+                  autoFocus
+                />
+              </div>
+              <Badge variant="secondary" className="text-xs h-8 flex items-center">
+                {selectedIds.size} seleccionados
+              </Badge>
+              <Button
+                size="sm"
+                onClick={handleGroup}
+                disabled={saving || selectedIds.size < 2 || !groupNameInput.trim()}
+              >
+                <Link className="h-4 w-4 mr-1" /> Crear grupo
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {currentFloorGroups.size > 0 && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-xs font-semibold text-muted-foreground">Grupos:</span>
+          {Array.from(currentFloorGroups.entries()).map(([gid, g]) => {
+            const totalM2 = g.rooms.reduce((s, r) => s + r.width * r.length, 0);
+            return (
+              <Badge
+                key={gid}
+                variant="secondary"
+                className="text-xs gap-1 cursor-default"
+                style={{ backgroundColor: getGroupColor(gid), color: '#333' }}
+              >
+                🔗 {g.name} — {g.rooms.length} espacios — {totalM2.toFixed(1)} m²
+                {onUngroupRooms && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onUngroupRooms(gid); }}
+                    className="ml-1 hover:text-destructive"
+                    title="Desagrupar"
+                  >
+                    <Unlink className="h-3 w-3" />
+                  </button>
+                )}
+              </Badge>
+            );
+          })}
+        </div>
+      )}
+
       {showAddForm && onAddRoom && (
         <Card>
           <CardContent className="py-3">
@@ -328,7 +475,7 @@ export function FloorPlanGridView({ rooms, floors, selectedRoomId, onSelectRoom,
       }
 
       <p className="text-xs text-muted-foreground">
-        Bordes gruesos = paredes externas. Clic en un espacio para editar sus paredes.
+        Bordes gruesos = paredes externas. Clic en un espacio para editar. Usa «Agrupar espacios» para unir varios en uno lógico.
       </p>
     </div>
   );

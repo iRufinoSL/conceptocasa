@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -6,11 +6,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
-import { Trash2, Save } from 'lucide-react';
+import { Trash2, Save, Unlink } from 'lucide-react';
 import type { RoomData, WallType, FloorPlanData } from '@/lib/floor-plan-calculations';
 
 interface FloorPlanSpaceFormProps {
   room: RoomData;
+  allRooms: RoomData[];
   planData: FloorPlanData;
   coordCol?: number;
   coordRow?: number;
@@ -18,6 +19,7 @@ interface FloorPlanSpaceFormProps {
   onUpdateRoom: (data: { name?: string; width?: number; length?: number; hasFloor?: boolean; hasCeiling?: boolean }) => void;
   onUpdateWall: (wallId: string, data: { wallType?: WallType }) => void;
   onChangeCoordinate?: (col: number, row: number) => void;
+  onUngroupRoom?: (groupId: string) => void;
   onDeleteRoom: () => void;
   saving: boolean;
 }
@@ -33,7 +35,7 @@ const WALL_TYPE_OPTIONS: { value: WallType; label: string }[] = [
   { value: 'interior_invisible', label: 'Int. invisible' },
 ];
 
-export function FloorPlanSpaceForm({ room, planData, coordCol, coordRow, floorName, onUpdateRoom, onUpdateWall, onChangeCoordinate, onDeleteRoom, saving }: FloorPlanSpaceFormProps) {
+export function FloorPlanSpaceForm({ room, allRooms, planData, coordCol, coordRow, floorName, onUpdateRoom, onUpdateWall, onChangeCoordinate, onUngroupRoom, onDeleteRoom, saving }: FloorPlanSpaceFormProps) {
   // Local buffered state for all editable fields
   const [localName, setLocalName] = useState(room.name);
   const [localWidth, setLocalWidth] = useState(String(room.width));
@@ -67,6 +69,13 @@ export function FloorPlanSpaceForm({ room, planData, coordCol, coordRow, floorNa
   const parsedCol = parseInt(localCol) || 1;
   const parsedRow = parseInt(localRow) || 1;
   const m2 = parsedWidth * parsedLength;
+
+  // Group info
+  const groupMembers = useMemo(() => {
+    if (!room.groupId) return [];
+    return allRooms.filter(r => r.groupId === room.groupId);
+  }, [room.groupId, allRooms]);
+  const groupTotalM2 = groupMembers.reduce((s, r) => s + r.width * r.length, 0);
 
   // Detect if anything changed
   const roomChanged =
@@ -174,6 +183,30 @@ export function FloorPlanSpaceForm({ room, planData, coordCol, coordRow, floorNa
             </div>
           </div>
         </div>
+
+        {/* Group info */}
+        {room.groupId && groupMembers.length > 0 && (
+          <div className="border rounded-lg p-2 bg-muted/30">
+            <div className="flex items-center justify-between mb-1">
+              <Label className="text-xs font-semibold">🔗 Grupo: {room.groupName || 'Sin nombre'}</Label>
+              {onUngroupRoom && (
+                <Button variant="ghost" size="sm" className="h-6 px-2" onClick={() => onUngroupRoom(room.groupId!)} disabled={saving}>
+                  <Unlink className="h-3 w-3 mr-1" /> Desagrupar
+                </Button>
+              )}
+            </div>
+            <div className="text-[10px] text-muted-foreground space-y-0.5">
+              {groupMembers.map(r => (
+                <div key={r.id} className={r.id === room.id ? 'font-bold' : ''}>
+                  {r.name} — {(r.width * r.length).toFixed(1)} m²
+                </div>
+              ))}
+              <div className="font-semibold text-xs mt-1 text-foreground">
+                Total grupo: {groupTotalM2.toFixed(1)} m²
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Dimensions */}
         <div className="grid grid-cols-2 gap-2">

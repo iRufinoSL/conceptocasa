@@ -707,6 +707,8 @@ export type Database = {
           created_at: string | null
           floor_id: string | null
           floor_plan_id: string
+          group_id: string | null
+          group_name: string | null
           has_ceiling: boolean
           has_floor: boolean
           has_roof: boolean
@@ -724,6 +726,8 @@ export type Database = {
           created_at?: string | null
           floor_id?: string | null
           floor_plan_id: string
+          group_id?: string | null
+          group_name?: string | null
           has_ceiling?: boolean
           has_floor?: boolean
           has_roof?: boolean
@@ -741,6 +745,8 @@ export type Database = {
           created_at?: string | null
           floor_id?: string | null
           floor_plan_id?: string
+          group_id?: string | null
+          group_name?: string | null
           has_ceiling?: boolean
           has_floor?: boolean
           has_roof?: boolean

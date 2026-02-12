@@ -1,5 +1,4 @@
-import { useState, useMemo, useCallback, useRef } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -7,18 +6,13 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { RefreshCw, Save, Layout, Box, BarChart3, Loader2, AlertTriangle, Trash2, DoorOpen, ImageIcon, Undo2, RotateCcw, RectangleVertical, Wand2, Maximize2, ExternalLink, X } from 'lucide-react';
-import { Switch } from '@/components/ui/switch';
+import { Loader2, Plus, Trash2, Layout, BarChart3, RefreshCw, Save, Wand2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useFloorPlan } from '@/hooks/useFloorPlan';
-import { calculateFloorPlanSummary, detectSharedWalls, autoClassifyWalls, WALL_LABELS, OPENING_PRESETS, generateExternalWallNames, computeWallSegments, isExteriorType, isInvisibleType } from '@/lib/floor-plan-calculations';
-import { FloorPlanCanvas2D } from './FloorPlanCanvas2D';
-import { FloorPlanRoomEditor } from './FloorPlanRoomEditor';
+import { FloorPlanGridView } from './FloorPlanGridView';
+import { FloorPlanSpaceForm } from './FloorPlanSpaceForm';
 import { FloorPlanSummaryView } from './FloorPlanSummary';
-import { FloorPlan3DViewer } from './FloorPlan3DViewer';
-import { ElevationsGridViewer } from './ElevationsGridViewer';
-import { FloorPlanRenderView } from './FloorPlanRenderView';
-import { WallElevationView } from './WallElevationView';
+import { calculateFloorPlanSummary } from '@/lib/floor-plan-calculations';
 import type { FloorPlanData } from '@/lib/floor-plan-calculations';
 
 interface FloorPlanTabProps {
@@ -26,148 +20,154 @@ interface FloorPlanTabProps {
   isAdmin: boolean;
 }
 
+interface SpaceTypeDef {
+  type: string;
+  name: string;
+  defaultM2: number;
+  qty: number;
+  m2: number;
+}
+
+interface FloorDef {
+  name: string;
+  level: string;
+  m2: number;
+  spaces: SpaceTypeDef[];
+  customSpaces: Array<{ name: string; m2: number }>;
+}
+
+const DEFAULT_SPACE_TYPES: SpaceTypeDef[] = [
+  { type: 'salon', name: 'Salón', defaultM2: 30, qty: 1, m2: 30 },
+  { type: 'hab_peq', name: 'Hab. pequeña', defaultM2: 9, qty: 2, m2: 9 },
+  { type: 'hab_med', name: 'Hab. mediana', defaultM2: 12, qty: 0, m2: 12 },
+  { type: 'hab_gra', name: 'Hab. grande', defaultM2: 15, qty: 0, m2: 15 },
+  { type: 'bano_peq', name: 'Baño pequeño', defaultM2: 4, qty: 1, m2: 4 },
+  { type: 'bano_med', name: 'Baño mediano', defaultM2: 6, qty: 0, m2: 6 },
+  { type: 'bano_gra', name: 'Baño grande', defaultM2: 9, qty: 0, m2: 9 },
+  { type: 'porche', name: 'Porche', defaultM2: 10, qty: 0, m2: 10 },
+];
+
+function createDefaultFloor(name: string, level: string, m2: number): FloorDef {
+  return {
+    name,
+    level,
+    m2,
+    spaces: DEFAULT_SPACE_TYPES.map(s => ({ ...s })),
+    customSpaces: [],
+  };
+}
+
 export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
   const {
     floorPlan, rooms, floors, loading, saving,
-    createFloorPlan, updateFloorPlan,
-    addRoom, updateRoom, deleteRoom, duplicateRoom,
-    updateWall, addOpening, updateOpening, deleteOpening,
+    updateRoom, updateWall, deleteRoom,
     classifyPerimeterWalls, syncToMeasurements, getPlanData, refetch,
-    addFloor, deleteFloor, autoCreateFloors,
+    generateFromTemplate, deleteFloorPlan,
   } = useFloorPlan(budgetId);
 
-  const [selectedRoomId, setSelectedRoomId] = useState<string>();
-  const [selectedWallKey, setSelectedWallKey] = useState<string | null>(null);
-  const [viewTab, setViewTab] = useState('plano');
-  const [refreshKey, setRefreshKey] = useState(0);
-  const [roomDialogId, setRoomDialogId] = useState<string | null>(null);
-  const [wallDialogKey, setWallDialogKey] = useState<{ roomId: string; wallIndex: number; segIndex?: number } | null>(null);
-  const [floatingOpen, setFloatingOpen] = useState(false);
+  const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
+  const [viewTab, setViewTab] = useState('cuadricula');
+  const [activeFloorTab, setActiveFloorTab] = useState('0');
 
-  // Undo stack: stores snapshots of room positions/dimensions before changes
-  const undoStackRef = useRef<Array<{ rooms: Array<{ id: string; posX: number; posY: number; width: number; length: number }> }>>([]);
-  const MAX_UNDO = 20;
-
-  const pushUndo = useCallback(() => {
-    const snapshot = rooms.map(r => ({ id: r.id, posX: r.posX, posY: r.posY, width: r.width, length: r.length }));
-    undoStackRef.current = [...undoStackRef.current.slice(-(MAX_UNDO - 1)), { rooms: snapshot }];
-  }, [rooms]);
-
-  const handleUndo = useCallback(async () => {
-    const stack = undoStackRef.current;
-    if (stack.length === 0) {
-      toast.info('No hay cambios que deshacer');
-      return;
-    }
-    const last = stack[stack.length - 1];
-    undoStackRef.current = stack.slice(0, -1);
-    for (const snap of last.rooms) {
-      const current = rooms.find(r => r.id === snap.id);
-      if (current && (current.posX !== snap.posX || current.posY !== snap.posY || current.width !== snap.width || current.length !== snap.length)) {
-        await updateRoom(snap.id, { posX: snap.posX, posY: snap.posY, width: snap.width, length: snap.length });
-      }
-    }
-    toast.success('Cambio deshecho');
-  }, [rooms, updateRoom]);
-
-  // Local form state for plan dimensions
-  const [planForm, setPlanForm] = useState({
-    m2: 108,
-    width: 12, length: 9, defaultHeight: 2.7,
-    externalWallThickness: 0.3, internalWallThickness: 0.15,
-    roofOverhang: 0.6, roofSlopePercent: 20,
-    roofType: 'dos_aguas' as FloorPlanData['roofType'],
+  // Wizard state
+  const [planConfig, setPlanConfig] = useState({
+    defaultHeight: 2.7,
+    externalWallThickness: 0.30,
+    internalWallThickness: 0.15,
+    roofOverhang: 0.6,
+    roofSlopePercent: 20,
+    roofType: 'dos_aguas',
   });
+  const [floorDefs, setFloorDefs] = useState<FloorDef[]>([
+    createDefaultFloor('Planta 1', 'planta_1', 100),
+  ]);
 
-  // Auto-deduce sides from m2
-  const handleM2Change = (m2: number) => {
-    const side = Math.round(Math.sqrt(m2) * 10) / 10;
-    const length = Math.round((m2 / side) * 10) / 10;
-    setPlanForm(prev => ({ ...prev, m2, width: side, length }));
-  };
-
-  // Validate manual side changes vs m2
-  const handleSideChange = (field: 'width' | 'length', value: number) => {
-    setPlanForm(prev => {
-      const other = field === 'width' ? prev.length : prev.width;
-      const product = value * other;
-      // If product exceeds m2, cap the value
-      if (product > prev.m2 * 1.001) {
-        const capped = Math.round((prev.m2 / other) * 10) / 10;
-        return { ...prev, [field]: capped };
-      }
-      return { ...prev, [field]: value };
-    });
-  };
-
-  // Sync form when floorPlan loads
   const planData = getPlanData();
-
   const summary = useMemo(() => {
-    const pd = planData || planForm;
-    return calculateFloorPlanSummary(pd as FloorPlanData, rooms, floors);
-  }, [planData, planForm, rooms, floors]);
+    if (!planData) return null;
+    return calculateFloorPlanSummary(planData, rooms, floors);
+  }, [planData, rooms, floors]);
 
-  const planArea = planData ? planData.width * planData.length : planForm.m2;
-  const roomsAreaSum = rooms.reduce((sum, r) => sum + r.width * r.length, 0);
-  const areaExceeded = roomsAreaSum > planArea * 1.001;
+  const selectedRoom = rooms.find(r => r.id === selectedRoomId) || null;
 
-  const sharedWallMap = useMemo(() => detectSharedWalls(rooms), [rooms]);
-  const sharedWallKeys = useMemo(() => new Set(sharedWallMap.keys()), [sharedWallMap]);
-  const wallClassification = useMemo(() => autoClassifyWalls(rooms), [rooms]);
-  const externalWallNames = useMemo(() => generateExternalWallNames(rooms, wallClassification), [rooms, wallClassification]);
-  const wallSegmentsMap = useMemo(() => computeWallSegments(rooms), [rooms]);
-
-  const handleMoveRoom = useCallback(async (roomId: string, posX: number, posY: number) => {
-    pushUndo();
-    await updateRoom(roomId, { posX, posY });
-    // Auto-classify perimeter walls after move
-    classifyPerimeterWalls();
-  }, [updateRoom, pushUndo, classifyPerimeterWalls]);
-
-  const handleResizeWall = useCallback(async (roomId: string, wallIndex: number, delta: number) => {
-    const room = rooms.find(r => r.id === roomId);
-    if (!room || delta === 0) return;
-    const applyResize = (r: { posX: number; posY: number; width: number; length: number }, wIdx: number, d: number) => {
-      switch (wIdx) {
-        case 1: return { posY: r.posY + d, length: Math.max(0.5, r.length - d) };
-        case 2: return { width: Math.max(0.5, r.width + d) };
-        case 3: return { length: Math.max(0.5, r.length + d) };
-        case 4: return { posX: r.posX + d, width: Math.max(0.5, r.width - d) };
-        default: return {};
-      }
-    };
-    pushUndo();
-    await updateRoom(roomId, applyResize(room, wallIndex, delta));
-    const wallKey = `${roomId}::${wallIndex}`;
-    const neighbor = sharedWallMap.get(wallKey);
-    if (neighbor) {
-      const nRoom = rooms.find(r => r.id === neighbor.neighborRoomId);
-      if (nRoom) {
-        await updateRoom(neighbor.neighborRoomId, applyResize(nRoom, neighbor.neighborWallIndex, delta));
-      }
-    }
-    // Auto-classify perimeter walls after resize
-    classifyPerimeterWalls();
-  }, [rooms, updateRoom, sharedWallMap, classifyPerimeterWalls]);
-
-  // Handle live plan dimension changes with m2 validation
-  const handlePlanWidthChange = (value: number) => {
-    if (!planData) return;
-    const maxForM2 = planData.width * planData.length; // current area is the limit
-    const product = value * planData.length;
-    if (product <= maxForM2 * 1.001 || value <= planData.width) {
-      updateFloorPlan({ width: value });
-    }
+  // Floor def handlers
+  const addFloorDef = () => {
+    const idx = floorDefs.length + 1;
+    setFloorDefs([...floorDefs, createDefaultFloor(`Planta ${idx}`, `planta_${idx}`, 80)]);
   };
 
-  const handlePlanLengthChange = (value: number) => {
-    if (!planData) return;
-    const maxForM2 = planData.width * planData.length;
-    const product = planData.width * value;
-    if (product <= maxForM2 * 1.001 || value <= planData.length) {
-      updateFloorPlan({ length: value });
-    }
+  const removeFloorDef = (idx: number) => {
+    setFloorDefs(floorDefs.filter((_, i) => i !== idx));
+  };
+
+  const updateFloorDef = (idx: number, updates: Partial<FloorDef>) => {
+    setFloorDefs(floorDefs.map((f, i) => i === idx ? { ...f, ...updates } : f));
+  };
+
+  const updateSpaceType = (floorIdx: number, spaceIdx: number, field: 'qty' | 'm2', value: number) => {
+    setFloorDefs(prev => prev.map((f, fi) => {
+      if (fi !== floorIdx) return f;
+      return { ...f, spaces: f.spaces.map((s, si) => si === spaceIdx ? { ...s, [field]: value } : s) };
+    }));
+  };
+
+  const addCustomSpace = (floorIdx: number) => {
+    setFloorDefs(prev => prev.map((f, fi) => {
+      if (fi !== floorIdx) return f;
+      return { ...f, customSpaces: [...f.customSpaces, { name: 'Nuevo espacio', m2: 10 }] };
+    }));
+  };
+
+  const updateCustomSpace = (floorIdx: number, csIdx: number, field: 'name' | 'm2', value: string | number) => {
+    setFloorDefs(prev => prev.map((f, fi) => {
+      if (fi !== floorIdx) return f;
+      return { ...f, customSpaces: f.customSpaces.map((cs, i) => i === csIdx ? { ...cs, [field]: value } : cs) };
+    }));
+  };
+
+  const removeCustomSpace = (floorIdx: number, csIdx: number) => {
+    setFloorDefs(prev => prev.map((f, fi) => {
+      if (fi !== floorIdx) return f;
+      return { ...f, customSpaces: f.customSpaces.filter((_, i) => i !== csIdx) };
+    }));
+  };
+
+  const getFloorTotalM2 = (f: FloorDef) => {
+    return f.spaces.reduce((sum, s) => sum + s.m2 * s.qty, 0) + f.customSpaces.reduce((sum, cs) => sum + cs.m2, 0);
+  };
+
+  const handleGenerate = async () => {
+    const defs = floorDefs.map(f => {
+      const expandedSpaces: Array<{ name: string; m2: number; gridCol: number; gridRow: number }> = [];
+
+      f.spaces.forEach(s => {
+        for (let i = 0; i < s.qty; i++) {
+          expandedSpaces.push({
+            name: s.qty > 1 ? `${s.name} ${i + 1}` : s.name,
+            m2: s.m2,
+            gridCol: 0, gridRow: 0,
+          });
+        }
+      });
+
+      f.customSpaces.forEach(cs => {
+        expandedSpaces.push({ name: cs.name, m2: cs.m2, gridCol: 0, gridRow: 0 });
+      });
+
+      // Auto-assign grid positions
+      const maxRows = Math.max(2, Math.ceil(Math.sqrt(expandedSpaces.length)));
+      let col = 1, row = 1;
+      expandedSpaces.forEach(sp => {
+        sp.gridCol = col;
+        sp.gridRow = row;
+        row++;
+        if (row > maxRows) { row = 1; col++; }
+      });
+
+      return { name: f.name, level: f.level, spaces: expandedSpaces };
+    });
+
+    await generateFromTemplate(planConfig, defs);
   };
 
   if (loading) {
@@ -178,752 +178,225 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
     );
   }
 
-  // No floor plan yet - show creation form
+  // ── Wizard Mode ──────────────────────────────────────────────
   if (!floorPlan) {
     return (
-      <Card className="max-w-lg mx-auto">
-        <CardHeader>
-          <CardTitle className="text-lg">Crear Plano de Planta</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <p className="text-sm text-muted-foreground">
-            Introduce los m² de la planta y se deducirán automáticamente las dimensiones de cada lado. Puedes ajustarlas manualmente.
-          </p>
+      <div className="max-w-3xl mx-auto space-y-6">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Layout className="h-5 w-5" /> Crear Plano — Definir Plantas y Espacios
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {/* Plan properties */}
+            <div>
+              <h3 className="text-sm font-semibold mb-2">Propiedades generales</h3>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                <div>
+                  <Label className="text-xs">Altura (m)</Label>
+                  <Input type="number" step="0.1" value={planConfig.defaultHeight}
+                    onChange={e => setPlanConfig({ ...planConfig, defaultHeight: Number(e.target.value) })} />
+                </div>
+                <div>
+                  <Label className="text-xs">Espesor ext. (m)</Label>
+                  <Input type="number" step="0.01" value={planConfig.externalWallThickness}
+                    onChange={e => setPlanConfig({ ...planConfig, externalWallThickness: Number(e.target.value) })} />
+                </div>
+                <div>
+                  <Label className="text-xs">Espesor int. (m)</Label>
+                  <Input type="number" step="0.01" value={planConfig.internalWallThickness}
+                    onChange={e => setPlanConfig({ ...planConfig, internalWallThickness: Number(e.target.value) })} />
+                </div>
+                <div>
+                  <Label className="text-xs">Tipo tejado</Label>
+                  <Select value={planConfig.roofType}
+                    onValueChange={v => setPlanConfig({ ...planConfig, roofType: v })}>
+                    <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="dos_aguas">Dos aguas</SelectItem>
+                      <SelectItem value="cuatro_aguas">Cuatro aguas</SelectItem>
+                      <SelectItem value="plana">Plana</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-xs">Alero (m)</Label>
+                  <Input type="number" step="0.1" value={planConfig.roofOverhang}
+                    onChange={e => setPlanConfig({ ...planConfig, roofOverhang: Number(e.target.value) })} />
+                </div>
+                <div>
+                  <Label className="text-xs">Pendiente (%)</Label>
+                  <Input type="number" step="1" value={planConfig.roofSlopePercent}
+                    onChange={e => setPlanConfig({ ...planConfig, roofSlopePercent: Number(e.target.value) })} />
+                </div>
+              </div>
+            </div>
 
-          {/* M2 input */}
-          <div>
-            <Label className="text-xs font-semibold">Superficie planta (m²)</Label>
-            <Input
-              type="number"
-              step="1"
-              value={planForm.m2}
-              onChange={e => handleM2Change(Number(e.target.value))}
-              className="text-lg font-semibold"
-            />
-            <p className="text-[10px] text-muted-foreground mt-1">
-              Se calculan automáticamente largo y ancho (√m² ≈ {Math.sqrt(planForm.m2).toFixed(1)}m por lado)
-            </p>
-          </div>
+            {/* Floors */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-sm font-semibold">Plantas</h3>
+                <Button variant="outline" size="sm" onClick={addFloorDef}>
+                  <Plus className="h-3.5 w-3.5 mr-1" /> Añadir planta
+                </Button>
+              </div>
+              <div className="space-y-2">
+                {floorDefs.map((f, fi) => (
+                  <div key={fi} className="flex items-center gap-2 p-2 border rounded-lg bg-muted/30">
+                    <Input className="w-32 h-8 text-sm" value={f.name}
+                      onChange={e => updateFloorDef(fi, { name: e.target.value })} />
+                    <Input type="number" className="w-20 h-8 text-sm text-center" value={f.m2}
+                      onChange={e => updateFloorDef(fi, { m2: Number(e.target.value) })} />
+                    <span className="text-xs text-muted-foreground">m²</span>
+                    <Badge variant={getFloorTotalM2(f) > f.m2 ? 'destructive' : 'secondary'} className="text-xs ml-auto">
+                      {getFloorTotalM2(f).toFixed(0)}/{f.m2}m²
+                    </Badge>
+                    {floorDefs.length > 1 && (
+                      <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => removeFloorDef(fi)}>
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
 
-          <div className="grid grid-cols-2 gap-3">
+            {/* Spaces per floor */}
             <div>
-              <Label className="text-xs">Largo (m)</Label>
-              <Input type="number" step="0.1" value={planForm.width}
-                onChange={e => handleSideChange('width', Number(e.target.value))} />
-            </div>
-            <div>
-              <Label className="text-xs">Ancho (m)</Label>
-              <Input type="number" step="0.1" value={planForm.length}
-                onChange={e => handleSideChange('length', Number(e.target.value))} />
-            </div>
-          </div>
+              <h3 className="text-sm font-semibold mb-2">Espacios por planta</h3>
+              <Tabs value={activeFloorTab} onValueChange={setActiveFloorTab}>
+                <TabsList className="h-8">
+                  {floorDefs.map((f, fi) => (
+                    <TabsTrigger key={fi} value={String(fi)} className="text-xs h-7">{f.name}</TabsTrigger>
+                  ))}
+                </TabsList>
+                {floorDefs.map((f, fi) => (
+                  <TabsContent key={fi} value={String(fi)} className="mt-3">
+                    <div className="space-y-1.5">
+                      <div className="grid grid-cols-[1fr_70px_70px] gap-2 text-xs font-semibold text-muted-foreground px-1">
+                        <span>Tipo</span>
+                        <span className="text-center">m²</span>
+                        <span className="text-center">Cantidad</span>
+                      </div>
+                      {f.spaces.map((s, si) => (
+                        <div key={si} className="grid grid-cols-[1fr_70px_70px] gap-2 items-center">
+                          <span className="text-sm">{s.name}</span>
+                          <Input type="number" className="h-8 text-center text-sm" value={s.m2}
+                            onChange={e => updateSpaceType(fi, si, 'm2', Number(e.target.value))} />
+                          <Input type="number" className="h-8 text-center text-sm" min={0} value={s.qty}
+                            onChange={e => updateSpaceType(fi, si, 'qty', Math.max(0, parseInt(e.target.value) || 0))} />
+                        </div>
+                      ))}
+                      {f.customSpaces.map((cs, ci) => (
+                        <div key={`c${ci}`} className="grid grid-cols-[1fr_70px_70px] gap-2 items-center">
+                          <Input className="h-8 text-sm" value={cs.name}
+                            onChange={e => updateCustomSpace(fi, ci, 'name', e.target.value)} />
+                          <Input type="number" className="h-8 text-center text-sm" value={cs.m2}
+                            onChange={e => updateCustomSpace(fi, ci, 'm2', Number(e.target.value))} />
+                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0 mx-auto" onClick={() => removeCustomSpace(fi, ci)}>
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      ))}
+                      <Button variant="outline" size="sm" className="mt-2" onClick={() => addCustomSpace(fi)}>
+                        <Plus className="h-3.5 w-3.5 mr-1" /> Otro espacio
+                      </Button>
+                    </div>
 
-          {planForm.width * planForm.length > planForm.m2 * 1.001 && (
-            <div className="flex items-center gap-2 text-destructive text-xs bg-destructive/10 p-2 rounded">
-              <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-              Largo × Ancho ({(planForm.width * planForm.length).toFixed(1)}m²) supera los m² definidos ({planForm.m2}m²)
+                    {getFloorTotalM2(f) > f.m2 && (
+                      <p className="text-xs text-destructive mt-2">
+                        ⚠ Los espacios ({getFloorTotalM2(f).toFixed(0)}m²) superan los m² de la planta ({f.m2}m²)
+                      </p>
+                    )}
+                  </TabsContent>
+                ))}
+              </Tabs>
             </div>
-          )}
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <Label className="text-xs">Altura estándar (m)</Label>
-              <Input type="number" step="0.1" value={planForm.defaultHeight}
-                onChange={e => setPlanForm({ ...planForm, defaultHeight: Number(e.target.value) })} />
-            </div>
-            <div>
-              <Label className="text-xs">Tipo tejado</Label>
-              <Select value={planForm.roofType}
-                onValueChange={v => setPlanForm({ ...planForm, roofType: v as any })}>
-                <SelectTrigger className="h-9">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="dos_aguas">Dos aguas</SelectItem>
-                  <SelectItem value="cuatro_aguas">Cuatro aguas</SelectItem>
-                  <SelectItem value="plana">Plana</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label className="text-xs">Espesor pared ext. (m)</Label>
-              <Input type="number" step="0.01" value={planForm.externalWallThickness}
-                onChange={e => setPlanForm({ ...planForm, externalWallThickness: Number(e.target.value) })} />
-            </div>
-            <div>
-              <Label className="text-xs">Espesor pared int. (m)</Label>
-              <Input type="number" step="0.01" value={planForm.internalWallThickness}
-                onChange={e => setPlanForm({ ...planForm, internalWallThickness: Number(e.target.value) })} />
-            </div>
-            <div>
-              <Label className="text-xs">Alero (m)</Label>
-              <Input type="number" step="0.1" value={planForm.roofOverhang}
-                onChange={e => setPlanForm({ ...planForm, roofOverhang: Number(e.target.value) })} />
-            </div>
-            <div>
-              <Label className="text-xs">Pendiente tejado (%)</Label>
-              <Input type="number" step="1" value={planForm.roofSlopePercent}
-                onChange={e => setPlanForm({ ...planForm, roofSlopePercent: Number(e.target.value) })} />
-            </div>
-          </div>
-          <Button onClick={() => createFloorPlan(planForm)} disabled={saving} className="w-full">
-            <Layout className="h-4 w-4 mr-2" />
-            Crear Plano
-          </Button>
-        </CardContent>
-      </Card>
+            {/* Generate */}
+            <Button onClick={handleGenerate} disabled={saving} className="w-full" size="lg">
+              {saving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Wand2 className="h-4 w-4 mr-2" />}
+              Generar Plano
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
     );
   }
 
+  // ── Grid View Mode ───────────────────────────────────────────
   return (
     <div className="space-y-4">
       {/* Toolbar */}
       <div className="flex items-center justify-between flex-wrap gap-2">
         <Tabs value={viewTab} onValueChange={setViewTab}>
-           <TabsList className="h-8">
-            <TabsTrigger value="plano" className="text-xs h-7 px-3">
-              <Layout className="h-3.5 w-3.5 mr-1" /> Plano 2D
-            </TabsTrigger>
-            <TabsTrigger value="alzados" className="text-xs h-7 px-3">
-              <RectangleVertical className="h-3.5 w-3.5 mr-1" /> Alzados
-            </TabsTrigger>
-            <TabsTrigger value="3d" className="text-xs h-7 px-3">
-              <Box className="h-3.5 w-3.5 mr-1" /> Alzados 2D
+          <TabsList className="h-8">
+            <TabsTrigger value="cuadricula" className="text-xs h-7 px-3">
+              <Layout className="h-3.5 w-3.5 mr-1" /> Cuadrícula
             </TabsTrigger>
             <TabsTrigger value="resumen" className="text-xs h-7 px-3">
               <BarChart3 className="h-3.5 w-3.5 mr-1" /> Resumen m²
-            </TabsTrigger>
-            <TabsTrigger value="render" className="text-xs h-7 px-3">
-              <ImageIcon className="h-3.5 w-3.5 mr-1" /> Render IA
             </TabsTrigger>
           </TabsList>
         </Tabs>
 
         <div className="flex items-center gap-2 flex-wrap">
-          {/* Area indicator */}
-          <Badge variant={areaExceeded ? 'destructive' : 'secondary'} className="text-xs">
-            {areaExceeded && <AlertTriangle className="h-3 w-3 mr-1" />}
-            Estancias: {roomsAreaSum.toFixed(1)}m² / {planArea.toFixed(1)}m² planta
-          </Badge>
           <Button variant="outline" size="sm" onClick={classifyPerimeterWalls} disabled={saving || rooms.length === 0}
-            title="Clasificar automáticamente las paredes del perímetro como externas">
-            <Wand2 className="h-4 w-4 mr-1" />
-            Auto ext.
-          </Button>
-          <Button variant="outline" size="sm" onClick={handleUndo} disabled={saving || undoStackRef.current.length === 0}
-            title="Deshacer último cambio">
-            <Undo2 className="h-4 w-4 mr-1" />
-            Deshacer
-          </Button>
-          <Button variant="outline" size="sm" onClick={async () => { await refetch(); setRefreshKey(k => k + 1); toast.success('Plano actualizado'); }} disabled={saving}
-            title="Actualizar plano con los últimos cambios">
-            <RotateCcw className="h-4 w-4 mr-1" />
-            Actualizar plano
-          </Button>
-          <Button variant="outline" size="sm" onClick={async () => {
-            if (planData) {
-              await updateFloorPlan({
-                roofType: planData.roofType,
-                roofOverhang: planData.roofOverhang,
-                roofSlopePercent: planData.roofSlopePercent,
-              });
-            }
-            await syncToMeasurements();
-            toast.success('Tejado y mediciones recalculados');
-          }} disabled={saving} title="Recalcular tejado y sincronizar mediciones">
-            <RefreshCw className={`h-4 w-4 mr-1 ${saving ? 'animate-spin' : ''}`} />
-            Recalcular tejado
+            title="Clasificar paredes del perímetro como externas">
+            <Wand2 className="h-4 w-4 mr-1" /> Auto ext.
           </Button>
           <Button variant="outline" size="sm" onClick={syncToMeasurements} disabled={saving}>
-            <Save className={`h-4 w-4 mr-1 ${saving ? 'animate-spin' : ''}`} />
-            Sincronizar mediciones
+            <Save className={`h-4 w-4 mr-1 ${saving ? 'animate-spin' : ''}`} /> Sincronizar
           </Button>
-          {viewTab === 'plano' && planData && (
-            <>
-              <Button variant="outline" size="sm" onClick={() => setFloatingOpen(true)}
-                title="Abrir plano en ventana flotante a pantalla completa">
-                <Maximize2 className="h-4 w-4 mr-1" />
-                Flotante
-              </Button>
-              <Button variant="outline" size="sm" onClick={() => {
-                const url = `${window.location.origin}/floorplan-popout?floorplan-popout=${budgetId}`;
-                const popup = window.open(url, `floorplan_${budgetId}`, 'width=1200,height=800,resizable=yes,scrollbars=yes');
-                if (!popup) toast.error('El navegador bloqueó la ventana emergente. Permite ventanas emergentes para este sitio.');
-              }} title="Abrir plano en ventana externa (puedes moverla a otra pantalla)">
-                <ExternalLink className="h-4 w-4 mr-1" />
-                Ventana ext.
-              </Button>
-            </>
-          )}
+          <Button variant="outline" size="sm" onClick={async () => { await refetch(); toast.success('Plano actualizado'); }} disabled={saving}>
+            <RefreshCw className="h-4 w-4 mr-1" /> Actualizar
+          </Button>
+          <Button variant="destructive" size="sm" onClick={async () => {
+            if (confirm('¿Eliminar el plano completo? Se perderán todos los espacios.')) {
+              await deleteFloorPlan();
+            }
+          }} disabled={saving}>
+            <Trash2 className="h-4 w-4 mr-1" /> Eliminar plano
+          </Button>
         </div>
       </div>
 
-      {areaExceeded && (
-        <div className="flex items-center gap-2 text-destructive text-sm bg-destructive/10 p-3 rounded-lg">
-          <AlertTriangle className="h-4 w-4 shrink-0" />
-          <span>
-            La suma de las estancias ({roomsAreaSum.toFixed(1)}m²) supera los m² de la planta ({planArea.toFixed(1)}m²).
-            Ajusta las dimensiones de la planta o reduce el tamaño de alguna estancia.
-          </span>
+      {/* Content */}
+      {viewTab === 'cuadricula' && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <div className="lg:col-span-2">
+            <FloorPlanGridView
+              rooms={rooms}
+              floors={floors}
+              selectedRoomId={selectedRoomId}
+              onSelectRoom={setSelectedRoomId}
+            />
+          </div>
+          <div>
+            {selectedRoom && planData ? (
+              <FloorPlanSpaceForm
+                room={selectedRoom}
+                planData={planData}
+                onUpdateRoom={(data) => updateRoom(selectedRoom.id, data)}
+                onUpdateWall={(wallId, data) => updateWall(wallId, data)}
+                onDeleteRoom={() => { deleteRoom(selectedRoom.id); setSelectedRoomId(null); }}
+                saving={saving}
+              />
+            ) : (
+              <Card>
+                <CardContent className="py-8 text-center text-muted-foreground text-sm">
+                  Haz clic en un espacio de la cuadrícula para editar sus propiedades y paredes
+                </CardContent>
+              </Card>
+            )}
+          </div>
         </div>
       )}
 
-      {/* Main layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Left: Canvas / Summary */}
-        <div className="lg:col-span-2">
-          {viewTab === 'plano' && planData && (
-            <>
-              <FloorPlanCanvas2D
-                plan={planData}
-                rooms={rooms}
-                selectedRoomId={selectedRoomId}
-                selectedWallKey={selectedWallKey ?? undefined}
-                sharedWallKeys={sharedWallKeys}
-                onSelectRoom={setSelectedRoomId}
-                onSelectWall={setSelectedWallKey}
-                onMoveRoom={handleMoveRoom}
-                onResizeWall={handleResizeWall}
-                onDoubleClickRoom={(roomId) => { setSelectedRoomId(roomId); setRoomDialogId(roomId); }}
-                onDoubleClickWall={(roomId, wallIndex, segIndex) => {
-                  setSelectedRoomId(roomId);
-                  setSelectedWallKey(segIndex !== undefined ? `${roomId}::${wallIndex}::${segIndex}` : `${roomId}::${wallIndex}`);
-                  setWallDialogKey({ roomId, wallIndex, segIndex });
-                }}
-              />
-              {selectedWallKey && (() => {
-                const parts = selectedWallKey.split('::');
-                const roomId = parts[0];
-                const wallIdx = parseInt(parts[1]);
-                const segIdx = parts.length > 2 ? parseInt(parts[2]) : undefined;
-                const baseWallKey = `${roomId}::${wallIdx}`;
-                const room = rooms.find(r => r.id === roomId);
-                if (!room) return null;
-                const wall = room.walls.find(w => w.wallIndex === wallIdx);
-                if (!wall) return null;
-                const segments = wallSegmentsMap.get(baseWallKey) || [];
-                const segmentInfo = segIdx !== undefined && segments[segIdx] ? segments[segIdx] : null;
-                const segType = segmentInfo ? segmentInfo.segmentType : (wallClassification.get(baseWallKey) || wall.wallType);
-                const isInvisible = isInvisibleType(segType);
-                const autoType = segType;
-                const neighborInfo = segmentInfo?.neighborRoomId
-                  ? { neighborRoomId: segmentInfo.neighborRoomId, neighborWallIndex: segmentInfo.neighborWallIndex }
-                  : sharedWallMap.get(baseWallKey);
-                const neighborRoom = neighborInfo ? rooms.find(r => r.id === neighborInfo.neighborRoomId) : null;
-
-                // Count visible (non-invisible) segments for this wall to generate numbered names
-                const visibleSegments = segments.map((s, i) => ({ ...s, originalIndex: i })).filter(s => !isInvisibleType(s.segmentType));
-                const hasMultipleVisible = visibleSegments.length > 1;
-                const visibleNumber = segIdx !== undefined
-                  ? visibleSegments.findIndex(s => s.originalIndex === segIdx) + 1
-                  : 0;
-                const wallLabel = hasMultipleVisible && visibleNumber > 0
-                  ? `${WALL_LABELS[wallIdx]} ${visibleNumber}`
-                  : WALL_LABELS[wallIdx];
-
-                // If the selected segment is invisible, show message to edit from neighbor
-                if (isInvisible && neighborRoom) {
-                  return (
-                    <Card className="mt-2">
-                      <CardContent className="p-3">
-                        <p className="text-xs text-muted-foreground">
-                          Esta zona de la pared es compartida con <strong>{neighborRoom.name}</strong>. 
-                          Los objetos se gestionan desde la pared visible de la estancia vecina.
-                        </p>
-                      </CardContent>
-                    </Card>
-                  );
-                }
-
-                return (
-                  <Card className="mt-2">
-                    <CardHeader className="pb-2 py-2 px-3">
-                      <div className="flex items-center gap-2">
-                        <CardTitle className="text-xs">
-                          {wallLabel} — {room.name}
-                          {isExteriorType(autoType) && externalWallNames.get(baseWallKey) && (
-                            <span className="ml-1 text-primary font-bold">({externalWallNames.get(baseWallKey)})</span>
-                          )}
-                        </CardTitle>
-                        <Badge variant="outline" className="text-[10px] h-4">{isExteriorType(autoType) ? 'Exterior' : isInvisibleType(autoType) ? 'Invisible' : 'Interior'}</Badge>
-                        {isInvisible && neighborRoom && (
-                          <Badge variant="outline" className="text-[10px] h-4">con {neighborRoom.name}</Badge>
-                        )}
-                      </div>
-                    </CardHeader>
-                    <CardContent className="px-3 pb-2 space-y-2">
-                      <div className="flex gap-2 items-end">
-                        <div className="flex-1">
-                          <Label className="text-[10px]">Tipo</Label>
-                          <Select value={wall.wallType}
-                            onValueChange={v => { if (!wall.id.startsWith('temp-')) updateWall(wall.id, { wallType: v as any }); }}>
-                            <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="externa">Externa</SelectItem>
-                              <SelectItem value="interna">Interna</SelectItem>
-                              <SelectItem value="invisible">Invisible</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div className="w-20">
-                          <Label className="text-[10px]">Espesor (m)</Label>
-                          <Input type="number" step="0.01" className="h-7 text-xs"
-                            value={wall.thickness || ''} placeholder="Auto"
-                            onChange={e => { if (!wall.id.startsWith('temp-')) updateWall(wall.id, { thickness: Number(e.target.value) || undefined }); }} />
-                        </div>
-                      </div>
-                      {isInvisible ? (
-                      <div className="text-xs text-muted-foreground bg-muted/30 p-2 rounded space-y-1">
-                          <p>Pared invisible — los objetos se gestionan desde la pared visible vecina.</p>
-                          {neighborRoom && (
-                            <p className="font-medium">
-                              Usa la pestaña <button className="text-primary underline" onClick={() => setViewTab('alzados')}>Alzados</button> para ver y arrastrar los objetos de esta pared compartida con <strong>{neighborRoom.name}</strong>.
-                            </p>
-                          )}
-                        </div>
-                      ) : (
-                      <div className="space-y-2">
-                        <Label className="text-[10px] font-semibold">Aberturas ({wall.openings.length})</Label>
-                        {wall.openings.length > 0 && (
-                          <p className="text-[9px] text-muted-foreground">
-                            🔄 Usa el slider «Posición» para mover cada objeto a lo largo de la pared
-                          </p>
-                        )}
-                        {wall.openings.map(op => (
-                          <div key={op.id} className="bg-muted/50 p-2 rounded space-y-1.5">
-                            <div className="flex items-center gap-2">
-                              <DoorOpen className="h-3 w-3 text-muted-foreground shrink-0" />
-                              <span className="text-xs font-medium flex-1">
-                                {OPENING_PRESETS[op.openingType as keyof typeof OPENING_PRESETS]?.label || op.openingType}
-                              </span>
-                              <Button variant="ghost" size="sm" className="h-5 w-5 p-0 text-destructive"
-                                onClick={() => deleteOpening(op.id)}>
-                                <Trash2 className="h-3 w-3" />
-                              </Button>
-                            </div>
-                            <div className="grid grid-cols-4 gap-1.5">
-                              <div>
-                                <Label className="text-[9px]">Tipo</Label>
-                                <Select value={op.openingType}
-                                  onValueChange={v => updateOpening(op.id, { openingType: v })}>
-                                  <SelectTrigger className="h-6 text-[10px]"><SelectValue /></SelectTrigger>
-                                  <SelectContent>
-                                    {Object.entries(OPENING_PRESETS).map(([key, preset]) => (
-                                      <SelectItem key={key} value={key} className="text-xs">{preset.label}</SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                              <div>
-                                <Label className="text-[9px]">Ancho (m)</Label>
-                                <Input type="number" step="0.1" className="h-6 text-[10px]"
-                                  defaultValue={op.width}
-                                  onBlur={e => updateOpening(op.id, { width: Number(e.target.value) })} />
-                              </div>
-                              <div>
-                                <Label className="text-[9px]">Alto (m)</Label>
-                                <Input type="number" step="0.1" className="h-6 text-[10px]"
-                                  defaultValue={op.height}
-                                  onBlur={e => updateOpening(op.id, { height: Number(e.target.value) })} />
-                              </div>
-                              <div>
-                                <Label className="text-[9px]">📍 Posición (mover)</Label>
-                                <div className="flex items-center gap-1">
-                                  <input type="range" min="0" max="1" step="0.05"
-                                    className="flex-1 h-5 accent-primary cursor-pointer"
-                                    value={op.positionX}
-                                    onChange={e => updateOpening(op.id, { positionX: Number(e.target.value) })}
-                                    title="Arrastra para mover el objeto a lo largo de la pared" />
-                                  <span className="text-[9px] text-muted-foreground w-7 text-right">{(op.positionX * 100).toFixed(0)}%</span>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                        {!wall.id.startsWith('temp-') && (
-                          <div className="flex gap-1 flex-wrap">
-                            {Object.entries(OPENING_PRESETS).map(([key, preset]) => (
-                              <Button key={key} variant="outline" size="sm" className="text-[10px] h-6"
-                                onClick={() => addOpening(wall.id, key, preset.width, preset.height)} disabled={saving}>
-                                + {preset.label}
-                              </Button>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                      )}
-                    </CardContent>
-                  </Card>
-                );
-              })()}
-            </>
-          )}
-          {viewTab === 'alzados' && planData && (
-            <WallElevationView
-              plan={planData}
-              rooms={rooms}
-              onUpdateOpening={updateOpening}
-              onAddOpening={addOpening}
-              onDeleteOpening={deleteOpening}
-              saving={saving}
-            />
-          )}
-          {viewTab === '3d' && planData && (
-            <ElevationsGridViewer
-              plan={planData}
-              rooms={rooms}
-              floors={floors}
-              onUpdateOpening={updateOpening}
-              onAddOpening={addOpening}
-              onDeleteOpening={deleteOpening}
-              saving={saving}
-            />
-          )}
-          {viewTab === 'resumen' && (
-            <FloorPlanSummaryView summary={summary} />
-          )}
-          {viewTab === 'render' && planData && (
-            <FloorPlanRenderView plan={planData} rooms={rooms} budgetId={budgetId} />
-          )}
-
-          {/* Plan settings */}
-          {planData && (
-            <div className="mt-4">
-              <Card>
-                <CardHeader className="pb-2 py-2 px-3">
-                  <CardTitle className="text-xs text-muted-foreground">
-                    Planta: {(planData.width * planData.length).toFixed(1)}m² ({planData.width}×{planData.length}m) · Altura: {planData.defaultHeight}m · Tejado: {planData.roofType}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="pt-0 px-3 pb-2">
-                  <div className="grid grid-cols-4 lg:grid-cols-8 gap-2">
-                    <div>
-                      <Label className="text-[10px]">Largo (m)</Label>
-                      <Input type="number" step="0.1" className="h-7 text-xs"
-                        defaultValue={planData.width}
-                        onBlur={e => handlePlanWidthChange(Number(e.target.value))} />
-                    </div>
-                    <div>
-                      <Label className="text-[10px]">Ancho (m)</Label>
-                      <Input type="number" step="0.1" className="h-7 text-xs"
-                        defaultValue={planData.length}
-                        onBlur={e => handlePlanLengthChange(Number(e.target.value))} />
-                    </div>
-                    <div>
-                      <Label className="text-[10px]">Altura (m)</Label>
-                      <Input type="number" step="0.1" className="h-7 text-xs"
-                        defaultValue={planData.defaultHeight}
-                        onBlur={e => updateFloorPlan({ defaultHeight: Number(e.target.value) })} />
-                    </div>
-                    <div>
-                      <Label className="text-[10px]">Pendiente (%)</Label>
-                      <Input type="number" step="1" className="h-7 text-xs"
-                        defaultValue={planData.roofSlopePercent}
-                        onBlur={e => updateFloorPlan({ roofSlopePercent: Number(e.target.value) })} />
-                    </div>
-                    <div>
-                      <Label className="text-[10px]">Tipo tejado</Label>
-                      <Select value={planData.roofType}
-                        onValueChange={v => updateFloorPlan({ roofType: v as any })}>
-                        <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="dos_aguas">Dos aguas</SelectItem>
-                          <SelectItem value="cuatro_aguas">Cuatro aguas</SelectItem>
-                          <SelectItem value="plana">Plana</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <Label className="text-[10px]">Alero (m)</Label>
-                      <Input type="number" step="0.1" className="h-7 text-xs"
-                        defaultValue={planData.roofOverhang}
-                        onBlur={e => updateFloorPlan({ roofOverhang: Number(e.target.value) })} />
-                    </div>
-                    <div>
-                      <Label className="text-[10px]">Pared ext. (m)</Label>
-                      <Input type="number" step="0.01" className="h-7 text-xs"
-                        defaultValue={planData.externalWallThickness}
-                        onBlur={e => updateFloorPlan({ externalWallThickness: Number(e.target.value) })} />
-                    </div>
-                    <div>
-                      <Label className="text-[10px]">Pared int. (m)</Label>
-                      <Input type="number" step="0.01" className="h-7 text-xs"
-                        defaultValue={planData.internalWallThickness}
-                        onBlur={e => updateFloorPlan({ internalWallThickness: Number(e.target.value) })} />
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          )}
-        </div>
-
-        {/* Right: Room editor */}
-        <div className="space-y-4">
-          <FloorPlanRoomEditor
-            rooms={rooms}
-            planArea={planArea}
-            selectedRoomId={selectedRoomId}
-            onSelectRoom={setSelectedRoomId}
-            onAddRoom={addRoom}
-            onUpdateRoom={updateRoom}
-            onDeleteRoom={deleteRoom}
-            onDuplicateRoom={duplicateRoom}
-            onUpdateWall={updateWall}
-            onAddOpening={addOpening}
-            onUpdateOpening={updateOpening}
-            onDeleteOpening={deleteOpening}
-            saving={saving}
-          />
-        </div>
-      </div>
-
-      {/* Room detail dialog (double-click) */}
-      <Dialog open={!!roomDialogId} onOpenChange={(open) => { if (!open) setRoomDialogId(null); }}>
-        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
-          {(() => {
-            const dialogRoom = rooms.find(r => r.id === roomDialogId);
-            if (!dialogRoom) return null;
-            return (
-              <>
-                <DialogHeader>
-                  <DialogTitle className="text-base">Editar espacio: {dialogRoom.name}</DialogTitle>
-                </DialogHeader>
-                <div className="space-y-4 pt-2">
-                  {/* Name */}
-                  <div>
-                    <Label className="text-xs font-semibold">Nombre</Label>
-                    <Input
-                      value={dialogRoom.name}
-                      onChange={e => updateRoom(dialogRoom.id, { name: e.target.value })}
-                      placeholder="Nombre del espacio"
-                    />
-                  </div>
-                  {/* Dimensions */}
-                  <div className="grid grid-cols-3 gap-3">
-                    <div>
-                      <Label className="text-xs">Ancho (m)</Label>
-                      <Input type="number" step="0.1" value={dialogRoom.width}
-                        onChange={e => updateRoom(dialogRoom.id, { width: Number(e.target.value) })} />
-                    </div>
-                    <div>
-                      <Label className="text-xs">Largo (m)</Label>
-                      <Input type="number" step="0.1" value={dialogRoom.length}
-                        onChange={e => updateRoom(dialogRoom.id, { length: Number(e.target.value) })} />
-                    </div>
-                    <div>
-                      <Label className="text-xs">Alto (m)</Label>
-                      <Input type="number" step="0.1" value={dialogRoom.height || ''}
-                        placeholder="Auto"
-                        onChange={e => updateRoom(dialogRoom.id, { height: Number(e.target.value) || undefined })} />
-                    </div>
-                  </div>
-                  {/* Position */}
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <Label className="text-xs">Posición X (m)</Label>
-                      <Input type="number" step="0.01" value={dialogRoom.posX}
-                        onChange={e => updateRoom(dialogRoom.id, { posX: Number(e.target.value) })} />
-                    </div>
-                    <div>
-                      <Label className="text-xs">Posición Y (m)</Label>
-                      <Input type="number" step="0.01" value={dialogRoom.posY}
-                        onChange={e => updateRoom(dialogRoom.id, { posY: Number(e.target.value) })} />
-                    </div>
-                  </div>
-                  {/* Surface elements */}
-                  <div className="space-y-2">
-                    <Label className="text-xs font-semibold">Elementos</Label>
-                    <div className="grid grid-cols-3 gap-2">
-                      <div className="flex items-center justify-between bg-muted/30 p-2 rounded">
-                        <span className="text-xs">Suelo</span>
-                        <Switch
-                          checked={dialogRoom.hasFloor !== false}
-                          onCheckedChange={v => updateRoom(dialogRoom.id, { hasFloor: v })}
-                        />
-                      </div>
-                      <div className="flex items-center justify-between bg-muted/30 p-2 rounded">
-                        <span className="text-xs">Techo</span>
-                        <Switch
-                          checked={dialogRoom.hasCeiling !== false}
-                          onCheckedChange={v => updateRoom(dialogRoom.id, { hasCeiling: v })}
-                        />
-                      </div>
-                      <div className="flex items-center justify-between bg-muted/30 p-2 rounded">
-                        <span className="text-xs">Tejado</span>
-                        <Switch
-                          checked={dialogRoom.hasRoof !== false}
-                          onCheckedChange={v => updateRoom(dialogRoom.id, { hasRoof: v })}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                  {/* Area info */}
-                  <div className="text-sm text-muted-foreground bg-muted/30 p-3 rounded">
-                    Superficie: <strong>{(dialogRoom.width * dialogRoom.length).toFixed(1)}m²</strong>
-                  </div>
-                </div>
-              </>
-            );
-          })()}
-        </DialogContent>
-      </Dialog>
-
-      {/* Wall detail dialog (double-click on wall) */}
-      <Dialog open={!!wallDialogKey} onOpenChange={(open) => { if (!open) setWallDialogKey(null); }}>
-        <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto">
-          {(() => {
-            if (!wallDialogKey) return null;
-            const room = rooms.find(r => r.id === wallDialogKey.roomId);
-            if (!room) return null;
-            const wall = room.walls.find(w => w.wallIndex === wallDialogKey.wallIndex);
-            if (!wall) return null;
-            const baseWallKey = `${wallDialogKey.roomId}::${wallDialogKey.wallIndex}`;
-            const segments = wallSegmentsMap.get(baseWallKey) || [];
-            const segInfo = wallDialogKey.segIndex !== undefined ? segments[wallDialogKey.segIndex] : null;
-            const segType = segInfo ? segInfo.segmentType : (wallClassification.get(baseWallKey) || wall.wallType);
-            const isHoriz = wall.wallIndex === 1 || wall.wallIndex === 3;
-            const wallLen = isHoriz ? room.width : room.length;
-
-            return (
-              <>
-                <DialogHeader>
-                  <DialogTitle className="text-base">
-                    {WALL_LABELS[wall.wallIndex]} — {room.name}
-                    {isExteriorType(segType) && externalWallNames.get(baseWallKey) && (
-                      <span className="ml-1 text-primary font-bold">({externalWallNames.get(baseWallKey)})</span>
-                    )}
-                  </DialogTitle>
-                </DialogHeader>
-                <div className="space-y-4 pt-2">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <Label className="text-xs font-semibold">Tipo de pared</Label>
-                      <Select value={wall.wallType}
-                        onValueChange={v => { if (!wall.id.startsWith('temp-')) updateWall(wall.id, { wallType: v as any }); }}>
-                        <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="externa">Externa</SelectItem>
-                          <SelectItem value="interna">Interna</SelectItem>
-                          <SelectItem value="invisible">Invisible</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <Label className="text-xs font-semibold">Espesor (m)</Label>
-                      <Input type="number" step="0.01" className="h-9 text-sm"
-                        value={wall.thickness || ''} placeholder="Auto"
-                        onChange={e => { if (!wall.id.startsWith('temp-')) updateWall(wall.id, { thickness: Number(e.target.value) || undefined }); }} />
-                    </div>
-                  </div>
-                  <div className="text-sm text-muted-foreground bg-muted/30 p-3 rounded space-y-1">
-                    <p><strong>Longitud interior:</strong> {wallLen.toFixed(2)}m</p>
-                    <p><strong>Clasificación auto:</strong> {isExteriorType(segType) ? 'Exterior' : isInvisibleType(segType) ? 'Invisible' : 'Interior'}</p>
-                    <p><strong>Orientación:</strong> {isHoriz ? 'Horizontal' : 'Vertical'}</p>
-                  </div>
-                  {/* Openings */}
-                  <div className="space-y-2">
-                    <Label className="text-xs font-semibold">Aberturas ({wall.openings.length})</Label>
-                    {wall.openings.map(op => (
-                      <div key={op.id} className="bg-muted/50 p-2 rounded space-y-1.5">
-                        <div className="flex items-center gap-2">
-                          <DoorOpen className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                          <span className="text-sm font-medium flex-1">
-                            {OPENING_PRESETS[op.openingType as keyof typeof OPENING_PRESETS]?.label || op.openingType}
-                          </span>
-                          <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-destructive"
-                            onClick={() => deleteOpening(op.id)}>
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
-                        </div>
-                        <div className="grid grid-cols-3 gap-2">
-                          <div>
-                            <Label className="text-[10px]">Tipo</Label>
-                            <Select value={op.openingType}
-                              onValueChange={v => updateOpening(op.id, { openingType: v })}>
-                              <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
-                              <SelectContent>
-                                {Object.entries(OPENING_PRESETS).map(([key, preset]) => (
-                                  <SelectItem key={key} value={key} className="text-xs">{preset.label}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <div>
-                            <Label className="text-[10px]">Ancho (m)</Label>
-                            <Input type="number" step="0.1" className="h-7 text-xs"
-                              defaultValue={op.width}
-                              onBlur={e => updateOpening(op.id, { width: Number(e.target.value) })} />
-                          </div>
-                          <div>
-                            <Label className="text-[10px]">Alto (m)</Label>
-                            <Input type="number" step="0.1" className="h-7 text-xs"
-                              defaultValue={op.height}
-                              onBlur={e => updateOpening(op.id, { height: Number(e.target.value) })} />
-                          </div>
-                        </div>
-                        <div>
-                          <Label className="text-[10px]">📍 Posición</Label>
-                          <div className="flex items-center gap-1">
-                            <input type="range" min="0" max="1" step="0.05"
-                              className="flex-1 h-5 accent-primary cursor-pointer"
-                              value={op.positionX}
-                              onChange={e => updateOpening(op.id, { positionX: Number(e.target.value) })} />
-                            <span className="text-[10px] text-muted-foreground w-7 text-right">{(op.positionX * 100).toFixed(0)}%</span>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                    {!wall.id.startsWith('temp-') && !isInvisibleType(segType) && (
-                      <div className="flex gap-1 flex-wrap">
-                        {Object.entries(OPENING_PRESETS).map(([key, preset]) => (
-                          <Button key={key} variant="outline" size="sm" className="text-[10px] h-6"
-                            onClick={() => addOpening(wall.id, key, preset.width, preset.height)} disabled={saving}>
-                            + {preset.label}
-                          </Button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </>
-            );
-          })()}
-        </DialogContent>
-      </Dialog>
-
-      {/* Floating fullscreen dialog for floor plan */}
-      <Dialog open={floatingOpen} onOpenChange={setFloatingOpen}>
-        <DialogContent className="max-w-[95vw] w-[95vw] h-[90vh] max-h-[90vh] flex flex-col p-0">
-          <DialogHeader className="flex flex-row items-center justify-between px-4 py-2 border-b shrink-0">
-            <DialogTitle className="text-sm font-semibold">Plano 2D — Vista ampliada</DialogTitle>
-            <Button variant="ghost" size="sm" onClick={() => setFloatingOpen(false)}>
-              <X className="h-4 w-4" />
-            </Button>
-          </DialogHeader>
-          <div className="flex-1 overflow-auto p-2">
-            {planData && (
-              <FloorPlanCanvas2D
-                plan={planData}
-                rooms={rooms}
-                selectedRoomId={selectedRoomId}
-                selectedWallKey={selectedWallKey ?? undefined}
-                sharedWallKeys={sharedWallKeys}
-                onSelectRoom={setSelectedRoomId}
-                onSelectWall={setSelectedWallKey}
-                onMoveRoom={handleMoveRoom}
-                onResizeWall={handleResizeWall}
-                onDoubleClickRoom={(roomId) => { setSelectedRoomId(roomId); setRoomDialogId(roomId); }}
-                onDoubleClickWall={(roomId, wallIndex, segIndex) => {
-                  setSelectedRoomId(roomId);
-                  setSelectedWallKey(segIndex !== undefined ? `${roomId}::${wallIndex}::${segIndex}` : `${roomId}::${wallIndex}`);
-                  setWallDialogKey({ roomId, wallIndex, segIndex });
-                }}
-              />
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
+      {viewTab === 'resumen' && planData && summary && (
+        <FloorPlanSummaryView summary={summary} />
+      )}
     </div>
   );
 }

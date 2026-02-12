@@ -49,6 +49,31 @@ interface DbOpening {
   position_x: number;
 }
 
+function calcGridPositions(spaces: Array<{ m2: number; gridCol: number; gridRow: number }>) {
+  const colWidths = new Map<number, number>();
+  spaces.forEach(s => {
+    const side = Math.sqrt(s.m2);
+    colWidths.set(s.gridCol, Math.max(colWidths.get(s.gridCol) || 0, side));
+  });
+  return spaces.map(s => {
+    const colWidth = colWidths.get(s.gridCol) || Math.sqrt(s.m2);
+    const length = Math.round((s.m2 / colWidth) * 100) / 100;
+    let posX = 0;
+    for (let c = 1; c < s.gridCol; c++) posX += colWidths.get(c) || 0;
+    let posY = 0;
+    spaces
+      .filter(o => o.gridCol === s.gridCol && o.gridRow < s.gridRow)
+      .sort((a, b) => a.gridRow - b.gridRow)
+      .forEach(o => { posY += o.m2 / (colWidths.get(o.gridCol) || Math.sqrt(o.m2)); });
+    return {
+      width: Math.round(colWidth * 100) / 100,
+      length,
+      posX: Math.round(posX * 100) / 100,
+      posY: Math.round(posY * 100) / 100,
+    };
+  });
+}
+
 export function useFloorPlan(budgetId: string) {
   const [floorPlan, setFloorPlan] = useState<(DbFloorPlan) | null>(null);
   const [rooms, setRooms] = useState<RoomData[]>([]);
@@ -760,6 +785,120 @@ export function useFloorPlan(budgetId: string) {
     }
   };
 
+  const deleteFloorPlan = async () => {
+    if (!floorPlan) return;
+    setSaving(true);
+    try {
+      await supabase.from('budget_floor_plan_rooms').delete().eq('floor_plan_id', floorPlan.id);
+      await supabase.from('budget_floors').delete().eq('floor_plan_id', floorPlan.id);
+      const { error } = await supabase.from('budget_floor_plans').delete().eq('id', floorPlan.id);
+      if (error) throw error;
+      setFloorPlan(null);
+      setRooms([]);
+      setFloors([]);
+      toast.success('Plano eliminado');
+    } catch (err) {
+      console.error('Error deleting floor plan:', err);
+      toast.error('Error al eliminar plano');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const generateFromTemplate = async (
+    planConfig: {
+      defaultHeight: number;
+      externalWallThickness: number;
+      internalWallThickness: number;
+      roofOverhang: number;
+      roofSlopePercent: number;
+      roofType: string;
+    },
+    floorDefs: Array<{
+      name: string;
+      level: string;
+      spaces: Array<{ name: string; m2: number; gridCol: number; gridRow: number }>;
+    }>
+  ) => {
+    setSaving(true);
+    try {
+      if (floorPlan) {
+        await supabase.from('budget_floor_plan_rooms').delete().eq('floor_plan_id', floorPlan.id);
+        await supabase.from('budget_floors').delete().eq('floor_plan_id', floorPlan.id);
+        await supabase.from('budget_floor_plans').delete().eq('id', floorPlan.id);
+      }
+
+      const totalM2 = Math.max(...floorDefs.map(f => f.spaces.reduce((s, sp) => s + sp.m2, 0)), 1);
+      const planSide = Math.round(Math.sqrt(totalM2) * 10) / 10;
+
+      const { data: fp, error: fpError } = await supabase
+        .from('budget_floor_plans')
+        .insert({
+          budget_id: budgetId,
+          width: planSide,
+          length: Math.round((totalM2 / planSide) * 10) / 10,
+          default_height: planConfig.defaultHeight,
+          external_wall_thickness: planConfig.externalWallThickness,
+          internal_wall_thickness: planConfig.internalWallThickness,
+          roof_overhang: planConfig.roofOverhang,
+          roof_slope_percent: planConfig.roofSlopePercent,
+          roof_type: planConfig.roofType,
+        })
+        .select()
+        .single();
+      if (fpError) throw fpError;
+
+      for (let fi = 0; fi < floorDefs.length; fi++) {
+        const fd = floorDefs[fi];
+        const { data: floor, error: flError } = await supabase
+          .from('budget_floors')
+          .insert({ floor_plan_id: fp.id, name: fd.name, level: fd.level, order_index: fi })
+          .select()
+          .single();
+        if (flError) throw flError;
+
+        const positions = calcGridPositions(fd.spaces);
+
+        for (let si = 0; si < fd.spaces.length; si++) {
+          const space = fd.spaces[si];
+          const pos = positions[si];
+          const { data: room, error: rError } = await supabase
+            .from('budget_floor_plan_rooms')
+            .insert({
+              floor_plan_id: fp.id,
+              floor_id: floor.id,
+              name: space.name,
+              width: pos.width,
+              length: pos.length,
+              pos_x: pos.posX,
+              pos_y: pos.posY,
+              order_index: space.gridCol * 100 + space.gridRow,
+            })
+            .select()
+            .single();
+          if (rError) throw rError;
+
+          await supabase
+            .from('budget_floor_plan_walls')
+            .insert([1, 2, 3, 4].map(idx => ({
+              room_id: room.id,
+              wall_index: idx,
+              wall_type: 'interior',
+            })));
+        }
+      }
+
+      await fetchAll();
+      setTimeout(() => classifyPerimeterWalls(), 500);
+      toast.success('Plano generado correctamente');
+    } catch (err) {
+      console.error('Error generating floor plan:', err);
+      toast.error('Error al generar el plano');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return {
     floorPlan,
     rooms,
@@ -783,6 +922,8 @@ export function useFloorPlan(budgetId: string) {
     updateFloor,
     deleteFloor,
     autoCreateFloors,
+    deleteFloorPlan,
+    generateFromTemplate,
     refetch: fetchAll,
   };
 }

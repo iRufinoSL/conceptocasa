@@ -53,6 +53,8 @@ interface Phase {
 interface Measurement {
   id: string;
   name: string;
+  manual_units?: number | null;
+  measurement_unit?: string | null;
 }
 
 interface CalculatedFields {
@@ -158,8 +160,8 @@ export function ResourcesTypePhaseActivityGroupedView({
 
   // Measurement lookup
   const measurementMap = useMemo(() => {
-    const map: Record<string, string> = {};
-    measurements.forEach(m => { map[m.id] = m.name; });
+    const map: Record<string, Measurement> = {};
+    measurements.forEach(m => { map[m.id] = m; });
     return map;
   }, [measurements]);
 
@@ -317,11 +319,21 @@ export function ResourcesTypePhaseActivityGroupedView({
     });
   };
 
-  const getActivityMeasurementName = (activityId: string): string | null => {
+  const getActivityMeasurementId = (activityId: string): string | null => {
     if (activityId === '__no_activity__') return null;
     const activity = activities.find(a => a.id === activityId);
     if (!activity?.measurement_id) return null;
-    return measurementMap[activity.measurement_id] || null;
+    const measurement = measurementMap[activity.measurement_id];
+    if (!measurement) return null;
+    // MediciónID format: Unidades/Tipo unidad/ActividadID
+    const units = measurement.manual_units != null ? String(measurement.manual_units) : '0';
+    const unitType = measurement.measurement_unit || '-';
+    const actDisplayName = formatActividadId({
+      phaseCode: activity.phase_id ? phases.find(p => p.id === activity.phase_id)?.code : null,
+      activityCode: activity.code,
+      name: activity.name,
+    });
+    return `${units}/${unitType}/${actDisplayName}`;
   };
 
   // Ordered types: alphabetical among those with resources, "Sin tipo" last
@@ -412,7 +424,7 @@ export function ResourcesTypePhaseActivityGroupedView({
         sortedActivityIds.forEach(activityId => {
           const activityResources = phaseActivitiesMap[activityId] || [];
           const activityDisplayName = getActivityDisplayName(activityId);
-          const measurementName = getActivityMeasurementName(activityId);
+          const measurementName = getActivityMeasurementId(activityId);
           const activityTotal = activityTotals[type]?.[phaseId]?.[activityId] || 0;
 
           if (y > doc.internal.pageSize.getHeight() - 20) { doc.addPage('a4', 'landscape'); y = 15; }
@@ -624,7 +636,7 @@ export function ResourcesTypePhaseActivityGroupedView({
                           const isActivityExpanded = expandedActivities.has(activityKey);
                           const activityTotal = activityTotals[type]?.[phaseId]?.[activityId] || 0;
                           const activityDisplayName = getActivityDisplayName(activityId);
-                          const measurementName = getActivityMeasurementName(activityId);
+                          const measurementName = getActivityMeasurementId(activityId);
                           const activityData = activityId !== '__no_activity__' ? activities.find(a => a.id === activityId) : null;
 
                           const formatDateDisplay = (dateStr: string | null | undefined) => {

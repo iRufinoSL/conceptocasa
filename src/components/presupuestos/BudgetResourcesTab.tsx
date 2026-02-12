@@ -262,7 +262,7 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
       if (measurementIds.length > 0) {
         const { data: measurementsData } = await supabase
           .from('budget_measurements')
-          .select('id, name')
+          .select('id, name, manual_units, measurement_unit')
           .in('id', measurementIds);
         if (measurementsData) {
           setMeasurements(measurementsData);

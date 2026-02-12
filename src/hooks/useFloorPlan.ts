@@ -278,18 +278,20 @@ export function useFloorPlan(budgetId: string) {
     }
   };
 
-  const addRoom = async (name: string, width: number, length: number) => {
+  const addRoom = async (name: string, width: number, length: number, floorId?: string) => {
     if (!floorPlan) return;
     setSaving(true);
     try {
-      // Calculate position: place rooms in a grid
-      const maxX = rooms.reduce((max, r) => Math.max(max, r.posX + r.width), 0);
-      const posX = rooms.length > 0 ? maxX : 0;
+      // Calculate position: place rooms in a grid — filter by floor if provided
+      const floorRooms = floorId ? rooms.filter(r => r.floorId === floorId) : rooms;
+      const maxX = floorRooms.reduce((max, r) => Math.max(max, r.posX + r.width), 0);
+      const posX = floorRooms.length > 0 ? maxX : 0;
 
       const { data: room, error } = await supabase
         .from('budget_floor_plan_rooms')
         .insert({
           floor_plan_id: floorPlan.id,
+          floor_id: floorId || null,
           name,
           width,
           length,

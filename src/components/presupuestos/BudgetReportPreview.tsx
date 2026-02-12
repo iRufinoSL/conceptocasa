@@ -1933,6 +1933,92 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
             }
             sectionNumber++;
           }
+        } else {
+          // COMPACT MODE: 2 images per LANDSCAPE A4 page
+          for (const contentType of contentTypes) {
+            const items = groupedPredesigns[contentType];
+
+            for (let i = 0; i < items.length; i += 2) {
+              // New landscape page for each pair
+              doc.addPage('a4', 'landscape');
+              const landscapeWidth = doc.internal.pageSize.getWidth(); // ~297mm
+              const landscapeHeight = doc.internal.pageSize.getHeight(); // ~210mm
+
+              const marginX = 10;
+              const marginTop = 8;
+              const marginBottom = 8;
+              const gap = 6; // gap between the two image slots
+
+              // Section header
+              doc.setFontSize(8);
+              doc.setFont('helvetica', 'bold');
+              doc.setTextColor(37, 99, 235);
+              doc.text(`${sectionNumber}. ANTE-PROYECTO: ${contentType.toUpperCase()}`, marginX, marginTop);
+
+              const headerHeight = marginTop + 4;
+              const slotWidth = (landscapeWidth - marginX * 2 - gap) / 2;
+              const availableSlotHeight = landscapeHeight - headerHeight - marginBottom;
+
+              // Draw up to 2 items
+              for (let j = 0; j < 2; j++) {
+                const itemIdx = i + j;
+                if (itemIdx >= items.length) break;
+                const item = items[itemIdx];
+                const slotX = marginX + j * (slotWidth + gap);
+
+                // Item title
+                doc.setFontSize(8);
+                doc.setFont('helvetica', 'bold');
+                doc.setTextColor(30, 41, 59);
+                const titleText = doc.splitTextToSize(item.content, slotWidth);
+                doc.text(titleText, slotX, headerHeight + 2);
+                const titleLines = Array.isArray(titleText) ? titleText.length : 1;
+                let itemY = headerHeight + 2 + titleLines * 3.5;
+
+                // Description
+                if (item.description) {
+                  doc.setFontSize(7);
+                  doc.setFont('helvetica', 'normal');
+                  doc.setTextColor(100, 116, 139);
+                  const descText = doc.splitTextToSize(item.description, slotWidth);
+                  const descLines = Array.isArray(descText) ? descText.slice(0, 2) : [descText];
+                  doc.text(descLines, slotX, itemY);
+                  itemY += descLines.length * 3;
+                }
+
+                // Draw image
+                const imgData = predesignImages.get(item.id);
+                if (imgData) {
+                  const imgDimensions = await getImgDimensions(imgData);
+                  const imgAspectRatio = imgDimensions.width / imgDimensions.height;
+
+                  const imgAvailableHeight = landscapeHeight - itemY - marginBottom;
+                  let drawWidth = slotWidth;
+                  let drawHeight = slotWidth / imgAspectRatio;
+
+                  if (drawHeight > imgAvailableHeight) {
+                    drawHeight = imgAvailableHeight;
+                    drawWidth = imgAvailableHeight * imgAspectRatio;
+                  }
+                  if (drawWidth > slotWidth) {
+                    drawWidth = slotWidth;
+                    drawHeight = slotWidth / imgAspectRatio;
+                  }
+
+                  // Center horizontally within slot
+                  const offsetX = slotX + (slotWidth - drawWidth) / 2;
+                  doc.addImage(imgData, 'JPEG', offsetX, itemY, drawWidth, drawHeight, undefined, 'FAST');
+                } else {
+                  doc.setFillColor(240, 240, 240);
+                  doc.roundedRect(slotX, itemY, slotWidth, 30, 2, 2, 'F');
+                  doc.setFontSize(9);
+                  doc.setTextColor(100);
+                  doc.text(`Archivo: ${item.file_name || 'Sin archivo'}`, slotX + 6, itemY + 18);
+                }
+              }
+            }
+            sectionNumber++;
+          }
         }
       }
 

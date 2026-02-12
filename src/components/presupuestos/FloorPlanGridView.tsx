@@ -131,12 +131,12 @@ export function FloorPlanGridView({ rooms, floors, selectedRoomId, onSelectRoom,
           {/* Column coordinate headers with ruler */}
           <div
             className="grid gap-1.5 mb-0.5"
-            style={{ gridTemplateColumns: `32px repeat(${cols}, minmax(100px, 1fr))` }}
+            style={{ gridTemplateColumns: `48px repeat(${cols}, minmax(100px, 1fr))` }}
           >
             <div /> {/* empty corner */}
             {Array.from({ length: cols }, (_, i) => (
               <div key={i} className="text-center">
-                <div className="text-xs font-bold text-muted-foreground">{i + 1}</div>
+                <div className="text-xs font-bold text-muted-foreground">Col {i + 1}</div>
                 <div className="text-[9px] text-muted-foreground/70 font-mono">
                   {colAccum[i].toFixed(1)}–{colAccum[i + 1].toFixed(1)}m
                 </div>
@@ -146,7 +146,7 @@ export function FloorPlanGridView({ rooms, floors, selectedRoomId, onSelectRoom,
           {/* Grid with row headers + ruler */}
           <div
             className="grid gap-1.5"
-            style={{ gridTemplateColumns: `32px repeat(${cols}, minmax(100px, 1fr))`, gridTemplateRows: `repeat(${rows}, auto)` }}
+            style={{ gridTemplateColumns: `48px repeat(${cols}, minmax(100px, 1fr))`, gridTemplateRows: `repeat(${rows}, auto)` }}
           >
             {/* Row headers with ruler */}
             {Array.from({ length: rows }, (_, ri) => (
@@ -155,7 +155,7 @@ export function FloorPlanGridView({ rooms, floors, selectedRoomId, onSelectRoom,
                 className="flex flex-col items-center justify-center"
                 style={{ gridColumn: 1, gridRow: ri + 1 }}
               >
-                <span className="text-xs font-bold text-muted-foreground">{ri + 1}</span>
+                <span className="text-xs font-bold text-muted-foreground">Fila {ri + 1}</span>
                 <span className="text-[9px] text-muted-foreground/70 font-mono leading-tight">
                   {rowAccum[ri].toFixed(1)}–{rowAccum[ri + 1].toFixed(1)}m
                 </span>
@@ -166,7 +166,7 @@ export function FloorPlanGridView({ rooms, floors, selectedRoomId, onSelectRoom,
               const isSelected = room.id === selectedRoomId;
               const m2 = (room.width * room.length).toFixed(1);
               const colorClass = getSpaceColor(room.name);
-              const coord = `${gridCol}.${gridRow}`;
+              const coord = `C${gridCol}·F${gridRow}`;
 
               return (
                 <div

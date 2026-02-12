@@ -12,7 +12,8 @@ import type { RoomData, WallType, FloorPlanData } from '@/lib/floor-plan-calcula
 interface FloorPlanSpaceFormProps {
   room: RoomData;
   planData: FloorPlanData;
-  coordinate?: string;
+  coordCol?: number;
+  coordRow?: number;
   floorName?: string;
   onUpdateRoom: (data: { name?: string; width?: number; length?: number; hasFloor?: boolean; hasCeiling?: boolean }) => void;
   onUpdateWall: (wallId: string, data: { wallType?: WallType }) => void;
@@ -32,33 +33,22 @@ const WALL_TYPE_OPTIONS: { value: WallType; label: string }[] = [
   { value: 'interior_invisible', label: 'Int. invisible' },
 ];
 
-export function FloorPlanSpaceForm({ room, planData, coordinate, floorName, onUpdateRoom, onUpdateWall, onChangeCoordinate, onDeleteRoom, saving }: FloorPlanSpaceFormProps) {
+export function FloorPlanSpaceForm({ room, planData, coordCol, coordRow, floorName, onUpdateRoom, onUpdateWall, onChangeCoordinate, onDeleteRoom, saving }: FloorPlanSpaceFormProps) {
   const m2 = room.width * room.length;
-  const [coordInput, setCoordInput] = useState(coordinate || '');
+  const [inputCol, setInputCol] = useState(coordCol || 1);
+  const [inputRow, setInputRow] = useState(coordRow || 1);
 
   useEffect(() => {
-    setCoordInput(coordinate || '');
-  }, [coordinate]);
+    setInputCol(coordCol || 1);
+    setInputRow(coordRow || 1);
+  }, [coordCol, coordRow]);
 
-  const parseCoord = (input: string): { col: number; row: number } | null => {
-    const parts = input.split('.');
-    if (parts.length === 2) {
-      const col = parseInt(parts[0]);
-      const row = parseInt(parts[1]);
-      if (col > 0 && row > 0) return { col, row };
-    }
-    return null;
-  };
-
-  const coordChanged = coordInput !== (coordinate || '') && parseCoord(coordInput) !== null;
+  const coordChanged = inputCol !== (coordCol || 1) || inputRow !== (coordRow || 1);
 
   const handleApplyCoordinate = () => {
-    if (!onChangeCoordinate) return;
-    const parsed = parseCoord(coordInput);
-    if (parsed) {
-      onChangeCoordinate(parsed.col, parsed.row);
-    } else {
-      setCoordInput(coordinate || '');
+    if (!onChangeCoordinate || !coordChanged) return;
+    if (inputCol > 0 && inputRow > 0) {
+      onChangeCoordinate(inputCol, inputRow);
     }
   };
 
@@ -74,6 +64,9 @@ export function FloorPlanSpaceForm({ room, planData, coordinate, floorName, onUp
         {floorName && (
           <div className="flex items-center gap-2 mt-1">
             <Badge variant="secondary" className="text-[10px]">{floorName}</Badge>
+            {coordCol && coordRow && (
+              <Badge variant="outline" className="text-[10px]">Col {coordCol} · Fila {coordRow}</Badge>
+            )}
           </div>
         )}
       </CardHeader>
@@ -88,35 +81,48 @@ export function FloorPlanSpaceForm({ room, planData, coordinate, floorName, onUp
           />
         </div>
 
-        {/* Coordinate */}
+        {/* Coordinate - separate Col / Row inputs */}
         <div>
-          <Label className="text-xs">Coordenada (col.fila)</Label>
-          <div className="flex items-center gap-2">
-            <Input
-              value={coordInput}
-              onChange={e => setCoordInput(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') handleApplyCoordinate(); }}
-              placeholder="ej: 1.1"
-              disabled={saving}
-              className="w-24"
-            />
+          <Label className="text-xs font-semibold">Coordenadas</Label>
+          <div className="flex items-end gap-2 mt-1">
+            <div>
+              <Label className="text-[10px] text-muted-foreground">Columna</Label>
+              <Input
+                type="number"
+                min={1}
+                value={inputCol}
+                onChange={e => setInputCol(Math.max(1, parseInt(e.target.value) || 1))}
+                onKeyDown={e => { if (e.key === 'Enter') handleApplyCoordinate(); }}
+                disabled={saving}
+                className="w-16 h-8 text-sm text-center"
+              />
+            </div>
+            <div>
+              <Label className="text-[10px] text-muted-foreground">Fila</Label>
+              <Input
+                type="number"
+                min={1}
+                value={inputRow}
+                onChange={e => setInputRow(Math.max(1, parseInt(e.target.value) || 1))}
+                onKeyDown={e => { if (e.key === 'Enter') handleApplyCoordinate(); }}
+                disabled={saving}
+                className="w-16 h-8 text-sm text-center"
+              />
+            </div>
             <Button
               variant="outline"
               size="sm"
               onClick={handleApplyCoordinate}
               disabled={saving || !coordChanged}
-              title="Aplicar coordenada y mover espacio"
+              title="Mover espacio a la coordenada indicada"
             >
               <MapPin className="h-3.5 w-3.5 mr-1" /> Mover
             </Button>
           </div>
           {coordChanged && (
-            <p className="text-[10px] text-primary font-medium mt-0.5">
-              Pulsa «Mover» para reposicionar de {coordinate} a {coordInput}
+            <p className="text-[10px] text-primary font-medium mt-1">
+              Pulsa «Mover» para reposicionar de Col {coordCol} · Fila {coordRow} → Col {inputCol} · Fila {inputRow}
             </p>
-          )}
-          {!coordChanged && (
-            <p className="text-[10px] text-muted-foreground mt-0.5">Editar y pulsar «Mover» para reposicionar</p>
           )}
         </div>
 

@@ -14,7 +14,7 @@ interface FloorPlanGridViewProps {
   floors: FloorLevel[];
   selectedRoomId: string | null;
   onSelectRoom: (id: string | null) => void;
-  onAddRoom?: (name: string, width: number, length: number, floorId?: string) => Promise<void>;
+  onAddRoom?: (name: string, width: number, length: number, floorId?: string, gridCol?: number, gridRow?: number) => Promise<void>;
   saving?: boolean;
 }
 
@@ -90,6 +90,8 @@ export function FloorPlanGridView({ rooms, floors, selectedRoomId, onSelectRoom,
   const [newName, setNewName] = useState('');
   const [newWidth, setNewWidth] = useState(4);
   const [newLength, setNewLength] = useState(3);
+  const [newCol, setNewCol] = useState(1);
+  const [newRow, setNewRow] = useState(1);
   const wallClassification = useMemo(() => autoClassifyWalls(rooms), [rooms]);
 
   const roomsByFloor = useMemo(() => {
@@ -226,10 +228,12 @@ export function FloorPlanGridView({ rooms, floors, selectedRoomId, onSelectRoom,
   const handleAddSpace = async () => {
     if (!onAddRoom || !newName.trim()) return;
     const floorId = currentFloorId !== '_none_' ? currentFloorId : undefined;
-    await onAddRoom(newName.trim(), newWidth, newLength, floorId);
+    await onAddRoom(newName.trim(), newWidth, newLength, floorId, newCol, newRow);
     setNewName('');
     setNewWidth(4);
     setNewLength(3);
+    setNewCol(1);
+    setNewRow(1);
     setShowAddForm(false);
   };
 
@@ -281,13 +285,25 @@ export function FloorPlanGridView({ rooms, floors, selectedRoomId, onSelectRoom,
                   onChange={e => setNewLength(Number(e.target.value))}
                   className="w-20 h-8 text-sm" />
               </div>
+              <div>
+                <Label className="text-xs">Columna</Label>
+                <Input type="number" min={1} value={newCol}
+                  onChange={e => setNewCol(Math.max(1, parseInt(e.target.value) || 1))}
+                  className="w-16 h-8 text-sm text-center" />
+              </div>
+              <div>
+                <Label className="text-xs">Fila</Label>
+                <Input type="number" min={1} value={newRow}
+                  onChange={e => setNewRow(Math.max(1, parseInt(e.target.value) || 1))}
+                  className="w-16 h-8 text-sm text-center" />
+              </div>
               <Button size="sm" onClick={handleAddSpace} disabled={saving || !newName.trim()}>
                 <Plus className="h-4 w-4 mr-1" /> Añadir
               </Button>
             </div>
             {currentFloor && currentFloor.id !== '_none_' && (
               <p className="text-[10px] text-muted-foreground mt-1">
-                Se añadirá a: {currentFloor.name}
+                Se añadirá a: {currentFloor.name} en Col {newCol} · Fila {newRow}
               </p>
             )}
           </CardContent>

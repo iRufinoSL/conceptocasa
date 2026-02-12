@@ -436,7 +436,8 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
   const maskContact = (name: string | null | undefined, fallback = 'Ejemplo') => isExampleMode ? fallback : (name || '');
   const maskDetails = (details: string) => isExampleMode ? '' : details;
 
-  const presupuestoId = `${presupuesto.nombre} (${presupuesto.codigo_correlativo}/${presupuesto.version}): ${presupuesto.poblacion}`;
+  const budgetName = isExampleMode ? 'Ejemplo' : presupuesto.nombre;
+  const presupuestoId = `${budgetName} (${presupuesto.codigo_correlativo}/${presupuesto.version}): ${isExampleMode ? 'Ejemplo' : presupuesto.poblacion}`;
 
   // Generate report type name based on selected sections
   const getReportTypeName = () => {
@@ -964,7 +965,7 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
         doc.text('INFORME DE PRESUPUESTO', pageWidth / 2, coverY + coverHeight / 2 - 5, { align: 'center' });
         
         doc.setFontSize(14);
-        doc.text(presupuesto.nombre, pageWidth / 2, coverY + coverHeight / 2 + 5, { align: 'center' });
+        doc.text(budgetName, pageWidth / 2, coverY + coverHeight / 2 + 5, { align: 'center' });
         
         doc.restoreGraphicsState();
         yPos = coverY + coverHeight + 8;
@@ -986,7 +987,7 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
       doc.setTextColor(30, 41, 59);
       doc.setFontSize(11);
       doc.setFont('helvetica', 'normal');
-      doc.text(presupuesto.nombre, pageWidth / 2, yPos, { align: 'center' });
+      doc.text(budgetName, pageWidth / 2, yPos, { align: 'center' });
       
       yPos += 5;
       doc.setTextColor(100, 116, 139);
@@ -1355,7 +1356,7 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
             doc.setTextColor(rgb.r, rgb.g, rgb.b);
             doc.setFontSize(10);
             doc.setFont('helvetica', 'bold');
-            doc.text(presupuesto.nombre, pageWidth / 2, coverY + coverHeight / 2 - 2, { align: 'center' });
+            doc.text(budgetName, pageWidth / 2, coverY + coverHeight / 2 - 2, { align: 'center' });
             doc.setFontSize(8);
             doc.setFont('helvetica', 'normal');
             doc.text(`${presupuesto.poblacion}${presupuesto.provincia ? `, ${presupuesto.provincia}` : ''}`, pageWidth / 2, coverY + coverHeight / 2 + 5, { align: 'center' });
@@ -1375,7 +1376,7 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
         yPos += 6;
         
         const budgetInfoData = [
-          ['Nombre:', presupuesto.nombre],
+          ['Nombre:', budgetName],
           ['Código:', presupuesto.codigo_correlativo.toString()],
           ['Versión:', presupuesto.version],
           ['Ubicación:', `${presupuesto.poblacion}${presupuesto.provincia ? `, ${presupuesto.provincia}` : ''}`],
@@ -2545,7 +2546,7 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
       if (selectedSections.includes('spaces-grouped')) sectionSuffixes.push('espacios_nivel');
       if (selectedSections.includes('estimated-budget')) sectionSuffixes.push('presupuesto_estimado');
       const sectionSuffix = sectionSuffixes.length > 0 ? sectionSuffixes.join('_') : 'informe';
-      const fileName = `presupuesto_${sectionSuffix}_${presupuesto.nombre.replace(/[^a-zA-Z0-9]/g, '_')}_${format(new Date(), 'yyyyMMdd')}.pdf`;
+      const fileName = `presupuesto_${sectionSuffix}_${budgetName.replace(/[^a-zA-Z0-9]/g, '_')}_${format(new Date(), 'yyyyMMdd')}.pdf`;
       doc.save(fileName);
       toast.success('PDF exportado correctamente');
     } catch (error) {
@@ -2867,7 +2868,7 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
                           />
                           <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-4" style={{ color: textColor }}>
                             <p className="text-xs font-medium uppercase tracking-wider">Informe de Presupuesto</p>
-                            <p className="text-lg font-bold mt-1">{presupuesto.nombre}</p>
+                            <p className="text-lg font-bold mt-1">{budgetName}</p>
                           </div>
                         </>
                       );
@@ -2879,7 +2880,7 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
                 <div className="text-center py-3 print:py-2 px-4">
                   <h1 className="text-lg print:text-base font-bold text-foreground">INFORME DE PRESUPUESTO</h1>
                   <p className="text-sm font-semibold text-primary mt-1">{getReportTypeName()}</p>
-                  <p className="text-sm print:text-xs text-foreground mt-1">{presupuesto.nombre}</p>
+                  <p className="text-sm print:text-xs text-foreground mt-1">{budgetName}</p>
                   <p className="text-xs print:text-[10px] text-muted-foreground">{presupuestoId}</p>
                   <p className="text-[10px] text-muted-foreground mt-1">
                     Fecha de generación: {format(new Date(), "d 'de' MMMM 'de' yyyy", { locale: es })}
@@ -3143,7 +3144,7 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
                       />
                       <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-4" style={{ color: presupuesto.portada_text_color || '#FFFFFF' }}>
                         <p className="text-sm font-medium uppercase tracking-wider">Presupuesto</p>
-                        <p className="text-xl font-bold mt-1">{presupuesto.nombre}</p>
+                        <p className="text-xl font-bold mt-1">{budgetName}</p>
                         <p className="text-sm mt-1">{presupuesto.poblacion}{presupuesto.provincia ? `, ${presupuesto.provincia}` : ''}</p>
                       </div>
                     </div>
@@ -3153,7 +3154,7 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                       <div>
                         <span className="text-muted-foreground">Nombre:</span>
-                        <p className="font-medium">{presupuesto.nombre}</p>
+                        <p className="font-medium">{budgetName}</p>
                       </div>
                       <div>
                         <span className="text-muted-foreground">Código:</span>

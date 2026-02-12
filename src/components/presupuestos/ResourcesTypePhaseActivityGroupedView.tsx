@@ -3,7 +3,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ChevronDown, ChevronRight, Pencil, Trash2, Package, Wrench, Truck, Briefcase, CheckSquare, Ruler } from 'lucide-react';
+import { ChevronDown, ChevronRight, Pencil, Trash2, Package, Wrench, Truck, Briefcase, CheckSquare, Ruler, Printer } from 'lucide-react';
 import { formatCurrency, formatNumber, formatPercent } from '@/lib/format-utils';
 import { ResourceInlineEdit } from './ResourceInlineEdit';
 import { InlineDatePicker } from '@/components/ui/inline-date-picker';
@@ -11,6 +11,8 @@ import { format, parseISO, isValid } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { formatActividadId } from '@/lib/activity-id';
 import { OPTION_COLORS, getDisplayOptions, getAllAvailableOptions } from '@/lib/options-utils';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 interface BudgetResource {
   id: string;
@@ -68,6 +70,7 @@ interface ResourcesTypePhaseActivityGroupedViewProps {
   activities: Activity[];
   phases: Phase[];
   measurements?: Measurement[];
+  budgetName?: string;
   permissions: any;
   selectedIds: Set<string>;
   onToggleSelect: (id: string) => void;
@@ -116,6 +119,7 @@ export function ResourcesTypePhaseActivityGroupedView({
   activities,
   phases,
   measurements = [],
+  budgetName,
   permissions,
   selectedIds,
   onToggleSelect,
@@ -143,9 +147,10 @@ export function ResourcesTypePhaseActivityGroupedView({
   // Filter resources by selected option: only resources whose activity includes the selected option
   const filteredResources = useMemo(() => {
     return resources.filter(r => {
-      if (!r.activity_id) return true; // unassigned resources show in all options
+      // Exclude resources without activity
+      if (!r.activity_id) return false;
       const activity = activities.find(a => a.id === r.activity_id);
-      if (!activity) return true;
+      if (!activity) return false;
       const opts = activity.opciones || ['A', 'B', 'C'];
       return opts.includes(selectedOption);
     });
@@ -333,6 +338,133 @@ export function ResourcesTypePhaseActivityGroupedView({
     return filteredResources.reduce((s, r) => s + calculateFields(r).subtotalSales, 0);
   }, [filteredResources, calculateFields]);
 
+  const formatPdfCurrency = (value: number): string => {
+    return new Intl.NumberFormat('es-ES', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+      useGrouping: true,
+    }).format(value) + ' €';
+  };
+
+  const handlePrint = () => {
+    const doc = new jsPDF('landscape', 'mm', 'a4');
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const marginX = 14;
+    let y = 15;
+
+    // Header
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.text(`Presupuesto: ${budgetName || ''}`, marginX, y);
+    y += 7;
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Recursos por Tipo — Opción ${selectedOption}`, marginX, y);
+    doc.text(`Total: ${formatPdfCurrency(grandTotal)}`, pageWidth - marginX, y, { align: 'right' });
+    y += 8;
+
+    orderedTypes.forEach(type => {
+      const typePhases = hierarchicalData[type] || {};
+      const typeCount = typeResourceCounts[type] || 0;
+      if (typeCount === 0) return;
+      const typeTotal = typeTotals[type] || 0;
+
+      // Type header
+      if (y > doc.internal.pageSize.getHeight() - 20) { doc.addPage('a4', 'landscape'); y = 15; }
+      doc.setFontSize(11);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(40, 40, 40);
+      doc.text(`${type} (${typeCount} recursos) — ${formatPdfCurrency(typeTotal)}`, marginX, y);
+      y += 5;
+
+      const sortedPhaseIds = Object.keys(typePhases).sort((a, b) => {
+        if (a === '__no_phase__') return 1;
+        if (b === '__no_phase__') return -1;
+        const phaseA = phases.find(p => p.id === a);
+        const phaseB = phases.find(p => p.id === b);
+        return (phaseA?.code || '').localeCompare(phaseB?.code || '', 'es');
+      });
+
+      sortedPhaseIds.forEach(phaseId => {
+        const phaseActivitiesMap = typePhases[phaseId] || {};
+        const phaseName = getPhaseName(phaseId);
+        const phaseTotal = phaseTotals[type]?.[phaseId] || 0;
+
+        if (y > doc.internal.pageSize.getHeight() - 20) { doc.addPage('a4', 'landscape'); y = 15; }
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(60, 60, 60);
+        doc.text(`  ${phaseName} — ${formatPdfCurrency(phaseTotal)}`, marginX, y);
+        y += 4;
+
+        const sortedActivityIds = Object.keys(phaseActivitiesMap).sort((a, b) => {
+          if (a === '__no_activity__') return 1;
+          if (b === '__no_activity__') return -1;
+          const actA = activities.find(act => act.id === a);
+          const actB = activities.find(act => act.id === b);
+          const phA = actA?.phase_id ? phases.find(p => p.id === actA.phase_id) : null;
+          const phB = actB?.phase_id ? phases.find(p => p.id === actB.phase_id) : null;
+          const idA = formatActividadId({ phaseCode: phA?.code, activityCode: actA?.code, name: actA?.name });
+          const idB = formatActividadId({ phaseCode: phB?.code, activityCode: actB?.code, name: actB?.name });
+          return idA.localeCompare(idB, 'es');
+        });
+
+        sortedActivityIds.forEach(activityId => {
+          const activityResources = phaseActivitiesMap[activityId] || [];
+          const activityDisplayName = getActivityDisplayName(activityId);
+          const measurementName = getActivityMeasurementName(activityId);
+          const activityTotal = activityTotals[type]?.[phaseId]?.[activityId] || 0;
+
+          if (y > doc.internal.pageSize.getHeight() - 20) { doc.addPage('a4', 'landscape'); y = 15; }
+          doc.setFontSize(9);
+          doc.setFont('helvetica', 'bold');
+          doc.setTextColor(80, 80, 80);
+          const actLabel = measurementName ? `    ${activityDisplayName} [${measurementName}]` : `    ${activityDisplayName}`;
+          doc.text(`${actLabel} — ${formatPdfCurrency(activityTotal)}`, marginX, y);
+          y += 3;
+
+          // Resources table
+          const tableData = activityResources.map(r => {
+            const f = calculateFields(r);
+            return [
+              r.name,
+              formatPdfCurrency(r.external_unit_cost || 0),
+              r.unit || '-',
+              formatPdfCurrency(f.internalCostUd),
+              formatPdfCurrency(f.salesCostUd),
+              f.calculatedUnits.toFixed(2),
+              formatPdfCurrency(f.subtotalSales),
+            ];
+          });
+
+          autoTable(doc, {
+            startY: y,
+            head: [['Recurso', '€Coste ud', 'Ud', '€Coste int.', '€Coste venta', 'Uds', '€Subtotal']],
+            body: tableData,
+            margin: { left: marginX + 6, right: marginX },
+            styles: { fontSize: 7, cellPadding: 1.5 },
+            headStyles: { fillColor: [100, 100, 100], fontSize: 7 },
+            columnStyles: {
+              0: { cellWidth: 60 },
+              1: { halign: 'right' },
+              2: { halign: 'center', cellWidth: 15 },
+              3: { halign: 'right' },
+              4: { halign: 'right' },
+              5: { halign: 'right', cellWidth: 18 },
+              6: { halign: 'right' },
+            },
+            didDrawPage: () => { y = 15; },
+          });
+          y = (doc as any).lastAutoTable.finalY + 4;
+        });
+      });
+
+      y += 3;
+    });
+
+    doc.save(`Recursos_Tipo_Opcion${selectedOption}_${budgetName || 'presupuesto'}.pdf`);
+  };
+
   return (
     <div className="space-y-4">
       {/* Option selector */}
@@ -353,9 +485,15 @@ export function ResourcesTypePhaseActivityGroupedView({
             </Button>
           );
         })}
-        <span className="ml-auto text-sm font-semibold">
-          Total Opción {selectedOption}: {formatCurrency(grandTotal)}
-        </span>
+        <div className="flex items-center gap-2 ml-auto">
+          <Button variant="outline" size="sm" onClick={handlePrint} className="gap-1.5">
+            <Printer className="h-4 w-4" />
+            Imprimir
+          </Button>
+          <span className="text-sm font-semibold">
+            Total Opción {selectedOption}: {formatCurrency(grandTotal)}
+          </span>
+        </div>
       </div>
 
       <div className="rounded-md border overflow-x-auto">

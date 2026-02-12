@@ -278,14 +278,31 @@ export function useFloorPlan(budgetId: string) {
     }
   };
 
-  const addRoom = async (name: string, width: number, length: number, floorId?: string) => {
+  const addRoom = async (name: string, width: number, length: number, floorId?: string, gridCol?: number, gridRow?: number) => {
     if (!floorPlan) return;
     setSaving(true);
     try {
-      // Calculate position: place rooms in a grid — filter by floor if provided
+      // Calculate position based on grid coordinate or auto-place
       const floorRooms = floorId ? rooms.filter(r => r.floorId === floorId) : rooms;
-      const maxX = floorRooms.reduce((max, r) => Math.max(max, r.posX + r.width), 0);
-      const posX = floorRooms.length > 0 ? maxX : 0;
+      let posX = 0;
+      let posY = 0;
+
+      if (gridCol && gridRow && gridCol > 0 && gridRow > 0) {
+        // Import deriveGridPositions to compute positions from existing layout
+        const { deriveGridPositions, computeGridRuler } = await import('@/components/presupuestos/FloorPlanGridView');
+        const positioned = deriveGridPositions(floorRooms);
+        const { colWidths, rowHeights } = computeGridRuler(positioned);
+        
+        for (let c = 1; c < gridCol; c++) {
+          posX += (c <= colWidths.length ? colWidths[c - 1] : width);
+        }
+        for (let r = 1; r < gridRow; r++) {
+          posY += (r <= rowHeights.length ? rowHeights[r - 1] : length);
+        }
+      } else {
+        const maxX = floorRooms.reduce((max, r) => Math.max(max, r.posX + r.width), 0);
+        posX = floorRooms.length > 0 ? maxX : 0;
+      }
 
       const { data: room, error } = await supabase
         .from('budget_floor_plan_rooms')
@@ -295,8 +312,8 @@ export function useFloorPlan(budgetId: string) {
           name,
           width,
           length,
-          pos_x: posX,
-          pos_y: 0,
+          pos_x: Math.round(posX * 100) / 100,
+          pos_y: Math.round(posY * 100) / 100,
           order_index: rooms.length,
         })
         .select()

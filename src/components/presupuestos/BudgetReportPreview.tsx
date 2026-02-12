@@ -171,6 +171,7 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
   const [selectedSections, setSelectedSections] = useState<string[]>(['activities']);
   const [customNotes, setCustomNotes] = useState<string>('');
   const [onlyWithCost, setOnlyWithCost] = useState(false);
+  const [isExampleMode, setIsExampleMode] = useState(false);
   const [predesignImageSize, setPredesignImageSize] = useState<'compact' | 'full'>('compact');
   const [portadaSignedUrl, setPortadaSignedUrl] = useState<string | null>(null);
   const [selectedOption, setSelectedOption] = useState<'A' | 'B' | 'C'>('A');
@@ -430,6 +431,10 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
       return acc;
     }, {} as Record<string, { count: number; total: number }>);
   };
+
+  // Helper to mask personal data in example mode
+  const maskContact = (name: string | null | undefined, fallback = 'Ejemplo') => isExampleMode ? fallback : (name || '');
+  const maskDetails = (details: string) => isExampleMode ? '' : details;
 
   const presupuestoId = `${presupuesto.nombre} (${presupuesto.codigo_correlativo}/${presupuesto.version}): ${presupuesto.poblacion}`;
 
@@ -1123,17 +1128,19 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
           let clientY = yPos + 10;
           clients.forEach(c => {
             if (c.contact) {
-              const clientName = `${c.contact.name} ${c.contact.surname || ''}`.trim();
+              const clientName = isExampleMode ? 'Ejemplo' : `${c.contact.name} ${c.contact.surname || ''}`.trim();
               doc.setFont('helvetica', 'bold');
               doc.text(clientName, 18, clientY);
               doc.setFont('helvetica', 'normal');
-              const clientDetails = [c.contact.email, c.contact.city].filter(Boolean).join(' | ');
-              if (clientDetails) {
-                doc.setFontSize(8);
-                doc.setTextColor(100, 116, 139);
-                doc.text(clientDetails, 18, clientY + 4);
-                doc.setTextColor(30, 41, 59);
-                doc.setFontSize(9);
+              if (!isExampleMode) {
+                const clientDetails = [c.contact.email, c.contact.city].filter(Boolean).join(' | ');
+                if (clientDetails) {
+                  doc.setFontSize(8);
+                  doc.setTextColor(100, 116, 139);
+                  doc.text(clientDetails, 18, clientY + 4);
+                  doc.setTextColor(30, 41, 59);
+                  doc.setFontSize(9);
+                }
               }
               clientY += 12;
             }
@@ -1164,17 +1171,19 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
           let provY = providerY + 10;
           providers.forEach(p => {
             if (p.contact) {
-              const providerName = `${p.contact.name} ${p.contact.surname || ''}`.trim();
+              const providerName = isExampleMode ? 'Ejemplo' : `${p.contact.name} ${p.contact.surname || ''}`.trim();
               doc.setFont('helvetica', 'bold');
               doc.text(providerName, providerStartX + 4, provY);
               doc.setFont('helvetica', 'normal');
-              const providerDetails = [p.contact.email, p.contact.city].filter(Boolean).join(' | ');
-              if (providerDetails) {
-                doc.setFontSize(8);
-                doc.setTextColor(100, 116, 139);
-                doc.text(providerDetails, providerStartX + 4, provY + 4);
-                doc.setTextColor(30, 41, 59);
-                doc.setFontSize(9);
+              if (!isExampleMode) {
+                const providerDetails = [p.contact.email, p.contact.city].filter(Boolean).join(' | ');
+                if (providerDetails) {
+                  doc.setFontSize(8);
+                  doc.setTextColor(100, 116, 139);
+                  doc.text(providerDetails, providerStartX + 4, provY + 4);
+                  doc.setTextColor(30, 41, 59);
+                  doc.setFontSize(9);
+                }
               }
               provY += 12;
             }
@@ -2784,6 +2793,18 @@ export function BudgetReportPreview({ open, onOpenChange, presupuesto }: BudgetR
               />
               <Label htmlFor="only-with-cost" className="cursor-pointer text-sm">
                 <span className="font-medium">Solo con coste:</span> Mostrar solo Fases/Actividades/Recursos con SubTotal {'>'} 0
+              </Label>
+            </div>
+
+            {/* Example mode - mask personal data */}
+            <div className="flex items-center space-x-3 p-3 bg-blue-50 dark:bg-blue-950/30 rounded-lg border border-blue-200 dark:border-blue-800">
+              <Switch 
+                id="example-mode" 
+                checked={isExampleMode}
+                onCheckedChange={setIsExampleMode}
+              />
+              <Label htmlFor="example-mode" className="cursor-pointer text-sm">
+                <span className="font-medium">Ejemplo:</span> Sustituir datos personales de clientes/proveedores por "Ejemplo"
               </Label>
             </div>
           </div>

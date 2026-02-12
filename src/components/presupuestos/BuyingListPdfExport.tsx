@@ -62,6 +62,7 @@ interface PrintOptions {
   groupName?: string;
   selectedResourceIds?: string[];
   supplierDetails?: Map<string, SupplierInfo>;
+  isExampleMode?: boolean;
 }
 
 const calcBuyingSubtotal = (r: Resource) => {
@@ -170,25 +171,30 @@ export function exportBuyingListPdf(
       yPos += 5;
       
       doc.setFont('helvetica', 'normal');
-      const supplierName = supplier.surname ? `${supplier.name} ${supplier.surname}` : supplier.name;
-      doc.text(`Nombre: ${supplierName}`, margin, yPos);
-      yPos += 4;
-      
-      if (supplier.nif_dni) {
-        doc.text(`NIF/CIF: ${supplier.nif_dni}`, margin, yPos);
+      if (options.isExampleMode) {
+        doc.text('Nombre: Ejemplo', margin, yPos);
         yPos += 4;
-      }
-      if (supplier.email) {
-        doc.text(`Email: ${supplier.email}`, margin, yPos);
+      } else {
+        const supplierName = supplier.surname ? `${supplier.name} ${supplier.surname}` : supplier.name;
+        doc.text(`Nombre: ${supplierName}`, margin, yPos);
         yPos += 4;
-      }
-      if (supplier.phone) {
-        doc.text(`Teléfono: ${supplier.phone}`, margin, yPos);
-        yPos += 4;
-      }
-      if (supplier.address) {
-        doc.text(`Dirección: ${supplier.address}`, margin, yPos);
-        yPos += 4;
+        
+        if (supplier.nif_dni) {
+          doc.text(`NIF/CIF: ${supplier.nif_dni}`, margin, yPos);
+          yPos += 4;
+        }
+        if (supplier.email) {
+          doc.text(`Email: ${supplier.email}`, margin, yPos);
+          yPos += 4;
+        }
+        if (supplier.phone) {
+          doc.text(`Teléfono: ${supplier.phone}`, margin, yPos);
+          yPos += 4;
+        }
+        if (supplier.address) {
+          doc.text(`Dirección: ${supplier.address}`, margin, yPos);
+          yPos += 4;
+        }
       }
       
       yPos += 4;
@@ -224,7 +230,7 @@ export function exportBuyingListPdf(
     return [
       resource.name,
       resource.resource_type || '-',
-      resource.supplier_name || 'Sin proveedor',
+      options.isExampleMode ? 'Ejemplo' : (resource.supplier_name || 'Sin proveedor'),
       getActivityInfo(resource.activity_id) || '-',
       formatCurrency(cost),
       unitMeasure,

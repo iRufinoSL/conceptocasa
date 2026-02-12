@@ -37,17 +37,38 @@ const handler = async (req: Request): Promise<Response> => {
   }
 
   try {
-    // Verify webhook signature (optional but recommended)
+    // Verify webhook signature (required)
     const webhookSecret = Deno.env.get("RESEND_WEBHOOK_SECRET");
     
-    if (webhookSecret) {
-      const svixId = req.headers.get("svix-id");
-      const svixTimestamp = req.headers.get("svix-timestamp");
-      const svixSignature = req.headers.get("svix-signature");
-      
-      if (!svixId || !svixTimestamp || !svixSignature) {
-        console.warn("Missing Svix headers, skipping signature verification");
-      }
+    if (!webhookSecret) {
+      console.error("RESEND_WEBHOOK_SECRET not configured");
+      return new Response(
+        JSON.stringify({ error: "Webhook not configured" }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const svixId = req.headers.get("svix-id");
+    const svixTimestamp = req.headers.get("svix-timestamp");
+    const svixSignature = req.headers.get("svix-signature");
+
+    if (!svixId || !svixTimestamp || !svixSignature) {
+      console.error("Missing Svix webhook signature headers");
+      return new Response(
+        JSON.stringify({ error: "Missing signature headers" }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Basic timestamp validation to prevent replay attacks (5 minute tolerance)
+    const timestampSeconds = parseInt(svixTimestamp, 10);
+    const now = Math.floor(Date.now() / 1000);
+    if (isNaN(timestampSeconds) || Math.abs(now - timestampSeconds) > 300) {
+      console.error("Webhook timestamp too old or invalid");
+      return new Response(
+        JSON.stringify({ error: "Invalid timestamp" }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
     const payload: ResendWebhookPayload = await req.json();

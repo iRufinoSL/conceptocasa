@@ -1,6 +1,7 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import type { RoomData, FloorLevel } from '@/lib/floor-plan-calculations';
 import { autoClassifyWalls, isExteriorType } from '@/lib/floor-plan-calculations';
 
@@ -11,7 +12,7 @@ interface FloorPlanGridViewProps {
   onSelectRoom: (id: string | null) => void;
 }
 
-interface PositionedRoom {
+export interface PositionedRoom {
   room: RoomData;
   gridCol: number;
   gridRow: number;
@@ -19,7 +20,7 @@ interface PositionedRoom {
 
 const THRESHOLD = 0.15;
 
-function deriveGridPositions(floorRooms: RoomData[]): PositionedRoom[] {
+export function deriveGridPositions(floorRooms: RoomData[]): PositionedRoom[] {
   if (floorRooms.length === 0) return [];
 
   const xVals = [...new Set(floorRooms.map(r => r.posX))].sort((a, b) => a - b);
@@ -51,6 +52,7 @@ const getSpaceColor = (name: string): string => {
 };
 
 export function FloorPlanGridView({ rooms, floors, selectedRoomId, onSelectRoom }: FloorPlanGridViewProps) {
+  const [activeFloorId, setActiveFloorId] = useState<string>(floors[0]?.id || '_none_');
   const wallClassification = useMemo(() => autoClassifyWalls(rooms), [rooms]);
 
   const roomsByFloor = useMemo(() => {
@@ -76,10 +78,11 @@ export function FloorPlanGridView({ rooms, floors, selectedRoomId, onSelectRoom 
   const renderFloor = (floorId: string, floorName: string, floorRooms: RoomData[]) => {
     const positioned = deriveGridPositions(floorRooms);
     const cols = positioned.length > 0 ? Math.max(...positioned.map(p => p.gridCol)) : 1;
+    const rows = positioned.length > 0 ? Math.max(...positioned.map(p => p.gridRow)) : 1;
     const totalM2 = floorRooms.reduce((s, r) => s + r.width * r.length, 0);
 
     return (
-      <Card key={floorId} className="mb-4">
+      <Card key={floorId}>
         <CardHeader className="py-3">
           <div className="flex items-center justify-between">
             <CardTitle className="text-sm">{floorName}</CardTitle>
@@ -87,15 +90,37 @@ export function FloorPlanGridView({ rooms, floors, selectedRoomId, onSelectRoom 
           </div>
         </CardHeader>
         <CardContent>
+          {/* Column coordinate headers */}
+          <div
+            className="grid gap-1.5 mb-1"
+            style={{ gridTemplateColumns: `32px repeat(${cols}, minmax(100px, 1fr))` }}
+          >
+            <div /> {/* empty corner */}
+            {Array.from({ length: cols }, (_, i) => (
+              <div key={i} className="text-center text-xs font-bold text-muted-foreground">{i + 1}</div>
+            ))}
+          </div>
+          {/* Grid with row headers */}
           <div
             className="grid gap-1.5"
-            style={{ gridTemplateColumns: `repeat(${cols}, minmax(100px, 1fr))` }}
+            style={{ gridTemplateColumns: `32px repeat(${cols}, minmax(100px, 1fr))`, gridTemplateRows: `repeat(${rows}, auto)` }}
           >
+            {/* Row headers */}
+            {Array.from({ length: rows }, (_, ri) => (
+              <div
+                key={`rh-${ri}`}
+                className="flex items-center justify-center text-xs font-bold text-muted-foreground"
+                style={{ gridColumn: 1, gridRow: ri + 1 }}
+              >
+                {ri + 1}
+              </div>
+            ))}
             {positioned.map(({ room, gridCol, gridRow }) => {
               const extWalls = getExternalWalls(room);
               const isSelected = room.id === selectedRoomId;
               const m2 = (room.width * room.length).toFixed(1);
               const colorClass = getSpaceColor(room.name);
+              const coord = `${gridCol}.${gridRow}`;
 
               return (
                 <div
@@ -106,7 +131,7 @@ export function FloorPlanGridView({ rooms, floors, selectedRoomId, onSelectRoom 
                     ${isSelected ? 'ring-2 ring-primary ring-offset-1 shadow-lg scale-[1.02]' : 'hover:shadow-md'}
                   `}
                   style={{
-                    gridColumn: gridCol,
+                    gridColumn: gridCol + 1, /* +1 for row header column */
                     gridRow: gridRow,
                     minHeight: '80px',
                     borderTopWidth: extWalls.has(1) ? '4px' : undefined,
@@ -120,7 +145,10 @@ export function FloorPlanGridView({ rooms, floors, selectedRoomId, onSelectRoom 
                   }}
                   onClick={() => onSelectRoom(room.id === selectedRoomId ? null : room.id)}
                 >
-                  <div className="text-xs font-semibold truncate">{room.name}</div>
+                  <div className="flex items-center justify-between">
+                    <div className="text-xs font-semibold truncate">{room.name}</div>
+                    <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 shrink-0 ml-1">{coord}</Badge>
+                  </div>
                   <div className="text-lg font-bold mt-1">{m2} m²</div>
                   <div className="text-[10px] text-muted-foreground mt-0.5">
                     {room.width.toFixed(1)} × {room.length.toFixed(1)}m
@@ -144,18 +172,36 @@ export function FloorPlanGridView({ rooms, floors, selectedRoomId, onSelectRoom 
     );
   }
 
+  const effectiveFloors = floors.length > 0 ? floors : [{ id: '_none_', name: 'Planta', level: '0', orderIndex: 0 }];
+  const currentFloorId = effectiveFloors.find(f => f.id === activeFloorId) ? activeFloorId : effectiveFloors[0]?.id;
+  const currentFloor = effectiveFloors.find(f => f.id === currentFloorId);
+  const currentFloorRooms = floors.length > 0 ? (roomsByFloor.get(currentFloorId) || []) : rooms;
+
   return (
-    <div>
-      {floors.length > 0 ? (
-        floors.map(f => {
-          const floorRooms = roomsByFloor.get(f.id) || [];
-          if (floorRooms.length === 0) return null;
-          return renderFloor(f.id, f.name, floorRooms);
-        })
-      ) : (
-        renderFloor('_none_', 'Planta', rooms)
+    <div className="space-y-3">
+      {/* Floor tabs */}
+      {effectiveFloors.length > 1 && (
+        <Tabs value={currentFloorId} onValueChange={setActiveFloorId}>
+          <TabsList className="h-8">
+            {effectiveFloors.map(f => (
+              <TabsTrigger key={f.id} value={f.id} className="text-xs h-7">{f.name}</TabsTrigger>
+            ))}
+          </TabsList>
+        </Tabs>
       )}
-      <p className="text-xs text-muted-foreground mt-2">
+
+      {currentFloor && currentFloorRooms.length > 0
+        ? renderFloor(currentFloor.id, currentFloor.name, currentFloorRooms)
+        : (
+          <Card>
+            <CardContent className="py-8 text-center text-muted-foreground text-sm">
+              No hay espacios en esta planta.
+            </CardContent>
+          </Card>
+        )
+      }
+
+      <p className="text-xs text-muted-foreground">
         Bordes gruesos = paredes externas. Clic en un espacio para editar sus paredes.
       </p>
     </div>

@@ -1,4 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -10,6 +11,8 @@ import type { RoomData, WallType, FloorPlanData } from '@/lib/floor-plan-calcula
 interface FloorPlanSpaceFormProps {
   room: RoomData;
   planData: FloorPlanData;
+  coordinate?: string;
+  floorName?: string;
   onUpdateRoom: (data: { name?: string; width?: number; length?: number; hasFloor?: boolean; hasCeiling?: boolean }) => void;
   onUpdateWall: (wallId: string, data: { wallType?: WallType }) => void;
   onDeleteRoom: () => void;
@@ -27,7 +30,7 @@ const WALL_TYPE_OPTIONS: { value: WallType; label: string }[] = [
   { value: 'interior_invisible', label: 'Int. invisible' },
 ];
 
-export function FloorPlanSpaceForm({ room, planData, onUpdateRoom, onUpdateWall, onDeleteRoom, saving }: FloorPlanSpaceFormProps) {
+export function FloorPlanSpaceForm({ room, planData, coordinate, floorName, onUpdateRoom, onUpdateWall, onDeleteRoom, saving }: FloorPlanSpaceFormProps) {
   const m2 = room.width * room.length;
 
   return (
@@ -39,6 +42,12 @@ export function FloorPlanSpaceForm({ room, planData, onUpdateRoom, onUpdateWall,
             <Trash2 className="h-3.5 w-3.5 text-destructive" />
           </Button>
         </div>
+        {(coordinate || floorName) && (
+          <div className="flex items-center gap-2 mt-1">
+            {floorName && <Badge variant="secondary" className="text-[10px]">{floorName}</Badge>}
+            {coordinate && <Badge variant="outline" className="text-[10px]">Coordenada: {coordinate}</Badge>}
+          </div>
+        )}
       </CardHeader>
       <CardContent className="space-y-4">
         {/* Name */}

@@ -12,6 +12,7 @@ import { useFloorPlan } from '@/hooks/useFloorPlan';
 import { FloorPlanGridView } from './FloorPlanGridView';
 import { FloorPlanSpaceForm } from './FloorPlanSpaceForm';
 import { FloorPlanSummaryView } from './FloorPlanSummary';
+import { deriveGridPositions } from './FloorPlanGridView';
 import { calculateFloorPlanSummary } from '@/lib/floor-plan-calculations';
 import type { FloorPlanData } from '@/lib/floor-plan-calculations';
 
@@ -374,16 +375,29 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
             />
           </div>
           <div>
-            {selectedRoom && planData ? (
-              <FloorPlanSpaceForm
-                room={selectedRoom}
-                planData={planData}
-                onUpdateRoom={(data) => updateRoom(selectedRoom.id, data)}
-                onUpdateWall={(wallId, data) => updateWall(wallId, data)}
-                onDeleteRoom={() => { deleteRoom(selectedRoom.id); setSelectedRoomId(null); }}
-                saving={saving}
-              />
-            ) : (
+            {selectedRoom && planData ? (() => {
+              // Compute coordinate for selected room
+              const roomFloorId = selectedRoom.floorId || '_none_';
+              const floorRooms = rooms.filter(r => (r.floorId || '_none_') === roomFloorId);
+              const positioned = deriveGridPositions(floorRooms);
+              const pos = positioned.find(p => p.room.id === selectedRoom.id);
+              const coordinate = pos ? `${pos.gridCol}.${pos.gridRow}` : undefined;
+              const floorObj = floors.find(f => f.id === selectedRoom.floorId);
+              const floorName = floorObj?.name;
+
+              return (
+                <FloorPlanSpaceForm
+                  room={selectedRoom}
+                  planData={planData}
+                  coordinate={coordinate}
+                  floorName={floorName}
+                  onUpdateRoom={(data) => updateRoom(selectedRoom.id, data)}
+                  onUpdateWall={(wallId, data) => updateWall(wallId, data)}
+                  onDeleteRoom={() => { deleteRoom(selectedRoom.id); setSelectedRoomId(null); }}
+                  saving={saving}
+                />
+              );
+            })() : (
               <Card>
                 <CardContent className="py-8 text-center text-muted-foreground text-sm">
                   Haz clic en un espacio de la cuadrícula para editar sus propiedades y paredes

@@ -61,7 +61,7 @@ function createDefaultFloor(name: string, level: string, m2: number): FloorDef {
 export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
   const {
     floorPlan, rooms, floors, loading, saving,
-    updateRoom, updateWall, deleteRoom,
+    addRoom, updateRoom, updateWall, deleteRoom,
     classifyPerimeterWalls, syncToMeasurements, getPlanData, refetch,
     generateFromTemplate, deleteFloorPlan,
   } = useFloorPlan(budgetId);
@@ -69,6 +69,10 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
   const [viewTab, setViewTab] = useState('cuadricula');
   const [activeFloorTab, setActiveFloorTab] = useState('0');
+  const [showAddSpace, setShowAddSpace] = useState(false);
+  const [newSpaceName, setNewSpaceName] = useState('');
+  const [newSpaceWidth, setNewSpaceWidth] = useState(4);
+  const [newSpaceLength, setNewSpaceLength] = useState(3);
 
   // Wizard state
   const [planConfig, setPlanConfig] = useState({
@@ -372,6 +376,8 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
               floors={floors}
               selectedRoomId={selectedRoomId}
               onSelectRoom={setSelectedRoomId}
+              onAddRoom={addRoom}
+              saving={saving}
             />
           </div>
           <div>

@@ -1,7 +1,11 @@
 import { useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Plus } from 'lucide-react';
 import type { RoomData, FloorLevel } from '@/lib/floor-plan-calculations';
 import { autoClassifyWalls, isExteriorType } from '@/lib/floor-plan-calculations';
 
@@ -10,6 +14,8 @@ interface FloorPlanGridViewProps {
   floors: FloorLevel[];
   selectedRoomId: string | null;
   onSelectRoom: (id: string | null) => void;
+  onAddRoom?: (name: string, width: number, length: number, floorId?: string) => Promise<void>;
+  saving?: boolean;
 }
 
 export interface PositionedRoom {
@@ -78,8 +84,12 @@ const getSpaceColor = (name: string): string => {
   return 'bg-purple-100 border-purple-300 dark:bg-purple-900/30 dark:border-purple-700';
 };
 
-export function FloorPlanGridView({ rooms, floors, selectedRoomId, onSelectRoom }: FloorPlanGridViewProps) {
+export function FloorPlanGridView({ rooms, floors, selectedRoomId, onSelectRoom, onAddRoom, saving = false }: FloorPlanGridViewProps) {
   const [activeFloorId, setActiveFloorId] = useState<string>(floors[0]?.id || '_none_');
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [newWidth, setNewWidth] = useState(4);
+  const [newLength, setNewLength] = useState(3);
   const wallClassification = useMemo(() => autoClassifyWalls(rooms), [rooms]);
 
   const roomsByFloor = useMemo(() => {
@@ -213,17 +223,75 @@ export function FloorPlanGridView({ rooms, floors, selectedRoomId, onSelectRoom 
   const currentFloor = effectiveFloors.find(f => f.id === currentFloorId);
   const currentFloorRooms = floors.length > 0 ? (roomsByFloor.get(currentFloorId) || []) : rooms;
 
+  const handleAddSpace = async () => {
+    if (!onAddRoom || !newName.trim()) return;
+    const floorId = currentFloorId !== '_none_' ? currentFloorId : undefined;
+    await onAddRoom(newName.trim(), newWidth, newLength, floorId);
+    setNewName('');
+    setNewWidth(4);
+    setNewLength(3);
+    setShowAddForm(false);
+  };
+
   return (
     <div className="space-y-3">
-      {/* Floor tabs */}
-      {effectiveFloors.length > 1 && (
-        <Tabs value={currentFloorId} onValueChange={setActiveFloorId}>
-          <TabsList className="h-8">
-            {effectiveFloors.map(f => (
-              <TabsTrigger key={f.id} value={f.id} className="text-xs h-7">{f.name}</TabsTrigger>
-            ))}
-          </TabsList>
-        </Tabs>
+      {/* Floor tabs + Add button */}
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        {effectiveFloors.length > 1 && (
+          <Tabs value={currentFloorId} onValueChange={setActiveFloorId}>
+            <TabsList className="h-8">
+              {effectiveFloors.map(f => (
+                <TabsTrigger key={f.id} value={f.id} className="text-xs h-7">{f.name}</TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
+        )}
+        {onAddRoom && (
+          <Button variant="outline" size="sm" onClick={() => setShowAddForm(!showAddForm)} disabled={saving}>
+            <Plus className="h-4 w-4 mr-1" /> Nuevo Espacio
+          </Button>
+        )}
+      </div>
+
+      {/* Inline add space form */}
+      {showAddForm && onAddRoom && (
+        <Card>
+          <CardContent className="py-3">
+            <div className="flex items-end gap-2 flex-wrap">
+              <div>
+                <Label className="text-xs">Nombre</Label>
+                <Input
+                  value={newName}
+                  onChange={e => setNewName(e.target.value)}
+                  placeholder="Ej: Dormitorio 3"
+                  className="w-40 h-8 text-sm"
+                  onKeyDown={e => { if (e.key === 'Enter') handleAddSpace(); }}
+                  autoFocus
+                />
+              </div>
+              <div>
+                <Label className="text-xs">Ancho (m)</Label>
+                <Input type="number" step="0.1" value={newWidth}
+                  onChange={e => setNewWidth(Number(e.target.value))}
+                  className="w-20 h-8 text-sm" />
+              </div>
+              <div>
+                <Label className="text-xs">Largo (m)</Label>
+                <Input type="number" step="0.1" value={newLength}
+                  onChange={e => setNewLength(Number(e.target.value))}
+                  className="w-20 h-8 text-sm" />
+              </div>
+              <Button size="sm" onClick={handleAddSpace} disabled={saving || !newName.trim()}>
+                <Plus className="h-4 w-4 mr-1" /> Añadir
+              </Button>
+            </div>
+            {currentFloor && currentFloor.id !== '_none_' && (
+              <p className="text-[10px] text-muted-foreground mt-1">
+                Se añadirá a: {currentFloor.name}
+              </p>
+            )}
+          </CardContent>
+        </Card>
       )}
 
       {currentFloor && currentFloorRooms.length > 0

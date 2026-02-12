@@ -361,19 +361,42 @@ export function ResourcesTypePhaseActivityGroupedView({
   const handlePrint = () => {
     const doc = new jsPDF('landscape', 'mm', 'a4');
     const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
     const marginX = 14;
-    let y = 15;
+    const headerHeight = 25;
+    const footerHeight = 12;
+    const contentBottom = pageHeight - footerHeight - 5;
 
-    // Header
-    doc.setFontSize(14);
-    doc.setFont('helvetica', 'bold');
-    doc.text(`Presupuesto: ${budgetName || ''}`, marginX, y);
-    y += 7;
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'normal');
-    doc.text(`Recursos por Tipo — Opción ${selectedOption}`, marginX, y);
-    doc.text(`Total: ${formatPdfCurrency(grandTotal)}`, pageWidth - marginX, y, { align: 'right' });
-    y += 8;
+    const drawHeader = () => {
+      doc.setFontSize(14);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(0, 0, 0);
+      doc.text(`Presupuesto: ${budgetName || ''}`, marginX, 15);
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`Recursos por Tipo — Opción ${selectedOption}`, marginX, 22);
+      doc.text(`Total: ${formatPdfCurrency(grandTotal)}`, pageWidth - marginX, 22, { align: 'right' });
+    };
+
+    const drawFooter = (pageNum: number, totalPages: number) => {
+      const footerY = pageHeight - 8;
+      doc.setFontSize(7);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(120, 120, 120);
+      doc.text('www.concepto.casa  |  organiza@concepto.casa  |  +34 690 123 533', marginX, footerY);
+      doc.text(`${pageNum}/${totalPages}`, pageWidth - marginX, footerY, { align: 'right' });
+    };
+
+    let y = headerHeight + 5;
+    drawHeader();
+
+    const checkNewPage = () => {
+      if (y > contentBottom) {
+        doc.addPage('a4', 'landscape');
+        drawHeader();
+        y = headerHeight + 5;
+      }
+    };
 
     orderedTypes.forEach(type => {
       const typePhases = hierarchicalData[type] || {};
@@ -381,8 +404,7 @@ export function ResourcesTypePhaseActivityGroupedView({
       if (typeCount === 0) return;
       const typeTotal = typeTotals[type] || 0;
 
-      // Type header
-      if (y > doc.internal.pageSize.getHeight() - 20) { doc.addPage('a4', 'landscape'); y = 15; }
+      checkNewPage();
       doc.setFontSize(11);
       doc.setFont('helvetica', 'bold');
       doc.setTextColor(40, 40, 40);
@@ -402,7 +424,7 @@ export function ResourcesTypePhaseActivityGroupedView({
         const phaseName = getPhaseName(phaseId);
         const phaseTotal = phaseTotals[type]?.[phaseId] || 0;
 
-        if (y > doc.internal.pageSize.getHeight() - 20) { doc.addPage('a4', 'landscape'); y = 15; }
+        checkNewPage();
         doc.setFontSize(10);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(60, 60, 60);
@@ -427,7 +449,7 @@ export function ResourcesTypePhaseActivityGroupedView({
           const measurementName = getActivityMeasurementId(activityId);
           const activityTotal = activityTotals[type]?.[phaseId]?.[activityId] || 0;
 
-          if (y > doc.internal.pageSize.getHeight() - 20) { doc.addPage('a4', 'landscape'); y = 15; }
+          checkNewPage();
           doc.setFontSize(9);
           doc.setFont('helvetica', 'bold');
           doc.setTextColor(80, 80, 80);
@@ -435,7 +457,6 @@ export function ResourcesTypePhaseActivityGroupedView({
           doc.text(`${actLabel} — ${formatPdfCurrency(activityTotal)}`, marginX, y);
           y += 3;
 
-          // Resources table
           const tableData = activityResources.map(r => {
             const f = calculateFields(r);
             return [
@@ -455,7 +476,14 @@ export function ResourcesTypePhaseActivityGroupedView({
             body: tableData,
             margin: { left: marginX + 6, right: marginX },
             styles: { fontSize: 7, cellPadding: 1.5 },
-            headStyles: { fillColor: [100, 100, 100], fontSize: 7 },
+            headStyles: {
+              fillColor: [255, 255, 255],
+              textColor: [40, 40, 40],
+              fontStyle: 'bold',
+              fontSize: 7,
+              lineWidth: { bottom: 0.4 },
+              lineColor: [80, 80, 80],
+            },
             columnStyles: {
               0: { cellWidth: 60 },
               1: { halign: 'right' },
@@ -465,7 +493,10 @@ export function ResourcesTypePhaseActivityGroupedView({
               5: { halign: 'right', cellWidth: 18 },
               6: { halign: 'right' },
             },
-            didDrawPage: () => { y = 15; },
+            didDrawPage: () => {
+              drawHeader();
+              y = headerHeight + 5;
+            },
           });
           y = (doc as any).lastAutoTable.finalY + 4;
         });
@@ -473,6 +504,13 @@ export function ResourcesTypePhaseActivityGroupedView({
 
       y += 3;
     });
+
+    // Draw footers on all pages
+    const totalPages = doc.getNumberOfPages();
+    for (let i = 1; i <= totalPages; i++) {
+      doc.setPage(i);
+      drawFooter(i, totalPages);
+    }
 
     doc.save(`Recursos_Tipo_Opcion${selectedOption}_${budgetName || 'presupuesto'}.pdf`);
   };

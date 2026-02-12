@@ -1719,6 +1719,7 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
               activities={activities}
               phases={phases}
               measurements={measurements}
+              budgetName={budgetName}
               permissions={permissions}
               selectedIds={selectedIds}
               onToggleSelect={toggleSelect}

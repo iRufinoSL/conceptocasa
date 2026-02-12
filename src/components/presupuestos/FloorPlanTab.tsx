@@ -12,7 +12,7 @@ import { useFloorPlan } from '@/hooks/useFloorPlan';
 import { FloorPlanGridView } from './FloorPlanGridView';
 import { FloorPlanSpaceForm } from './FloorPlanSpaceForm';
 import { FloorPlanSummaryView } from './FloorPlanSummary';
-import { deriveGridPositions } from './FloorPlanGridView';
+import { deriveGridPositions, computeGridRuler } from './FloorPlanGridView';
 import { calculateFloorPlanSummary } from '@/lib/floor-plan-calculations';
 import type { FloorPlanData } from '@/lib/floor-plan-calculations';
 
@@ -385,6 +385,22 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
               const floorObj = floors.find(f => f.id === selectedRoom.floorId);
               const floorName = floorObj?.name;
 
+              const handleChangeCoordinate = async (targetCol: number, targetRow: number) => {
+                const { colWidths, rowHeights, colAccum, rowAccum } = computeGridRuler(positioned);
+                // Compute target posX as accumulated width up to targetCol
+                let posX = 0;
+                for (let c = 1; c < targetCol; c++) posX += (colWidths[c - 1] || selectedRoom.width);
+                // Compute target posY as accumulated height up to targetRow
+                let posY = 0;
+                for (let r = 1; r < targetRow; r++) posY += (rowHeights[r - 1] || selectedRoom.length);
+                // If there's a room at the target, swap positions
+                const occupant = positioned.find(p => p.gridCol === targetCol && p.gridRow === targetRow && p.room.id !== selectedRoom.id);
+                if (occupant) {
+                  await updateRoom(occupant.room.id, { posX: selectedRoom.posX, posY: selectedRoom.posY });
+                }
+                await updateRoom(selectedRoom.id, { posX: Math.round(posX * 100) / 100, posY: Math.round(posY * 100) / 100 });
+              };
+
               return (
                 <FloorPlanSpaceForm
                   room={selectedRoom}
@@ -393,6 +409,7 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
                   floorName={floorName}
                   onUpdateRoom={(data) => updateRoom(selectedRoom.id, data)}
                   onUpdateWall={(wallId, data) => updateWall(wallId, data)}
+                  onChangeCoordinate={handleChangeCoordinate}
                   onDeleteRoom={() => { deleteRoom(selectedRoom.id); setSelectedRoomId(null); }}
                   saving={saving}
                 />

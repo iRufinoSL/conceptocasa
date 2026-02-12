@@ -40,6 +40,33 @@ export function deriveGridPositions(floorRooms: RoomData[]): PositionedRoom[] {
   }));
 }
 
+/** Compute accumulated ruler ticks per column/row based on actual room sizes */
+export function computeGridRuler(positioned: PositionedRoom[]) {
+  if (positioned.length === 0) return { colWidths: [], rowHeights: [], colAccum: [], rowAccum: [] };
+  const cols = Math.max(...positioned.map(p => p.gridCol));
+  const rows = Math.max(...positioned.map(p => p.gridRow));
+
+  // Max width per column, max length per row
+  const colWidths: number[] = [];
+  for (let c = 1; c <= cols; c++) {
+    const roomsInCol = positioned.filter(p => p.gridCol === c);
+    colWidths.push(roomsInCol.length > 0 ? Math.max(...roomsInCol.map(p => p.room.width)) : 0);
+  }
+  const rowHeights: number[] = [];
+  for (let r = 1; r <= rows; r++) {
+    const roomsInRow = positioned.filter(p => p.gridRow === r);
+    rowHeights.push(roomsInRow.length > 0 ? Math.max(...roomsInRow.map(p => p.room.length)) : 0);
+  }
+
+  // Accumulated positions
+  const colAccum: number[] = [0];
+  colWidths.forEach((w, i) => colAccum.push(colAccum[i] + w));
+  const rowAccum: number[] = [0];
+  rowHeights.forEach((h, i) => rowAccum.push(rowAccum[i] + h));
+
+  return { colWidths, rowHeights, colAccum, rowAccum };
+}
+
 const getSpaceColor = (name: string): string => {
   const n = name.toLowerCase();
   if (n.includes('salón') || n.includes('salon')) return 'bg-amber-100 border-amber-300 dark:bg-amber-900/30 dark:border-amber-700';
@@ -80,6 +107,7 @@ export function FloorPlanGridView({ rooms, floors, selectedRoomId, onSelectRoom 
     const cols = positioned.length > 0 ? Math.max(...positioned.map(p => p.gridCol)) : 1;
     const rows = positioned.length > 0 ? Math.max(...positioned.map(p => p.gridRow)) : 1;
     const totalM2 = floorRooms.reduce((s, r) => s + r.width * r.length, 0);
+    const { colWidths, rowHeights, colAccum, rowAccum } = computeGridRuler(positioned);
 
     return (
       <Card key={floorId}>
@@ -90,29 +118,37 @@ export function FloorPlanGridView({ rooms, floors, selectedRoomId, onSelectRoom 
           </div>
         </CardHeader>
         <CardContent>
-          {/* Column coordinate headers */}
+          {/* Column coordinate headers with ruler */}
           <div
-            className="grid gap-1.5 mb-1"
+            className="grid gap-1.5 mb-0.5"
             style={{ gridTemplateColumns: `32px repeat(${cols}, minmax(100px, 1fr))` }}
           >
             <div /> {/* empty corner */}
             {Array.from({ length: cols }, (_, i) => (
-              <div key={i} className="text-center text-xs font-bold text-muted-foreground">{i + 1}</div>
+              <div key={i} className="text-center">
+                <div className="text-xs font-bold text-muted-foreground">{i + 1}</div>
+                <div className="text-[9px] text-muted-foreground/70 font-mono">
+                  {colAccum[i].toFixed(1)}–{colAccum[i + 1].toFixed(1)}m
+                </div>
+              </div>
             ))}
           </div>
-          {/* Grid with row headers */}
+          {/* Grid with row headers + ruler */}
           <div
             className="grid gap-1.5"
             style={{ gridTemplateColumns: `32px repeat(${cols}, minmax(100px, 1fr))`, gridTemplateRows: `repeat(${rows}, auto)` }}
           >
-            {/* Row headers */}
+            {/* Row headers with ruler */}
             {Array.from({ length: rows }, (_, ri) => (
               <div
                 key={`rh-${ri}`}
-                className="flex items-center justify-center text-xs font-bold text-muted-foreground"
+                className="flex flex-col items-center justify-center"
                 style={{ gridColumn: 1, gridRow: ri + 1 }}
               >
-                {ri + 1}
+                <span className="text-xs font-bold text-muted-foreground">{ri + 1}</span>
+                <span className="text-[9px] text-muted-foreground/70 font-mono leading-tight">
+                  {rowAccum[ri].toFixed(1)}–{rowAccum[ri + 1].toFixed(1)}m
+                </span>
               </div>
             ))}
             {positioned.map(({ room, gridCol, gridRow }) => {
@@ -131,7 +167,7 @@ export function FloorPlanGridView({ rooms, floors, selectedRoomId, onSelectRoom 
                     ${isSelected ? 'ring-2 ring-primary ring-offset-1 shadow-lg scale-[1.02]' : 'hover:shadow-md'}
                   `}
                   style={{
-                    gridColumn: gridCol + 1, /* +1 for row header column */
+                    gridColumn: gridCol + 1,
                     gridRow: gridRow,
                     minHeight: '80px',
                     borderTopWidth: extWalls.has(1) ? '4px' : undefined,

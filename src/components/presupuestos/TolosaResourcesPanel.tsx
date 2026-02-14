@@ -44,6 +44,7 @@ interface TolosaResourcesPanelProps {
   budgetId: string;
   tolosItemId: string;
   isAdmin: boolean;
+  parentItemId?: string | null;
   onSubtotalChange?: (subtotal: number) => void;
 }
 
@@ -64,7 +65,7 @@ const defaultForm = {
   purchase_unit_cost: null as number | null,
 };
 
-export function TolosaResourcesPanel({ budgetId, tolosItemId, isAdmin, onSubtotalChange }: TolosaResourcesPanelProps) {
+export function TolosaResourcesPanel({ budgetId, tolosItemId, isAdmin, parentItemId, onSubtotalChange }: TolosaResourcesPanelProps) {
   const [linkedResources, setLinkedResources] = useState<BudgetResource[]>([]);
   const [allResources, setAllResources] = useState<BudgetResource[]>([]);
   const [linkedIds, setLinkedIds] = useState<Set<string>>(new Set());
@@ -75,14 +76,49 @@ export function TolosaResourcesPanel({ budgetId, tolosItemId, isAdmin, onSubtota
   const [editingResource, setEditingResource] = useState<BudgetResource | null>(null);
   const [saving, setSaving] = useState(false);
   const [formData, setFormData] = useState(defaultForm);
+  const [measurementUnits, setMeasurementUnits] = useState<number>(0);
 
-  const getSubtotal = (r: BudgetResource) => calcResourceSubtotal({
+  // Fetch measurements linked to this QUÉ? (own or inherited from parent)
+  const fetchMeasurementUnits = useCallback(async () => {
+    // First check own measurements
+    const { data: ownLinks } = await supabase
+      .from('tolosa_item_measurements')
+      .select('measurement_id')
+      .eq('tolosa_item_id', tolosItemId);
+    
+    let measurementIds = (ownLinks || []).map((l: any) => l.measurement_id);
+    
+    // If no own measurements, inherit from parent
+    if (measurementIds.length === 0 && parentItemId) {
+      const { data: parentLinks } = await supabase
+        .from('tolosa_item_measurements')
+        .select('measurement_id')
+        .eq('tolosa_item_id', parentItemId);
+      measurementIds = (parentLinks || []).map((l: any) => l.measurement_id);
+    }
+    
+    if (measurementIds.length > 0) {
+      const { data: measurements } = await supabase
+        .from('budget_measurements')
+        .select('manual_units, count_raw')
+        .in('id', measurementIds);
+      const total = (measurements || []).reduce((sum: number, m: any) => {
+        return sum + (m.manual_units != null ? Number(m.manual_units) : Number(m.count_raw) || 0);
+      }, 0);
+      setMeasurementUnits(total);
+    } else {
+      setMeasurementUnits(0);
+    }
+  }, [tolosItemId, parentItemId]);
+
+  // Use measurement units as related_units for subtotal calculation
+  const getSubtotal = useCallback((r: BudgetResource) => calcResourceSubtotal({
     externalUnitCost: r.external_unit_cost,
     safetyPercent: r.safety_margin_percent,
     salesPercent: r.sales_margin_percent,
     manualUnits: r.manual_units,
-    relatedUnits: r.related_units,
-  });
+    relatedUnits: r.manual_units != null ? r.related_units : measurementUnits,
+  }), [measurementUnits]);
 
   const fetchLinked = useCallback(async () => {
     setLoading(true);
@@ -117,12 +153,13 @@ export function TolosaResourcesPanel({ budgetId, tolosItemId, isAdmin, onSubtota
   }, [budgetId]);
 
   useEffect(() => { fetchLinked(); }, [fetchLinked]);
+  useEffect(() => { fetchMeasurementUnits(); }, [fetchMeasurementUnits]);
   useEffect(() => { if (showSearch) fetchAllResources(); }, [showSearch, fetchAllResources]);
 
   useEffect(() => {
     const total = linkedResources.reduce((sum, r) => sum + getSubtotal(r), 0);
     onSubtotalChange?.(total);
-  }, [linkedResources, onSubtotalChange]);
+  }, [linkedResources, onSubtotalChange, measurementUnits, getSubtotal]);
 
   const linkResource = async (resourceId: string) => {
     const { error } = await supabase
@@ -235,7 +272,7 @@ export function TolosaResourcesPanel({ budgetId, tolosItemId, isAdmin, onSubtota
   const internalCostUd = formData.external_unit_cost + safetyMarginUd;
   const salesMarginUd = internalCostUd * formData.sales_margin_percent;
   const salesCostUd = internalCostUd + salesMarginUd;
-  const calculatedUnits = formData.manual_units !== null ? formData.manual_units : (formData.related_units || 0);
+  const calculatedUnits = formData.manual_units !== null ? formData.manual_units : measurementUnits;
   const subtotalSales = calculatedUnits * salesCostUd;
 
   const purchaseUnitCost = formData.purchase_unit_cost ?? formData.external_unit_cost;
@@ -301,7 +338,7 @@ export function TolosaResourcesPanel({ budgetId, tolosItemId, isAdmin, onSubtota
             </thead>
             <tbody>
               {linkedResources.map(r => {
-                const units = r.manual_units ?? r.related_units ?? 0;
+                const units = r.manual_units ?? measurementUnits;
                 const subtotal = getSubtotal(r);
                 const vatPct = r.purchase_vat_percent ?? 21;
                 const safetyPct = r.safety_margin_percent != null

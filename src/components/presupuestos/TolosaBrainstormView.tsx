@@ -1387,6 +1387,7 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
               budgetId={budgetId}
               tolosItemId={item.id}
               isAdmin={isAdmin}
+              parentItemId={item.parent_id}
               onSubtotalChange={(s) => updateItemSubtotal(item.id, s)}
             />
           </div>
@@ -1503,6 +1504,7 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
                       budgetId={budgetId}
                       tolosItemId={item.id}
                       isAdmin={isAdmin}
+                      parentItemId={item.parent_id}
                       onSubtotalChange={(s) => updateItemSubtotal(item.id, s)}
                     />
                   </div>

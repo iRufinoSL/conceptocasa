@@ -1203,44 +1203,16 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
                       {DIMENSION_LINKS.map(dim => {
                         const Icon = dim.icon;
                         const isActive = openDim === dim.key;
-                        const isComo = dim.key === 'como';
-                        const activeSub = comoSubmenu[item.id] || 'perfil';
                         return (
-                          <div key={dim.key} className="flex flex-col gap-0">
-                            <button
-                              className={`flex flex-col items-center gap-1 p-3 rounded-lg ${isComo ? 'rounded-b-none' : ''} border text-center transition-all hover:shadow-md hover:scale-[1.02] ${dim.color} ${isActive ? 'ring-2 ring-primary shadow-md' : ''}`}
-                              onClick={() => setDimension(item.id, dim.key)}
-                            >
-                              <Icon className="h-5 w-5" />
-                              <span className="text-xs font-bold">{dim.label}</span>
-                              <span className="text-[10px] opacity-70">{dim.hint}</span>
-                            </button>
-                            {isComo && (
-                              <div className="flex flex-col border border-t-0 border-blue-200 dark:border-blue-800 rounded-b-lg overflow-hidden bg-blue-50/80 dark:bg-blue-950/40">
-                                {COMO_SUBMENUS.map(sub => {
-                                  const SubIcon = sub.icon;
-                                  const isSubActive = openDim === 'como' && activeSub === sub.key;
-                                  return (
-                                    <button
-                                      key={sub.key}
-                                      className={`flex items-center gap-1.5 px-2 py-1.5 text-[11px] font-medium transition-colors ${
-                                        isSubActive
-                                          ? 'bg-blue-200/70 dark:bg-blue-800/50 text-blue-800 dark:text-blue-200'
-                                          : 'text-blue-600/80 dark:text-blue-400/70 hover:bg-blue-100 dark:hover:bg-blue-900/40'
-                                      }`}
-                                      onClick={() => {
-                                        setComoSub(item.id, sub.key);
-                                        if (openDim !== 'como') setDimension(item.id, 'como');
-                                      }}
-                                    >
-                                      <SubIcon className="h-3 w-3" />
-                                      {sub.label}
-                                    </button>
-                                  );
-                                })}
-                              </div>
-                            )}
-                          </div>
+                          <button
+                            key={dim.key}
+                            className={`flex flex-col items-center gap-1 p-3 rounded-lg border text-center transition-all hover:shadow-md hover:scale-[1.02] ${dim.color} ${isActive ? 'ring-2 ring-primary shadow-md' : ''}`}
+                            onClick={() => setDimension(item.id, dim.key)}
+                          >
+                            <Icon className="h-5 w-5" />
+                            <span className="text-xs font-bold">{dim.label}</span>
+                            <span className="text-[10px] opacity-70">{dim.hint}</span>
+                          </button>
                         );
                       })}
                     </div>
@@ -1334,13 +1306,29 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
       </div>
 
       {/* Dimension legend */}
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap gap-2 items-start">
         {DIMENSION_LINKS.map(dim => {
           const Icon = dim.icon;
+          const isComo = dim.key === 'como';
           return (
-            <Badge key={dim.key} variant="outline" className={`gap-1 ${dim.color}`}>
-              <Icon className="h-3 w-3" /> {dim.label}
-            </Badge>
+            <div key={dim.key} className="flex flex-col gap-0">
+              <Badge variant="outline" className={`gap-1 ${dim.color} ${isComo ? 'rounded-b-none' : ''}`}>
+                <Icon className="h-3 w-3" /> {dim.label}
+              </Badge>
+              {isComo && (
+                <div className="flex flex-col border border-t-0 border-blue-200 dark:border-blue-800 rounded-b-md overflow-hidden bg-blue-50/80 dark:bg-blue-950/40">
+                  {COMO_SUBMENUS.map(sub => {
+                    const SubIcon = sub.icon;
+                    return (
+                      <span key={sub.key} className="flex items-center gap-1.5 px-2 py-1 text-[11px] font-medium text-blue-600/80 dark:text-blue-400/70">
+                        <SubIcon className="h-3 w-3" />
+                        {sub.label}
+                      </span>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           );
         })}
       </div>

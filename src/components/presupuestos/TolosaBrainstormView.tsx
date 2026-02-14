@@ -34,7 +34,8 @@ import { BudgetWorkAreasTab } from './BudgetWorkAreasTab';
 import { SpaceDetail } from './HousingProfileEditor';
 import { Json } from '@/integrations/supabase/types';
 import { toast } from 'sonner';
-import { formatCurrency } from '@/lib/format-utils';
+import { formatCurrency, formatNumber } from '@/lib/format-utils';
+import { calcResourceSubtotal } from '@/lib/budget-pricing';
 
 interface TolosItem {
   id: string;
@@ -141,6 +142,7 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
   }>>({});
   const [dondeLocationOpen, setDondeLocationOpen] = useState<Record<string, boolean>>({});
   const [itemSubtotals, setItemSubtotals] = useState<Record<string, number>>({});
+  const [itemSummaries, setItemSummaries] = useState<Record<string, { measurementUnits: number; measurementUnit: string; resourceSubtotal: number }>>({});
 
   const updateItemSubtotal = useCallback((itemId: string, subtotal: number) => {
     setItemSubtotals(prev => {
@@ -156,6 +158,113 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
     const childrenTotal = children.reduce((sum, child) => sum + getCuanto(child.id), 0);
     return own + childrenTotal;
   }, [items, itemSubtotals]);
+
+  // Bulk fetch measurement + resource summaries for all items
+  const fetchItemSummaries = useCallback(async () => {
+    if (items.length === 0) return;
+    const itemIds = items.map(i => i.id);
+
+    // 1. Fetch all tolosa_item_measurements links
+    const { data: allMeasLinks } = await supabase
+      .from('tolosa_item_measurements')
+      .select('tolosa_item_id, measurement_id')
+      .in('tolosa_item_id', itemIds);
+    const measLinksByItem: Record<string, string[]> = {};
+    (allMeasLinks || []).forEach((l: any) => {
+      if (!measLinksByItem[l.tolosa_item_id]) measLinksByItem[l.tolosa_item_id] = [];
+      measLinksByItem[l.tolosa_item_id].push(l.measurement_id);
+    });
+
+    // 2. Fetch all referenced measurements
+    const allMeasIds = new Set<string>();
+    (allMeasLinks || []).forEach((l: any) => allMeasIds.add(l.measurement_id));
+    const measData: Record<string, { units: number; unit: string }> = {};
+    if (allMeasIds.size > 0) {
+      const { data: measurements } = await supabase
+        .from('budget_measurements')
+        .select('id, manual_units, count_raw, measurement_unit')
+        .in('id', Array.from(allMeasIds));
+      (measurements || []).forEach((m: any) => {
+        measData[m.id] = {
+          units: m.manual_units != null ? Number(m.manual_units) : Number(m.count_raw) || 0,
+          unit: m.measurement_unit || 'ud',
+        };
+      });
+    }
+
+    // 3. Build parent map for ancestor traversal
+    const parentMap: Record<string, string | null> = {};
+    items.forEach(i => { parentMap[i.id] = i.parent_id; });
+
+    // 4. Calculate inherited measurement units per item (walk up ancestors)
+    const getInheritedMeas = (itemId: string): { total: number; unit: string } => {
+      let currentId: string | null = itemId;
+      while (currentId) {
+        const mids = measLinksByItem[currentId];
+        if (mids && mids.length > 0) {
+          let total = 0;
+          let unit = 'ud';
+          mids.forEach(mid => {
+            const m = measData[mid];
+            if (m) { total += m.units; unit = m.unit; }
+          });
+          return { total, unit };
+        }
+        currentId = parentMap[currentId] ?? null;
+      }
+      return { total: 0, unit: 'ud' };
+    };
+
+    // 5. Fetch all tolosa_item_resources links
+    const { data: allResLinks } = await supabase
+      .from('tolosa_item_resources')
+      .select('tolosa_item_id, resource_id')
+      .in('tolosa_item_id', itemIds);
+    const resLinksByItem: Record<string, string[]> = {};
+    (allResLinks || []).forEach((l: any) => {
+      if (!resLinksByItem[l.tolosa_item_id]) resLinksByItem[l.tolosa_item_id] = [];
+      resLinksByItem[l.tolosa_item_id].push(l.resource_id);
+    });
+
+    // 6. Fetch all referenced resources
+    const allResIds = new Set<string>();
+    (allResLinks || []).forEach((l: any) => allResIds.add(l.resource_id));
+    const resData: Record<string, any> = {};
+    if (allResIds.size > 0) {
+      const { data: resources } = await supabase
+        .from('budget_activity_resources')
+        .select('id, external_unit_cost, safety_margin_percent, sales_margin_percent, manual_units, related_units')
+        .in('id', Array.from(allResIds));
+      (resources || []).forEach((r: any) => { resData[r.id] = r; });
+    }
+
+    // 7. Calculate subtotals per item
+    const summaries: Record<string, { measurementUnits: number; measurementUnit: string; resourceSubtotal: number }> = {};
+    itemIds.forEach(itemId => {
+      const meas = getInheritedMeas(itemId);
+      const rids = resLinksByItem[itemId] || [];
+      let subtotal = 0;
+      rids.forEach(rid => {
+        const r = resData[rid];
+        if (r) {
+          subtotal += calcResourceSubtotal({
+            externalUnitCost: r.external_unit_cost,
+            safetyPercent: r.safety_margin_percent,
+            salesPercent: r.sales_margin_percent,
+            manualUnits: r.manual_units,
+            relatedUnits: r.manual_units != null ? r.related_units : meas.total,
+          });
+        }
+      });
+      summaries[itemId] = { measurementUnits: meas.total, measurementUnit: meas.unit, resourceSubtotal: subtotal };
+    });
+
+    setItemSummaries(summaries);
+    // Update itemSubtotals for CUÁNTO? aggregation
+    const newSubtotals: Record<string, number> = {};
+    itemIds.forEach(id => { newSubtotals[id] = summaries[id]?.resourceSubtotal || 0; });
+    setItemSubtotals(newSubtotals);
+  }, [items]);
 
   const initDondeForm = (item: TolosItem) => {
     if (!dondeForm[item.id]) {
@@ -278,6 +387,7 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
   }, []);
 
   useEffect(() => { fetchItems(); fetchContacts(); fetchHousingProfiles(); }, [fetchItems, fetchContacts, fetchHousingProfiles]);
+  useEffect(() => { fetchItemSummaries(); }, [fetchItemSummaries]);
 
   const rootItems = items.filter(i => !i.parent_id);
   const getChildren = (parentId: string) => items.filter(i => i.parent_id === parentId);
@@ -1388,7 +1498,7 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
               tolosItemId={item.id}
               isAdmin={isAdmin}
               parentItemId={item.parent_id}
-              onSubtotalChange={(s) => updateItemSubtotal(item.id, s)}
+              onSubtotalChange={(s) => { updateItemSubtotal(item.id, s); fetchItemSummaries(); }}
             />
           </div>
         );
@@ -1450,7 +1560,7 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
               </div>
             ) : (
               <>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <Badge variant="outline" className="font-mono text-xs shrink-0">{item.code}</Badge>
                   <button
                     onClick={() => {
@@ -1473,16 +1583,31 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
                       {children.length} sub
                     </Badge>
                   )}
-                  {/* CUÁNTO? badge */}
+                  {/* Summary info: Mediciones relacionadas | Ud medida | SubTotal */}
                   {(() => {
+                    const summary = itemSummaries[item.id];
                     const cuanto = getCuanto(item.id);
-                    if (cuanto > 0) return (
-                      <Badge variant="secondary" className="ml-auto text-xs font-mono shrink-0 gap-1">
-                        <DollarSign className="h-3 w-3" />
-                        {formatCurrency(cuanto)}
-                      </Badge>
+                    return (
+                      <div className="ml-auto flex items-center gap-1.5 shrink-0">
+                        {summary && summary.measurementUnits > 0 && (
+                          <Badge variant="outline" className="text-[10px] font-mono gap-1">
+                            <Ruler className="h-2.5 w-2.5" />
+                            {formatNumber(summary.measurementUnits)} {summary.measurementUnit}
+                          </Badge>
+                        )}
+                        {summary && summary.resourceSubtotal > 0 && (
+                          <Badge variant="secondary" className="text-[10px] font-mono gap-1">
+                            {formatCurrency(summary.resourceSubtotal)}
+                          </Badge>
+                        )}
+                        {cuanto > 0 && cuanto !== (summary?.resourceSubtotal || 0) && (
+                          <Badge variant="secondary" className="text-[10px] font-mono gap-1 bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300">
+                            <DollarSign className="h-2.5 w-2.5" />
+                            {formatCurrency(cuanto)}
+                          </Badge>
+                        )}
+                      </div>
                     );
-                    return null;
                   })()}
                 </div>
                 {item.description && isDetailOpen && (
@@ -1503,7 +1628,7 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
                       tolosItemId={item.id}
                       isAdmin={isAdmin}
                       parentItemId={item.parent_id}
-                      onSubtotalChange={(s) => updateItemSubtotal(item.id, s)}
+                      onSubtotalChange={(s) => { updateItemSubtotal(item.id, s); fetchItemSummaries(); }}
                     />
                   </div>
                 )}

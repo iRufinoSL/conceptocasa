@@ -376,7 +376,7 @@ export default function PresupuestoDashboard() {
           <Button
             variant={budgetMode === 'tolosa' ? 'default' : 'outline'}
             size="sm"
-            onClick={() => setBudgetMode('tolosa')}
+            onClick={() => { setBudgetMode('tolosa'); setActiveTab('actividades'); }}
             className="gap-2"
           >
             <Brain className="h-4 w-4" />
@@ -393,9 +393,6 @@ export default function PresupuestoDashboard() {
           </Button>
         </div>
 
-        {budgetMode === 'tolosa' ? (
-          <TolosaBrainstormView budgetId={presupuesto.id} isAdmin={isAdmin} />
-        ) : (
         <>
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-6 gap-4 mb-8">
@@ -695,15 +692,19 @@ export default function PresupuestoDashboard() {
           </TabsContent>
 
           <TabsContent value="actividades" className="mt-6">
-            <BudgetActivitiesTab 
-              budgetId={presupuesto.id} 
-              budgetName={presupuesto.nombre} 
-              isAdmin={isAdmin}
-              budgetStartDate={presupuesto.start_date}
-              budgetEndDate={presupuesto.end_date}
-              initialActivityId={selectedActivityId}
-              onClearInitialActivityId={() => setSelectedActivityId(null)}
-            />
+            {budgetMode === 'tolosa' ? (
+              <TolosaBrainstormView budgetId={presupuesto.id} isAdmin={isAdmin} />
+            ) : (
+              <BudgetActivitiesTab 
+                budgetId={presupuesto.id} 
+                budgetName={presupuesto.nombre} 
+                isAdmin={isAdmin}
+                budgetStartDate={presupuesto.start_date}
+                budgetEndDate={presupuesto.end_date}
+                initialActivityId={selectedActivityId}
+                onClearInitialActivityId={() => setSelectedActivityId(null)}
+              />
+            )}
           </TabsContent>
 
           <TabsContent value="fases" className="mt-6">
@@ -1109,7 +1110,6 @@ export default function PresupuestoDashboard() {
           </TabsContent>
         </Tabs>
         </>
-        )}
       </main>
 
       {/* Report Preview Dialog */}

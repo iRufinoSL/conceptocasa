@@ -17,6 +17,16 @@ import { BudgetUrbanismTab } from './BudgetUrbanismTab';
 import { BudgetMeasurementsTab } from './BudgetMeasurementsTab';
 import { BudgetAgendaTab } from './BudgetAgendaTab';
 import { BudgetAdministracionTab } from './BudgetAdministracionTab';
+import { BudgetSpacesTab } from './BudgetSpacesTab';
+import { FloorPlanTab } from './FloorPlanTab';
+import { BudgetPredesignTab } from './BudgetPredesignTab';
+import { BudgetDocumentsTab } from './BudgetDocumentsTab';
+import { BudgetCommunicationsTab } from './BudgetCommunicationsTab';
+import { BudgetVisualSummary } from './BudgetVisualSummary';
+import { HierarchicalGanttView } from './HierarchicalGanttView';
+import { BudgetTimelineView } from './BudgetTimelineView';
+import { BudgetVersionComparison } from './BudgetVersionComparison';
+import { BudgetContactsManager } from './BudgetContactsManager';
 import { SpaceDetail } from './HousingProfileEditor';
 import { Json } from '@/integrations/supabase/types';
 import { toast } from 'sonner';
@@ -1228,55 +1238,31 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
       case 'plano':
         return renderComoPlanoSection(item);
       case 'anteproyecto':
-        return (
-          <div className="p-4 rounded border border-dashed text-center space-y-2">
-            <PenTool className="h-8 w-8 text-muted-foreground/40 mx-auto" />
-            <p className="text-sm text-muted-foreground">Ante-proyecto — próximamente</p>
-          </div>
-        );
+        return <BudgetPredesignTab budgetId={budgetId} isAdmin={isAdmin} projectId={null} />;
       case 'mediciones':
         return <BudgetMeasurementsTab budgetId={budgetId} isAdmin={isAdmin} />;
       case 'documentos':
-        return (
-          <div className="p-4 rounded border border-dashed text-center space-y-2">
-            <FolderOpen className="h-8 w-8 text-muted-foreground/40 mx-auto" />
-            <p className="text-sm font-medium">Documentos</p>
-            <p className="text-xs text-muted-foreground">Gestión documental del QUÉ? — se integrará con la pestaña Documentos del presupuesto.</p>
-          </div>
-        );
+        return <BudgetDocumentsTab budgetId={budgetId} projectId={null} projectName={null} isAdmin={isAdmin} />;
       case 'agenda':
         return <BudgetAgendaTab budgetId={budgetId} isAdmin={isAdmin} />;
       case 'comunicaciones':
-        return (
-          <div className="p-4 rounded border border-dashed text-center space-y-2">
-            <MessageSquare className="h-8 w-8 text-muted-foreground/40 mx-auto" />
-            <p className="text-sm font-medium">Comunicaciones</p>
-            <p className="text-xs text-muted-foreground">Historial de comunicaciones del QUÉ? — se integrará con la pestaña Comunicaciones.</p>
-          </div>
-        );
+        return <BudgetCommunicationsTab budgetId={budgetId} budgetName="" projectId={null} isAdmin={isAdmin} />;
       case 'administracion':
         return <BudgetAdministracionTab budgetId={budgetId} isAdmin={isAdmin} />;
       case 'resumen':
-        return (
-          <div className="p-4 rounded border border-dashed text-center space-y-2">
-            <BarChart3 className="h-8 w-8 text-muted-foreground/40 mx-auto" />
-            <p className="text-sm font-medium">Resumen</p>
-            <p className="text-xs text-muted-foreground">Vista resumen del QUÉ? — se integrará con el resumen del presupuesto.</p>
-          </div>
-        );
+        return <BudgetVisualSummary budgetId={budgetId} budgetName="" />;
       case 'timeline':
         return (
-          <div className="p-4 rounded border border-dashed text-center space-y-2">
-            <Timer className="h-8 w-8 text-muted-foreground/40 mx-auto" />
-            <p className="text-sm font-medium">Timeline</p>
-            <p className="text-xs text-muted-foreground">Línea temporal del QUÉ? — se integrará con el timeline del presupuesto.</p>
+          <div className="space-y-6">
+            <HierarchicalGanttView budgetId={budgetId} budgetStartDate={null} budgetEndDate={null} />
+            <BudgetTimelineView budgetId={budgetId} budgetStartDate={null} budgetEndDate={null} />
           </div>
         );
       case 'config':
         return (
-          <div className="p-4 rounded border border-dashed text-center space-y-2">
-            <Settings className="h-8 w-8 text-muted-foreground/40 mx-auto" />
-            <p className="text-sm text-muted-foreground">Configuración del QUÉ? — próximamente</p>
+          <div className="space-y-6">
+            <BudgetContactsManager budgetId={budgetId} isAdmin={isAdmin} />
+            <BudgetVersionComparison currentBudgetId={budgetId} currentBudgetName="" currentVersion="" />
           </div>
         );
       default:

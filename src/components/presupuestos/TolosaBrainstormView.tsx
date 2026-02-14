@@ -829,118 +829,289 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
     );
   };
 
-  const renderComoPanel = (item: TolosItem) => {
+  const [comoSubmenu, setComoSubmenu] = useState<Record<string, string>>({});
+
+  const setComoSub = (itemId: string, sub: string) => {
+    setComoSubmenu(prev => ({ ...prev, [itemId]: prev[itemId] === sub ? '' : sub }));
+  };
+
+  const renderComoPerfilSection = (item: TolosItem) => {
     const isPickerOpen = showProfilePicker === item.id;
+
+    return (
+      <div className="space-y-2">
+        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Perfil de vivienda</p>
+
+        {item.housing_profile_id ? (
+          <div className="space-y-0">
+            <div className="flex items-center gap-2 p-2 rounded-t border border-blue-300 bg-blue-100/50 dark:border-blue-700 dark:bg-blue-900/30">
+              <Link className="h-4 w-4 text-blue-500 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium truncate">{getProfileName(item.housing_profile_id)}</p>
+                <p className="text-xs text-muted-foreground">Perfil vinculado</p>
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                className="text-xs shrink-0"
+                onClick={() => updateItemField(item.id, { housing_profile_id: null })}
+              >
+                <Unlink className="h-3 w-3 mr-1" /> Desvincular
+              </Button>
+            </div>
+            {profileCache[item.housing_profile_id] && (
+              <div className="p-2 rounded-b border border-t-0 border-blue-300 dark:border-blue-700">
+                {renderProfileDetail(profileCache[item.housing_profile_id])}
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 p-2 rounded border border-dashed border-blue-300 dark:border-blue-700">
+              <FileText className="h-4 w-4 text-blue-500" />
+              <div className="flex-1">
+                <p className="text-sm text-muted-foreground">Sin perfil vinculado</p>
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                className="text-xs"
+                onClick={() => {
+                  setShowProfilePicker(isPickerOpen ? null : item.id);
+                  if (!isPickerOpen) fetchHousingProfiles();
+                }}
+              >
+                <Link className="h-3 w-3 mr-1" /> Vincular perfil
+              </Button>
+            </div>
+
+            {isPickerOpen && (
+              <div className="space-y-2 p-2 rounded border border-blue-200 bg-background dark:border-blue-800">
+                <input
+                  type="text"
+                  value={profileSearch}
+                  placeholder="Buscar perfil por nombre, email o población..."
+                  onChange={e => {
+                    setProfileSearch(e.target.value);
+                    fetchHousingProfiles(e.target.value);
+                  }}
+                  className="flex h-8 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                />
+                {housingProfiles.length > 0 ? (
+                  <div className="max-h-40 overflow-y-auto space-y-1">
+                    {housingProfiles.map(p => (
+                      <button
+                        key={p.id}
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-accent rounded flex items-center justify-between gap-2"
+                        onClick={() => {
+                          updateItemField(item.id, { housing_profile_id: p.id });
+                          setShowProfilePicker(null);
+                          setProfileSearch('');
+                        }}
+                      >
+                        <div className="min-w-0">
+                          <span className="font-medium">{p.contact_name}</span>
+                          {p.poblacion && <span className="text-muted-foreground"> — {p.poblacion}</span>}
+                        </div>
+                        <span className="text-xs text-muted-foreground shrink-0">{p.contact_email}</span>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground text-center py-2">No se encontraron perfiles</p>
+                )}
+                <div className="pt-1 border-t">
+                  <p className="text-xs text-muted-foreground">
+                    ¿No existe el perfil?{' '}
+                    <button
+                      className="text-primary hover:underline font-medium"
+                      onClick={() => {
+                        toast.info('Para crear un nuevo perfil, ve a la pestaña "Perfil" del presupuesto o recíbelo desde el formulario web.');
+                        setShowProfilePicker(null);
+                      }}
+                    >
+                      Crear nuevo perfil desde la pestaña Perfil
+                    </button>
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderComoEspaciosSection = (item: TolosItem) => {
     const linkedProfile = item.housing_profile_id ? profileCache[item.housing_profile_id] : null;
+    const spaces: SpaceDetail[] = linkedProfile && Array.isArray(linkedProfile.espacios_detalle)
+      ? (linkedProfile.espacios_detalle as unknown as SpaceDetail[])
+      : [];
+    const totalM2 = spaces.reduce((sum, s) => sum + (s.m2 || 0), 0);
+    const m2Planta = linkedProfile?.m2_por_planta ? parseFloat(linkedProfile.m2_por_planta) : null;
+    const numPlantas = linkedProfile?.num_plantas ? parseInt(linkedProfile.num_plantas) : null;
+    const m2Construidos = m2Planta && numPlantas ? m2Planta * numPlantas : null;
+
+    if (!linkedProfile) {
+      return (
+        <div className="p-4 rounded border border-dashed border-blue-300 dark:border-blue-700 text-center space-y-2">
+          <Home className="h-8 w-8 text-muted-foreground/40 mx-auto" />
+          <p className="text-sm text-muted-foreground">Vincula primero un Perfil de vivienda para ver los espacios.</p>
+          <Button size="sm" variant="outline" className="text-xs" onClick={() => setComoSub(item.id, 'perfil')}>
+            <Link className="h-3 w-3 mr-1" /> Ir a Perfil
+          </Button>
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-3">
+        {/* Surface summary */}
+        <div className="grid grid-cols-3 gap-2">
+          <div className="p-2 rounded border bg-background text-center">
+            <p className="text-lg font-bold text-foreground">{m2Construidos ? `${m2Construidos}` : '—'}</p>
+            <p className="text-[10px] text-muted-foreground uppercase">m² Construidos</p>
+          </div>
+          <div className="p-2 rounded border bg-background text-center">
+            <p className="text-lg font-bold text-foreground">{totalM2 > 0 ? `${totalM2.toFixed(1)}` : '—'}</p>
+            <p className="text-[10px] text-muted-foreground uppercase">m² Habitables</p>
+          </div>
+          <div className="p-2 rounded border bg-background text-center">
+            <p className="text-lg font-bold text-foreground">{m2Planta ? `${m2Planta}` : '—'}</p>
+            <p className="text-[10px] text-muted-foreground uppercase">m²/Planta</p>
+          </div>
+        </div>
+
+        {/* Spaces from profile */}
+        {spaces.length > 0 ? (
+          <div className="space-y-2">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+              Espacios del perfil ({spaces.length})
+            </p>
+            <div className="border rounded overflow-hidden">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-muted/50 text-xs text-muted-foreground">
+                    <th className="text-left px-3 py-1.5 font-medium">Espacio</th>
+                    <th className="text-right px-3 py-1.5 font-medium w-20">m² Perfil</th>
+                    <th className="text-right px-3 py-1.5 font-medium w-24">m² Ejecutado</th>
+                    <th className="text-center px-3 py-1.5 font-medium w-16">Δ</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {spaces.map(s => (
+                    <tr key={s.id} className="border-t hover:bg-accent/20 transition-colors">
+                      <td className="px-3 py-1.5 truncate">{s.name}</td>
+                      <td className="px-3 py-1.5 text-right text-muted-foreground">
+                        {s.m2 ? `${s.m2}` : '—'}
+                      </td>
+                      <td className="px-3 py-1.5 text-right text-muted-foreground/50 italic text-xs">
+                        —
+                      </td>
+                      <td className="px-3 py-1.5 text-center text-muted-foreground/50 text-xs">
+                        —
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="border-t bg-muted/30 font-semibold text-xs">
+                    <td className="px-3 py-1.5">Total</td>
+                    <td className="px-3 py-1.5 text-right">{totalM2.toFixed(1)}</td>
+                    <td className="px-3 py-1.5 text-right text-muted-foreground/50">—</td>
+                    <td className="px-3 py-1.5 text-center text-muted-foreground/50">—</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+            <p className="text-[10px] text-muted-foreground">
+              La columna "m² Ejecutado" se completará desde el Plano. "Δ" muestra la diferencia perfil vs. ejecutado.
+            </p>
+          </div>
+        ) : (
+          <div className="p-3 rounded border border-dashed text-center">
+            <p className="text-sm text-muted-foreground">El perfil vinculado no tiene espacios definidos.</p>
+            <p className="text-xs text-muted-foreground mt-1">Edita el perfil desde la pestaña "Perfil" para añadir espacios.</p>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderComoPlanoSection = (item: TolosItem) => {
+    const linkedProfile = item.housing_profile_id ? profileCache[item.housing_profile_id] : null;
+
+    if (!linkedProfile) {
+      return (
+        <div className="p-4 rounded border border-dashed border-blue-300 dark:border-blue-700 text-center space-y-2">
+          <Layers className="h-8 w-8 text-muted-foreground/40 mx-auto" />
+          <p className="text-sm text-muted-foreground">Vincula primero un Perfil de vivienda para desarrollar el plano.</p>
+          <Button size="sm" variant="outline" className="text-xs" onClick={() => setComoSub(item.id, 'perfil')}>
+            <Link className="h-3 w-3 mr-1" /> Ir a Perfil
+          </Button>
+        </div>
+      );
+    }
+
+    return (
+      <div className="p-4 rounded border border-dashed border-blue-300 dark:border-blue-700 text-center space-y-2">
+        <Layers className="h-8 w-8 text-blue-400 mx-auto" />
+        <p className="text-sm font-medium">Plano de la vivienda</p>
+        <p className="text-xs text-muted-foreground">
+          Los espacios del perfil sirven como base para el desarrollo del plano.
+          El editor de plano estará disponible desde esta sección.
+        </p>
+        <Button size="sm" variant="outline" className="text-xs" onClick={() => {
+          toast.info('El editor de plano se abrirá próximamente desde este submenú.');
+        }}>
+          <Layers className="h-3 w-3 mr-1" /> Abrir Plano (próximamente)
+        </Button>
+      </div>
+    );
+  };
+
+  const COMO_SUBMENUS = [
+    { key: 'perfil', label: 'Perfil', icon: User },
+    { key: 'espacios', label: 'Espacios', icon: Home },
+    { key: 'plano', label: 'Plano', icon: Layers },
+  ];
+
+  const renderComoPanel = (item: TolosItem) => {
+    const activeSub = comoSubmenu[item.id] || 'perfil';
 
     return (
       <div className="space-y-3 p-3 rounded-lg border border-blue-200 bg-blue-50/50 dark:border-blue-800 dark:bg-blue-950/30">
         <h4 className="text-sm font-semibold flex items-center gap-2 text-blue-700 dark:text-blue-400">
-          <Wrench className="h-4 w-4" /> CÓMO? — Actividades / Perfil
+          <Wrench className="h-4 w-4" /> CÓMO?
         </h4>
-        <div className="space-y-2">
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Perfil de vivienda</p>
 
-          {item.housing_profile_id ? (
-            <div className="space-y-0">
-              <div className="flex items-center gap-2 p-2 rounded-t border border-blue-300 bg-blue-100/50 dark:border-blue-700 dark:bg-blue-900/30">
-                <Link className="h-4 w-4 text-blue-500 shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">{getProfileName(item.housing_profile_id)}</p>
-                  <p className="text-xs text-muted-foreground">Perfil vinculado</p>
-                </div>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="text-xs shrink-0"
-                  onClick={() => updateItemField(item.id, { housing_profile_id: null })}
-                >
-                  <Unlink className="h-3 w-3 mr-1" /> Desvincular
-                </Button>
-              </div>
-              {linkedProfile && (
-                <div className="p-2 rounded-b border border-t-0 border-blue-300 dark:border-blue-700">
-                  {renderProfileDetail(linkedProfile)}
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="space-y-2">
-              <div className="flex items-center gap-2 p-2 rounded border border-dashed border-blue-300 dark:border-blue-700">
-                <FileText className="h-4 w-4 text-blue-500" />
-                <div className="flex-1">
-                  <p className="text-sm text-muted-foreground">Sin perfil vinculado</p>
-                </div>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="text-xs"
-                  onClick={() => {
-                    setShowProfilePicker(isPickerOpen ? null : item.id);
-                    if (!isPickerOpen) fetchHousingProfiles();
-                  }}
-                >
-                  <Link className="h-3 w-3 mr-1" /> Vincular perfil
-                </Button>
-              </div>
+        {/* Submenu tabs */}
+        <div className="flex gap-1 border-b border-blue-200 dark:border-blue-800 pb-0">
+          {COMO_SUBMENUS.map(sub => {
+            const Icon = sub.icon;
+            const isActive = activeSub === sub.key;
+            return (
+              <button
+                key={sub.key}
+                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-t transition-colors border border-b-0 ${
+                  isActive
+                    ? 'bg-background text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-700 -mb-px z-10'
+                    : 'bg-transparent text-muted-foreground hover:text-foreground border-transparent hover:bg-blue-100/50 dark:hover:bg-blue-900/30'
+                }`}
+                onClick={() => setComoSub(item.id, sub.key)}
+              >
+                <Icon className="h-3.5 w-3.5" />
+                {sub.label}
+              </button>
+            );
+          })}
+        </div>
 
-              {isPickerOpen && (
-                <div className="space-y-2 p-2 rounded border border-blue-200 bg-background dark:border-blue-800">
-                  <input
-                    type="text"
-                    value={profileSearch}
-                    placeholder="Buscar perfil por nombre, email o población..."
-                    onChange={e => {
-                      setProfileSearch(e.target.value);
-                      fetchHousingProfiles(e.target.value);
-                    }}
-                    className="flex h-8 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                  />
-                  {housingProfiles.length > 0 ? (
-                    <div className="max-h-40 overflow-y-auto space-y-1">
-                      {housingProfiles.map(p => (
-                        <button
-                          key={p.id}
-                          className="w-full text-left px-3 py-2 text-sm hover:bg-accent rounded flex items-center justify-between gap-2"
-                          onClick={() => {
-                            updateItemField(item.id, { housing_profile_id: p.id });
-                            setShowProfilePicker(null);
-                            setProfileSearch('');
-                          }}
-                        >
-                          <div className="min-w-0">
-                            <span className="font-medium">{p.contact_name}</span>
-                            {p.poblacion && <span className="text-muted-foreground"> — {p.poblacion}</span>}
-                          </div>
-                          <span className="text-xs text-muted-foreground shrink-0">{p.contact_email}</span>
-                        </button>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-xs text-muted-foreground text-center py-2">No se encontraron perfiles</p>
-                  )}
-                  <div className="pt-1 border-t">
-                    <p className="text-xs text-muted-foreground">
-                      ¿No existe el perfil?{' '}
-                      <button
-                        className="text-primary hover:underline font-medium"
-                        onClick={() => {
-                          toast.info('Para crear un nuevo perfil, ve a la pestaña "Perfil" del presupuesto o recíbelo desde el formulario web.');
-                          setShowProfilePicker(null);
-                        }}
-                      >
-                        Crear nuevo perfil desde la pestaña Perfil
-                      </button>
-                    </p>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          <p className="text-xs text-muted-foreground">
-            Vincula aquí las actividades (CÓMO se ejecuta cada QUÉ?)
-          </p>
+        {/* Active sub-panel */}
+        <div>
+          {activeSub === 'perfil' && renderComoPerfilSection(item)}
+          {activeSub === 'espacios' && renderComoEspaciosSection(item)}
+          {activeSub === 'plano' && renderComoPlanoSection(item)}
         </div>
       </div>
     );

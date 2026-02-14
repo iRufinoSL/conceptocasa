@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { Plus, Search, Trash2, Ruler, Link2, X } from 'lucide-react';
+import { Plus, Search, Ruler, Link2, X, Check } from 'lucide-react';
 import { searchMatch } from '@/lib/search-utils';
 import { formatNumber } from '@/lib/format-utils';
 import { NumericInput } from '@/components/ui/numeric-input';
@@ -153,9 +153,49 @@ export function TolosaMeasurementsPanel({ budgetId, tolosItemId, isAdmin }: Tolo
     fetchAllMeasurements();
   };
 
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editData, setEditData] = useState<{ name: string; floor: string; manual_units: number | null; measurement_unit: string }>({ name: '', floor: '', manual_units: null, measurement_unit: 'ud' });
+  const [saving, setSaving] = useState(false);
+
   const getCalculatedUnits = (m: Measurement): number => {
     if (m.manual_units != null) return m.manual_units;
     return m.count_raw ?? 0;
+  };
+
+  const startEdit = (m: Measurement) => {
+    setEditingId(m.id);
+    setEditData({
+      name: m.name,
+      floor: m.floor || '',
+      manual_units: m.manual_units,
+      measurement_unit: m.measurement_unit || 'ud',
+    });
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+  };
+
+  const saveEdit = async () => {
+    if (!editingId || !editData.name.trim()) return;
+    setSaving(true);
+    const { error } = await supabase
+      .from('budget_measurements')
+      .update({
+        name: editData.name.trim(),
+        floor: editData.floor.trim() || null,
+        manual_units: editData.manual_units,
+        measurement_unit: editData.measurement_unit,
+      })
+      .eq('id', editingId);
+    setSaving(false);
+    if (error) {
+      toast.error('Error al guardar');
+    } else {
+      toast.success('Medición actualizada');
+      setEditingId(null);
+      fetchLinked();
+    }
   };
 
   // Filter available measurements (not yet linked)
@@ -207,34 +247,92 @@ export function TolosaMeasurementsPanel({ budgetId, tolosItemId, isAdmin }: Tolo
               </tr>
             </thead>
             <tbody>
-              {linkedMeasurements.map(m => (
-                <tr key={m.id} className="border-t hover:bg-accent/20 transition-colors">
-                  <td className="px-3 py-1.5">
-                    <span className="font-medium">{m.name}</span>
-                    {m.source && (
-                      <Badge variant="outline" className="ml-2 text-[9px]">{m.source}</Badge>
+              {linkedMeasurements.map(m => {
+                const isEditing = editingId === m.id;
+                return (
+                  <tr key={m.id} className="border-t hover:bg-accent/20 transition-colors">
+                    {isEditing ? (
+                      <>
+                        <td className="px-2 py-1">
+                          <Input
+                            value={editData.name}
+                            onChange={e => setEditData(d => ({ ...d, name: e.target.value }))}
+                            className="h-7 text-sm"
+                            autoFocus
+                            onKeyDown={e => { if (e.key === 'Enter') saveEdit(); if (e.key === 'Escape') cancelEdit(); }}
+                          />
+                        </td>
+                        <td className="px-1 py-1">
+                          <Input
+                            value={editData.floor}
+                            onChange={e => setEditData(d => ({ ...d, floor: e.target.value }))}
+                            className="h-7 text-sm text-center w-16"
+                            placeholder="—"
+                            onKeyDown={e => { if (e.key === 'Enter') saveEdit(); if (e.key === 'Escape') cancelEdit(); }}
+                          />
+                        </td>
+                        <td className="px-1 py-1">
+                          <NumericInput
+                            value={editData.manual_units}
+                            onChange={v => setEditData(d => ({ ...d, manual_units: v }))}
+                            className="h-7 text-sm text-right w-20"
+                            onKeyDown={e => { if (e.key === 'Enter') saveEdit(); if (e.key === 'Escape') cancelEdit(); }}
+                          />
+                        </td>
+                        <td className="px-1 py-1">
+                          <Select value={editData.measurement_unit} onValueChange={v => setEditData(d => ({ ...d, measurement_unit: v }))}>
+                            <SelectTrigger className="h-7 text-xs w-16">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {MEASUREMENT_UNITS.map(u => (
+                                <SelectItem key={u} value={u}>{u}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </td>
+                        <td className="px-1 py-1 text-center">
+                          <div className="flex gap-0.5 justify-center">
+                            <button onClick={saveEdit} disabled={saving} className="p-1 rounded hover:bg-primary/10 text-primary transition-colors" title="Guardar">
+                              <Check className="h-3 w-3" />
+                            </button>
+                            <button onClick={cancelEdit} className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors" title="Cancelar">
+                              <X className="h-3 w-3" />
+                            </button>
+                          </div>
+                        </td>
+                      </>
+                    ) : (
+                      <>
+                        <td className="px-3 py-1.5 cursor-pointer" onClick={() => startEdit(m)}>
+                          <span className="font-medium">{m.name}</span>
+                          {m.source && (
+                            <Badge variant="outline" className="ml-2 text-[9px]">{m.source}</Badge>
+                          )}
+                        </td>
+                        <td className="px-2 py-1.5 text-center text-muted-foreground text-xs cursor-pointer" onClick={() => startEdit(m)}>
+                          {m.floor || '—'}
+                        </td>
+                        <td className="px-2 py-1.5 text-right font-mono text-xs cursor-pointer" onClick={() => startEdit(m)}>
+                          {formatNumber(getCalculatedUnits(m))}
+                        </td>
+                        <td className="px-2 py-1.5 text-center cursor-pointer" onClick={() => startEdit(m)}>
+                          <Badge variant="secondary" className="text-[9px]">{m.measurement_unit || 'ud'}</Badge>
+                        </td>
+                        <td className="px-2 py-1.5 text-center">
+                          <button
+                            onClick={() => unlinkMeasurement(m.id)}
+                            className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+                            title="Desvincular medición"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </td>
+                      </>
                     )}
-                  </td>
-                  <td className="px-2 py-1.5 text-center text-muted-foreground text-xs">
-                    {m.floor || '—'}
-                  </td>
-                  <td className="px-2 py-1.5 text-right font-mono text-xs">
-                    {formatNumber(getCalculatedUnits(m))}
-                  </td>
-                  <td className="px-2 py-1.5 text-center">
-                    <Badge variant="secondary" className="text-[9px]">{m.measurement_unit || 'ud'}</Badge>
-                  </td>
-                  <td className="px-2 py-1.5 text-center">
-                    <button
-                      onClick={() => unlinkMeasurement(m.id)}
-                      className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
-                      title="Desvincular medición"
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                  </td>
-                </tr>
-              ))}
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

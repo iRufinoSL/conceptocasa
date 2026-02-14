@@ -10,7 +10,8 @@ import {
   HelpCircle, Copy, Wrench, Users, MapPin, Clock, DollarSign,
   ExternalLink, Building, User, Truck, FileText, Link, Unlink,
   Home, Ruler, Layers, Landmark, PenTool, RulerIcon, FolderOpen,
-  CalendarDays, MessageSquare, Calculator, BarChart3, Timer, Settings
+  CalendarDays, MessageSquare, Calculator, BarChart3, Timer, Settings,
+  ArrowUp, ArrowDown, ArrowLeft, ArrowRight
 } from 'lucide-react';
 import { BudgetUrbanismTab } from './BudgetUrbanismTab';
 import { BudgetMeasurementsTab } from './BudgetMeasurementsTab';
@@ -428,6 +429,125 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
       ...prev,
       [itemId]: prev[itemId] === dim ? '' : dim,
     }));
+  };
+
+  // Recalculate codes for an item and all its descendants recursively
+  const recalculateCodesForChildren = async (parentId: string | null, parentCode: string) => {
+    const children = parentId ? items.filter(i => i.parent_id === parentId) : items.filter(i => !i.parent_id);
+    const sorted = [...children].sort((a, b) => a.order_index - b.order_index);
+    const updates: PromiseLike<any>[] = [];
+    for (let i = 0; i < sorted.length; i++) {
+      const newCode = parentCode + String(i + 1).padStart(3, '0');
+      if (sorted[i].code !== newCode) {
+        updates.push(
+          supabase.from('tolosa_items').update({ code: newCode, order_index: i }).eq('id', sorted[i].id).then()
+        );
+      } else if (sorted[i].order_index !== i) {
+        updates.push(
+          supabase.from('tolosa_items').update({ order_index: i }).eq('id', sorted[i].id).then()
+        );
+      }
+    }
+    await Promise.all(updates);
+  };
+
+  const recalculateAllCodes = async () => {
+    // Fetch fresh items
+    const { data } = await supabase.from('tolosa_items').select('*').eq('budget_id', budgetId).order('order_index');
+    if (!data) return;
+    const allItems = data as TolosItem[];
+
+    const rebuildRecursive = async (parentId: string | null, prefix: string) => {
+      const children = allItems.filter(i => parentId ? i.parent_id === parentId : !i.parent_id);
+      const sorted = [...children].sort((a, b) => a.order_index - b.order_index);
+      for (let i = 0; i < sorted.length; i++) {
+        const newCode = prefix + String(i + 1).padStart(3, '0');
+        if (sorted[i].code !== newCode || sorted[i].order_index !== i) {
+          await supabase.from('tolosa_items').update({ code: newCode, order_index: i }).eq('id', sorted[i].id);
+        }
+        // Update in-memory for nested lookups
+        sorted[i].code = newCode;
+        sorted[i].order_index = i;
+        await rebuildRecursive(sorted[i].id, newCode);
+      }
+    };
+    await rebuildRecursive(null, '');
+    fetchItems();
+  };
+
+  // Move item up/down within its siblings
+  const moveItem = async (item: TolosItem, direction: 'up' | 'down') => {
+    const siblings = item.parent_id ? getChildren(item.parent_id) : rootItems;
+    const sorted = [...siblings].sort((a, b) => a.order_index - b.order_index);
+    const idx = sorted.findIndex(s => s.id === item.id);
+    if (direction === 'up' && idx <= 0) return;
+    if (direction === 'down' && idx >= sorted.length - 1) return;
+
+    const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
+    const other = sorted[swapIdx];
+
+    await Promise.all([
+      supabase.from('tolosa_items').update({ order_index: swapIdx }).eq('id', item.id).then(),
+      supabase.from('tolosa_items').update({ order_index: idx }).eq('id', other.id).then(),
+    ]);
+    await recalculateAllCodes();
+  };
+
+  // Indent (→): become child of the sibling above
+  const indentItem = async (item: TolosItem) => {
+    const siblings = item.parent_id ? getChildren(item.parent_id) : rootItems;
+    const sorted = [...siblings].sort((a, b) => a.order_index - b.order_index);
+    const idx = sorted.findIndex(s => s.id === item.id);
+    if (idx <= 0) {
+      toast.error('No hay un hermano superior para anidar');
+      return;
+    }
+    const newParent = sorted[idx - 1];
+    const newSiblings = getChildren(newParent.id);
+
+    await supabase.from('tolosa_items').update({
+      parent_id: newParent.id,
+      order_index: newSiblings.length,
+    }).eq('id', item.id);
+
+    setExpandedIds(prev => new Set(prev).add(newParent.id));
+    await recalculateAllCodes();
+    toast.success(`"${item.name}" movido dentro de "${newParent.name}"`);
+  };
+
+  // Outdent (←): move to parent's level (become sibling of parent)
+  const outdentItem = async (item: TolosItem) => {
+    if (!item.parent_id) {
+      toast.error('Ya está en el nivel raíz');
+      return;
+    }
+    const parent = items.find(i => i.id === item.parent_id);
+    if (!parent) return;
+
+    // Place after the parent in the parent's siblings
+    const grandParentId = parent.parent_id;
+    const parentSiblings = grandParentId ? getChildren(grandParentId) : rootItems;
+    const parentIdx = parentSiblings.findIndex(s => s.id === parent.id);
+
+    // Shift siblings after parentIdx to make room
+    const sorted = [...parentSiblings].sort((a, b) => a.order_index - b.order_index);
+    const updates: PromiseLike<any>[] = [];
+    for (const s of sorted) {
+      if (s.order_index > parentIdx) {
+        updates.push(
+          supabase.from('tolosa_items').update({ order_index: s.order_index + 1 }).eq('id', s.id).then()
+        );
+      }
+    }
+    await Promise.all(updates);
+
+    await supabase.from('tolosa_items').update({
+      parent_id: grandParentId || null,
+      order_index: parentIdx + 1,
+    }).eq('id', item.id);
+
+    await recalculateAllCodes();
+    toast.success(`"${item.name}" movido al nivel de "${parent.name}"`);
   };
 
   const getDepthColor = (depth: number) => {
@@ -1345,7 +1465,26 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
 
           {/* Actions */}
           {!isEditing && (
-            <div className="flex items-center gap-1 opacity-0 group-hover/item:opacity-100 transition-opacity shrink-0">
+            <div className="flex items-center gap-0.5 opacity-0 group-hover/item:opacity-100 transition-opacity shrink-0">
+              {/* Move arrows */}
+              <div className="flex items-center gap-0 border rounded-md mr-1">
+                <Button size="icon" variant="ghost" className="h-6 w-6 rounded-r-none" title="Subir nivel (← Outdent)"
+                  onClick={() => outdentItem(item)} disabled={!item.parent_id}>
+                  <ArrowLeft className="h-3 w-3" />
+                </Button>
+                <Button size="icon" variant="ghost" className="h-6 w-6 rounded-none border-x" title="Mover arriba"
+                  onClick={() => moveItem(item, 'up')}>
+                  <ArrowUp className="h-3 w-3" />
+                </Button>
+                <Button size="icon" variant="ghost" className="h-6 w-6 rounded-none" title="Mover abajo"
+                  onClick={() => moveItem(item, 'down')}>
+                  <ArrowDown className="h-3 w-3" />
+                </Button>
+                <Button size="icon" variant="ghost" className="h-6 w-6 rounded-l-none" title="Bajar nivel (→ Indent)"
+                  onClick={() => indentItem(item)}>
+                  <ArrowRight className="h-3 w-3" />
+                </Button>
+              </div>
               <Button size="icon" variant="ghost" className="h-7 w-7" title="Añadir sub-QUÉ?"
                 onClick={() => { setAddingParentId(item.id); setNewName(''); setNewDescription(''); }}>
                 <Plus className="h-3.5 w-3.5" />

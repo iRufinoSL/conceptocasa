@@ -10,7 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ArrowLeft, Calculator, ClipboardList, Building2, FileText, Settings, Calendar, Ruler, FileDown, Image, RefreshCw, Copy, GanttChart, Upload, X, Loader2, Euro, Home, MapPin, Users, FolderOpen, CalendarCheck, Mail, Landmark, PenTool, Wallet } from 'lucide-react';
+import { ArrowLeft, Calculator, ClipboardList, Building2, FileText, Settings, Calendar, Ruler, FileDown, Image, RefreshCw, Copy, GanttChart, Upload, X, Loader2, Euro, Home, MapPin, Users, FolderOpen, CalendarCheck, Mail, Landmark, PenTool, Wallet, Brain } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { AppNavDropdown } from '@/components/AppNavDropdown';
@@ -38,7 +38,7 @@ import { BudgetPresenceIndicator } from '@/components/presupuestos/BudgetPresenc
 import { FloorPlanTab } from '@/components/presupuestos/FloorPlanTab';
 import { toast } from 'sonner';
 import { BudgetAdministracionTab } from '@/components/presupuestos/BudgetAdministracionTab';
-
+import { TolosaBrainstormView } from '@/components/presupuestos/TolosaBrainstormView';
 interface Presupuesto {
   id: string;
   nombre: string;
@@ -85,7 +85,7 @@ export default function PresupuestoDashboard() {
   const [selectedActivityId, setSelectedActivityId] = useState<string | null>(null);
   const [activityReturnTab, setActivityReturnTab] = useState<string | null>(null);
   const portadaInputRef = useRef<HTMLInputElement>(null);
-
+  const [budgetMode, setBudgetMode] = useState<'gestconcepto' | 'tolosa'>('gestconcepto');
   const isAdmin = roles.includes('administrador');
   const { isTabVisible } = useTabVisibility();
 
@@ -371,6 +371,32 @@ export default function PresupuestoDashboard() {
       </header>
 
       <main className="container mx-auto px-4 py-8">
+        {/* Mode Selector */}
+        <div className="flex items-center gap-2 mb-6">
+          <Button
+            variant={budgetMode === 'tolosa' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setBudgetMode('tolosa')}
+            className="gap-2"
+          >
+            <Brain className="h-4 w-4" />
+            TO.LO.SA.system 2.0
+          </Button>
+          <Button
+            variant={budgetMode === 'gestconcepto' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setBudgetMode('gestconcepto')}
+            className="gap-2"
+          >
+            <Calculator className="h-4 w-4" />
+            GestConcepto 1.0
+          </Button>
+        </div>
+
+        {budgetMode === 'tolosa' ? (
+          <TolosaBrainstormView budgetId={presupuesto.id} isAdmin={isAdmin} />
+        ) : (
+        <>
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-6 gap-4 mb-8">
           <Card>
@@ -1082,6 +1108,8 @@ export default function PresupuestoDashboard() {
             </div>
           </TabsContent>
         </Tabs>
+        </>
+        )}
       </main>
 
       {/* Report Preview Dialog */}

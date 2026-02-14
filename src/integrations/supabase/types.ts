@@ -4232,6 +4232,42 @@ export type Database = {
           },
         ]
       }
+      tolosa_item_measurements: {
+        Row: {
+          created_at: string
+          id: string
+          measurement_id: string
+          tolosa_item_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          measurement_id: string
+          tolosa_item_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          measurement_id?: string
+          tolosa_item_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tolosa_item_measurements_measurement_id_fkey"
+            columns: ["measurement_id"]
+            isOneToOne: false
+            referencedRelation: "budget_measurements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tolosa_item_measurements_tolosa_item_id_fkey"
+            columns: ["tolosa_item_id"]
+            isOneToOne: false
+            referencedRelation: "tolosa_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tolosa_items: {
         Row: {
           address_city: string | null

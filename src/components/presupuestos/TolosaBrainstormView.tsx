@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { BudgetUrbanismTab } from './BudgetUrbanismTab';
 import { BudgetMeasurementsTab } from './BudgetMeasurementsTab';
+import { TolosaMeasurementsPanel } from './TolosaMeasurementsPanel';
 import { BudgetAgendaTab } from './BudgetAgendaTab';
 import { BudgetAdministracionTab } from './BudgetAdministracionTab';
 import { BudgetSpacesTab } from './BudgetSpacesTab';
@@ -1265,7 +1266,7 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
       case 'anteproyecto':
         return <BudgetPredesignTab budgetId={budgetId} isAdmin={isAdmin} projectId={null} />;
       case 'mediciones':
-        return <BudgetMeasurementsTab budgetId={budgetId} isAdmin={isAdmin} />;
+        return <TolosaMeasurementsPanel budgetId={budgetId} tolosItemId={item.id} isAdmin={isAdmin} />;
       case 'documentos':
         return <BudgetDocumentsTab budgetId={budgetId} projectId={null} projectName={null} isAdmin={isAdmin} />;
       case 'agenda':

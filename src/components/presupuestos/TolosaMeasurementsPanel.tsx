@@ -33,12 +33,15 @@ interface TolosaMeasurementsPanelProps {
   budgetId: string;
   tolosItemId: string;
   isAdmin: boolean;
+  parentItemId?: string | null;
 }
 
-export function TolosaMeasurementsPanel({ budgetId, tolosItemId, isAdmin }: TolosaMeasurementsPanelProps) {
+export function TolosaMeasurementsPanel({ budgetId, tolosItemId, isAdmin, parentItemId }: TolosaMeasurementsPanelProps) {
   const [linkedMeasurements, setLinkedMeasurements] = useState<Measurement[]>([]);
+  const [inheritedMeasurements, setInheritedMeasurements] = useState<Measurement[]>([]);
   const [allMeasurements, setAllMeasurements] = useState<Measurement[]>([]);
   const [linkedIds, setLinkedIds] = useState<Set<string>>(new Set());
+  const [isInheriting, setIsInheriting] = useState(false);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [showSearch, setShowSearch] = useState(false);
@@ -51,7 +54,7 @@ export function TolosaMeasurementsPanel({ budgetId, tolosItemId, isAdmin }: Tolo
 
   const fetchLinked = useCallback(async () => {
     setLoading(true);
-    // Get linked measurement IDs
+    // Get linked measurement IDs for this item
     const { data: links } = await supabase
       .from('tolosa_item_measurements')
       .select('measurement_id')
@@ -67,11 +70,36 @@ export function TolosaMeasurementsPanel({ budgetId, tolosItemId, isAdmin }: Tolo
         .in('id', Array.from(ids))
         .order('name');
       setLinkedMeasurements((measurements as Measurement[]) || []);
+      setInheritedMeasurements([]);
+      setIsInheriting(false);
     } else {
       setLinkedMeasurements([]);
+      // Inherit from parent if no own measurements
+      if (parentItemId) {
+        const { data: parentLinks } = await supabase
+          .from('tolosa_item_measurements')
+          .select('measurement_id')
+          .eq('tolosa_item_id', parentItemId);
+        const parentIds = (parentLinks || []).map(l => l.measurement_id);
+        if (parentIds.length > 0) {
+          const { data: parentMeasurements } = await supabase
+            .from('budget_measurements')
+            .select('*')
+            .in('id', parentIds)
+            .order('name');
+          setInheritedMeasurements((parentMeasurements as Measurement[]) || []);
+          setIsInheriting(true);
+        } else {
+          setInheritedMeasurements([]);
+          setIsInheriting(false);
+        }
+      } else {
+        setInheritedMeasurements([]);
+        setIsInheriting(false);
+      }
     }
     setLoading(false);
-  }, [tolosItemId]);
+  }, [tolosItemId, parentItemId]);
 
   const fetchAllMeasurements = useCallback(async () => {
     const { data } = await supabase
@@ -213,7 +241,8 @@ export function TolosaMeasurementsPanel({ budgetId, tolosItemId, isAdmin }: Tolo
       <div className="flex items-center justify-between gap-2">
         <h5 className="text-sm font-semibold flex items-center gap-1.5">
           <Ruler className="h-4 w-4 text-muted-foreground" />
-          Mediciones vinculadas ({linkedMeasurements.length})
+          Mediciones {isInheriting ? '(heredadas del padre)' : `vinculadas (${linkedMeasurements.length})`}
+          {isInheriting && <Badge variant="outline" className="text-[9px] ml-1">heredadas</Badge>}
         </h5>
         <div className="flex gap-1">
           <Button size="sm" variant="outline" className="text-xs" onClick={() => setShowSearch(!showSearch)}>
@@ -225,16 +254,22 @@ export function TolosaMeasurementsPanel({ budgetId, tolosItemId, isAdmin }: Tolo
         </div>
       </div>
 
-      {/* Linked measurements list */}
-      {loading ? (
-        <p className="text-xs text-muted-foreground text-center py-4">Cargando...</p>
-      ) : linkedMeasurements.length === 0 ? (
-        <div className="p-4 rounded border border-dashed text-center space-y-1">
-          <Ruler className="h-6 w-6 text-muted-foreground/40 mx-auto" />
-          <p className="text-sm text-muted-foreground">Sin mediciones vinculadas</p>
-          <p className="text-xs text-muted-foreground">Busca una medición existente o crea una nueva.</p>
-        </div>
-      ) : (
+      {/* Linked or inherited measurements list */}
+      {(() => {
+        const displayMeasurements = linkedMeasurements.length > 0 ? linkedMeasurements : inheritedMeasurements;
+        const isDisplayInherited = linkedMeasurements.length === 0 && inheritedMeasurements.length > 0;
+
+        if (loading) return <p className="text-xs text-muted-foreground text-center py-4">Cargando...</p>;
+
+        if (displayMeasurements.length === 0) return (
+          <div className="p-4 rounded border border-dashed text-center space-y-1">
+            <Ruler className="h-6 w-6 text-muted-foreground/40 mx-auto" />
+            <p className="text-sm text-muted-foreground">Sin mediciones vinculadas</p>
+            <p className="text-xs text-muted-foreground">Busca una medición existente o crea una nueva.</p>
+          </div>
+        );
+
+        return (
         <div className="border rounded overflow-hidden">
           <table className="w-full text-sm">
             <thead>
@@ -247,10 +282,10 @@ export function TolosaMeasurementsPanel({ budgetId, tolosItemId, isAdmin }: Tolo
               </tr>
             </thead>
             <tbody>
-              {linkedMeasurements.map(m => {
-                const isEditing = editingId === m.id;
+              {displayMeasurements.map(m => {
+                const isEditing = !isDisplayInherited && editingId === m.id;
                 return (
-                  <tr key={m.id} className="border-t hover:bg-accent/20 transition-colors">
+                  <tr key={m.id} className={`border-t hover:bg-accent/20 transition-colors ${isDisplayInherited ? 'opacity-70' : ''}`}>
                     {isEditing ? (
                       <>
                         <td className="px-2 py-1">
@@ -304,29 +339,34 @@ export function TolosaMeasurementsPanel({ budgetId, tolosItemId, isAdmin }: Tolo
                       </>
                     ) : (
                       <>
-                        <td className="px-3 py-1.5 cursor-pointer" onClick={() => startEdit(m)}>
+                        <td className="px-3 py-1.5 cursor-pointer" onClick={() => !isDisplayInherited && startEdit(m)}>
                           <span className="font-medium">{m.name}</span>
                           {m.source && (
                             <Badge variant="outline" className="ml-2 text-[9px]">{m.source}</Badge>
                           )}
+                          {isDisplayInherited && (
+                            <Badge variant="outline" className="ml-2 text-[9px] border-amber-300 text-amber-600">heredada</Badge>
+                          )}
                         </td>
-                        <td className="px-2 py-1.5 text-center text-muted-foreground text-xs cursor-pointer" onClick={() => startEdit(m)}>
+                        <td className="px-2 py-1.5 text-center text-muted-foreground text-xs cursor-pointer" onClick={() => !isDisplayInherited && startEdit(m)}>
                           {m.floor || '—'}
                         </td>
-                        <td className="px-2 py-1.5 text-right font-mono text-xs cursor-pointer" onClick={() => startEdit(m)}>
+                        <td className="px-2 py-1.5 text-right font-mono text-xs cursor-pointer" onClick={() => !isDisplayInherited && startEdit(m)}>
                           {formatNumber(getCalculatedUnits(m))}
                         </td>
-                        <td className="px-2 py-1.5 text-center cursor-pointer" onClick={() => startEdit(m)}>
+                        <td className="px-2 py-1.5 text-center cursor-pointer" onClick={() => !isDisplayInherited && startEdit(m)}>
                           <Badge variant="secondary" className="text-[9px]">{m.measurement_unit || 'ud'}</Badge>
                         </td>
                         <td className="px-2 py-1.5 text-center">
-                          <button
-                            onClick={() => unlinkMeasurement(m.id)}
-                            className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
-                            title="Desvincular medición"
-                          >
-                            <X className="h-3 w-3" />
-                          </button>
+                          {!isDisplayInherited && (
+                            <button
+                              onClick={() => unlinkMeasurement(m.id)}
+                              className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+                              title="Desvincular medición"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          )}
                         </td>
                       </>
                     )}
@@ -336,7 +376,8 @@ export function TolosaMeasurementsPanel({ budgetId, tolosItemId, isAdmin }: Tolo
             </tbody>
           </table>
         </div>
-      )}
+        );
+      })()}
 
       {/* Search panel */}
       {showSearch && (

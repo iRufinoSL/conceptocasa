@@ -8,8 +8,11 @@ import { Badge } from '@/components/ui/badge';
 import {
   Plus, ChevronRight, ChevronDown, Brain, Trash2, Edit2, Check, X,
   HelpCircle, Copy, Wrench, Users, MapPin, Clock, DollarSign,
-  ExternalLink, Building, User, Truck, FileText, Link, Unlink
+  ExternalLink, Building, User, Truck, FileText, Link, Unlink,
+  Home, Ruler, Layers
 } from 'lucide-react';
+import { SpaceDetail } from './HousingProfileEditor';
+import { Json } from '@/integrations/supabase/types';
 import { toast } from 'sonner';
 
 interface TolosItem {
@@ -52,6 +55,27 @@ interface ProfileInfo {
   project_id: string;
 }
 
+interface FullProfileData {
+  id: string;
+  contact_name: string;
+  contact_email: string;
+  poblacion: string | null;
+  num_plantas: string | null;
+  m2_por_planta: string | null;
+  num_habitaciones_total: string | null;
+  num_banos_total: string | null;
+  tipo_salon: string | null;
+  tipo_cocina: string | null;
+  lavanderia: string | null;
+  despensa: string | null;
+  garaje: string | null;
+  porche_cubierto: string | null;
+  patio_descubierto: string | null;
+  presupuesto_global: string | null;
+  espacios_detalle: Json | null;
+  altura_habitaciones: number | null;
+}
+
 interface TolosaBrainstormViewProps {
   budgetId: string;
   isAdmin: boolean;
@@ -83,6 +107,7 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
   const [housingProfiles, setHousingProfiles] = useState<ProfileInfo[]>([]);
   const [profileSearch, setProfileSearch] = useState('');
   const [showProfilePicker, setShowProfilePicker] = useState<string | null>(null);
+  const [profileCache, setProfileCache] = useState<Record<string, FullProfileData>>({});
   const [dondeForm, setDondeForm] = useState<Record<string, {
     address_street: string;
     address_city: string;
@@ -173,6 +198,23 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
             cache[c.id] = `${c.name}${c.surname ? ' ' + c.surname : ''}`;
           });
           setContactCache(prev => ({ ...prev, ...cache }));
+        }
+      }
+
+      // Fetch linked housing profiles
+      const profileIds = new Set<string>();
+      loadedItems.forEach(i => {
+        if (i.housing_profile_id) profileIds.add(i.housing_profile_id);
+      });
+      if (profileIds.size > 0) {
+        const { data: pData } = await supabase
+          .from('project_profiles')
+          .select('id, contact_name, contact_email, poblacion, num_plantas, m2_por_planta, num_habitaciones_total, num_banos_total, tipo_salon, tipo_cocina, lavanderia, despensa, garaje, porche_cubierto, patio_descubierto, presupuesto_global, espacios_detalle, altura_habitaciones')
+          .in('id', Array.from(profileIds));
+        if (pData) {
+          const cache: Record<string, FullProfileData> = {};
+          pData.forEach((p: any) => { cache[p.id] = p; });
+          setProfileCache(prev => ({ ...prev, ...cache }));
         }
       }
     }
@@ -702,12 +744,94 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
   // CÓMO? panel
   const getProfileName = (profileId: string | null) => {
     if (!profileId) return null;
-    const p = housingProfiles.find(p => p.id === profileId);
-    return p ? `${p.contact_name} — ${p.poblacion || p.contact_email}` : profileId.slice(0, 8) + '...';
+    const p = profileCache[profileId];
+    if (p) return `${p.contact_name} — ${p.poblacion || p.contact_email}`;
+    const pList = housingProfiles.find(p => p.id === profileId);
+    return pList ? `${pList.contact_name} — ${pList.poblacion || pList.contact_email}` : profileId.slice(0, 8) + '...';
+  };
+
+  const renderProfileDetail = (profile: FullProfileData) => {
+    const spaces: SpaceDetail[] = Array.isArray(profile.espacios_detalle)
+      ? (profile.espacios_detalle as unknown as SpaceDetail[])
+      : [];
+    const totalM2 = spaces.reduce((sum, s) => sum + (s.m2 || 0), 0);
+    const m2Planta = profile.m2_por_planta ? parseFloat(profile.m2_por_planta) : null;
+    const numPlantas = profile.num_plantas ? parseInt(profile.num_plantas) : null;
+    const m2Construidos = m2Planta && numPlantas ? m2Planta * numPlantas : null;
+
+    return (
+      <div className="space-y-2 mt-2">
+        {/* Summary metrics */}
+        <div className="grid grid-cols-3 gap-2">
+          <div className="p-2 rounded border bg-background text-center">
+            <p className="text-lg font-bold text-foreground">{m2Construidos ? `${m2Construidos}` : '—'}</p>
+            <p className="text-[10px] text-muted-foreground uppercase">m² Construidos</p>
+          </div>
+          <div className="p-2 rounded border bg-background text-center">
+            <p className="text-lg font-bold text-foreground">{totalM2 > 0 ? `${totalM2.toFixed(1)}` : '—'}</p>
+            <p className="text-[10px] text-muted-foreground uppercase">m² Habitables</p>
+          </div>
+          <div className="p-2 rounded border bg-background text-center">
+            <p className="text-lg font-bold text-foreground">{m2Planta ? `${m2Planta}` : '—'}</p>
+            <p className="text-[10px] text-muted-foreground uppercase">m²/Planta</p>
+          </div>
+        </div>
+
+        {/* Key data row */}
+        <div className="flex flex-wrap gap-2 text-xs">
+          {profile.num_plantas && (
+            <Badge variant="outline" className="gap-1"><Layers className="h-3 w-3" />{profile.num_plantas} plantas</Badge>
+          )}
+          {profile.num_habitaciones_total && (
+            <Badge variant="outline" className="gap-1"><Home className="h-3 w-3" />{profile.num_habitaciones_total} hab.</Badge>
+          )}
+          {profile.num_banos_total && (
+            <Badge variant="outline" className="gap-1">{profile.num_banos_total} baños</Badge>
+          )}
+          {profile.altura_habitaciones && (
+            <Badge variant="outline" className="gap-1"><Ruler className="h-3 w-3" />{profile.altura_habitaciones}m alto</Badge>
+          )}
+          {profile.presupuesto_global && (
+            <Badge variant="outline" className="gap-1"><DollarSign className="h-3 w-3" />{profile.presupuesto_global}€</Badge>
+          )}
+        </div>
+
+        {/* Spaces list */}
+        {spaces.length > 0 && (
+          <div className="space-y-1">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Espacios del perfil</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-1">
+              {spaces.map(s => (
+                <div key={s.id} className="flex items-center justify-between px-2 py-1 rounded border bg-background text-sm">
+                  <span className="truncate">{s.name}</span>
+                  <span className="text-muted-foreground text-xs shrink-0 ml-2">
+                    {s.m2 ? `${s.m2} m²` : '—'}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Extra features */}
+        {(profile.tipo_salon || profile.tipo_cocina || profile.garaje || profile.porche_cubierto || profile.lavanderia || profile.despensa) && (
+          <div className="flex flex-wrap gap-1 text-xs">
+            {profile.tipo_salon && <Badge variant="secondary" className="text-[10px]">Salón: {profile.tipo_salon}</Badge>}
+            {profile.tipo_cocina && <Badge variant="secondary" className="text-[10px]">Cocina: {profile.tipo_cocina}</Badge>}
+            {profile.garaje && profile.garaje !== 'no' && <Badge variant="secondary" className="text-[10px]">Garaje: {profile.garaje}</Badge>}
+            {profile.porche_cubierto && profile.porche_cubierto !== 'no' && <Badge variant="secondary" className="text-[10px]">Porche: {profile.porche_cubierto}</Badge>}
+            {profile.patio_descubierto && profile.patio_descubierto !== 'no' && <Badge variant="secondary" className="text-[10px]">Patio: {profile.patio_descubierto}</Badge>}
+            {profile.lavanderia && profile.lavanderia !== 'no' && <Badge variant="secondary" className="text-[10px]">Lavandería: {profile.lavanderia}</Badge>}
+            {profile.despensa && profile.despensa !== 'no' && <Badge variant="secondary" className="text-[10px]">Despensa: {profile.despensa}</Badge>}
+          </div>
+        )}
+      </div>
+    );
   };
 
   const renderComoPanel = (item: TolosItem) => {
     const isPickerOpen = showProfilePicker === item.id;
+    const linkedProfile = item.housing_profile_id ? profileCache[item.housing_profile_id] : null;
 
     return (
       <div className="space-y-3 p-3 rounded-lg border border-blue-200 bg-blue-50/50 dark:border-blue-800 dark:bg-blue-950/30">
@@ -718,20 +842,27 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Perfil de vivienda</p>
 
           {item.housing_profile_id ? (
-            <div className="flex items-center gap-2 p-2 rounded border border-blue-300 bg-blue-100/50 dark:border-blue-700 dark:bg-blue-900/30">
-              <Link className="h-4 w-4 text-blue-500 shrink-0" />
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate">{getProfileName(item.housing_profile_id)}</p>
-                <p className="text-xs text-muted-foreground">Perfil vinculado</p>
+            <div className="space-y-0">
+              <div className="flex items-center gap-2 p-2 rounded-t border border-blue-300 bg-blue-100/50 dark:border-blue-700 dark:bg-blue-900/30">
+                <Link className="h-4 w-4 text-blue-500 shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate">{getProfileName(item.housing_profile_id)}</p>
+                  <p className="text-xs text-muted-foreground">Perfil vinculado</p>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="text-xs shrink-0"
+                  onClick={() => updateItemField(item.id, { housing_profile_id: null })}
+                >
+                  <Unlink className="h-3 w-3 mr-1" /> Desvincular
+                </Button>
               </div>
-              <Button
-                size="sm"
-                variant="outline"
-                className="text-xs shrink-0"
-                onClick={() => updateItemField(item.id, { housing_profile_id: null })}
-              >
-                <Unlink className="h-3 w-3 mr-1" /> Desvincular
-              </Button>
+              {linkedProfile && (
+                <div className="p-2 rounded-b border border-t-0 border-blue-300 dark:border-blue-700">
+                  {renderProfileDetail(linkedProfile)}
+                </div>
+              )}
             </div>
           ) : (
             <div className="space-y-2">

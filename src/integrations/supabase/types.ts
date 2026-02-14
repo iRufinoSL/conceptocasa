@@ -4234,36 +4234,63 @@ export type Database = {
       }
       tolosa_items: {
         Row: {
+          address_postal_code: string | null
+          address_province: string | null
+          address_street: string | null
           budget_id: string
+          cadastral_reference: string | null
+          client_contact_id: string | null
           code: string
           created_at: string
           description: string | null
+          housing_profile_id: string | null
           id: string
+          latitude: number | null
+          longitude: number | null
           name: string
           order_index: number
           parent_id: string | null
+          supplier_contact_id: string | null
           updated_at: string
         }
         Insert: {
+          address_postal_code?: string | null
+          address_province?: string | null
+          address_street?: string | null
           budget_id: string
+          cadastral_reference?: string | null
+          client_contact_id?: string | null
           code: string
           created_at?: string
           description?: string | null
+          housing_profile_id?: string | null
           id?: string
+          latitude?: number | null
+          longitude?: number | null
           name: string
           order_index?: number
           parent_id?: string | null
+          supplier_contact_id?: string | null
           updated_at?: string
         }
         Update: {
+          address_postal_code?: string | null
+          address_province?: string | null
+          address_street?: string | null
           budget_id?: string
+          cadastral_reference?: string | null
+          client_contact_id?: string | null
           code?: string
           created_at?: string
           description?: string | null
+          housing_profile_id?: string | null
           id?: string
+          latitude?: number | null
+          longitude?: number | null
           name?: string
           order_index?: number
           parent_id?: string | null
+          supplier_contact_id?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -4275,10 +4302,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "tolosa_items_client_contact_id_fkey"
+            columns: ["client_contact_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contacts"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "tolosa_items_parent_id_fkey"
             columns: ["parent_id"]
             isOneToOne: false
             referencedRelation: "tolosa_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tolosa_items_supplier_contact_id_fkey"
+            columns: ["supplier_contact_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contacts"
             referencedColumns: ["id"]
           },
         ]

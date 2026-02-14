@@ -7,7 +7,8 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import {
   Plus, ChevronRight, ChevronDown, Brain, Trash2, Edit2, Check, X,
-  HelpCircle, Copy, Wrench, Users, MapPin, Clock, DollarSign
+  HelpCircle, Copy, Wrench, Users, MapPin, Clock, DollarSign,
+  ExternalLink, Building, User, Truck, FileText
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -21,6 +22,23 @@ interface TolosItem {
   order_index: number;
   created_at: string;
   updated_at: string;
+  address_street: string | null;
+  address_postal_code: string | null;
+  address_province: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  cadastral_reference: string | null;
+  client_contact_id: string | null;
+  supplier_contact_id: string | null;
+  housing_profile_id: string | null;
+}
+
+interface ContactInfo {
+  id: string;
+  name: string;
+  surname: string | null;
+  email: string | null;
+  phone: string | null;
 }
 
 interface TolosaBrainstormViewProps {
@@ -29,9 +47,9 @@ interface TolosaBrainstormViewProps {
 }
 
 const DIMENSION_LINKS = [
-  { key: 'como', label: 'CÓMO?', icon: Wrench, color: 'text-blue-600 bg-blue-50 border-blue-200 dark:text-blue-400 dark:bg-blue-950 dark:border-blue-800', hint: 'Actividades' },
-  { key: 'quien', label: 'QUIÉN?', icon: Users, color: 'text-emerald-600 bg-emerald-50 border-emerald-200 dark:text-emerald-400 dark:bg-emerald-950 dark:border-emerald-800', hint: 'Contactos' },
-  { key: 'donde', label: 'DÓNDE?', icon: MapPin, color: 'text-amber-600 bg-amber-50 border-amber-200 dark:text-amber-400 dark:bg-amber-950 dark:border-amber-800', hint: 'Zonas de trabajo' },
+  { key: 'como', label: 'CÓMO?', icon: Wrench, color: 'text-blue-600 bg-blue-50 border-blue-200 dark:text-blue-400 dark:bg-blue-950 dark:border-blue-800', hint: 'Actividades / Perfil' },
+  { key: 'quien', label: 'QUIÉN?', icon: Users, color: 'text-emerald-600 bg-emerald-50 border-emerald-200 dark:text-emerald-400 dark:bg-emerald-950 dark:border-emerald-800', hint: 'Cliente / Proveedor' },
+  { key: 'donde', label: 'DÓNDE?', icon: MapPin, color: 'text-amber-600 bg-amber-50 border-amber-200 dark:text-amber-400 dark:bg-amber-950 dark:border-amber-800', hint: 'Dirección / Catastro' },
   { key: 'cuando', label: 'CUÁNDO?', icon: Clock, color: 'text-purple-600 bg-purple-50 border-purple-200 dark:text-purple-400 dark:bg-purple-950 dark:border-purple-800', hint: 'Fases / Plazos' },
   { key: 'cuanto', label: 'CUÁNTO?', icon: DollarSign, color: 'text-rose-600 bg-rose-50 border-rose-200 dark:text-rose-400 dark:bg-rose-950 dark:border-rose-800', hint: 'Recursos / Costes' },
 ];
@@ -47,6 +65,9 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
   const [editDescription, setEditDescription] = useState('');
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [detailOpenIds, setDetailOpenIds] = useState<Set<string>>(new Set());
+  const [activeDimension, setActiveDimension] = useState<Record<string, string>>({});
+  const [contacts, setContacts] = useState<ContactInfo[]>([]);
+  const [contactSearch, setContactSearch] = useState('');
 
   const fetchItems = useCallback(async () => {
     const { data, error } = await supabase
@@ -59,12 +80,19 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
       console.error('Error fetching tolosa items:', error);
       toast.error('Error al cargar ítems');
     } else {
-      setItems(data || []);
+      setItems((data as TolosItem[]) || []);
     }
     setLoading(false);
   }, [budgetId]);
 
-  useEffect(() => { fetchItems(); }, [fetchItems]);
+  const fetchContacts = useCallback(async (search?: string) => {
+    let query = supabase.from('crm_contacts').select('id, name, surname, email, phone').order('name').limit(20);
+    if (search) query = query.or(`name.ilike.%${search}%,surname.ilike.%${search}%`);
+    const { data } = await query;
+    setContacts((data as ContactInfo[]) || []);
+  }, []);
+
+  useEffect(() => { fetchItems(); fetchContacts(); }, [fetchItems, fetchContacts]);
 
   const rootItems = items.filter(i => !i.parent_id);
   const getChildren = (parentId: string) => items.filter(i => i.parent_id === parentId);
@@ -137,7 +165,15 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
     }
   };
 
-  // Duplicate an item (and optionally all descendants) as sibling or as sub-item
+  const updateItemField = async (id: string, fields: Record<string, unknown>) => {
+    const { error } = await supabase.from('tolosa_items').update(fields).eq('id', id);
+    if (error) {
+      toast.error('Error al guardar');
+    } else {
+      fetchItems();
+    }
+  };
+
   const duplicateItem = async (item: TolosItem, asSub: boolean) => {
     const targetParentId = asSub ? item.id : item.parent_id;
     const code = getNextCode(targetParentId);
@@ -152,6 +188,15 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
         name: item.name + ' (copia)',
         description: item.description,
         order_index: siblings.length,
+        address_street: item.address_street,
+        address_postal_code: item.address_postal_code,
+        address_province: item.address_province,
+        latitude: item.latitude,
+        longitude: item.longitude,
+        cadastral_reference: item.cadastral_reference,
+        client_contact_id: item.client_contact_id,
+        supplier_contact_id: item.supplier_contact_id,
+        housing_profile_id: item.housing_profile_id,
       })
       .select()
       .single();
@@ -161,7 +206,6 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
       return;
     }
 
-    // Recursively duplicate children
     const children = getChildren(item.id);
     if (children.length > 0) {
       await duplicateChildren(children, newItem.id, newItem.code);
@@ -185,6 +229,15 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
           name: child.name,
           description: child.description,
           order_index: i,
+          address_street: child.address_street,
+          address_postal_code: child.address_postal_code,
+          address_province: child.address_province,
+          latitude: child.latitude,
+          longitude: child.longitude,
+          cadastral_reference: child.cadastral_reference,
+          client_contact_id: child.client_contact_id,
+          supplier_contact_id: child.supplier_contact_id,
+          housing_profile_id: child.housing_profile_id,
         })
         .select()
         .single();
@@ -214,6 +267,13 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
     });
   };
 
+  const setDimension = (itemId: string, dim: string) => {
+    setActiveDimension(prev => ({
+      ...prev,
+      [itemId]: prev[itemId] === dim ? '' : dim,
+    }));
+  };
+
   const getDepthColor = (depth: number) => {
     const colors = [
       'border-l-primary',
@@ -226,6 +286,256 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
     return colors[depth % colors.length];
   };
 
+  const getGoogleMapsUrl = (item: TolosItem) => {
+    if (item.latitude && item.longitude) {
+      return `https://www.google.com/maps?q=${item.latitude},${item.longitude}`;
+    }
+    const addr = [item.address_street, item.address_postal_code, item.address_province].filter(Boolean).join(', ');
+    if (addr) return `https://www.google.com/maps/search/${encodeURIComponent(addr)}`;
+    return null;
+  };
+
+  const getCatastroUrl = (ref: string) => {
+    return `https://www1.sedecatastro.gob.es/CYCBienInmworking/OVCConCiworking.aspx?RefC=${encodeURIComponent(ref)}`;
+  };
+
+  const getContactName = (contactId: string | null) => {
+    if (!contactId) return null;
+    const c = contacts.find(c => c.id === contactId);
+    return c ? `${c.name}${c.surname ? ' ' + c.surname : ''}` : 'Cargando...';
+  };
+
+  // DÓNDE? panel
+  const renderDondePanel = (item: TolosItem) => (
+    <div className="space-y-3 p-3 rounded-lg border border-amber-200 bg-amber-50/50 dark:border-amber-800 dark:bg-amber-950/30">
+      <h4 className="text-sm font-semibold flex items-center gap-2 text-amber-700 dark:text-amber-400">
+        <MapPin className="h-4 w-4" /> DÓNDE? — Ubicación
+      </h4>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+        <div>
+          <label className="text-xs text-muted-foreground">Calle / Dirección</label>
+          <Input
+            value={item.address_street || ''}
+            placeholder="Calle, número..."
+            onChange={e => updateItemField(item.id, { address_street: e.target.value || null })}
+            className="h-8 text-sm"
+          />
+        </div>
+        <div>
+          <label className="text-xs text-muted-foreground">Código Postal</label>
+          <Input
+            value={item.address_postal_code || ''}
+            placeholder="28001"
+            onChange={e => updateItemField(item.id, { address_postal_code: e.target.value || null })}
+            className="h-8 text-sm"
+          />
+        </div>
+        <div>
+          <label className="text-xs text-muted-foreground">Provincia</label>
+          <Input
+            value={item.address_province || ''}
+            placeholder="Madrid"
+            onChange={e => updateItemField(item.id, { address_province: e.target.value || null })}
+            className="h-8 text-sm"
+          />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <div>
+          <label className="text-xs text-muted-foreground">Coordenadas (Lat, Lng)</label>
+          <div className="flex gap-2">
+            <Input
+              type="number"
+              step="any"
+              value={item.latitude ?? ''}
+              placeholder="Lat"
+              onChange={e => updateItemField(item.id, { latitude: e.target.value ? parseFloat(e.target.value) : null })}
+              className="h-8 text-sm"
+            />
+            <Input
+              type="number"
+              step="any"
+              value={item.longitude ?? ''}
+              placeholder="Lng"
+              onChange={e => updateItemField(item.id, { longitude: e.target.value ? parseFloat(e.target.value) : null })}
+              className="h-8 text-sm"
+            />
+          </div>
+          {getGoogleMapsUrl(item) && (
+            <a
+              href={getGoogleMapsUrl(item)!}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-xs text-primary hover:underline mt-1"
+            >
+              <ExternalLink className="h-3 w-3" /> Ver en Google Maps
+            </a>
+          )}
+        </div>
+        <div>
+          <label className="text-xs text-muted-foreground">Referencia Catastral</label>
+          <Input
+            value={item.cadastral_reference || ''}
+            placeholder="0000000AA0000A0001AA"
+            onChange={e => updateItemField(item.id, { cadastral_reference: e.target.value || null })}
+            className="h-8 text-sm"
+          />
+          {item.cadastral_reference && (
+            <a
+              href={getCatastroUrl(item.cadastral_reference)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-xs text-primary hover:underline mt-1"
+            >
+              <Building className="h-3 w-3" /> Consultar Catastro
+            </a>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+
+  // QUIÉN? panel
+  const renderQuienPanel = (item: TolosItem) => (
+    <div className="space-y-3 p-3 rounded-lg border border-emerald-200 bg-emerald-50/50 dark:border-emerald-800 dark:bg-emerald-950/30">
+      <h4 className="text-sm font-semibold flex items-center gap-2 text-emerald-700 dark:text-emerald-400">
+        <Users className="h-4 w-4" /> QUIÉN? — Personas
+      </h4>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {/* Client */}
+        <div className="space-y-1">
+          <label className="text-xs text-muted-foreground flex items-center gap-1">
+            <User className="h-3 w-3" /> Cliente
+          </label>
+          {item.client_contact_id ? (
+            <div className="flex items-center gap-2">
+              <Badge variant="secondary" className="text-xs">{getContactName(item.client_contact_id)}</Badge>
+              <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => updateItemField(item.id, { client_contact_id: null })}>
+                <X className="h-3 w-3" />
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-1">
+              <Input
+                placeholder="Buscar contacto..."
+                className="h-8 text-sm"
+                value={contactSearch}
+                onChange={e => { setContactSearch(e.target.value); fetchContacts(e.target.value); }}
+              />
+              {contactSearch && contacts.length > 0 && (
+                <div className="max-h-32 overflow-y-auto border rounded bg-background">
+                  {contacts.map(c => (
+                    <button
+                      key={c.id}
+                      className="w-full text-left px-2 py-1 text-sm hover:bg-accent truncate"
+                      onClick={() => { updateItemField(item.id, { client_contact_id: c.id }); setContactSearch(''); }}
+                    >
+                      {c.name} {c.surname || ''} {c.email ? `· ${c.email}` : ''}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Supplier */}
+        <div className="space-y-1">
+          <label className="text-xs text-muted-foreground flex items-center gap-1">
+            <Truck className="h-3 w-3" /> Proveedor principal
+          </label>
+          {item.supplier_contact_id ? (
+            <div className="flex items-center gap-2">
+              <Badge variant="secondary" className="text-xs">{getContactName(item.supplier_contact_id)}</Badge>
+              <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => updateItemField(item.id, { supplier_contact_id: null })}>
+                <X className="h-3 w-3" />
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-1">
+              <Input
+                placeholder="Buscar proveedor..."
+                className="h-8 text-sm"
+                value={contactSearch}
+                onChange={e => { setContactSearch(e.target.value); fetchContacts(e.target.value); }}
+              />
+              {contactSearch && contacts.length > 0 && (
+                <div className="max-h-32 overflow-y-auto border rounded bg-background">
+                  {contacts.map(c => (
+                    <button
+                      key={c.id}
+                      className="w-full text-left px-2 py-1 text-sm hover:bg-accent truncate"
+                      onClick={() => { updateItemField(item.id, { supplier_contact_id: c.id }); setContactSearch(''); }}
+                    >
+                      {c.name} {c.surname || ''} {c.phone ? `· ${c.phone}` : ''}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+
+  // CÓMO? panel
+  const renderComoPanel = (item: TolosItem) => (
+    <div className="space-y-3 p-3 rounded-lg border border-blue-200 bg-blue-50/50 dark:border-blue-800 dark:bg-blue-950/30">
+      <h4 className="text-sm font-semibold flex items-center gap-2 text-blue-700 dark:text-blue-400">
+        <Wrench className="h-4 w-4" /> CÓMO? — Actividades / Perfil
+      </h4>
+      <div className="space-y-2">
+        <div className="flex items-center gap-2 p-2 rounded border border-dashed border-blue-300 dark:border-blue-700">
+          <FileText className="h-4 w-4 text-blue-500" />
+          <div className="flex-1">
+            <p className="text-sm font-medium">Perfil de vivienda</p>
+            <p className="text-xs text-muted-foreground">
+              Perfil genérico del formulario web o desarrollado en el apartado Perfil
+            </p>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            className="text-xs"
+            onClick={() => toast.info('Acceso al perfil de vivienda — próximamente')}
+          >
+            {item.housing_profile_id ? 'Ver perfil' : 'Vincular perfil'}
+          </Button>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Vincula aquí las actividades (CÓMO se ejecuta cada QUÉ?)
+        </p>
+      </div>
+    </div>
+  );
+
+  const renderDimensionPanel = (item: TolosItem, dim: string) => {
+    switch (dim) {
+      case 'donde': return renderDondePanel(item);
+      case 'quien': return renderQuienPanel(item);
+      case 'como': return renderComoPanel(item);
+      case 'cuando': return (
+        <div className="p-3 rounded-lg border border-purple-200 bg-purple-50/50 dark:border-purple-800 dark:bg-purple-950/30">
+          <h4 className="text-sm font-semibold flex items-center gap-2 text-purple-700 dark:text-purple-400">
+            <Clock className="h-4 w-4" /> CUÁNDO? — Plazos y fases
+          </h4>
+          <p className="text-xs text-muted-foreground mt-1">Vinculación a fases y cronograma — próximamente</p>
+        </div>
+      );
+      case 'cuanto': return (
+        <div className="p-3 rounded-lg border border-rose-200 bg-rose-50/50 dark:border-rose-800 dark:bg-rose-950/30">
+          <h4 className="text-sm font-semibold flex items-center gap-2 text-rose-700 dark:text-rose-400">
+            <DollarSign className="h-4 w-4" /> CUÁNTO? — Costes
+          </h4>
+          <p className="text-xs text-muted-foreground mt-1">Vinculación a recursos y costes — próximamente</p>
+        </div>
+      );
+      default: return null;
+    }
+  };
+
   const renderItem = (item: TolosItem, depth: number = 0) => {
     const children = getChildren(item.id);
     const hasChildren = children.length > 0;
@@ -234,6 +544,7 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
     const isAddingSub = addingParentId === item.id;
     const isDetailOpen = detailOpenIds.has(item.id);
     const queId = `${item.code} ${item.name}`;
+    const openDim = activeDimension[item.id];
 
     return (
       <div key={item.id} className="group/item">
@@ -241,7 +552,6 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
           className={`flex items-start gap-2 p-3 rounded-lg border-l-4 ${getDepthColor(depth)} bg-card hover:bg-accent/30 transition-colors`}
           style={{ marginLeft: depth * 24 }}
         >
-          {/* Expand/collapse children */}
           <button
             onClick={() => hasChildren && toggleExpanded(item.id)}
             className={`mt-1 p-0.5 rounded ${hasChildren ? 'hover:bg-accent cursor-pointer' : 'invisible'}`}
@@ -283,14 +593,15 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
                     <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                       QUÉ?id: {queId}
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-5 gap-2">
+                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
                       {DIMENSION_LINKS.map(dim => {
                         const Icon = dim.icon;
+                        const isActive = openDim === dim.key;
                         return (
                           <button
                             key={dim.key}
-                            className={`flex flex-col items-center gap-1 p-3 rounded-lg border text-center transition-all hover:shadow-md hover:scale-[1.02] ${dim.color}`}
-                            onClick={() => toast.info(`${dim.label} — Vinculación próximamente`)}
+                            className={`flex flex-col items-center gap-1 p-3 rounded-lg border text-center transition-all hover:shadow-md hover:scale-[1.02] ${dim.color} ${isActive ? 'ring-2 ring-primary shadow-md' : ''}`}
+                            onClick={() => setDimension(item.id, dim.key)}
                           >
                             <Icon className="h-5 w-5" />
                             <span className="text-xs font-bold">{dim.label}</span>
@@ -299,6 +610,9 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
                         );
                       })}
                     </div>
+
+                    {/* Active dimension panel */}
+                    {openDim && renderDimensionPanel(item, openDim)}
                   </div>
                 )}
               </>

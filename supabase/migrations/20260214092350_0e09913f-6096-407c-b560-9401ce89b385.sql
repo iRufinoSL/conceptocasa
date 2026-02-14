@@ -1,0 +1,1 @@
+ALTER TABLE public.tolosa_items ADD COLUMN google_maps_url TEXT;

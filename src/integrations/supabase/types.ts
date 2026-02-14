@@ -4244,6 +4244,7 @@ export type Database = {
           code: string
           created_at: string
           description: string | null
+          google_maps_url: string | null
           housing_profile_id: string | null
           id: string
           latitude: number | null
@@ -4265,6 +4266,7 @@ export type Database = {
           code: string
           created_at?: string
           description?: string | null
+          google_maps_url?: string | null
           housing_profile_id?: string | null
           id?: string
           latitude?: number | null
@@ -4286,6 +4288,7 @@ export type Database = {
           code?: string
           created_at?: string
           description?: string | null
+          google_maps_url?: string | null
           housing_profile_id?: string | null
           id?: string
           latitude?: number | null

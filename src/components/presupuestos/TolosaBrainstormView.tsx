@@ -29,6 +29,7 @@ interface TolosItem {
   latitude: number | null;
   longitude: number | null;
   cadastral_reference: string | null;
+  google_maps_url: string | null;
   client_contact_id: string | null;
   supplier_contact_id: string | null;
   housing_profile_id: string | null;
@@ -196,6 +197,7 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
         latitude: item.latitude,
         longitude: item.longitude,
         cadastral_reference: item.cadastral_reference,
+        google_maps_url: item.google_maps_url,
         client_contact_id: item.client_contact_id,
         supplier_contact_id: item.supplier_contact_id,
         housing_profile_id: item.housing_profile_id,
@@ -238,6 +240,7 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
           latitude: child.latitude,
           longitude: child.longitude,
           cadastral_reference: child.cadastral_reference,
+          google_maps_url: child.google_maps_url,
           client_contact_id: child.client_contact_id,
           supplier_contact_id: child.supplier_contact_id,
           housing_profile_id: child.housing_profile_id,
@@ -290,6 +293,8 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
   };
 
   const getGoogleMapsUrl = (item: TolosItem) => {
+    // Priority: manual URL > coordinates > address-based
+    if (item.google_maps_url) return item.google_maps_url;
     if (item.latitude && item.longitude) {
       return `https://www.google.com/maps?q=${item.latitude},${item.longitude}`;
     }
@@ -331,39 +336,43 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <div className="sm:col-span-2">
               <label className="text-xs text-muted-foreground">Calle / Dirección</label>
-              <Input
+              <input
+                type="text"
                 value={item.address_street || ''}
                 placeholder="Calle, número..."
                 onChange={e => updateItemField(item.id, { address_street: e.target.value || null })}
-                className="h-8 text-sm"
+                className="flex h-8 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               />
             </div>
             <div>
               <label className="text-xs text-muted-foreground">Población</label>
-              <Input
+              <input
+                type="text"
                 value={item.address_city || ''}
                 placeholder="Madrid, Barcelona..."
                 onChange={e => updateItemField(item.id, { address_city: e.target.value || null })}
-                className="h-8 text-sm"
+                className="flex h-8 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               />
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <label className="text-xs text-muted-foreground">Código Postal</label>
-                <Input
+                <input
+                  type="text"
                   value={item.address_postal_code || ''}
                   placeholder="28001"
                   onChange={e => updateItemField(item.id, { address_postal_code: e.target.value || null })}
-                  className="h-8 text-sm"
+                  className="flex h-8 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                 />
               </div>
               <div>
                 <label className="text-xs text-muted-foreground">Provincia</label>
-                <Input
+                <input
+                  type="text"
                   value={item.address_province || ''}
                   placeholder="Madrid"
                   onChange={e => updateItemField(item.id, { address_province: e.target.value || null })}
-                  className="h-8 text-sm"
+                  className="flex h-8 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                 />
               </div>
             </div>
@@ -373,23 +382,41 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
         {/* 2. Coordenadas Google Maps */}
         <div className="space-y-2">
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">2. Coordenadas Google Maps</p>
-          <div className="grid grid-cols-2 gap-2">
-            <Input
-              type="number"
-              step="any"
-              value={item.latitude ?? ''}
-              placeholder="Latitud"
-              onChange={e => updateItemField(item.id, { latitude: e.target.value ? parseFloat(e.target.value) : null })}
-              className="h-8 text-sm"
-            />
-            <Input
-              type="number"
-              step="any"
-              value={item.longitude ?? ''}
-              placeholder="Longitud"
-              onChange={e => updateItemField(item.id, { longitude: e.target.value ? parseFloat(e.target.value) : null })}
-              className="h-8 text-sm"
-            />
+          <div className="space-y-2">
+            <div>
+              <label className="text-xs text-muted-foreground">URL de Google Maps (pega aquí la dirección)</label>
+              <input
+                type="text"
+                value={item.google_maps_url || ''}
+                placeholder="https://www.google.com/maps/place/..."
+                onChange={e => updateItemField(item.id, { google_maps_url: e.target.value || null })}
+                className="flex h-8 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <input
+                type="text"
+                inputMode="decimal"
+                value={item.latitude ?? ''}
+                placeholder="Latitud"
+                onChange={e => {
+                  const val = e.target.value;
+                  updateItemField(item.id, { latitude: val ? parseFloat(val) || null : null });
+                }}
+                className="flex h-8 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              />
+              <input
+                type="text"
+                inputMode="decimal"
+                value={item.longitude ?? ''}
+                placeholder="Longitud"
+                onChange={e => {
+                  const val = e.target.value;
+                  updateItemField(item.id, { longitude: val ? parseFloat(val) || null : null });
+                }}
+                className="flex h-8 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              />
+            </div>
           </div>
           {mapsUrl && (
             <div className="space-y-1">
@@ -411,11 +438,12 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
         {/* 3. Referencia Catastral */}
         <div className="space-y-2">
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">3. Referencia Catastral</p>
-          <Input
+          <input
+            type="text"
             value={item.cadastral_reference || ''}
             placeholder="0000000AA0000A0001AA"
             onChange={e => updateItemField(item.id, { cadastral_reference: e.target.value || null })}
-            className="h-8 text-sm font-mono"
+            className="flex h-8 w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-mono ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           />
           {item.cadastral_reference && (
             <div className="space-y-2">

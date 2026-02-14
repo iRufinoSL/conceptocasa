@@ -1,0 +1,1 @@
+ALTER TABLE public.tolosa_items ADD COLUMN address_city TEXT;

@@ -4234,6 +4234,7 @@ export type Database = {
       }
       tolosa_items: {
         Row: {
+          address_city: string | null
           address_postal_code: string | null
           address_province: string | null
           address_street: string | null
@@ -4254,6 +4255,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          address_city?: string | null
           address_postal_code?: string | null
           address_province?: string | null
           address_street?: string | null
@@ -4274,6 +4276,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          address_city?: string | null
           address_postal_code?: string | null
           address_province?: string | null
           address_street?: string | null

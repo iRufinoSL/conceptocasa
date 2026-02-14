@@ -9,8 +9,13 @@ import {
   Plus, ChevronRight, ChevronDown, Brain, Trash2, Edit2, Check, X,
   HelpCircle, Copy, Wrench, Users, MapPin, Clock, DollarSign,
   ExternalLink, Building, User, Truck, FileText, Link, Unlink,
-  Home, Ruler, Layers
+  Home, Ruler, Layers, Landmark, PenTool, RulerIcon, FolderOpen,
+  CalendarDays, MessageSquare, Calculator, BarChart3, Timer, Settings
 } from 'lucide-react';
+import { BudgetUrbanismTab } from './BudgetUrbanismTab';
+import { BudgetMeasurementsTab } from './BudgetMeasurementsTab';
+import { BudgetAgendaTab } from './BudgetAgendaTab';
+import { BudgetAdministracionTab } from './BudgetAdministracionTab';
 import { SpaceDetail } from './HousingProfileEditor';
 import { Json } from '@/integrations/supabase/types';
 import { toast } from 'sonner';
@@ -1071,13 +1076,96 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
   };
 
   const COMO_SUBMENUS = [
+    { key: 'urbanismo', label: 'Urbanismo', icon: Landmark },
     { key: 'perfil', label: 'Perfil', icon: User },
     { key: 'espacios', label: 'Espacios', icon: Home },
     { key: 'plano', label: 'Plano', icon: Layers },
+    { key: 'anteproyecto', label: 'Ante-proyecto', icon: PenTool },
+    { key: 'mediciones', label: 'Mediciones', icon: RulerIcon },
+    { key: 'documentos', label: 'Documentos', icon: FolderOpen },
+    { key: 'agenda', label: 'Agenda', icon: CalendarDays },
+    { key: 'comunicaciones', label: 'Comunicaciones', icon: MessageSquare },
+    { key: 'administracion', label: 'Administración', icon: Calculator },
+    { key: 'resumen', label: 'Resumen', icon: BarChart3 },
+    { key: 'timeline', label: 'Timeline', icon: Timer },
+    { key: 'config', label: 'Config', icon: Settings },
   ];
 
+  const renderComoSubContent = (item: TolosItem, activeSub: string) => {
+    switch (activeSub) {
+      case 'urbanismo':
+        return (
+          <BudgetUrbanismTab
+            budgetId={budgetId}
+            isAdmin={isAdmin}
+            cadastralReference={item.cadastral_reference || undefined}
+          />
+        );
+      case 'perfil':
+        return renderComoPerfilSection(item);
+      case 'espacios':
+        return renderComoEspaciosSection(item);
+      case 'plano':
+        return renderComoPlanoSection(item);
+      case 'anteproyecto':
+        return (
+          <div className="p-4 rounded border border-dashed text-center space-y-2">
+            <PenTool className="h-8 w-8 text-muted-foreground/40 mx-auto" />
+            <p className="text-sm text-muted-foreground">Ante-proyecto — próximamente</p>
+          </div>
+        );
+      case 'mediciones':
+        return <BudgetMeasurementsTab budgetId={budgetId} isAdmin={isAdmin} />;
+      case 'documentos':
+        return (
+          <div className="p-4 rounded border border-dashed text-center space-y-2">
+            <FolderOpen className="h-8 w-8 text-muted-foreground/40 mx-auto" />
+            <p className="text-sm font-medium">Documentos</p>
+            <p className="text-xs text-muted-foreground">Gestión documental del QUÉ? — se integrará con la pestaña Documentos del presupuesto.</p>
+          </div>
+        );
+      case 'agenda':
+        return <BudgetAgendaTab budgetId={budgetId} isAdmin={isAdmin} />;
+      case 'comunicaciones':
+        return (
+          <div className="p-4 rounded border border-dashed text-center space-y-2">
+            <MessageSquare className="h-8 w-8 text-muted-foreground/40 mx-auto" />
+            <p className="text-sm font-medium">Comunicaciones</p>
+            <p className="text-xs text-muted-foreground">Historial de comunicaciones del QUÉ? — se integrará con la pestaña Comunicaciones.</p>
+          </div>
+        );
+      case 'administracion':
+        return <BudgetAdministracionTab budgetId={budgetId} isAdmin={isAdmin} />;
+      case 'resumen':
+        return (
+          <div className="p-4 rounded border border-dashed text-center space-y-2">
+            <BarChart3 className="h-8 w-8 text-muted-foreground/40 mx-auto" />
+            <p className="text-sm font-medium">Resumen</p>
+            <p className="text-xs text-muted-foreground">Vista resumen del QUÉ? — se integrará con el resumen del presupuesto.</p>
+          </div>
+        );
+      case 'timeline':
+        return (
+          <div className="p-4 rounded border border-dashed text-center space-y-2">
+            <Timer className="h-8 w-8 text-muted-foreground/40 mx-auto" />
+            <p className="text-sm font-medium">Timeline</p>
+            <p className="text-xs text-muted-foreground">Línea temporal del QUÉ? — se integrará con el timeline del presupuesto.</p>
+          </div>
+        );
+      case 'config':
+        return (
+          <div className="p-4 rounded border border-dashed text-center space-y-2">
+            <Settings className="h-8 w-8 text-muted-foreground/40 mx-auto" />
+            <p className="text-sm text-muted-foreground">Configuración del QUÉ? — próximamente</p>
+          </div>
+        );
+      default:
+        return null;
+    }
+  };
+
   const renderComoPanel = (item: TolosItem) => {
-    const activeSub = comoSubmenu[item.id] || 'perfil';
+    const activeSub = comoSubmenu[item.id] || 'urbanismo';
 
     return (
       <div className="space-y-3 p-3 rounded-lg border border-blue-200 bg-blue-50/50 dark:border-blue-800 dark:bg-blue-950/30">
@@ -1085,15 +1173,15 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
           <Wrench className="h-4 w-4" /> CÓMO?
         </h4>
 
-        {/* Submenu tabs */}
-        <div className="flex gap-1 border-b border-blue-200 dark:border-blue-800 pb-0">
+        {/* Submenu tabs - scrollable */}
+        <div className="flex gap-1 border-b border-blue-200 dark:border-blue-800 pb-0 overflow-x-auto">
           {COMO_SUBMENUS.map(sub => {
             const Icon = sub.icon;
             const isActive = activeSub === sub.key;
             return (
               <button
                 key={sub.key}
-                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-t transition-colors border border-b-0 ${
+                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-t transition-colors border border-b-0 whitespace-nowrap ${
                   isActive
                     ? 'bg-background text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-700 -mb-px z-10'
                     : 'bg-transparent text-muted-foreground hover:text-foreground border-transparent hover:bg-blue-100/50 dark:hover:bg-blue-900/30'
@@ -1109,9 +1197,7 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
 
         {/* Active sub-panel */}
         <div>
-          {activeSub === 'perfil' && renderComoPerfilSection(item)}
-          {activeSub === 'espacios' && renderComoEspaciosSection(item)}
-          {activeSub === 'plano' && renderComoPlanoSection(item)}
+          {renderComoSubContent(item, activeSub)}
         </div>
       </div>
     );

@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import {
   Plus, ChevronRight, ChevronDown, Brain, Trash2, Edit2, Check, X,
   HelpCircle, Copy, Wrench, Users, MapPin, Clock, DollarSign,
-  ExternalLink, Building, User, Truck, FileText
+  ExternalLink, Building, User, Truck, FileText, Link, Unlink
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -43,6 +43,15 @@ interface ContactInfo {
   phone: string | null;
 }
 
+interface ProfileInfo {
+  id: string;
+  contact_name: string;
+  contact_email: string;
+  poblacion: string | null;
+  created_at: string;
+  project_id: string;
+}
+
 interface TolosaBrainstormViewProps {
   budgetId: string;
   isAdmin: boolean;
@@ -70,6 +79,9 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
   const [activeDimension, setActiveDimension] = useState<Record<string, string>>({});
   const [contacts, setContacts] = useState<ContactInfo[]>([]);
   const [contactSearch, setContactSearch] = useState('');
+  const [housingProfiles, setHousingProfiles] = useState<ProfileInfo[]>([]);
+  const [profileSearch, setProfileSearch] = useState('');
+  const [showProfilePicker, setShowProfilePicker] = useState<string | null>(null);
   const [dondeForm, setDondeForm] = useState<Record<string, {
     address_street: string;
     address_city: string;
@@ -152,7 +164,18 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
     setContacts((data as ContactInfo[]) || []);
   }, []);
 
-  useEffect(() => { fetchItems(); fetchContacts(); }, [fetchItems, fetchContacts]);
+  const fetchHousingProfiles = useCallback(async (search?: string) => {
+    let query = supabase
+      .from('project_profiles')
+      .select('id, contact_name, contact_email, poblacion, created_at, project_id')
+      .order('created_at', { ascending: false })
+      .limit(20);
+    if (search) query = query.or(`contact_name.ilike.%${search}%,contact_email.ilike.%${search}%,poblacion.ilike.%${search}%`);
+    const { data } = await query;
+    setHousingProfiles((data as ProfileInfo[]) || []);
+  }, []);
+
+  useEffect(() => { fetchItems(); fetchContacts(); fetchHousingProfiles(); }, [fetchItems, fetchContacts, fetchHousingProfiles]);
 
   const rootItems = items.filter(i => !i.parent_id);
   const getChildren = (parentId: string) => items.filter(i => i.parent_id === parentId);
@@ -654,35 +677,120 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
   );
 
   // CÓMO? panel
-  const renderComoPanel = (item: TolosItem) => (
-    <div className="space-y-3 p-3 rounded-lg border border-blue-200 bg-blue-50/50 dark:border-blue-800 dark:bg-blue-950/30">
-      <h4 className="text-sm font-semibold flex items-center gap-2 text-blue-700 dark:text-blue-400">
-        <Wrench className="h-4 w-4" /> CÓMO? — Actividades / Perfil
-      </h4>
-      <div className="space-y-2">
-        <div className="flex items-center gap-2 p-2 rounded border border-dashed border-blue-300 dark:border-blue-700">
-          <FileText className="h-4 w-4 text-blue-500" />
-          <div className="flex-1">
-            <p className="text-sm font-medium">Perfil de vivienda</p>
-            <p className="text-xs text-muted-foreground">
-              Perfil genérico del formulario web o desarrollado en el apartado Perfil
-            </p>
-          </div>
-          <Button
-            size="sm"
-            variant="outline"
-            className="text-xs"
-            onClick={() => toast.info('Acceso al perfil de vivienda — próximamente')}
-          >
-            {item.housing_profile_id ? 'Ver perfil' : 'Vincular perfil'}
-          </Button>
+  const getProfileName = (profileId: string | null) => {
+    if (!profileId) return null;
+    const p = housingProfiles.find(p => p.id === profileId);
+    return p ? `${p.contact_name} — ${p.poblacion || p.contact_email}` : profileId.slice(0, 8) + '...';
+  };
+
+  const renderComoPanel = (item: TolosItem) => {
+    const isPickerOpen = showProfilePicker === item.id;
+
+    return (
+      <div className="space-y-3 p-3 rounded-lg border border-blue-200 bg-blue-50/50 dark:border-blue-800 dark:bg-blue-950/30">
+        <h4 className="text-sm font-semibold flex items-center gap-2 text-blue-700 dark:text-blue-400">
+          <Wrench className="h-4 w-4" /> CÓMO? — Actividades / Perfil
+        </h4>
+        <div className="space-y-2">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Perfil de vivienda</p>
+
+          {item.housing_profile_id ? (
+            <div className="flex items-center gap-2 p-2 rounded border border-blue-300 bg-blue-100/50 dark:border-blue-700 dark:bg-blue-900/30">
+              <Link className="h-4 w-4 text-blue-500 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium truncate">{getProfileName(item.housing_profile_id)}</p>
+                <p className="text-xs text-muted-foreground">Perfil vinculado</p>
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                className="text-xs shrink-0"
+                onClick={() => updateItemField(item.id, { housing_profile_id: null })}
+              >
+                <Unlink className="h-3 w-3 mr-1" /> Desvincular
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 p-2 rounded border border-dashed border-blue-300 dark:border-blue-700">
+                <FileText className="h-4 w-4 text-blue-500" />
+                <div className="flex-1">
+                  <p className="text-sm text-muted-foreground">Sin perfil vinculado</p>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="text-xs"
+                  onClick={() => {
+                    setShowProfilePicker(isPickerOpen ? null : item.id);
+                    if (!isPickerOpen) fetchHousingProfiles();
+                  }}
+                >
+                  <Link className="h-3 w-3 mr-1" /> Vincular perfil
+                </Button>
+              </div>
+
+              {isPickerOpen && (
+                <div className="space-y-2 p-2 rounded border border-blue-200 bg-background dark:border-blue-800">
+                  <input
+                    type="text"
+                    value={profileSearch}
+                    placeholder="Buscar perfil por nombre, email o población..."
+                    onChange={e => {
+                      setProfileSearch(e.target.value);
+                      fetchHousingProfiles(e.target.value);
+                    }}
+                    className="flex h-8 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  />
+                  {housingProfiles.length > 0 ? (
+                    <div className="max-h-40 overflow-y-auto space-y-1">
+                      {housingProfiles.map(p => (
+                        <button
+                          key={p.id}
+                          className="w-full text-left px-3 py-2 text-sm hover:bg-accent rounded flex items-center justify-between gap-2"
+                          onClick={() => {
+                            updateItemField(item.id, { housing_profile_id: p.id });
+                            setShowProfilePicker(null);
+                            setProfileSearch('');
+                          }}
+                        >
+                          <div className="min-w-0">
+                            <span className="font-medium">{p.contact_name}</span>
+                            {p.poblacion && <span className="text-muted-foreground"> — {p.poblacion}</span>}
+                          </div>
+                          <span className="text-xs text-muted-foreground shrink-0">{p.contact_email}</span>
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-muted-foreground text-center py-2">No se encontraron perfiles</p>
+                  )}
+                  <div className="pt-1 border-t">
+                    <p className="text-xs text-muted-foreground">
+                      ¿No existe el perfil?{' '}
+                      <button
+                        className="text-primary hover:underline font-medium"
+                        onClick={() => {
+                          toast.info('Para crear un nuevo perfil, ve a la pestaña "Perfil" del presupuesto o recíbelo desde el formulario web.');
+                          setShowProfilePicker(null);
+                        }}
+                      >
+                        Crear nuevo perfil desde la pestaña Perfil
+                      </button>
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          <p className="text-xs text-muted-foreground">
+            Vincula aquí las actividades (CÓMO se ejecuta cada QUÉ?)
+          </p>
         </div>
-        <p className="text-xs text-muted-foreground">
-          Vincula aquí las actividades (CÓMO se ejecuta cada QUÉ?)
-        </p>
       </div>
-    </div>
-  );
+    );
+  };
 
   const renderDimensionPanel = (item: TolosItem, dim: string) => {
     switch (dim) {

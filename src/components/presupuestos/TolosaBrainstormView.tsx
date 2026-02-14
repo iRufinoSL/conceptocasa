@@ -79,6 +79,7 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
   const [activeDimension, setActiveDimension] = useState<Record<string, string>>({});
   const [contacts, setContacts] = useState<ContactInfo[]>([]);
   const [contactSearch, setContactSearch] = useState('');
+  const [contactCache, setContactCache] = useState<Record<string, string>>({});
   const [housingProfiles, setHousingProfiles] = useState<ProfileInfo[]>([]);
   const [profileSearch, setProfileSearch] = useState('');
   const [showProfilePicker, setShowProfilePicker] = useState<string | null>(null);
@@ -151,8 +152,29 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
       console.error('Error fetching tolosa items:', error);
       toast.error('Error al cargar ítems');
     } else {
-      setItems((data as TolosItem[]) || []);
+      const loadedItems = (data as TolosItem[]) || [];
+      setItems(loadedItems);
       setDondeForm({});
+
+      // Fetch linked contact names
+      const contactIds = new Set<string>();
+      loadedItems.forEach(i => {
+        if (i.client_contact_id) contactIds.add(i.client_contact_id);
+        if (i.supplier_contact_id) contactIds.add(i.supplier_contact_id);
+      });
+      if (contactIds.size > 0) {
+        const { data: cData } = await supabase
+          .from('crm_contacts')
+          .select('id, name, surname')
+          .in('id', Array.from(contactIds));
+        if (cData) {
+          const cache: Record<string, string> = {};
+          cData.forEach((c: any) => {
+            cache[c.id] = `${c.name}${c.surname ? ' ' + c.surname : ''}`;
+          });
+          setContactCache(prev => ({ ...prev, ...cache }));
+        }
+      }
     }
     setLoading(false);
   }, [budgetId]);
@@ -398,8 +420,9 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
 
   const getContactName = (contactId: string | null) => {
     if (!contactId) return null;
+    if (contactCache[contactId]) return contactCache[contactId];
     const c = contacts.find(c => c.id === contactId);
-    return c ? `${c.name}${c.surname ? ' ' + c.surname : ''}` : 'Cargando...';
+    return c ? `${c.name}${c.surname ? ' ' + c.surname : ''}` : contactId.slice(0, 8) + '...';
   };
 
   // DÓNDE? panel

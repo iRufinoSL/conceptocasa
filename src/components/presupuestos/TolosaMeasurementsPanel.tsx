@@ -1,0 +1,358 @@
+import { useState, useEffect, useCallback } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import { toast } from 'sonner';
+import { Plus, Search, Trash2, Ruler, Link2, X } from 'lucide-react';
+import { searchMatch } from '@/lib/search-utils';
+import { formatNumber } from '@/lib/format-utils';
+import { NumericInput } from '@/components/ui/numeric-input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Label } from '@/components/ui/label';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+
+interface Measurement {
+  id: string;
+  budget_id: string;
+  name: string;
+  manual_units: number | null;
+  measurement_unit: string | null;
+  source: string | null;
+  source_classification: string | null;
+  floor: string | null;
+  size_text: string | null;
+  count_raw: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+const MEASUREMENT_UNITS = ['ud', 'm', 'm2', 'm3', 'kg', 'l', 'ml', 'h', 'día', 'sem', 'mes', 'año', 'pa', 'pza', 'rollo', 'saco', 'caja', 'palé'];
+
+interface TolosaMeasurementsPanelProps {
+  budgetId: string;
+  tolosItemId: string;
+  isAdmin: boolean;
+}
+
+export function TolosaMeasurementsPanel({ budgetId, tolosItemId, isAdmin }: TolosaMeasurementsPanelProps) {
+  const [linkedMeasurements, setLinkedMeasurements] = useState<Measurement[]>([]);
+  const [allMeasurements, setAllMeasurements] = useState<Measurement[]>([]);
+  const [linkedIds, setLinkedIds] = useState<Set<string>>(new Set());
+  const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showSearch, setShowSearch] = useState(false);
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [newUnit, setNewUnit] = useState('ud');
+  const [newManualUnits, setNewManualUnits] = useState<number | null>(null);
+  const [newFloor, setNewFloor] = useState('');
+  const [creating, setCreating] = useState(false);
+
+  const fetchLinked = useCallback(async () => {
+    setLoading(true);
+    // Get linked measurement IDs
+    const { data: links } = await supabase
+      .from('tolosa_item_measurements')
+      .select('measurement_id')
+      .eq('tolosa_item_id', tolosItemId);
+
+    const ids = new Set((links || []).map(l => l.measurement_id));
+    setLinkedIds(ids);
+
+    if (ids.size > 0) {
+      const { data: measurements } = await supabase
+        .from('budget_measurements')
+        .select('*')
+        .in('id', Array.from(ids))
+        .order('name');
+      setLinkedMeasurements((measurements as Measurement[]) || []);
+    } else {
+      setLinkedMeasurements([]);
+    }
+    setLoading(false);
+  }, [tolosItemId]);
+
+  const fetchAllMeasurements = useCallback(async () => {
+    const { data } = await supabase
+      .from('budget_measurements')
+      .select('*')
+      .eq('budget_id', budgetId)
+      .order('name');
+    setAllMeasurements((data as Measurement[]) || []);
+  }, [budgetId]);
+
+  useEffect(() => { fetchLinked(); }, [fetchLinked]);
+  useEffect(() => { if (showSearch) fetchAllMeasurements(); }, [showSearch, fetchAllMeasurements]);
+
+  const linkMeasurement = async (measurementId: string) => {
+    const { error } = await supabase
+      .from('tolosa_item_measurements')
+      .insert({ tolosa_item_id: tolosItemId, measurement_id: measurementId });
+    if (error) {
+      if (error.code === '23505') {
+        toast.info('Esta medición ya está vinculada');
+      } else {
+        toast.error('Error al vincular medición');
+      }
+    } else {
+      toast.success('Medición vinculada');
+      fetchLinked();
+      fetchAllMeasurements();
+    }
+  };
+
+  const unlinkMeasurement = async (measurementId: string) => {
+    const { error } = await supabase
+      .from('tolosa_item_measurements')
+      .delete()
+      .eq('tolosa_item_id', tolosItemId)
+      .eq('measurement_id', measurementId);
+    if (error) {
+      toast.error('Error al desvincular');
+    } else {
+      toast.success('Medición desvinculada');
+      fetchLinked();
+    }
+  };
+
+  const createAndLink = async () => {
+    if (!newName.trim()) return;
+    setCreating(true);
+    const { data, error } = await supabase
+      .from('budget_measurements')
+      .insert({
+        budget_id: budgetId,
+        name: newName.trim(),
+        measurement_unit: newUnit,
+        manual_units: newManualUnits,
+        floor: newFloor.trim() || null,
+      })
+      .select()
+      .single();
+
+    if (error || !data) {
+      toast.error('Error al crear medición');
+      setCreating(false);
+      return;
+    }
+
+    // Link it
+    await supabase
+      .from('tolosa_item_measurements')
+      .insert({ tolosa_item_id: tolosItemId, measurement_id: data.id });
+
+    toast.success('Medición creada y vinculada');
+    setShowCreateDialog(false);
+    setNewName('');
+    setNewUnit('ud');
+    setNewManualUnits(null);
+    setNewFloor('');
+    setCreating(false);
+    fetchLinked();
+    fetchAllMeasurements();
+  };
+
+  const getCalculatedUnits = (m: Measurement): number => {
+    if (m.manual_units != null) return m.manual_units;
+    return m.count_raw ?? 0;
+  };
+
+  // Filter available measurements (not yet linked)
+  const availableMeasurements = allMeasurements.filter(m =>
+    !linkedIds.has(m.id) && (
+      !searchQuery || searchMatch(m.name, searchQuery) ||
+      (m.floor && searchMatch(m.floor, searchQuery)) ||
+      (m.measurement_unit && searchMatch(m.measurement_unit, searchQuery))
+    )
+  );
+
+  return (
+    <div className="space-y-3">
+      {/* Header */}
+      <div className="flex items-center justify-between gap-2">
+        <h5 className="text-sm font-semibold flex items-center gap-1.5">
+          <Ruler className="h-4 w-4 text-muted-foreground" />
+          Mediciones vinculadas ({linkedMeasurements.length})
+        </h5>
+        <div className="flex gap-1">
+          <Button size="sm" variant="outline" className="text-xs" onClick={() => setShowSearch(!showSearch)}>
+            <Search className="h-3 w-3 mr-1" /> Buscar existente
+          </Button>
+          <Button size="sm" variant="outline" className="text-xs" onClick={() => setShowCreateDialog(true)}>
+            <Plus className="h-3 w-3 mr-1" /> Nueva
+          </Button>
+        </div>
+      </div>
+
+      {/* Linked measurements list */}
+      {loading ? (
+        <p className="text-xs text-muted-foreground text-center py-4">Cargando...</p>
+      ) : linkedMeasurements.length === 0 ? (
+        <div className="p-4 rounded border border-dashed text-center space-y-1">
+          <Ruler className="h-6 w-6 text-muted-foreground/40 mx-auto" />
+          <p className="text-sm text-muted-foreground">Sin mediciones vinculadas</p>
+          <p className="text-xs text-muted-foreground">Busca una medición existente o crea una nueva.</p>
+        </div>
+      ) : (
+        <div className="border rounded overflow-hidden">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-muted/50 text-xs text-muted-foreground">
+                <th className="text-left px-3 py-1.5 font-medium">Nombre</th>
+                <th className="text-center px-2 py-1.5 font-medium w-16">Planta</th>
+                <th className="text-right px-2 py-1.5 font-medium w-20">Uds</th>
+                <th className="text-center px-2 py-1.5 font-medium w-14">Tipo</th>
+                <th className="text-center px-2 py-1.5 font-medium w-10"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {linkedMeasurements.map(m => (
+                <tr key={m.id} className="border-t hover:bg-accent/20 transition-colors">
+                  <td className="px-3 py-1.5">
+                    <span className="font-medium">{m.name}</span>
+                    {m.source && (
+                      <Badge variant="outline" className="ml-2 text-[9px]">{m.source}</Badge>
+                    )}
+                  </td>
+                  <td className="px-2 py-1.5 text-center text-muted-foreground text-xs">
+                    {m.floor || '—'}
+                  </td>
+                  <td className="px-2 py-1.5 text-right font-mono text-xs">
+                    {formatNumber(getCalculatedUnits(m))}
+                  </td>
+                  <td className="px-2 py-1.5 text-center">
+                    <Badge variant="secondary" className="text-[9px]">{m.measurement_unit || 'ud'}</Badge>
+                  </td>
+                  <td className="px-2 py-1.5 text-center">
+                    <button
+                      onClick={() => unlinkMeasurement(m.id)}
+                      className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+                      title="Desvincular medición"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Search panel */}
+      {showSearch && (
+        <div className="space-y-2 p-3 rounded border border-blue-200 bg-blue-50/30 dark:border-blue-800 dark:bg-blue-950/20">
+          <div className="flex items-center gap-2">
+            <Search className="h-4 w-4 text-muted-foreground shrink-0" />
+            <Input
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              placeholder="Buscar medición por nombre, planta, tipo..."
+              className="h-8 text-sm"
+              autoFocus
+            />
+            <Button size="sm" variant="ghost" className="shrink-0" onClick={() => { setShowSearch(false); setSearchQuery(''); }}>
+              <X className="h-3 w-3" />
+            </Button>
+          </div>
+
+          {availableMeasurements.length > 0 ? (
+            <div className="max-h-48 overflow-y-auto space-y-0.5">
+              {availableMeasurements.slice(0, 30).map(m => (
+                <button
+                  key={m.id}
+                  className="w-full text-left px-3 py-1.5 text-sm hover:bg-accent rounded flex items-center justify-between gap-2 transition-colors"
+                  onClick={() => linkMeasurement(m.id)}
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Link2 className="h-3 w-3 text-primary shrink-0" />
+                    <span className="truncate font-medium">{m.name}</span>
+                    {m.floor && <span className="text-xs text-muted-foreground shrink-0">({m.floor})</span>}
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <span className="text-xs font-mono text-muted-foreground">{formatNumber(getCalculatedUnits(m))}</span>
+                    <Badge variant="secondary" className="text-[9px]">{m.measurement_unit || 'ud'}</Badge>
+                  </div>
+                </button>
+              ))}
+              {availableMeasurements.length > 30 && (
+                <p className="text-xs text-muted-foreground text-center py-1">
+                  +{availableMeasurements.length - 30} más — refina la búsqueda
+                </p>
+              )}
+            </div>
+          ) : (
+            <div className="text-center py-3 space-y-1">
+              <p className="text-xs text-muted-foreground">
+                {searchQuery ? 'No se encontraron mediciones' : 'Todas las mediciones ya están vinculadas'}
+              </p>
+              <Button size="sm" variant="outline" className="text-xs" onClick={() => { setShowSearch(false); setShowCreateDialog(true); }}>
+                <Plus className="h-3 w-3 mr-1" /> Crear nueva medición
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Create dialog */}
+      <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Nueva Medición</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label className="text-xs">Nombre *</Label>
+              <Input
+                value={newName}
+                onChange={e => setNewName(e.target.value)}
+                placeholder="Ej: Tabiquería interior, Solado planta baja..."
+                autoFocus
+              />
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <div>
+                <Label className="text-xs">Unidad</Label>
+                <Select value={newUnit} onValueChange={setNewUnit}>
+                  <SelectTrigger className="h-8">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {MEASUREMENT_UNITS.map(u => (
+                      <SelectItem key={u} value={u}>{u}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-xs">Cantidad</Label>
+                <NumericInput
+                  value={newManualUnits}
+                  onChange={setNewManualUnits}
+                  className="h-8"
+                  placeholder="0"
+                />
+              </div>
+              <div>
+                <Label className="text-xs">Planta</Label>
+                <Input
+                  value={newFloor}
+                  onChange={e => setNewFloor(e.target.value)}
+                  className="h-8"
+                  placeholder="PB, P1..."
+                />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => setShowCreateDialog(false)}>Cancelar</Button>
+            <Button size="sm" onClick={createAndLink} disabled={!newName.trim() || creating}>
+              <Plus className="h-3 w-3 mr-1" /> Crear y vincular
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}

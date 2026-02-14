@@ -1413,27 +1413,26 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
           className={`flex items-start gap-2 p-3 rounded-lg border-l-4 ${getDepthColor(depth)} bg-card hover:bg-accent/30 transition-colors`}
           style={{ marginLeft: depth * 24 }}
         >
-          {/* Expand/collapse button - always visible with clear styling */}
+          {/* Expand/collapse chevron - toggles children tree only, NOT the detail form */}
           <button
             onClick={() => {
-              toggleDetail(item.id);
-              if (hasChildren) {
-                // If we're closing detail, also collapse children; if opening, expand children
-                if (isDetailOpen) {
-                  setExpandedIds(prev => { const n = new Set(prev); n.delete(item.id); return n; });
-                } else {
-                  setExpandedIds(prev => new Set(prev).add(item.id));
-                }
+              if (isExpanded) {
+                // Collapse: hide children and close detail
+                setExpandedIds(prev => { const n = new Set(prev); n.delete(item.id); return n; });
+                if (isDetailOpen) toggleDetail(item.id);
+              } else {
+                // Expand: show children (don't open detail form)
+                setExpandedIds(prev => new Set(prev).add(item.id));
               }
             }}
             className={`mt-0.5 p-1 rounded-md border transition-all shrink-0 ${
-              isDetailOpen
+              isExpanded
                 ? 'bg-primary/10 border-primary/30 text-primary hover:bg-primary/20'
                 : 'bg-muted border-border text-muted-foreground hover:bg-accent hover:text-foreground'
             }`}
-            title={isDetailOpen ? 'Colapsar' : 'Expandir'}
+            title={isExpanded ? 'Colapsar' : 'Expandir'}
           >
-            {isDetailOpen
+            {isExpanded
               ? <ChevronDown className="h-4 w-4" />
               : <ChevronRight className="h-4 w-4" />
             }
@@ -1454,7 +1453,13 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
                 <div className="flex items-center gap-2">
                   <Badge variant="outline" className="font-mono text-xs shrink-0">{item.code}</Badge>
                   <button
-                    onClick={() => toggleDetail(item.id)}
+                    onClick={() => {
+                      toggleDetail(item.id);
+                      // When opening detail, also expand children
+                      if (!isDetailOpen && hasChildren) {
+                        setExpandedIds(prev => new Set(prev).add(item.id));
+                      }
+                    }}
                     className="font-medium text-foreground truncate hover:underline text-left"
                   >
                     {item.name}

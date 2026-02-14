@@ -4268,6 +4268,42 @@ export type Database = {
           },
         ]
       }
+      tolosa_item_resources: {
+        Row: {
+          created_at: string
+          id: string
+          resource_id: string
+          tolosa_item_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          resource_id: string
+          tolosa_item_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          resource_id?: string
+          tolosa_item_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tolosa_item_resources_resource_id_fkey"
+            columns: ["resource_id"]
+            isOneToOne: false
+            referencedRelation: "budget_activity_resources"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tolosa_item_resources_tolosa_item_id_fkey"
+            columns: ["tolosa_item_id"]
+            isOneToOne: false
+            referencedRelation: "tolosa_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tolosa_items: {
         Row: {
           address_city: string | null

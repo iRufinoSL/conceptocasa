@@ -17,6 +17,7 @@ import {
 import { BudgetUrbanismTab } from './BudgetUrbanismTab';
 import { BudgetMeasurementsTab } from './BudgetMeasurementsTab';
 import { TolosaMeasurementsPanel } from './TolosaMeasurementsPanel';
+import { TolosaResourcesPanel } from './TolosaResourcesPanel';
 import { BudgetAgendaTab } from './BudgetAgendaTab';
 import { BudgetAdministracionTab } from './BudgetAdministracionTab';
 import { BudgetSpacesTab } from './BudgetSpacesTab';
@@ -33,6 +34,7 @@ import { BudgetWorkAreasTab } from './BudgetWorkAreasTab';
 import { SpaceDetail } from './HousingProfileEditor';
 import { Json } from '@/integrations/supabase/types';
 import { toast } from 'sonner';
+import { formatCurrency } from '@/lib/format-utils';
 
 interface TolosItem {
   id: string;
@@ -105,7 +107,7 @@ const DIMENSION_LINKS = [
   { key: 'quien', label: 'QUIÉN?', icon: Users, color: 'text-emerald-600 bg-emerald-50 border-emerald-200 dark:text-emerald-400 dark:bg-emerald-950 dark:border-emerald-800', hint: 'Cliente / Proveedor' },
   { key: 'donde', label: 'DÓNDE?', icon: MapPin, color: 'text-amber-600 bg-amber-50 border-amber-200 dark:text-amber-400 dark:bg-amber-950 dark:border-amber-800', hint: 'Dirección / Catastro' },
   { key: 'cuando', label: 'CUÁNDO?', icon: Clock, color: 'text-purple-600 bg-purple-50 border-purple-200 dark:text-purple-400 dark:bg-purple-950 dark:border-purple-800', hint: 'Fases / Plazos' },
-  { key: 'cuanto', label: 'CUÁNTO?', icon: DollarSign, color: 'text-rose-600 bg-rose-50 border-rose-200 dark:text-rose-400 dark:bg-rose-950 dark:border-rose-800', hint: 'Recursos / Costes' },
+  { key: 'cuanto', label: 'CUÁNTO?', icon: DollarSign, color: 'text-rose-600 bg-rose-50 border-rose-200 dark:text-rose-400 dark:bg-rose-950 dark:border-rose-800', hint: 'Costes / SubTotal' },
 ];
 
 export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormViewProps) {
@@ -138,6 +140,22 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
     cadastral_reference: string;
   }>>({});
   const [dondeLocationOpen, setDondeLocationOpen] = useState<Record<string, boolean>>({});
+  const [itemSubtotals, setItemSubtotals] = useState<Record<string, number>>({});
+
+  const updateItemSubtotal = useCallback((itemId: string, subtotal: number) => {
+    setItemSubtotals(prev => {
+      if (prev[itemId] === subtotal) return prev;
+      return { ...prev, [itemId]: subtotal };
+    });
+  }, []);
+
+  // Calculate CUÁNTO? for an item: own subtotal + all descendants' subtotals
+  const getCuanto = useCallback((itemId: string): number => {
+    const own = itemSubtotals[itemId] || 0;
+    const children = items.filter(i => i.parent_id === itemId);
+    const childrenTotal = children.reduce((sum, child) => sum + getCuanto(child.id), 0);
+    return own + childrenTotal;
+  }, [items, itemSubtotals]);
 
   const initDondeForm = (item: TolosItem) => {
     if (!dondeForm[item.id]) {
@@ -1266,7 +1284,7 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
       case 'anteproyecto':
         return <BudgetPredesignTab budgetId={budgetId} isAdmin={isAdmin} projectId={null} />;
       case 'mediciones':
-        return <TolosaMeasurementsPanel budgetId={budgetId} tolosItemId={item.id} isAdmin={isAdmin} />;
+        return <TolosaMeasurementsPanel budgetId={budgetId} tolosItemId={item.id} isAdmin={isAdmin} parentItemId={item.parent_id} />;
       case 'documentos':
         return <BudgetDocumentsTab budgetId={budgetId} projectId={null} projectName={null} isAdmin={isAdmin} />;
       case 'agenda':
@@ -1348,14 +1366,32 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
           <p className="text-xs text-muted-foreground mt-1">Vinculación a fases y cronograma — próximamente</p>
         </div>
       );
-      case 'cuanto': return (
-        <div className="p-3 rounded-lg border border-rose-200 bg-rose-50/50 dark:border-rose-800 dark:bg-rose-950/30">
-          <h4 className="text-sm font-semibold flex items-center gap-2 text-rose-700 dark:text-rose-400">
-            <DollarSign className="h-4 w-4" /> CUÁNTO? — Costes
-          </h4>
-          <p className="text-xs text-muted-foreground mt-1">Vinculación a recursos y costes — próximamente</p>
-        </div>
-      );
+      case 'cuanto': {
+        const cuanto = getCuanto(item.id);
+        return (
+          <div className="p-3 rounded-lg border border-rose-200 bg-rose-50/50 dark:border-rose-800 dark:bg-rose-950/30 space-y-3">
+            <h4 className="text-sm font-semibold flex items-center gap-2 text-rose-700 dark:text-rose-400">
+              <DollarSign className="h-4 w-4" /> CUÁNTO? — Costes
+            </h4>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="p-3 rounded border bg-background text-center">
+                <p className="text-xl font-bold text-foreground">{formatCurrency(itemSubtotals[item.id] || 0)}</p>
+                <p className="text-[10px] text-muted-foreground uppercase">Recursos propios</p>
+              </div>
+              <div className="p-3 rounded border bg-background text-center">
+                <p className="text-xl font-bold text-foreground">{formatCurrency(cuanto)}</p>
+                <p className="text-[10px] text-muted-foreground uppercase">Total (con hijos)</p>
+              </div>
+            </div>
+            <TolosaResourcesPanel
+              budgetId={budgetId}
+              tolosItemId={item.id}
+              isAdmin={isAdmin}
+              onSubtotalChange={(s) => updateItemSubtotal(item.id, s)}
+            />
+          </div>
+        );
+      }
       default: return null;
     }
   };
@@ -1438,9 +1474,38 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
                       {children.length} {isExpanded ? '▾' : '▸'}
                     </button>
                   )}
+                  {/* CUÁNTO? badge */}
+                  {(() => {
+                    const cuanto = getCuanto(item.id);
+                    if (cuanto > 0) return (
+                      <Badge variant="secondary" className="ml-auto text-xs font-mono shrink-0 gap-1">
+                        <DollarSign className="h-3 w-3" />
+                        {formatCurrency(cuanto)}
+                      </Badge>
+                    );
+                    return null;
+                  })()}
                 </div>
                 {item.description && isDetailOpen && (
                   <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{item.description}</p>
+                )}
+
+                {/* Inline Measurements + Resources (always visible when detail open) */}
+                {isDetailOpen && (
+                  <div className="mt-3 space-y-3">
+                    <TolosaMeasurementsPanel
+                      budgetId={budgetId}
+                      tolosItemId={item.id}
+                      isAdmin={isAdmin}
+                      parentItemId={item.parent_id}
+                    />
+                    <TolosaResourcesPanel
+                      budgetId={budgetId}
+                      tolosItemId={item.id}
+                      isAdmin={isAdmin}
+                      onSubtotalChange={(s) => updateItemSubtotal(item.id, s)}
+                    />
+                  </div>
                 )}
 
                 {/* Dimension links panel */}

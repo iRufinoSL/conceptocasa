@@ -1189,7 +1189,7 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
                     <Badge variant="secondary" className="text-xs">{children.length}</Badge>
                   )}
                 </div>
-                {item.description && (
+                {item.description && isDetailOpen && (
                   <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{item.description}</p>
                 )}
 

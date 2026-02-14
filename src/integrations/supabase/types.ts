@@ -4232,6 +4232,57 @@ export type Database = {
           },
         ]
       }
+      tolosa_items: {
+        Row: {
+          budget_id: string
+          code: string
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          order_index: number
+          parent_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          budget_id: string
+          code: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          order_index?: number
+          parent_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          budget_id?: string
+          code?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          order_index?: number
+          parent_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tolosa_items_budget_id_fkey"
+            columns: ["budget_id"]
+            isOneToOne: false
+            referencedRelation: "presupuestos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tolosa_items_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "tolosa_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       urban_document_uploads: {
         Row: {
           budget_id: string | null

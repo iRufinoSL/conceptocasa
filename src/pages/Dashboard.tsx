@@ -18,7 +18,8 @@ import {
   MessageSquare, 
   Settings,
   LogOut,
-  Building2
+  Building2,
+  Brain
 } from 'lucide-react';
 
 interface AppCard {
@@ -32,6 +33,15 @@ interface AppCard {
 }
 
 const apps: AppCard[] = [
+  {
+    id: 'tolosa',
+    title: 'TO.LO.SA.system 2.0',
+    description: 'Brainstorming y planificación inteligente',
+    icon: Brain,
+    route: '/presupuestos',
+    available: true,
+    adminOnly: false,
+  },
   {
     id: 'proyectos',
     title: 'Proyectos',

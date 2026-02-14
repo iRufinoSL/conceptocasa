@@ -1244,11 +1244,33 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
           className={`flex items-start gap-2 p-3 rounded-lg border-l-4 ${getDepthColor(depth)} bg-card hover:bg-accent/30 transition-colors`}
           style={{ marginLeft: depth * 24 }}
         >
+          {/* Expand/collapse button - always visible with clear styling */}
           <button
-            onClick={() => hasChildren && toggleExpanded(item.id)}
-            className={`mt-1 p-0.5 rounded ${hasChildren ? 'hover:bg-accent cursor-pointer' : 'invisible'}`}
+            onClick={() => {
+              if (hasChildren) {
+                toggleExpanded(item.id);
+              } else {
+                toggleDetail(item.id);
+              }
+            }}
+            className={`mt-0.5 p-1 rounded-md border transition-all shrink-0 ${
+              hasChildren
+                ? isExpanded
+                  ? 'bg-primary/10 border-primary/30 text-primary hover:bg-primary/20'
+                  : 'bg-muted border-border text-muted-foreground hover:bg-accent hover:text-foreground'
+                : isDetailOpen
+                  ? 'bg-primary/10 border-primary/30 text-primary hover:bg-primary/20'
+                  : 'bg-muted border-border text-muted-foreground hover:bg-accent hover:text-foreground'
+            }`}
+            title={hasChildren
+              ? (isExpanded ? 'Colapsar sub-QUÉ?' : `Expandir ${children.length} sub-QUÉ?`)
+              : (isDetailOpen ? 'Colapsar detalle' : 'Expandir detalle')
+            }
           >
-            {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+            {(hasChildren ? isExpanded : isDetailOpen)
+              ? <ChevronDown className="h-4 w-4" />
+              : <ChevronRight className="h-4 w-4" />
+            }
           </button>
 
           <div className="flex-1 min-w-0">
@@ -1272,7 +1294,17 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
                     {item.name}
                   </button>
                   {hasChildren && (
-                    <Badge variant="secondary" className="text-xs">{children.length}</Badge>
+                    <button
+                      onClick={() => toggleExpanded(item.id)}
+                      className={`inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-full border transition-colors ${
+                        isExpanded
+                          ? 'bg-primary/10 border-primary/30 text-primary'
+                          : 'bg-muted border-border text-muted-foreground hover:bg-accent'
+                      }`}
+                      title={isExpanded ? 'Colapsar' : 'Expandir'}
+                    >
+                      {children.length} {isExpanded ? '▾' : '▸'}
+                    </button>
                   )}
                 </div>
                 {item.description && isDetailOpen && (
@@ -1392,31 +1424,30 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
       </div>
 
       {/* Dimension legend */}
-      <div className="flex flex-wrap gap-2 items-start">
-        {DIMENSION_LINKS.map(dim => {
-          const Icon = dim.icon;
-          const isComo = dim.key === 'como';
-          return (
-            <div key={dim.key} className="flex flex-col gap-0">
-              <Badge variant="outline" className={`gap-1 ${dim.color} ${isComo ? 'rounded-b-none' : ''}`}>
+      <div className="space-y-2">
+        <div className="flex flex-wrap gap-2 items-center">
+          {DIMENSION_LINKS.map(dim => {
+            const Icon = dim.icon;
+            return (
+              <Badge key={dim.key} variant="outline" className={`gap-1 ${dim.color}`}>
                 <Icon className="h-3 w-3" /> {dim.label}
               </Badge>
-              {isComo && (
-                <div className="flex flex-col border border-t-0 border-blue-200 dark:border-blue-800 rounded-b-md overflow-hidden bg-blue-50/80 dark:bg-blue-950/40">
-                  {COMO_SUBMENUS.map(sub => {
-                    const SubIcon = sub.icon;
-                    return (
-                      <span key={sub.key} className="flex items-center gap-1.5 px-2 py-1 text-[11px] font-medium text-blue-600/80 dark:text-blue-400/70">
-                        <SubIcon className="h-3 w-3" />
-                        {sub.label}
-                      </span>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
+        {/* CÓMO? submenu - horizontal */}
+        <div className="flex flex-wrap gap-1 items-center pl-1">
+          <span className="text-[10px] font-bold text-blue-500 dark:text-blue-400 uppercase tracking-wider mr-1">CÓMO? →</span>
+          {COMO_SUBMENUS.map(sub => {
+            const SubIcon = sub.icon;
+            return (
+              <Badge key={sub.key} variant="outline" className="gap-1 text-[10px] px-1.5 py-0.5 border-blue-200 dark:border-blue-800 text-blue-600/80 dark:text-blue-400/70 bg-blue-50/60 dark:bg-blue-950/30">
+                <SubIcon className="h-2.5 w-2.5" />
+                {sub.label}
+              </Badge>
+            );
+          })}
+        </div>
       </div>
 
       {/* Root add form */}

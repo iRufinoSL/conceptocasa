@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import {
   Plus, ChevronRight, ChevronDown, Brain, Trash2, Edit2, Check, X,
   HelpCircle, Copy, Wrench, Users, MapPin, Clock, DollarSign,
@@ -27,6 +28,7 @@ import { HierarchicalGanttView } from './HierarchicalGanttView';
 import { BudgetTimelineView } from './BudgetTimelineView';
 import { BudgetVersionComparison } from './BudgetVersionComparison';
 import { BudgetContactsManager } from './BudgetContactsManager';
+import { BudgetWorkAreasTab } from './BudgetWorkAreasTab';
 import { SpaceDetail } from './HousingProfileEditor';
 import { Json } from '@/integrations/supabase/types';
 import { toast } from 'sonner';
@@ -134,6 +136,7 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
     google_maps_url: string;
     cadastral_reference: string;
   }>>({});
+  const [dondeLocationOpen, setDondeLocationOpen] = useState<Record<string, boolean>>({});
 
   const initDondeForm = (item: TolosItem) => {
     if (!dondeForm[item.id]) {
@@ -615,178 +618,200 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
       return null;
     })();
 
+    const isLocationOpen = dondeLocationOpen[item.id] ?? false;
+
     return (
       <div className="space-y-3 p-3 rounded-lg border border-amber-200 bg-amber-50/50 dark:border-amber-800 dark:bg-amber-950/30">
         <h4 className="text-sm font-semibold flex items-center gap-2 text-amber-700 dark:text-amber-400">
-          <MapPin className="h-4 w-4" /> DÓNDE? — Ubicación
+          <MapPin className="h-4 w-4" /> DÓNDE? — Ubicación y Áreas de Trabajo
         </h4>
 
-        {/* 1. Dirección completa */}
-        <div className="space-y-2">
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">1. Dirección completa</p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            <div className="sm:col-span-2">
-              <label className="text-xs text-muted-foreground">Calle / Dirección</label>
-              <input
-                type="text"
-                value={f.address_street}
-                placeholder="Calle, número..."
-                onChange={e => updateDondeField(item.id, 'address_street', e.target.value)}
-                className="flex h-8 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-              />
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground">Población</label>
-              <input
-                type="text"
-                value={f.address_city}
-                placeholder="Madrid, Barcelona..."
-                onChange={e => updateDondeField(item.id, 'address_city', e.target.value)}
-                className="flex h-8 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="text-xs text-muted-foreground">Código Postal</label>
-                <input
-                  type="text"
-                  value={f.address_postal_code}
-                  placeholder="28001"
-                  onChange={e => updateDondeField(item.id, 'address_postal_code', e.target.value)}
-                  className="flex h-8 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                />
-              </div>
-              <div>
-                <label className="text-xs text-muted-foreground">Provincia</label>
-                <input
-                  type="text"
-                  value={f.address_province}
-                  placeholder="Madrid"
-                  onChange={e => updateDondeField(item.id, 'address_province', e.target.value)}
-                  className="flex h-8 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* 2. Coordenadas Google Maps */}
-        <div className="space-y-2">
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">2. Coordenadas Google Maps</p>
-          <div className="space-y-2">
-            <div>
-              <label className="text-xs text-muted-foreground">URL de Google Maps (pega aquí la dirección)</label>
-              <input
-                type="text"
-                value={f.google_maps_url}
-                placeholder="https://www.google.com/maps/place/..."
-                onChange={e => updateDondeField(item.id, 'google_maps_url', e.target.value)}
-                className="flex h-8 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <input
-                type="text"
-                inputMode="decimal"
-                value={f.latitude}
-                placeholder="Latitud"
-                onChange={e => updateDondeField(item.id, 'latitude', e.target.value)}
-                className="flex h-8 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-              />
-              <input
-                type="text"
-                inputMode="decimal"
-                value={f.longitude}
-                placeholder="Longitud"
-                onChange={e => updateDondeField(item.id, 'longitude', e.target.value)}
-                className="flex h-8 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-              />
-            </div>
-          </div>
-          {mapsUrl && (
-            <div className="flex items-center gap-2 pt-1">
-              <Button
-                size="sm"
-                variant="outline"
-                className="text-xs"
-                onClick={() => window.open(mapsUrl, '_blank', 'noopener,noreferrer')}
-              >
-                <ExternalLink className="h-3 w-3 mr-1" /> Ir a dirección
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                className="text-xs"
-                onClick={() => {
-                  navigator.clipboard.writeText(mapsUrl);
-                  toast.success('URL copiada al portapapeles');
-                }}
-              >
-                <Copy className="h-3 w-3 mr-1" /> Copiar dirección
-              </Button>
-            </div>
-          )}
-        </div>
-
-        {/* 3. Referencia Catastral */}
-        <div className="space-y-2">
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">3. Referencia Catastral</p>
-          <input
-            type="text"
-            value={f.cadastral_reference}
-            placeholder="0000000AA0000A0001AA"
-            onChange={e => updateDondeField(item.id, 'cadastral_reference', e.target.value)}
-            className="flex h-8 w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-mono ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-          />
-          {f.cadastral_reference && (
+        {/* 1. Ubicación del terreno - Collapsible */}
+        <Collapsible open={isLocationOpen} onOpenChange={(open) => setDondeLocationOpen(prev => ({ ...prev, [item.id]: open }))}>
+          <CollapsibleTrigger asChild>
+            <button className="flex items-center gap-2 w-full text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider hover:text-foreground transition-colors py-1">
+              {isLocationOpen ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+              Ubicación del terreno
+              {(f.address_street || f.address_city || f.cadastral_reference) && (
+                <Badge variant="outline" className="text-[10px] ml-1">con datos</Badge>
+              )}
+            </button>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="space-y-3 pt-2">
+            {/* 1. Dirección completa */}
             <div className="space-y-2">
-              <div className="flex flex-wrap gap-2">
-                <a
-                  href={getCatastroUrl(f.cadastral_reference)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
-                >
-                  <Building className="h-3 w-3" /> Ficha catastral
-                </a>
-                <a
-                  href={getCatastroMapaUrl(f.cadastral_reference)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
-                >
-                  <MapPin className="h-3 w-3" /> Mapa catastral
-                </a>
-              </div>
-              <div className="rounded-lg border overflow-hidden bg-background">
-                <div className="flex items-center justify-between px-3 py-1.5 bg-muted/50 border-b">
-                  <span className="text-xs font-semibold text-muted-foreground">Consulta descriptiva y gráfica</span>
-                  <a
-                    href={getCatastroDescriptivaUrl(f.cadastral_reference)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-xs text-primary hover:underline flex items-center gap-1"
-                  >
-                    <ExternalLink className="h-3 w-3" /> Abrir en nueva pestaña
-                  </a>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">1. Dirección completa</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div className="sm:col-span-2">
+                  <label className="text-xs text-muted-foreground">Calle / Dirección</label>
+                  <input
+                    type="text"
+                    value={f.address_street}
+                    placeholder="Calle, número..."
+                    onChange={e => updateDondeField(item.id, 'address_street', e.target.value)}
+                    className="flex h-8 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  />
                 </div>
-                <iframe
-                  src={getCatastroDescriptivaUrl(f.cadastral_reference)}
-                  className="w-full border-0"
-                  style={{ height: '500px' }}
-                  title="Consulta descriptiva y gráfica - Catastro"
-                  sandbox="allow-scripts allow-same-origin allow-popups"
-                />
+                <div>
+                  <label className="text-xs text-muted-foreground">Población</label>
+                  <input
+                    type="text"
+                    value={f.address_city}
+                    placeholder="Madrid, Barcelona..."
+                    onChange={e => updateDondeField(item.id, 'address_city', e.target.value)}
+                    className="flex h-8 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-xs text-muted-foreground">Código Postal</label>
+                    <input
+                      type="text"
+                      value={f.address_postal_code}
+                      placeholder="28001"
+                      onChange={e => updateDondeField(item.id, 'address_postal_code', e.target.value)}
+                      className="flex h-8 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-muted-foreground">Provincia</label>
+                    <input
+                      type="text"
+                      value={f.address_province}
+                      placeholder="Madrid"
+                      onChange={e => updateDondeField(item.id, 'address_province', e.target.value)}
+                      className="flex h-8 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                    />
+                  </div>
+                </div>
               </div>
             </div>
-          )}
-        </div>
 
-        {/* Botón Guardar */}
-        <div className="flex justify-end pt-2 border-t border-amber-200 dark:border-amber-800">
-          <Button size="sm" onClick={() => saveDondeForm(item.id)}>
-            <Check className="h-3 w-3 mr-1" /> Guardar ubicación
-          </Button>
+            {/* 2. Coordenadas Google Maps */}
+            <div className="space-y-2">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">2. Coordenadas Google Maps</p>
+              <div className="space-y-2">
+                <div>
+                  <label className="text-xs text-muted-foreground">URL de Google Maps (pega aquí la dirección)</label>
+                  <input
+                    type="text"
+                    value={f.google_maps_url}
+                    placeholder="https://www.google.com/maps/place/..."
+                    onChange={e => updateDondeField(item.id, 'google_maps_url', e.target.value)}
+                    className="flex h-8 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={f.latitude}
+                    placeholder="Latitud"
+                    onChange={e => updateDondeField(item.id, 'latitude', e.target.value)}
+                    className="flex h-8 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  />
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={f.longitude}
+                    placeholder="Longitud"
+                    onChange={e => updateDondeField(item.id, 'longitude', e.target.value)}
+                    className="flex h-8 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  />
+                </div>
+              </div>
+              {mapsUrl && (
+                <div className="flex items-center gap-2 pt-1">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="text-xs"
+                    onClick={() => window.open(mapsUrl, '_blank', 'noopener,noreferrer')}
+                  >
+                    <ExternalLink className="h-3 w-3 mr-1" /> Ir a dirección
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="text-xs"
+                    onClick={() => {
+                      navigator.clipboard.writeText(mapsUrl);
+                      toast.success('URL copiada al portapapeles');
+                    }}
+                  >
+                    <Copy className="h-3 w-3 mr-1" /> Copiar dirección
+                  </Button>
+                </div>
+              )}
+            </div>
+
+            {/* 3. Referencia Catastral */}
+            <div className="space-y-2">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">3. Referencia Catastral</p>
+              <input
+                type="text"
+                value={f.cadastral_reference}
+                placeholder="0000000AA0000A0001AA"
+                onChange={e => updateDondeField(item.id, 'cadastral_reference', e.target.value)}
+                className="flex h-8 w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-mono ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              />
+              {f.cadastral_reference && (
+                <div className="space-y-2">
+                  <div className="flex flex-wrap gap-2">
+                    <a
+                      href={getCatastroUrl(f.cadastral_reference)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                    >
+                      <Building className="h-3 w-3" /> Ficha catastral
+                    </a>
+                    <a
+                      href={getCatastroMapaUrl(f.cadastral_reference)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                    >
+                      <MapPin className="h-3 w-3" /> Mapa catastral
+                    </a>
+                  </div>
+                  <div className="rounded-lg border overflow-hidden bg-background">
+                    <div className="flex items-center justify-between px-3 py-1.5 bg-muted/50 border-b">
+                      <span className="text-xs font-semibold text-muted-foreground">Consulta descriptiva y gráfica</span>
+                      <a
+                        href={getCatastroDescriptivaUrl(f.cadastral_reference)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-primary hover:underline flex items-center gap-1"
+                      >
+                        <ExternalLink className="h-3 w-3" /> Abrir en nueva pestaña
+                      </a>
+                    </div>
+                    <iframe
+                      src={getCatastroDescriptivaUrl(f.cadastral_reference)}
+                      className="w-full border-0"
+                      style={{ height: '500px' }}
+                      title="Consulta descriptiva y gráfica - Catastro"
+                      sandbox="allow-scripts allow-same-origin allow-popups"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Botón Guardar */}
+            <div className="flex justify-end pt-2 border-t border-amber-200 dark:border-amber-800">
+              <Button size="sm" onClick={() => saveDondeForm(item.id)}>
+                <Check className="h-3 w-3 mr-1" /> Guardar ubicación
+              </Button>
+            </div>
+          </CollapsibleContent>
+        </Collapsible>
+
+        {/* 2. Áreas de Trabajo */}
+        <div className="space-y-2 pt-2 border-t border-amber-200 dark:border-amber-800">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Áreas de Trabajo</p>
+          <BudgetWorkAreasTab budgetId={budgetId} isAdmin={isAdmin} />
         </div>
       </div>
     );

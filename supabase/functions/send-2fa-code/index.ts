@@ -11,6 +11,22 @@ function generateOTP(): string {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
+// Hash OTP code using SHA-256 with a salt for secure storage
+async function hashOTP(code: string, salt: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(salt + code);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// Generate a random salt
+function generateSalt(): string {
+  const array = new Uint8Array(16);
+  crypto.getRandomValues(array);
+  return Array.from(array).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
 // Normalize phone number to E.164 format
 function normalizePhone(phone: string): string {
   // Remove all non-digit characters except leading +
@@ -53,8 +69,8 @@ const handler = async (req: Request): Promise<Response> => {
     if (!birdApiKey) {
       console.error("BIRD_API_KEY not configured");
       return new Response(
-        JSON.stringify({ error: "SMS service not configured" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({ error: "Service temporarily unavailable" }),
+        { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
@@ -75,6 +91,8 @@ const handler = async (req: Request): Promise<Response> => {
 
       const normalizedPhone = normalizePhone(phoneNumber);
       const otpCode = generateOTP();
+      const salt = generateSalt();
+      const hashedCode = await hashOTP(otpCode, salt);
       const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
 
       console.log(`[2FA] Generating OTP for user ${userId}, phone ${normalizedPhone.substring(0, 6)}...`);
@@ -86,13 +104,13 @@ const handler = async (req: Request): Promise<Response> => {
         .eq('user_id', userId)
         .is('verified_at', null);
 
-      // Store the new OTP code
+      // Store the hashed OTP code (salt:hash format)
       const { error: insertError } = await supabase
         .from('auth_otp_codes')
         .insert({
           user_id: userId,
           phone_number: normalizedPhone,
-          code: otpCode,
+          code: `${salt}:${hashedCode}`,
           expires_at: expiresAt.toISOString()
         });
 
@@ -208,8 +226,21 @@ const handler = async (req: Request): Promise<Response> => {
         .update({ attempts: otpRecord.attempts + 1 })
         .eq('id', otpRecord.id);
 
-      // Verify the code
-      if (otpRecord.code !== code) {
+      // Verify the code by hashing the provided code and comparing
+      const storedCode = otpRecord.code;
+      let isValid = false;
+
+      if (storedCode.includes(':')) {
+        // New format: salt:hash
+        const [salt, storedHash] = storedCode.split(':');
+        const providedHash = await hashOTP(code, salt);
+        isValid = providedHash === storedHash;
+      } else {
+        // Legacy plain-text format (backwards compatibility)
+        isValid = storedCode === code;
+      }
+
+      if (!isValid) {
         console.log("[2FA] Invalid code provided");
         return new Response(
           JSON.stringify({ 
@@ -236,7 +267,7 @@ const handler = async (req: Request): Promise<Response> => {
 
     } else {
       return new Response(
-        JSON.stringify({ error: "Invalid action. Use /send or /verify" }),
+        JSON.stringify({ error: "Invalid request" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -244,7 +275,7 @@ const handler = async (req: Request): Promise<Response> => {
   } catch (error: any) {
     console.error("[2FA] Error:", error);
     return new Response(
-      JSON.stringify({ error: error.message || "Internal server error" }),
+      JSON.stringify({ error: "An unexpected error occurred" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }

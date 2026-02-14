@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { Webhook } from "https://esm.sh/svix@1.15.0";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -43,8 +44,8 @@ const handler = async (req: Request): Promise<Response> => {
     if (!webhookSecret) {
       console.error("RESEND_WEBHOOK_SECRET not configured");
       return new Response(
-        JSON.stringify({ error: "Webhook not configured" }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ error: "Service temporarily unavailable" }),
+        { status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
@@ -60,18 +61,26 @@ const handler = async (req: Request): Promise<Response> => {
       );
     }
 
-    // Basic timestamp validation to prevent replay attacks (5 minute tolerance)
-    const timestampSeconds = parseInt(svixTimestamp, 10);
-    const now = Math.floor(Date.now() / 1000);
-    if (isNaN(timestampSeconds) || Math.abs(now - timestampSeconds) > 300) {
-      console.error("Webhook timestamp too old or invalid");
+    // Read raw body for signature verification
+    const rawBody = await req.text();
+
+    // Use Svix library for proper cryptographic signature verification + replay protection
+    const wh = new Webhook(webhookSecret);
+    let payload: ResendWebhookPayload;
+    try {
+      payload = wh.verify(rawBody, {
+        "svix-id": svixId,
+        "svix-timestamp": svixTimestamp,
+        "svix-signature": svixSignature,
+      }) as ResendWebhookPayload;
+    } catch (err) {
+      console.error("Webhook signature verification failed:", err);
       return new Response(
-        JSON.stringify({ error: "Invalid timestamp" }),
+        JSON.stringify({ error: "Invalid signature" }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    const payload: ResendWebhookPayload = await req.json();
     console.log("Received webhook event:", payload.type, "for email:", payload.data?.email_id);
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -120,7 +129,7 @@ const handler = async (req: Request): Promise<Response> => {
     if (updateError) {
       console.error("Error updating email status:", updateError);
       return new Response(
-        JSON.stringify({ error: updateError.message }),
+        JSON.stringify({ error: "Processing error" }),
         { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
       );
     }
@@ -189,7 +198,7 @@ const handler = async (req: Request): Promise<Response> => {
   } catch (error: any) {
     console.error("Error in resend-webhook:", error);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: "An unexpected error occurred" }),
       { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
     );
   }

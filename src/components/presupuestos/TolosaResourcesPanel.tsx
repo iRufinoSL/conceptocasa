@@ -78,23 +78,28 @@ export function TolosaResourcesPanel({ budgetId, tolosItemId, isAdmin, parentIte
   const [formData, setFormData] = useState(defaultForm);
   const [measurementUnits, setMeasurementUnits] = useState<number>(0);
 
-  // Fetch measurements linked to this QUÉ? (own or inherited from parent)
+  // Fetch measurements linked to this QUÉ? (own or inherited from ancestors)
   const fetchMeasurementUnits = useCallback(async () => {
-    // First check own measurements
-    const { data: ownLinks } = await supabase
-      .from('tolosa_item_measurements')
-      .select('measurement_id')
-      .eq('tolosa_item_id', tolosItemId);
-    
-    let measurementIds = (ownLinks || []).map((l: any) => l.measurement_id);
-    
-    // If no own measurements, inherit from parent
-    if (measurementIds.length === 0 && parentItemId) {
-      const { data: parentLinks } = await supabase
+    // Walk up the ancestor chain until we find measurements
+    let currentId: string | null = tolosItemId;
+    let measurementIds: string[] = [];
+
+    while (currentId) {
+      const { data: links } = await supabase
         .from('tolosa_item_measurements')
         .select('measurement_id')
-        .eq('tolosa_item_id', parentItemId);
-      measurementIds = (parentLinks || []).map((l: any) => l.measurement_id);
+        .eq('tolosa_item_id', currentId);
+      
+      measurementIds = (links || []).map((l: any) => l.measurement_id);
+      if (measurementIds.length > 0) break;
+
+      // Go up to parent
+      const { data: item } = await supabase
+        .from('tolosa_items')
+        .select('parent_id')
+        .eq('id', currentId)
+        .single();
+      currentId = item?.parent_id ?? null;
     }
     
     if (measurementIds.length > 0) {
@@ -109,7 +114,7 @@ export function TolosaResourcesPanel({ budgetId, tolosItemId, isAdmin, parentIte
     } else {
       setMeasurementUnits(0);
     }
-  }, [tolosItemId, parentItemId]);
+  }, [tolosItemId]);
 
   // Use measurement units as related_units for subtotal calculation
   const getSubtotal = useCallback((r: BudgetResource) => calcResourceSubtotal({

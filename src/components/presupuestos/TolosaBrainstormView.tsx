@@ -481,18 +481,26 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
             </div>
           </div>
           {mapsUrl && (
-            <div className="space-y-1">
-              <a
-                href={mapsUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+            <div className="flex items-center gap-2 pt-1">
+              <Button
+                size="sm"
+                variant="outline"
+                className="text-xs"
+                onClick={() => window.open(mapsUrl, '_blank', 'noopener,noreferrer')}
               >
-                <ExternalLink className="h-3 w-3" /> Ver en Google Maps
-              </a>
-              <div className="text-xs text-muted-foreground font-mono bg-muted/50 px-2 py-1 rounded break-all select-all">
-                {mapsUrl}
-              </div>
+                <ExternalLink className="h-3 w-3 mr-1" /> Ir a dirección
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="text-xs"
+                onClick={() => {
+                  navigator.clipboard.writeText(mapsUrl);
+                  toast.success('URL copiada al portapapeles');
+                }}
+              >
+                <Copy className="h-3 w-3 mr-1" /> Copiar dirección
+              </Button>
             </div>
           )}
         </div>

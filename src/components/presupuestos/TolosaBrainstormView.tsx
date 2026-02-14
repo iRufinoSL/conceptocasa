@@ -1416,27 +1416,24 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
           {/* Expand/collapse button - always visible with clear styling */}
           <button
             onClick={() => {
+              toggleDetail(item.id);
               if (hasChildren) {
-                toggleExpanded(item.id);
-              } else {
-                toggleDetail(item.id);
+                // If we're closing detail, also collapse children; if opening, expand children
+                if (isDetailOpen) {
+                  setExpandedIds(prev => { const n = new Set(prev); n.delete(item.id); return n; });
+                } else {
+                  setExpandedIds(prev => new Set(prev).add(item.id));
+                }
               }
             }}
             className={`mt-0.5 p-1 rounded-md border transition-all shrink-0 ${
-              hasChildren
-                ? isExpanded
-                  ? 'bg-primary/10 border-primary/30 text-primary hover:bg-primary/20'
-                  : 'bg-muted border-border text-muted-foreground hover:bg-accent hover:text-foreground'
-                : isDetailOpen
-                  ? 'bg-primary/10 border-primary/30 text-primary hover:bg-primary/20'
-                  : 'bg-muted border-border text-muted-foreground hover:bg-accent hover:text-foreground'
+              isDetailOpen
+                ? 'bg-primary/10 border-primary/30 text-primary hover:bg-primary/20'
+                : 'bg-muted border-border text-muted-foreground hover:bg-accent hover:text-foreground'
             }`}
-            title={hasChildren
-              ? (isExpanded ? 'Colapsar sub-QUÉ?' : `Expandir ${children.length} sub-QUÉ?`)
-              : (isDetailOpen ? 'Colapsar detalle' : 'Expandir detalle')
-            }
+            title={isDetailOpen ? 'Colapsar' : 'Expandir'}
           >
-            {(hasChildren ? isExpanded : isDetailOpen)
+            {isDetailOpen
               ? <ChevronDown className="h-4 w-4" />
               : <ChevronRight className="h-4 w-4" />
             }
@@ -1463,17 +1460,13 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
                     {item.name}
                   </button>
                   {hasChildren && (
-                    <button
-                      onClick={() => toggleExpanded(item.id)}
-                      className={`inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-full border transition-colors ${
-                        isExpanded
-                          ? 'bg-primary/10 border-primary/30 text-primary'
-                          : 'bg-muted border-border text-muted-foreground hover:bg-accent'
-                      }`}
-                      title={isExpanded ? 'Colapsar' : 'Expandir'}
+                    <Badge
+                      variant="outline"
+                      className={`text-xs cursor-pointer ${isExpanded ? 'bg-primary/10 border-primary/30 text-primary' : ''}`}
+                      onClick={(e) => { e.stopPropagation(); toggleExpanded(item.id); }}
                     >
-                      {children.length} {isExpanded ? '▾' : '▸'}
-                    </button>
+                      {children.length} sub
+                    </Badge>
                   )}
                   {/* CUÁNTO? badge */}
                   {(() => {

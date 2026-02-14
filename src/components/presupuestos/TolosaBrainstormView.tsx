@@ -23,6 +23,7 @@ interface TolosItem {
   created_at: string;
   updated_at: string;
   address_street: string | null;
+  address_city: string | null;
   address_postal_code: string | null;
   address_province: string | null;
   latitude: number | null;
@@ -189,6 +190,7 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
         description: item.description,
         order_index: siblings.length,
         address_street: item.address_street,
+        address_city: item.address_city,
         address_postal_code: item.address_postal_code,
         address_province: item.address_province,
         latitude: item.latitude,
@@ -229,8 +231,9 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
           name: child.name,
           description: child.description,
           order_index: i,
-          address_street: child.address_street,
-          address_postal_code: child.address_postal_code,
+           address_street: child.address_street,
+           address_city: child.address_city,
+           address_postal_code: child.address_postal_code,
           address_province: child.address_province,
           latitude: child.latitude,
           longitude: child.longitude,
@@ -290,13 +293,21 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
     if (item.latitude && item.longitude) {
       return `https://www.google.com/maps?q=${item.latitude},${item.longitude}`;
     }
-    const addr = [item.address_street, item.address_postal_code, item.address_province].filter(Boolean).join(', ');
+    const addr = [item.address_street, item.address_city, item.address_postal_code, item.address_province].filter(Boolean).join(', ');
     if (addr) return `https://www.google.com/maps/search/${encodeURIComponent(addr)}`;
     return null;
   };
 
   const getCatastroUrl = (ref: string) => {
-    return `https://www1.sedecatastro.gob.es/CYCBienInmworking/OVCConCiworking.aspx?RefC=${encodeURIComponent(ref)}`;
+    return `https://www1.sedecatastro.gob.es/CYCBienInmueble/OVCConCiworking.aspx?RefC=${encodeURIComponent(ref)}`;
+  };
+
+  const getCatastroDescriptivaUrl = (ref: string) => {
+    return `https://www1.sedecatastro.gob.es/CYCBienInmueble/OVCBusqueda.aspx?pest=rc&RCCompleta=${encodeURIComponent(ref)}&final=&DenijaBusworking=S`;
+  };
+
+  const getCatastroMapaUrl = (ref: string) => {
+    return `https://www1.sedecatastro.gob.es/Cartografia/mapa.aspx?refcat=${encodeURIComponent(ref)}`;
   };
 
   const getContactName = (contactId: string | null) => {
@@ -306,50 +317,68 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
   };
 
   // DÓNDE? panel
-  const renderDondePanel = (item: TolosItem) => (
-    <div className="space-y-3 p-3 rounded-lg border border-amber-200 bg-amber-50/50 dark:border-amber-800 dark:bg-amber-950/30">
-      <h4 className="text-sm font-semibold flex items-center gap-2 text-amber-700 dark:text-amber-400">
-        <MapPin className="h-4 w-4" /> DÓNDE? — Ubicación
-      </h4>
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-        <div>
-          <label className="text-xs text-muted-foreground">Calle / Dirección</label>
-          <Input
-            value={item.address_street || ''}
-            placeholder="Calle, número..."
-            onChange={e => updateItemField(item.id, { address_street: e.target.value || null })}
-            className="h-8 text-sm"
-          />
-        </div>
-        <div>
-          <label className="text-xs text-muted-foreground">Código Postal</label>
-          <Input
-            value={item.address_postal_code || ''}
-            placeholder="28001"
-            onChange={e => updateItemField(item.id, { address_postal_code: e.target.value || null })}
-            className="h-8 text-sm"
-          />
-        </div>
-        <div>
-          <label className="text-xs text-muted-foreground">Provincia</label>
-          <Input
-            value={item.address_province || ''}
-            placeholder="Madrid"
-            onChange={e => updateItemField(item.id, { address_province: e.target.value || null })}
-            className="h-8 text-sm"
-          />
-        </div>
-      </div>
+  const renderDondePanel = (item: TolosItem) => {
+    const mapsUrl = getGoogleMapsUrl(item);
+    return (
+      <div className="space-y-3 p-3 rounded-lg border border-amber-200 bg-amber-50/50 dark:border-amber-800 dark:bg-amber-950/30">
+        <h4 className="text-sm font-semibold flex items-center gap-2 text-amber-700 dark:text-amber-400">
+          <MapPin className="h-4 w-4" /> DÓNDE? — Ubicación
+        </h4>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-        <div>
-          <label className="text-xs text-muted-foreground">Coordenadas (Lat, Lng)</label>
-          <div className="flex gap-2">
+        {/* 1. Dirección completa */}
+        <div className="space-y-2">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">1. Dirección completa</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div className="sm:col-span-2">
+              <label className="text-xs text-muted-foreground">Calle / Dirección</label>
+              <Input
+                value={item.address_street || ''}
+                placeholder="Calle, número..."
+                onChange={e => updateItemField(item.id, { address_street: e.target.value || null })}
+                className="h-8 text-sm"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">Población</label>
+              <Input
+                value={item.address_city || ''}
+                placeholder="Madrid, Barcelona..."
+                onChange={e => updateItemField(item.id, { address_city: e.target.value || null })}
+                className="h-8 text-sm"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-xs text-muted-foreground">Código Postal</label>
+                <Input
+                  value={item.address_postal_code || ''}
+                  placeholder="28001"
+                  onChange={e => updateItemField(item.id, { address_postal_code: e.target.value || null })}
+                  className="h-8 text-sm"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground">Provincia</label>
+                <Input
+                  value={item.address_province || ''}
+                  placeholder="Madrid"
+                  onChange={e => updateItemField(item.id, { address_province: e.target.value || null })}
+                  className="h-8 text-sm"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* 2. Coordenadas Google Maps */}
+        <div className="space-y-2">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">2. Coordenadas Google Maps</p>
+          <div className="grid grid-cols-2 gap-2">
             <Input
               type="number"
               step="any"
               value={item.latitude ?? ''}
-              placeholder="Lat"
+              placeholder="Latitud"
               onChange={e => updateItemField(item.id, { latitude: e.target.value ? parseFloat(e.target.value) : null })}
               className="h-8 text-sm"
             />
@@ -357,44 +386,84 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
               type="number"
               step="any"
               value={item.longitude ?? ''}
-              placeholder="Lng"
+              placeholder="Longitud"
               onChange={e => updateItemField(item.id, { longitude: e.target.value ? parseFloat(e.target.value) : null })}
               className="h-8 text-sm"
             />
           </div>
-          {getGoogleMapsUrl(item) && (
-            <a
-              href={getGoogleMapsUrl(item)!}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 text-xs text-primary hover:underline mt-1"
-            >
-              <ExternalLink className="h-3 w-3" /> Ver en Google Maps
-            </a>
+          {mapsUrl && (
+            <div className="space-y-1">
+              <a
+                href={mapsUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+              >
+                <ExternalLink className="h-3 w-3" /> Ver en Google Maps
+              </a>
+              <div className="text-xs text-muted-foreground font-mono bg-muted/50 px-2 py-1 rounded break-all select-all">
+                {mapsUrl}
+              </div>
+            </div>
           )}
         </div>
-        <div>
-          <label className="text-xs text-muted-foreground">Referencia Catastral</label>
+
+        {/* 3. Referencia Catastral */}
+        <div className="space-y-2">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">3. Referencia Catastral</p>
           <Input
             value={item.cadastral_reference || ''}
             placeholder="0000000AA0000A0001AA"
             onChange={e => updateItemField(item.id, { cadastral_reference: e.target.value || null })}
-            className="h-8 text-sm"
+            className="h-8 text-sm font-mono"
           />
           {item.cadastral_reference && (
-            <a
-              href={getCatastroUrl(item.cadastral_reference)}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 text-xs text-primary hover:underline mt-1"
-            >
-              <Building className="h-3 w-3" /> Consultar Catastro
-            </a>
+            <div className="space-y-2">
+              <div className="flex flex-wrap gap-2">
+                <a
+                  href={getCatastroUrl(item.cadastral_reference)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                >
+                  <Building className="h-3 w-3" /> Ficha catastral
+                </a>
+                <a
+                  href={getCatastroMapaUrl(item.cadastral_reference)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                >
+                  <MapPin className="h-3 w-3" /> Mapa catastral
+                </a>
+              </div>
+              {/* Consulta descriptiva y gráfica embebida */}
+              <div className="rounded-lg border overflow-hidden bg-background">
+                <div className="flex items-center justify-between px-3 py-1.5 bg-muted/50 border-b">
+                  <span className="text-xs font-semibold text-muted-foreground">Consulta descriptiva y gráfica</span>
+                  <a
+                    href={getCatastroDescriptivaUrl(item.cadastral_reference)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-primary hover:underline flex items-center gap-1"
+                  >
+                    <ExternalLink className="h-3 w-3" /> Abrir en nueva pestaña
+                  </a>
+                </div>
+                <iframe
+                  src={getCatastroDescriptivaUrl(item.cadastral_reference)}
+                  className="w-full border-0"
+                  style={{ height: '500px' }}
+                  title="Consulta descriptiva y gráfica - Catastro"
+                  sandbox="allow-scripts allow-same-origin allow-popups"
+                />
+              </div>
+            </div>
           )}
         </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   // QUIÉN? panel
   const renderQuienPanel = (item: TolosItem) => (

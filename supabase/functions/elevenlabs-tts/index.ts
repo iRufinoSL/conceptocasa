@@ -46,8 +46,8 @@ Deno.serve(async (req: Request) => {
     const ELEVENLABS_API_KEY = Deno.env.get('ELEVENLABS_API_KEY');
     if (!ELEVENLABS_API_KEY) {
       console.error('ELEVENLABS_API_KEY not configured');
-      return new Response(JSON.stringify({ error: 'TTS service not configured' }), {
-        status: 500,
+      return new Response(JSON.stringify({ error: 'Service temporarily unavailable' }), {
+        status: 503,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
@@ -101,8 +101,7 @@ Deno.serve(async (req: Request) => {
 
   } catch (error) {
     console.error('[TTS] Error:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    return new Response(JSON.stringify({ error: errorMessage }), {
+    return new Response(JSON.stringify({ error: 'An unexpected error occurred' }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });

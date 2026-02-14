@@ -276,7 +276,7 @@ const handler = async (req: Request): Promise<Response> => {
       
       if (!supabaseUrl || !supabaseServiceKey) {
         console.error("Missing Supabase configuration");
-        throw new Error("Configuración de base de datos no disponible");
+        throw new Error("Service temporarily unavailable");
       }
       
       const supabase = createClient(supabaseUrl, supabaseServiceKey);

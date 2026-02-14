@@ -70,6 +70,63 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
   const [activeDimension, setActiveDimension] = useState<Record<string, string>>({});
   const [contacts, setContacts] = useState<ContactInfo[]>([]);
   const [contactSearch, setContactSearch] = useState('');
+  const [dondeForm, setDondeForm] = useState<Record<string, {
+    address_street: string;
+    address_city: string;
+    address_postal_code: string;
+    address_province: string;
+    latitude: string;
+    longitude: string;
+    google_maps_url: string;
+    cadastral_reference: string;
+  }>>({});
+
+  const initDondeForm = (item: TolosItem) => {
+    if (!dondeForm[item.id]) {
+      setDondeForm(prev => ({
+        ...prev,
+        [item.id]: {
+          address_street: item.address_street || '',
+          address_city: item.address_city || '',
+          address_postal_code: item.address_postal_code || '',
+          address_province: item.address_province || '',
+          latitude: item.latitude != null ? String(item.latitude) : '',
+          longitude: item.longitude != null ? String(item.longitude) : '',
+          google_maps_url: item.google_maps_url || '',
+          cadastral_reference: item.cadastral_reference || '',
+        },
+      }));
+    }
+  };
+
+  const updateDondeField = (itemId: string, field: string, value: string) => {
+    setDondeForm(prev => ({
+      ...prev,
+      [itemId]: { ...prev[itemId], [field]: value },
+    }));
+  };
+
+  const saveDondeForm = async (itemId: string) => {
+    const f = dondeForm[itemId];
+    if (!f) return;
+    const fields: Record<string, unknown> = {
+      address_street: f.address_street || null,
+      address_city: f.address_city || null,
+      address_postal_code: f.address_postal_code || null,
+      address_province: f.address_province || null,
+      latitude: f.latitude ? parseFloat(f.latitude) || null : null,
+      longitude: f.longitude ? parseFloat(f.longitude) || null : null,
+      google_maps_url: f.google_maps_url || null,
+      cadastral_reference: f.cadastral_reference || null,
+    };
+    const { error } = await supabase.from('tolosa_items').update(fields).eq('id', itemId);
+    if (error) {
+      toast.error('Error al guardar ubicación');
+    } else {
+      toast.success('Ubicación guardada');
+      fetchItems();
+    }
+  };
 
   const fetchItems = useCallback(async () => {
     const { data, error } = await supabase
@@ -83,6 +140,7 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
       toast.error('Error al cargar ítems');
     } else {
       setItems((data as TolosItem[]) || []);
+      setDondeForm({});
     }
     setLoading(false);
   }, [budgetId]);
@@ -323,7 +381,17 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
 
   // DÓNDE? panel
   const renderDondePanel = (item: TolosItem) => {
-    const mapsUrl = getGoogleMapsUrl(item);
+    initDondeForm(item);
+    const f = dondeForm[item.id];
+    if (!f) return null;
+
+    const mapsUrl = f.google_maps_url || (() => {
+      if (f.latitude && f.longitude) return `https://www.google.com/maps?q=${f.latitude},${f.longitude}`;
+      const addr = [f.address_street, f.address_city, f.address_postal_code, f.address_province].filter(Boolean).join(', ');
+      if (addr) return `https://www.google.com/maps/search/${encodeURIComponent(addr)}`;
+      return null;
+    })();
+
     return (
       <div className="space-y-3 p-3 rounded-lg border border-amber-200 bg-amber-50/50 dark:border-amber-800 dark:bg-amber-950/30">
         <h4 className="text-sm font-semibold flex items-center gap-2 text-amber-700 dark:text-amber-400">
@@ -338,9 +406,9 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
               <label className="text-xs text-muted-foreground">Calle / Dirección</label>
               <input
                 type="text"
-                value={item.address_street || ''}
+                value={f.address_street}
                 placeholder="Calle, número..."
-                onChange={e => updateItemField(item.id, { address_street: e.target.value || null })}
+                onChange={e => updateDondeField(item.id, 'address_street', e.target.value)}
                 className="flex h-8 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               />
             </div>
@@ -348,9 +416,9 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
               <label className="text-xs text-muted-foreground">Población</label>
               <input
                 type="text"
-                value={item.address_city || ''}
+                value={f.address_city}
                 placeholder="Madrid, Barcelona..."
-                onChange={e => updateItemField(item.id, { address_city: e.target.value || null })}
+                onChange={e => updateDondeField(item.id, 'address_city', e.target.value)}
                 className="flex h-8 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               />
             </div>
@@ -359,9 +427,9 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
                 <label className="text-xs text-muted-foreground">Código Postal</label>
                 <input
                   type="text"
-                  value={item.address_postal_code || ''}
+                  value={f.address_postal_code}
                   placeholder="28001"
-                  onChange={e => updateItemField(item.id, { address_postal_code: e.target.value || null })}
+                  onChange={e => updateDondeField(item.id, 'address_postal_code', e.target.value)}
                   className="flex h-8 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                 />
               </div>
@@ -369,9 +437,9 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
                 <label className="text-xs text-muted-foreground">Provincia</label>
                 <input
                   type="text"
-                  value={item.address_province || ''}
+                  value={f.address_province}
                   placeholder="Madrid"
-                  onChange={e => updateItemField(item.id, { address_province: e.target.value || null })}
+                  onChange={e => updateDondeField(item.id, 'address_province', e.target.value)}
                   className="flex h-8 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                 />
               </div>
@@ -387,9 +455,9 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
               <label className="text-xs text-muted-foreground">URL de Google Maps (pega aquí la dirección)</label>
               <input
                 type="text"
-                value={item.google_maps_url || ''}
+                value={f.google_maps_url}
                 placeholder="https://www.google.com/maps/place/..."
-                onChange={e => updateItemField(item.id, { google_maps_url: e.target.value || null })}
+                onChange={e => updateDondeField(item.id, 'google_maps_url', e.target.value)}
                 className="flex h-8 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               />
             </div>
@@ -397,23 +465,17 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
               <input
                 type="text"
                 inputMode="decimal"
-                value={item.latitude ?? ''}
+                value={f.latitude}
                 placeholder="Latitud"
-                onChange={e => {
-                  const val = e.target.value;
-                  updateItemField(item.id, { latitude: val ? parseFloat(val) || null : null });
-                }}
+                onChange={e => updateDondeField(item.id, 'latitude', e.target.value)}
                 className="flex h-8 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               />
               <input
                 type="text"
                 inputMode="decimal"
-                value={item.longitude ?? ''}
+                value={f.longitude}
                 placeholder="Longitud"
-                onChange={e => {
-                  const val = e.target.value;
-                  updateItemField(item.id, { longitude: val ? parseFloat(val) || null : null });
-                }}
+                onChange={e => updateDondeField(item.id, 'longitude', e.target.value)}
                 className="flex h-8 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               />
             </div>
@@ -440,16 +502,16 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">3. Referencia Catastral</p>
           <input
             type="text"
-            value={item.cadastral_reference || ''}
+            value={f.cadastral_reference}
             placeholder="0000000AA0000A0001AA"
-            onChange={e => updateItemField(item.id, { cadastral_reference: e.target.value || null })}
+            onChange={e => updateDondeField(item.id, 'cadastral_reference', e.target.value)}
             className="flex h-8 w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-mono ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           />
-          {item.cadastral_reference && (
+          {f.cadastral_reference && (
             <div className="space-y-2">
               <div className="flex flex-wrap gap-2">
                 <a
-                  href={getCatastroUrl(item.cadastral_reference)}
+                  href={getCatastroUrl(f.cadastral_reference)}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
@@ -457,7 +519,7 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
                   <Building className="h-3 w-3" /> Ficha catastral
                 </a>
                 <a
-                  href={getCatastroMapaUrl(item.cadastral_reference)}
+                  href={getCatastroMapaUrl(f.cadastral_reference)}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
@@ -465,12 +527,11 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
                   <MapPin className="h-3 w-3" /> Mapa catastral
                 </a>
               </div>
-              {/* Consulta descriptiva y gráfica embebida */}
               <div className="rounded-lg border overflow-hidden bg-background">
                 <div className="flex items-center justify-between px-3 py-1.5 bg-muted/50 border-b">
                   <span className="text-xs font-semibold text-muted-foreground">Consulta descriptiva y gráfica</span>
                   <a
-                    href={getCatastroDescriptivaUrl(item.cadastral_reference)}
+                    href={getCatastroDescriptivaUrl(f.cadastral_reference)}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-xs text-primary hover:underline flex items-center gap-1"
@@ -479,7 +540,7 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
                   </a>
                 </div>
                 <iframe
-                  src={getCatastroDescriptivaUrl(item.cadastral_reference)}
+                  src={getCatastroDescriptivaUrl(f.cadastral_reference)}
                   className="w-full border-0"
                   style={{ height: '500px' }}
                   title="Consulta descriptiva y gráfica - Catastro"
@@ -488,6 +549,13 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
               </div>
             </div>
           )}
+        </div>
+
+        {/* Botón Guardar */}
+        <div className="flex justify-end pt-2 border-t border-amber-200 dark:border-amber-800">
+          <Button size="sm" onClick={() => saveDondeForm(item.id)}>
+            <Check className="h-3 w-3 mr-1" /> Guardar ubicación
+          </Button>
         </div>
       </div>
     );

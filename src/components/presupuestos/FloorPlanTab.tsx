@@ -61,7 +61,7 @@ function createDefaultFloor(name: string, level: string, m2: number): FloorDef {
 export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
   const {
     floorPlan, rooms, floors, loading, saving,
-    addRoom, updateRoom, updateWall, deleteRoom,
+    addRoom, updateRoom, updateWall, deleteRoom, duplicateRoom,
     addOpening, deleteOpening,
     classifyPerimeterWalls, syncToMeasurements, getPlanData, refetch,
     generateFromTemplate, deleteFloorPlan, groupRooms, ungroupRooms,
@@ -453,6 +453,10 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
                   onUpdateWall={(wallId, data) => updateWall(wallId, data)}
                   onAddOpening={(wallId, type, w, h, sh) => addOpening(wallId, type, w, h, sh)}
                   onDeleteOpening={(openingId) => deleteOpening(openingId)}
+                  onDuplicateRoom={async (direction) => {
+                    const newId = await duplicateRoom(selectedRoom.id, direction, true);
+                    if (newId) setSelectedRoomId(newId);
+                  }}
                   onChangeCoordinate={handleChangeCoordinate}
                   onUngroupRoom={selectedRoom.groupId ? () => ungroupRooms(selectedRoom.groupId!) : undefined}
                   onDeleteRoom={() => { deleteRoom(selectedRoom.id); setSelectedRoomId(null); }}

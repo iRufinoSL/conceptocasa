@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
-import { Trash2, Save, Unlink, Plus, DoorOpen } from 'lucide-react';
+import { Trash2, Save, Unlink, Plus, DoorOpen, Copy, ArrowRight, ArrowDown } from 'lucide-react';
 import type { RoomData, WallType, FloorPlanData, OpeningData } from '@/lib/floor-plan-calculations';
 import { OPENING_PRESETS } from '@/lib/floor-plan-calculations';
 
@@ -21,6 +21,7 @@ interface FloorPlanSpaceFormProps {
   onUpdateWall: (wallId: string, data: { wallType?: WallType }) => void;
   onAddOpening?: (wallId: string, type: string, width: number, height: number, sillHeight?: number) => Promise<void>;
   onDeleteOpening?: (openingId: string) => Promise<void>;
+  onDuplicateRoom?: (direction: 'right' | 'down') => Promise<void>;
   onChangeCoordinate?: (col: number, row: number) => void;
   onUngroupRoom?: (groupId: string) => void;
   onDeleteRoom: () => void;
@@ -38,7 +39,7 @@ const WALL_TYPE_OPTIONS: { value: WallType; label: string }[] = [
   { value: 'interior_invisible', label: 'Int. invisible' },
 ];
 
-export function FloorPlanSpaceForm({ room, allRooms, planData, coordCol, coordRow, floorName, onUpdateRoom, onUpdateWall, onAddOpening, onDeleteOpening, onChangeCoordinate, onUngroupRoom, onDeleteRoom, saving }: FloorPlanSpaceFormProps) {
+export function FloorPlanSpaceForm({ room, allRooms, planData, coordCol, coordRow, floorName, onUpdateRoom, onUpdateWall, onAddOpening, onDeleteOpening, onDuplicateRoom, onChangeCoordinate, onUngroupRoom, onDeleteRoom, saving }: FloorPlanSpaceFormProps) {
   // Local buffered state for all editable fields
   const [localName, setLocalName] = useState(room.name);
   const [localWidth, setLocalWidth] = useState(String(room.width));
@@ -350,6 +351,36 @@ export function FloorPlanSpaceForm({ room, allRooms, planData, coordCol, coordRo
               })}
           </div>
         </div>
+
+        {/* Duplicate buttons */}
+        {onDuplicateRoom && (
+          <div className="border-t pt-3">
+            <Label className="text-xs font-semibold mb-2 block">Duplicar espacio (auto-agrupa)</Label>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex-1"
+                onClick={() => onDuplicateRoom('right')}
+                disabled={saving}
+              >
+                <ArrowRight className="h-3.5 w-3.5 mr-1" /> Derecha
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex-1"
+                onClick={() => onDuplicateRoom('down')}
+                disabled={saving}
+              >
+                <ArrowDown className="h-3.5 w-3.5 mr-1" /> Abajo
+              </Button>
+            </div>
+            <p className="text-[10px] text-muted-foreground mt-1">
+              La copia se agrupa automáticamente con el original. Las dimensiones se definen en el espacio original.
+            </p>
+          </div>
+        )}
 
         {/* Save button */}
         <Button

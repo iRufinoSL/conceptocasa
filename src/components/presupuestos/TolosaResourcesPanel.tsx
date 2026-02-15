@@ -77,6 +77,7 @@ export function TolosaResourcesPanel({ budgetId, tolosItemId, isAdmin, parentIte
   const [saving, setSaving] = useState(false);
   const [formData, setFormData] = useState(defaultForm);
   const [measurementUnits, setMeasurementUnits] = useState<number>(0);
+  const [measurementUnitType, setMeasurementUnitType] = useState<string>('ud');
 
   // Fetch measurements linked to this QUÉ? (own or inherited from ancestors)
   const fetchMeasurementUnits = useCallback(async () => {
@@ -98,21 +99,25 @@ export function TolosaResourcesPanel({ budgetId, tolosItemId, isAdmin, parentIte
         .from('tolosa_items')
         .select('parent_id')
         .eq('id', currentId)
-        .single();
+        .maybeSingle();
       currentId = item?.parent_id ?? null;
     }
     
     if (measurementIds.length > 0) {
       const { data: measurements } = await supabase
         .from('budget_measurements')
-        .select('manual_units, count_raw')
+        .select('manual_units, count_raw, measurement_unit')
         .in('id', measurementIds);
       const total = (measurements || []).reduce((sum: number, m: any) => {
         return sum + (m.manual_units != null ? Number(m.manual_units) : Number(m.count_raw) || 0);
       }, 0);
       setMeasurementUnits(total);
+      // Use the first measurement's unit type as default
+      const firstUnit = (measurements || []).find((m: any) => m.measurement_unit)?.measurement_unit;
+      if (firstUnit) setMeasurementUnitType(firstUnit);
     } else {
       setMeasurementUnits(0);
+      setMeasurementUnitType('ud');
     }
   }, [tolosItemId]);
 
@@ -190,10 +195,10 @@ export function TolosaResourcesPanel({ budgetId, tolosItemId, isAdmin, parentIte
     else { toast.success('Recurso desvinculado'); fetchLinked(); }
   };
 
-  // Open create dialog
+  // Open create dialog — pre-populate unit from measurement
   const openCreate = () => {
     setEditingResource(null);
-    setFormData(defaultForm);
+    setFormData({ ...defaultForm, unit: measurementUnitType });
     setShowFormDialog(true);
   };
 
@@ -223,6 +228,16 @@ export function TolosaResourcesPanel({ budgetId, tolosItemId, isAdmin, parentIte
     if (!formData.name.trim()) { toast.error('Nombre obligatorio'); return; }
     setSaving(true);
 
+    // Compute signed_subtotal before saving
+    const computedUnits = formData.manual_units !== null ? formData.manual_units : measurementUnits;
+    const computedSubtotal = calcResourceSubtotal({
+      externalUnitCost: formData.external_unit_cost,
+      safetyPercent: formData.safety_margin_percent,
+      salesPercent: formData.sales_margin_percent,
+      manualUnits: formData.manual_units,
+      relatedUnits: formData.manual_units != null ? formData.related_units : measurementUnits,
+    });
+
     const payload = {
       budget_id: budgetId,
       name: formData.name.trim(),
@@ -232,13 +247,14 @@ export function TolosaResourcesPanel({ budgetId, tolosItemId, isAdmin, parentIte
       safety_margin_percent: formData.safety_margin_percent,
       sales_margin_percent: formData.sales_margin_percent,
       manual_units: formData.manual_units,
-      related_units: formData.related_units,
+      related_units: formData.related_units ?? (measurementUnits > 0 ? measurementUnits : null),
       description: formData.description || null,
       supplier_id: formData.supplier_id,
       purchase_vat_percent: formData.purchase_vat_percent,
       purchase_units: formData.purchase_units,
       purchase_unit_measure: formData.purchase_unit_measure || null,
       purchase_unit_cost: formData.purchase_unit_cost,
+      signed_subtotal: computedSubtotal,
     };
 
     try {
@@ -266,7 +282,13 @@ export function TolosaResourcesPanel({ budgetId, tolosItemId, isAdmin, parentIte
       fetchLinked();
       fetchAllResources();
     } catch (err: any) {
-      toast.error('Error al guardar: ' + (err?.message || 'desconocido'));
+      const msg = err?.message || 'desconocido';
+      if (msg.includes('Failed to fetch')) {
+        toast.error('Error de conexión al guardar. Verifica tu conexión a internet e inténtalo de nuevo.');
+      } else {
+        toast.error('Error al guardar: ' + msg);
+      }
+      console.error('Save resource error:', err);
     } finally {
       setSaving(false);
     }

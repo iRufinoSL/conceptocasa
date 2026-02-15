@@ -242,7 +242,7 @@ export function TolosaResourcesPanel({ budgetId, tolosItemId, isAdmin, parentIte
       relatedUnits: formData.manual_units != null ? formData.related_units : measurementUnits,
     });
 
-    const payload = {
+    const payload: Record<string, any> = {
       budget_id: budgetId,
       name: formData.name.trim(),
       external_unit_cost: formData.external_unit_cost,
@@ -258,21 +258,25 @@ export function TolosaResourcesPanel({ budgetId, tolosItemId, isAdmin, parentIte
       purchase_units: formData.purchase_units,
       purchase_unit_measure: formData.purchase_unit_measure || null,
       purchase_unit_cost: formData.purchase_unit_cost,
-      signed_subtotal: computedSubtotal,
     };
 
     try {
       if (editingResource) {
+        // Only include signed_subtotal if it wasn't already set (trigger prevents modification)
+        if (editingResource.signed_subtotal === null || editingResource.signed_subtotal === undefined) {
+          payload.signed_subtotal = computedSubtotal;
+        }
         const { error } = await supabase
           .from('budget_activity_resources')
-          .update(payload)
+          .update(payload as any)
           .eq('id', editingResource.id);
         if (error) throw error;
         toast.success('Recurso actualizado');
       } else {
+        payload.signed_subtotal = computedSubtotal;
         const { data, error } = await supabase
           .from('budget_activity_resources')
-          .insert(payload)
+          .insert(payload as any)
           .select()
           .single();
         if (error || !data) throw error || new Error('No data');

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -166,9 +166,13 @@ export function TolosaResourcesPanel({ budgetId, tolosItemId, isAdmin, parentIte
   useEffect(() => { fetchMeasurementUnits(); }, [fetchMeasurementUnits]);
   useEffect(() => { if (showSearch) fetchAllResources(); }, [showSearch, fetchAllResources]);
 
+  const prevSubtotalRef = useRef<number | null>(null);
   useEffect(() => {
     const total = linkedResources.reduce((sum, r) => sum + getSubtotal(r), 0);
-    onSubtotalChange?.(total);
+    if (prevSubtotalRef.current !== total) {
+      prevSubtotalRef.current = total;
+      onSubtotalChange?.(total);
+    }
   }, [linkedResources, onSubtotalChange, measurementUnits, getSubtotal]);
 
   const linkResource = async (resourceId: string) => {

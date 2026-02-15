@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
-import { Trash2, Save, Unlink, Plus, DoorOpen, Copy, ArrowRight, ArrowDown } from 'lucide-react';
+import { Trash2, Save, Unlink, Plus, DoorOpen, Copy, ArrowRight, ArrowDown, ChevronDown, ChevronRight } from 'lucide-react';
 import type { RoomData, WallType, FloorPlanData, OpeningData } from '@/lib/floor-plan-calculations';
 import { OPENING_PRESETS } from '@/lib/floor-plan-calculations';
 
@@ -260,24 +260,32 @@ export function FloorPlanSpaceForm({ room, allRooms, planData, coordCol, coordRo
         {/* Walls with openings */}
         <div className="border-t pt-3">
           <h4 className="text-xs font-semibold mb-2">Paredes y Aperturas</h4>
+          <p className="text-[10px] text-muted-foreground mb-2">
+            Pulsa en una pared para ver/añadir puertas y ventanas
+          </p>
           <div className="space-y-2">
             {room.walls
               .slice()
               .sort((a, b) => a.wallIndex - b.wallIndex)
               .map(wall => {
                 const isExpanded = expandedWall === wall.wallIndex;
+                const openingCount = wall.openings.length;
                 return (
                   <div key={wall.id} className="border rounded-md p-2 space-y-2">
                     <div className="flex items-center gap-2">
                       <button
-                        className="text-xs w-24 shrink-0 text-muted-foreground text-left font-medium hover:text-foreground"
+                        className="text-xs shrink-0 text-muted-foreground text-left font-medium hover:text-foreground flex items-center gap-1"
                         onClick={() => setExpandedWall(isExpanded ? null : wall.wallIndex)}
                       >
+                        {isExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
                         {WALL_NAMES[wall.wallIndex - 1]}
-                        {wall.openings.length > 0 && (
+                        {openingCount > 0 && (
                           <Badge variant="secondary" className="ml-1 text-[9px] px-1 py-0 h-3.5">
-                            {wall.openings.length}
+                            {openingCount} {openingCount === 1 ? 'hueco' : 'huecos'}
                           </Badge>
+                        )}
+                        {openingCount === 0 && onAddOpening && (
+                          <span className="text-[9px] text-muted-foreground/60 ml-1">+ añadir</span>
                         )}
                       </button>
                       <Select
@@ -324,20 +332,23 @@ export function FloorPlanSpaceForm({ room, allRooms, planData, coordCol, coordRo
 
                         {/* Add opening buttons */}
                         {onAddOpening && (
-                          <div className="flex gap-1 flex-wrap pt-1">
-                            {Object.entries(OPENING_PRESETS).map(([key, preset]) => (
-                              <Button
-                                key={key}
-                                variant="outline"
-                                size="sm"
-                                className="text-[9px] h-5 px-1.5"
-                                onClick={() => onAddOpening(wall.id, key, preset.width, preset.height, preset.sillHeight)}
-                                disabled={saving}
-                              >
-                                <Plus className="h-2.5 w-2.5 mr-0.5" />
-                                {preset.label}
-                              </Button>
-                            ))}
+                          <div className="space-y-1 pt-1">
+                            <Label className="text-[10px] text-muted-foreground font-semibold">Añadir apertura:</Label>
+                            <div className="flex gap-1 flex-wrap">
+                              {Object.entries(OPENING_PRESETS).map(([key, preset]) => (
+                                <Button
+                                  key={key}
+                                  variant="outline"
+                                  size="sm"
+                                  className="text-[9px] h-6 px-2"
+                                  onClick={() => onAddOpening(wall.id, key, preset.width, preset.height, preset.sillHeight)}
+                                  disabled={saving}
+                                >
+                                  <Plus className="h-2.5 w-2.5 mr-0.5" />
+                                  {preset.label}
+                                </Button>
+                              ))}
+                            </div>
                           </div>
                         )}
 

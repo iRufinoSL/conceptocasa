@@ -6,8 +6,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Plus, Link, Unlink } from 'lucide-react';
-import type { RoomData, FloorLevel } from '@/lib/floor-plan-calculations';
-import { autoClassifyWalls, isExteriorType } from '@/lib/floor-plan-calculations';
+import type { RoomData, FloorLevel, WallType } from '@/lib/floor-plan-calculations';
+import { autoClassifyWalls, isExteriorType, isInvisibleType, isCompartidaType } from '@/lib/floor-plan-calculations';
 
 interface FloorPlanGridViewProps {
   rooms: RoomData[];
@@ -141,14 +141,41 @@ export function FloorPlanGridView({ rooms, floors, selectedRoomId, onSelectRoom,
     return groups;
   }, [currentFloorRooms]);
 
-  const getExternalWalls = (room: RoomData): Set<number> => {
-    const ext = new Set<number>();
+  // Get wall type for each side of a room
+  const getWallInfo = (room: RoomData) => {
+    const info = new Map<number, WallType>();
     [1, 2, 3, 4].forEach(idx => {
+      // Use the room's own wall type first, fallback to classification
+      const ownWall = room.walls.find(w => w.wallIndex === idx);
       const key = `${room.id}::${idx}`;
-      const wt = wallClassification.get(key);
-      if (wt && isExteriorType(wt)) ext.add(idx);
+      const classified = wallClassification.get(key);
+      info.set(idx, ownWall?.wallType || classified || 'interior');
     });
-    return ext;
+    return info;
+  };
+
+  // Color/style for each wall type
+  const getWallStyle = (wt: WallType, planExtThickness = 0.25, planIntThickness = 0.13) => {
+    const isExt = isExteriorType(wt);
+    const isInvis = isInvisibleType(wt);
+    const isComp = isCompartidaType(wt);
+
+    // Proportional thickness: ext=5px, int=3px, scale roughly
+    const thickness = isExt
+      ? Math.max(4, Math.round(planExtThickness * 20))
+      : Math.max(2, Math.round(planIntThickness * 20));
+
+    let color: string;
+    if (isExt && isComp) color = 'hsl(210, 70%, 55%)';       // Blue - exterior shared
+    else if (isExt && isInvis) color = 'hsl(0, 0%, 30%)';    // Dark gray dashed
+    else if (isExt) color = 'hsl(var(--foreground))';         // Black - exterior
+    else if (isComp) color = 'hsl(210, 60%, 70%)';           // Light blue - interior shared
+    else if (isInvis) color = 'hsl(0, 0%, 60%)';             // Gray dashed
+    else color = 'hsl(0, 0%, 50%)';                          // Gray - interior
+
+    const style = isInvis ? 'dashed' : 'solid';
+
+    return { width: `${thickness}px`, color, style };
   };
 
   const toggleMultiSelect = (roomId: string) => {
@@ -227,7 +254,11 @@ export function FloorPlanGridView({ rooms, floors, selectedRoomId, onSelectRoom,
               </div>
             ))}
             {positioned.map(({ room, gridCol, gridRow }) => {
-              const extWalls = getExternalWalls(room);
+              const wallInfo = getWallInfo(room);
+              const ws1 = getWallStyle(wallInfo.get(1)!);
+              const ws2 = getWallStyle(wallInfo.get(2)!);
+              const ws3 = getWallStyle(wallInfo.get(3)!);
+              const ws4 = getWallStyle(wallInfo.get(4)!);
               const isSelected = room.id === selectedRoomId;
               const isMultiSelected = selectedIds.has(room.id);
               const m2 = (room.width * room.length).toFixed(1);
@@ -237,11 +268,45 @@ export function FloorPlanGridView({ rooms, floors, selectedRoomId, onSelectRoom,
               const groupInfo = room.groupId ? groupsMap.get(room.groupId) : null;
               const groupTotalM2 = groupInfo ? groupInfo.rooms.reduce((s, r) => s + r.width * r.length, 0) : null;
 
+              // Count openings per wall for visual marks
+              const openingCounts = new Map<number, { windows: number; doors: number }>();
+              room.walls.forEach(w => {
+                const wins = w.openings.filter(o => o.openingType.startsWith('ventana')).length;
+                const doors = w.openings.filter(o => o.openingType.startsWith('puerta')).length;
+                if (wins > 0 || doors > 0) openingCounts.set(w.wallIndex, { windows: wins, doors });
+              });
+
+              // Opening marks renderer for a wall side
+              const renderOpeningMarks = (wallIndex: number, side: 'top' | 'right' | 'bottom' | 'left') => {
+                const counts = openingCounts.get(wallIndex);
+                if (!counts) return null;
+                const marks: React.ReactNode[] = [];
+                for (let i = 0; i < counts.windows; i++) marks.push(
+                  <div key={`w${i}`} className="bg-sky-400/80" style={{
+                    ...(side === 'top' || side === 'bottom' ? { width: '12px', height: '3px' } : { width: '3px', height: '12px' }),
+                    borderRadius: '1px',
+                  }} />
+                );
+                for (let i = 0; i < counts.doors; i++) marks.push(
+                  <div key={`d${i}`} className="bg-amber-600/80" style={{
+                    ...(side === 'top' || side === 'bottom' ? { width: '8px', height: '4px' } : { width: '4px', height: '8px' }),
+                    borderRadius: '1px',
+                  }} />
+                );
+                const posClasses: Record<string, string> = {
+                  top: 'absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 flex gap-0.5',
+                  bottom: 'absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 flex gap-0.5',
+                  left: 'absolute left-0 top-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col gap-0.5',
+                  right: 'absolute right-0 top-1/2 translate-x-1/2 -translate-y-1/2 flex flex-col gap-0.5',
+                };
+                return <div className={posClasses[side]}>{marks}</div>;
+              };
+
               return (
                 <div
                   key={room.id}
                   className={`
-                    relative p-3 rounded cursor-pointer transition-all border-2
+                    relative p-3 rounded cursor-pointer transition-all
                     ${colorClass}
                     ${isSelected ? 'ring-2 ring-primary ring-offset-1 shadow-lg scale-[1.02]' : 'hover:shadow-md'}
                     ${isMultiSelected ? 'ring-2 ring-blue-500 ring-offset-1' : ''}
@@ -250,14 +315,18 @@ export function FloorPlanGridView({ rooms, floors, selectedRoomId, onSelectRoom,
                     gridColumn: gridCol + 1,
                     gridRow: gridRow,
                     minHeight: '80px',
-                    borderTopWidth: extWalls.has(1) ? '4px' : undefined,
-                    borderRightWidth: extWalls.has(2) ? '4px' : undefined,
-                    borderBottomWidth: extWalls.has(3) ? '4px' : undefined,
-                    borderLeftWidth: extWalls.has(4) ? '4px' : undefined,
-                    borderTopColor: extWalls.has(1) ? 'hsl(var(--foreground))' : undefined,
-                    borderRightColor: extWalls.has(2) ? 'hsl(var(--foreground))' : undefined,
-                    borderBottomColor: extWalls.has(3) ? 'hsl(var(--foreground))' : undefined,
-                    borderLeftColor: extWalls.has(4) ? 'hsl(var(--foreground))' : undefined,
+                    borderTopWidth: ws1.width,
+                    borderRightWidth: ws2.width,
+                    borderBottomWidth: ws3.width,
+                    borderLeftWidth: ws4.width,
+                    borderTopColor: ws1.color,
+                    borderRightColor: ws2.color,
+                    borderBottomColor: ws3.color,
+                    borderLeftColor: ws4.color,
+                    borderTopStyle: ws1.style as any,
+                    borderRightStyle: ws2.style as any,
+                    borderBottomStyle: ws3.style as any,
+                    borderLeftStyle: ws4.style as any,
                     ...(groupColor ? { boxShadow: `inset 0 0 0 3px ${groupColor}` } : {}),
                   }}
                   onClick={() => {
@@ -268,6 +337,12 @@ export function FloorPlanGridView({ rooms, floors, selectedRoomId, onSelectRoom,
                     }
                   }}
                 >
+                  {/* Opening marks on borders */}
+                  {renderOpeningMarks(1, 'top')}
+                  {renderOpeningMarks(2, 'right')}
+                  {renderOpeningMarks(3, 'bottom')}
+                  {renderOpeningMarks(4, 'left')}
+
                   <div className="flex items-center justify-between">
                     <div className="text-xs font-semibold truncate">{room.name}</div>
                     <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 shrink-0 ml-1">{coord}</Badge>

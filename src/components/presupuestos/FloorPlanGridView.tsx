@@ -353,14 +353,14 @@ export function FloorPlanGridView({ rooms, floors, selectedRoomId, onSelectRoom,
                   <div className="text-[10px] text-muted-foreground mt-0.5">
                     {room.width.toFixed(1)} × {room.length.toFixed(1)}m
                   </div>
-                  {groupInfo && (
+                  {groupInfo && groupInfo.rooms.length > 0 && (
                     <div className="mt-1">
                       <Badge
                         variant="secondary"
                         className="text-[9px] px-1 py-0 h-3.5"
                         style={{ backgroundColor: groupColor, color: '#333' }}
                       >
-                        🔗 {groupInfo.name} ({groupTotalM2?.toFixed(1)} m²)
+                        🔗 {groupInfo.name} ({groupInfo.rooms.length} esp. · {groupTotalM2?.toFixed(1)} m²)
                       </Badge>
                     </div>
                   )}
@@ -557,7 +557,7 @@ export function FloorPlanGridView({ rooms, floors, selectedRoomId, onSelectRoom,
       }
 
       <p className="text-xs text-muted-foreground">
-        Bordes gruesos = paredes externas. Clic en un espacio para editar. Usa «Agrupar espacios» para unir varios en uno lógico.
+        Bordes gruesos = paredes externas. Clic en un espacio para editar sus propiedades, paredes y aperturas (puertas/ventanas). Usa «Agrupar espacios» para unir varios en uno lógico.
       </p>
     </div>
   );

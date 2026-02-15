@@ -742,11 +742,15 @@ export function useFloorPlan(budgetId: string) {
       const groupId = sourceRoom.groupId || crypto.randomUUID();
       const groupName = sourceRoom.groupName || sourceRoom.name;
 
+      // Ensure dimensions are valid (defensive)
+      const copyWidth = sourceRoom.width > 0 ? sourceRoom.width : 1;
+      const copyLength = sourceRoom.length > 0 ? sourceRoom.length : 1;
+
       const insertData: any = {
         floor_plan_id: floorPlan.id,
         name: newName,
-        width: sourceRoom.width,
-        length: sourceRoom.length,
+        width: copyWidth,
+        length: copyLength,
         height: sourceRoom.height || null,
         pos_x: targetPosX,
         pos_y: targetPosY,

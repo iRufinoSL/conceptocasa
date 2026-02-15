@@ -1927,9 +1927,22 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
           contactCache={contactCache}
           getCuanto={getCuanto}
           onItemClick={(itemId) => {
-            // Switch to list view and open the item detail
+            // Single click: no-op in card view (expand/collapse handled internally)
+          }}
+          onItemDoubleClick={(itemId) => {
+            // Double click: switch to list view and open item detail
             setViewMode('list');
-            setExpandedIds(prev => new Set(prev).add(itemId));
+            setExpandedIds(prev => {
+              const next = new Set(prev);
+              // Expand all ancestors
+              let current = items.find(i => i.id === itemId);
+              while (current?.parent_id) {
+                next.add(current.parent_id);
+                current = items.find(i => i.id === current!.parent_id);
+              }
+              next.add(itemId);
+              return next;
+            });
             setDetailOpenIds(prev => {
               const n = new Set(prev);
               n.add(itemId);

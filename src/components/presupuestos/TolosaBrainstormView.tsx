@@ -168,119 +168,129 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
     if (currentItems.length === 0) return;
     const itemIds = currentItems.map(i => i.id);
 
-    // 1. Fetch all tolosa_item_measurements links
-    const { data: allMeasLinks } = await supabase
-      .from('tolosa_item_measurements')
-      .select('tolosa_item_id, measurement_id')
-      .in('tolosa_item_id', itemIds);
-    const measLinksByItem: Record<string, string[]> = {};
-    (allMeasLinks || []).forEach((l: any) => {
-      if (!measLinksByItem[l.tolosa_item_id]) measLinksByItem[l.tolosa_item_id] = [];
-      measLinksByItem[l.tolosa_item_id].push(l.measurement_id);
-    });
+    try {
+      // 1. Fetch all tolosa_item_measurements links
+      const { data: allMeasLinks, error: measLinksErr } = await supabase
+        .from('tolosa_item_measurements')
+        .select('tolosa_item_id, measurement_id')
+        .in('tolosa_item_id', itemIds);
+      if (measLinksErr) { console.error('fetchItemSummaries measLinks error:', measLinksErr); return; }
 
-    // 2. Fetch all referenced measurements
-    const allMeasIds = new Set<string>();
-    (allMeasLinks || []).forEach((l: any) => allMeasIds.add(l.measurement_id));
-    const measData: Record<string, { units: number; unit: string }> = {};
-    if (allMeasIds.size > 0) {
-      const { data: measurements } = await supabase
-        .from('budget_measurements')
-        .select('id, manual_units, count_raw, measurement_unit')
-        .in('id', Array.from(allMeasIds));
-      (measurements || []).forEach((m: any) => {
-        measData[m.id] = {
-          units: m.manual_units != null ? Number(m.manual_units) : Number(m.count_raw) || 0,
-          unit: m.measurement_unit || 'ud',
-        };
+      const measLinksByItem: Record<string, string[]> = {};
+      (allMeasLinks || []).forEach((l: any) => {
+        if (!measLinksByItem[l.tolosa_item_id]) measLinksByItem[l.tolosa_item_id] = [];
+        measLinksByItem[l.tolosa_item_id].push(l.measurement_id);
       });
-    }
 
-    // 3. Build parent map for ancestor traversal
-    const parentMap: Record<string, string | null> = {};
-    currentItems.forEach(i => { parentMap[i.id] = i.parent_id; });
-
-    // 4. Calculate inherited measurement units per item (walk up ancestors)
-    const getInheritedMeas = (itemId: string): { total: number; unit: string } => {
-      let currentId: string | null = itemId;
-      while (currentId) {
-        const mids = measLinksByItem[currentId];
-        if (mids && mids.length > 0) {
-          let total = 0;
-          let unit = 'ud';
-          mids.forEach(mid => {
-            const m = measData[mid];
-            if (m) { total += m.units; unit = m.unit; }
-          });
-          return { total, unit };
-        }
-        currentId = parentMap[currentId] ?? null;
+      // 2. Fetch all referenced measurements
+      const allMeasIds = new Set<string>();
+      (allMeasLinks || []).forEach((l: any) => allMeasIds.add(l.measurement_id));
+      const measData: Record<string, { units: number; unit: string }> = {};
+      if (allMeasIds.size > 0) {
+        const { data: measurements, error: measErr } = await supabase
+          .from('budget_measurements')
+          .select('id, manual_units, count_raw, measurement_unit')
+          .in('id', Array.from(allMeasIds));
+        if (measErr) { console.error('fetchItemSummaries measurements error:', measErr); return; }
+        (measurements || []).forEach((m: any) => {
+          measData[m.id] = {
+            units: m.manual_units != null ? Number(m.manual_units) : Number(m.count_raw) || 0,
+            unit: m.measurement_unit || 'ud',
+          };
+        });
       }
-      return { total: 0, unit: 'ud' };
-    };
 
-    // 5. Fetch all tolosa_item_resources links
-    const { data: allResLinks } = await supabase
-      .from('tolosa_item_resources')
-      .select('tolosa_item_id, resource_id')
-      .in('tolosa_item_id', itemIds);
-    const resLinksByItem: Record<string, string[]> = {};
-    (allResLinks || []).forEach((l: any) => {
-      if (!resLinksByItem[l.tolosa_item_id]) resLinksByItem[l.tolosa_item_id] = [];
-      resLinksByItem[l.tolosa_item_id].push(l.resource_id);
-    });
+      // 3. Build parent map for ancestor traversal
+      const parentMap: Record<string, string | null> = {};
+      currentItems.forEach(i => { parentMap[i.id] = i.parent_id; });
 
-    // 6. Fetch all referenced resources
-    const allResIds = new Set<string>();
-    (allResLinks || []).forEach((l: any) => allResIds.add(l.resource_id));
-    const resData: Record<string, any> = {};
-    if (allResIds.size > 0) {
-      const { data: resources } = await supabase
-        .from('budget_activity_resources')
-        .select('id, external_unit_cost, safety_margin_percent, sales_margin_percent, manual_units, related_units')
-        .in('id', Array.from(allResIds));
-      (resources || []).forEach((r: any) => { resData[r.id] = r; });
-    }
-
-    // 7. Calculate subtotals per item
-    const summaries: Record<string, { measurementUnits: number; measurementUnit: string; resourceSubtotal: number }> = {};
-    itemIds.forEach(itemId => {
-      const meas = getInheritedMeas(itemId);
-      const rids = resLinksByItem[itemId] || [];
-      let subtotal = 0;
-      rids.forEach(rid => {
-        const r = resData[rid];
-        if (r) {
-          subtotal += calcResourceSubtotal({
-            externalUnitCost: r.external_unit_cost,
-            safetyPercent: r.safety_margin_percent,
-            salesPercent: r.sales_margin_percent,
-            manualUnits: r.manual_units,
-            relatedUnits: r.manual_units != null ? r.related_units : meas.total,
-          });
+      // 4. Calculate inherited measurement units per item (walk up ancestors)
+      const getInheritedMeas = (itemId: string): { total: number; unit: string } => {
+        let currentId: string | null = itemId;
+        while (currentId) {
+          const mids = measLinksByItem[currentId];
+          if (mids && mids.length > 0) {
+            let total = 0;
+            let unit = 'ud';
+            mids.forEach(mid => {
+              const m = measData[mid];
+              if (m) { total += m.units; unit = m.unit; }
+            });
+            return { total, unit };
+          }
+          currentId = parentMap[currentId] ?? null;
         }
-      });
-      summaries[itemId] = { measurementUnits: meas.total, measurementUnit: meas.unit, resourceSubtotal: subtotal };
-    });
+        return { total: 0, unit: 'ud' };
+      };
 
-    // Only update state if values actually changed (prevent re-render cascade)
-    setItemSummaries(prev => {
-      const changed = itemIds.some(id => {
-        const p = prev[id];
-        const n = summaries[id];
-        if (!p && !n) return false;
-        if (!p || !n) return true;
-        return p.measurementUnits !== n.measurementUnits || p.measurementUnit !== n.measurementUnit || p.resourceSubtotal !== n.resourceSubtotal;
-      });
-      return changed ? summaries : prev;
-    });
+      // 5. Fetch all tolosa_item_resources links
+      const { data: allResLinks, error: resLinksErr } = await supabase
+        .from('tolosa_item_resources')
+        .select('tolosa_item_id, resource_id')
+        .in('tolosa_item_id', itemIds);
+      if (resLinksErr) { console.error('fetchItemSummaries resLinks error:', resLinksErr); return; }
 
-    const newSubtotals: Record<string, number> = {};
-    itemIds.forEach(id => { newSubtotals[id] = summaries[id]?.resourceSubtotal || 0; });
-    setItemSubtotals(prev => {
-      const changed = itemIds.some(id => (prev[id] || 0) !== (newSubtotals[id] || 0));
-      return changed ? newSubtotals : prev;
-    });
+      const resLinksByItem: Record<string, string[]> = {};
+      (allResLinks || []).forEach((l: any) => {
+        if (!resLinksByItem[l.tolosa_item_id]) resLinksByItem[l.tolosa_item_id] = [];
+        resLinksByItem[l.tolosa_item_id].push(l.resource_id);
+      });
+
+      // 6. Fetch all referenced resources
+      const allResIds = new Set<string>();
+      (allResLinks || []).forEach((l: any) => allResIds.add(l.resource_id));
+      const resData: Record<string, any> = {};
+      if (allResIds.size > 0) {
+        const { data: resources, error: resErr } = await supabase
+          .from('budget_activity_resources')
+          .select('id, external_unit_cost, safety_margin_percent, sales_margin_percent, manual_units, related_units')
+          .in('id', Array.from(allResIds));
+        if (resErr) { console.error('fetchItemSummaries resources error:', resErr); return; }
+        (resources || []).forEach((r: any) => { resData[r.id] = r; });
+      }
+
+      // 7. Calculate subtotals per item
+      const summaries: Record<string, { measurementUnits: number; measurementUnit: string; resourceSubtotal: number }> = {};
+      itemIds.forEach(itemId => {
+        const meas = getInheritedMeas(itemId);
+        const rids = resLinksByItem[itemId] || [];
+        let subtotal = 0;
+        rids.forEach(rid => {
+          const r = resData[rid];
+          if (r) {
+            subtotal += calcResourceSubtotal({
+              externalUnitCost: r.external_unit_cost,
+              safetyPercent: r.safety_margin_percent,
+              salesPercent: r.sales_margin_percent,
+              manualUnits: r.manual_units,
+              relatedUnits: r.manual_units != null ? r.related_units : meas.total,
+            });
+          }
+        });
+        summaries[itemId] = { measurementUnits: meas.total, measurementUnit: meas.unit, resourceSubtotal: subtotal };
+      });
+
+      // Only update state if values actually changed (prevent re-render cascade)
+      setItemSummaries(prev => {
+        const changed = itemIds.some(id => {
+          const p = prev[id];
+          const n = summaries[id];
+          if (!p && !n) return false;
+          if (!p || !n) return true;
+          return p.measurementUnits !== n.measurementUnits || p.measurementUnit !== n.measurementUnit || p.resourceSubtotal !== n.resourceSubtotal;
+        });
+        return changed ? summaries : prev;
+      });
+
+      const newSubtotals: Record<string, number> = {};
+      itemIds.forEach(id => { newSubtotals[id] = summaries[id]?.resourceSubtotal || 0; });
+      setItemSubtotals(prev => {
+        const changed = itemIds.some(id => (prev[id] || 0) !== (newSubtotals[id] || 0));
+        return changed ? newSubtotals : prev;
+      });
+    } catch (err) {
+      console.error('fetchItemSummaries unexpected error:', err);
+    }
   }, []);
 
   const initDondeForm = (item: TolosItem) => {
@@ -343,6 +353,7 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
     } else {
       const loadedItems = (data as TolosItem[]) || [];
       setItems(loadedItems);
+      itemsRef.current = loadedItems;
       setDondeForm({});
 
       // Fetch linked contact names
@@ -383,7 +394,9 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
       }
     }
     setLoading(false);
-  }, [budgetId]);
+    // Directly fetch summaries after items are loaded (ref is already updated)
+    fetchItemSummaries();
+  }, [budgetId, fetchItemSummaries]);
 
   const fetchContacts = useCallback(async (search?: string) => {
     let query = supabase.from('crm_contacts').select('id, name, surname, email, phone').order('name').limit(20);
@@ -404,12 +417,6 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
   }, []);
 
   useEffect(() => { fetchItems(); fetchContacts(); fetchHousingProfiles(); }, [fetchItems, fetchContacts, fetchHousingProfiles]);
-  // Debounce summary fetch to prevent rapid cascading re-renders
-  useEffect(() => {
-    if (items.length === 0) return;
-    const timer = setTimeout(() => { fetchItemSummaries(); }, 150);
-    return () => clearTimeout(timer);
-  }, [items, fetchItemSummaries]);
 
   const rootItems = items.filter(i => !i.parent_id);
   const getChildren = (parentId: string) => items.filter(i => i.parent_id === parentId);

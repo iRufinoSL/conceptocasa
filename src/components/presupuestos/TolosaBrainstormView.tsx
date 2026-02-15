@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -160,9 +160,13 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
   }, [items, itemSubtotals]);
 
   // Bulk fetch measurement + resource summaries for all items
+  const itemsRef = useRef(items);
+  itemsRef.current = items;
+
   const fetchItemSummaries = useCallback(async () => {
-    if (items.length === 0) return;
-    const itemIds = items.map(i => i.id);
+    const currentItems = itemsRef.current;
+    if (currentItems.length === 0) return;
+    const itemIds = currentItems.map(i => i.id);
 
     // 1. Fetch all tolosa_item_measurements links
     const { data: allMeasLinks } = await supabase
@@ -194,7 +198,7 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
 
     // 3. Build parent map for ancestor traversal
     const parentMap: Record<string, string | null> = {};
-    items.forEach(i => { parentMap[i.id] = i.parent_id; });
+    currentItems.forEach(i => { parentMap[i.id] = i.parent_id; });
 
     // 4. Calculate inherited measurement units per item (walk up ancestors)
     const getInheritedMeas = (itemId: string): { total: number; unit: string } => {
@@ -259,12 +263,25 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
       summaries[itemId] = { measurementUnits: meas.total, measurementUnit: meas.unit, resourceSubtotal: subtotal };
     });
 
-    setItemSummaries(summaries);
-    // Update itemSubtotals for CUÁNTO? aggregation
+    // Only update state if values actually changed (prevent re-render cascade)
+    setItemSummaries(prev => {
+      const changed = itemIds.some(id => {
+        const p = prev[id];
+        const n = summaries[id];
+        if (!p && !n) return false;
+        if (!p || !n) return true;
+        return p.measurementUnits !== n.measurementUnits || p.measurementUnit !== n.measurementUnit || p.resourceSubtotal !== n.resourceSubtotal;
+      });
+      return changed ? summaries : prev;
+    });
+
     const newSubtotals: Record<string, number> = {};
     itemIds.forEach(id => { newSubtotals[id] = summaries[id]?.resourceSubtotal || 0; });
-    setItemSubtotals(newSubtotals);
-  }, [items]);
+    setItemSubtotals(prev => {
+      const changed = itemIds.some(id => (prev[id] || 0) !== (newSubtotals[id] || 0));
+      return changed ? newSubtotals : prev;
+    });
+  }, []);
 
   const initDondeForm = (item: TolosItem) => {
     if (!dondeForm[item.id]) {
@@ -387,7 +404,12 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
   }, []);
 
   useEffect(() => { fetchItems(); fetchContacts(); fetchHousingProfiles(); }, [fetchItems, fetchContacts, fetchHousingProfiles]);
-  useEffect(() => { fetchItemSummaries(); }, [fetchItemSummaries]);
+  // Debounce summary fetch to prevent rapid cascading re-renders
+  useEffect(() => {
+    if (items.length === 0) return;
+    const timer = setTimeout(() => { fetchItemSummaries(); }, 150);
+    return () => clearTimeout(timer);
+  }, [items, fetchItemSummaries]);
 
   const rootItems = items.filter(i => !i.parent_id);
   const getChildren = (parentId: string) => items.filter(i => i.parent_id === parentId);
@@ -1531,7 +1553,7 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
               tolosItemId={item.id}
               isAdmin={isAdmin}
               parentItemId={item.parent_id}
-              onSubtotalChange={(s) => { updateItemSubtotal(item.id, s); fetchItemSummaries(); }}
+              onSubtotalChange={(s) => updateItemSubtotal(item.id, s)}
             />
           </div>
         );
@@ -1666,7 +1688,7 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
                       tolosItemId={item.id}
                       isAdmin={isAdmin}
                       parentItemId={item.parent_id}
-                      onSubtotalChange={(s) => { updateItemSubtotal(item.id, s); fetchItemSummaries(); }}
+                      onSubtotalChange={(s) => updateItemSubtotal(item.id, s)}
                     />
                   </div>
                 )}

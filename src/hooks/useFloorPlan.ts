@@ -634,7 +634,9 @@ export function useFloorPlan(budgetId: string) {
   };
 
   // Duplicate a room with all its characteristics (walls, openings)
-  const duplicateRoom = async (roomId: string) => {
+  // direction: 'right' places copy to the right, 'down' places it below
+  // autoGroup: if true, groups copy with the original automatically
+  const duplicateRoom = async (roomId: string, direction: 'right' | 'down' = 'right', autoGroup = true) => {
     if (!floorPlan) return;
     const sourceRoom = rooms.find(r => r.id === roomId);
     if (!sourceRoom) return;
@@ -645,24 +647,37 @@ export function useFloorPlan(budgetId: string) {
       const existingCopies = rooms.filter(r => r.name.startsWith(baseName) && r.id !== roomId).length;
       const newName = `${baseName} (copia${existingCopies > 0 ? ` ${existingCopies + 1}` : ''})`;
 
-      // Offset position so it doesn't overlap
-      const offsetX = sourceRoom.width + 0.5;
+      // Offset position based on direction
+      const offsetX = direction === 'right' ? sourceRoom.width : 0;
+      const offsetY = direction === 'down' ? sourceRoom.length : 0;
+
+      // Determine group: use existing groupId or create a new one
+      const groupId = sourceRoom.groupId || crypto.randomUUID();
+      const groupName = sourceRoom.groupName || sourceRoom.name;
+
+      const insertData: any = {
+        floor_plan_id: floorPlan.id,
+        name: newName,
+        width: sourceRoom.width,
+        length: sourceRoom.length,
+        height: sourceRoom.height || null,
+        pos_x: Math.round((sourceRoom.posX + offsetX) * 100) / 100,
+        pos_y: Math.round((sourceRoom.posY + offsetY) * 100) / 100,
+        order_index: rooms.length,
+        has_floor: sourceRoom.hasFloor !== false,
+        has_ceiling: sourceRoom.hasCeiling !== false,
+        has_roof: sourceRoom.hasRoof !== false,
+        floor_id: sourceRoom.floorId || null,
+      };
+
+      if (autoGroup) {
+        insertData.group_id = groupId;
+        insertData.group_name = groupName;
+      }
 
       const { data: newRoom, error: roomError } = await supabase
         .from('budget_floor_plan_rooms')
-        .insert({
-          floor_plan_id: floorPlan.id,
-          name: newName,
-          width: sourceRoom.width,
-          length: sourceRoom.length,
-          height: sourceRoom.height || null,
-          pos_x: sourceRoom.posX + offsetX,
-          pos_y: sourceRoom.posY,
-          order_index: rooms.length,
-          has_floor: sourceRoom.hasFloor !== false,
-          has_ceiling: sourceRoom.hasCeiling !== false,
-          has_roof: sourceRoom.hasRoof !== false,
-        })
+        .insert(insertData)
         .select()
         .single();
 
@@ -703,8 +718,16 @@ export function useFloorPlan(budgetId: string) {
         }
       }
 
+      // If autoGroup and source room wasn't already in a group, update source to join the new group
+      if (autoGroup && !sourceRoom.groupId) {
+        await supabase
+          .from('budget_floor_plan_rooms')
+          .update({ group_id: groupId, group_name: groupName } as any)
+          .eq('id', sourceRoom.id);
+      }
+
       await fetchAll();
-      toast.success(`Habitación "${newName}" duplicada`);
+      toast.success(`"${newName}" duplicado hacia ${direction === 'right' ? 'la derecha' : 'abajo'}`);
       return newRoom.id;
     } catch (err) {
       console.error('Error duplicating room:', err);

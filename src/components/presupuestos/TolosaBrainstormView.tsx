@@ -145,7 +145,11 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
   const [itemSubtotals, setItemSubtotals] = useState<Record<string, number>>({});
   const [itemSummaries, setItemSummaries] = useState<Record<string, { measurementUnits: number; measurementUnit: string; resourceSubtotal: number }>>({});
   const [viewMode, setViewMode] = useState<'list' | 'cards'>('list');
+  const [measurementVersions, setMeasurementVersions] = useState<Record<string, number>>({});
 
+  const bumpMeasurementVersion = useCallback((itemId: string) => {
+    setMeasurementVersions(prev => ({ ...prev, [itemId]: (prev[itemId] || 0) + 1 }));
+  }, []);
   const updateItemSubtotal = useCallback((itemId: string, subtotal: number) => {
     setItemSubtotals(prev => {
       if (prev[itemId] === subtotal) return prev;
@@ -1437,7 +1441,7 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
       case 'mediciones':
         return (
           <div className="space-y-4">
-            <TolosaMeasurementsPanel budgetId={budgetId} tolosItemId={item.id} isAdmin={isAdmin} parentItemId={item.parent_id} />
+            <TolosaMeasurementsPanel budgetId={budgetId} tolosItemId={item.id} isAdmin={isAdmin} parentItemId={item.parent_id} onMeasurementChange={() => bumpMeasurementVersion(item.id)} />
             <div className="border-t pt-3">
               <h5 className="text-sm font-semibold text-muted-foreground mb-2">Todas las Mediciones del Presupuesto</h5>
               <BudgetMeasurementsTab budgetId={budgetId} isAdmin={isAdmin} />
@@ -1563,6 +1567,7 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
               isAdmin={isAdmin}
               parentItemId={item.parent_id}
               onSubtotalChange={(s) => updateItemSubtotal(item.id, s)}
+              measurementVersion={measurementVersions[item.id] || 0}
             />
           </div>
         );
@@ -1691,6 +1696,7 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
                         setDimension(item.id, 'como');
                         setComoSub(item.id, 'mediciones');
                       }}
+                      onMeasurementChange={() => bumpMeasurementVersion(item.id)}
                     />
                     <TolosaResourcesPanel
                       budgetId={budgetId}
@@ -1698,6 +1704,7 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
                       isAdmin={isAdmin}
                       parentItemId={item.parent_id}
                       onSubtotalChange={(s) => updateItemSubtotal(item.id, s)}
+                      measurementVersion={measurementVersions[item.id] || 0}
                     />
                   </div>
                 )}

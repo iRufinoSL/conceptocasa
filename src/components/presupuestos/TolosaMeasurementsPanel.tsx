@@ -35,9 +35,10 @@ interface TolosaMeasurementsPanelProps {
   isAdmin: boolean;
   parentItemId?: string | null;
   onNavigateToMeasurements?: () => void;
+  onMeasurementChange?: () => void;
 }
 
-export function TolosaMeasurementsPanel({ budgetId, tolosItemId, isAdmin, parentItemId, onNavigateToMeasurements }: TolosaMeasurementsPanelProps) {
+export function TolosaMeasurementsPanel({ budgetId, tolosItemId, isAdmin, parentItemId, onNavigateToMeasurements, onMeasurementChange }: TolosaMeasurementsPanelProps) {
   const [linkedMeasurements, setLinkedMeasurements] = useState<Measurement[]>([]);
   const [inheritedMeasurements, setInheritedMeasurements] = useState<Measurement[]>([]);
   const [allMeasurements, setAllMeasurements] = useState<Measurement[]>([]);
@@ -140,6 +141,7 @@ export function TolosaMeasurementsPanel({ budgetId, tolosItemId, isAdmin, parent
       toast.success('Medición vinculada');
       fetchLinked();
       fetchAllMeasurements();
+      onMeasurementChange?.();
     }
   };
 
@@ -154,6 +156,7 @@ export function TolosaMeasurementsPanel({ budgetId, tolosItemId, isAdmin, parent
     } else {
       toast.success('Medición desvinculada');
       fetchLinked();
+      onMeasurementChange?.();
     }
   };
 
@@ -192,6 +195,7 @@ export function TolosaMeasurementsPanel({ budgetId, tolosItemId, isAdmin, parent
     setCreating(false);
     fetchLinked();
     fetchAllMeasurements();
+    onMeasurementChange?.();
   };
 
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -236,6 +240,7 @@ export function TolosaMeasurementsPanel({ budgetId, tolosItemId, isAdmin, parent
       toast.success('Medición actualizada');
       setEditingId(null);
       fetchLinked();
+      onMeasurementChange?.();
     }
   };
 

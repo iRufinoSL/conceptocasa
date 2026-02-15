@@ -46,6 +46,7 @@ interface TolosaResourcesPanelProps {
   isAdmin: boolean;
   parentItemId?: string | null;
   onSubtotalChange?: (subtotal: number) => void;
+  measurementVersion?: number;
 }
 
 const defaultForm = {
@@ -65,7 +66,7 @@ const defaultForm = {
   purchase_unit_cost: null as number | null,
 };
 
-export function TolosaResourcesPanel({ budgetId, tolosItemId, isAdmin, parentItemId, onSubtotalChange }: TolosaResourcesPanelProps) {
+export function TolosaResourcesPanel({ budgetId, tolosItemId, isAdmin, parentItemId, onSubtotalChange, measurementVersion }: TolosaResourcesPanelProps) {
   const [linkedResources, setLinkedResources] = useState<BudgetResource[]>([]);
   const [allResources, setAllResources] = useState<BudgetResource[]>([]);
   const [linkedIds, setLinkedIds] = useState<Set<string>>(new Set());
@@ -163,7 +164,7 @@ export function TolosaResourcesPanel({ budgetId, tolosItemId, isAdmin, parentIte
   }, [budgetId]);
 
   useEffect(() => { fetchLinked(); }, [fetchLinked]);
-  useEffect(() => { fetchMeasurementUnits(); }, [fetchMeasurementUnits]);
+  useEffect(() => { fetchMeasurementUnits(); }, [fetchMeasurementUnits, measurementVersion]);
   useEffect(() => { if (showSearch) fetchAllResources(); }, [showSearch, fetchAllResources]);
 
   const prevSubtotalRef = useRef<number | null>(null);

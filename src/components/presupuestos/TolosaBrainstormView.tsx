@@ -751,9 +751,14 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
 
     return (
       <div className="space-y-3 p-3 rounded-lg border border-amber-200 bg-amber-50/50 dark:border-amber-800 dark:bg-amber-950/30">
-        <h4 className="text-sm font-semibold flex items-center gap-2 text-amber-700 dark:text-amber-400">
-          <MapPin className="h-4 w-4" /> DÓNDE? — Ubicación y Áreas de Trabajo
-        </h4>
+        <div className="flex items-center justify-between">
+          <h4 className="text-sm font-semibold flex items-center gap-2 text-amber-700 dark:text-amber-400">
+            <MapPin className="h-4 w-4" /> DÓNDE? — Ubicación y Áreas de Trabajo
+          </h4>
+          <Button size="sm" variant="ghost" className="text-xs h-7 gap-1 text-muted-foreground" onClick={() => setDimension(item.id, '')}>
+            <X className="h-3 w-3" /> Cerrar
+          </Button>
+        </div>
 
         {/* 1. Ubicación del terreno - Collapsible */}
         <Collapsible open={isLocationOpen} onOpenChange={(open) => setDondeLocationOpen(prev => ({ ...prev, [item.id]: open }))}>
@@ -949,9 +954,14 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
   // QUIÉN? panel
   const renderQuienPanel = (item: TolosItem) => (
     <div className="space-y-3 p-3 rounded-lg border border-emerald-200 bg-emerald-50/50 dark:border-emerald-800 dark:bg-emerald-950/30">
-      <h4 className="text-sm font-semibold flex items-center gap-2 text-emerald-700 dark:text-emerald-400">
-        <Users className="h-4 w-4" /> QUIÉN? — Personas
-      </h4>
+      <div className="flex items-center justify-between">
+        <h4 className="text-sm font-semibold flex items-center gap-2 text-emerald-700 dark:text-emerald-400">
+          <Users className="h-4 w-4" /> QUIÉN? — Personas
+        </h4>
+        <Button size="sm" variant="ghost" className="text-xs h-7 gap-1 text-muted-foreground" onClick={() => setDimension(item.id, '')}>
+          <X className="h-3 w-3" /> Cerrar
+        </Button>
+      </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {/* Client */}
         <div className="space-y-1">
@@ -1394,7 +1404,15 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
       case 'anteproyecto':
         return <BudgetPredesignTab budgetId={budgetId} isAdmin={isAdmin} projectId={null} />;
       case 'mediciones':
-        return <TolosaMeasurementsPanel budgetId={budgetId} tolosItemId={item.id} isAdmin={isAdmin} parentItemId={item.parent_id} />;
+        return (
+          <div className="space-y-4">
+            <TolosaMeasurementsPanel budgetId={budgetId} tolosItemId={item.id} isAdmin={isAdmin} parentItemId={item.parent_id} />
+            <div className="border-t pt-3">
+              <h5 className="text-sm font-semibold text-muted-foreground mb-2">Todas las Mediciones del Presupuesto</h5>
+              <BudgetMeasurementsTab budgetId={budgetId} isAdmin={isAdmin} />
+            </div>
+          </div>
+        );
       case 'documentos':
         return <BudgetDocumentsTab budgetId={budgetId} projectId={null} projectName={null} isAdmin={isAdmin} />;
       case 'agenda':
@@ -1429,9 +1447,14 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
 
     return (
       <div className="space-y-3 p-3 rounded-lg border border-blue-200 bg-blue-50/50 dark:border-blue-800 dark:bg-blue-950/30">
-        <h4 className="text-sm font-semibold flex items-center gap-2 text-blue-700 dark:text-blue-400">
-          <Wrench className="h-4 w-4" /> CÓMO?
-        </h4>
+        <div className="flex items-center justify-between">
+          <h4 className="text-sm font-semibold flex items-center gap-2 text-blue-700 dark:text-blue-400">
+            <Wrench className="h-4 w-4" /> CÓMO?
+          </h4>
+          <Button size="sm" variant="ghost" className="text-xs h-7 gap-1 text-muted-foreground" onClick={() => setDimension(item.id, '')}>
+            <X className="h-3 w-3" /> Cerrar
+          </Button>
+        </div>
 
         {/* Submenu tabs - scrollable */}
         <div className="flex gap-1 border-b border-blue-200 dark:border-blue-800 pb-0 overflow-x-auto">
@@ -1470,9 +1493,14 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
       case 'como': return renderComoPanel(item);
       case 'cuando': return (
         <div className="p-3 rounded-lg border border-purple-200 bg-purple-50/50 dark:border-purple-800 dark:bg-purple-950/30">
-          <h4 className="text-sm font-semibold flex items-center gap-2 text-purple-700 dark:text-purple-400">
-            <Clock className="h-4 w-4" /> CUÁNDO? — Plazos y fases
-          </h4>
+          <div className="flex items-center justify-between">
+            <h4 className="text-sm font-semibold flex items-center gap-2 text-purple-700 dark:text-purple-400">
+              <Clock className="h-4 w-4" /> CUÁNDO? — Plazos y fases
+            </h4>
+            <Button size="sm" variant="ghost" className="text-xs h-7 gap-1 text-muted-foreground" onClick={() => setDimension(item.id, '')}>
+              <X className="h-3 w-3" /> Cerrar
+            </Button>
+          </div>
           <p className="text-xs text-muted-foreground mt-1">Vinculación a fases y cronograma — próximamente</p>
         </div>
       );
@@ -1480,9 +1508,14 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
         const cuanto = getCuanto(item.id);
         return (
           <div className="p-3 rounded-lg border border-rose-200 bg-rose-50/50 dark:border-rose-800 dark:bg-rose-950/30 space-y-3">
-            <h4 className="text-sm font-semibold flex items-center gap-2 text-rose-700 dark:text-rose-400">
-              <DollarSign className="h-4 w-4" /> CUÁNTO? — Costes
-            </h4>
+            <div className="flex items-center justify-between">
+              <h4 className="text-sm font-semibold flex items-center gap-2 text-rose-700 dark:text-rose-400">
+                <DollarSign className="h-4 w-4" /> CUÁNTO? — Costes
+              </h4>
+              <Button size="sm" variant="ghost" className="text-xs h-7 gap-1 text-muted-foreground" onClick={() => setDimension(item.id, '')}>
+                <X className="h-3 w-3" /> Cerrar
+              </Button>
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="p-3 rounded border bg-background text-center">
                 <p className="text-xl font-bold text-foreground">{formatCurrency(itemSubtotals[item.id] || 0)}</p>
@@ -1622,6 +1655,11 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
                       tolosItemId={item.id}
                       isAdmin={isAdmin}
                       parentItemId={item.parent_id}
+                      onNavigateToMeasurements={() => {
+                        // Open CÓMO? > Mediciones for this item
+                        setDimension(item.id, 'como');
+                        setComoSub(item.id, 'mediciones');
+                      }}
                     />
                     <TolosaResourcesPanel
                       budgetId={budgetId}

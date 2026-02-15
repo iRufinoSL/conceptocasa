@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { Plus, Search, Ruler, Link2, X, Check } from 'lucide-react';
+import { Plus, Search, Ruler, Link2, X, Check, ExternalLink } from 'lucide-react';
 import { searchMatch } from '@/lib/search-utils';
 import { formatNumber } from '@/lib/format-utils';
 import { NumericInput } from '@/components/ui/numeric-input';
@@ -34,9 +34,10 @@ interface TolosaMeasurementsPanelProps {
   tolosItemId: string;
   isAdmin: boolean;
   parentItemId?: string | null;
+  onNavigateToMeasurements?: () => void;
 }
 
-export function TolosaMeasurementsPanel({ budgetId, tolosItemId, isAdmin, parentItemId }: TolosaMeasurementsPanelProps) {
+export function TolosaMeasurementsPanel({ budgetId, tolosItemId, isAdmin, parentItemId, onNavigateToMeasurements }: TolosaMeasurementsPanelProps) {
   const [linkedMeasurements, setLinkedMeasurements] = useState<Measurement[]>([]);
   const [inheritedMeasurements, setInheritedMeasurements] = useState<Measurement[]>([]);
   const [allMeasurements, setAllMeasurements] = useState<Measurement[]>([]);
@@ -74,26 +75,38 @@ export function TolosaMeasurementsPanel({ budgetId, tolosItemId, isAdmin, parent
       setIsInheriting(false);
     } else {
       setLinkedMeasurements([]);
-      // Inherit from parent if no own measurements
-      if (parentItemId) {
-        const { data: parentLinks } = await supabase
+      // Walk up ancestor chain to find inherited measurements
+      let currentParentId: string | null = parentItemId ?? null;
+      let foundInherited = false;
+
+      while (currentParentId && !foundInherited) {
+        const { data: ancestorLinks } = await supabase
           .from('tolosa_item_measurements')
           .select('measurement_id')
-          .eq('tolosa_item_id', parentItemId);
-        const parentIds = (parentLinks || []).map(l => l.measurement_id);
-        if (parentIds.length > 0) {
-          const { data: parentMeasurements } = await supabase
+          .eq('tolosa_item_id', currentParentId);
+        const ancestorIds = (ancestorLinks || []).map(l => l.measurement_id);
+
+        if (ancestorIds.length > 0) {
+          const { data: ancestorMeasurements } = await supabase
             .from('budget_measurements')
             .select('*')
-            .in('id', parentIds)
+            .in('id', ancestorIds)
             .order('name');
-          setInheritedMeasurements((parentMeasurements as Measurement[]) || []);
+          setInheritedMeasurements((ancestorMeasurements as Measurement[]) || []);
           setIsInheriting(true);
+          foundInherited = true;
         } else {
-          setInheritedMeasurements([]);
-          setIsInheriting(false);
+          // Go up to next ancestor
+          const { data: parentItem } = await supabase
+            .from('tolosa_items')
+            .select('parent_id')
+            .eq('id', currentParentId)
+            .single();
+          currentParentId = parentItem?.parent_id ?? null;
         }
-      } else {
+      }
+
+      if (!foundInherited) {
         setInheritedMeasurements([]);
         setIsInheriting(false);
       }
@@ -245,6 +258,11 @@ export function TolosaMeasurementsPanel({ budgetId, tolosItemId, isAdmin, parent
           {isInheriting && <Badge variant="outline" className="text-[9px] ml-1">heredadas</Badge>}
         </h5>
         <div className="flex gap-1">
+          {onNavigateToMeasurements && (
+            <Button size="sm" variant="outline" className="text-xs" onClick={onNavigateToMeasurements}>
+              <ExternalLink className="h-3 w-3 mr-1" /> Ver Mediciones
+            </Button>
+          )}
           <Button size="sm" variant="outline" className="text-xs" onClick={() => setShowSearch(!showSearch)}>
             <Search className="h-3 w-3 mr-1" /> Buscar existente
           </Button>

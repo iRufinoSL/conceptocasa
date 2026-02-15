@@ -12,8 +12,9 @@ import {
   ExternalLink, Building, User, Truck, FileText, Link, Unlink,
   Home, Ruler, Layers, Landmark, PenTool, RulerIcon, FolderOpen,
   CalendarDays, MessageSquare, Calculator, BarChart3, Timer, Settings,
-  ArrowUp, ArrowDown, ArrowLeft, ArrowRight
+  ArrowUp, ArrowDown, ArrowLeft, ArrowRight, List, LayoutGrid
 } from 'lucide-react';
+import { TolosaCardView } from './TolosaCardView';
 import { BudgetUrbanismTab } from './BudgetUrbanismTab';
 import { BudgetMeasurementsTab } from './BudgetMeasurementsTab';
 import { TolosaMeasurementsPanel } from './TolosaMeasurementsPanel';
@@ -143,6 +144,7 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
   const [dondeLocationOpen, setDondeLocationOpen] = useState<Record<string, boolean>>({});
   const [itemSubtotals, setItemSubtotals] = useState<Record<string, number>>({});
   const [itemSummaries, setItemSummaries] = useState<Record<string, { measurementUnits: number; measurementUnit: string; resourceSubtotal: number }>>({});
+  const [viewMode, setViewMode] = useState<'list' | 'cards'>('list');
 
   const updateItemSubtotal = useCallback((itemId: string, subtotal: number) => {
     setItemSubtotals(prev => {
@@ -1826,9 +1828,38 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
             <p className="text-sm text-muted-foreground">Brainstorming — ¿QUÉ hay que hacer?</p>
           </div>
         </div>
-        <Button onClick={() => { setAddingParentId('root'); setNewName(''); setNewDescription(''); }} className="gap-2">
-          <Plus className="h-4 w-4" /> Nuevo QUÉ?
-        </Button>
+        <div className="flex items-center gap-2">
+          {/* View toggle */}
+          <div className="flex items-center border rounded-lg overflow-hidden">
+            <button
+              onClick={() => setViewMode('list')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium transition-colors ${
+                viewMode === 'list'
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-muted text-muted-foreground hover:text-foreground hover:bg-accent'
+              }`}
+              title="Vista Listado"
+            >
+              <List className="h-4 w-4" />
+              <span className="hidden sm:inline">Listado</span>
+            </button>
+            <button
+              onClick={() => setViewMode('cards')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium transition-colors ${
+                viewMode === 'cards'
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-muted text-muted-foreground hover:text-foreground hover:bg-accent'
+              }`}
+              title="Vista Gráfico"
+            >
+              <LayoutGrid className="h-4 w-4" />
+              <span className="hidden sm:inline">Gráfico</span>
+            </button>
+          </div>
+          <Button onClick={() => { setAddingParentId('root'); setNewName(''); setNewDescription(''); }} className="gap-2">
+            <Plus className="h-4 w-4" /> Nuevo QUÉ?
+          </Button>
+        </div>
       </div>
 
       {/* Dimension legend */}
@@ -1888,6 +1919,24 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
             </Button>
           </CardContent>
         </Card>
+      ) : viewMode === 'cards' ? (
+        <TolosaCardView
+          items={items}
+          itemSummaries={itemSummaries}
+          itemSubtotals={itemSubtotals}
+          contactCache={contactCache}
+          getCuanto={getCuanto}
+          onItemClick={(itemId) => {
+            // Switch to list view and open the item detail
+            setViewMode('list');
+            setExpandedIds(prev => new Set(prev).add(itemId));
+            setDetailOpenIds(prev => {
+              const n = new Set(prev);
+              n.add(itemId);
+              return n;
+            });
+          }}
+        />
       ) : (
         <div className="space-y-1">
           {rootItems.map(item => renderItem(item, 0))}

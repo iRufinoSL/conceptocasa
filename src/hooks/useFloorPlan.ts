@@ -680,15 +680,46 @@ export function useFloorPlan(budgetId: string) {
       const existingCopies = rooms.filter(r => r.name.startsWith(baseName) && r.id !== roomId).length;
       const newName = `${baseName} (copia${existingCopies > 0 ? ` ${existingCopies + 1}` : ''})`;
 
-      // Calculate target position: 1 grid cell away (use source dimensions as step)
-      const offsetX = direction === 'right' ? sourceRoom.width : 0;
-      const offsetY = direction === 'down' ? sourceRoom.length : 0;
-      const targetPosX = Math.round((sourceRoom.posX + offsetX) * 100) / 100;
-      const targetPosY = Math.round((sourceRoom.posY + offsetY) * 100) / 100;
+      // Find adjacent grid position using deriveGridPositions
+      const sameFloorRooms = rooms.filter(r => (r.floorId || null) === (sourceRoom.floorId || null));
+      
+      // Import grid logic inline: cluster X and Y positions
+      const THRESHOLD = 0.15;
+      const xVals = [...new Set(sameFloorRooms.map(r => r.posX))].sort((a, b) => a - b);
+      const xClusters: number[] = [];
+      xVals.forEach(x => { if (!xClusters.some(c => Math.abs(c - x) < THRESHOLD)) xClusters.push(x); });
+      xClusters.sort((a, b) => a - b);
+
+      const yVals = [...new Set(sameFloorRooms.map(r => r.posY))].sort((a, b) => a - b);
+      const yClusters: number[] = [];
+      yVals.forEach(y => { if (!yClusters.some(c => Math.abs(c - y) < THRESHOLD)) yClusters.push(y); });
+      yClusters.sort((a, b) => a - b);
+
+      const sourceColIdx = xClusters.findIndex(c => Math.abs(c - sourceRoom.posX) < THRESHOLD);
+      const sourceRowIdx = yClusters.findIndex(c => Math.abs(c - sourceRoom.posY) < THRESHOLD);
+
+      let targetPosX: number;
+      let targetPosY: number;
+
+      if (direction === 'right') {
+        // Place at the next column's X, or create one adjacent using source width
+        if (sourceColIdx + 1 < xClusters.length) {
+          targetPosX = xClusters[sourceColIdx + 1];
+        } else {
+          targetPosX = Math.round((sourceRoom.posX + sourceRoom.width) * 100) / 100;
+        }
+        targetPosY = sourceRoom.posY;
+      } else {
+        // Place at the next row's Y, or create one adjacent using source length
+        targetPosX = sourceRoom.posX;
+        if (sourceRowIdx + 1 < yClusters.length) {
+          targetPosY = yClusters[sourceRowIdx + 1];
+        } else {
+          targetPosY = Math.round((sourceRoom.posY + sourceRoom.length) * 100) / 100;
+        }
+      }
 
       // Check for occupant at the target position and displace it
-      const THRESHOLD = 0.15;
-      const sameFloorRooms = rooms.filter(r => (r.floorId || null) === (sourceRoom.floorId || null));
       const occupant = sameFloorRooms.find(r =>
         r.id !== roomId &&
         Math.abs(r.posX - targetPosX) < THRESHOLD &&

@@ -24,7 +24,7 @@ interface FloorPlanRoomEditorProps {
   onDeleteRoom: (roomId: string) => Promise<void>;
   onDuplicateRoom?: (roomId: string) => Promise<string | undefined>;
   onUpdateWall: (wallId: string, data: any) => Promise<void>;
-  onAddOpening: (wallId: string, type: string, width: number, height: number) => Promise<void>;
+  onAddOpening: (wallId: string, type: string, width: number, height: number, sillHeight?: number) => Promise<void>;
   onUpdateOpening?: (openingId: string, data: { width?: number; height?: number; positionX?: number }) => Promise<void>;
   onDeleteOpening: (openingId: string) => Promise<void>;
   saving: boolean;
@@ -370,7 +370,7 @@ export function FloorPlanRoomEditor({
                       <div className="flex gap-1 flex-wrap">
                         {Object.entries(OPENING_PRESETS).map(([key, preset]) => (
                           <Button key={key} variant="outline" size="sm" className="text-[10px] h-6"
-                            onClick={() => onAddOpening(wall.id, key, preset.width, preset.height)}
+                            onClick={() => onAddOpening(wall.id, key, preset.width, preset.height, preset.sillHeight)}
                             disabled={saving}>
                             + {preset.label}
                           </Button>

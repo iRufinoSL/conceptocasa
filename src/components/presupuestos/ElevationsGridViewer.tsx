@@ -17,7 +17,7 @@ interface ElevationsGridViewerProps {
   rooms: RoomData[];
   floors?: FloorLevel[];
   onUpdateOpening: (openingId: string, data: { width?: number; height?: number; positionX?: number; openingType?: string }) => Promise<void>;
-  onAddOpening: (wallId: string, type: string, width: number, height: number) => Promise<void>;
+  onAddOpening: (wallId: string, type: string, width: number, height: number, sillHeight?: number) => Promise<void>;
   onDeleteOpening: (openingId: string) => Promise<void>;
   saving: boolean;
 }
@@ -487,7 +487,7 @@ export function ElevationsGridViewer({
 function ElevationCardView({ card, onOpeningClick, onAddOpening, onCardClick, saving }: {
   card: ElevationCard;
   onOpeningClick: (op: OpeningData) => void;
-  onAddOpening: (wallId: string, type: string, width: number, height: number) => Promise<void>;
+  onAddOpening: (wallId: string, type: string, width: number, height: number, sillHeight?: number) => Promise<void>;
   onCardClick: (card: ElevationCard) => void;
   saving: boolean;
 }) {
@@ -651,7 +651,7 @@ function ElevationCardView({ card, onOpeningClick, onAddOpening, onCardClick, sa
             onClick={e => e.stopPropagation()}>
             {Object.entries(OPENING_PRESETS).map(([key, preset]) => (
               <Button key={key} variant="ghost" size="sm" className="text-[9px] h-5 px-1.5"
-                onClick={() => onAddOpening(card.wallId!, key, preset.width, preset.height)}
+                onClick={() => onAddOpening(card.wallId!, key, preset.width, preset.height, preset.sillHeight)}
                 disabled={saving}>
                 <Plus className="h-2.5 w-2.5 mr-0.5" />
                 {preset.label}

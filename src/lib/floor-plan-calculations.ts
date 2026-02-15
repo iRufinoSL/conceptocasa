@@ -67,6 +67,7 @@ export interface OpeningData {
   name?: string;
   width: number;
   height: number;
+  sillHeight: number; // altura sobre el suelo en metros
   positionX: number; // 0-1 fraction along the wall
 }
 
@@ -766,14 +767,14 @@ export function calculateFloorPlanSummary(plan: FloorPlanData, rooms: RoomData[]
   };
 }
 
-// Default opening presets
+// Default opening presets with standard dimensions
 export const OPENING_PRESETS = {
-  puerta: { width: 0.925, height: 2.15, label: 'Puerta interior' },
-  puerta_externa: { width: 1.0, height: 2.20, label: 'Puerta externa' },
-  ventana_grande: { width: 1.5, height: 1.2, label: 'Ventana grande' },
-  ventana_mediana: { width: 1.2, height: 1.0, label: 'Ventana mediana' },
-  ventana_pequeña: { width: 0.6, height: 0.6, label: 'Ventana pequeña' },
-  ventana_balconera: { width: 1.5, height: 2.10, label: 'Ventana balconera' },
+  ventana_balconera: { width: 1.875, height: 2.5, sillHeight: 0, label: 'Ventana balconera' },
+  ventana_grande: { width: 1.875, height: 1.25, sillHeight: 1.0, label: 'Ventana grande' },
+  ventana_mediana: { width: 1.25, height: 1.25, sillHeight: 1.0, label: 'Ventana mediana' },
+  ventana_pequeña: { width: 0.625, height: 1.25, sillHeight: 1.0, label: 'Ventana pequeña' },
+  puerta_externa: { width: 1.25, height: 2.25, sillHeight: 0, label: 'Puerta exterior' },
+  puerta: { width: 1.50, height: 2.0, sillHeight: 0, label: 'Puerta interior' },
 } as const;
 
 export const WALL_LABELS: Record<number, string> = {

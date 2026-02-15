@@ -47,6 +47,7 @@ interface DbOpening {
   width: number;
   height: number;
   position_x: number;
+  sill_height: number;
 }
 
 function calcGridPositions(spaces: Array<{ m2: number; gridCol: number; gridRow: number }>) {
@@ -173,6 +174,7 @@ export function useFloorPlan(budgetId: string) {
                   name: o.name || undefined,
                   width: o.width,
                   height: o.height,
+                  sillHeight: o.sill_height ?? 0,
                   positionX: o.position_x,
                 })),
             };
@@ -229,9 +231,9 @@ export function useFloorPlan(budgetId: string) {
           budget_id: budgetId,
           width: data.width || 12,
           length: data.length || 9,
-          default_height: data.defaultHeight || 2.7,
-          external_wall_thickness: data.externalWallThickness || 0.3,
-          internal_wall_thickness: data.internalWallThickness || 0.15,
+        default_height: data.defaultHeight || 2.5,
+        external_wall_thickness: data.externalWallThickness || 0.25,
+        internal_wall_thickness: data.internalWallThickness || 0.13,
           roof_overhang: data.roofOverhang || 0.6,
           roof_slope_percent: data.roofSlopePercent || 20,
           roof_type: data.roofType || 'dos_aguas',
@@ -419,7 +421,7 @@ export function useFloorPlan(budgetId: string) {
     }
   };
 
-  const addOpening = async (wallId: string, openingType: string, width: number, height: number) => {
+  const addOpening = async (wallId: string, openingType: string, width: number, height: number, sillHeight?: number) => {
     setSaving(true);
     try {
       const { error } = await supabase
@@ -429,6 +431,7 @@ export function useFloorPlan(budgetId: string) {
           opening_type: openingType,
           width,
           height,
+          sill_height: sillHeight ?? 0,
           position_x: 0.5,
         });
 
@@ -461,13 +464,14 @@ export function useFloorPlan(budgetId: string) {
     }
   };
 
-  const updateOpening = async (openingId: string, data: { openingType?: string; width?: number; height?: number; positionX?: number }) => {
+  const updateOpening = async (openingId: string, data: { openingType?: string; width?: number; height?: number; sillHeight?: number; positionX?: number }) => {
     setSaving(true);
     try {
       const updates: any = {};
       if (data.openingType !== undefined) updates.opening_type = data.openingType;
       if (data.width !== undefined) updates.width = data.width;
       if (data.height !== undefined) updates.height = data.height;
+      if (data.sillHeight !== undefined) updates.sill_height = data.sillHeight;
       if (data.positionX !== undefined) updates.position_x = data.positionX;
 
       const { error } = await supabase
@@ -692,6 +696,7 @@ export function useFloorPlan(budgetId: string) {
               name: op.name || null,
               width: op.width,
               height: op.height,
+              sill_height: op.sillHeight ?? 0,
               position_x: op.positionX,
             });
           if (opError) throw opError;

@@ -62,6 +62,7 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
   const {
     floorPlan, rooms, floors, loading, saving,
     addRoom, updateRoom, updateWall, deleteRoom,
+    addOpening, deleteOpening,
     classifyPerimeterWalls, syncToMeasurements, getPlanData, refetch,
     generateFromTemplate, deleteFloorPlan, groupRooms, ungroupRooms,
   } = useFloorPlan(budgetId);
@@ -450,6 +451,8 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
                   floorName={floorName}
                   onUpdateRoom={(data) => updateRoom(selectedRoom.id, data)}
                   onUpdateWall={(wallId, data) => updateWall(wallId, data)}
+                  onAddOpening={(wallId, type, w, h, sh) => addOpening(wallId, type, w, h, sh)}
+                  onDeleteOpening={(openingId) => deleteOpening(openingId)}
                   onChangeCoordinate={handleChangeCoordinate}
                   onUngroupRoom={selectedRoom.groupId ? () => ungroupRooms(selectedRoom.groupId!) : undefined}
                   onDeleteRoom={() => { deleteRoom(selectedRoom.id); setSelectedRoomId(null); }}

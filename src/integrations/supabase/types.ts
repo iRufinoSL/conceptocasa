@@ -669,6 +669,7 @@ export type Database = {
           name: string | null
           opening_type: string
           position_x: number | null
+          sill_height: number
           wall_id: string
           width: number
         }
@@ -679,6 +680,7 @@ export type Database = {
           name?: string | null
           opening_type?: string
           position_x?: number | null
+          sill_height?: number
           wall_id: string
           width?: number
         }
@@ -689,6 +691,7 @@ export type Database = {
           name?: string | null
           opening_type?: string
           position_x?: number | null
+          sill_height?: number
           wall_id?: string
           width?: number
         }

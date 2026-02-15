@@ -11,7 +11,7 @@ interface WallElevationViewProps {
   plan: FloorPlanData;
   rooms: RoomData[];
   onUpdateOpening: (openingId: string, data: { width?: number; height?: number; positionX?: number; openingType?: string }) => Promise<void>;
-  onAddOpening: (wallId: string, type: string, width: number, height: number) => Promise<void>;
+  onAddOpening: (wallId: string, type: string, width: number, height: number, sillHeight?: number) => Promise<void>;
   onDeleteOpening: (openingId: string) => Promise<void>;
   saving: boolean;
 }
@@ -517,7 +517,7 @@ export function WallElevationView({
           <span className="text-xs text-muted-foreground">Añadir:</span>
           {Object.entries(OPENING_PRESETS).map(([key, preset]) => (
             <Button key={key} variant="outline" size="sm" className="text-[10px] h-6"
-              onClick={() => onAddOpening(targetWallId, key, preset.width, preset.height)}
+              onClick={() => onAddOpening(targetWallId, key, preset.width, preset.height, preset.sillHeight)}
               disabled={saving}>
               <Plus className="h-3 w-3 mr-0.5" />
               {preset.label}

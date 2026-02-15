@@ -6,8 +6,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
-import { Trash2, Save, Unlink } from 'lucide-react';
-import type { RoomData, WallType, FloorPlanData } from '@/lib/floor-plan-calculations';
+import { Trash2, Save, Unlink, Plus, DoorOpen } from 'lucide-react';
+import type { RoomData, WallType, FloorPlanData, OpeningData } from '@/lib/floor-plan-calculations';
+import { OPENING_PRESETS } from '@/lib/floor-plan-calculations';
 
 interface FloorPlanSpaceFormProps {
   room: RoomData;
@@ -18,6 +19,8 @@ interface FloorPlanSpaceFormProps {
   floorName?: string;
   onUpdateRoom: (data: { name?: string; width?: number; length?: number; hasFloor?: boolean; hasCeiling?: boolean }) => void;
   onUpdateWall: (wallId: string, data: { wallType?: WallType }) => void;
+  onAddOpening?: (wallId: string, type: string, width: number, height: number, sillHeight?: number) => Promise<void>;
+  onDeleteOpening?: (openingId: string) => Promise<void>;
   onChangeCoordinate?: (col: number, row: number) => void;
   onUngroupRoom?: (groupId: string) => void;
   onDeleteRoom: () => void;
@@ -35,7 +38,7 @@ const WALL_TYPE_OPTIONS: { value: WallType; label: string }[] = [
   { value: 'interior_invisible', label: 'Int. invisible' },
 ];
 
-export function FloorPlanSpaceForm({ room, allRooms, planData, coordCol, coordRow, floorName, onUpdateRoom, onUpdateWall, onChangeCoordinate, onUngroupRoom, onDeleteRoom, saving }: FloorPlanSpaceFormProps) {
+export function FloorPlanSpaceForm({ room, allRooms, planData, coordCol, coordRow, floorName, onUpdateRoom, onUpdateWall, onAddOpening, onDeleteOpening, onChangeCoordinate, onUngroupRoom, onDeleteRoom, saving }: FloorPlanSpaceFormProps) {
   // Local buffered state for all editable fields
   const [localName, setLocalName] = useState(room.name);
   const [localWidth, setLocalWidth] = useState(String(room.width));
@@ -49,6 +52,7 @@ export function FloorPlanSpaceForm({ room, allRooms, planData, coordCol, coordRo
     room.walls.forEach(w => { map[w.id] = w.wallType; });
     return map;
   });
+  const [expandedWall, setExpandedWall] = useState<number | null>(null);
 
   // Reset local state when a different room is selected
   useEffect(() => {
@@ -62,6 +66,7 @@ export function FloorPlanSpaceForm({ room, allRooms, planData, coordCol, coordRo
     const map: Record<string, WallType> = {};
     room.walls.forEach(w => { map[w.id] = w.wallType; });
     setLocalWalls(map);
+    setExpandedWall(null);
   }, [room.id, coordCol, coordRow]);
 
   const parsedWidth = parseFloat(localWidth) || room.width;
@@ -251,36 +256,98 @@ export function FloorPlanSpaceForm({ room, allRooms, planData, coordCol, coordRo
           </div>
         </div>
 
-        {/* Walls */}
+        {/* Walls with openings */}
         <div className="border-t pt-3">
-          <h4 className="text-xs font-semibold mb-2">Paredes</h4>
+          <h4 className="text-xs font-semibold mb-2">Paredes y Aperturas</h4>
           <div className="space-y-2">
             {room.walls
               .slice()
               .sort((a, b) => a.wallIndex - b.wallIndex)
-              .map(wall => (
-                <div key={wall.id} className="flex items-center gap-2">
-                  <span className="text-xs w-24 shrink-0 text-muted-foreground">
-                    {WALL_NAMES[wall.wallIndex - 1]}
-                  </span>
-                  <Select
-                    value={localWalls[wall.id] || wall.wallType}
-                    onValueChange={v => setLocalWalls(prev => ({ ...prev, [wall.id]: v as WallType }))}
-                    disabled={saving}
-                  >
-                    <SelectTrigger className="h-8 text-xs">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {WALL_TYPE_OPTIONS.map(opt => (
-                        <SelectItem key={opt.value} value={opt.value} className="text-xs">
-                          {opt.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              ))}
+              .map(wall => {
+                const isExpanded = expandedWall === wall.wallIndex;
+                return (
+                  <div key={wall.id} className="border rounded-md p-2 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <button
+                        className="text-xs w-24 shrink-0 text-muted-foreground text-left font-medium hover:text-foreground"
+                        onClick={() => setExpandedWall(isExpanded ? null : wall.wallIndex)}
+                      >
+                        {WALL_NAMES[wall.wallIndex - 1]}
+                        {wall.openings.length > 0 && (
+                          <Badge variant="secondary" className="ml-1 text-[9px] px-1 py-0 h-3.5">
+                            {wall.openings.length}
+                          </Badge>
+                        )}
+                      </button>
+                      <Select
+                        value={localWalls[wall.id] || wall.wallType}
+                        onValueChange={v => setLocalWalls(prev => ({ ...prev, [wall.id]: v as WallType }))}
+                        disabled={saving}
+                      >
+                        <SelectTrigger className="h-8 text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {WALL_TYPE_OPTIONS.map(opt => (
+                            <SelectItem key={opt.value} value={opt.value} className="text-xs">
+                              {opt.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Openings section */}
+                    {isExpanded && (
+                      <div className="pl-2 space-y-1.5">
+                        {/* Existing openings */}
+                        {wall.openings.map(op => (
+                          <div key={op.id} className="flex items-center justify-between text-[10px] bg-muted/40 rounded px-2 py-1">
+                            <div className="flex items-center gap-1">
+                              <DoorOpen className="h-3 w-3 text-muted-foreground" />
+                              <span className="font-medium">
+                                {OPENING_PRESETS[op.openingType as keyof typeof OPENING_PRESETS]?.label || op.openingType}
+                              </span>
+                              <span className="text-muted-foreground">
+                                {op.width.toFixed(2)}×{op.height.toFixed(2)}m
+                                {op.sillHeight > 0 && ` ↑${op.sillHeight.toFixed(2)}m`}
+                              </span>
+                            </div>
+                            {onDeleteOpening && (
+                              <Button variant="ghost" size="sm" className="h-5 w-5 p-0" onClick={() => onDeleteOpening(op.id)} disabled={saving}>
+                                <Trash2 className="h-3 w-3 text-destructive" />
+                              </Button>
+                            )}
+                          </div>
+                        ))}
+
+                        {/* Add opening buttons */}
+                        {onAddOpening && (
+                          <div className="flex gap-1 flex-wrap pt-1">
+                            {Object.entries(OPENING_PRESETS).map(([key, preset]) => (
+                              <Button
+                                key={key}
+                                variant="outline"
+                                size="sm"
+                                className="text-[9px] h-5 px-1.5"
+                                onClick={() => onAddOpening(wall.id, key, preset.width, preset.height, preset.sillHeight)}
+                                disabled={saving}
+                              >
+                                <Plus className="h-2.5 w-2.5 mr-0.5" />
+                                {preset.label}
+                              </Button>
+                            ))}
+                          </div>
+                        )}
+
+                        {wall.openings.length === 0 && !onAddOpening && (
+                          <p className="text-[10px] text-muted-foreground italic">Sin aperturas</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
           </div>
         </div>
 
@@ -294,8 +361,8 @@ export function FloorPlanSpaceForm({ room, allRooms, planData, coordCol, coordRo
         </Button>
 
         <p className="text-[10px] text-muted-foreground">
-          Las paredes sin nada adyacente (arriba, derecha, abajo, izquierda) se consideran externas por defecto.
-          Usa «Auto ext.» en la barra superior para clasificar automáticamente.
+          Las paredes sin nada adyacente se consideran externas por defecto.
+          Haz clic en una pared para ver y gestionar sus aperturas.
         </p>
       </CardContent>
     </Card>

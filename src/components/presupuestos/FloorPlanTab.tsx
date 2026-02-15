@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Plus, Trash2, Layout, BarChart3, RefreshCw, Save, Wand2 } from 'lucide-react';
+import { Loader2, Plus, Trash2, Layout, BarChart3, RefreshCw, Save, Wand2, Settings2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useFloorPlan } from '@/hooks/useFloorPlan';
 import { FloorPlanGridView } from './FloorPlanGridView';
@@ -58,11 +58,97 @@ function createDefaultFloor(name: string, level: string, m2: number): FloorDef {
   };
 }
 
+function FloorPlanSettingsPanel({ planData, onUpdate, saving, onClose }: {
+  planData: FloorPlanData;
+  onUpdate: (data: Partial<FloorPlanData>) => Promise<void>;
+  saving: boolean;
+  onClose: () => void;
+}) {
+  const [height, setHeight] = useState(String(planData.defaultHeight));
+  const [extThick, setExtThick] = useState(String(planData.externalWallThickness));
+  const [intThick, setIntThick] = useState(String(planData.internalWallThickness));
+  const [roofType, setRoofType] = useState<string>(planData.roofType || 'dos_aguas');
+  const [overhang, setOverhang] = useState(String(planData.roofOverhang));
+  const [slope, setSlope] = useState(String(planData.roofSlopePercent));
+
+  const hasChanges =
+    parseFloat(height) !== planData.defaultHeight ||
+    parseFloat(extThick) !== planData.externalWallThickness ||
+    parseFloat(intThick) !== planData.internalWallThickness ||
+    roofType !== (planData.roofType || 'dos_aguas') ||
+    parseFloat(overhang) !== planData.roofOverhang ||
+    parseFloat(slope) !== planData.roofSlopePercent;
+
+  const handleSave = async () => {
+    await onUpdate({
+      defaultHeight: parseFloat(height) || planData.defaultHeight,
+      externalWallThickness: parseFloat(extThick) || planData.externalWallThickness,
+      internalWallThickness: parseFloat(intThick) || planData.internalWallThickness,
+      roofType: roofType as any,
+      roofOverhang: parseFloat(overhang) || planData.roofOverhang,
+      roofSlopePercent: parseFloat(slope) || planData.roofSlopePercent,
+    });
+    toast.success('Parámetros actualizados');
+    onClose();
+  };
+
+  return (
+    <Card>
+      <CardHeader className="py-3">
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-sm flex items-center gap-2">
+            <Settings2 className="h-4 w-4" /> Parámetros generales del plano
+          </CardTitle>
+          <Button variant="ghost" size="sm" onClick={onClose} className="h-7 px-2 text-xs">Cerrar</Button>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          <div>
+            <Label className="text-xs">Altura espacios (m)</Label>
+            <Input type="number" step="0.1" value={height} onChange={e => setHeight(e.target.value)} disabled={saving} />
+          </div>
+          <div>
+            <Label className="text-xs">Espesor ext. (m)</Label>
+            <Input type="number" step="0.01" value={extThick} onChange={e => setExtThick(e.target.value)} disabled={saving} />
+          </div>
+          <div>
+            <Label className="text-xs">Espesor int. (m)</Label>
+            <Input type="number" step="0.01" value={intThick} onChange={e => setIntThick(e.target.value)} disabled={saving} />
+          </div>
+          <div>
+            <Label className="text-xs">Tipo tejado</Label>
+            <Select value={roofType} onValueChange={setRoofType}>
+              <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="dos_aguas">Dos aguas</SelectItem>
+                <SelectItem value="cuatro_aguas">Cuatro aguas</SelectItem>
+                <SelectItem value="plana">Plana</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label className="text-xs">Alero (m)</Label>
+            <Input type="number" step="0.1" value={overhang} onChange={e => setOverhang(e.target.value)} disabled={saving} />
+          </div>
+          <div>
+            <Label className="text-xs">Pendiente (%)</Label>
+            <Input type="number" step="1" value={slope} onChange={e => setSlope(e.target.value)} disabled={saving} />
+          </div>
+        </div>
+        <Button onClick={handleSave} disabled={saving || !hasChanges} className="w-full mt-4" size="sm">
+          <Save className="h-4 w-4 mr-1" /> Guardar parámetros
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
 export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
   const {
     floorPlan, rooms, floors, loading, saving,
     addRoom, updateRoom, updateWall, deleteRoom, duplicateRoom,
-    addOpening, deleteOpening,
+    addOpening, deleteOpening, updateFloorPlan,
     classifyPerimeterWalls, syncToMeasurements, getPlanData, refetch,
     generateFromTemplate, deleteFloorPlan, groupRooms, ungroupRooms,
   } = useFloorPlan(budgetId);
@@ -74,6 +160,7 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
   const [newSpaceName, setNewSpaceName] = useState('');
   const [newSpaceWidth, setNewSpaceWidth] = useState(4);
   const [newSpaceLength, setNewSpaceLength] = useState(3);
+  const [showSettings, setShowSettings] = useState(false);
 
   // Wizard state
   const [planConfig, setPlanConfig] = useState({
@@ -348,6 +435,13 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
         </Tabs>
 
         <div className="flex items-center gap-2 flex-wrap">
+          <Button
+            variant={showSettings ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setShowSettings(!showSettings)}
+          >
+            <Settings2 className="h-4 w-4 mr-1" /> Parámetros
+          </Button>
           <Button variant="outline" size="sm" onClick={classifyPerimeterWalls} disabled={saving || rooms.length === 0}
             title="Clasificar paredes del perímetro como externas">
             <Wand2 className="h-4 w-4 mr-1" /> Auto ext.
@@ -367,6 +461,16 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
           </Button>
         </div>
       </div>
+
+      {/* Settings panel */}
+      {showSettings && planData && (
+        <FloorPlanSettingsPanel
+          planData={planData}
+          onUpdate={updateFloorPlan}
+          saving={saving}
+          onClose={() => setShowSettings(false)}
+        />
+      )}
 
       {/* Content */}
       {viewTab === 'cuadricula' && (

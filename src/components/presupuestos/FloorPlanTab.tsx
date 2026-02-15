@@ -151,6 +151,7 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
     addOpening, deleteOpening, updateFloorPlan,
     classifyPerimeterWalls, syncToMeasurements, getPlanData, refetch,
     generateFromTemplate, deleteFloorPlan, groupRooms, ungroupRooms,
+    undoLastChange, undoCount,
   } = useFloorPlan(budgetId);
 
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
@@ -484,6 +485,8 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
               onAddRoom={addRoom}
               onGroupRooms={groupRooms}
               onUngroupRooms={ungroupRooms}
+              onUndo={undoLastChange}
+              undoCount={undoCount}
               saving={saving}
             />
           </div>

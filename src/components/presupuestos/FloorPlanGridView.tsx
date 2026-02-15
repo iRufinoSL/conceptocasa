@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Plus, Link, Unlink } from 'lucide-react';
+import { Plus, Link, Unlink, Undo2 } from 'lucide-react';
 import type { RoomData, FloorLevel, WallType } from '@/lib/floor-plan-calculations';
 import { autoClassifyWalls, isExteriorType, isInvisibleType, isCompartidaType } from '@/lib/floor-plan-calculations';
 
@@ -17,6 +17,8 @@ interface FloorPlanGridViewProps {
   onAddRoom?: (name: string, width: number, length: number, floorId?: string, gridCol?: number, gridRow?: number) => Promise<void>;
   onGroupRooms?: (roomIds: string[], groupName: string) => Promise<void>;
   onUngroupRooms?: (groupId: string) => Promise<void>;
+  onUndo?: () => Promise<void>;
+  undoCount?: number;
   saving?: boolean;
 }
 
@@ -90,7 +92,7 @@ const getGroupColor = (groupId: string): string => {
   return `hsl(${hue}, 70%, 85%)`;
 };
 
-export function FloorPlanGridView({ rooms, floors, selectedRoomId, onSelectRoom, onAddRoom, onGroupRooms, onUngroupRooms, saving = false }: FloorPlanGridViewProps) {
+export function FloorPlanGridView({ rooms, floors, selectedRoomId, onSelectRoom, onAddRoom, onGroupRooms, onUngroupRooms, onUndo, undoCount = 0, saving = false }: FloorPlanGridViewProps) {
   const [activeFloorId, setActiveFloorId] = useState<string>(floors[0]?.id || '_none_');
   const [showAddForm, setShowAddForm] = useState(false);
   const [newName, setNewName] = useState('');
@@ -415,6 +417,11 @@ export function FloorPlanGridView({ rooms, floors, selectedRoomId, onSelectRoom,
           {onAddRoom && (
             <Button variant="outline" size="sm" onClick={() => setShowAddForm(!showAddForm)} disabled={saving}>
               <Plus className="h-4 w-4 mr-1" /> Nuevo Espacio
+            </Button>
+          )}
+          {onUndo && undoCount > 0 && (
+            <Button variant="outline" size="sm" onClick={onUndo} disabled={saving}>
+              <Undo2 className="h-4 w-4 mr-1" /> Deshacer ({undoCount})
             </Button>
           )}
         </div>

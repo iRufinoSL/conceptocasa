@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import type { FloorPlanData, RoomData, WallData, OpeningData, WallType, FloorLevel } from '@/lib/floor-plan-calculations';
@@ -633,13 +633,46 @@ export function useFloorPlan(budgetId: string) {
     }
   };
 
+  // --- Undo system: up to 3 snapshots ---
+  const undoStackRef = useRef<Array<Array<{ id: string; posX: number; posY: number; width: number; length: number }>>>([]);
+  const [undoCount, setUndoCount] = useState(0);
+
+  const pushUndoSnapshot = () => {
+    const snapshot = rooms.map(r => ({ id: r.id, posX: r.posX, posY: r.posY, width: r.width, length: r.length }));
+    undoStackRef.current = [...undoStackRef.current.slice(-2), snapshot];
+    setUndoCount(undoStackRef.current.length);
+  };
+
+  const undoLastChange = async () => {
+    if (undoStackRef.current.length === 0) return;
+    const snapshot = undoStackRef.current.pop()!;
+    setUndoCount(undoStackRef.current.length);
+    setSaving(true);
+    try {
+      for (const s of snapshot) {
+        await supabase
+          .from('budget_floor_plan_rooms')
+          .update({ pos_x: s.posX, pos_y: s.posY, width: s.width, length: s.length } as any)
+          .eq('id', s.id);
+      }
+      await fetchAll();
+      toast.success('Cambio deshecho');
+    } catch (err) {
+      console.error('Error undoing:', err);
+      toast.error('Error al deshacer');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   // Duplicate a room with all its characteristics (walls, openings)
-  // direction: 'right' places copy to the right, 'down' places it below
+  // direction: 'right' places copy 1 grid cell away, displacing any occupant
   // autoGroup: if true, groups copy with the original automatically
   const duplicateRoom = async (roomId: string, direction: 'right' | 'down' = 'right', autoGroup = true) => {
     if (!floorPlan) return;
     const sourceRoom = rooms.find(r => r.id === roomId);
     if (!sourceRoom) return;
+    pushUndoSnapshot();
     setSaving(true);
     try {
       // Generate new name
@@ -647,9 +680,32 @@ export function useFloorPlan(budgetId: string) {
       const existingCopies = rooms.filter(r => r.name.startsWith(baseName) && r.id !== roomId).length;
       const newName = `${baseName} (copia${existingCopies > 0 ? ` ${existingCopies + 1}` : ''})`;
 
-      // Offset position based on direction
+      // Calculate target position: 1 grid cell away (use source dimensions as step)
       const offsetX = direction === 'right' ? sourceRoom.width : 0;
       const offsetY = direction === 'down' ? sourceRoom.length : 0;
+      const targetPosX = Math.round((sourceRoom.posX + offsetX) * 100) / 100;
+      const targetPosY = Math.round((sourceRoom.posY + offsetY) * 100) / 100;
+
+      // Check for occupant at the target position and displace it
+      const THRESHOLD = 0.15;
+      const sameFloorRooms = rooms.filter(r => (r.floorId || null) === (sourceRoom.floorId || null));
+      const occupant = sameFloorRooms.find(r =>
+        r.id !== roomId &&
+        Math.abs(r.posX - targetPosX) < THRESHOLD &&
+        Math.abs(r.posY - targetPosY) < THRESHOLD
+      );
+      if (occupant) {
+        // Shift occupant 1 cell further in the same direction
+        const shiftX = direction === 'right' ? occupant.width : 0;
+        const shiftY = direction === 'down' ? occupant.length : 0;
+        await supabase
+          .from('budget_floor_plan_rooms')
+          .update({
+            pos_x: Math.round((occupant.posX + shiftX) * 100) / 100,
+            pos_y: Math.round((occupant.posY + shiftY) * 100) / 100,
+          } as any)
+          .eq('id', occupant.id);
+      }
 
       // Determine group: use existing groupId or create a new one
       const groupId = sourceRoom.groupId || crypto.randomUUID();
@@ -661,8 +717,8 @@ export function useFloorPlan(budgetId: string) {
         width: sourceRoom.width,
         length: sourceRoom.length,
         height: sourceRoom.height || null,
-        pos_x: Math.round((sourceRoom.posX + offsetX) * 100) / 100,
-        pos_y: Math.round((sourceRoom.posY + offsetY) * 100) / 100,
+        pos_x: targetPosX,
+        pos_y: targetPosY,
         order_index: rooms.length,
         has_floor: sourceRoom.hasFloor !== false,
         has_ceiling: sourceRoom.hasCeiling !== false,
@@ -1014,6 +1070,8 @@ export function useFloorPlan(budgetId: string) {
     generateFromTemplate,
     groupRooms,
     ungroupRooms,
+    undoLastChange,
+    undoCount,
     refetch: fetchAll,
   };
 }

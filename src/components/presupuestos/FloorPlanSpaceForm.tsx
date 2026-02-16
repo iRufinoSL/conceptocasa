@@ -18,12 +18,12 @@ interface FloorPlanSpaceFormProps {
   coordCol?: number;
   coordRow?: number;
   floorName?: string;
-  onUpdateRoom: (data: { name?: string; width?: number; length?: number; hasFloor?: boolean; hasCeiling?: boolean }) => void;
-  onUpdateWall: (wallId: string, data: { wallType?: WallType }) => void;
+  onUpdateRoom: (data: { name?: string; width?: number; length?: number; hasFloor?: boolean; hasCeiling?: boolean }) => void | Promise<void>;
+  onUpdateWall: (wallId: string, data: { wallType?: WallType }) => void | Promise<void>;
   onAddOpening?: (wallId: string, type: string, width: number, height: number, sillHeight?: number) => Promise<void>;
   onDeleteOpening?: (openingId: string) => Promise<void>;
   onDuplicateRoom?: (direction: 'right' | 'down') => Promise<void>;
-  onChangeCoordinate?: (col: number, row: number) => void;
+  onChangeCoordinate?: (col: number, row: number) => void | Promise<void>;
   onUngroupRoom?: (groupId: string) => void;
   onDeleteRoom: () => void;
   saving: boolean;
@@ -98,6 +98,11 @@ export function FloorPlanSpaceForm({ room, allRooms, planData, coordCol, coordRo
   const hasChanges = roomChanged || coordChanged || wallsChanged;
 
   const handleSave = async () => {
+    // Save coordinate changes FIRST (most important for unplaced rooms)
+    if (coordChanged && onChangeCoordinate && parsedCol > 0 && parsedRow > 0) {
+      await onChangeCoordinate(parsedCol, parsedRow);
+    }
+
     // Save room property changes
     if (roomChanged) {
       const updates: Record<string, unknown> = {};
@@ -106,21 +111,16 @@ export function FloorPlanSpaceForm({ room, allRooms, planData, coordCol, coordRo
       if (parsedLength !== room.length) updates.length = parsedLength;
       if (localHasFloor !== (room.hasFloor !== false)) updates.hasFloor = localHasFloor;
       if (localHasCeiling !== (room.hasCeiling !== false)) updates.hasCeiling = localHasCeiling;
-      onUpdateRoom(updates as { name?: string; width?: number; length?: number; hasFloor?: boolean; hasCeiling?: boolean });
+      await onUpdateRoom(updates as { name?: string; width?: number; length?: number; hasFloor?: boolean; hasCeiling?: boolean });
     }
 
     // Save wall changes
     if (wallsChanged) {
       for (const wall of room.walls) {
         if (localWalls[wall.id] !== wall.wallType) {
-          onUpdateWall(wall.id, { wallType: localWalls[wall.id] });
+          await onUpdateWall(wall.id, { wallType: localWalls[wall.id] });
         }
       }
-    }
-
-    // Save coordinate changes
-    if (coordChanged && onChangeCoordinate && parsedCol > 0 && parsedRow > 0) {
-      onChangeCoordinate(parsedCol, parsedRow);
     }
   };
 

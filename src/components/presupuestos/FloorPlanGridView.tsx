@@ -172,9 +172,9 @@ export function FloorPlanGridView({
   const currentFloorId = effectiveFloors.find(f => f.id === activeFloorId) ? activeFloorId : effectiveFloors[0]?.id;
   const currentFloorRooms = floors.length > 0 ? (roomsByFloor.get(currentFloorId) || []) : rooms;
 
-  // Rooms placed on the grid (posX > 0 or posY > 0 or explicitly placed)
+  // Rooms placed on the grid (posX >= 0 and posY >= 0)
   const placedRooms = useMemo(() => {
-    return currentFloorRooms.filter(r => r.width > 0 && r.length > 0);
+    return currentFloorRooms.filter(r => r.width > 0 && r.length > 0 && r.posX >= 0 && r.posY >= 0);
   }, [currentFloorRooms]);
 
   // Build a cell occupation map: key = "col,row" → roomId
@@ -183,8 +183,8 @@ export function FloorPlanGridView({
     placedRooms.forEach(r => {
       const startCol = Math.round(r.posX) + 1;
       const startRow = Math.round(r.posY) + 1;
-      const spanCols = Math.round(r.width);
-      const spanRows = Math.round(r.length);
+      const spanCols = Math.max(1, Math.round(r.width));
+      const spanRows = Math.max(1, Math.round(r.length));
       for (let dc = 0; dc < spanCols; dc++) {
         for (let dr = 0; dr < spanRows; dr++) {
           const c = startCol + dc;
@@ -198,16 +198,10 @@ export function FloorPlanGridView({
     return map;
   }, [placedRooms, totalCols, totalRows]);
 
-  // Unplaced rooms: rooms with posX=0 and posY=0 and no cells in the grid
-  // Actually, we show ALL rooms in header but mark placed ones
+  // Unplaced rooms: posX < 0 means "not yet positioned on the grid"
   const unplacedRooms = useMemo(() => {
-    // A room is "unplaced" if it's at (0,0) and the cell A1 is not explicitly assigned to it,
-    // or more practically: it shows in the header until the user assigns a coordinate.
-    // For simplicity: rooms not occupying any grid cell are unplaced
-    const placedIds = new Set<string>();
-    cellMap.forEach(v => placedIds.add(v.roomId));
-    return currentFloorRooms.filter(r => !placedIds.has(r.id));
-  }, [currentFloorRooms, cellMap]);
+    return currentFloorRooms.filter(r => r.posX < 0 || r.posY < 0);
+  }, [currentFloorRooms]);
 
   const currentFloorGroups = useMemo(() => {
     const groups = new Map<string, { name: string; rooms: RoomData[] }>();

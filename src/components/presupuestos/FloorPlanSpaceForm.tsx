@@ -9,6 +9,7 @@ import { Switch } from '@/components/ui/switch';
 import { Trash2, Save, Unlink, Plus, DoorOpen, Copy, ArrowRight, ArrowDown, ChevronDown, ChevronRight } from 'lucide-react';
 import type { RoomData, WallType, FloorPlanData, OpeningData } from '@/lib/floor-plan-calculations';
 import { OPENING_PRESETS } from '@/lib/floor-plan-calculations';
+import { formatCoord, parseCoord } from './FloorPlanGridView';
 
 interface FloorPlanSpaceFormProps {
   room: RoomData;
@@ -46,8 +47,7 @@ export function FloorPlanSpaceForm({ room, allRooms, planData, coordCol, coordRo
   const [localLength, setLocalLength] = useState(String(room.length));
   const [localHasFloor, setLocalHasFloor] = useState(room.hasFloor !== false);
   const [localHasCeiling, setLocalHasCeiling] = useState(room.hasCeiling !== false);
-  const [localCol, setLocalCol] = useState(String(coordCol || 1));
-  const [localRow, setLocalRow] = useState(String(coordRow || 1));
+  const [localCoord, setLocalCoord] = useState(formatCoord(coordCol || 1, coordRow || 1));
   const [localWalls, setLocalWalls] = useState<Record<string, WallType>>(() => {
     const map: Record<string, WallType> = {};
     room.walls.forEach(w => { map[w.id] = w.wallType; });
@@ -62,8 +62,7 @@ export function FloorPlanSpaceForm({ room, allRooms, planData, coordCol, coordRo
     setLocalLength(String(room.length));
     setLocalHasFloor(room.hasFloor !== false);
     setLocalHasCeiling(room.hasCeiling !== false);
-    setLocalCol(String(coordCol || 1));
-    setLocalRow(String(coordRow || 1));
+    setLocalCoord(formatCoord(coordCol || 1, coordRow || 1));
     const map: Record<string, WallType> = {};
     room.walls.forEach(w => { map[w.id] = w.wallType; });
     setLocalWalls(map);
@@ -72,8 +71,9 @@ export function FloorPlanSpaceForm({ room, allRooms, planData, coordCol, coordRo
 
   const parsedWidth = parseFloat(localWidth) || room.width;
   const parsedLength = parseFloat(localLength) || room.length;
-  const parsedCol = parseInt(localCol) || 1;
-  const parsedRow = parseInt(localRow) || 1;
+  const parsedCoord = parseCoord(localCoord);
+  const parsedCol = parsedCoord?.col || 1;
+  const parsedRow = parsedCoord?.row || 1;
   const m2 = parsedWidth * parsedLength;
 
   // Group info
@@ -137,7 +137,7 @@ export function FloorPlanSpaceForm({ room, allRooms, planData, coordCol, coordRo
           <div className="flex items-center gap-2 mt-1">
             <Badge variant="secondary" className="text-[10px]">{floorName}</Badge>
             {coordCol && coordRow && (
-              <Badge variant="outline" className="text-[10px]">Col {coordCol} · Fila {coordRow}</Badge>
+              <Badge variant="outline" className="text-[10px] font-mono">{formatCoord(coordCol, coordRow)}</Badge>
             )}
           </div>
         )}
@@ -153,40 +153,21 @@ export function FloorPlanSpaceForm({ room, allRooms, planData, coordCol, coordRo
           />
         </div>
 
-        {/* Coordinate - plain text inputs without spinners */}
+        {/* Coordinate - letter+number format (e.g. A1, B3) */}
         <div>
-          <Label className="text-xs font-semibold">Coordenadas</Label>
+          <Label className="text-xs font-semibold">Coordenada (ej: A1, C5)</Label>
           <div className="flex items-end gap-2 mt-1">
-            <div>
-              <Label className="text-[10px] text-muted-foreground">Columna</Label>
-              <input
-                type="text"
-                inputMode="numeric"
-                pattern="[0-9]*"
-                value={localCol}
-                onChange={e => {
-                  const v = e.target.value.replace(/[^0-9]/g, '');
-                  setLocalCol(v);
-                }}
-                disabled={saving}
-                className="flex h-8 w-16 rounded-md border border-input bg-background px-3 py-1 text-sm text-center ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-              />
-            </div>
-            <div>
-              <Label className="text-[10px] text-muted-foreground">Fila</Label>
-              <input
-                type="text"
-                inputMode="numeric"
-                pattern="[0-9]*"
-                value={localRow}
-                onChange={e => {
-                  const v = e.target.value.replace(/[^0-9]/g, '');
-                  setLocalRow(v);
-                }}
-                disabled={saving}
-                className="flex h-8 w-16 rounded-md border border-input bg-background px-3 py-1 text-sm text-center ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-              />
-            </div>
+            <input
+              type="text"
+              value={localCoord}
+              onChange={e => setLocalCoord(e.target.value.toUpperCase())}
+              placeholder="A1"
+              disabled={saving}
+              className="flex h-8 w-20 rounded-md border border-input bg-background px-3 py-1 text-sm text-center font-mono ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+            />
+            <span className="text-[10px] text-muted-foreground pb-1">
+              Actual: {formatCoord(coordCol || 1, coordRow || 1)}
+            </span>
           </div>
         </div>
 

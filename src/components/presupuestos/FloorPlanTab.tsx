@@ -12,7 +12,7 @@ import { useFloorPlan } from '@/hooks/useFloorPlan';
 import { FloorPlanGridView } from './FloorPlanGridView';
 import { FloorPlanSpaceForm } from './FloorPlanSpaceForm';
 import { FloorPlanSummaryView } from './FloorPlanSummary';
-import { deriveGridPositions, computeGridRuler } from './FloorPlanGridView';
+import { deriveGridPositions, computeGridRuler, formatCoord, parseCoord, colToLetter } from './FloorPlanGridView';
 import { calculateFloorPlanSummary } from '@/lib/floor-plan-calculations';
 import type { FloorPlanData } from '@/lib/floor-plan-calculations';
 
@@ -38,13 +38,14 @@ interface FloorDef {
 }
 
 const DEFAULT_SPACE_TYPES: SpaceTypeDef[] = [
-  { type: 'salon', name: 'Salón', defaultM2: 30, qty: 1, m2: 30 },
+  { type: 'salon', name: 'Salón grande', defaultM2: 30, qty: 1, m2: 30 },
   { type: 'hab_peq', name: 'Hab. pequeña', defaultM2: 9, qty: 2, m2: 9 },
   { type: 'hab_med', name: 'Hab. mediana', defaultM2: 12, qty: 0, m2: 12 },
-  { type: 'hab_gra', name: 'Hab. grande', defaultM2: 15, qty: 0, m2: 15 },
+  { type: 'hab_gra', name: 'Hab. grande', defaultM2: 20, qty: 0, m2: 20 },
   { type: 'bano_peq', name: 'Baño pequeño', defaultM2: 4, qty: 1, m2: 4 },
   { type: 'bano_med', name: 'Baño mediano', defaultM2: 6, qty: 0, m2: 6 },
-  { type: 'bano_gra', name: 'Baño grande', defaultM2: 9, qty: 0, m2: 9 },
+  { type: 'bano_gra', name: 'Baño grande', defaultM2: 8, qty: 0, m2: 8 },
+  { type: 'cocina_peq', name: 'Cocina pequeña', defaultM2: 8, qty: 1, m2: 8 },
   { type: 'porche', name: 'Porche', defaultM2: 10, qty: 0, m2: 10 },
 ];
 
@@ -480,6 +481,8 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
             <FloorPlanGridView
               rooms={rooms}
               floors={floors}
+              planWidth={planData?.width || 12}
+              planLength={planData?.length || 9}
               selectedRoomId={selectedRoomId}
               onSelectRoom={setSelectedRoomId}
               onAddRoom={addRoom}
@@ -492,60 +495,18 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
           </div>
           <div>
             {selectedRoom && planData ? (() => {
-              // Compute coordinate for selected room
-              const roomFloorId = selectedRoom.floorId || '_none_';
-              const floorRooms = rooms.filter(r => (r.floorId || '_none_') === roomFloorId);
-              const positioned = deriveGridPositions(floorRooms);
-              const pos = positioned.find(p => p.room.id === selectedRoom.id);
-              const coordCol = pos?.gridCol;
-              const coordRow = pos?.gridRow;
+              // Compute coordinate for selected room (1m grid: posX+1 = col, posY+1 = row)
+              const coordCol = Math.round(selectedRoom.posX) + 1;
+              const coordRow = Math.round(selectedRoom.posY) + 1;
               const floorObj = floors.find(f => f.id === selectedRoom.floorId);
               const floorName = floorObj?.name;
 
               const handleChangeCoordinate = async (targetCol: number, targetRow: number) => {
-                // Check if there's a room at the target position
-                const occupant = positioned.find(p => p.gridCol === targetCol && p.gridRow === targetRow && p.room.id !== selectedRoom.id);
-                
-                if (occupant) {
-                  // Swap: exchange posX/posY directly between the two rooms
-                  const oldPosX = selectedRoom.posX;
-                  const oldPosY = selectedRoom.posY;
-                  await updateRoom(selectedRoom.id, { posX: occupant.room.posX, posY: occupant.room.posY });
-                  await updateRoom(occupant.room.id, { posX: oldPosX, posY: oldPosY });
-                } else {
-                  // No occupant: calculate target position from existing rooms in that col/row
-                  const roomInTargetCol = positioned.find(p => p.gridCol === targetCol);
-                  const roomInTargetRow = positioned.find(p => p.gridRow === targetRow);
-                  
-                  let posX: number;
-                  let posY: number;
-                  
-                  if (roomInTargetCol) {
-                    posX = roomInTargetCol.room.posX;
-                  } else {
-                    // New column: accumulate widths from ruler
-                    const { colWidths } = computeGridRuler(positioned);
-                    posX = 0;
-                    for (let c = 1; c < targetCol; c++) {
-                      posX += (c <= colWidths.length ? colWidths[c - 1] : selectedRoom.width);
-                    }
-                  }
-                  
-                  if (roomInTargetRow) {
-                    posY = roomInTargetRow.room.posY;
-                  } else {
-                    const { rowHeights } = computeGridRuler(positioned);
-                    posY = 0;
-                    for (let r = 1; r < targetRow; r++) {
-                      posY += (r <= rowHeights.length ? rowHeights[r - 1] : selectedRoom.length);
-                    }
-                  }
-                  
-                  await updateRoom(selectedRoom.id, { posX: Math.round(posX * 100) / 100, posY: Math.round(posY * 100) / 100 });
-                }
-                
+                const posX = targetCol - 1;
+                const posY = targetRow - 1;
+                await updateRoom(selectedRoom.id, { posX: Math.round(posX * 100) / 100, posY: Math.round(posY * 100) / 100 });
                 await refetch();
-                toast.success(`${selectedRoom.name} movido a Col ${targetCol} · Fila ${targetRow}`);
+                toast.success(`${selectedRoom.name} movido a ${formatCoord(targetCol, targetRow)}`);
               };
 
               return (

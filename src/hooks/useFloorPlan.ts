@@ -50,28 +50,49 @@ interface DbOpening {
   sill_height: number;
 }
 
+/** Map space m2 to predefined width×length */
+function getPresetDimensions(m2: number): { width: number; length: number } {
+  // Use known presets
+  const presets: Array<{ m2: number; width: number; length: number }> = [
+    { m2: 9, width: 3, length: 3 },
+    { m2: 12, width: 4, length: 3 },
+    { m2: 20, width: 5, length: 4 },
+    { m2: 4, width: 2, length: 2 },
+    { m2: 6, width: 3, length: 2 },
+    { m2: 8, width: 4, length: 2 },
+    { m2: 30, width: 6, length: 5 },
+    { m2: 10, width: 5, length: 2 },
+    { m2: 15, width: 5, length: 3 },
+  ];
+  const match = presets.find(p => p.m2 === m2);
+  if (match) return { width: match.width, length: match.length };
+  // Fallback: closest rectangle with integer sides
+  const side = Math.ceil(Math.sqrt(m2));
+  const length = Math.max(1, Math.ceil(m2 / side));
+  return { width: side, length };
+}
+
 function calcGridPositions(spaces: Array<{ m2: number; gridCol: number; gridRow: number }>) {
-  const colWidths = new Map<number, number>();
-  spaces.forEach(s => {
-    const side = Math.sqrt(s.m2);
-    colWidths.set(s.gridCol, Math.max(colWidths.get(s.gridCol) || 0, side));
-  });
+  // For 1m grid: place spaces sequentially, tracking cumulative posX/posY
+  let posX = 0;
+  let posY = 0;
+  let maxHeightInRow = 0;
+  const maxColsPerRow = 4;
+  let colInRow = 0;
+
   return spaces.map(s => {
-    const colWidth = colWidths.get(s.gridCol) || Math.sqrt(s.m2);
-    const length = Math.round((s.m2 / colWidth) * 100) / 100;
-    let posX = 0;
-    for (let c = 1; c < s.gridCol; c++) posX += colWidths.get(c) || 0;
-    let posY = 0;
-    spaces
-      .filter(o => o.gridCol === s.gridCol && o.gridRow < s.gridRow)
-      .sort((a, b) => a.gridRow - b.gridRow)
-      .forEach(o => { posY += o.m2 / (colWidths.get(o.gridCol) || Math.sqrt(o.m2)); });
-    return {
-      width: Math.round(colWidth * 100) / 100,
-      length,
-      posX: Math.round(posX * 100) / 100,
-      posY: Math.round(posY * 100) / 100,
-    };
+    const dims = getPresetDimensions(s.m2);
+    if (colInRow >= maxColsPerRow) {
+      posX = 0;
+      posY += maxHeightInRow;
+      maxHeightInRow = 0;
+      colInRow = 0;
+    }
+    const result = { width: dims.width, length: dims.length, posX, posY };
+    posX += dims.width;
+    maxHeightInRow = Math.max(maxHeightInRow, dims.length);
+    colInRow++;
+    return result;
   });
 }
 
@@ -286,23 +307,14 @@ export function useFloorPlan(budgetId: string) {
     if (!floorPlan) return;
     setSaving(true);
     try {
-      // Calculate position based on grid coordinate or auto-place
+      // Calculate position based on grid coordinate (1m grid: posX = col-1, posY = row-1)
       const floorRooms = floorId ? rooms.filter(r => r.floorId === floorId) : rooms;
       let posX = 0;
       let posY = 0;
 
       if (gridCol && gridRow && gridCol > 0 && gridRow > 0) {
-        // Import deriveGridPositions to compute positions from existing layout
-        const { deriveGridPositions, computeGridRuler } = await import('@/components/presupuestos/FloorPlanGridView');
-        const positioned = deriveGridPositions(floorRooms);
-        const { colWidths, rowHeights } = computeGridRuler(positioned);
-        
-        for (let c = 1; c < gridCol; c++) {
-          posX += (c <= colWidths.length ? colWidths[c - 1] : width);
-        }
-        for (let r = 1; r < gridRow; r++) {
-          posY += (r <= rowHeights.length ? rowHeights[r - 1] : length);
-        }
+        posX = gridCol - 1;
+        posY = gridRow - 1;
       } else {
         const maxX = floorRooms.reduce((max, r) => Math.max(max, r.posX + r.width), 0);
         posX = floorRooms.length > 0 ? maxX : 0;
@@ -680,55 +692,30 @@ export function useFloorPlan(budgetId: string) {
       const existingCopies = rooms.filter(r => r.name.startsWith(baseName) && r.id !== roomId).length;
       const newName = `${baseName} (copia${existingCopies > 0 ? ` ${existingCopies + 1}` : ''})`;
 
-      // Find adjacent grid position using deriveGridPositions
+      // 1m grid: posX/posY are in meters, col = posX + width, row = posY + length
       const sameFloorRooms = rooms.filter(r => (r.floorId || null) === (sourceRoom.floorId || null));
-      
-      // Import grid logic inline: cluster X and Y positions
-      const THRESHOLD = 0.15;
-      const xVals = [...new Set(sameFloorRooms.map(r => r.posX))].sort((a, b) => a - b);
-      const xClusters: number[] = [];
-      xVals.forEach(x => { if (!xClusters.some(c => Math.abs(c - x) < THRESHOLD)) xClusters.push(x); });
-      xClusters.sort((a, b) => a - b);
-
-      const yVals = [...new Set(sameFloorRooms.map(r => r.posY))].sort((a, b) => a - b);
-      const yClusters: number[] = [];
-      yVals.forEach(y => { if (!yClusters.some(c => Math.abs(c - y) < THRESHOLD)) yClusters.push(y); });
-      yClusters.sort((a, b) => a - b);
-
-      const sourceColIdx = xClusters.findIndex(c => Math.abs(c - sourceRoom.posX) < THRESHOLD);
-      const sourceRowIdx = yClusters.findIndex(c => Math.abs(c - sourceRoom.posY) < THRESHOLD);
 
       let targetPosX: number;
       let targetPosY: number;
 
       if (direction === 'right') {
-        // Place at the next column's X, or create one adjacent using source width
-        if (sourceColIdx + 1 < xClusters.length) {
-          targetPosX = xClusters[sourceColIdx + 1];
-        } else {
-          targetPosX = Math.round((sourceRoom.posX + sourceRoom.width) * 100) / 100;
-        }
-        targetPosY = sourceRoom.posY;
+        targetPosX = Math.round(sourceRoom.posX + sourceRoom.width);
+        targetPosY = Math.round(sourceRoom.posY);
       } else {
-        // Place at the next row's Y, or create one adjacent using source length
-        targetPosX = sourceRoom.posX;
-        if (sourceRowIdx + 1 < yClusters.length) {
-          targetPosY = yClusters[sourceRowIdx + 1];
-        } else {
-          targetPosY = Math.round((sourceRoom.posY + sourceRoom.length) * 100) / 100;
-        }
+        targetPosX = Math.round(sourceRoom.posX);
+        targetPosY = Math.round(sourceRoom.posY + sourceRoom.length);
       }
 
       // Check for occupant at the target position and displace it
+      const THRESHOLD = 0.5;
       const occupant = sameFloorRooms.find(r =>
         r.id !== roomId &&
         Math.abs(r.posX - targetPosX) < THRESHOLD &&
         Math.abs(r.posY - targetPosY) < THRESHOLD
       );
       if (occupant) {
-        // Shift occupant 1 cell further in the same direction
-        const shiftX = direction === 'right' ? occupant.width : 0;
-        const shiftY = direction === 'down' ? occupant.length : 0;
+        const shiftX = direction === 'right' ? Math.round(occupant.width) : 0;
+        const shiftY = direction === 'down' ? Math.round(occupant.length) : 0;
         await supabase
           .from('budget_floor_plan_rooms')
           .update({

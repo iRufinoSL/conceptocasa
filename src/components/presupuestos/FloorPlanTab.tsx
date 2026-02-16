@@ -256,7 +256,7 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
       });
 
       // All spaces start unplaced (gridCol=0, gridRow=0) → they appear in the staging header
-      return { name: f.name, level: f.level, spaces: expandedSpaces };
+      return { name: f.name, level: f.level, m2: f.m2, spaces: expandedSpaces };
     });
 
     await generateFromTemplate(planConfig, defs);

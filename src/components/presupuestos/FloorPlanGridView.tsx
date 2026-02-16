@@ -152,8 +152,6 @@ export function FloorPlanGridView({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [groupNameInput, setGroupNameInput] = useState('');
 
-  const totalCols = Math.max(1, Math.ceil(planWidth));
-  const totalRows = Math.max(1, Math.ceil(planLength));
   const CELL_SIZE = 48; // px per 1m cell
 
   const wallClassification = useMemo(() => autoClassifyWalls(rooms), [rooms]);
@@ -177,6 +175,21 @@ export function FloorPlanGridView({
     return currentFloorRooms.filter(r => r.width > 0 && r.length > 0 && r.posX >= 0 && r.posY >= 0);
   }, [currentFloorRooms]);
 
+  // Auto-expand grid to fit all placed rooms beyond the initial plan dimensions
+  const totalCols = useMemo(() => {
+    const baseCols = Math.max(1, Math.ceil(planWidth));
+    if (placedRooms.length === 0) return baseCols;
+    const maxCol = Math.max(...placedRooms.map(r => Math.round(r.posX) + Math.max(1, Math.round(r.width))));
+    return Math.max(baseCols, maxCol);
+  }, [planWidth, placedRooms]);
+
+  const totalRows = useMemo(() => {
+    const baseRows = Math.max(1, Math.ceil(planLength));
+    if (placedRooms.length === 0) return baseRows;
+    const maxRow = Math.max(...placedRooms.map(r => Math.round(r.posY) + Math.max(1, Math.round(r.length))));
+    return Math.max(baseRows, maxRow);
+  }, [planLength, placedRooms]);
+
   // Build a cell occupation map: key = "col,row" → roomId
   const cellMap = useMemo(() => {
     const map = new Map<string, { roomId: string; isOrigin: boolean }>();
@@ -189,9 +202,7 @@ export function FloorPlanGridView({
         for (let dr = 0; dr < spanRows; dr++) {
           const c = startCol + dc;
           const row = startRow + dr;
-          if (c >= 1 && c <= totalCols && row >= 1 && row <= totalRows) {
-            map.set(`${c},${row}`, { roomId: r.id, isOrigin: dc === 0 && dr === 0 });
-          }
+          map.set(`${c},${row}`, { roomId: r.id, isOrigin: dc === 0 && dr === 0 });
         }
       }
     });

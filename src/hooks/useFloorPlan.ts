@@ -930,6 +930,7 @@ export function useFloorPlan(budgetId: string) {
     floorDefs: Array<{
       name: string;
       level: string;
+      m2: number;
       spaces: Array<{ name: string; m2: number; gridCol: number; gridRow: number }>;
     }>
   ) => {
@@ -941,15 +942,18 @@ export function useFloorPlan(budgetId: string) {
         await supabase.from('budget_floor_plans').delete().eq('id', floorPlan.id);
       }
 
-      const totalM2 = Math.max(...floorDefs.map(f => f.spaces.reduce((s, sp) => s + sp.m2, 0)), 1);
-      const planSide = Math.round(Math.sqrt(totalM2) * 10) / 10;
+      // Use the floor m2 value directly for plan dimensions
+      const maxFloorM2 = Math.max(...floorDefs.map(f => f.m2 || f.spaces.reduce((s, sp) => s + sp.m2, 0)), 1);
+      // Create a rectangular grid: use reasonable aspect ratio (e.g. 1.2:1)
+      const planWidth = Math.ceil(Math.sqrt(maxFloorM2 * 1.2));
+      const planLength = Math.ceil(maxFloorM2 / planWidth);
 
       const { data: fp, error: fpError } = await supabase
         .from('budget_floor_plans')
         .insert({
           budget_id: budgetId,
-          width: planSide,
-          length: Math.round((totalM2 / planSide) * 10) / 10,
+          width: planWidth,
+          length: planLength,
           default_height: planConfig.defaultHeight,
           external_wall_thickness: planConfig.externalWallThickness,
           internal_wall_thickness: planConfig.internalWallThickness,

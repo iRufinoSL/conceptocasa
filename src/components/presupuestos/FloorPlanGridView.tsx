@@ -12,6 +12,8 @@ import { autoClassifyWalls, isExteriorType, isInvisibleType, isCompartidaType } 
 interface FloorPlanGridViewProps {
   rooms: RoomData[];
   floors: FloorLevel[];
+  planWidth: number;   // plan width in meters
+  planLength: number;  // plan length in meters
   selectedRoomId: string | null;
   onSelectRoom: (id: string | null) => void;
   onAddRoom?: (name: string, width: number, length: number, floorId?: string, gridCol?: number, gridRow?: number) => Promise<void>;
@@ -30,23 +32,45 @@ export interface PositionedRoom {
 
 const THRESHOLD = 0.15;
 
+/** Convert column index (1-based) to letter(s): 1→A, 2→B, ..., 27→AA */
+export function colToLetter(col: number): string {
+  let s = '';
+  let c = col;
+  while (c > 0) {
+    c--;
+    s = String.fromCharCode(65 + (c % 26)) + s;
+    c = Math.floor(c / 26);
+  }
+  return s;
+}
+
+/** Convert letter(s) to column index (1-based): A→1, B→2, AA→27 */
+export function letterToCol(letters: string): number {
+  let col = 0;
+  for (let i = 0; i < letters.length; i++) {
+    col = col * 26 + (letters.charCodeAt(i) - 64);
+  }
+  return col;
+}
+
+/** Parse coordinate like "A1" → { col: 1, row: 1 } */
+export function parseCoord(coord: string): { col: number; row: number } | null {
+  const m = coord.toUpperCase().match(/^([A-Z]+)(\d+)$/);
+  if (!m) return null;
+  return { col: letterToCol(m[1]), row: parseInt(m[2]) };
+}
+
+/** Format coordinate: col=1, row=1 → "A1" */
+export function formatCoord(col: number, row: number): string {
+  return `${colToLetter(col)}${row}`;
+}
+
+// Derive grid positions from room posX/posY based on 1m grid
 export function deriveGridPositions(floorRooms: RoomData[]): PositionedRoom[] {
-  if (floorRooms.length === 0) return [];
-
-  const xVals = [...new Set(floorRooms.map(r => r.posX))].sort((a, b) => a - b);
-  const xClusters: number[] = [];
-  xVals.forEach(x => { if (!xClusters.some(c => Math.abs(c - x) < THRESHOLD)) xClusters.push(x); });
-  xClusters.sort((a, b) => a - b);
-
-  const yVals = [...new Set(floorRooms.map(r => r.posY))].sort((a, b) => a - b);
-  const yClusters: number[] = [];
-  yVals.forEach(y => { if (!yClusters.some(c => Math.abs(c - y) < THRESHOLD)) yClusters.push(y); });
-  yClusters.sort((a, b) => a - b);
-
   return floorRooms.map(r => ({
     room: r,
-    gridCol: xClusters.findIndex(c => Math.abs(c - r.posX) < THRESHOLD) + 1,
-    gridRow: yClusters.findIndex(c => Math.abs(c - r.posY) < THRESHOLD) + 1,
+    gridCol: Math.round(r.posX) + 1, // 1-based col from posX in meters
+    gridRow: Math.round(r.posY) + 1, // 1-based row from posY in meters
   }));
 }
 
@@ -54,35 +78,22 @@ export function computeGridRuler(positioned: PositionedRoom[]) {
   if (positioned.length === 0) return { colWidths: [], rowHeights: [], colAccum: [], rowAccum: [] };
   const cols = Math.max(...positioned.map(p => p.gridCol));
   const rows = Math.max(...positioned.map(p => p.gridRow));
-
-  const colWidths: number[] = [];
-  for (let c = 1; c <= cols; c++) {
-    const roomsInCol = positioned.filter(p => p.gridCol === c);
-    colWidths.push(roomsInCol.length > 0 ? Math.max(...roomsInCol.map(p => p.room.width)) : 0);
-  }
-  const rowHeights: number[] = [];
-  for (let r = 1; r <= rows; r++) {
-    const roomsInRow = positioned.filter(p => p.gridRow === r);
-    rowHeights.push(roomsInRow.length > 0 ? Math.max(...roomsInRow.map(p => p.room.length)) : 0);
-  }
-
-  const colAccum: number[] = [0];
-  colWidths.forEach((w, i) => colAccum.push(colAccum[i] + w));
-  const rowAccum: number[] = [0];
-  rowHeights.forEach((h, i) => rowAccum.push(rowAccum[i] + h));
-
+  const colWidths = Array(cols).fill(1);
+  const rowHeights = Array(rows).fill(1);
+  const colAccum = colWidths.reduce((acc, w) => [...acc, acc[acc.length - 1] + w], [0]);
+  const rowAccum = rowHeights.reduce((acc, h) => [...acc, acc[acc.length - 1] + h], [0]);
   return { colWidths, rowHeights, colAccum, rowAccum };
 }
 
 const getSpaceColor = (name: string): string => {
   const n = name.toLowerCase();
-  if (n.includes('salón') || n.includes('salon')) return 'bg-amber-100 border-amber-300 dark:bg-amber-900/30 dark:border-amber-700';
-  if (n.includes('hab')) return 'bg-blue-100 border-blue-300 dark:bg-blue-900/30 dark:border-blue-700';
-  if (n.includes('baño') || n.includes('bano')) return 'bg-cyan-100 border-cyan-300 dark:bg-cyan-900/30 dark:border-cyan-700';
-  if (n.includes('porche')) return 'bg-green-100 border-green-300 dark:bg-green-900/30 dark:border-green-700';
-  if (n.includes('pasillo') || n.includes('corredor')) return 'bg-gray-100 border-gray-300 dark:bg-gray-800/50 dark:border-gray-600';
-  if (n.includes('cocina')) return 'bg-orange-100 border-orange-300 dark:bg-orange-900/30 dark:border-orange-700';
-  return 'bg-purple-100 border-purple-300 dark:bg-purple-900/30 dark:border-purple-700';
+  if (n.includes('salón') || n.includes('salon')) return 'bg-amber-100/70 border-amber-400 dark:bg-amber-900/30 dark:border-amber-700';
+  if (n.includes('hab')) return 'bg-blue-100/70 border-blue-400 dark:bg-blue-900/30 dark:border-blue-700';
+  if (n.includes('baño') || n.includes('bano')) return 'bg-cyan-100/70 border-cyan-400 dark:bg-cyan-900/30 dark:border-cyan-700';
+  if (n.includes('porche')) return 'bg-green-100/70 border-green-400 dark:bg-green-900/30 dark:border-green-700';
+  if (n.includes('pasillo') || n.includes('corredor')) return 'bg-gray-100/70 border-gray-400 dark:bg-gray-800/50 dark:border-gray-600';
+  if (n.includes('cocina')) return 'bg-orange-100/70 border-orange-400 dark:bg-orange-900/30 dark:border-orange-700';
+  return 'bg-purple-100/70 border-purple-400 dark:bg-purple-900/30 dark:border-purple-700';
 };
 
 const getGroupColor = (groupId: string): string => {
@@ -92,17 +103,58 @@ const getGroupColor = (groupId: string): string => {
   return `hsl(${hue}, 70%, 85%)`;
 };
 
-export function FloorPlanGridView({ rooms, floors, selectedRoomId, onSelectRoom, onAddRoom, onGroupRooms, onUngroupRooms, onUndo, undoCount = 0, saving = false }: FloorPlanGridViewProps) {
+/** Predefined space sizes */
+const SPACE_PRESETS = [
+  { label: 'Hab. pequeña', width: 3, length: 3 },
+  { label: 'Hab. mediana', width: 4, length: 3 },
+  { label: 'Hab. grande', width: 5, length: 4 },
+  { label: 'Baño pequeño', width: 2, length: 2 },
+  { label: 'Baño mediano', width: 3, length: 2 },
+  { label: 'Baño grande', width: 4, length: 2 },
+  { label: 'Cocina pequeña', width: 4, length: 2 },
+  { label: 'Salón grande', width: 6, length: 5 },
+];
+
+// Get wall type for each side of a room
+const getWallInfo = (room: RoomData, wallClassification: Map<string, WallType>) => {
+  const info = new Map<number, WallType>();
+  [1, 2, 3, 4].forEach(idx => {
+    const ownWall = room.walls.find(w => w.wallIndex === idx);
+    const key = `${room.id}::${idx}`;
+    const classified = wallClassification.get(key);
+    info.set(idx, ownWall?.wallType || classified || 'interior');
+  });
+  return info;
+};
+
+const getWallStyle = (wt: WallType) => {
+  const isExt = isExteriorType(wt);
+  const isInvis = isInvisibleType(wt);
+  const isComp = isCompartidaType(wt);
+  const thickness = isExt ? 4 : 2;
+  let color: string;
+  if (isExt && isComp) color = 'hsl(210, 70%, 55%)';
+  else if (isExt && isInvis) color = 'hsl(0, 0%, 30%)';
+  else if (isExt) color = 'hsl(var(--foreground))';
+  else if (isComp) color = 'hsl(210, 60%, 70%)';
+  else if (isInvis) color = 'hsl(0, 0%, 60%)';
+  else color = 'hsl(0, 0%, 50%)';
+  const style = isInvis ? 'dashed' : 'solid';
+  return { width: `${thickness}px`, color, style };
+};
+
+export function FloorPlanGridView({
+  rooms, floors, planWidth, planLength, selectedRoomId, onSelectRoom,
+  onAddRoom, onGroupRooms, onUngroupRooms, onUndo, undoCount = 0, saving = false,
+}: FloorPlanGridViewProps) {
   const [activeFloorId, setActiveFloorId] = useState<string>(floors[0]?.id || '_none_');
-  const [showAddForm, setShowAddForm] = useState(false);
-  const [newName, setNewName] = useState('');
-  const [newWidth, setNewWidth] = useState(4);
-  const [newLength, setNewLength] = useState(3);
-  const [newCol, setNewCol] = useState(1);
-  const [newRow, setNewRow] = useState(1);
   const [multiSelectMode, setMultiSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [groupNameInput, setGroupNameInput] = useState('');
+
+  const totalCols = Math.max(1, Math.ceil(planWidth));
+  const totalRows = Math.max(1, Math.ceil(planLength));
+  const CELL_SIZE = 48; // px per 1m cell
 
   const wallClassification = useMemo(() => autoClassifyWalls(rooms), [rooms]);
 
@@ -116,21 +168,46 @@ export function FloorPlanGridView({ rooms, floors, selectedRoomId, onSelectRoom,
     return map;
   }, [rooms]);
 
-  const groupsMap = useMemo(() => {
-    const map = new Map<string, { name: string; rooms: RoomData[] }>();
-    rooms.forEach(r => {
-      if (r.groupId) {
-        if (!map.has(r.groupId)) map.set(r.groupId, { name: r.groupName || 'Grupo', rooms: [] });
-        map.get(r.groupId)!.rooms.push(r);
+  const effectiveFloors = floors.length > 0 ? floors : [{ id: '_none_', name: 'Planta', level: '0', orderIndex: 0 }];
+  const currentFloorId = effectiveFloors.find(f => f.id === activeFloorId) ? activeFloorId : effectiveFloors[0]?.id;
+  const currentFloorRooms = floors.length > 0 ? (roomsByFloor.get(currentFloorId) || []) : rooms;
+
+  // Rooms placed on the grid (posX > 0 or posY > 0 or explicitly placed)
+  const placedRooms = useMemo(() => {
+    return currentFloorRooms.filter(r => r.width > 0 && r.length > 0);
+  }, [currentFloorRooms]);
+
+  // Build a cell occupation map: key = "col,row" → roomId
+  const cellMap = useMemo(() => {
+    const map = new Map<string, { roomId: string; isOrigin: boolean }>();
+    placedRooms.forEach(r => {
+      const startCol = Math.round(r.posX) + 1;
+      const startRow = Math.round(r.posY) + 1;
+      const spanCols = Math.round(r.width);
+      const spanRows = Math.round(r.length);
+      for (let dc = 0; dc < spanCols; dc++) {
+        for (let dr = 0; dr < spanRows; dr++) {
+          const c = startCol + dc;
+          const row = startRow + dr;
+          if (c >= 1 && c <= totalCols && row >= 1 && row <= totalRows) {
+            map.set(`${c},${row}`, { roomId: r.id, isOrigin: dc === 0 && dr === 0 });
+          }
+        }
       }
     });
     return map;
-  }, [rooms]);
+  }, [placedRooms, totalCols, totalRows]);
 
-  const effectiveFloors = floors.length > 0 ? floors : [{ id: '_none_', name: 'Planta', level: '0', orderIndex: 0 }];
-  const currentFloorId = effectiveFloors.find(f => f.id === activeFloorId) ? activeFloorId : effectiveFloors[0]?.id;
-  const currentFloor = effectiveFloors.find(f => f.id === currentFloorId);
-  const currentFloorRooms = floors.length > 0 ? (roomsByFloor.get(currentFloorId) || []) : rooms;
+  // Unplaced rooms: rooms with posX=0 and posY=0 and no cells in the grid
+  // Actually, we show ALL rooms in header but mark placed ones
+  const unplacedRooms = useMemo(() => {
+    // A room is "unplaced" if it's at (0,0) and the cell A1 is not explicitly assigned to it,
+    // or more practically: it shows in the header until the user assigns a coordinate.
+    // For simplicity: rooms not occupying any grid cell are unplaced
+    const placedIds = new Set<string>();
+    cellMap.forEach(v => placedIds.add(v.roomId));
+    return currentFloorRooms.filter(r => !placedIds.has(r.id));
+  }, [currentFloorRooms, cellMap]);
 
   const currentFloorGroups = useMemo(() => {
     const groups = new Map<string, { name: string; rooms: RoomData[] }>();
@@ -142,43 +219,6 @@ export function FloorPlanGridView({ rooms, floors, selectedRoomId, onSelectRoom,
     });
     return groups;
   }, [currentFloorRooms]);
-
-  // Get wall type for each side of a room
-  const getWallInfo = (room: RoomData) => {
-    const info = new Map<number, WallType>();
-    [1, 2, 3, 4].forEach(idx => {
-      // Use the room's own wall type first, fallback to classification
-      const ownWall = room.walls.find(w => w.wallIndex === idx);
-      const key = `${room.id}::${idx}`;
-      const classified = wallClassification.get(key);
-      info.set(idx, ownWall?.wallType || classified || 'interior');
-    });
-    return info;
-  };
-
-  // Color/style for each wall type
-  const getWallStyle = (wt: WallType, planExtThickness = 0.25, planIntThickness = 0.13) => {
-    const isExt = isExteriorType(wt);
-    const isInvis = isInvisibleType(wt);
-    const isComp = isCompartidaType(wt);
-
-    // Proportional thickness: ext=5px, int=3px, scale roughly
-    const thickness = isExt
-      ? Math.max(4, Math.round(planExtThickness * 20))
-      : Math.max(2, Math.round(planIntThickness * 20));
-
-    let color: string;
-    if (isExt && isComp) color = 'hsl(210, 70%, 55%)';       // Blue - exterior shared
-    else if (isExt && isInvis) color = 'hsl(0, 0%, 30%)';    // Dark gray dashed
-    else if (isExt) color = 'hsl(var(--foreground))';         // Black - exterior
-    else if (isComp) color = 'hsl(210, 60%, 70%)';           // Light blue - interior shared
-    else if (isInvis) color = 'hsl(0, 0%, 60%)';             // Gray dashed
-    else color = 'hsl(0, 0%, 50%)';                          // Gray - interior
-
-    const style = isInvis ? 'dashed' : 'solid';
-
-    return { width: `${thickness}px`, color, style };
-  };
 
   const toggleMultiSelect = (roomId: string) => {
     setSelectedIds(prev => {
@@ -197,184 +237,188 @@ export function FloorPlanGridView({ rooms, floors, selectedRoomId, onSelectRoom,
     setMultiSelectMode(false);
   };
 
-  const handleAddSpace = async () => {
-    if (!onAddRoom || !newName.trim()) return;
-    const floorId = currentFloorId !== '_none_' ? currentFloorId : undefined;
-    await onAddRoom(newName.trim(), newWidth, newLength, floorId, newCol, newRow);
-    setNewName('');
-    setNewWidth(4);
-    setNewLength(3);
-    setNewCol(1);
-    setNewRow(1);
-    setShowAddForm(false);
+  // Opening marks for walls
+  const renderOpeningMarks = (room: RoomData, wallIndex: number, side: 'top' | 'right' | 'bottom' | 'left') => {
+    const wall = room.walls.find(w => w.wallIndex === wallIndex);
+    if (!wall) return null;
+    const wins = wall.openings.filter(o => o.openingType.startsWith('ventana')).length;
+    const doors = wall.openings.filter(o => o.openingType.startsWith('puerta')).length;
+    if (wins === 0 && doors === 0) return null;
+    const marks: React.ReactNode[] = [];
+    for (let i = 0; i < wins; i++) marks.push(
+      <div key={`w${i}`} className="bg-sky-400/80" style={{
+        ...(side === 'top' || side === 'bottom' ? { width: '10px', height: '3px' } : { width: '3px', height: '10px' }),
+        borderRadius: '1px',
+      }} />
+    );
+    for (let i = 0; i < doors; i++) marks.push(
+      <div key={`d${i}`} className="bg-amber-600/80" style={{
+        ...(side === 'top' || side === 'bottom' ? { width: '7px', height: '3px' } : { width: '3px', height: '7px' }),
+        borderRadius: '1px',
+      }} />
+    );
+    const posClasses: Record<string, string> = {
+      top: 'absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 flex gap-0.5',
+      bottom: 'absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 flex gap-0.5',
+      left: 'absolute left-0 top-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col gap-0.5',
+      right: 'absolute right-0 top-1/2 translate-x-1/2 -translate-y-1/2 flex flex-col gap-0.5',
+    };
+    return <div className={posClasses[side]}>{marks}</div>;
   };
 
-  const renderFloor = (floorId: string, floorName: string, floorRooms: RoomData[]) => {
-    const positioned = deriveGridPositions(floorRooms);
-    const cols = positioned.length > 0 ? Math.max(...positioned.map(p => p.gridCol)) : 1;
-    const rows = positioned.length > 0 ? Math.max(...positioned.map(p => p.gridRow)) : 1;
-    const totalM2 = floorRooms.reduce((s, r) => s + r.width * r.length, 0);
-    const { colAccum, rowAccum } = computeGridRuler(positioned);
+  const renderGrid = () => {
+    // Render rooms as absolutely positioned overlays on the grid
+    const roomOverlays = placedRooms.map(room => {
+      const startCol = Math.round(room.posX) + 1;
+      const startRow = Math.round(room.posY) + 1;
+      const spanCols = Math.max(1, Math.round(room.width));
+      const spanRows = Math.max(1, Math.round(room.length));
+
+      const wallInfo = getWallInfo(room, wallClassification);
+      const ws1 = getWallStyle(wallInfo.get(1)!);
+      const ws2 = getWallStyle(wallInfo.get(2)!);
+      const ws3 = getWallStyle(wallInfo.get(3)!);
+      const ws4 = getWallStyle(wallInfo.get(4)!);
+
+      const isSelected = room.id === selectedRoomId;
+      const isMultiSelected = selectedIds.has(room.id);
+      const m2 = (room.width * room.length).toFixed(1);
+      const colorClass = getSpaceColor(room.name);
+      const coord = formatCoord(startCol, startRow);
+      const groupColor = room.groupId ? getGroupColor(room.groupId) : undefined;
+
+      // Position: col header (30px) + (startCol-1)*CELL_SIZE, row header (20px) + (startRow-1)*CELL_SIZE
+      const left = 30 + (startCol - 1) * CELL_SIZE;
+      const top = 20 + (startRow - 1) * CELL_SIZE;
+      const width = spanCols * CELL_SIZE;
+      const height = spanRows * CELL_SIZE;
+
+      return (
+        <div
+          key={room.id}
+          className={`
+            absolute cursor-pointer transition-shadow z-10 flex flex-col items-center justify-center
+            ${colorClass}
+            ${isSelected ? 'ring-2 ring-primary ring-offset-1 shadow-lg z-20' : 'hover:shadow-md'}
+            ${isMultiSelected ? 'ring-2 ring-blue-500 ring-offset-1 z-20' : ''}
+          `}
+          style={{
+            left, top, width, height,
+            borderTopWidth: ws1.width,
+            borderRightWidth: ws2.width,
+            borderBottomWidth: ws3.width,
+            borderLeftWidth: ws4.width,
+            borderTopColor: ws1.color,
+            borderRightColor: ws2.color,
+            borderBottomColor: ws3.color,
+            borderLeftColor: ws4.color,
+            borderTopStyle: ws1.style as any,
+            borderRightStyle: ws2.style as any,
+            borderBottomStyle: ws3.style as any,
+            borderLeftStyle: ws4.style as any,
+            ...(groupColor ? { boxShadow: `inset 0 0 0 2px ${groupColor}` } : {}),
+          }}
+          onClick={() => {
+            if (multiSelectMode) toggleMultiSelect(room.id);
+            else onSelectRoom(room.id === selectedRoomId ? null : room.id);
+          }}
+        >
+          {renderOpeningMarks(room, 1, 'top')}
+          {renderOpeningMarks(room, 2, 'right')}
+          {renderOpeningMarks(room, 3, 'bottom')}
+          {renderOpeningMarks(room, 4, 'left')}
+
+          <div className="text-[9px] font-bold truncate max-w-full px-0.5 leading-tight">{room.name}</div>
+          <div className="text-[10px] font-semibold">{m2} m²</div>
+          <div className="text-[8px] text-muted-foreground">{room.width.toFixed(1)}×{room.length.toFixed(1)}</div>
+          <Badge variant="outline" className="text-[7px] px-0.5 py-0 h-3 mt-0.5">{coord}</Badge>
+
+          {multiSelectMode && (
+            <div className={`absolute top-0.5 right-0.5 w-3 h-3 rounded-full border ${isMultiSelected ? 'bg-blue-500 border-blue-500' : 'border-muted-foreground/50 bg-background'}`} />
+          )}
+        </div>
+      );
+    });
 
     return (
-      <Card key={floorId}>
-        <CardHeader className="py-3">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-sm">{floorName}</CardTitle>
-            <Badge variant="secondary" className="text-xs">{totalM2.toFixed(1)} m²</Badge>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div
-            className="grid gap-1.5 mb-0.5"
-            style={{ gridTemplateColumns: `48px repeat(${cols}, minmax(100px, 1fr))` }}
-          >
-            <div />
-            {Array.from({ length: cols }, (_, i) => (
-              <div key={i} className="text-center">
-                <div className="text-xs font-bold text-muted-foreground">Col {i + 1}</div>
-                <div className="text-[9px] text-muted-foreground/70 font-mono">
-                  {colAccum[i].toFixed(1)}–{colAccum[i + 1].toFixed(1)}m
-                </div>
-              </div>
-            ))}
-          </div>
-          <div
-            className="grid gap-1.5"
-            style={{ gridTemplateColumns: `48px repeat(${cols}, minmax(100px, 1fr))`, gridTemplateRows: `repeat(${rows}, auto)` }}
-          >
-            {Array.from({ length: rows }, (_, ri) => (
-              <div
-                key={`rh-${ri}`}
-                className="flex flex-col items-center justify-center"
-                style={{ gridColumn: 1, gridRow: ri + 1 }}
-              >
-                <span className="text-xs font-bold text-muted-foreground">Fila {ri + 1}</span>
-                <span className="text-[9px] text-muted-foreground/70 font-mono leading-tight">
-                  {rowAccum[ri].toFixed(1)}–{rowAccum[ri + 1].toFixed(1)}m
-                </span>
-              </div>
-            ))}
-            {positioned.map(({ room, gridCol, gridRow }) => {
-              const wallInfo = getWallInfo(room);
-              const ws1 = getWallStyle(wallInfo.get(1)!);
-              const ws2 = getWallStyle(wallInfo.get(2)!);
-              const ws3 = getWallStyle(wallInfo.get(3)!);
-              const ws4 = getWallStyle(wallInfo.get(4)!);
-              const isSelected = room.id === selectedRoomId;
-              const isMultiSelected = selectedIds.has(room.id);
-              const m2 = (room.width * room.length).toFixed(1);
-              const colorClass = getSpaceColor(room.name);
-              const coord = `C${gridCol}·F${gridRow}`;
-              const groupColor = room.groupId ? getGroupColor(room.groupId) : undefined;
-              const groupInfo = room.groupId ? groupsMap.get(room.groupId) : null;
-              const groupTotalM2 = groupInfo ? groupInfo.rooms.reduce((s, r) => s + r.width * r.length, 0) : null;
+      <div className="overflow-auto border rounded-lg bg-background">
+        <div
+          className="relative"
+          style={{
+            width: 30 + totalCols * CELL_SIZE + 1,
+            height: 20 + totalRows * CELL_SIZE + 1,
+          }}
+        >
+          {/* Column headers (A, B, C...) */}
+          {Array.from({ length: totalCols }, (_, ci) => (
+            <div
+              key={`ch-${ci}`}
+              className="absolute text-[8px] font-bold text-muted-foreground/60 text-center"
+              style={{
+                left: 30 + ci * CELL_SIZE,
+                top: 0,
+                width: CELL_SIZE,
+                height: 20,
+                lineHeight: '20px',
+              }}
+            >
+              {colToLetter(ci + 1)}
+            </div>
+          ))}
 
-              // Count openings per wall for visual marks
-              const openingCounts = new Map<number, { windows: number; doors: number }>();
-              room.walls.forEach(w => {
-                const wins = w.openings.filter(o => o.openingType.startsWith('ventana')).length;
-                const doors = w.openings.filter(o => o.openingType.startsWith('puerta')).length;
-                if (wins > 0 || doors > 0) openingCounts.set(w.wallIndex, { windows: wins, doors });
-              });
+          {/* Row headers (1, 2, 3...) */}
+          {Array.from({ length: totalRows }, (_, ri) => (
+            <div
+              key={`rh-${ri}`}
+              className="absolute text-[8px] font-bold text-muted-foreground/60 text-center"
+              style={{
+                left: 0,
+                top: 20 + ri * CELL_SIZE,
+                width: 30,
+                height: CELL_SIZE,
+                lineHeight: `${CELL_SIZE}px`,
+              }}
+            >
+              {ri + 1}
+            </div>
+          ))}
 
-              // Opening marks renderer for a wall side
-              const renderOpeningMarks = (wallIndex: number, side: 'top' | 'right' | 'bottom' | 'left') => {
-                const counts = openingCounts.get(wallIndex);
-                if (!counts) return null;
-                const marks: React.ReactNode[] = [];
-                for (let i = 0; i < counts.windows; i++) marks.push(
-                  <div key={`w${i}`} className="bg-sky-400/80" style={{
-                    ...(side === 'top' || side === 'bottom' ? { width: '12px', height: '3px' } : { width: '3px', height: '12px' }),
-                    borderRadius: '1px',
-                  }} />
-                );
-                for (let i = 0; i < counts.doors; i++) marks.push(
-                  <div key={`d${i}`} className="bg-amber-600/80" style={{
-                    ...(side === 'top' || side === 'bottom' ? { width: '8px', height: '4px' } : { width: '4px', height: '8px' }),
-                    borderRadius: '1px',
-                  }} />
-                );
-                const posClasses: Record<string, string> = {
-                  top: 'absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 flex gap-0.5',
-                  bottom: 'absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 flex gap-0.5',
-                  left: 'absolute left-0 top-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col gap-0.5',
-                  right: 'absolute right-0 top-1/2 translate-x-1/2 -translate-y-1/2 flex flex-col gap-0.5',
-                };
-                return <div className={posClasses[side]}>{marks}</div>;
-              };
+          {/* Grid lines - very subtle */}
+          {/* Vertical lines */}
+          {Array.from({ length: totalCols + 1 }, (_, ci) => (
+            <div
+              key={`vl-${ci}`}
+              className="absolute bg-muted-foreground/10"
+              style={{
+                left: 30 + ci * CELL_SIZE,
+                top: 20,
+                width: 1,
+                height: totalRows * CELL_SIZE,
+              }}
+            />
+          ))}
+          {/* Horizontal lines */}
+          {Array.from({ length: totalRows + 1 }, (_, ri) => (
+            <div
+              key={`hl-${ri}`}
+              className="absolute bg-muted-foreground/10"
+              style={{
+                left: 30,
+                top: 20 + ri * CELL_SIZE,
+                width: totalCols * CELL_SIZE,
+                height: 1,
+              }}
+            />
+          ))}
 
-              return (
-                <div
-                  key={room.id}
-                  className={`
-                    relative p-3 rounded cursor-pointer transition-all
-                    ${colorClass}
-                    ${isSelected ? 'ring-2 ring-primary ring-offset-1 shadow-lg scale-[1.02]' : 'hover:shadow-md'}
-                    ${isMultiSelected ? 'ring-2 ring-blue-500 ring-offset-1' : ''}
-                  `}
-                  style={{
-                    gridColumn: gridCol + 1,
-                    gridRow: gridRow,
-                    minHeight: '80px',
-                    borderTopWidth: ws1.width,
-                    borderRightWidth: ws2.width,
-                    borderBottomWidth: ws3.width,
-                    borderLeftWidth: ws4.width,
-                    borderTopColor: ws1.color,
-                    borderRightColor: ws2.color,
-                    borderBottomColor: ws3.color,
-                    borderLeftColor: ws4.color,
-                    borderTopStyle: ws1.style as any,
-                    borderRightStyle: ws2.style as any,
-                    borderBottomStyle: ws3.style as any,
-                    borderLeftStyle: ws4.style as any,
-                    ...(groupColor ? { boxShadow: `inset 0 0 0 3px ${groupColor}` } : {}),
-                  }}
-                  onClick={() => {
-                    if (multiSelectMode) {
-                      toggleMultiSelect(room.id);
-                    } else {
-                      onSelectRoom(room.id === selectedRoomId ? null : room.id);
-                    }
-                  }}
-                >
-                  {/* Opening marks on borders */}
-                  {renderOpeningMarks(1, 'top')}
-                  {renderOpeningMarks(2, 'right')}
-                  {renderOpeningMarks(3, 'bottom')}
-                  {renderOpeningMarks(4, 'left')}
-
-                  <div className="flex items-center justify-between">
-                    <div className="text-xs font-semibold truncate">{room.name}</div>
-                    <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 shrink-0 ml-1">{coord}</Badge>
-                  </div>
-                  <div className="text-lg font-bold mt-1">{m2} m²</div>
-                  <div className="text-[10px] text-muted-foreground mt-0.5">
-                    {room.width.toFixed(1)} × {room.length.toFixed(1)}m
-                  </div>
-                  {groupInfo && groupInfo.rooms.length > 0 && (
-                    <div className="mt-1">
-                      <Badge
-                        variant="secondary"
-                        className="text-[9px] px-1 py-0 h-3.5"
-                        style={{ backgroundColor: groupColor, color: '#333' }}
-                      >
-                        🔗 {groupInfo.name} ({groupInfo.rooms.length} esp. · {groupTotalM2?.toFixed(1)} m²)
-                      </Badge>
-                    </div>
-                  )}
-                  {multiSelectMode && (
-                    <div className={`absolute top-1 right-1 w-4 h-4 rounded-full border-2 ${isMultiSelected ? 'bg-blue-500 border-blue-500' : 'border-muted-foreground/50 bg-background'}`} />
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </CardContent>
-      </Card>
+          {/* Room overlays */}
+          {roomOverlays}
+        </div>
+      </div>
     );
   };
+
+  const totalM2 = currentFloorRooms.reduce((s, r) => s + r.width * r.length, 0);
 
   if (rooms.length === 0) {
     return (
@@ -388,6 +432,7 @@ export function FloorPlanGridView({ rooms, floors, selectedRoomId, onSelectRoom,
 
   return (
     <div className="space-y-3">
+      {/* Toolbar */}
       <div className="flex items-center justify-between gap-2 flex-wrap">
         {effectiveFloors.length > 1 && (
           <Tabs value={currentFloorId} onValueChange={setActiveFloorId}>
@@ -411,12 +456,7 @@ export function FloorPlanGridView({ rooms, floors, selectedRoomId, onSelectRoom,
               disabled={saving}
             >
               <Link className="h-4 w-4 mr-1" />
-              {multiSelectMode ? 'Cancelar selección' : 'Agrupar espacios'}
-            </Button>
-          )}
-          {onAddRoom && (
-            <Button variant="outline" size="sm" onClick={() => setShowAddForm(!showAddForm)} disabled={saving}>
-              <Plus className="h-4 w-4 mr-1" /> Nuevo Espacio
+              {multiSelectMode ? 'Cancelar' : 'Agrupar'}
             </Button>
           )}
           {onUndo && undoCount > 0 && (
@@ -427,31 +467,21 @@ export function FloorPlanGridView({ rooms, floors, selectedRoomId, onSelectRoom,
         </div>
       </div>
 
+      {/* Multi-select grouping UI */}
       {multiSelectMode && (
         <Card>
           <CardContent className="py-3">
             <p className="text-xs text-muted-foreground mb-2">
-              Selecciona 2 o más espacios haciendo clic sobre ellos, luego asígnales un nombre de grupo.
+              Selecciona 2+ espacios en la cuadrícula, luego asígnales un nombre de grupo.
             </p>
             <div className="flex items-end gap-2 flex-wrap">
               <div>
                 <Label className="text-xs">Nombre del grupo</Label>
-                <Input
-                  value={groupNameInput}
-                  onChange={e => setGroupNameInput(e.target.value)}
-                  placeholder="Ej: Porche 1"
-                  className="w-40 h-8 text-sm"
-                  autoFocus
-                />
+                <Input value={groupNameInput} onChange={e => setGroupNameInput(e.target.value)}
+                  placeholder="Ej: Porche 1" className="w-40 h-8 text-sm" autoFocus />
               </div>
-              <Badge variant="secondary" className="text-xs h-8 flex items-center">
-                {selectedIds.size} seleccionados
-              </Badge>
-              <Button
-                size="sm"
-                onClick={handleGroup}
-                disabled={saving || selectedIds.size < 2 || !groupNameInput.trim()}
-              >
+              <Badge variant="secondary" className="text-xs h-8 flex items-center">{selectedIds.size} sel.</Badge>
+              <Button size="sm" onClick={handleGroup} disabled={saving || selectedIds.size < 2 || !groupNameInput.trim()}>
                 <Link className="h-4 w-4 mr-1" /> Crear grupo
               </Button>
             </div>
@@ -459,25 +489,18 @@ export function FloorPlanGridView({ rooms, floors, selectedRoomId, onSelectRoom,
         </Card>
       )}
 
+      {/* Groups summary */}
       {currentFloorGroups.size > 0 && (
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-xs font-semibold text-muted-foreground">Grupos:</span>
           {Array.from(currentFloorGroups.entries()).map(([gid, g]) => {
-            const totalM2 = g.rooms.reduce((s, r) => s + r.width * r.length, 0);
+            const gm2 = g.rooms.reduce((s, r) => s + r.width * r.length, 0);
             return (
-              <Badge
-                key={gid}
-                variant="secondary"
-                className="text-xs gap-1 cursor-default"
-                style={{ backgroundColor: getGroupColor(gid), color: '#333' }}
-              >
-                🔗 {g.name} — {g.rooms.length} espacios — {totalM2.toFixed(1)} m²
+              <Badge key={gid} variant="secondary" className="text-xs gap-1"
+                style={{ backgroundColor: getGroupColor(gid), color: '#333' }}>
+                🔗 {g.name} — {g.rooms.length} esp. — {gm2.toFixed(1)} m²
                 {onUngroupRooms && (
-                  <button
-                    onClick={(e) => { e.stopPropagation(); onUngroupRooms(gid); }}
-                    className="ml-1 hover:text-destructive"
-                    title="Desagrupar"
-                  >
+                  <button onClick={e => { e.stopPropagation(); onUngroupRooms(gid); }} className="ml-1 hover:text-destructive" title="Desagrupar">
                     <Unlink className="h-3 w-3" />
                   </button>
                 )}
@@ -487,77 +510,54 @@ export function FloorPlanGridView({ rooms, floors, selectedRoomId, onSelectRoom,
         </div>
       )}
 
-      {showAddForm && onAddRoom && (
+      {/* Unplaced spaces header */}
+      {unplacedRooms.length > 0 && (
         <Card>
           <CardContent className="py-3">
-            <div className="flex items-end gap-2 flex-wrap">
-              <div>
-                <Label className="text-xs">Nombre</Label>
-                <Input
-                  value={newName}
-                  onChange={e => setNewName(e.target.value)}
-                  placeholder="Ej: Dormitorio 3"
-                  className="w-40 h-8 text-sm"
-                  onKeyDown={e => { if (e.key === 'Enter') handleAddSpace(); }}
-                  autoFocus
-                />
-              </div>
-              <div>
-                <Label className="text-xs">Ancho (m)</Label>
-                <Input type="number" step="0.1" value={newWidth}
-                  onChange={e => setNewWidth(Number(e.target.value))}
-                  className="w-20 h-8 text-sm" />
-              </div>
-              <div>
-                <Label className="text-xs">Largo (m)</Label>
-                <Input type="number" step="0.1" value={newLength}
-                  onChange={e => setNewLength(Number(e.target.value))}
-                  className="w-20 h-8 text-sm" />
-              </div>
-              <div>
-                <Label className="text-xs">Columna</Label>
-                <input type="text" inputMode="numeric" pattern="[0-9]*" value={newCol}
-                  onChange={e => {
-                    const v = e.target.value.replace(/[^0-9]/g, '');
-                    setNewCol(Math.max(1, parseInt(v) || 1));
-                  }}
-                  className="flex h-8 w-16 rounded-md border border-input bg-background px-2 py-1 text-sm text-center ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2" />
-              </div>
-              <div>
-                <Label className="text-xs">Fila</Label>
-                <input type="text" inputMode="numeric" pattern="[0-9]*" value={newRow}
-                  onChange={e => {
-                    const v = e.target.value.replace(/[^0-9]/g, '');
-                    setNewRow(Math.max(1, parseInt(v) || 1));
-                  }}
-                  className="flex h-8 w-16 rounded-md border border-input bg-background px-2 py-1 text-sm text-center ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2" />
-              </div>
-              <Button size="sm" onClick={handleAddSpace} disabled={saving || !newName.trim()}>
-                <Plus className="h-4 w-4 mr-1" /> Añadir
-              </Button>
+            <p className="text-xs font-semibold text-muted-foreground mb-2">
+              Espacios sin colocar — Asigna coordenada en el formulario para posicionarlos en el plano
+            </p>
+            <div className="flex gap-2 flex-wrap">
+              {unplacedRooms.map(r => (
+                <div
+                  key={r.id}
+                  className={`
+                    px-3 py-2 rounded-lg border-2 cursor-pointer transition-all text-center
+                    ${getSpaceColor(r.name)}
+                    ${r.id === selectedRoomId ? 'ring-2 ring-primary shadow-md' : 'hover:shadow'}
+                  `}
+                  onClick={() => onSelectRoom(r.id === selectedRoomId ? null : r.id)}
+                >
+                  <div className="text-xs font-semibold">{r.name}</div>
+                  <div className="text-[10px] text-muted-foreground">
+                    {r.width.toFixed(1)}×{r.length.toFixed(1)}m = {(r.width * r.length).toFixed(1)}m²
+                  </div>
+                </div>
+              ))}
             </div>
-            {currentFloor && currentFloor.id !== '_none_' && (
-              <p className="text-[10px] text-muted-foreground mt-1">
-                Se añadirá a: {currentFloor.name} en Col {newCol} · Fila {newRow}
-              </p>
-            )}
           </CardContent>
         </Card>
       )}
 
-      {currentFloor && currentFloorRooms.length > 0
-        ? renderFloor(currentFloor.id, currentFloor.name, currentFloorRooms)
-        : (
-          <Card>
-            <CardContent className="py-8 text-center text-muted-foreground text-sm">
-              No hay espacios en esta planta.
-            </CardContent>
-          </Card>
-        )
-      }
+      {/* Main grid */}
+      <Card>
+        <CardHeader className="py-2">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-sm">
+              Plano {totalCols}×{totalRows}m ({totalCols * totalRows} m²)
+            </CardTitle>
+            <Badge variant="secondary" className="text-xs">
+              {placedRooms.length} colocados · {totalM2.toFixed(1)} m²
+            </Badge>
+          </div>
+        </CardHeader>
+        <CardContent className="p-2">
+          {renderGrid()}
+        </CardContent>
+      </Card>
 
       <p className="text-xs text-muted-foreground">
-        Bordes gruesos = paredes externas. Clic en un espacio para editar sus propiedades, paredes y aperturas (puertas/ventanas). Usa «Agrupar espacios» para unir varios en uno lógico.
+        Cada celda = 1 m². Coordenadas: columnas A-Z, filas 1-N. Clic en un espacio para editar propiedades, paredes y aperturas.
       </p>
     </div>
   );

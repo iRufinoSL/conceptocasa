@@ -494,55 +494,7 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
               saving={saving}
             />
           </div>
-          <div>
-            {/* Add new space section */}
-            {!selectedRoom && (
-              <Card>
-                <CardContent className="py-4 space-y-3">
-                  <h4 className="text-sm font-semibold flex items-center gap-1">
-                    <Plus className="h-4 w-4" /> Añadir espacio
-                  </h4>
-                  <div>
-                    <Label className="text-xs">Nombre</Label>
-                    <Input
-                      value={newSpaceName}
-                      onChange={e => setNewSpaceName(e.target.value)}
-                      placeholder="Ej: Habitación 3"
-                      disabled={saving}
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <Label className="text-xs">Ancho (m)</Label>
-                      <Input type="number" step="0.1" value={newSpaceWidth}
-                        onChange={e => setNewSpaceWidth(Number(e.target.value))} disabled={saving} />
-                    </div>
-                    <div>
-                      <Label className="text-xs">Largo (m)</Label>
-                      <Input type="number" step="0.1" value={newSpaceLength}
-                        onChange={e => setNewSpaceLength(Number(e.target.value))} disabled={saving} />
-                    </div>
-                  </div>
-                  <p className="text-[10px] text-muted-foreground">
-                    Presets: Hab.peq 3×3 · Hab.med 4×3 · Hab.gra 5×4 · Baño.peq 2×2 · Cocina 4×2 · Salón 6×5
-                  </p>
-                  <Button
-                    onClick={async () => {
-                      if (!newSpaceName.trim()) { toast.error('Indica un nombre'); return; }
-                      await addRoom(newSpaceName.trim(), newSpaceWidth, newSpaceLength, floors[0]?.id);
-                      setNewSpaceName('');
-                      toast.success('Espacio añadido a la cabecera');
-                    }}
-                    disabled={saving || !newSpaceName.trim()}
-                    size="sm"
-                    className="w-full"
-                  >
-                    <Plus className="h-4 w-4 mr-1" /> Crear en cabecera
-                  </Button>
-                </CardContent>
-              </Card>
-            )}
-
+          <div className="space-y-4">
             {selectedRoom && planData ? (() => {
               // Compute coordinate for selected room
               const isUnplaced = selectedRoom.posX < 0 || selectedRoom.posY < 0;
@@ -555,7 +507,6 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
                 const posX = targetCol - 1;
                 const posY = targetRow - 1;
                 await updateRoom(selectedRoom.id, { posX: Math.round(posX * 100) / 100, posY: Math.round(posY * 100) / 100 });
-                await refetch();
                 toast.success(`${selectedRoom.name} movido a ${formatCoord(targetCol, targetRow)}`);
               };
 
@@ -581,13 +532,53 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
                   saving={saving}
                 />
               );
-            })() : !selectedRoom ? null : (
-              <Card>
-                <CardContent className="py-8 text-center text-muted-foreground text-sm">
-                  Haz clic en un espacio de la cuadrícula para editar sus propiedades y paredes
-                </CardContent>
-              </Card>
-            )}
+            })() : null}
+
+            {/* Add new space section - always visible */}
+            <Card>
+              <CardContent className="py-4 space-y-3">
+                <h4 className="text-sm font-semibold flex items-center gap-1">
+                  <Plus className="h-4 w-4" /> Añadir espacio
+                </h4>
+                <div>
+                  <Label className="text-xs">Nombre</Label>
+                  <Input
+                    value={newSpaceName}
+                    onChange={e => setNewSpaceName(e.target.value)}
+                    placeholder="Ej: Habitación 3"
+                    disabled={saving}
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <Label className="text-xs">Ancho (m)</Label>
+                    <Input type="number" step="0.1" value={newSpaceWidth}
+                      onChange={e => setNewSpaceWidth(Number(e.target.value))} disabled={saving} />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Largo (m)</Label>
+                    <Input type="number" step="0.1" value={newSpaceLength}
+                      onChange={e => setNewSpaceLength(Number(e.target.value))} disabled={saving} />
+                  </div>
+                </div>
+                <p className="text-[10px] text-muted-foreground">
+                  Presets: Hab.peq 3×3 · Hab.med 4×3 · Hab.gra 5×4 · Baño.peq 2×2 · Cocina 4×2 · Salón 6×5
+                </p>
+                <Button
+                  onClick={async () => {
+                    if (!newSpaceName.trim()) { toast.error('Indica un nombre'); return; }
+                    await addRoom(newSpaceName.trim(), newSpaceWidth, newSpaceLength, floors[0]?.id);
+                    setNewSpaceName('');
+                    toast.success('Espacio añadido a la cabecera');
+                  }}
+                  disabled={saving || !newSpaceName.trim()}
+                  size="sm"
+                  className="w-full"
+                >
+                  <Plus className="h-4 w-4 mr-1" /> Crear en cabecera
+                </Button>
+              </CardContent>
+            </Card>
           </div>
         </div>
       )}

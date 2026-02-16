@@ -1019,19 +1019,65 @@ export function useFloorPlan(budgetId: string) {
     }
   };
 
-  // Group/ungroup rooms
-  const groupRooms = async (roomIds: string[], groupName: string) => {
-    if (roomIds.length < 2) return;
+  // Group/ungroup rooms — supports creating 1x1 rooms for empty cells
+  const groupRooms = async (roomIds: string[], groupName: string, emptyCells?: { col: number; row: number }[]) => {
+    if (roomIds.length === 0 && (!emptyCells || emptyCells.length === 0)) return;
+    if (roomIds.length + (emptyCells?.length || 0) < 2) return;
     setSaving(true);
     try {
       const groupId = crypto.randomUUID();
-      const { error } = await supabase
-        .from('budget_floor_plan_rooms')
-        .update({ group_id: groupId, group_name: groupName } as any)
-        .in('id', roomIds);
-      if (error) throw error;
+      const allRoomIds = [...roomIds];
+
+      // Create 1x1 rooms for each empty cell
+      if (emptyCells && emptyCells.length > 0 && floorPlan) {
+        // Determine floor_id from existing rooms in selection
+        const refRoom = roomIds.length > 0 ? rooms.find(r => roomIds.includes(r.id)) : null;
+        const floorId = refRoom?.floorId || null;
+
+        for (const cell of emptyCells) {
+          const posX = cell.col - 1; // 1-based col → 0-based posX
+          const posY = cell.row - 1;
+
+          const { data: newRoom, error: roomErr } = await supabase
+            .from('budget_floor_plan_rooms')
+            .insert({
+              floor_plan_id: floorPlan.id,
+              floor_id: floorId,
+              name: groupName,
+              width: 1,
+              length: 1,
+              pos_x: posX,
+              pos_y: posY,
+              order_index: rooms.length + allRoomIds.length,
+            })
+            .select()
+            .single();
+
+          if (roomErr) throw roomErr;
+
+          // Create 4 default walls
+          await supabase
+            .from('budget_floor_plan_walls')
+            .insert([1, 2, 3, 4].map(idx => ({
+              room_id: newRoom.id,
+              wall_index: idx,
+              wall_type: 'interior',
+            })));
+
+          allRoomIds.push(newRoom.id);
+        }
+      }
+
+      if (allRoomIds.length >= 2) {
+        const { error } = await supabase
+          .from('budget_floor_plan_rooms')
+          .update({ group_id: groupId, group_name: groupName } as any)
+          .in('id', allRoomIds);
+        if (error) throw error;
+      }
+
       await fetchAll();
-      toast.success(`${roomIds.length} espacios agrupados como "${groupName}"`);
+      toast.success(`${allRoomIds.length} espacios agrupados como "${groupName}"`);
     } catch (err) {
       console.error('Error grouping rooms:', err);
       toast.error('Error al agrupar espacios');

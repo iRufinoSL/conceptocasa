@@ -17,7 +17,7 @@ interface FloorPlanGridViewProps {
   selectedRoomId: string | null;
   onSelectRoom: (id: string | null) => void;
   onAddRoom?: (name: string, width: number, length: number, floorId?: string, gridCol?: number, gridRow?: number) => Promise<void>;
-  onGroupRooms?: (roomIds: string[], groupName: string) => Promise<void>;
+  onGroupRooms?: (roomIds: string[], groupName: string, emptyCells?: { col: number; row: number }[]) => Promise<void>;
   onUngroupRooms?: (groupId: string) => Promise<void>;
   onUndo?: () => Promise<void>;
   undoCount?: number;
@@ -150,6 +150,7 @@ export function FloorPlanGridView({
   const [activeFloorId, setActiveFloorId] = useState<string>(floors[0]?.id || '_none_');
   const [multiSelectMode, setMultiSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [selectedEmptyCells, setSelectedEmptyCells] = useState<Set<string>>(new Set()); // "col,row"
   const [groupNameInput, setGroupNameInput] = useState('');
 
   const CELL_SIZE = 48; // px per 1m cell
@@ -234,10 +235,37 @@ export function FloorPlanGridView({
     });
   };
 
+  const toggleEmptyCell = (col: number, row: number) => {
+    const key = `${col},${row}`;
+    setSelectedEmptyCells(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  // Auto-derive group name from the first selected room
+  const autoGroupName = useMemo(() => {
+    if (selectedIds.size === 0) return '';
+    const firstRoomId = Array.from(selectedIds)[0];
+    const room = currentFloorRooms.find(r => r.id === firstRoomId);
+    return room?.name || '';
+  }, [selectedIds, currentFloorRooms]);
+
+  const effectiveGroupName = groupNameInput || autoGroupName;
+
+  const totalSelected = selectedIds.size + selectedEmptyCells.size;
+
   const handleGroup = async () => {
-    if (!onGroupRooms || selectedIds.size < 2 || !groupNameInput.trim()) return;
-    await onGroupRooms(Array.from(selectedIds), groupNameInput.trim());
+    if (!onGroupRooms || totalSelected < 2 || !effectiveGroupName.trim()) return;
+    const emptyCells = Array.from(selectedEmptyCells).map(k => {
+      const [c, r] = k.split(',').map(Number);
+      return { col: c, row: r };
+    });
+    await onGroupRooms(Array.from(selectedIds), effectiveGroupName.trim(), emptyCells);
     setSelectedIds(new Set());
+    setSelectedEmptyCells(new Set());
     setGroupNameInput('');
     setMultiSelectMode(false);
   };
@@ -416,6 +444,34 @@ export function FloorPlanGridView({
             />
           ))}
 
+          {/* Empty cell click targets for multiselect grouping */}
+          {multiSelectMode && Array.from({ length: totalCols * totalRows }, (_, i) => {
+            const col = (i % totalCols) + 1;
+            const row = Math.floor(i / totalCols) + 1;
+            const cellKey = `${col},${row}`;
+            const isOccupied = cellMap.has(cellKey);
+            if (isOccupied) return null;
+            const isEmptySelected = selectedEmptyCells.has(cellKey);
+            return (
+              <div
+                key={`empty-${cellKey}`}
+                className={`absolute cursor-pointer transition-colors z-5 ${isEmptySelected ? 'bg-blue-300/50 ring-2 ring-blue-500' : 'hover:bg-blue-100/30'}`}
+                style={{
+                  left: 30 + (col - 1) * CELL_SIZE,
+                  top: 20 + (row - 1) * CELL_SIZE,
+                  width: CELL_SIZE,
+                  height: CELL_SIZE,
+                }}
+                onClick={() => toggleEmptyCell(col, row)}
+              >
+                {isEmptySelected && (
+                  <div className="absolute top-0.5 right-0.5 w-3 h-3 rounded-full bg-blue-500 border-blue-500 border" />
+                )}
+                <div className="text-[7px] text-muted-foreground/40 p-0.5">{formatCoord(col, row)}</div>
+              </div>
+            );
+          })}
+
           {/* Room overlays */}
           {roomOverlays}
         </div>
@@ -456,6 +512,7 @@ export function FloorPlanGridView({
               onClick={() => {
                 setMultiSelectMode(!multiSelectMode);
                 setSelectedIds(new Set());
+                setSelectedEmptyCells(new Set());
                 setGroupNameInput('');
               }}
               disabled={saving}
@@ -477,16 +534,18 @@ export function FloorPlanGridView({
         <Card>
           <CardContent className="py-3">
             <p className="text-xs text-muted-foreground mb-2">
-              Selecciona 2+ espacios en la cuadrícula, luego asígnales un nombre de grupo.
+              Selecciona espacios y/o casillas vacías en la cuadrícula. El grupo toma el nombre del espacio seleccionado (editable).
             </p>
             <div className="flex items-end gap-2 flex-wrap">
               <div>
                 <Label className="text-xs">Nombre del grupo</Label>
-                <Input value={groupNameInput} onChange={e => setGroupNameInput(e.target.value)}
-                  placeholder="Ej: Porche 1" className="w-40 h-8 text-sm" autoFocus />
+                <Input value={groupNameInput || autoGroupName} onChange={e => setGroupNameInput(e.target.value)}
+                  placeholder="Nombre automático del espacio" className="w-48 h-8 text-sm" />
               </div>
-              <Badge variant="secondary" className="text-xs h-8 flex items-center">{selectedIds.size} sel.</Badge>
-              <Button size="sm" onClick={handleGroup} disabled={saving || selectedIds.size < 2 || !groupNameInput.trim()}>
+              <Badge variant="secondary" className="text-xs h-8 flex items-center">
+                {selectedIds.size} esp. + {selectedEmptyCells.size} vacías = {totalSelected} sel.
+              </Badge>
+              <Button size="sm" onClick={handleGroup} disabled={saving || totalSelected < 2 || !effectiveGroupName.trim()}>
                 <Link className="h-4 w-4 mr-1" /> Crear grupo
               </Button>
             </div>

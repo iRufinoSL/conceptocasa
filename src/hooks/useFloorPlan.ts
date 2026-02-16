@@ -73,26 +73,15 @@ function getPresetDimensions(m2: number): { width: number; length: number } {
 }
 
 function calcGridPositions(spaces: Array<{ m2: number; gridCol: number; gridRow: number }>) {
-  // For 1m grid: place spaces sequentially, tracking cumulative posX/posY
-  let posX = 0;
-  let posY = 0;
-  let maxHeightInRow = 0;
-  const maxColsPerRow = 4;
-  let colInRow = 0;
-
+  // For 1m grid: if gridCol/gridRow are 0, the space is "unplaced" (posX=-1, posY=-1)
+  // Otherwise place at gridCol-1, gridRow-1 in meters
   return spaces.map(s => {
     const dims = getPresetDimensions(s.m2);
-    if (colInRow >= maxColsPerRow) {
-      posX = 0;
-      posY += maxHeightInRow;
-      maxHeightInRow = 0;
-      colInRow = 0;
+    if (s.gridCol <= 0 || s.gridRow <= 0) {
+      // Unplaced - use negative position as marker
+      return { width: dims.width, length: dims.length, posX: -1, posY: -1 };
     }
-    const result = { width: dims.width, length: dims.length, posX, posY };
-    posX += dims.width;
-    maxHeightInRow = Math.max(maxHeightInRow, dims.length);
-    colInRow++;
-    return result;
+    return { width: dims.width, length: dims.length, posX: s.gridCol - 1, posY: s.gridRow - 1 };
   });
 }
 
@@ -308,17 +297,14 @@ export function useFloorPlan(budgetId: string) {
     setSaving(true);
     try {
       // Calculate position based on grid coordinate (1m grid: posX = col-1, posY = row-1)
-      const floorRooms = floorId ? rooms.filter(r => r.floorId === floorId) : rooms;
-      let posX = 0;
-      let posY = 0;
+      let posX = -1;
+      let posY = -1;
 
       if (gridCol && gridRow && gridCol > 0 && gridRow > 0) {
         posX = gridCol - 1;
         posY = gridRow - 1;
-      } else {
-        const maxX = floorRooms.reduce((max, r) => Math.max(max, r.posX + r.width), 0);
-        posX = floorRooms.length > 0 ? maxX : 0;
       }
+      // If no coordinate given, room stays "unplaced" (posX=-1) → appears in staging header
 
       const { data: room, error } = await supabase
         .from('budget_floor_plan_rooms')

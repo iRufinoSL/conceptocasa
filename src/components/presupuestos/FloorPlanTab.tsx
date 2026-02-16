@@ -34,7 +34,7 @@ interface FloorDef {
   level: string;
   m2: number;
   spaces: SpaceTypeDef[];
-  customSpaces: Array<{ name: string; m2: number }>;
+  customSpaces: Array<{ name: string; m2: number; qty: number }>;
 }
 
 const DEFAULT_SPACE_TYPES: SpaceTypeDef[] = [
@@ -209,11 +209,11 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
   const addCustomSpace = (floorIdx: number) => {
     setFloorDefs(prev => prev.map((f, fi) => {
       if (fi !== floorIdx) return f;
-      return { ...f, customSpaces: [...f.customSpaces, { name: 'Nuevo espacio', m2: 10 }] };
+      return { ...f, customSpaces: [...f.customSpaces, { name: 'Nuevo espacio', m2: 10, qty: 1 }] };
     }));
   };
 
-  const updateCustomSpace = (floorIdx: number, csIdx: number, field: 'name' | 'm2', value: string | number) => {
+  const updateCustomSpace = (floorIdx: number, csIdx: number, field: 'name' | 'm2' | 'qty', value: string | number) => {
     setFloorDefs(prev => prev.map((f, fi) => {
       if (fi !== floorIdx) return f;
       return { ...f, customSpaces: f.customSpaces.map((cs, i) => i === csIdx ? { ...cs, [field]: value } : cs) };
@@ -228,7 +228,7 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
   };
 
   const getFloorTotalM2 = (f: FloorDef) => {
-    return f.spaces.reduce((sum, s) => sum + s.m2 * s.qty, 0) + f.customSpaces.reduce((sum, cs) => sum + cs.m2, 0);
+    return f.spaces.reduce((sum, s) => sum + s.m2 * s.qty, 0) + f.customSpaces.reduce((sum, cs) => sum + cs.m2 * (cs.qty || 1), 0);
   };
 
   const handleGenerate = async () => {
@@ -246,19 +246,16 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
       });
 
       f.customSpaces.forEach(cs => {
-        expandedSpaces.push({ name: cs.name, m2: cs.m2, gridCol: 0, gridRow: 0 });
+        for (let i = 0; i < (cs.qty || 1); i++) {
+          expandedSpaces.push({
+            name: cs.qty > 1 ? `${cs.name} ${i + 1}` : cs.name,
+            m2: cs.m2,
+            gridCol: 0, gridRow: 0,
+          });
+        }
       });
 
-      // Auto-assign grid positions
-      const maxRows = Math.max(2, Math.ceil(Math.sqrt(expandedSpaces.length)));
-      let col = 1, row = 1;
-      expandedSpaces.forEach(sp => {
-        sp.gridCol = col;
-        sp.gridRow = row;
-        row++;
-        if (row > maxRows) { row = 1; col++; }
-      });
-
+      // All spaces start unplaced (gridCol=0, gridRow=0) → they appear in the staging header
       return { name: f.name, level: f.level, spaces: expandedSpaces };
     });
 
@@ -369,27 +366,31 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
                 {floorDefs.map((f, fi) => (
                   <TabsContent key={fi} value={String(fi)} className="mt-3">
                     <div className="space-y-1.5">
-                      <div className="grid grid-cols-[1fr_70px_70px] gap-2 text-xs font-semibold text-muted-foreground px-1">
+                      <div className="grid grid-cols-[1fr_70px_70px_32px] gap-2 text-xs font-semibold text-muted-foreground px-1">
                         <span>Tipo</span>
                         <span className="text-center">m²</span>
-                        <span className="text-center">Cantidad</span>
+                        <span className="text-center">Cant.</span>
+                        <span></span>
                       </div>
                       {f.spaces.map((s, si) => (
-                        <div key={si} className="grid grid-cols-[1fr_70px_70px] gap-2 items-center">
+                        <div key={si} className="grid grid-cols-[1fr_70px_70px_32px] gap-2 items-center">
                           <span className="text-sm">{s.name}</span>
                           <Input type="number" className="h-8 text-center text-sm" value={s.m2}
                             onChange={e => updateSpaceType(fi, si, 'm2', Number(e.target.value))} />
                           <Input type="number" className="h-8 text-center text-sm" min={0} value={s.qty}
                             onChange={e => updateSpaceType(fi, si, 'qty', Math.max(0, parseInt(e.target.value) || 0))} />
+                          <span></span>
                         </div>
                       ))}
                       {f.customSpaces.map((cs, ci) => (
-                        <div key={`c${ci}`} className="grid grid-cols-[1fr_70px_70px] gap-2 items-center">
+                        <div key={`c${ci}`} className="grid grid-cols-[1fr_70px_70px_32px] gap-2 items-center">
                           <Input className="h-8 text-sm" value={cs.name}
                             onChange={e => updateCustomSpace(fi, ci, 'name', e.target.value)} />
                           <Input type="number" className="h-8 text-center text-sm" value={cs.m2}
                             onChange={e => updateCustomSpace(fi, ci, 'm2', Number(e.target.value))} />
-                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0 mx-auto" onClick={() => removeCustomSpace(fi, ci)}>
+                          <Input type="number" className="h-8 text-center text-sm" min={1} value={cs.qty}
+                            onChange={e => updateCustomSpace(fi, ci, 'qty', Math.max(1, parseInt(e.target.value) || 1))} />
+                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => removeCustomSpace(fi, ci)}>
                             <Trash2 className="h-3.5 w-3.5" />
                           </Button>
                         </div>
@@ -494,10 +495,59 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
             />
           </div>
           <div>
+            {/* Add new space section */}
+            {!selectedRoom && (
+              <Card>
+                <CardContent className="py-4 space-y-3">
+                  <h4 className="text-sm font-semibold flex items-center gap-1">
+                    <Plus className="h-4 w-4" /> Añadir espacio
+                  </h4>
+                  <div>
+                    <Label className="text-xs">Nombre</Label>
+                    <Input
+                      value={newSpaceName}
+                      onChange={e => setNewSpaceName(e.target.value)}
+                      placeholder="Ej: Habitación 3"
+                      disabled={saving}
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <Label className="text-xs">Ancho (m)</Label>
+                      <Input type="number" step="0.1" value={newSpaceWidth}
+                        onChange={e => setNewSpaceWidth(Number(e.target.value))} disabled={saving} />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Largo (m)</Label>
+                      <Input type="number" step="0.1" value={newSpaceLength}
+                        onChange={e => setNewSpaceLength(Number(e.target.value))} disabled={saving} />
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground">
+                    Presets: Hab.peq 3×3 · Hab.med 4×3 · Hab.gra 5×4 · Baño.peq 2×2 · Cocina 4×2 · Salón 6×5
+                  </p>
+                  <Button
+                    onClick={async () => {
+                      if (!newSpaceName.trim()) { toast.error('Indica un nombre'); return; }
+                      await addRoom(newSpaceName.trim(), newSpaceWidth, newSpaceLength, floors[0]?.id);
+                      setNewSpaceName('');
+                      toast.success('Espacio añadido a la cabecera');
+                    }}
+                    disabled={saving || !newSpaceName.trim()}
+                    size="sm"
+                    className="w-full"
+                  >
+                    <Plus className="h-4 w-4 mr-1" /> Crear en cabecera
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
+
             {selectedRoom && planData ? (() => {
-              // Compute coordinate for selected room (1m grid: posX+1 = col, posY+1 = row)
-              const coordCol = Math.round(selectedRoom.posX) + 1;
-              const coordRow = Math.round(selectedRoom.posY) + 1;
+              // Compute coordinate for selected room
+              const isUnplaced = selectedRoom.posX < 0 || selectedRoom.posY < 0;
+              const coordCol = isUnplaced ? undefined : Math.round(selectedRoom.posX) + 1;
+              const coordRow = isUnplaced ? undefined : Math.round(selectedRoom.posY) + 1;
               const floorObj = floors.find(f => f.id === selectedRoom.floorId);
               const floorName = floorObj?.name;
 
@@ -531,7 +581,7 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
                   saving={saving}
                 />
               );
-            })() : (
+            })() : !selectedRoom ? null : (
               <Card>
                 <CardContent className="py-8 text-center text-muted-foreground text-sm">
                   Haz clic en un espacio de la cuadrícula para editar sus propiedades y paredes

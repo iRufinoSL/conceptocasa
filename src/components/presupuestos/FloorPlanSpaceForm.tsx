@@ -47,7 +47,7 @@ export function FloorPlanSpaceForm({ room, allRooms, planData, coordCol, coordRo
   const [localLength, setLocalLength] = useState(String(room.length));
   const [localHasFloor, setLocalHasFloor] = useState(room.hasFloor !== false);
   const [localHasCeiling, setLocalHasCeiling] = useState(room.hasCeiling !== false);
-  const [localCoord, setLocalCoord] = useState(formatCoord(coordCol || 1, coordRow || 1));
+  const [localCoord, setLocalCoord] = useState(coordCol && coordRow ? formatCoord(coordCol, coordRow) : '');
   const [localWalls, setLocalWalls] = useState<Record<string, WallType>>(() => {
     const map: Record<string, WallType> = {};
     room.walls.forEach(w => { map[w.id] = w.wallType; });
@@ -62,7 +62,7 @@ export function FloorPlanSpaceForm({ room, allRooms, planData, coordCol, coordRo
     setLocalLength(String(room.length));
     setLocalHasFloor(room.hasFloor !== false);
     setLocalHasCeiling(room.hasCeiling !== false);
-    setLocalCoord(formatCoord(coordCol || 1, coordRow || 1));
+    setLocalCoord(coordCol && coordRow ? formatCoord(coordCol, coordRow) : '');
     const map: Record<string, WallType> = {};
     room.walls.forEach(w => { map[w.id] = w.wallType; });
     setLocalWalls(map);
@@ -71,9 +71,9 @@ export function FloorPlanSpaceForm({ room, allRooms, planData, coordCol, coordRo
 
   const parsedWidth = parseFloat(localWidth) || room.width;
   const parsedLength = parseFloat(localLength) || room.length;
-  const parsedCoord = parseCoord(localCoord);
-  const parsedCol = parsedCoord?.col || 1;
-  const parsedRow = parsedCoord?.row || 1;
+  const parsedCoord = localCoord ? parseCoord(localCoord) : null;
+  const parsedCol = parsedCoord?.col || 0;
+  const parsedRow = parsedCoord?.row || 0;
   const m2 = parsedWidth * parsedLength;
 
   // Group info
@@ -91,7 +91,7 @@ export function FloorPlanSpaceForm({ room, allRooms, planData, coordCol, coordRo
     localHasFloor !== (room.hasFloor !== false) ||
     localHasCeiling !== (room.hasCeiling !== false);
 
-  const coordChanged = parsedCol !== (coordCol || 1) || parsedRow !== (coordRow || 1);
+  const coordChanged = parsedCol !== (coordCol || 0) || parsedRow !== (coordRow || 0);
 
   const wallsChanged = room.walls.some(w => localWalls[w.id] !== w.wallType);
 
@@ -166,7 +166,9 @@ export function FloorPlanSpaceForm({ room, allRooms, planData, coordCol, coordRo
               className="flex h-8 w-20 rounded-md border border-input bg-background px-3 py-1 text-sm text-center font-mono ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
             />
             <span className="text-[10px] text-muted-foreground pb-1">
-              Actual: {formatCoord(coordCol || 1, coordRow || 1)}
+              {coordCol && coordRow
+                ? `Actual: ${formatCoord(coordCol, coordRow)}`
+                : 'Sin colocar — asigna coordenada para posicionar'}
             </span>
           </div>
         </div>

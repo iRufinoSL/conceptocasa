@@ -92,8 +92,10 @@ export function useFloorPlan(budgetId: string) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
+  const initialLoadDone = useRef(false);
+
   const fetchAll = useCallback(async () => {
-    setLoading(true);
+    if (!initialLoadDone.current) setLoading(true);
     try {
       // Fetch floor plan
       const { data: fp } = await supabase
@@ -225,6 +227,7 @@ export function useFloorPlan(budgetId: string) {
       toast.error('Error al cargar el plano');
     } finally {
       setLoading(false);
+      initialLoadDone.current = true;
     }
   }, [budgetId]);
 

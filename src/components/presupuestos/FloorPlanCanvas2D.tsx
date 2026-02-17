@@ -634,36 +634,47 @@ export function FloorPlanCanvas2D({
                         const sw = Math.max(opSegStroke, 2);
 
                         if (isDoor) {
+                          const halfT = sw / 2;
                           if (isHoriz) {
                             const ox = startPos;
                             const cy = wall.wallIndex === 1 ? 0 : h;
+                            const arcDir = wall.wallIndex === 1 ? 1 : -1;
                             return (
                               <g key={`op-${oi}`} pointerEvents="none">
-                                <line x1={ox} y1={cy} x2={ox + opWidth} y2={cy} stroke="#ffffff" strokeWidth={sw + 4} />
-                                <line x1={ox} y1={cy} x2={ox + opWidth * 0.7} y2={cy + (wall.wallIndex === 1 ? 1 : -1) * opWidth * 0.3}
-                                  stroke={WALL_SELECTED_COLOR} strokeWidth={0.8} opacity={0.6} />
+                                <line x1={ox} y1={cy} x2={ox + opWidth} y2={cy} stroke="#ffffff" strokeWidth={sw + 2} />
+                                <path d={`M ${ox},${cy} A ${opWidth},${opWidth} 0 0 ${arcDir > 0 ? 1 : 0} ${ox + opWidth},${cy + arcDir * opWidth * 0.05}`}
+                                  stroke="#d97706" strokeWidth={0.7} fill="none" opacity={0.5} />
+                                <line x1={ox} y1={cy - halfT} x2={ox} y2={cy + halfT} stroke="#d97706" strokeWidth={0.8} />
+                                <line x1={ox + opWidth} y1={cy - halfT} x2={ox + opWidth} y2={cy + halfT} stroke="#d97706" strokeWidth={0.8} />
                               </g>
                             );
                           } else {
                             const oy = startPos;
                             const cx = wall.wallIndex === 4 ? 0 : w;
+                            const arcDir = wall.wallIndex === 4 ? 1 : -1;
                             return (
                               <g key={`op-${oi}`} pointerEvents="none">
-                                <line x1={cx} y1={oy} x2={cx} y2={oy + opWidth} stroke="#ffffff" strokeWidth={sw + 4} />
-                                <line x1={cx} y1={oy} x2={cx + (wall.wallIndex === 4 ? 1 : -1) * opWidth * 0.3} y2={oy + opWidth * 0.7}
-                                  stroke={WALL_SELECTED_COLOR} strokeWidth={0.8} opacity={0.6} />
+                                <line x1={cx} y1={oy} x2={cx} y2={oy + opWidth} stroke="#ffffff" strokeWidth={sw + 2} />
+                                <path d={`M ${cx},${oy} A ${opWidth},${opWidth} 0 0 ${arcDir > 0 ? 1 : 0} ${cx + arcDir * opWidth * 0.05},${oy + opWidth}`}
+                                  stroke="#d97706" strokeWidth={0.7} fill="none" opacity={0.5} />
+                                <line x1={cx - halfT} y1={oy} x2={cx + halfT} y2={oy} stroke="#d97706" strokeWidth={0.8} />
+                                <line x1={cx - halfT} y1={oy + opWidth} x2={cx + halfT} y2={oy + opWidth} stroke="#d97706" strokeWidth={0.8} />
                               </g>
                             );
                           }
                         } else {
+                          // Window: two parallel lines spaced by wall thickness, proportional to opening
+                          const halfT = sw / 2;
                           if (isHoriz) {
                             const ox = startPos;
                             const cy = wall.wallIndex === 1 ? 0 : h;
                             return (
                               <g key={`op-${oi}`} pointerEvents="none">
-                                <line x1={ox} y1={cy} x2={ox + opWidth} y2={cy} stroke="#ffffff" strokeWidth={sw + 4} />
-                                <line x1={ox} y1={cy - 1.5} x2={ox + opWidth} y2={cy - 1.5} stroke="#3b82f6" strokeWidth={1.5} />
-                                <line x1={ox} y1={cy + 1.5} x2={ox + opWidth} y2={cy + 1.5} stroke="#3b82f6" strokeWidth={1.5} />
+                                <line x1={ox} y1={cy} x2={ox + opWidth} y2={cy} stroke="#ffffff" strokeWidth={sw + 2} />
+                                <line x1={ox} y1={cy - halfT} x2={ox + opWidth} y2={cy - halfT} stroke="#06b6d4" strokeWidth={1} />
+                                <line x1={ox} y1={cy + halfT} x2={ox + opWidth} y2={cy + halfT} stroke="#06b6d4" strokeWidth={1} />
+                                <line x1={ox} y1={cy - halfT} x2={ox} y2={cy + halfT} stroke="#06b6d4" strokeWidth={0.6} />
+                                <line x1={ox + opWidth} y1={cy - halfT} x2={ox + opWidth} y2={cy + halfT} stroke="#06b6d4" strokeWidth={0.6} />
                               </g>
                             );
                           } else {
@@ -671,9 +682,11 @@ export function FloorPlanCanvas2D({
                             const cx = wall.wallIndex === 4 ? 0 : w;
                             return (
                               <g key={`op-${oi}`} pointerEvents="none">
-                                <line x1={cx} y1={oy} x2={cx} y2={oy + opWidth} stroke="#ffffff" strokeWidth={sw + 4} />
-                                <line x1={cx - 1.5} y1={oy} x2={cx - 1.5} y2={oy + opWidth} stroke="#3b82f6" strokeWidth={1.5} />
-                                <line x1={cx + 1.5} y1={oy} x2={cx + 1.5} y2={oy + opWidth} stroke="#3b82f6" strokeWidth={1.5} />
+                                <line x1={cx} y1={oy} x2={cx} y2={oy + opWidth} stroke="#ffffff" strokeWidth={sw + 2} />
+                                <line x1={cx - halfT} y1={oy} x2={cx - halfT} y2={oy + opWidth} stroke="#06b6d4" strokeWidth={1} />
+                                <line x1={cx + halfT} y1={oy} x2={cx + halfT} y2={oy + opWidth} stroke="#06b6d4" strokeWidth={1} />
+                                <line x1={cx - halfT} y1={oy} x2={cx + halfT} y2={oy} stroke="#06b6d4" strokeWidth={0.6} />
+                                <line x1={cx - halfT} y1={oy + opWidth} x2={cx + halfT} y2={oy + opWidth} stroke="#06b6d4" strokeWidth={0.6} />
                               </g>
                             );
                           }
@@ -861,44 +874,53 @@ export function FloorPlanCanvas2D({
                     const isDoor = op.openingType === 'puerta' || op.openingType === 'puerta_externa';
                     const sw = Math.max(wallThick, 2);
 
+                    const halfT = sw / 2;
                     if (isHoriz) {
                       const ox = pw.start * SCALE + startPos;
                       const cy = pw.fixedCoord * SCALE;
-                      const dir = pw.side === 'top' ? 1 : -1;
+                      const arcDir = pw.side === 'top' ? 1 : -1;
                       if (isDoor) {
                         return (
                           <g key={`pw-op-${oi}`} pointerEvents="none">
-                            <line x1={ox} y1={cy} x2={ox + opWidth} y2={cy} stroke="#ffffff" strokeWidth={sw + 4} />
-                            <line x1={ox} y1={cy} x2={ox + opWidth * 0.7} y2={cy + dir * opWidth * 0.3}
-                              stroke={WALL_SELECTED_COLOR} strokeWidth={0.8} opacity={0.6} />
+                            <line x1={ox} y1={cy} x2={ox + opWidth} y2={cy} stroke="#ffffff" strokeWidth={sw + 2} />
+                            <path d={`M ${ox},${cy} A ${opWidth},${opWidth} 0 0 ${arcDir > 0 ? 1 : 0} ${ox + opWidth},${cy + arcDir * opWidth * 0.05}`}
+                              stroke="#d97706" strokeWidth={0.7} fill="none" opacity={0.5} />
+                            <line x1={ox} y1={cy - halfT} x2={ox} y2={cy + halfT} stroke="#d97706" strokeWidth={0.8} />
+                            <line x1={ox + opWidth} y1={cy - halfT} x2={ox + opWidth} y2={cy + halfT} stroke="#d97706" strokeWidth={0.8} />
                           </g>
                         );
                       }
                       return (
                         <g key={`pw-op-${oi}`} pointerEvents="none">
-                          <line x1={ox} y1={cy} x2={ox + opWidth} y2={cy} stroke="#ffffff" strokeWidth={sw + 4} />
-                          <line x1={ox} y1={cy - 1.5} x2={ox + opWidth} y2={cy - 1.5} stroke="#3b82f6" strokeWidth={1.5} />
-                          <line x1={ox} y1={cy + 1.5} x2={ox + opWidth} y2={cy + 1.5} stroke="#3b82f6" strokeWidth={1.5} />
+                          <line x1={ox} y1={cy} x2={ox + opWidth} y2={cy} stroke="#ffffff" strokeWidth={sw + 2} />
+                          <line x1={ox} y1={cy - halfT} x2={ox + opWidth} y2={cy - halfT} stroke="#06b6d4" strokeWidth={1} />
+                          <line x1={ox} y1={cy + halfT} x2={ox + opWidth} y2={cy + halfT} stroke="#06b6d4" strokeWidth={1} />
+                          <line x1={ox} y1={cy - halfT} x2={ox} y2={cy + halfT} stroke="#06b6d4" strokeWidth={0.6} />
+                          <line x1={ox + opWidth} y1={cy - halfT} x2={ox + opWidth} y2={cy + halfT} stroke="#06b6d4" strokeWidth={0.6} />
                         </g>
                       );
                     } else {
                       const oy = pw.start * SCALE + startPos;
                       const cx = pw.fixedCoord * SCALE;
-                      const dir = pw.side === 'left' ? 1 : -1;
+                      const arcDir = pw.side === 'left' ? 1 : -1;
                       if (isDoor) {
                         return (
                           <g key={`pw-op-${oi}`} pointerEvents="none">
-                            <line x1={cx} y1={oy} x2={cx} y2={oy + opWidth} stroke="#ffffff" strokeWidth={sw + 4} />
-                            <line x1={cx} y1={oy} x2={cx + dir * opWidth * 0.3} y2={oy + opWidth * 0.7}
-                              stroke={WALL_SELECTED_COLOR} strokeWidth={0.8} opacity={0.6} />
+                            <line x1={cx} y1={oy} x2={cx} y2={oy + opWidth} stroke="#ffffff" strokeWidth={sw + 2} />
+                            <path d={`M ${cx},${oy} A ${opWidth},${opWidth} 0 0 ${arcDir > 0 ? 1 : 0} ${cx + arcDir * opWidth * 0.05},${oy + opWidth}`}
+                              stroke="#d97706" strokeWidth={0.7} fill="none" opacity={0.5} />
+                            <line x1={cx - halfT} y1={oy} x2={cx + halfT} y2={oy} stroke="#d97706" strokeWidth={0.8} />
+                            <line x1={cx - halfT} y1={oy + opWidth} x2={cx + halfT} y2={oy + opWidth} stroke="#d97706" strokeWidth={0.8} />
                           </g>
                         );
                       }
                       return (
                         <g key={`pw-op-${oi}`} pointerEvents="none">
-                          <line x1={cx} y1={oy} x2={cx} y2={oy + opWidth} stroke="#ffffff" strokeWidth={sw + 4} />
-                          <line x1={cx - 1.5} y1={oy} x2={cx - 1.5} y2={oy + opWidth} stroke="#3b82f6" strokeWidth={1.5} />
-                          <line x1={cx + 1.5} y1={oy} x2={cx + 1.5} y2={oy + opWidth} stroke="#3b82f6" strokeWidth={1.5} />
+                          <line x1={cx} y1={oy} x2={cx} y2={oy + opWidth} stroke="#ffffff" strokeWidth={sw + 2} />
+                          <line x1={cx - halfT} y1={oy} x2={cx - halfT} y2={oy + opWidth} stroke="#06b6d4" strokeWidth={1} />
+                          <line x1={cx + halfT} y1={oy} x2={cx + halfT} y2={oy + opWidth} stroke="#06b6d4" strokeWidth={1} />
+                          <line x1={cx - halfT} y1={oy} x2={cx + halfT} y2={oy} stroke="#06b6d4" strokeWidth={0.6} />
+                          <line x1={cx - halfT} y1={oy + opWidth} x2={cx + halfT} y2={oy + opWidth} stroke="#06b6d4" strokeWidth={0.6} />
                         </g>
                       );
                     }
@@ -957,8 +979,8 @@ export function FloorPlanCanvas2D({
                 <text x={81} y={4} fontSize={7} fill="#64748b">Interna</text>
                 <line x1={130} y1={1.5} x2={142} y2={1.5} stroke={WALL_INVIS_COLOR} strokeWidth={1.5} strokeDasharray="4 3" />
                 <text x={146} y={4} fontSize={7} fill="#64748b">Invisible</text>
-                <line x1={195} y1={-1} x2={207} y2={-1} stroke="#3b82f6" strokeWidth={1.5} />
-                <line x1={195} y1={3} x2={207} y2={3} stroke="#3b82f6" strokeWidth={1.5} />
+                <line x1={195} y1={-1} x2={207} y2={-1} stroke="#06b6d4" strokeWidth={1} />
+                <line x1={195} y1={3} x2={207} y2={3} stroke="#06b6d4" strokeWidth={1} />
                 <text x={211} y={4} fontSize={7} fill="#64748b">Ventana</text>
                 <rect x={260} y={0} width={12} height={3} fill={SHARED_WALL_COLOR} />
                 <text x={276} y={4} fontSize={7} fill="#64748b">Compartida</text>

@@ -1,6 +1,6 @@
 import { useMemo, useState, useCallback, useRef, useEffect } from 'react';
 import type { FloorPlanData, RoomData } from '@/lib/floor-plan-calculations';
-import { autoClassifyWalls, generateExternalWallNames, computeWallSegments, isExteriorType, isInvisibleType, isCompartidaType } from '@/lib/floor-plan-calculations';
+import { autoClassifyWalls, generateExternalWallNames, computeWallSegments, isExteriorType, isInvisibleType, isCompartidaType, computeGroupPerimeterWalls } from '@/lib/floor-plan-calculations';
 
 interface FloorPlanCanvas2DProps {
   plan: FloorPlanData;
@@ -134,6 +134,12 @@ export function FloorPlanCanvas2D({
 
   const wallClassification = useMemo(() => autoClassifyWalls(rooms), [rooms]);
   const wallSegmentsMap = useMemo(() => computeWallSegments(rooms), [rooms]);
+  const perimeterWalls = useMemo(() => computeGroupPerimeterWalls(rooms), [rooms]);
+  const groupedRoomIds = useMemo(() => {
+    const ids = new Set<string>();
+    rooms.forEach(r => { if (r.groupId) ids.add(r.id); });
+    return ids;
+  }, [rooms]);
 
   // Mouse wheel zoom
   const handleWheel = useCallback((e: React.WheelEvent) => {
@@ -572,8 +578,8 @@ export function FloorPlanCanvas2D({
                         );
                       })}
 
-                      {/* Openings */}
-                      {wall.openings.map((op, oi) => {
+                      {/* Openings — skip for grouped rooms (rendered via perimeter walls) */}
+                      {!groupedRoomIds.has(room.id) && wall.openings.map((op, oi) => {
                         const opCenter = op.positionX;
                         const opSeg = segments.find(s => opCenter >= s.startFraction - 0.01 && opCenter <= s.endFraction + 0.01);
                         const isOnInvisible = opSeg ? isInvisibleType(opSeg.segmentType) : false;
@@ -725,6 +731,96 @@ export function FloorPlanCanvas2D({
                         )}
                       </g>
                     );
+                  })}
+                </g>
+              );
+            })}
+
+            {/* Perimeter wall openings for grouped spaces */}
+            {perimeterWalls.map(pw => {
+              const isHoriz = pw.direction === 'horizontal';
+              const isExt = isExteriorType(pw.wallType);
+              const wallThick = (isExt ? plan.externalWallThickness : plan.internalWallThickness) * SCALE;
+
+              return (
+                <g key={`pw-${pw.id}`}>
+                  {/* Merged wall indicator */}
+                  {pw.cellSegments.length > 1 && (() => {
+                    const sx = isHoriz ? pw.start * SCALE : pw.fixedCoord * SCALE;
+                    const sy = isHoriz ? pw.fixedCoord * SCALE : pw.start * SCALE;
+                    const ex = isHoriz ? pw.end * SCALE : pw.fixedCoord * SCALE;
+                    const ey = isHoriz ? pw.fixedCoord * SCALE : pw.end * SCALE;
+                    return (
+                      <line x1={sx} y1={sy} x2={ex} y2={ey}
+                        stroke="#8b5cf6" strokeWidth={1} strokeDasharray="2 4" opacity={0.4} pointerEvents="none" />
+                    );
+                  })()}
+
+                  {/* Length label for merged walls */}
+                  {pw.cellSegments.length > 1 && (() => {
+                    const mid = (pw.start + pw.end) / 2 * SCALE;
+                    const fixed = pw.fixedCoord * SCALE;
+                    const offset = pw.side === 'top' || pw.side === 'left' ? -16 : 16;
+                    return (
+                      <text
+                        x={isHoriz ? mid : fixed + offset}
+                        y={isHoriz ? fixed + offset : mid}
+                        textAnchor="middle" fontSize={7} fontWeight="bold" fill="#8b5cf6" opacity={0.7} pointerEvents="none"
+                      >
+                        ↔ {pw.length.toFixed(1)}m ({pw.cellSegments.length} celdas)
+                      </text>
+                    );
+                  })()}
+
+                  {/* Openings on perimeter walls */}
+                  {pw.openings.map((op, oi) => {
+                    const opWidth = op.width * SCALE;
+                    const centerPos = op.perimeterPositionX * pw.length * SCALE;
+                    const startPos = centerPos - opWidth / 2;
+                    const isDoor = op.openingType === 'puerta' || op.openingType === 'puerta_externa';
+                    const sw = Math.max(wallThick, 2);
+
+                    if (isHoriz) {
+                      const ox = pw.start * SCALE + startPos;
+                      const cy = pw.fixedCoord * SCALE;
+                      const dir = pw.side === 'top' ? 1 : -1;
+                      if (isDoor) {
+                        return (
+                          <g key={`pw-op-${oi}`} pointerEvents="none">
+                            <line x1={ox} y1={cy} x2={ox + opWidth} y2={cy} stroke="#ffffff" strokeWidth={sw + 4} />
+                            <line x1={ox} y1={cy} x2={ox + opWidth * 0.7} y2={cy + dir * opWidth * 0.3}
+                              stroke={WALL_SELECTED_COLOR} strokeWidth={0.8} opacity={0.6} />
+                          </g>
+                        );
+                      }
+                      return (
+                        <g key={`pw-op-${oi}`} pointerEvents="none">
+                          <line x1={ox} y1={cy} x2={ox + opWidth} y2={cy} stroke="#ffffff" strokeWidth={sw + 4} />
+                          <line x1={ox} y1={cy - 1.5} x2={ox + opWidth} y2={cy - 1.5} stroke="#3b82f6" strokeWidth={1.5} />
+                          <line x1={ox} y1={cy + 1.5} x2={ox + opWidth} y2={cy + 1.5} stroke="#3b82f6" strokeWidth={1.5} />
+                        </g>
+                      );
+                    } else {
+                      const oy = pw.start * SCALE + startPos;
+                      const cx = pw.fixedCoord * SCALE;
+                      const dir = pw.side === 'left' ? 1 : -1;
+                      if (isDoor) {
+                        return (
+                          <g key={`pw-op-${oi}`} pointerEvents="none">
+                            <line x1={cx} y1={oy} x2={cx} y2={oy + opWidth} stroke="#ffffff" strokeWidth={sw + 4} />
+                            <line x1={cx} y1={oy} x2={cx + dir * opWidth * 0.3} y2={oy + opWidth * 0.7}
+                              stroke={WALL_SELECTED_COLOR} strokeWidth={0.8} opacity={0.6} />
+                          </g>
+                        );
+                      }
+                      return (
+                        <g key={`pw-op-${oi}`} pointerEvents="none">
+                          <line x1={cx} y1={oy} x2={cx} y2={oy + opWidth} stroke="#ffffff" strokeWidth={sw + 4} />
+                          <line x1={cx - 1.5} y1={oy} x2={cx - 1.5} y2={oy + opWidth} stroke="#3b82f6" strokeWidth={1.5} />
+                          <line x1={cx + 1.5} y1={oy} x2={cx + 1.5} y2={oy + opWidth} stroke="#3b82f6" strokeWidth={1.5} />
+                        </g>
+                      );
+                    }
                   })}
                 </g>
               );

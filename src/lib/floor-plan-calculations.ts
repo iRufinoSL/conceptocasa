@@ -1099,3 +1099,206 @@ export function computeWallSegments(rooms: RoomData[]): Map<string, WallSegment[
 
   return result;
 }
+
+// === Perimeter Wall System for Non-Rectangular Grouped Spaces ===
+
+export interface PerimeterWallCellSegment {
+  roomId: string;
+  wallIndex: number;
+  wallId: string;
+  segStart: number;
+  segEnd: number;
+  startInPerimeter: number;
+  endInPerimeter: number;
+}
+
+export interface PerimeterWall {
+  id: string;
+  groupId: string;
+  groupName: string;
+  direction: 'horizontal' | 'vertical';
+  fixedCoord: number;
+  start: number;
+  end: number;
+  length: number;
+  wallType: WallType;
+  side: 'top' | 'right' | 'bottom' | 'left';
+  cellSegments: PerimeterWallCellSegment[];
+  openings: Array<OpeningData & { perimeterPositionX: number }>;
+}
+
+/**
+ * Compute merged perimeter walls for grouped rooms.
+ * Groups of 1×1m cells form non-rectangular shapes; this function
+ * traces the outer perimeter and merges collinear adjacent cell walls
+ * into continuous "perimeter walls" that can span multiple cells.
+ */
+export function computeGroupPerimeterWalls(rooms: RoomData[]): PerimeterWall[] {
+  const EPSILON = 0.05;
+  const wallSegmentsMap = computeWallSegments(rooms);
+  const result: PerimeterWall[] = [];
+
+  const groups = new Map<string, RoomData[]>();
+  rooms.forEach(r => {
+    if (r.groupId) {
+      if (!groups.has(r.groupId)) groups.set(r.groupId, []);
+      groups.get(r.groupId)!.push(r);
+    }
+  });
+
+  const sideMap: Record<number, 'top' | 'right' | 'bottom' | 'left'> = {
+    1: 'top', 2: 'right', 3: 'bottom', 4: 'left',
+  };
+
+  groups.forEach((groupRooms, groupId) => {
+    const groupRoomIds = new Set(groupRooms.map(r => r.id));
+    const groupName = groupRooms[0]?.groupName || groupId;
+
+    interface AbsEdge {
+      roomId: string;
+      wallIndex: number;
+      wallId: string;
+      direction: 'horizontal' | 'vertical';
+      fixedCoord: number;
+      start: number;
+      end: number;
+      wallType: WallType;
+      side: 'top' | 'right' | 'bottom' | 'left';
+      openings: OpeningData[];
+      cellWallLength: number;
+    }
+
+    const edges: AbsEdge[] = [];
+
+    groupRooms.forEach(room => {
+      room.walls.forEach(wall => {
+        const key = `${room.id}::${wall.wallIndex}`;
+        const segments = wallSegmentsMap.get(key) || [];
+        const isHoriz = wall.wallIndex === 1 || wall.wallIndex === 3;
+        const cellWallLength = isHoriz ? room.width : room.length;
+
+        segments.forEach(seg => {
+          if (seg.neighborRoomId && groupRoomIds.has(seg.neighborRoomId)) return;
+          if (isInvisibleType(seg.segmentType)) return;
+
+          let fixedCoord: number, start: number, end: number;
+          switch (wall.wallIndex) {
+            case 1: fixedCoord = room.posY; start = room.posX + seg.startMeters; end = room.posX + seg.endMeters; break;
+            case 2: fixedCoord = room.posX + room.width; start = room.posY + seg.startMeters; end = room.posY + seg.endMeters; break;
+            case 3: fixedCoord = room.posY + room.length; start = room.posX + seg.startMeters; end = room.posX + seg.endMeters; break;
+            default: fixedCoord = room.posX; start = room.posY + seg.startMeters; end = room.posY + seg.endMeters; break;
+          }
+
+          const segOpenings = wall.openings.filter(op =>
+            op.positionX >= seg.startFraction - 0.01 && op.positionX <= seg.endFraction + 0.01
+          );
+
+          edges.push({
+            roomId: room.id, wallIndex: wall.wallIndex, wallId: wall.id,
+            direction: isHoriz ? 'horizontal' : 'vertical',
+            fixedCoord, start, end,
+            wallType: seg.segmentType,
+            side: sideMap[wall.wallIndex],
+            openings: segOpenings,
+            cellWallLength,
+          });
+        });
+      });
+    });
+
+    const edgeGroups = new Map<string, AbsEdge[]>();
+    edges.forEach(e => {
+      const gk = `${e.direction}::${Math.round(e.fixedCoord * 1000)}::${e.side}`;
+      if (!edgeGroups.has(gk)) edgeGroups.set(gk, []);
+      edgeGroups.get(gk)!.push(e);
+    });
+
+    edgeGroups.forEach(groupEdges => {
+      groupEdges.sort((a, b) => a.start - b.start);
+
+      let mStart = groupEdges[0].start;
+      let mEnd = groupEdges[0].end;
+      let cells: AbsEdge[] = [groupEdges[0]];
+
+      const emit = () => {
+        const totalLen = mEnd - mStart;
+        if (totalLen < EPSILON) return;
+
+        const cellSegs: PerimeterWallCellSegment[] = cells.map(c => ({
+          roomId: c.roomId, wallIndex: c.wallIndex, wallId: c.wallId,
+          segStart: c.start, segEnd: c.end,
+          startInPerimeter: (c.start - mStart) / totalLen,
+          endInPerimeter: (c.end - mStart) / totalLen,
+        }));
+
+        const allOpenings: Array<OpeningData & { perimeterPositionX: number }> = [];
+        cells.forEach(c => {
+          const room = rooms.find(r => r.id === c.roomId)!;
+          c.openings.forEach(op => {
+            const isH = c.wallIndex === 1 || c.wallIndex === 3;
+            const cellStart = isH ? room.posX : room.posY;
+            const absCenter = cellStart + op.positionX * c.cellWallLength;
+            allOpenings.push({
+              ...op,
+              perimeterPositionX: Math.max(0, Math.min(1, (absCenter - mStart) / totalLen)),
+            });
+          });
+        });
+
+        result.push({
+          id: `pw-${groupId}-${cells[0].side}-${Math.round(cells[0].fixedCoord * 100)}-${Math.round(mStart * 100)}`,
+          groupId, groupName,
+          direction: cells[0].direction,
+          fixedCoord: cells[0].fixedCoord,
+          start: mStart, end: mEnd, length: totalLen,
+          wallType: cells[0].wallType,
+          side: cells[0].side,
+          cellSegments: cellSegs,
+          openings: allOpenings,
+        });
+      };
+
+      for (let i = 1; i < groupEdges.length; i++) {
+        const next = groupEdges[i];
+        if (Math.abs(next.start - mEnd) < EPSILON) {
+          mEnd = next.end;
+          cells.push(next);
+        } else {
+          emit();
+          mStart = next.start;
+          mEnd = next.end;
+          cells = [next];
+        }
+      }
+      emit();
+    });
+  });
+
+  return result;
+}
+
+/**
+ * Convert a perimeter wall position (0-1) to the corresponding cell wall and positionX for DB storage.
+ */
+export function perimeterPositionToCell(
+  pw: PerimeterWall,
+  perimeterPos: number,
+  rooms: RoomData[]
+): { wallId: string; positionX: number; roomId: string } | null {
+  for (const seg of pw.cellSegments) {
+    if (perimeterPos >= seg.startInPerimeter - 0.01 && perimeterPos <= seg.endInPerimeter + 0.01) {
+      const room = rooms.find(r => r.id === seg.roomId);
+      if (!room) continue;
+      const isH = seg.wallIndex === 1 || seg.wallIndex === 3;
+      const cellWallLen = isH ? room.width : room.length;
+      const cellStart = isH ? room.posX : room.posY;
+      const absPos = pw.start + perimeterPos * pw.length;
+      const positionX = (absPos - cellStart) / cellWallLen;
+      return { wallId: seg.wallId, positionX: Math.max(0, Math.min(1, positionX)), roomId: seg.roomId };
+    }
+  }
+  if (pw.cellSegments.length > 0) {
+    return { wallId: pw.cellSegments[0].wallId, positionX: 0.5, roomId: pw.cellSegments[0].roomId };
+  }
+  return null;
+}

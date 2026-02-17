@@ -141,6 +141,44 @@ export function FloorPlanCanvas2D({
     return ids;
   }, [rooms]);
 
+  // Walls between cells of the same group → should be invisible
+  const intraGroupWallKeys = useMemo(() => {
+    const keys = new Set<string>();
+    const EPSILON = 0.05;
+    const grouped = rooms.filter(r => r.groupId);
+    for (let i = 0; i < grouped.length; i++) {
+      for (let j = i + 1; j < grouped.length; j++) {
+        const a = grouped[i], b = grouped[j];
+        if (a.groupId !== b.groupId) continue;
+        // A right = B left
+        if (Math.abs((a.posX + a.width) - b.posX) < EPSILON) {
+          const os = Math.max(a.posY, b.posY);
+          const oe = Math.min(a.posY + a.length, b.posY + b.length);
+          if (oe - os > EPSILON) { keys.add(`${a.id}::2`); keys.add(`${b.id}::4`); }
+        }
+        // A left = B right
+        if (Math.abs(a.posX - (b.posX + b.width)) < EPSILON) {
+          const os = Math.max(a.posY, b.posY);
+          const oe = Math.min(a.posY + a.length, b.posY + b.length);
+          if (oe - os > EPSILON) { keys.add(`${a.id}::4`); keys.add(`${b.id}::2`); }
+        }
+        // A bottom = B top
+        if (Math.abs((a.posY + a.length) - b.posY) < EPSILON) {
+          const os = Math.max(a.posX, b.posX);
+          const oe = Math.min(a.posX + a.width, b.posX + b.width);
+          if (oe - os > EPSILON) { keys.add(`${a.id}::3`); keys.add(`${b.id}::1`); }
+        }
+        // A top = B bottom
+        if (Math.abs(a.posY - (b.posY + b.length)) < EPSILON) {
+          const os = Math.max(a.posX, b.posX);
+          const oe = Math.min(a.posX + a.width, b.posX + b.width);
+          if (oe - os > EPSILON) { keys.add(`${a.id}::1`); keys.add(`${b.id}::3`); }
+        }
+      }
+    }
+    return keys;
+  }, [rooms]);
+
   // Mouse wheel zoom
   const handleWheel = useCallback((e: React.WheelEvent) => {
     e.preventDefault();
@@ -507,8 +545,10 @@ export function FloorPlanCanvas2D({
                       stroke={WALL_SELECTED_COLOR} strokeWidth={2} fill="none" rx={2} strokeDasharray="6 3" pointerEvents="none" />
                   )}
 
-                  {/* Wall segments */}
-                  {roomWallSegments.map(({ wall, wallKey, segments, isHoriz, wx1, wy1, wx2, wy2 }) => (
+                  {/* Wall segments — skip intra-group walls entirely */}
+                  {roomWallSegments.map(({ wall, wallKey, segments, isHoriz, wx1, wy1, wx2, wy2 }) => {
+                    if (intraGroupWallKeys.has(wallKey)) return null;
+                    return (
                     <g key={wallKey}>
                       {segments.map((seg, si) => {
                         const segKey = `${wallKey}::${si}`;
@@ -640,10 +680,12 @@ export function FloorPlanCanvas2D({
                         }
                       })}
                     </g>
-                  ))}
+                    );
+                  })}
 
                   {/* External wall thickness bands */}
                   {roomWallSegments.map(({ wallKey, wall, isHoriz: ih }) => {
+                    if (intraGroupWallKeys.has(wallKey)) return null;
                     const overallType = wallClassification.get(wallKey) || wall.wallType;
                     if (!isExteriorType(overallType)) return null;
                     const extThick = extT * SCALE;
@@ -664,16 +706,55 @@ export function FloorPlanCanvas2D({
                     }
                   })}
 
-                  {/* Labels */}
-                  <text x={w / 2} y={h / 2 - 10} textAnchor="middle" fontSize={10} fontWeight="bold" fill="#1e293b" pointerEvents="none">
-                    {room.name}
-                  </text>
-                  <text x={w / 2} y={h / 2 + 2} textAnchor="middle" fontSize={8} fill="#64748b" pointerEvents="none">
-                    {room.width}×{room.length}m
-                  </text>
-                  <text x={w / 2} y={h / 2 + 14} textAnchor="middle" fontSize={8.5} fontWeight="bold" fill="#3b82f6" pointerEvents="none">
-                    Suelo: {(room.width * room.length).toFixed(1)}m²
-                  </text>
+                  {/* Labels — adaptive 3 lines max */}
+                  {(() => {
+                    const area = (room.width * room.length).toFixed(1);
+                    const dims = `${room.width}×${room.length}m`;
+                    const maxChars = Math.max(3, Math.floor(w / 5.5)); // approx chars that fit
+                    const nameStr = room.name.length > maxChars
+                      ? room.name.slice(0, maxChars - 1) + '…'
+                      : room.name;
+                    // 3 lines: name + m², dims, (empty or nothing based on height)
+                    const lineH = 11;
+                    const totalH = h;
+                    const lines3 = totalH >= lineH * 3;
+                    const lines2 = totalH >= lineH * 2;
+                    const cy = h / 2;
+
+                    if (lines3) {
+                      return (
+                        <>
+                          <text x={w / 2} y={cy - 8} textAnchor="middle" fontSize={9} fontWeight="bold" fill="#1e293b" pointerEvents="none">
+                            {nameStr} · {area}m²
+                          </text>
+                          <text x={w / 2} y={cy + 3} textAnchor="middle" fontSize={7.5} fill="#64748b" pointerEvents="none">
+                            {dims}
+                          </text>
+                          <text x={w / 2} y={cy + 13} textAnchor="middle" fontSize={7} fill="#3b82f6" pointerEvents="none">
+                            h:{(room.height || 2.5).toFixed(1)}m
+                          </text>
+                        </>
+                      );
+                    }
+                    if (lines2) {
+                      return (
+                        <>
+                          <text x={w / 2} y={cy - 4} textAnchor="middle" fontSize={8} fontWeight="bold" fill="#1e293b" pointerEvents="none">
+                            {nameStr} · {area}m²
+                          </text>
+                          <text x={w / 2} y={cy + 7} textAnchor="middle" fontSize={7} fill="#64748b" pointerEvents="none">
+                            {dims}
+                          </text>
+                        </>
+                      );
+                    }
+                    // Single line only
+                    return (
+                      <text x={w / 2} y={cy + 3} textAnchor="middle" fontSize={7} fontWeight="bold" fill="#1e293b" pointerEvents="none">
+                        {nameStr} {area}m²
+                      </text>
+                    );
+                  })()}
 
                   {/* Interior dimension (top) */}
                   <line x1={0} y1={-8} x2={w} y2={-8} stroke="#9ca3af" strokeWidth={0.5} pointerEvents="none" />

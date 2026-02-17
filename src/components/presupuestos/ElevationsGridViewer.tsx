@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Plus, Trash2, Box, Layers, ArrowUpDown } from 'lucide-react';
-import { OPENING_PRESETS, WALL_LABELS, computeWallSegments, autoClassifyWalls, generateExternalWallNames, isExteriorType, isInvisibleType } from '@/lib/floor-plan-calculations';
+import { OPENING_PRESETS, WALL_LABELS, computeWallSegments, autoClassifyWalls, generateExternalWallNames, isExteriorType, isInvisibleType, computeGroupPerimeterWalls, perimeterPositionToCell } from '@/lib/floor-plan-calculations';
 import type { RoomData, WallData, OpeningData, FloorPlanData, WallSegment, FloorLevel } from '@/lib/floor-plan-calculations';
 
 interface ElevationsGridViewerProps {
@@ -74,6 +74,12 @@ export function ElevationsGridViewer({
   const wallSegmentsMap = useMemo(() => computeWallSegments(rooms), [rooms]);
   const wallClassification = useMemo(() => autoClassifyWalls(rooms), [rooms]);
   const externalWallNames = useMemo(() => generateExternalWallNames(rooms, wallClassification), [rooms, wallClassification]);
+  const perimeterWalls = useMemo(() => computeGroupPerimeterWalls(rooms), [rooms]);
+  const groupedRoomIds = useMemo(() => {
+    const ids = new Set<string>();
+    rooms.forEach(r => { if (r.groupId) ids.add(r.id); });
+    return ids;
+  }, [rooms]);
 
   // Build all elevation cards
   const cards: ElevationCard[] = useMemo(() => {
@@ -109,9 +115,45 @@ export function ElevationsGridViewer({
     }
 
     // 2. Per-room surfaces: suelo, techo, paredes, volumen
+    const processedGroupSurfaces = new Set<string>();
     rooms.forEach(room => {
       const roomH = room.height || plan.defaultHeight;
       const floorArea = room.width * room.length;
+
+      // Grouped rooms: aggregate surfaces per group, skip individual wall cards
+      if (room.groupId) {
+        if (processedGroupSurfaces.has(room.groupId)) return;
+        processedGroupSurfaces.add(room.groupId);
+        const gRooms = rooms.filter(r => r.groupId === room.groupId);
+        const totalArea = gRooms.reduce((s, r) => s + r.width * r.length, 0);
+        const gName = room.groupName || room.groupId;
+        const sqSide = Math.sqrt(totalArea);
+
+        if (gRooms.some(r => r.hasFloor !== false)) {
+          result.push({
+            id: `suelo-group-${room.groupId}`, label: 'Suelo', sublabel: gName,
+            category: 'suelo', width: sqSide, height: sqSide, room, openings: [],
+            canAddOpenings: false, fill: 'hsl(142, 40%, 90%)', stroke: 'hsl(142, 50%, 40%)',
+            badgeLabel: `Suelo · ${totalArea.toFixed(1)}m²`, badgeVariant: 'secondary', surfaceArea: totalArea,
+          });
+        }
+        if (gRooms.some(r => r.hasCeiling !== false || r.hasRoof)) {
+          result.push({
+            id: `techo-group-${room.groupId}`, label: 'Techo', sublabel: gName,
+            category: 'techo', width: sqSide, height: sqSide, room, openings: [],
+            canAddOpenings: false, fill: 'hsl(200, 30%, 92%)', stroke: 'hsl(200, 40%, 50%)',
+            badgeLabel: 'Techo', badgeVariant: 'outline', surfaceArea: totalArea,
+          });
+        }
+        result.push({
+          id: `volumen-group-${room.groupId}`, label: 'Volumen', sublabel: gName,
+          category: 'volumen', width: sqSide, height: roomH, room, openings: [],
+          canAddOpenings: false, fill: 'hsl(280, 20%, 94%)', stroke: 'hsl(280, 30%, 55%)',
+          badgeLabel: 'Volumen', badgeVariant: 'outline', surfaceArea: totalArea,
+          volume: totalArea * roomH, roomHeight: roomH,
+        });
+        return; // Walls handled by perimeter walls below
+      }
 
       // Suelo - only if hasFloor
       if (room.hasFloor !== false) {
@@ -224,6 +266,39 @@ export function ElevationsGridViewer({
             surfaceArea: segLen * wallHeight,
           });
         });
+      });
+    });
+
+    // 2b. Perimeter wall cards for grouped spaces
+    perimeterWalls.forEach(pw => {
+      const firstRoom = rooms.find(r => r.id === pw.cellSegments[0]?.roomId);
+      if (!firstRoom) return;
+      const wallHeight = firstRoom.height || plan.defaultHeight;
+      const isExternal = isExteriorType(pw.wallType);
+      const sideLabels: Record<string, string> = { top: 'Superior', right: 'Derecha', bottom: 'Inferior', left: 'Izquierda' };
+      const mappedOpenings: OpeningData[] = pw.openings.map(op => ({ ...op, positionX: op.perimeterPositionX }));
+      const centerCell = perimeterPositionToCell(pw, 0.5, rooms);
+      const firstWall = firstRoom.walls.find(w => w.wallIndex === pw.cellSegments[0]?.wallIndex);
+      const targetWallId = centerCell?.wallId || firstWall?.id;
+      const canAdd = targetWallId ? !targetWallId.startsWith('temp-') : false;
+
+      result.push({
+        id: `pw-${pw.id}`,
+        label: `Pared ${sideLabels[pw.side] || pw.side}`,
+        sublabel: pw.groupName,
+        category: 'pared',
+        width: pw.length,
+        height: wallHeight,
+        room: firstRoom,
+        wall: firstWall,
+        openings: mappedOpenings,
+        wallId: targetWallId,
+        canAddOpenings: canAdd,
+        fill: isExternal ? 'hsl(30, 30%, 92%)' : 'hsl(25, 60%, 93%)',
+        stroke: isExternal ? 'hsl(222, 47%, 30%)' : 'hsl(25, 80%, 50%)',
+        badgeLabel: `${isExternal ? 'Ext.' : 'Int.'} ${pw.length.toFixed(1)}m · ${pw.cellSegments.length} celdas`,
+        badgeVariant: isExternal ? 'default' : 'outline' as const,
+        surfaceArea: pw.length * wallHeight,
       });
     });
 

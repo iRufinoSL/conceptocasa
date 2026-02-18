@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,7 +9,25 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useEmailService } from '@/hooks/useEmailService';
 import { ExternalResource } from '@/types/resource';
 import { formatCurrency } from '@/lib/format-utils';
-import { Mail, Send, X, Plus, Paperclip, FileText } from 'lucide-react';
+import { Mail, Send, X, Plus, Paperclip, FileText, Search, User } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { ContactForm } from '@/components/crm/ContactForm';
+import { normalizeSearchText } from '@/lib/search-utils';
+
+interface CrmContact {
+  id: string;
+  name: string;
+  surname: string | null;
+  email: string | null;
+  phone: string | null;
+}
+
+interface Recipient {
+  type: 'contact' | 'manual';
+  contactId?: string;
+  contactName?: string;
+  email: string;
+}
 
 interface ResourceEmailDialogProps {
   open: boolean;
@@ -29,22 +47,75 @@ export function ResourceEmailDialog({
   getEffectiveCost,
 }: ResourceEmailDialogProps) {
   const { sendEmail, sending } = useEmailService();
-  const [recipients, setRecipients] = useState<string[]>(['']);
+  const [recipients, setRecipients] = useState<Recipient[]>([]);
   const [subject, setSubject] = useState(headerText || 'Listado de Recursos');
   const [body, setBody] = useState('');
   const [pdfMode, setPdfMode] = useState<'inline' | 'attach'>('attach');
   const [extraAttachments, setExtraAttachments] = useState<File[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const addRecipient = () => setRecipients((prev) => [...prev, '']);
+  // Contact search state
+  const [contacts, setContacts] = useState<CrmContact[]>([]);
+  const [contactSearch, setContactSearch] = useState('');
+  const [showContactSearch, setShowContactSearch] = useState(false);
+  const [showNewContactForm, setShowNewContactForm] = useState(false);
+  const [manualEmail, setManualEmail] = useState('');
 
-  const updateRecipient = (index: number, value: string) => {
-    setRecipients((prev) => prev.map((r, i) => (i === index ? value : r)));
+  useEffect(() => {
+    if (open) {
+      supabase
+        .from('crm_contacts')
+        .select('id, name, surname, email, phone')
+        .order('name')
+        .then(({ data }) => setContacts(data || []));
+    }
+  }, [open]);
+
+  const filteredContacts = useMemo(() => {
+    if (!contactSearch.trim()) return contacts.filter(c => c.email);
+    const norm = normalizeSearchText(contactSearch);
+    return contacts.filter(c => {
+      if (!c.email) return false;
+      const text = `${c.name} ${c.surname || ''} ${c.email} ${c.phone || ''}`;
+      return normalizeSearchText(text).includes(norm);
+    });
+  }, [contacts, contactSearch]);
+
+  const addContactRecipient = (contact: CrmContact) => {
+    if (!contact.email) return;
+    if (recipients.some(r => r.email === contact.email)) return;
+    setRecipients(prev => [...prev, {
+      type: 'contact',
+      contactId: contact.id,
+      contactName: contact.surname ? `${contact.name} ${contact.surname}` : contact.name,
+      email: contact.email,
+    }]);
+    setContactSearch('');
+    setShowContactSearch(false);
+  };
+
+  const addManualRecipient = () => {
+    const email = manualEmail.trim();
+    if (!email || recipients.some(r => r.email === email)) return;
+    setRecipients(prev => [...prev, { type: 'manual', email }]);
+    setManualEmail('');
   };
 
   const removeRecipient = (index: number) => {
-    if (recipients.length <= 1) return;
-    setRecipients((prev) => prev.filter((_, i) => i !== index));
+    setRecipients(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleNewContactSaved = async (newContactId?: string) => {
+    setShowNewContactForm(false);
+    const { data } = await supabase
+      .from('crm_contacts')
+      .select('id, name, surname, email, phone')
+      .order('name');
+    setContacts(data || []);
+    if (newContactId) {
+      const newContact = (data || []).find(c => c.id === newContactId);
+      if (newContact?.email) addContactRecipient(newContact);
+    }
   };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -100,7 +171,7 @@ export function ResourceEmailDialog({
     });
 
   const handleSend = async () => {
-    const validRecipients = recipients.map((r) => r.trim()).filter(Boolean);
+    const validRecipients = recipients.map((r) => r.email.trim()).filter(Boolean);
     if (validRecipients.length === 0) return;
     if (!subject.trim()) return;
 
@@ -143,14 +214,14 @@ export function ResourceEmailDialog({
 
     if (result.success) {
       onOpenChange(false);
-      // Reset
-      setRecipients(['']);
+      setRecipients([]);
       setBody('');
       setExtraAttachments([]);
     }
   };
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col overflow-hidden">
         <DialogHeader className="flex-shrink-0">
@@ -167,26 +238,94 @@ export function ResourceEmailDialog({
           {/* Recipients */}
           <div className="space-y-2">
             <Label>Destinatarios *</Label>
-            {recipients.map((email, i) => (
-              <div key={i} className="flex items-center gap-2">
+            {/* List of added recipients */}
+            {recipients.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {recipients.map((r, i) => (
+                  <Badge key={i} variant="secondary" className="gap-1 pr-1 py-1">
+                    {r.type === 'contact' && <User className="h-3 w-3 text-primary" />}
+                    <span className="text-xs">
+                      {r.contactName ? `${r.contactName} (${r.email})` : r.email}
+                    </span>
+                    <Button variant="ghost" size="sm" className="h-4 w-4 p-0 ml-1" onClick={() => removeRecipient(i)}>
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </Badge>
+                ))}
+              </div>
+            )}
+
+            {/* Contact search */}
+            <div className="border rounded-lg p-2 space-y-2 bg-muted/20">
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1">
+                  <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                  <Input
+                    value={contactSearch}
+                    onChange={(e) => {
+                      setContactSearch(e.target.value);
+                      setShowContactSearch(true);
+                    }}
+                    onFocus={() => setShowContactSearch(true)}
+                    placeholder="Buscar contacto por nombre, email..."
+                    className="pl-8 h-8 text-sm"
+                  />
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 gap-1 text-xs flex-shrink-0"
+                  onClick={() => setShowNewContactForm(true)}
+                >
+                  <Plus className="h-3 w-3" />
+                  Nuevo
+                </Button>
+              </div>
+
+              {showContactSearch && contactSearch.trim() && (
+                <div className="border rounded bg-popover max-h-[150px] overflow-y-auto">
+                  {filteredContacts.length === 0 ? (
+                    <div className="p-2 text-center text-xs text-muted-foreground">
+                      No se encontraron contactos.{' '}
+                      <button className="text-primary underline" onClick={() => setShowNewContactForm(true)}>
+                        Crear nuevo
+                      </button>
+                    </div>
+                  ) : (
+                    filteredContacts.map(c => (
+                      <button
+                        key={c.id}
+                        className="w-full text-left px-3 py-1.5 text-sm hover:bg-accent flex items-center gap-2"
+                        onClick={() => addContactRecipient(c)}
+                      >
+                        <User className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+                        <div className="min-w-0">
+                          <span className="truncate block">
+                            {c.surname ? `${c.name} ${c.surname}` : c.name}
+                          </span>
+                          <span className="text-xs text-muted-foreground truncate block">{c.email}</span>
+                        </div>
+                      </button>
+                    ))
+                  )}
+                </div>
+              )}
+
+              {/* Manual email entry */}
+              <div className="flex items-center gap-2">
                 <Input
                   type="email"
-                  value={email}
-                  onChange={(e) => updateRecipient(i, e.target.value)}
-                  placeholder="email@ejemplo.com"
-                  className="flex-1"
+                  value={manualEmail}
+                  onChange={(e) => setManualEmail(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addManualRecipient(); } }}
+                  placeholder="O escribe un email directo..."
+                  className="flex-1 h-8 text-sm"
                 />
-                {recipients.length > 1 && (
-                  <Button variant="ghost" size="icon" className="h-8 w-8 flex-shrink-0" onClick={() => removeRecipient(i)}>
-                    <X className="h-4 w-4" />
-                  </Button>
-                )}
+                <Button variant="outline" size="sm" className="h-8 text-xs" onClick={addManualRecipient} disabled={!manualEmail.trim()}>
+                  Añadir
+                </Button>
               </div>
-            ))}
-            <Button variant="outline" size="sm" onClick={addRecipient} className="gap-1">
-              <Plus className="h-3 w-3" />
-              Añadir destinatario
-            </Button>
+            </div>
           </div>
 
           {/* Subject */}
@@ -264,7 +403,7 @@ export function ResourceEmailDialog({
           </Button>
           <Button
             onClick={handleSend}
-            disabled={sending || recipients.every((r) => !r.trim()) || !subject.trim()}
+            disabled={sending || recipients.length === 0 || !subject.trim()}
             className="gap-2"
           >
             <Send className="h-4 w-4" />
@@ -273,5 +412,13 @@ export function ResourceEmailDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+      <ContactForm
+        open={showNewContactForm}
+        onOpenChange={setShowNewContactForm}
+        contact={null}
+        onSuccess={handleNewContactSaved}
+      />
+    </>
   );
 }

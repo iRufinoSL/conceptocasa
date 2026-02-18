@@ -760,7 +760,7 @@ export default function PresupuestoDashboard() {
           </TabsContent>
 
           <TabsContent value="plano" className="mt-6">
-            <FloorPlanTab budgetId={presupuesto.id} isAdmin={isAdmin} />
+            <FloorPlanTab budgetId={presupuesto.id} budgetName={presupuesto.nombre} isAdmin={isAdmin} />
           </TabsContent>
 
           <TabsContent value="documentos" className="mt-6">

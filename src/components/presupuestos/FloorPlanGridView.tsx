@@ -172,7 +172,7 @@ export function FloorPlanGridView({
     return map;
   }, [rooms]);
 
-  const effectiveFloors = floors.length > 0 ? floors : [{ id: '_none_', name: 'Planta', level: '0', orderIndex: 0 }];
+  const effectiveFloors = floors.length > 0 ? floors : [{ id: '_none_', name: 'Nivel 1', level: '0', orderIndex: 0 }];
   const currentFloorId = effectiveFloors.find(f => f.id === activeFloorId) ? activeFloorId : effectiveFloors[0]?.id;
   const currentFloorRooms = floors.length > 0 ? (roomsByFloor.get(currentFloorId) || []) : rooms;
 
@@ -500,7 +500,7 @@ export function FloorPlanGridView({
     <div className="space-y-3">
       {/* Toolbar */}
       <div className="flex items-center justify-between gap-2 flex-wrap">
-        {effectiveFloors.length > 1 && (
+        {effectiveFloors.length >= 1 && (
           <Tabs value={currentFloorId} onValueChange={setActiveFloorId}>
             <TabsList className="h-8">
               {effectiveFloors.map(f => (

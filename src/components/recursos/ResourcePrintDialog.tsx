@@ -77,16 +77,23 @@ export function ResourcePrintDialog({
   const buildPdf = (): jsPDF => {
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
     const title = headerText.trim() || 'Listado de Recursos';
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const margin = 14;
+    const maxTextWidth = pageWidth - margin * 2;
 
-    // Header
+    // Header – wrap long titles to fit within page width
     doc.setFontSize(16);
     doc.setFont('helvetica', 'bold');
-    doc.text(title, 14, 18);
+    const titleLines: string[] = doc.splitTextToSize(title, maxTextWidth);
+    doc.text(titleLines, margin, 18);
+
+    const titleHeight = titleLines.length * 7; // ~7mm per line at font-size 16
+    const subtitleY = 18 + titleHeight;
 
     doc.setFontSize(9);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(120);
-    doc.text(`${selectedResources.length} recurso(s) · ${new Date().toLocaleDateString('es-ES')}`, 14, 25);
+    doc.text(`${selectedResources.length} recurso(s) · ${new Date().toLocaleDateString('es-ES')}`, margin, subtitleY);
     doc.setTextColor(0);
 
     const rows = selectedResources.map((r) => [
@@ -96,7 +103,7 @@ export function ResourcePrintDialog({
     ]);
 
     autoTable(doc, {
-      startY: 30,
+      startY: subtitleY + 5,
       head: [['Nombre', 'Descripción', 'Coste']],
       body: rows,
       styles: { fontSize: 9, cellPadding: 3 },
@@ -123,12 +130,13 @@ export function ResourcePrintDialog({
           doc.internal.pageSize.getHeight() - 8,
           { align: 'right' }
         );
-        // Repeat header on every page
+        // Repeat header on every page (wrapped)
         if (data.pageNumber > 1) {
           doc.setFontSize(10);
           doc.setFont('helvetica', 'bold');
           doc.setTextColor(0);
-          doc.text(title, 14, 12);
+          const repeatLines: string[] = doc.splitTextToSize(title, maxTextWidth);
+          doc.text(repeatLines, margin, 12);
         }
       },
     });

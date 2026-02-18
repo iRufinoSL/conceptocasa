@@ -37,6 +37,7 @@ import { es } from 'date-fns/locale';
 import ExcelJS from 'exceljs';
 import { z } from 'zod';
 import { parseNumber as parseExcelNumber, getCellString, resourceImportSchema } from '@/lib/excel-utils';
+import { SnapshotRestoreButton } from './SnapshotRestoreButton';
 
 interface BudgetResource {
   id: string;
@@ -1484,6 +1485,7 @@ export function BudgetResourcesTab({ budgetId, budgetName, isAdmin }: BudgetReso
               </CardDescription>
             </div>
             <div className="flex items-center gap-2">
+              <SnapshotRestoreButton budgetId={budgetId} module="recursos" onRestored={() => fetchData()} />
               <Button variant="outline" size="sm" onClick={() => fetchData()}>
                 <RefreshCw className="h-4 w-4 mr-2" />
                 Actualizar

@@ -68,3 +68,6 @@ verify_jwt = false
 
 [functions.check-email-receipts]
 verify_jwt = false
+
+[functions.manage-snapshots]
+verify_jwt = false

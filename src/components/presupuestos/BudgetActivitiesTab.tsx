@@ -38,6 +38,7 @@ import autoTable from 'jspdf-autotable';
 import { format, addDays, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { useBudgetBroadcast } from '@/hooks/useBudgetBroadcast';
+import { SnapshotRestoreButton } from './SnapshotRestoreButton';
 interface WorkArea {
   id: string;
   name: string;
@@ -1987,6 +1988,7 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
               Por Opción
             </Button>
           </div>
+          <SnapshotRestoreButton budgetId={budgetId} module="actividades" onRestored={() => fetchData()} />
           <Button variant="outline" size="sm" onClick={exportActivitiesPDF}>
             <FileDown className="h-4 w-4 mr-1" />
             Exportar PDF

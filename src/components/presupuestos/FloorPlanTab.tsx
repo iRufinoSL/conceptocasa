@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Plus, Trash2, Layout, BarChart3, RefreshCw, Save, Wand2, Settings2, Layers, Pencil } from 'lucide-react';
+import { Loader2, Plus, Trash2, Layout, BarChart3, RefreshCw, Save, Wand2, Settings2, Layers, Pencil, Printer } from 'lucide-react';
 import { toast } from 'sonner';
 import { useFloorPlan } from '@/hooks/useFloorPlan';
 import { FloorPlanGridView } from './FloorPlanGridView';
@@ -14,10 +14,12 @@ import { FloorPlanSpaceForm } from './FloorPlanSpaceForm';
 import { FloorPlanSummaryView } from './FloorPlanSummary';
 import { deriveGridPositions, computeGridRuler, formatCoord, parseCoord, colToLetter } from './FloorPlanGridView';
 import { calculateFloorPlanSummary } from '@/lib/floor-plan-calculations';
+import { FloorPlanPdfExport } from './FloorPlanPdfExport';
 import type { FloorPlanData } from '@/lib/floor-plan-calculations';
 
 interface FloorPlanTabProps {
   budgetId: string;
+  budgetName?: string;
   isAdmin: boolean;
 }
 
@@ -231,7 +233,7 @@ function FloorPlanSettingsPanel({ planData, onUpdate, saving, onClose }: {
   );
 }
 
-export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
+export function FloorPlanTab({ budgetId, budgetName = '', isAdmin }: FloorPlanTabProps) {
   const {
     floorPlan, rooms, floors, loading, saving,
     addRoom, updateRoom, updateWall, deleteRoom, duplicateRoom,
@@ -255,6 +257,9 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
   const [newLevelName, setNewLevelName] = useState('');
   const [editingFloorId, setEditingFloorId] = useState<string | null>(null);
   const [editingFloorName, setEditingFloorName] = useState('');
+  const gridRef = useRef<HTMLDivElement>(null);
+  const [activeFloorName, setActiveFloorName] = useState('Nivel 1');
+  const handleActiveFloorChange = useCallback((name: string) => setActiveFloorName(name), []);
 
   // Wizard state
   const [planConfig, setPlanConfig] = useState({
@@ -548,6 +553,11 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
             title="Clasificar paredes del perímetro como externas">
             <Wand2 className="h-4 w-4 mr-1" /> Auto ext.
           </Button>
+          <FloorPlanPdfExport
+            budgetName={budgetName}
+            floorName={activeFloorName}
+            containerRef={gridRef}
+          />
           <Button variant="outline" size="sm" onClick={syncToMeasurements} disabled={saving}>
             <Save className={`h-4 w-4 mr-1 ${saving ? 'animate-spin' : ''}`} /> Sincronizar
           </Button>
@@ -603,6 +613,8 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
               onUndo={undoLastChange}
               undoCount={undoCount}
               saving={saving}
+              gridRef={gridRef}
+              onActiveFloorChange={handleActiveFloorChange}
             />
           </div>
           <div className="space-y-4">

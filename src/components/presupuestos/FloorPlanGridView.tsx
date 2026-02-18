@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -22,6 +22,10 @@ interface FloorPlanGridViewProps {
   onUndo?: () => Promise<void>;
   undoCount?: number;
   saving?: boolean;
+  /** Ref to capture the grid container for PDF export */
+  gridRef?: React.RefObject<HTMLDivElement | null>;
+  /** Callback to report active floor name */
+  onActiveFloorChange?: (floorName: string) => void;
 }
 
 export interface PositionedRoom {
@@ -151,6 +155,7 @@ const getWallStyle = (wt: WallType) => {
 export function FloorPlanGridView({
   rooms, floors, planWidth, planLength, selectedRoomId, onSelectRoom,
   onAddRoom, onGroupRooms, onUngroupRooms, onUndo, undoCount = 0, saving = false,
+  gridRef, onActiveFloorChange,
 }: FloorPlanGridViewProps) {
   const [activeFloorId, setActiveFloorId] = useState<string>(floors[0]?.id || '_none_');
   const [multiSelectMode, setMultiSelectMode] = useState(false);
@@ -175,6 +180,12 @@ export function FloorPlanGridView({
   const effectiveFloors = floors.length > 0 ? floors : [{ id: '_none_', name: 'Nivel 1', level: '0', orderIndex: 0 }];
   const currentFloorId = effectiveFloors.find(f => f.id === activeFloorId) ? activeFloorId : effectiveFloors[0]?.id;
   const currentFloorRooms = floors.length > 0 ? (roomsByFloor.get(currentFloorId) || []) : rooms;
+  const currentFloorName = effectiveFloors.find(f => f.id === currentFloorId)?.name || 'Nivel 1';
+
+  // Report active floor name changes
+  useEffect(() => {
+    onActiveFloorChange?.(currentFloorName);
+  }, [currentFloorName, onActiveFloorChange]);
 
   // Rooms placed on the grid (posX >= 0 and posY >= 0)
   const placedRooms = useMemo(() => {
@@ -379,7 +390,7 @@ export function FloorPlanGridView({
     });
 
     return (
-      <div className="overflow-auto border rounded-lg bg-background">
+      <div className="overflow-auto border rounded-lg bg-background" ref={gridRef}>
         <div
           className="relative"
           style={{

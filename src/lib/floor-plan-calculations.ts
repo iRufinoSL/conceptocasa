@@ -364,14 +364,19 @@ export function autoClassifyWalls(rooms: RoomData[]): Map<string, WallType> {
         const neighborWall = neighborRoom?.walls.find(w => w.wallIndex === neighborWallIdx);
         const thisIsInvisible = wall && !wall.id.startsWith('temp-') && isInvisibleType(wall.wallType);
         const neighborIsInvisible = neighborWall && !neighborWall.id.startsWith('temp-') && isInvisibleType(neighborWall.wallType);
+        const sameGroup = room.groupId && neighborRoom?.groupId === room.groupId;
 
         let isOwner: boolean;
-        if (thisIsInvisible) {
-          isOwner = false; // invisible walls are never the visible owner
+        if (sameGroup) {
+          isOwner = false; // intra-group walls are always invisible
+        } else if (thisIsInvisible && neighborIsInvisible) {
+          isOwner = room.id < neighborId; // both invisible: fallback to ID-based
+        } else if (thisIsInvisible) {
+          isOwner = false;
         } else if (neighborIsInvisible) {
-          isOwner = true; // if neighbor is invisible, this side is always visible
+          isOwner = true;
         } else {
-          isOwner = room.id < neighborId; // default: ID-based
+          isOwner = room.id < neighborId;
         }
 
         if (!isOwner) {
@@ -1063,18 +1068,32 @@ export function computeWallSegments(rooms: RoomData[]): Map<string, WallSegment[
         const neighborIsInvisible = neighborHasManualType && isInvisibleType(neighborWall!.wallType);
         const thisIsInvisible = hasManualType && isInvisibleType(wall!.wallType);
 
+        // Check if rooms belong to the same group (same logical room)
+        const sameGroup = room.groupId && neighborRoom?.groupId === room.groupId;
+
         let effectiveOwner: boolean;
-        if (thisIsInvisible) {
-          effectiveOwner = false; // invisible walls are never the visible owner
+        if (sameGroup) {
+          // Intra-group walls are always invisible (no physical wall between parts of same room)
+          effectiveOwner = false;
+        } else if (thisIsInvisible && neighborIsInvisible) {
+          // Both sides invisible: fall back to ID-based so one side still counts
+          effectiveOwner = room.id < ol.neighborRoomId;
+        } else if (thisIsInvisible) {
+          effectiveOwner = false;
         } else if (neighborIsInvisible) {
-          effectiveOwner = true; // if neighbor is invisible, this side is always visible
+          effectiveOwner = true;
         } else {
-          effectiveOwner = room.id < ol.neighborRoomId; // default: ID-based
+          effectiveOwner = room.id < ol.neighborRoomId;
         }
 
         let segType: WallType;
-        if (thisIsInvisible) {
+        if (sameGroup) {
+          segType = onPeri ? 'exterior_invisible' : 'interior_invisible';
+        } else if (thisIsInvisible && !effectiveOwner) {
           segType = wall!.wallType; // keep invisible
+        } else if (thisIsInvisible && effectiveOwner) {
+          // Both-sides-invisible fallback: this side becomes the visible owner
+          segType = onPeri ? 'exterior_compartida' : 'interior_compartida';
         } else if (hasManualType && isExteriorType(wall!.wallType)) {
           segType = effectiveOwner ? 'exterior_compartida' : 'exterior_invisible';
         } else if (effectiveOwner) {

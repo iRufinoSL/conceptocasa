@@ -5,3 +5,7 @@ Arquitectura de planos: Soporta múltiples niveles (Nivel 0: Cimentación, Nivel
 
 ## Propiedad de segmentos compartidos
 Las paredes compartidas entre porches (invisible) y casa principal (visible) usan propiedad basada en visibilidad: la pared visible siempre es la "propietaria" del segmento, no por ID. Así los porches no añaden área exterior extra. Las paredes de porche compartidas deben ser `exterior_invisible` en BD.
+
+## Correcciones de paredes internas (Feb 2026)
+1. **Bug ambos-invisibles**: Cuando ambos lados de una pared compartida son `_invisible`, se usa fallback ID-based para que un lado cuente el área.
+2. **Paredes intra-grupo**: Rectángulos del mismo `groupId` (mismo espacio lógico) generan paredes `interior_invisible` automáticamente, evitando contar paredes ficticias entre partes de la misma habitación.

@@ -12,7 +12,9 @@ import { ResourceForm } from '@/components/ResourceForm';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import { WebSearchDialog } from '@/components/recursos/WebSearchDialog';
 import { Button } from '@/components/ui/button';
-import { Plus, FolderOpen, LayoutGrid, List, ArrowLeft, Package, Globe, HardHat } from 'lucide-react';
+import { Plus, FolderOpen, LayoutGrid, List, ArrowLeft, Package, Globe, HardHat, Printer } from 'lucide-react';
+import { ResourcePrintDialog } from '@/components/recursos/ResourcePrintDialog';
+import { ResourceEmailDialog } from '@/components/recursos/ResourceEmailDialog';
 import { useToast } from '@/hooks/use-toast';
 import { AppNavDropdown } from '@/components/AppNavDropdown';
 import { BackupButton } from '@/components/BackupButton';
@@ -46,6 +48,11 @@ export default function Recursos() {
   const [resourceToDelete, setResourceToDelete] = useState<ExternalResource | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('cards');
   const [webSearchOpen, setWebSearchOpen] = useState(false);
+  const [printDialogOpen, setPrintDialogOpen] = useState(false);
+  const [emailDialogOpen, setEmailDialogOpen] = useState(false);
+  const [emailResources, setEmailResources] = useState<ExternalResource[]>([]);
+  const [emailHeaderText, setEmailHeaderText] = useState('');
+  const [emailPdfBlob, setEmailPdfBlob] = useState<Blob | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -153,7 +160,13 @@ export default function Recursos() {
     });
     setFormOpen(true);
   };
-
+  const handleSendEmail = (selected: ExternalResource[], header: string, blob: Blob) => {
+    setEmailResources(selected);
+    setEmailHeaderText(header);
+    setEmailPdfBlob(blob);
+    setPrintDialogOpen(false);
+    setEmailDialogOpen(true);
+  };
 
   if (authLoading || rolesLoading) {
     return (
@@ -194,6 +207,10 @@ export default function Recursos() {
             <Button variant="outline" onClick={() => setWebSearchOpen(true)} className="gap-2">
               <Globe className="h-4 w-4" />
               <span className="hidden sm:inline">Rastrear Web</span>
+            </Button>
+            <Button variant="outline" onClick={() => setPrintDialogOpen(true)} className="gap-2">
+              <Printer className="h-4 w-4" />
+              <span className="hidden sm:inline">Imprimir</span>
             </Button>
             <BackupButton module="resources" variant="outline" />
             <Button variant="accent" onClick={handleAddNew} className="gap-2">
@@ -329,6 +346,25 @@ export default function Recursos() {
         open={webSearchOpen}
         onOpenChange={setWebSearchOpen}
         onCreateResource={handleWebSearchCreate}
+      />
+
+      {/* Print / Export Dialog */}
+      <ResourcePrintDialog
+        open={printDialogOpen}
+        onOpenChange={setPrintDialogOpen}
+        resources={allResources}
+        getEffectiveCost={getEffectiveCost}
+        onSendEmail={handleSendEmail}
+      />
+
+      {/* Email Dialog */}
+      <ResourceEmailDialog
+        open={emailDialogOpen}
+        onOpenChange={setEmailDialogOpen}
+        resources={emailResources}
+        headerText={emailHeaderText}
+        pdfBlob={emailPdfBlob}
+        getEffectiveCost={getEffectiveCost}
       />
     </div>
   );

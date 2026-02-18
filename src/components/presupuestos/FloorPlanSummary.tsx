@@ -44,7 +44,7 @@ export function FloorPlanSummaryView({ summary }: FloorPlanSummaryProps) {
         <CardContent>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
             <div>
-              <span className="text-muted-foreground">Planta total</span>
+              <span className="text-muted-foreground">Huella en planta</span>
               <p className="font-semibold text-foreground">{fmt(summary.plantaTotalM2)}</p>
             </div>
             <div>
@@ -152,7 +152,7 @@ export function FloorPlanSummaryView({ summary }: FloorPlanSummaryProps) {
       {/* Per-floor summaries */}
       {summary.floorSummaries.length > 0 && (
         <div className="space-y-3">
-          <h3 className="text-sm font-semibold text-foreground">Resumen por Planta</h3>
+          <h3 className="text-sm font-semibold text-foreground">Resumen por Nivel</h3>
           {summary.floorSummaries.map(fs => (
             <Collapsible key={fs.floorId} defaultOpen={true}>
               <CollapsibleTrigger className="flex items-center gap-2 w-full text-left group hover:bg-muted/50 rounded px-2 py-1 transition-colors">

@@ -722,7 +722,7 @@ export function calculateFloorPlanSummary(plan: FloorPlanData, rooms: RoomData[]
     if (unassigned.length > 0) {
       floorSummaries.push({
         floorId: 'unassigned',
-        floorName: 'Sin planta asignada',
+        floorName: 'Sin nivel asignado',
         floorLevel: 'unassigned',
         totalUsableM2: unassigned.reduce((s, r) => s + r.floorArea, 0),
         totalBuiltM2: unassigned.reduce((s, r) => s + r.floorArea, 0),

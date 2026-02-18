@@ -354,10 +354,26 @@ export function autoClassifyWalls(rooms: RoomData[]): Map<string, WallType> {
       const onPerimeter = isOnPerimeter(room, wallIdx);
 
       // CRITICAL: Check shared walls FIRST to avoid double-counting.
-      // When two rooms share a wall, only the "owner" (smaller id) counts the area;
+      // When two rooms share a wall, only the "owner" counts the area;
       // the other side is always invisible, regardless of what's stored in DB.
+      // Ownership prefers visible walls: if one side is invisible, the other is owner.
       if (sharedWalls.has(key)) {
-        const isOwner = room.id < sharedWalls.get(key)!.neighborRoomId;
+        const neighborId = sharedWalls.get(key)!.neighborRoomId;
+        const neighborWallIdx = sharedWalls.get(key)!.neighborWallIndex;
+        const neighborRoom = rooms.find(r => r.id === neighborId);
+        const neighborWall = neighborRoom?.walls.find(w => w.wallIndex === neighborWallIdx);
+        const thisIsInvisible = wall && !wall.id.startsWith('temp-') && isInvisibleType(wall.wallType);
+        const neighborIsInvisible = neighborWall && !neighborWall.id.startsWith('temp-') && isInvisibleType(neighborWall.wallType);
+
+        let isOwner: boolean;
+        if (thisIsInvisible) {
+          isOwner = false; // invisible walls are never the visible owner
+        } else if (neighborIsInvisible) {
+          isOwner = true; // if neighbor is invisible, this side is always visible
+        } else {
+          isOwner = room.id < neighborId; // default: ID-based
+        }
+
         if (!isOwner) {
           // Non-owner side is ALWAYS invisible to prevent double-counting
           classification.set(key, onPerimeter ? 'exterior_invisible' : 'interior_invisible');
@@ -367,8 +383,10 @@ export function autoClassifyWalls(rooms: RoomData[]): Map<string, WallType> {
         if (wall && !wall.id.startsWith('temp-') && wall.wallType) {
           const manualType = migrateLegacyWallType(wall.wallType as string);
           // Ensure it's the compartida variant of whatever the user chose
-          if (isExteriorType(manualType)) {
+          if (isExteriorType(manualType) && !isInvisibleType(manualType)) {
             classification.set(key, 'exterior_compartida');
+          } else if (isInvisibleType(manualType)) {
+            classification.set(key, manualType);
           } else {
             classification.set(key, 'interior_compartida');
           }

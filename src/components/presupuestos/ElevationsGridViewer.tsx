@@ -440,7 +440,7 @@ export function ElevationsGridViewer({
         unassignedMap.get(roomName)!.push(c);
       });
       if (unassignedMap.size > 0) {
-        floorGroups.push({ floorId: 'unassigned', floorName: 'Sin planta asignada', roomGroups: unassignedMap });
+        floorGroups.push({ floorId: 'unassigned', floorName: 'Sin nivel asignado', roomGroups: unassignedMap });
       }
     } else {
       // No floors defined: flat list grouped by room

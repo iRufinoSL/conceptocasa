@@ -884,7 +884,7 @@ export function useFloorPlan(budgetId: string) {
       const isFlat = planData?.roofType === 'plana' || planData?.roofSlopePercent === 0;
       
       const defaultFloors = [
-        { floor_plan_id: floorPlan.id, name: 'Planta 1', level: 'planta_1', order_index: 0 },
+        { floor_plan_id: floorPlan.id, name: 'Nivel 1', level: 'nivel_1', order_index: 0 },
       ];
       if (!isFlat) {
         defaultFloors.push({ floor_plan_id: floorPlan.id, name: 'Bajo cubierta', level: 'bajo_cubierta', order_index: 1 });

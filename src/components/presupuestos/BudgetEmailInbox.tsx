@@ -85,11 +85,8 @@ export function BudgetEmailInbox({ budgetId, onComposeReply, onComposeForward }:
         .eq('id', emailId);
       if (error) throw error;
     },
-    onSuccess: (_data, emailId) => {
-      // Optimistically update selectedEmail to avoid stale state issues
-      if (selectedEmail && selectedEmail.id === emailId) {
-        setSelectedEmail(prev => prev ? { ...prev, is_read: true, read_at: new Date().toISOString() } : null);
-      }
+    onSuccess: () => {
+      // Don't update selectedEmail here - already optimistically updated in handleSelectEmail
       queryClient.invalidateQueries({ queryKey: ['budget-emails', budgetId] });
     },
   });
@@ -203,7 +200,11 @@ export function BudgetEmailInbox({ budgetId, onComposeReply, onComposeForward }:
   };
 
   const handleSelectEmail = (email: EmailMessage) => {
-    setSelectedEmail(email);
+    // Optimistically mark as read so the dialog doesn't re-render mid-interaction
+    const emailToShow = (!email.is_read && email.direction === 'inbound')
+      ? { ...email, is_read: true, read_at: new Date().toISOString() }
+      : email;
+    setSelectedEmail(emailToShow);
     if (!email.is_read && email.direction === 'inbound') {
       markAsReadMutation.mutate(email.id);
     }

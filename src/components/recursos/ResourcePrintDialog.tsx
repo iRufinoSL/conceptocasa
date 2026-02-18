@@ -29,7 +29,9 @@ export function ResourcePrintDialog({
   onSendEmail,
 }: ResourcePrintDialogProps) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [headerText, setHeaderText] = useState('');
+  const [headerText, setHeaderText] = useState(() => {
+    try { return localStorage.getItem('resource_print_header') || ''; } catch { return ''; }
+  });
   const [searchTerm, setSearchTerm] = useState('');
 
   const sortedResources = useMemo(
@@ -193,7 +195,11 @@ export function ResourcePrintDialog({
             <Input
               id="list-header"
               value={headerText}
-              onChange={(e) => setHeaderText(e.target.value)}
+              onChange={(e) => {
+                const v = e.target.value;
+                setHeaderText(v);
+                try { localStorage.setItem('resource_print_header', v); } catch {}
+              }}
               placeholder="Introduce el título del listado..."
             />
           </div>

@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Plus, Trash2, Layout, BarChart3, RefreshCw, Save, Wand2, Settings2 } from 'lucide-react';
+import { Loader2, Plus, Trash2, Layout, BarChart3, RefreshCw, Save, Wand2, Settings2, Layers, Pencil } from 'lucide-react';
 import { toast } from 'sonner';
 import { useFloorPlan } from '@/hooks/useFloorPlan';
 import { FloorPlanGridView } from './FloorPlanGridView';
@@ -57,6 +57,92 @@ function createDefaultFloor(name: string, level: string, m2: number): FloorDef {
     spaces: DEFAULT_SPACE_TYPES.map(s => ({ ...s })),
     customSpaces: [],
   };
+}
+
+// Level manager panel shown after plan creation
+function LevelManagerPanel({ floors, onAdd, onUpdate, onDelete, saving, onClose }: {
+  floors: Array<{ id: string; name: string; level: string; orderIndex: number }>;
+  onAdd: (name: string, level: string) => Promise<void>;
+  onUpdate: (floorId: string, data: { name?: string }) => Promise<void>;
+  onDelete: (floorId: string) => Promise<void>;
+  saving: boolean;
+  onClose: () => void;
+}) {
+  const [newName, setNewName] = useState('');
+  const [editId, setEditId] = useState<string | null>(null);
+  const [editName, setEditName] = useState('');
+
+  const handleAdd = async () => {
+    if (!newName.trim()) return;
+    const level = `nivel_${floors.length}`;
+    await onAdd(newName.trim(), level);
+    setNewName('');
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editId || !editName.trim()) return;
+    await onUpdate(editId, { name: editName.trim() });
+    setEditId(null);
+    setEditName('');
+  };
+
+  return (
+    <Card>
+      <CardHeader className="py-3">
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-sm flex items-center gap-2">
+            <Layers className="h-4 w-4" /> Gestionar Niveles
+          </CardTitle>
+          <Button variant="ghost" size="sm" onClick={onClose} className="h-7 px-2 text-xs">Cerrar</Button>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {/* Existing levels */}
+        {floors.map(f => (
+          <div key={f.id} className="flex items-center gap-2 p-2 border rounded-lg bg-muted/30">
+            {editId === f.id ? (
+              <>
+                <Input className="h-8 text-sm flex-1" value={editName}
+                  onChange={e => setEditName(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handleSaveEdit()} />
+                <Button size="sm" className="h-8" onClick={handleSaveEdit} disabled={saving}>
+                  <Save className="h-3.5 w-3.5" />
+                </Button>
+                <Button variant="ghost" size="sm" className="h-8" onClick={() => setEditId(null)}>✕</Button>
+              </>
+            ) : (
+              <>
+                <Badge variant="secondary" className="text-xs">{f.orderIndex}</Badge>
+                <span className="text-sm font-medium flex-1">{f.name}</span>
+                <Button variant="ghost" size="sm" className="h-7 w-7 p-0"
+                  onClick={() => { setEditId(f.id); setEditName(f.name); }}>
+                  <Pencil className="h-3.5 w-3.5" />
+                </Button>
+                <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive hover:text-destructive"
+                  onClick={() => {
+                    if (confirm(`¿Eliminar el nivel "${f.name}"? Los espacios asignados quedarán sin nivel.`)) {
+                      onDelete(f.id);
+                    }
+                  }} disabled={saving}>
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              </>
+            )}
+          </div>
+        ))}
+        {/* Add new level */}
+        <div className="flex items-center gap-2">
+          <Input className="h-8 text-sm flex-1" value={newName}
+            onChange={e => setNewName(e.target.value)}
+            placeholder="Nombre del nuevo nivel (ej: Nivel 2)"
+            onKeyDown={e => e.key === 'Enter' && handleAdd()} />
+          <Button size="sm" className="h-8" onClick={handleAdd} disabled={saving || !newName.trim()}>
+            <Plus className="h-3.5 w-3.5 mr-1" /> Añadir
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
 }
 
 function FloorPlanSettingsPanel({ planData, onUpdate, saving, onClose }: {
@@ -153,6 +239,7 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
     classifyPerimeterWalls, syncToMeasurements, getPlanData, refetch,
     generateFromTemplate, deleteFloorPlan, groupRooms, ungroupRooms,
     undoLastChange, undoCount,
+    addFloor, updateFloor, deleteFloor,
   } = useFloorPlan(budgetId);
 
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
@@ -162,7 +249,12 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
   const [newSpaceName, setNewSpaceName] = useState('');
   const [newSpaceWidth, setNewSpaceWidth] = useState(4);
   const [newSpaceLength, setNewSpaceLength] = useState(3);
+  const [newSpaceFloorId, setNewSpaceFloorId] = useState<string>('');
   const [showSettings, setShowSettings] = useState(false);
+  const [showLevelManager, setShowLevelManager] = useState(false);
+  const [newLevelName, setNewLevelName] = useState('');
+  const [editingFloorId, setEditingFloorId] = useState<string | null>(null);
+  const [editingFloorName, setEditingFloorName] = useState('');
 
   // Wizard state
   const [planConfig, setPlanConfig] = useState({
@@ -174,7 +266,7 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
     roofType: 'dos_aguas',
   });
   const [floorDefs, setFloorDefs] = useState<FloorDef[]>([
-    createDefaultFloor('Planta 1', 'planta_1', 100),
+    createDefaultFloor('Nivel 1', 'nivel_1', 100),
   ]);
 
   const planData = getPlanData();
@@ -188,7 +280,7 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
   // Floor def handlers
   const addFloorDef = () => {
     const idx = floorDefs.length + 1;
-    setFloorDefs([...floorDefs, createDefaultFloor(`Planta ${idx}`, `planta_${idx}`, 80)]);
+    setFloorDefs([...floorDefs, createDefaultFloor(`Nivel ${idx}`, `nivel_${idx}`, 80)]);
   };
 
   const removeFloorDef = (idx: number) => {
@@ -277,7 +369,7 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
         <Card>
           <CardHeader>
             <CardTitle className="text-lg flex items-center gap-2">
-              <Layout className="h-5 w-5" /> Crear Plano — Definir Plantas y Espacios
+              <Layout className="h-5 w-5" /> Crear Plano — Definir Niveles y Espacios
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
@@ -328,9 +420,9 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
             {/* Floors */}
             <div>
               <div className="flex items-center justify-between mb-2">
-                <h3 className="text-sm font-semibold">Plantas</h3>
+                <h3 className="text-sm font-semibold">Niveles</h3>
                 <Button variant="outline" size="sm" onClick={addFloorDef}>
-                  <Plus className="h-3.5 w-3.5 mr-1" /> Añadir planta
+                  <Plus className="h-3.5 w-3.5 mr-1" /> Añadir nivel
                 </Button>
               </div>
               <div className="space-y-2">
@@ -356,7 +448,7 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
 
             {/* Spaces per floor */}
             <div>
-              <h3 className="text-sm font-semibold mb-2">Espacios por planta</h3>
+              <h3 className="text-sm font-semibold mb-2">Espacios por nivel</h3>
               <Tabs value={activeFloorTab} onValueChange={setActiveFloorTab}>
                 <TabsList className="h-8">
                   {floorDefs.map((f, fi) => (
@@ -402,7 +494,7 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
 
                     {getFloorTotalM2(f) > f.m2 && (
                       <p className="text-xs text-destructive mt-2">
-                        ⚠ Los espacios ({getFloorTotalM2(f).toFixed(0)}m²) superan los m² de la planta ({f.m2}m²)
+                        ⚠ Los espacios ({getFloorTotalM2(f).toFixed(0)}m²) superan los m² del nivel ({f.m2}m²)
                       </p>
                     )}
                   </TabsContent>
@@ -439,9 +531,16 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
 
         <div className="flex items-center gap-2 flex-wrap">
           <Button
+            variant={showLevelManager ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => { setShowLevelManager(!showLevelManager); if (showSettings) setShowSettings(false); }}
+          >
+            <Layers className="h-4 w-4 mr-1" /> Niveles
+          </Button>
+          <Button
             variant={showSettings ? 'default' : 'outline'}
             size="sm"
-            onClick={() => setShowSettings(!showSettings)}
+            onClick={() => { setShowSettings(!showSettings); if (showLevelManager) setShowLevelManager(false); }}
           >
             <Settings2 className="h-4 w-4 mr-1" /> Parámetros
           </Button>
@@ -472,6 +571,18 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
           onUpdate={updateFloorPlan}
           saving={saving}
           onClose={() => setShowSettings(false)}
+        />
+      )}
+
+      {/* Level manager panel */}
+      {showLevelManager && (
+        <LevelManagerPanel
+          floors={floors}
+          onAdd={addFloor}
+          onUpdate={updateFloor}
+          onDelete={deleteFloor}
+          saving={saving}
+          onClose={() => setShowLevelManager(false)}
         />
       )}
 
@@ -549,6 +660,19 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
                     disabled={saving}
                   />
                 </div>
+                {floors.length > 0 && (
+                  <div>
+                    <Label className="text-xs">Nivel</Label>
+                    <Select value={newSpaceFloorId || floors[0]?.id || ''} onValueChange={setNewSpaceFloorId}>
+                      <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {floors.map(f => (
+                          <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
                 <div className="grid grid-cols-2 gap-2">
                   <div>
                     <Label className="text-xs">Ancho (m)</Label>
@@ -567,7 +691,8 @@ export function FloorPlanTab({ budgetId, isAdmin }: FloorPlanTabProps) {
                 <Button
                   onClick={async () => {
                     if (!newSpaceName.trim()) { toast.error('Indica un nombre'); return; }
-                    await addRoom(newSpaceName.trim(), newSpaceWidth, newSpaceLength, floors[0]?.id);
+                    const targetFloor = newSpaceFloorId || floors[0]?.id;
+                    await addRoom(newSpaceName.trim(), newSpaceWidth, newSpaceLength, targetFloor);
                     setNewSpaceName('');
                     toast.success('Espacio añadido a la cabecera');
                   }}

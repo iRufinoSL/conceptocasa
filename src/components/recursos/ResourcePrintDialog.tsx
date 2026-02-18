@@ -202,7 +202,7 @@ export function ResourcePrintDialog({
           </div>
 
           {/* Resource selection table */}
-          <ScrollArea className="flex-1 border rounded-lg min-h-0">
+          <ScrollArea className="border rounded-lg" style={{ height: 'clamp(200px, 40vh, 400px)' }}>
             <Table>
               <TableHeader>
                 <TableRow className="bg-muted/50">

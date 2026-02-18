@@ -1034,15 +1034,32 @@ export function computeWallSegments(rooms: RoomData[]): Map<string, WallSegment[
         // The overlap itself — one side is compartida (visible), the other is invisible
         const startF = (Math.max(cursor, ol.overlapStart) - wallStart) / wallLen;
         const endF = (ol.overlapEnd - wallStart) / wallLen;
-        const isOwner = room.id < ol.neighborRoomId;
         const onPeri = isOnPerimeter(Math.max(cursor, ol.overlapStart), ol.overlapEnd);
+
+        // Determine effective ownership: prefer visible walls over invisible ones.
+        // If this wall is invisible, it should always stay invisible (non-owner).
+        // If neighbor wall is invisible, this side should be the visible owner.
+        const neighborRoom = rooms.find(r => r.id === ol.neighborRoomId);
+        const neighborWall = neighborRoom?.walls.find(w => w.wallIndex === ol.neighborWallIndex);
+        const neighborHasManualType = neighborWall && !neighborWall.id.startsWith('temp-');
+        const neighborIsInvisible = neighborHasManualType && isInvisibleType(neighborWall!.wallType);
+        const thisIsInvisible = hasManualType && isInvisibleType(wall!.wallType);
+
+        let effectiveOwner: boolean;
+        if (thisIsInvisible) {
+          effectiveOwner = false; // invisible walls are never the visible owner
+        } else if (neighborIsInvisible) {
+          effectiveOwner = true; // if neighbor is invisible, this side is always visible
+        } else {
+          effectiveOwner = room.id < ol.neighborRoomId; // default: ID-based
+        }
+
         let segType: WallType;
-        // If the wall has a manual type override, respect it for shared segments too
-        if (hasManualType && isInvisibleType(wall!.wallType)) {
-          segType = wall!.wallType;
+        if (thisIsInvisible) {
+          segType = wall!.wallType; // keep invisible
         } else if (hasManualType && isExteriorType(wall!.wallType)) {
-          segType = isOwner ? 'exterior_compartida' : 'exterior_invisible';
-        } else if (isOwner) {
+          segType = effectiveOwner ? 'exterior_compartida' : 'exterior_invisible';
+        } else if (effectiveOwner) {
           segType = onPeri ? 'exterior_compartida' : 'interior_compartida';
         } else {
           segType = onPeri ? 'exterior_invisible' : 'interior_invisible';

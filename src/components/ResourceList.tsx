@@ -50,7 +50,6 @@ export function ResourceList({ resources, onEdit, onDelete, onDuplicate, getEffe
       <Table>
         <TableHeader>
           <TableRow className="bg-muted/50">
-            <TableHead className="w-[80px]">ID</TableHead>
             <TableHead>Nombre</TableHead>
             <TableHead className="hidden md:table-cell">Descripción</TableHead>
             <TableHead>Tipo</TableHead>
@@ -74,10 +73,7 @@ export function ResourceList({ resources, onEdit, onDelete, onDuplicate, getEffe
                 className="animate-fade-in"
                 style={{ animationDelay: `${index * 30}ms` }}
               >
-                <TableCell className="font-mono text-xs text-muted-foreground">
-                  {resource.id}
-                </TableCell>
-                <TableCell className="max-w-[200px]">
+                <TableCell>
                   <div className="flex items-center gap-3">
                     {resource.imageUrl ? (
                       <img
@@ -90,8 +86,8 @@ export function ResourceList({ resources, onEdit, onDelete, onDuplicate, getEffe
                         {resourceTypeIcons[resource.resourceType]}
                       </div>
                     )}
-                    <div className="min-w-0 flex-1 overflow-hidden">
-                      <p className="font-medium text-foreground truncate max-w-full" title={resource.name}>{resource.name}</p>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium text-foreground">{resource.name}</p>
                       {resource.website && (
                         <a
                           href={resource.website}
@@ -107,7 +103,7 @@ export function ResourceList({ resources, onEdit, onDelete, onDuplicate, getEffe
                   </div>
                 </TableCell>
                 <TableCell className="hidden md:table-cell">
-                  <p className="text-sm text-muted-foreground line-clamp-2 max-w-[300px]">
+                  <p className="text-sm text-muted-foreground whitespace-pre-line">
                     {resource.description}
                   </p>
                 </TableCell>

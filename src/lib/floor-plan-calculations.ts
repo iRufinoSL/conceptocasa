@@ -472,7 +472,8 @@ export function calculateGables(plan: FloorPlanData, rooms: RoomData[], wallClas
       const portionArea = triangleArea * proportion;
       const key = `${r.id}::${wallIndex}`;
       const wt = wallClassification.get(key) || 'interior';
-      const isExternal = isExteriorType(wt);
+      // Invisible exterior walls (e.g. open porches) should NOT contribute external gable area
+      const isExternal = isExteriorType(wt) && !isInvisibleType(wt);
 
       return {
         roomId: r.id,
@@ -683,11 +684,8 @@ export function calculateFloorPlanSummary(plan: FloorPlanData, rooms: RoomData[]
     });
   });
 
-  // Add gable areas to wall totals
-  totalExternalWallM2 += totalGableExternalM2;
-  totalExternalWallGrossM2 += totalGableExternalM2;
-  totalInternalWallM2 += totalGableInternalM2;
-  totalInternalWallGrossM2 += totalGableInternalM2;
+  // NOTE: Gable areas are NOT added to wall totals — they have their own section in the UI.
+  // Previously they were added here, causing confusing double-reporting.
   
   const externalWallFootprint = totalExternalWallBaseM * plan.externalWallThickness;
   const internalWallFootprint = totalInternalWallBaseM * plan.internalWallThickness;

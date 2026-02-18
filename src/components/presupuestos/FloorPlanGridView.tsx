@@ -26,6 +26,8 @@ interface FloorPlanGridViewProps {
   gridRef?: React.RefObject<HTMLDivElement | null>;
   /** Callback to report active floor name */
   onActiveFloorChange?: (floorName: string) => void;
+  /** Force switch to this floor tab (e.g. after creating a new floor) */
+  forceActiveFloorId?: string;
 }
 
 export interface PositionedRoom {
@@ -49,8 +51,14 @@ export function colToLetter(col: number): string {
 }
 
 /** Column label with correlative number: 1→A01, 2→B02, 3→C03 */
-export function colToLabel(col: number): string {
-  return `${colToLetter(col)}${String(col).padStart(2, '0')}`;
+export function colToLabel(col: number, levelPrefix?: string): string {
+  const base = `${colToLetter(col)}${String(col).padStart(2, '0')}`;
+  return levelPrefix ? `${levelPrefix}-${base}` : base;
+}
+
+/** Row label with optional level prefix: "1" or "2-1" */
+export function rowToLabel(row: number, levelPrefix?: string): string {
+  return levelPrefix ? `${levelPrefix}-${row}` : String(row);
 }
 
 /** Convert letter(s) to column index (1-based): A→1, B→2, AA→27 */
@@ -155,7 +163,7 @@ const getWallStyle = (wt: WallType) => {
 export function FloorPlanGridView({
   rooms, floors, planWidth, planLength, selectedRoomId, onSelectRoom,
   onAddRoom, onGroupRooms, onUngroupRooms, onUndo, undoCount = 0, saving = false,
-  gridRef, onActiveFloorChange,
+  gridRef, onActiveFloorChange, forceActiveFloorId,
 }: FloorPlanGridViewProps) {
   const [activeFloorId, setActiveFloorId] = useState<string>(floors[0]?.id || '_none_');
   const [multiSelectMode, setMultiSelectMode] = useState(false);
@@ -163,6 +171,12 @@ export function FloorPlanGridView({
   const [selectedEmptyCells, setSelectedEmptyCells] = useState<Set<string>>(new Set()); // "col,row"
   const [groupNameInput, setGroupNameInput] = useState('');
 
+  // Force switch to a specific floor tab when requested (e.g. after creating a new floor)
+  useEffect(() => {
+    if (forceActiveFloorId) {
+      setActiveFloorId(forceActiveFloorId);
+    }
+  }, [forceActiveFloorId]);
   const CELL_SIZE = 48; // px per 1m cell
 
   const wallClassification = useMemo(() => autoClassifyWalls(rooms), [rooms]);
@@ -181,6 +195,21 @@ export function FloorPlanGridView({
   const currentFloorId = effectiveFloors.find(f => f.id === activeFloorId) ? activeFloorId : effectiveFloors[0]?.id;
   const currentFloorRooms = floors.length > 0 ? (roomsByFloor.get(currentFloorId) || []) : rooms;
   const currentFloorName = effectiveFloors.find(f => f.id === currentFloorId)?.name || 'Nivel 1';
+
+  // Level prefix for coordinates: floor orderIndex + 1 (e.g. "1" for Level 1, "2" for Level 2)
+  const currentFloorObj = effectiveFloors.find(f => f.id === currentFloorId);
+  const levelPrefix = effectiveFloors.length > 1 ? String((currentFloorObj?.orderIndex ?? 0) + 1) : undefined;
+
+  // Ghost underlay: rooms from the floor directly below the current one
+  const ghostRooms = useMemo(() => {
+    if (!currentFloorObj || effectiveFloors.length <= 1) return [];
+    const currentIdx = currentFloorObj.orderIndex;
+    if (currentIdx <= 0) return []; // Level 1 has no underlay
+    const lowerFloor = effectiveFloors.find(f => f.orderIndex === currentIdx - 1);
+    if (!lowerFloor) return [];
+    const lowerRooms = roomsByFloor.get(lowerFloor.id) || [];
+    return lowerRooms.filter(r => r.posX >= 0 && r.posY >= 0);
+  }, [currentFloorObj, effectiveFloors, roomsByFloor]);
 
   // Report active floor name changes
   useEffect(() => {
@@ -333,7 +362,7 @@ export function FloorPlanGridView({
       const isMultiSelected = selectedIds.has(room.id);
       const m2 = (room.width * room.length).toFixed(1);
       const colorClass = getSpaceColor(room.name);
-      const coord = formatCoord(startCol, startRow);
+      const coord = levelPrefix ? `${levelPrefix}-${formatCoord(startCol, startRow)}` : formatCoord(startCol, startRow);
       const groupColor = room.groupId ? getGroupColor(room.groupId) : undefined;
 
       // Position: col header (30px) + (startCol-1)*CELL_SIZE, row header (20px) + (startRow-1)*CELL_SIZE
@@ -398,7 +427,7 @@ export function FloorPlanGridView({
             height: 20 + totalRows * CELL_SIZE + 1,
           }}
         >
-          {/* Column headers (A, B, C...) */}
+          {/* Column headers with level prefix */}
           {Array.from({ length: totalCols }, (_, ci) => (
             <div
               key={`ch-${ci}`}
@@ -411,11 +440,11 @@ export function FloorPlanGridView({
                 lineHeight: '20px',
               }}
             >
-              {colToLabel(ci + 1)}
+              {colToLabel(ci + 1, levelPrefix)}
             </div>
           ))}
 
-          {/* Row headers (1, 2, 3...) */}
+          {/* Row headers with level prefix */}
           {Array.from({ length: totalRows }, (_, ri) => (
             <div
               key={`rh-${ri}`}
@@ -428,7 +457,7 @@ export function FloorPlanGridView({
                 lineHeight: `${CELL_SIZE}px`,
               }}
             >
-              {ri + 1}
+              {rowToLabel(ri + 1, levelPrefix)}
             </div>
           ))}
 
@@ -459,6 +488,33 @@ export function FloorPlanGridView({
               }}
             />
           ))}
+
+          {/* Ghost underlay: faint outlines of the floor below */}
+          {ghostRooms.map(room => {
+            const startCol = Math.round(room.posX) + 1;
+            const startRow = Math.round(room.posY) + 1;
+            const spanCols = Math.max(1, Math.round(room.width));
+            const spanRows = Math.max(1, Math.round(room.length));
+            const left = 30 + (startCol - 1) * CELL_SIZE;
+            const top = 20 + (startRow - 1) * CELL_SIZE;
+            const width = spanCols * CELL_SIZE;
+            const height = spanRows * CELL_SIZE;
+            return (
+              <div
+                key={`ghost-${room.id}`}
+                className="absolute pointer-events-none z-[1]"
+                style={{
+                  left, top, width, height,
+                  border: '1px dashed hsl(var(--muted-foreground) / 0.15)',
+                  backgroundColor: 'hsl(var(--muted-foreground) / 0.03)',
+                }}
+              >
+                <div className="text-[7px] px-0.5 truncate" style={{ color: 'hsl(var(--muted-foreground) / 0.2)' }}>
+                  {room.name}
+                </div>
+              </div>
+            );
+          })}
 
           {/* Empty cell click targets for multiselect grouping */}
           {multiSelectMode && Array.from({ length: totalCols * totalRows }, (_, i) => {
@@ -637,7 +693,7 @@ export function FloorPlanGridView({
       </Card>
 
       <p className="text-xs text-muted-foreground">
-        Cada celda = 1 m². Coordenadas: columnas A-Z, filas 1-N. Clic en un espacio para editar propiedades, paredes y aperturas.
+        Cada celda = 1 m². Coordenadas: {levelPrefix ? `nivel ${levelPrefix} → ` : ''}columnas {levelPrefix ? `${levelPrefix}-` : ''}A01…, filas {levelPrefix ? `${levelPrefix}-` : ''}1…N. Clic en un espacio para editar. Líneas tenues = nivel inferior.
       </p>
     </div>
   );

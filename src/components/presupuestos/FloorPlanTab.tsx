@@ -64,7 +64,7 @@ function createDefaultFloor(name: string, level: string, m2: number): FloorDef {
 }
 
 // Level manager panel shown after plan creation
-function NewLevelWizardDialog({ open, onOpenChange, floors, onAdd, saving }: {
+function NewLevelWizardDialog({ open, onOpenChange, floors, onAdd, saving, onFloorCreated }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   floors: Array<{ id: string; name: string; level: string; orderIndex: number }>;
@@ -73,8 +73,9 @@ function NewLevelWizardDialog({ open, onOpenChange, floors, onAdd, saving }: {
     wallHeight?: number;
     roofSlopes?: number;
     roofSlopePercent?: number;
-  }) => Promise<void>;
+  }) => Promise<string | undefined>;
   saving: boolean;
+  onFloorCreated?: (floorId: string) => void;
 }) {
   const [step, setStep] = useState(0);
   const [levelName, setLevelName] = useState('');
@@ -116,7 +117,10 @@ function NewLevelWizardDialog({ open, onOpenChange, floors, onAdd, saving }: {
       opts.roofSlopes = parseInt(roofSlopes) || 2;
       opts.roofSlopePercent = parseFloat(roofSlopePercent) || 20;
     }
-    await onAdd(levelName.trim(), level, opts);
+    const newFloorId = await onAdd(levelName.trim(), level, opts);
+    if (newFloorId) {
+      onFloorCreated?.(newFloorId);
+    }
     onOpenChange(false);
   };
 
@@ -231,13 +235,14 @@ function NewLevelWizardDialog({ open, onOpenChange, floors, onAdd, saving }: {
   );
 }
 
-function LevelManagerPanel({ floors, onAdd, onUpdate, onDelete, saving, onClose }: {
+function LevelManagerPanel({ floors, onAdd, onUpdate, onDelete, saving, onClose, onFloorCreated }: {
   floors: Array<{ id: string; name: string; level: string; orderIndex: number }>;
-  onAdd: (name: string, level: string, opts?: any) => Promise<void>;
+  onAdd: (name: string, level: string, opts?: any) => Promise<string | undefined>;
   onUpdate: (floorId: string, data: { name?: string }) => Promise<void>;
   onDelete: (floorId: string) => Promise<void>;
   saving: boolean;
   onClose: () => void;
+  onFloorCreated?: (floorId: string) => void;
 }) {
   const [editId, setEditId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
@@ -304,6 +309,7 @@ function LevelManagerPanel({ floors, onAdd, onUpdate, onDelete, saving, onClose 
           floors={floors}
           onAdd={onAdd}
           saving={saving}
+          onFloorCreated={onFloorCreated}
         />
       </CardContent>
     </Card>
@@ -422,6 +428,7 @@ export function FloorPlanTab({ budgetId, budgetName = '', isAdmin }: FloorPlanTa
   const [editingFloorName, setEditingFloorName] = useState('');
   const gridRef = useRef<HTMLDivElement>(null);
   const [activeFloorName, setActiveFloorName] = useState('Nivel 1');
+  const [forceActiveFloorId, setForceActiveFloorId] = useState<string | undefined>(undefined);
   const handleActiveFloorChange = useCallback((name: string) => setActiveFloorName(name), []);
 
   // Wizard state
@@ -756,6 +763,7 @@ export function FloorPlanTab({ budgetId, budgetName = '', isAdmin }: FloorPlanTa
           onDelete={deleteFloor}
           saving={saving}
           onClose={() => setShowLevelManager(false)}
+          onFloorCreated={(floorId) => setForceActiveFloorId(floorId)}
         />
       )}
 
@@ -778,6 +786,7 @@ export function FloorPlanTab({ budgetId, budgetName = '', isAdmin }: FloorPlanTa
               saving={saving}
               gridRef={gridRef}
               onActiveFloorChange={handleActiveFloorChange}
+              forceActiveFloorId={forceActiveFloorId}
             />
           </div>
           <div className="space-y-4">

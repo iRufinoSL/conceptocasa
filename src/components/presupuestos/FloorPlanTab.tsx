@@ -1,4 +1,6 @@
-import { useState, useMemo, useRef, useCallback } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -62,24 +64,184 @@ function createDefaultFloor(name: string, level: string, m2: number): FloorDef {
 }
 
 // Level manager panel shown after plan creation
+function NewLevelWizardDialog({ open, onOpenChange, floors, onAdd, saving }: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  floors: Array<{ id: string; name: string; level: string; orderIndex: number }>;
+  onAdd: (name: string, level: string, opts?: {
+    copyFromFloorId?: string;
+    wallHeight?: number;
+    roofSlopes?: number;
+    roofSlopePercent?: number;
+  }) => Promise<void>;
+  saving: boolean;
+}) {
+  const [step, setStep] = useState(0);
+  const [levelName, setLevelName] = useState('');
+  const [sameFootprint, setSameFootprint] = useState<boolean | null>(null);
+  const [wallHeight, setWallHeight] = useState('2.5');
+  const [isRoof, setIsRoof] = useState(false);
+  const [roofSlopes, setRoofSlopes] = useState('2');
+  const [roofSlopePercent, setRoofSlopePercent] = useState('20');
+
+  const reset = () => {
+    setStep(0);
+    setLevelName('');
+    setSameFootprint(null);
+    setWallHeight('2.5');
+    setIsRoof(false);
+    setRoofSlopes('2');
+    setRoofSlopePercent('20');
+  };
+
+  useEffect(() => {
+    if (open) {
+      reset();
+      const idx = floors.length + 1;
+      setLevelName(`Nivel ${idx}`);
+    }
+  }, [open, floors.length]);
+
+  // The lowest existing floor to copy from (last one by order)
+  const sourceFloor = floors.length > 0 ? floors[floors.length - 1] : null;
+
+  const handleCreate = async () => {
+    const level = `nivel_${floors.length}`;
+    const opts: any = {};
+    if (sameFootprint && sourceFloor) {
+      opts.copyFromFloorId = sourceFloor.id;
+    }
+    opts.wallHeight = parseFloat(wallHeight) || 2.5;
+    if (isRoof) {
+      opts.roofSlopes = parseInt(roofSlopes) || 2;
+      opts.roofSlopePercent = parseFloat(roofSlopePercent) || 20;
+    }
+    await onAdd(levelName.trim(), level, opts);
+    onOpenChange(false);
+  };
+
+  const totalSteps = isRoof ? 5 : 3;
+  const canNext = () => {
+    if (step === 0) return levelName.trim().length > 0;
+    if (step === 1) return sameFootprint !== null;
+    return true;
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Layers className="h-4 w-4" /> Nuevo Nivel — Paso {step + 1}/{totalSteps}
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4 py-2">
+          {step === 0 && (
+            <div className="space-y-2">
+              <Label>Nombre del nivel</Label>
+              <Input value={levelName} onChange={e => setLevelName(e.target.value)} placeholder="Ej: Nivel 2, Bajo cubierta" />
+            </div>
+          )}
+
+          {step === 1 && (
+            <div className="space-y-3">
+              <Label>¿Ocupa la misma planta que el nivel inferior ({sourceFloor?.name || 'Nivel 1'})?</Label>
+              <div className="flex gap-3">
+                <Button variant={sameFootprint === true ? 'default' : 'outline'} className="flex-1"
+                  onClick={() => setSameFootprint(true)}>
+                  Sí — Copiar perímetro
+                </Button>
+                <Button variant={sameFootprint === false ? 'default' : 'outline'} className="flex-1"
+                  onClick={() => setSameFootprint(false)}>
+                  No — Definir manualmente
+                </Button>
+              </div>
+              {sameFootprint === true && (
+                <p className="text-xs text-muted-foreground">Se copiarán todos los espacios y muros del nivel inferior.</p>
+              )}
+              {sameFootprint === false && (
+                <p className="text-xs text-muted-foreground">Deberás definir cada espacio y sus dimensiones después de crear el nivel.</p>
+              )}
+            </div>
+          )}
+
+          {step === 2 && (
+            <div className="space-y-3">
+              <Label>Altura de las paredes externas (m)</Label>
+              <Input type="number" step="0.1" min="0.5" value={wallHeight} onChange={e => setWallHeight(e.target.value)} />
+              <div className="flex items-center gap-2 pt-2">
+                <Checkbox id="is-roof" checked={isRoof} onCheckedChange={(v) => setIsRoof(v === true)} />
+                <Label htmlFor="is-roof" className="text-sm cursor-pointer">Es un nivel bajo cubierta (tejado)</Label>
+              </div>
+            </div>
+          )}
+
+          {step === 3 && isRoof && (
+            <div className="space-y-3">
+              <Label>¿Cuántos faldones tendrá el tejado?</Label>
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { val: '0', label: '0 — Cubierta plana' },
+                  { val: '2', label: '2 — Dos aguas' },
+                  { val: '4', label: '4 — Cuatro aguas' },
+                ].map(opt => (
+                  <Button key={opt.val} variant={roofSlopes === opt.val ? 'default' : 'outline'}
+                    className="text-xs h-auto py-2 px-2" onClick={() => setRoofSlopes(opt.val)}>
+                    {opt.label}
+                  </Button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {step === 4 && isRoof && (
+            <div className="space-y-3">
+              <Label>Pendiente del tejado (%)</Label>
+              <Input type="number" step="1" min="0" max="100" value={roofSlopePercent}
+                onChange={e => setRoofSlopePercent(e.target.value)} />
+              <p className="text-xs text-muted-foreground">
+                Ej: 20% = pendiente suave, 40% = pendiente pronunciada
+              </p>
+            </div>
+          )}
+        </div>
+
+        <DialogFooter className="flex justify-between">
+          <div>
+            {step > 0 && (
+              <Button variant="ghost" onClick={() => setStep(s => s - 1)}>← Anterior</Button>
+            )}
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
+            {step < totalSteps - 1 ? (
+              <Button onClick={() => setStep(s => s + 1)} disabled={!canNext()}>
+                Siguiente →
+              </Button>
+            ) : (
+              <Button onClick={handleCreate} disabled={saving || !canNext()}>
+                {saving ? 'Creando...' : 'Crear nivel'}
+              </Button>
+            )}
+          </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function LevelManagerPanel({ floors, onAdd, onUpdate, onDelete, saving, onClose }: {
   floors: Array<{ id: string; name: string; level: string; orderIndex: number }>;
-  onAdd: (name: string, level: string) => Promise<void>;
+  onAdd: (name: string, level: string, opts?: any) => Promise<void>;
   onUpdate: (floorId: string, data: { name?: string }) => Promise<void>;
   onDelete: (floorId: string) => Promise<void>;
   saving: boolean;
   onClose: () => void;
 }) {
-  const [newName, setNewName] = useState('');
   const [editId, setEditId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
-
-  const handleAdd = async () => {
-    if (!newName.trim()) return;
-    const level = `nivel_${floors.length}`;
-    await onAdd(newName.trim(), level);
-    setNewName('');
-  };
+  const [showWizard, setShowWizard] = useState(false);
 
   const handleSaveEdit = async () => {
     if (!editId || !editName.trim()) return;
@@ -132,16 +294,17 @@ function LevelManagerPanel({ floors, onAdd, onUpdate, onDelete, saving, onClose 
             )}
           </div>
         ))}
-        {/* Add new level */}
-        <div className="flex items-center gap-2">
-          <Input className="h-8 text-sm flex-1" value={newName}
-            onChange={e => setNewName(e.target.value)}
-            placeholder="Nombre del nuevo nivel (ej: Nivel 2)"
-            onKeyDown={e => e.key === 'Enter' && handleAdd()} />
-          <Button size="sm" className="h-8" onClick={handleAdd} disabled={saving || !newName.trim()}>
-            <Plus className="h-3.5 w-3.5 mr-1" /> Añadir
-          </Button>
-        </div>
+        {/* Add new level button */}
+        <Button size="sm" className="w-full" onClick={() => setShowWizard(true)} disabled={saving}>
+          <Plus className="h-3.5 w-3.5 mr-1" /> Añadir nivel
+        </Button>
+        <NewLevelWizardDialog
+          open={showWizard}
+          onOpenChange={setShowWizard}
+          floors={floors}
+          onAdd={onAdd}
+          saving={saving}
+        />
       </CardContent>
     </Card>
   );

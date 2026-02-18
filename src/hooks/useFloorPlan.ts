@@ -819,19 +819,80 @@ export function useFloorPlan(budgetId: string) {
   };
 
   // Floor CRUD
-  const addFloor = async (name: string, level: string) => {
+  const addFloor = async (name: string, level: string, opts?: {
+    copyFromFloorId?: string;
+    wallHeight?: number;
+    roofSlopes?: number;
+    roofSlopePercent?: number;
+  }) => {
     if (!floorPlan) return;
     setSaving(true);
     try {
-      const { error } = await supabase
+      const { data: newFloor, error } = await supabase
         .from('budget_floors')
         .insert({
           floor_plan_id: floorPlan.id,
           name,
           level,
           order_index: floors.length,
-        });
+        })
+        .select()
+        .single();
       if (error) throw error;
+
+      // Update roof params if provided
+      if (opts?.roofSlopes !== undefined || opts?.roofSlopePercent !== undefined) {
+        const roofUpdates: any = {};
+        if (opts.roofSlopes !== undefined) {
+          const roofTypeMap: Record<number, string> = { 0: 'plana', 2: 'dos_aguas', 4: 'cuatro_aguas' };
+          roofUpdates.roof_type = roofTypeMap[opts.roofSlopes] || 'dos_aguas';
+        }
+        if (opts.roofSlopePercent !== undefined) {
+          roofUpdates.roof_slope_percent = opts.roofSlopePercent;
+        }
+        if (Object.keys(roofUpdates).length > 0) {
+          await supabase.from('budget_floor_plans').update(roofUpdates).eq('id', floorPlan.id);
+        }
+      }
+
+      // Copy rooms from lower level if requested
+      if (opts?.copyFromFloorId && newFloor) {
+        const sourceRooms = rooms.filter(r => r.floorId === opts.copyFromFloorId && r.posX >= 0);
+        for (const src of sourceRooms) {
+          const roomHeight = opts?.wallHeight || src.height || undefined;
+          const { data: newRoom, error: roomErr } = await supabase
+            .from('budget_floor_plan_rooms')
+            .insert({
+              floor_plan_id: floorPlan.id,
+              floor_id: newFloor.id,
+              name: src.name,
+              width: src.width,
+              length: src.length,
+              height: roomHeight || null,
+              pos_x: src.posX,
+              pos_y: src.posY,
+              order_index: 0,
+              group_id: src.groupId || null,
+              group_name: src.groupName || null,
+            })
+            .select()
+            .single();
+          if (roomErr || !newRoom) continue;
+
+          // Copy walls
+          const srcWalls = src.walls || [];
+          for (const w of srcWalls) {
+            await supabase.from('budget_floor_plan_walls').insert({
+              room_id: newRoom.id,
+              wall_index: w.wallIndex,
+              wall_type: w.wallType,
+              thickness: w.thickness || null,
+              height: opts?.wallHeight || w.height || null,
+            });
+          }
+        }
+      }
+
       await fetchAll();
       toast.success(`Planta "${name}" creada`);
     } catch (err) {

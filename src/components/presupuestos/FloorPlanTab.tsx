@@ -428,8 +428,12 @@ export function FloorPlanTab({ budgetId, budgetName = '', isAdmin }: FloorPlanTa
   const [editingFloorName, setEditingFloorName] = useState('');
   const gridRef = useRef<HTMLDivElement>(null);
   const [activeFloorName, setActiveFloorName] = useState('Nivel 1');
+  const [activeGridFloorId, setActiveGridFloorId] = useState<string | undefined>(undefined);
   const [forceActiveFloorId, setForceActiveFloorId] = useState<string | undefined>(undefined);
-  const handleActiveFloorChange = useCallback((name: string) => setActiveFloorName(name), []);
+  const handleActiveFloorChange = useCallback((name: string, floorId?: string) => {
+    setActiveFloorName(name);
+    if (floorId) setActiveGridFloorId(floorId);
+  }, []);
 
   // Wizard state
   const [planConfig, setPlanConfig] = useState({
@@ -735,11 +739,23 @@ export function FloorPlanTab({ budgetId, budgetName = '', isAdmin }: FloorPlanTa
             <RefreshCw className="h-4 w-4 mr-1" /> Actualizar
           </Button>
           <Button variant="destructive" size="sm" onClick={async () => {
-            if (confirm('¿Eliminar el plano completo? Se perderán todos los espacios.')) {
-              await deleteFloorPlan();
+            if (floors.length > 1) {
+              const floorToDelete = floors.find(f => f.id === activeGridFloorId) || floors[floors.length - 1];
+              if (floorToDelete && confirm(`¿Eliminar el nivel "${floorToDelete.name}" y sus espacios? Los demás niveles se mantendrán.`)) {
+                const floorRooms = rooms.filter(r => r.floorId === floorToDelete.id);
+                for (const r of floorRooms) {
+                  await deleteRoom(r.id);
+                }
+                await deleteFloor(floorToDelete.id);
+                toast.success(`Nivel "${floorToDelete.name}" eliminado`);
+              }
+            } else {
+              if (confirm('¿Eliminar el plano completo? Se perderán todos los espacios.')) {
+                await deleteFloorPlan();
+              }
             }
           }} disabled={saving}>
-            <Trash2 className="h-4 w-4 mr-1" /> Eliminar plano
+            <Trash2 className="h-4 w-4 mr-1" /> {floors.length > 1 ? 'Eliminar nivel' : 'Eliminar plano'}
           </Button>
         </div>
       </div>
@@ -875,7 +891,7 @@ export function FloorPlanTab({ budgetId, budgetName = '', isAdmin }: FloorPlanTa
                 <Button
                   onClick={async () => {
                     if (!newSpaceName.trim()) { toast.error('Indica un nombre'); return; }
-                    const targetFloor = newSpaceFloorId || floors[0]?.id;
+                    const targetFloor = newSpaceFloorId || activeGridFloorId || floors[0]?.id;
                     await addRoom(newSpaceName.trim(), newSpaceWidth, newSpaceLength, targetFloor);
                     setNewSpaceName('');
                     toast.success('Espacio añadido a la cabecera');

@@ -24,8 +24,8 @@ interface FloorPlanGridViewProps {
   saving?: boolean;
   /** Ref to capture the grid container for PDF export */
   gridRef?: React.RefObject<HTMLDivElement | null>;
-  /** Callback to report active floor name */
-  onActiveFloorChange?: (floorName: string) => void;
+  /** Callback to report active floor name and id */
+  onActiveFloorChange?: (floorName: string, floorId?: string) => void;
   /** Force switch to this floor tab (e.g. after creating a new floor) */
   forceActiveFloorId?: string;
 }
@@ -70,9 +70,11 @@ export function letterToCol(letters: string): number {
   return col;
 }
 
-/** Parse coordinate like "A1" → { col: 1, row: 1 } */
+/** Parse coordinate like "A1", "A01", "2-A01" → { col: 1, row: 1 } (strips level prefix) */
 export function parseCoord(coord: string): { col: number; row: number } | null {
-  const m = coord.toUpperCase().match(/^([A-Z]+)(\d+)$/);
+  // Strip optional level prefix like "2-" or "1-"
+  const stripped = coord.replace(/^\d+-/, '').toUpperCase();
+  const m = stripped.match(/^([A-Z]+)(\d+)$/);
   if (!m) return null;
   return { col: letterToCol(m[1]), row: parseInt(m[2]) };
 }
@@ -213,8 +215,8 @@ export function FloorPlanGridView({
 
   // Report active floor name changes
   useEffect(() => {
-    onActiveFloorChange?.(currentFloorName);
-  }, [currentFloorName, onActiveFloorChange]);
+    onActiveFloorChange?.(currentFloorName, currentFloorId);
+  }, [currentFloorName, currentFloorId, onActiveFloorChange]);
 
   // Rooms placed on the grid (posX >= 0 and posY >= 0)
   const placedRooms = useMemo(() => {

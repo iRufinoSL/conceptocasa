@@ -17,6 +17,7 @@ import { FloorPlanSummaryView } from './FloorPlanSummary';
 import { deriveGridPositions, computeGridRuler, formatCoord, parseCoord, colToLetter } from './FloorPlanGridView';
 import { calculateFloorPlanSummary } from '@/lib/floor-plan-calculations';
 import { FloorPlanPdfExport } from './FloorPlanPdfExport';
+import { SnapshotRestoreButton } from './SnapshotRestoreButton';
 import type { FloorPlanData } from '@/lib/floor-plan-calculations';
 
 interface FloorPlanTabProps {
@@ -735,6 +736,7 @@ export function FloorPlanTab({ budgetId, budgetName = '', isAdmin }: FloorPlanTa
           <Button variant="outline" size="sm" onClick={syncToMeasurements} disabled={saving}>
             <Save className={`h-4 w-4 mr-1 ${saving ? 'animate-spin' : ''}`} /> Sincronizar
           </Button>
+          <SnapshotRestoreButton budgetId={budgetId} module="plano" onRestored={() => refetch()} />
           <Button variant="outline" size="sm" onClick={async () => { await refetch(); toast.success('Plano actualizado'); }} disabled={saving}>
             <RefreshCw className="h-4 w-4 mr-1" /> Actualizar
           </Button>

@@ -3220,6 +3220,47 @@ export type Database = {
         }
         Relationships: []
       }
+      module_snapshots: {
+        Row: {
+          budget_id: string
+          created_at: string
+          created_by: string | null
+          id: string
+          label: string | null
+          module: string
+          snapshot_data: Json
+          snapshot_type: string
+        }
+        Insert: {
+          budget_id: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          label?: string | null
+          module: string
+          snapshot_data?: Json
+          snapshot_type: string
+        }
+        Update: {
+          budget_id?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          label?: string | null
+          module?: string
+          snapshot_data?: Json
+          snapshot_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "module_snapshots_budget_id_fkey"
+            columns: ["budget_id"]
+            isOneToOne: false
+            referencedRelation: "presupuestos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       notifications: {
         Row: {
           action_url: string | null

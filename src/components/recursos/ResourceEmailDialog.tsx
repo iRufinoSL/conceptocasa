@@ -205,11 +205,15 @@ export function ResourceEmailDialog({
           ? `<div style="font-family:Arial,sans-serif"><p>${body.replace(/\n/g, '<br>')}</p></div>`
           : `<p>Adjunto encontrará el listado de recursos: ${headerText || 'Listado de Recursos'}</p>`;
 
+    // Pass contact_id from the first CRM contact recipient so the email appears in their communications
+    const firstContactRecipient = recipients.find(r => r.type === 'contact' && r.contactId);
+
     const result = await sendEmail({
       to: validRecipients,
       subject: subject.trim(),
       body_html: bodyHtml,
       attachments: attachments.length > 0 ? attachments : undefined,
+      contact_id: firstContactRecipient?.contactId,
     });
 
     if (result.success) {

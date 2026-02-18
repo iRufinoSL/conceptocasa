@@ -454,6 +454,51 @@ const handler = async (req: Request): Promise<Response> => {
       console.error("Error storing email record:", insertError);
     } else {
       console.log("Email record stored:", emailRecord.id);
+
+      // Store attachments in storage and email_attachments table
+      if (attachments && attachments.length > 0 && emailRecord?.id) {
+        for (const att of attachments) {
+          try {
+            // Decode base64 to Uint8Array
+            const binaryString = atob(att.content);
+            const bytes = new Uint8Array(binaryString.length);
+            for (let i = 0; i < binaryString.length; i++) {
+              bytes[i] = binaryString.charCodeAt(i);
+            }
+
+            const filePath = `outbound/${emailRecord.id}/${att.filename}`;
+            const { error: uploadError } = await supabaseAdmin.storage
+              .from('email-attachments')
+              .upload(filePath, bytes, {
+                contentType: att.content_type || 'application/octet-stream',
+                upsert: false,
+              });
+
+            if (uploadError) {
+              console.error("Error uploading attachment:", att.filename, uploadError);
+              continue;
+            }
+
+            const { error: attInsertError } = await supabaseAdmin
+              .from('email_attachments')
+              .insert({
+                email_id: emailRecord.id,
+                file_name: att.filename,
+                file_path: filePath,
+                file_type: att.content_type || null,
+                file_size: bytes.length,
+              });
+
+            if (attInsertError) {
+              console.error("Error storing attachment record:", att.filename, attInsertError);
+            } else {
+              console.log("Attachment stored:", att.filename);
+            }
+          } catch (attError) {
+            console.error("Error processing attachment:", att.filename, attError);
+          }
+        }
+      }
       
       // Create budget assignment if budget_id is provided (verify access first)
       if (budget_id && emailRecord?.id) {

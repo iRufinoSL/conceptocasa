@@ -8,7 +8,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ExternalResource } from '@/types/resource';
 import { formatCurrency } from '@/lib/format-utils';
-import { Printer, FileDown, Mail } from 'lucide-react';
+import { searchMatch } from '@/lib/search-utils';
+import { Printer, FileDown, Mail, Search } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
@@ -29,19 +30,36 @@ export function ResourcePrintDialog({
 }: ResourcePrintDialogProps) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [headerText, setHeaderText] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
 
   const sortedResources = useMemo(
     () => [...resources].sort((a, b) => a.name.localeCompare(b.name, 'es', { sensitivity: 'base' })),
     [resources]
   );
 
-  const allSelected = sortedResources.length > 0 && selectedIds.size === sortedResources.length;
+  const filteredResources = useMemo(
+    () => sortedResources.filter((r) =>
+      searchMatch(r.name, searchTerm) ||
+      searchMatch(r.description, searchTerm)
+    ),
+    [sortedResources, searchTerm]
+  );
+
+  const allSelected = filteredResources.length > 0 && filteredResources.every((r) => selectedIds.has(r.id));
 
   const toggleAll = () => {
     if (allSelected) {
-      setSelectedIds(new Set());
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        filteredResources.forEach((r) => next.delete(r.id));
+        return next;
+      });
     } else {
-      setSelectedIds(new Set(sortedResources.map((r) => r.id)));
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        filteredResources.forEach((r) => next.add(r.id));
+        return next;
+      });
     }
   };
 
@@ -172,6 +190,17 @@ export function ResourcePrintDialog({
             />
           </div>
 
+          {/* Search */}
+          <div className="relative flex-shrink-0">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Buscar recursos..."
+              className="pl-10"
+            />
+          </div>
+
           {/* Resource selection table */}
           <ScrollArea className="flex-1 border rounded-lg min-h-0">
             <Table>
@@ -190,7 +219,7 @@ export function ResourcePrintDialog({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {sortedResources.map((resource) => (
+                {filteredResources.map((resource) => (
                   <TableRow key={resource.id}>
                     <TableCell>
                       <Checkbox

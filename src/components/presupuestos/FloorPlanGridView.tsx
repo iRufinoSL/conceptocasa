@@ -44,6 +44,11 @@ export function colToLetter(col: number): string {
   return s;
 }
 
+/** Column label with correlative number: 1→A01, 2→B02, 3→C03 */
+export function colToLabel(col: number): string {
+  return `${colToLetter(col)}${String(col).padStart(2, '0')}`;
+}
+
 /** Convert letter(s) to column index (1-based): A→1, B→2, AA→27 */
 export function letterToCol(letters: string): number {
   let col = 0;
@@ -395,7 +400,7 @@ export function FloorPlanGridView({
                 lineHeight: '20px',
               }}
             >
-              {colToLetter(ci + 1)}
+              {colToLabel(ci + 1)}
             </div>
           ))}
 

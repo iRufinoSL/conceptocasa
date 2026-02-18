@@ -391,7 +391,7 @@ export function FloorPlanGridView({
           {Array.from({ length: totalCols }, (_, ci) => (
             <div
               key={`ch-${ci}`}
-              className="absolute text-[8px] font-bold text-muted-foreground/60 text-center"
+              className="absolute text-[9px] font-extrabold text-blue-600 dark:text-blue-400 text-center"
               style={{
                 left: 30 + ci * CELL_SIZE,
                 top: 0,
@@ -408,7 +408,7 @@ export function FloorPlanGridView({
           {Array.from({ length: totalRows }, (_, ri) => (
             <div
               key={`rh-${ri}`}
-              className="absolute text-[8px] font-bold text-muted-foreground/60 text-center"
+              className="absolute text-[9px] font-extrabold text-blue-600 dark:text-blue-400 text-center"
               style={{
                 left: 0,
                 top: 20 + ri * CELL_SIZE,

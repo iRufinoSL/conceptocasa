@@ -229,11 +229,9 @@ export function EmailInbox({ onComposeReply, onComposeForward }: EmailInboxProps
         .eq('id', emailId);
       if (error) throw error;
     },
-    onSuccess: (_data, emailId) => {
-      // Optimistically update selectedEmail to avoid stale state issues with buttons
-      if (selectedEmail && selectedEmail.id === emailId) {
-        setSelectedEmail(prev => prev ? { ...prev, is_read: true, read_at: new Date().toISOString() } : null);
-      }
+    onSuccess: () => {
+      // Don't update selectedEmail here - it's already optimistically updated in handleEmailClick
+      // Updating it again here causes a re-render that can break button interactions
       queryClient.invalidateQueries({ queryKey: ['email-messages'] });
     },
   });
@@ -786,9 +784,14 @@ export function EmailInbox({ onComposeReply, onComposeForward }: EmailInboxProps
   }, [emails]);
 
   const handleEmailClick = async (email: EmailMessage) => {
-    setSelectedEmail(email);
+    // Optimistically mark as read in the local state immediately so the dialog
+    // doesn't re-render mid-interaction when the mutation completes
+    const emailToShow = (!email.is_read && email.direction === 'inbound')
+      ? { ...email, is_read: true, read_at: new Date().toISOString() }
+      : email;
+    setSelectedEmail(emailToShow);
     
-    // Mark as read if not already
+    // Persist to DB
     if (!email.is_read && email.direction === 'inbound') {
       markAsReadMutation.mutate(email.id);
     }

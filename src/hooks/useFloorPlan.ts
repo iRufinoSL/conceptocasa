@@ -824,7 +824,7 @@ export function useFloorPlan(budgetId: string) {
     wallHeight?: number;
     roofSlopes?: number;
     roofSlopePercent?: number;
-  }) => {
+  }): Promise<string | undefined> => {
     if (!floorPlan) return;
     setSaving(true);
     try {
@@ -895,6 +895,7 @@ export function useFloorPlan(budgetId: string) {
 
       await fetchAll();
       toast.success(`Planta "${name}" creada`);
+      return newFloor?.id;
     } catch (err) {
       console.error('Error adding floor:', err);
       toast.error('Error al añadir planta');

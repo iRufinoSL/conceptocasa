@@ -366,11 +366,17 @@ export function autoClassifyWalls(rooms: RoomData[]): Map<string, WallType> {
         const neighborIsInvisible = neighborWall && !neighborWall.id.startsWith('temp-') && isInvisibleType(neighborWall.wallType);
         const sameGroup = room.groupId && neighborRoom?.groupId === room.groupId;
 
+        // For interior walls: if either side is manually set to interior_invisible,
+        // it means "no physical wall" (open plan). Both sides stay invisible.
+        const thisIsInteriorInvisible = thisIsInvisible && !isExteriorType(wall!?.wallType || 'interior');
+        const neighborIsInteriorInvisible = neighborIsInvisible && !isExteriorType(neighborWall!?.wallType || 'interior');
+        const noPhysicalWall = !onPerimeter && (thisIsInteriorInvisible || neighborIsInteriorInvisible);
+
         let isOwner: boolean;
-        if (sameGroup) {
-          isOwner = false; // intra-group walls are always invisible
+        if (sameGroup || noPhysicalWall) {
+          isOwner = false; // intra-group or explicitly no wall
         } else if (thisIsInvisible && neighborIsInvisible) {
-          isOwner = room.id < neighborId; // both invisible: fallback to ID-based
+          isOwner = room.id < neighborId; // both invisible exterior: fallback to ID-based
         } else if (thisIsInvisible) {
           isOwner = false;
         } else if (neighborIsInvisible) {
@@ -381,7 +387,11 @@ export function autoClassifyWalls(rooms: RoomData[]): Map<string, WallType> {
 
         if (!isOwner) {
           // Non-owner side is ALWAYS invisible to prevent double-counting
-          classification.set(key, onPerimeter ? 'exterior_invisible' : 'interior_invisible');
+          if (noPhysicalWall) {
+            classification.set(key, 'interior_invisible');
+          } else {
+            classification.set(key, onPerimeter ? 'exterior_invisible' : 'interior_invisible');
+          }
           return;
         }
         // Owner side: use manual type if set, otherwise auto-classify
@@ -1071,12 +1081,20 @@ export function computeWallSegments(rooms: RoomData[]): Map<string, WallSegment[
         // Check if rooms belong to the same group (same logical room)
         const sameGroup = room.groupId && neighborRoom?.groupId === room.groupId;
 
+        // For INTERIOR walls: if either side has a manually-set _invisible type,
+        // it means "no physical wall here" (e.g. open plan). Both sides stay invisible.
+        // For EXTERIOR walls: _invisible means "this side doesn't own the wall" (porches),
+        // so the visible side should still be the owner.
+        const thisIsInteriorInvisible = thisIsInvisible && !isExteriorType(wall!?.wallType || 'interior');
+        const neighborIsInteriorInvisible = neighborIsInvisible && !isExteriorType(neighborWall!?.wallType || 'interior');
+        const noPhysicalWall = !onPeri && (thisIsInteriorInvisible || neighborIsInteriorInvisible);
+
         let effectiveOwner: boolean;
-        if (sameGroup) {
-          // Intra-group walls are always invisible (no physical wall between parts of same room)
+        if (sameGroup || noPhysicalWall) {
+          // Intra-group walls or explicitly invisible interior walls: no wall exists
           effectiveOwner = false;
         } else if (thisIsInvisible && neighborIsInvisible) {
-          // Both sides invisible: fall back to ID-based so one side still counts
+          // Both sides invisible (exterior): fall back to ID-based so one side still counts
           effectiveOwner = room.id < ol.neighborRoomId;
         } else if (thisIsInvisible) {
           effectiveOwner = false;
@@ -1089,6 +1107,8 @@ export function computeWallSegments(rooms: RoomData[]): Map<string, WallSegment[
         let segType: WallType;
         if (sameGroup) {
           segType = onPeri ? 'exterior_invisible' : 'interior_invisible';
+        } else if (noPhysicalWall) {
+          segType = 'interior_invisible';
         } else if (thisIsInvisible && !effectiveOwner) {
           segType = wall!.wallType; // keep invisible
         } else if (thisIsInvisible && effectiveOwner) {

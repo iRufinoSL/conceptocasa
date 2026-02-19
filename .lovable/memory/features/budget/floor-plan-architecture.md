@@ -1,7 +1,7 @@
 # Memory: features/budget/floor-plan-architecture
 Updated: now
 
-Arquitectura de planos: Soporta múltiples niveles (Nivel 0: Cimentación, Nivel 1, Nivel 2: Bajo cubierta). Cuadrícula de 1m² con expansión dinámica y coordenadas A01, B02... Flujo: espacios 'Sin colocar' (posX: -1) se mueven al plano vía coordenada. Perímetro: fusión de segmentos colineales e invisibilización de paredes internas. Cálculo: superficies de paredes excluyen hastiales (gables). Nivel 2 (Bajo cubierta) genera hastiales automáticamente basándose en el perímetro del Nivel 1 y la pendiente del tejado. Visualización: Muros proporcionales, aperturas (cyan/ámbar) en huecos blancos y etiquetas adaptativas.
+Arquitectura de planos: Soporta múltiples niveles (Nivel 0: Cimentación, Nivel 1, Nivel 2: Bajo cubierta). Cuadrícula de 1m² con expansión dinámica y coordenadas A01, B02... Flujo: espacios 'Sin colocar' (posX: -1) se mueven al plano vía coordenada. Perímetro: fusión de segmentos colineales e invisibilización de paredes internas. Cálculo: superficies de paredes excluyen hastiales (gables). Nivel 2 (Bajo cubierta) genera hastiales automáticamente basándose en el perímetro del Nivel 1 y la pendiente del tejado. Visualización: Muros proporcionales, huecos como rectángulos blancos con borde de color (ámbar puertas, cyan ventanas) y etiquetas adaptativas.
 
 ## Propiedad de segmentos compartidos
 Las paredes compartidas entre porches (invisible) y casa principal (visible) usan propiedad basada en visibilidad: la pared visible siempre es la "propietaria" del segmento, no por ID. Así los porches no añaden área exterior extra. Las paredes de porche compartidas deben ser `exterior_invisible` en BD.
@@ -25,6 +25,9 @@ Al visualizar un nivel superior (ej. Nivel 2), las habitaciones del nivel inmedi
 
 ## Asignación de espacios a niveles (Feb 2026)
 Al añadir un nuevo espacio, se usa por defecto el nivel actualmente visible en la cuadrícula (`activeGridFloorId`), no siempre el primer nivel.
+
+## Huecos estándar (Feb 2026)
+7 tipos de hueco con dimensiones por defecto: Puerta int (0.93x2.06), Puerta ext (1.25x2.25), Hueco de paso (1.875x2.25), Ventana balconera (1.875x2.25), Ventana grande (1.875x1.25), Ventana mediana (1.25x1.25), Ventana pequeña (0.625x1.25). Altura base ventanas: 1.00m (excepto balconera: 0.00m). Representación en plano: rectángulo blanco con borde ámbar (puertas/huecos) o cyan (ventanas).
 
 ## Deshacer (Undo)
 Limitado a 3 snapshots de posiciones (posX, posY, width, length). No cubre borrado de habitaciones ni niveles completos. Botón visible solo cuando hay snapshots disponibles.

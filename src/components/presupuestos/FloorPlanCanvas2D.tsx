@@ -629,67 +629,42 @@ export function FloorPlanCanvas2D({
                         const opWidth = op.width * SCALE;
                         const centerPos = op.positionX * wallLen * SCALE;
                         const startPos = centerPos - opWidth / 2;
-                        const isDoor = op.openingType === 'puerta' || op.openingType === 'puerta_externa';
+                        const isDoor = op.openingType === 'puerta' || op.openingType === 'puerta_externa' || op.openingType === 'hueco_paso';
                         const opSegStroke = opSeg ? (isExteriorType(opSeg.segmentType) ? plan.externalWallThickness * SCALE : plan.internalWallThickness * SCALE) : 2;
                         const sw = Math.max(opSegStroke, 2);
+                        const halfT = sw / 2;
 
-                        if (isDoor) {
-                          const halfT = sw / 2;
-                          if (isHoriz) {
-                            const ox = startPos;
-                            const cy = wall.wallIndex === 1 ? 0 : h;
-                            const arcDir = wall.wallIndex === 1 ? 1 : -1;
-                            return (
-                              <g key={`op-${oi}`} pointerEvents="none">
-                                <line x1={ox} y1={cy} x2={ox + opWidth} y2={cy} stroke="#ffffff" strokeWidth={sw + 2} />
-                                <path d={`M ${ox},${cy} A ${opWidth},${opWidth} 0 0 ${arcDir > 0 ? 1 : 0} ${ox + opWidth},${cy + arcDir * opWidth * 0.05}`}
-                                  stroke="#d97706" strokeWidth={0.7} fill="none" opacity={0.5} />
-                                <line x1={ox} y1={cy - halfT} x2={ox} y2={cy + halfT} stroke="#d97706" strokeWidth={0.8} />
-                                <line x1={ox + opWidth} y1={cy - halfT} x2={ox + opWidth} y2={cy + halfT} stroke="#d97706" strokeWidth={0.8} />
-                              </g>
-                            );
-                          } else {
-                            const oy = startPos;
-                            const cx = wall.wallIndex === 4 ? 0 : w;
-                            const arcDir = wall.wallIndex === 4 ? 1 : -1;
-                            return (
-                              <g key={`op-${oi}`} pointerEvents="none">
-                                <line x1={cx} y1={oy} x2={cx} y2={oy + opWidth} stroke="#ffffff" strokeWidth={sw + 2} />
-                                <path d={`M ${cx},${oy} A ${opWidth},${opWidth} 0 0 ${arcDir > 0 ? 1 : 0} ${cx + arcDir * opWidth * 0.05},${oy + opWidth}`}
-                                  stroke="#d97706" strokeWidth={0.7} fill="none" opacity={0.5} />
-                                <line x1={cx - halfT} y1={oy} x2={cx + halfT} y2={oy} stroke="#d97706" strokeWidth={0.8} />
-                                <line x1={cx - halfT} y1={oy + opWidth} x2={cx + halfT} y2={oy + opWidth} stroke="#d97706" strokeWidth={0.8} />
-                              </g>
-                            );
-                          }
+                        // All openings: white rectangle proportional to width on the wall
+                        if (isHoriz) {
+                          const ox = startPos;
+                          const cy = wall.wallIndex === 1 ? 0 : h;
+                          const rectH = sw + 4;
+                          return (
+                            <g key={`op-${oi}`} pointerEvents="none">
+                              {/* White rectangle background */}
+                              <rect x={ox} y={cy - rectH / 2} width={opWidth} height={rectH}
+                                fill="#ffffff" stroke={isDoor ? '#d97706' : '#06b6d4'} strokeWidth={1} />
+                              {isDoor && (
+                                <path d={`M ${ox},${cy} A ${opWidth},${opWidth} 0 0 ${(wall.wallIndex === 1 ? 1 : -1) > 0 ? 1 : 0} ${ox + opWidth},${cy + (wall.wallIndex === 1 ? 1 : -1) * opWidth * 0.05}`}
+                                  stroke="#d97706" strokeWidth={0.7} fill="none" opacity={0.4} />
+                              )}
+                            </g>
+                          );
                         } else {
-                          // Window: two parallel lines spaced by wall thickness, proportional to opening
-                          const halfT = sw / 2;
-                          if (isHoriz) {
-                            const ox = startPos;
-                            const cy = wall.wallIndex === 1 ? 0 : h;
-                            return (
-                              <g key={`op-${oi}`} pointerEvents="none">
-                                <line x1={ox} y1={cy} x2={ox + opWidth} y2={cy} stroke="#ffffff" strokeWidth={sw + 2} />
-                                <line x1={ox} y1={cy - halfT} x2={ox + opWidth} y2={cy - halfT} stroke="#06b6d4" strokeWidth={1} />
-                                <line x1={ox} y1={cy + halfT} x2={ox + opWidth} y2={cy + halfT} stroke="#06b6d4" strokeWidth={1} />
-                                <line x1={ox} y1={cy - halfT} x2={ox} y2={cy + halfT} stroke="#06b6d4" strokeWidth={0.6} />
-                                <line x1={ox + opWidth} y1={cy - halfT} x2={ox + opWidth} y2={cy + halfT} stroke="#06b6d4" strokeWidth={0.6} />
-                              </g>
-                            );
-                          } else {
-                            const oy = startPos;
-                            const cx = wall.wallIndex === 4 ? 0 : w;
-                            return (
-                              <g key={`op-${oi}`} pointerEvents="none">
-                                <line x1={cx} y1={oy} x2={cx} y2={oy + opWidth} stroke="#ffffff" strokeWidth={sw + 2} />
-                                <line x1={cx - halfT} y1={oy} x2={cx - halfT} y2={oy + opWidth} stroke="#06b6d4" strokeWidth={1} />
-                                <line x1={cx + halfT} y1={oy} x2={cx + halfT} y2={oy + opWidth} stroke="#06b6d4" strokeWidth={1} />
-                                <line x1={cx - halfT} y1={oy} x2={cx + halfT} y2={oy} stroke="#06b6d4" strokeWidth={0.6} />
-                                <line x1={cx - halfT} y1={oy + opWidth} x2={cx + halfT} y2={oy + opWidth} stroke="#06b6d4" strokeWidth={0.6} />
-                              </g>
-                            );
-                          }
+                          const oy = startPos;
+                          const cx = wall.wallIndex === 4 ? 0 : w;
+                          const rectW = sw + 4;
+                          return (
+                            <g key={`op-${oi}`} pointerEvents="none">
+                              {/* White rectangle background */}
+                              <rect x={cx - rectW / 2} y={oy} width={rectW} height={opWidth}
+                                fill="#ffffff" stroke={isDoor ? '#d97706' : '#06b6d4'} strokeWidth={1} />
+                              {isDoor && (
+                                <path d={`M ${cx},${oy} A ${opWidth},${opWidth} 0 0 ${(wall.wallIndex === 4 ? 1 : -1) > 0 ? 1 : 0} ${cx + (wall.wallIndex === 4 ? 1 : -1) * opWidth * 0.05},${oy + opWidth}`}
+                                  stroke="#d97706" strokeWidth={0.7} fill="none" opacity={0.4} />
+                              )}
+                            </g>
+                          );
                         }
                       })}
                     </g>
@@ -871,56 +846,36 @@ export function FloorPlanCanvas2D({
                     const opWidth = op.width * SCALE;
                     const centerPos = op.perimeterPositionX * pw.length * SCALE;
                     const startPos = centerPos - opWidth / 2;
-                    const isDoor = op.openingType === 'puerta' || op.openingType === 'puerta_externa';
+                    const isDoor = op.openingType === 'puerta' || op.openingType === 'puerta_externa' || op.openingType === 'hueco_paso';
                     const sw = Math.max(wallThick, 2);
+                    const rectThick = sw + 4;
 
-                    const halfT = sw / 2;
                     if (isHoriz) {
                       const ox = pw.start * SCALE + startPos;
                       const cy = pw.fixedCoord * SCALE;
                       const arcDir = pw.side === 'top' ? 1 : -1;
-                      if (isDoor) {
-                        return (
-                          <g key={`pw-op-${oi}`} pointerEvents="none">
-                            <line x1={ox} y1={cy} x2={ox + opWidth} y2={cy} stroke="#ffffff" strokeWidth={sw + 2} />
-                            <path d={`M ${ox},${cy} A ${opWidth},${opWidth} 0 0 ${arcDir > 0 ? 1 : 0} ${ox + opWidth},${cy + arcDir * opWidth * 0.05}`}
-                              stroke="#d97706" strokeWidth={0.7} fill="none" opacity={0.5} />
-                            <line x1={ox} y1={cy - halfT} x2={ox} y2={cy + halfT} stroke="#d97706" strokeWidth={0.8} />
-                            <line x1={ox + opWidth} y1={cy - halfT} x2={ox + opWidth} y2={cy + halfT} stroke="#d97706" strokeWidth={0.8} />
-                          </g>
-                        );
-                      }
                       return (
                         <g key={`pw-op-${oi}`} pointerEvents="none">
-                          <line x1={ox} y1={cy} x2={ox + opWidth} y2={cy} stroke="#ffffff" strokeWidth={sw + 2} />
-                          <line x1={ox} y1={cy - halfT} x2={ox + opWidth} y2={cy - halfT} stroke="#06b6d4" strokeWidth={1} />
-                          <line x1={ox} y1={cy + halfT} x2={ox + opWidth} y2={cy + halfT} stroke="#06b6d4" strokeWidth={1} />
-                          <line x1={ox} y1={cy - halfT} x2={ox} y2={cy + halfT} stroke="#06b6d4" strokeWidth={0.6} />
-                          <line x1={ox + opWidth} y1={cy - halfT} x2={ox + opWidth} y2={cy + halfT} stroke="#06b6d4" strokeWidth={0.6} />
+                          <rect x={ox} y={cy - rectThick / 2} width={opWidth} height={rectThick}
+                            fill="#ffffff" stroke={isDoor ? '#d97706' : '#06b6d4'} strokeWidth={1} />
+                          {isDoor && (
+                            <path d={`M ${ox},${cy} A ${opWidth},${opWidth} 0 0 ${arcDir > 0 ? 1 : 0} ${ox + opWidth},${cy + arcDir * opWidth * 0.05}`}
+                              stroke="#d97706" strokeWidth={0.7} fill="none" opacity={0.4} />
+                          )}
                         </g>
                       );
                     } else {
                       const oy = pw.start * SCALE + startPos;
                       const cx = pw.fixedCoord * SCALE;
                       const arcDir = pw.side === 'left' ? 1 : -1;
-                      if (isDoor) {
-                        return (
-                          <g key={`pw-op-${oi}`} pointerEvents="none">
-                            <line x1={cx} y1={oy} x2={cx} y2={oy + opWidth} stroke="#ffffff" strokeWidth={sw + 2} />
-                            <path d={`M ${cx},${oy} A ${opWidth},${opWidth} 0 0 ${arcDir > 0 ? 1 : 0} ${cx + arcDir * opWidth * 0.05},${oy + opWidth}`}
-                              stroke="#d97706" strokeWidth={0.7} fill="none" opacity={0.5} />
-                            <line x1={cx - halfT} y1={oy} x2={cx + halfT} y2={oy} stroke="#d97706" strokeWidth={0.8} />
-                            <line x1={cx - halfT} y1={oy + opWidth} x2={cx + halfT} y2={oy + opWidth} stroke="#d97706" strokeWidth={0.8} />
-                          </g>
-                        );
-                      }
                       return (
                         <g key={`pw-op-${oi}`} pointerEvents="none">
-                          <line x1={cx} y1={oy} x2={cx} y2={oy + opWidth} stroke="#ffffff" strokeWidth={sw + 2} />
-                          <line x1={cx - halfT} y1={oy} x2={cx - halfT} y2={oy + opWidth} stroke="#06b6d4" strokeWidth={1} />
-                          <line x1={cx + halfT} y1={oy} x2={cx + halfT} y2={oy + opWidth} stroke="#06b6d4" strokeWidth={1} />
-                          <line x1={cx - halfT} y1={oy} x2={cx + halfT} y2={oy} stroke="#06b6d4" strokeWidth={0.6} />
-                          <line x1={cx - halfT} y1={oy + opWidth} x2={cx + halfT} y2={oy + opWidth} stroke="#06b6d4" strokeWidth={0.6} />
+                          <rect x={cx - rectThick / 2} y={oy} width={rectThick} height={opWidth}
+                            fill="#ffffff" stroke={isDoor ? '#d97706' : '#06b6d4'} strokeWidth={1} />
+                          {isDoor && (
+                            <path d={`M ${cx},${oy} A ${opWidth},${opWidth} 0 0 ${arcDir > 0 ? 1 : 0} ${cx + arcDir * opWidth * 0.05},${oy + opWidth}`}
+                              stroke="#d97706" strokeWidth={0.7} fill="none" opacity={0.4} />
+                          )}
                         </g>
                       );
                     }

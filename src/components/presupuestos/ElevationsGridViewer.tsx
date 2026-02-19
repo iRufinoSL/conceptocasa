@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Plus, Trash2, Box, Layers, ArrowUpDown } from 'lucide-react';
 import { OPENING_PRESETS, WALL_LABELS, computeWallSegments, autoClassifyWalls, generateExternalWallNames, isExteriorType, isInvisibleType } from '@/lib/floor-plan-calculations';
-import type { RoomData, WallData, OpeningData, FloorPlanData, WallSegment, FloorLevel } from '@/lib/floor-plan-calculations';
+import type { RoomData, WallData, OpeningData, FloorPlanData, WallSegment, FloorLevel, WallType } from '@/lib/floor-plan-calculations';
 
 interface ElevationsGridViewerProps {
   plan: FloorPlanData;
@@ -19,6 +19,7 @@ interface ElevationsGridViewerProps {
   onUpdateOpening: (openingId: string, data: { width?: number; height?: number; positionX?: number; openingType?: string }) => Promise<void>;
   onAddOpening: (wallId: string, type: string, width: number, height: number, sillHeight?: number) => Promise<void>;
   onDeleteOpening: (openingId: string) => Promise<void>;
+  onUpdateWall?: (wallId: string, data: { wallType?: WallType; thickness?: number; height?: number }) => Promise<void>;
   saving: boolean;
 }
 
@@ -70,7 +71,7 @@ function getWallHeight(wall: WallData, room: RoomData, plan: FloorPlanData): num
 }
 
 export function ElevationsGridViewer({
-  plan, rooms, floors, onUpdateOpening, onAddOpening, onDeleteOpening, saving,
+  plan, rooms, floors, onUpdateOpening, onAddOpening, onDeleteOpening, onUpdateWall, saving,
 }: ElevationsGridViewerProps) {
   const [selectedOpening, setSelectedOpening] = useState<OpeningData | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -344,6 +345,7 @@ export function ElevationsGridViewer({
           onAddOpening={onAddOpening}
           onUpdateOpening={onUpdateOpening}
           onDeleteOpening={onDeleteOpening}
+          onUpdateWall={onUpdateWall}
           saving={saving}
         />
       )}
@@ -566,16 +568,35 @@ function ElevationCardView({ card, onOpeningClick, onAddOpening, onCardDoubleCli
 // ──────────────────────────────────────────────────────────────────
 // Wall card edit dialog — opened on double-click
 // ──────────────────────────────────────────────────────────────────
-function WallEditDialog({ open, onOpenChange, card, onAddOpening, onUpdateOpening, onDeleteOpening, saving }: {
+
+const WALL_TYPE_OPTIONS: Array<{ value: WallType; label: string; description: string }> = [
+  { value: 'exterior', label: 'Exterior', description: 'Pared perimetral exterior' },
+  { value: 'exterior_compartida', label: 'Ext. compartida', description: 'Exterior compartida con otro espacio' },
+  { value: 'exterior_invisible', label: 'Ext. invisible', description: 'Exterior sin cómputo (hueco, porche)' },
+  { value: 'interior', label: 'Interior', description: 'Pared interior normal' },
+  { value: 'interior_compartida', label: 'Int. compartida', description: 'Interior compartida con espacio adyacente' },
+  { value: 'interior_invisible', label: 'Invisible', description: 'Sin pared física (espacio abierto)' },
+];
+
+function WallEditDialog({ open, onOpenChange, card, onAddOpening, onUpdateOpening, onDeleteOpening, onUpdateWall, saving }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   card: ElevationCard;
   onAddOpening: (wallId: string, type: string, width: number, height: number, sillHeight?: number) => Promise<void>;
   onUpdateOpening: (id: string, data: { width?: number; height?: number; positionX?: number; openingType?: string }) => Promise<void>;
   onDeleteOpening: (id: string) => Promise<void>;
+  onUpdateWall?: (wallId: string, data: { wallType?: WallType; thickness?: number; height?: number }) => Promise<void>;
   saving: boolean;
 }) {
   const [editingOp, setEditingOp] = useState<OpeningData | null>(null);
+  const [wallType, setWallType] = useState<WallType>((card.wall?.wallType as WallType) || 'interior');
+  const [wallTypeChanged, setWallTypeChanged] = useState(false);
+
+  // Reset when card changes
+  const cardWallType = card.wall?.wallType as WallType;
+  if (cardWallType && wallType !== cardWallType && !wallTypeChanged) {
+    setWallType(cardWallType);
+  }
 
   const handleAdd = async (key: string) => {
     if (!card.wallId) return;
@@ -587,6 +608,13 @@ function WallEditDialog({ open, onOpenChange, card, onAddOpening, onUpdateOpenin
     if (!editingOp) return;
     await onUpdateOpening(editingOp.id, data);
     setEditingOp(null);
+  };
+
+  const handleSaveWallType = async () => {
+    if (!card.wallId || !onUpdateWall || card.wall?.id.startsWith('temp-')) return;
+    await onUpdateWall(card.wall!.id, { wallType });
+    setWallTypeChanged(false);
+    onOpenChange(false);
   };
 
   return (
@@ -604,6 +632,29 @@ function WallEditDialog({ open, onOpenChange, card, onAddOpening, onUpdateOpenin
         </DialogHeader>
 
         <div className="space-y-4">
+          {/* Wall type editor */}
+          {card.wall && !card.wall.id.startsWith('temp-') && onUpdateWall && (
+            <div className="border border-border rounded-md p-3 space-y-2 bg-muted/20">
+              <p className="text-xs font-semibold text-muted-foreground">Tipo de pared</p>
+              <Select value={wallType} onValueChange={v => { setWallType(v as WallType); setWallTypeChanged(true); }}>
+                <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {WALL_TYPE_OPTIONS.map(opt => (
+                    <SelectItem key={opt.value} value={opt.value} className="text-xs">
+                      <span className="font-medium">{opt.label}</span>
+                      <span className="text-muted-foreground ml-2">{opt.description}</span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {wallTypeChanged && (
+                <Button size="sm" className="w-full h-7 text-xs" onClick={handleSaveWallType} disabled={saving}>
+                  Guardar tipo de pared
+                </Button>
+              )}
+            </div>
+          )}
+
           {/* Existing openings */}
           {card.openings.length > 0 && (
             <div className="space-y-2">

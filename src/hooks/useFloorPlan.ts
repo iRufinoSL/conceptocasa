@@ -90,7 +90,14 @@ export function useFloorPlan(budgetId: string) {
   const [rooms, setRooms] = useState<RoomData[]>([]);
   const [floors, setFloors] = useState<FloorLevel[]>([]);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const [saving, _setSaving] = useState(false);
+  const savingRef = useRef(false);
+
+  // Keep savingRef in sync so realtime handler can avoid triggering during saves
+  const setSaving = useCallback((v: boolean) => {
+    savingRef.current = v;
+    _setSaving(v);
+  }, []);
 
   const initialLoadDone = useRef(false);
 
@@ -234,6 +241,30 @@ export function useFloorPlan(budgetId: string) {
   useEffect(() => {
     fetchAll();
   }, [fetchAll]);
+
+  // Realtime: refresh automatically when floor-plan data changes in any session
+  useEffect(() => {
+    if (!budgetId) return;
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const handleChange = () => {
+      if (savingRef.current) return;
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => { fetchAll(); }, 500);
+    };
+
+    const channel = supabase
+      .channel(`floor-plan-rt-${budgetId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'budget_floor_plan_walls' }, handleChange)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'budget_floor_plan_rooms' }, handleChange)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'budget_floor_plan_openings' }, handleChange)
+      .subscribe();
+
+    return () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      supabase.removeChannel(channel);
+    };
+  }, [budgetId, fetchAll]);
 
   const createFloorPlan = async (data: Partial<FloorPlanData>) => {
     setSaving(true);

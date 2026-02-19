@@ -83,6 +83,13 @@ export function ElevationsGridViewer({
   const wallClassification = useMemo(() => autoClassifyWalls(rooms), [rooms]);
   const externalWallNames = useMemo(() => generateExternalWallNames(rooms, wallClassification), [rooms, wallClassification]);
 
+  // Sync editCard wall data when rooms refresh (e.g. after saving wall type)
+  // This ensures the WallEditDialog always shows the current wall type
+  // Using a simple inline effect approach that runs when rooms change
+  const syncedEditCardWallType = editCard?.wall
+    ? rooms.find(r => r.id === editCard.room?.id)?.walls.find(w => w.id === editCard.wall?.id)?.wallType ?? editCard.wall.wallType
+    : undefined;
+
   // Build per-room elevation cards – NO group aggregate cards; each room stands alone
   const roomGroups: RoomElevationGroup[] = useMemo(() => {
     return rooms.map(room => {
@@ -188,16 +195,32 @@ export function ElevationsGridViewer({
 
         segments.forEach((seg, si) => {
           const segLen = seg.endMeters - seg.startMeters;
-          const invisible = isInvisibleType(seg.segmentType);
+          // Use wall.wallType (manual DB type) for VISUAL display; seg.segmentType is for calculations
+          // This ensures edits to wall type are always reflected in the Alzados view
+          const displayType = wall.wallType as string;
+          const invisible = isInvisibleType(displayType);
           const ownOpenings = wall.openings.filter(op => {
             return op.positionX >= seg.startFraction - 0.01 && op.positionX <= seg.endFraction + 0.01;
           });
 
-          const isExternal = isExteriorType(seg.segmentType);
+          const isExternal = isExteriorType(displayType);
           const visibleSegCount = segments.filter(s => !isInvisibleType(s.segmentType)).length;
           const wallLabel = visibleSegCount > 1 ? `${WALL_LABELS[wall.wallIndex]} ${si + 1}` : WALL_LABELS[wall.wallIndex];
           const wallName = externalWallNames.get(key);
           const canAdd = !wall.id.startsWith('temp-') && !invisible;
+
+          let badgeLabel: string;
+          if (invisible) {
+            badgeLabel = 'Invisible';
+          } else if (displayType === 'exterior_compartida') {
+            badgeLabel = wallName ? `Ext. compartida ${wallName}` : 'Ext. compartida';
+          } else if (displayType === 'interior_compartida') {
+            badgeLabel = 'Int. compartida';
+          } else if (isExternal) {
+            badgeLabel = wallName ? `Ext. ${wallName}` : 'Externa';
+          } else {
+            badgeLabel = 'Interna';
+          }
 
           cards.push({
             id: `wall-${room.id}-${wall.wallIndex}-${si}`,
@@ -216,7 +239,7 @@ export function ElevationsGridViewer({
             isInvisible: invisible,
             fill: invisible ? 'hsl(0, 0%, 96%)' : isExternal ? 'hsl(30, 30%, 92%)' : 'hsl(25, 60%, 93%)',
             stroke: invisible ? 'hsl(0, 0%, 70%)' : isExternal ? 'hsl(222, 47%, 30%)' : 'hsl(25, 80%, 50%)',
-            badgeLabel: invisible ? 'Invisible' : isExternal ? (wallName ? `Ext. ${wallName}` : 'Externa') : 'Interna',
+            badgeLabel,
             badgeVariant: invisible ? 'outline' : isExternal ? 'default' : 'outline',
             surfaceArea: invisible ? 0 : segLen * wallHeight,
           });
@@ -342,6 +365,7 @@ export function ElevationsGridViewer({
           open={editCardDialogOpen}
           onOpenChange={setEditCardDialogOpen}
           card={editCard}
+          currentWallType={syncedEditCardWallType}
           onAddOpening={onAddOpening}
           onUpdateOpening={onUpdateOpening}
           onDeleteOpening={onDeleteOpening}
@@ -578,10 +602,11 @@ const WALL_TYPE_OPTIONS: Array<{ value: WallType; label: string; description: st
   { value: 'interior_invisible', label: 'Invisible', description: 'Sin pared física (espacio abierto)' },
 ];
 
-function WallEditDialog({ open, onOpenChange, card, onAddOpening, onUpdateOpening, onDeleteOpening, onUpdateWall, saving }: {
+function WallEditDialog({ open, onOpenChange, card, currentWallType, onAddOpening, onUpdateOpening, onDeleteOpening, onUpdateWall, saving }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   card: ElevationCard;
+  currentWallType?: WallType; // live wall type from updated rooms data
   onAddOpening: (wallId: string, type: string, width: number, height: number, sillHeight?: number) => Promise<void>;
   onUpdateOpening: (id: string, data: { width?: number; height?: number; positionX?: number; openingType?: string }) => Promise<void>;
   onDeleteOpening: (id: string) => Promise<void>;
@@ -589,13 +614,15 @@ function WallEditDialog({ open, onOpenChange, card, onAddOpening, onUpdateOpenin
   saving: boolean;
 }) {
   const [editingOp, setEditingOp] = useState<OpeningData | null>(null);
-  const [wallType, setWallType] = useState<WallType>((card.wall?.wallType as WallType) || 'interior');
+  // Use currentWallType (live from rooms state) if available, fallback to card snapshot
+  const resolvedInitialType = (currentWallType || card.wall?.wallType || 'interior') as WallType;
+  const [wallType, setWallType] = useState<WallType>(resolvedInitialType);
   const [wallTypeChanged, setWallTypeChanged] = useState(false);
 
-  // Reset when card changes
-  const cardWallType = card.wall?.wallType as WallType;
-  if (cardWallType && wallType !== cardWallType && !wallTypeChanged) {
-    setWallType(cardWallType);
+  // Sync wallType state when the live wall type changes (e.g. another user or after save)
+  const effectiveWallType = currentWallType || (card.wall?.wallType as WallType);
+  if (effectiveWallType && wallType !== effectiveWallType && !wallTypeChanged) {
+    setWallType(effectiveWallType);
   }
 
   const handleAdd = async (key: string) => {

@@ -800,12 +800,12 @@ export function calculateFloorPlanSummary(plan: FloorPlanData, rooms: RoomData[]
 
 // Default opening presets with standard dimensions
 export const OPENING_PRESETS = {
-  ventana_balconera: { width: 1.875, height: 2.5, sillHeight: 0, label: 'Ventana balconera' },
+  ventana_balconera: { width: 1.875, height: 2.25, sillHeight: 0, label: 'Ventana balconera' },
   ventana_grande: { width: 1.875, height: 1.25, sillHeight: 1.0, label: 'Ventana grande' },
   ventana_mediana: { width: 1.25, height: 1.25, sillHeight: 1.0, label: 'Ventana mediana' },
   ventana_pequeña: { width: 0.625, height: 1.25, sillHeight: 1.0, label: 'Ventana pequeña' },
   puerta_externa: { width: 1.25, height: 2.25, sillHeight: 0, label: 'Puerta exterior' },
-  puerta: { width: 1.50, height: 2.0, sillHeight: 0, label: 'Puerta interior' },
+  puerta: { width: 0.93, height: 2.06, sillHeight: 0, label: 'Puerta interior' },
 } as const;
 
 export const WALL_LABELS: Record<number, string> = {

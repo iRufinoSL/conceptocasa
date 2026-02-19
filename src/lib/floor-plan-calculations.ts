@@ -63,7 +63,7 @@ export interface WallData {
 
 export interface OpeningData {
   id: string;
-  openingType: 'puerta' | 'puerta_externa' | 'ventana_grande' | 'ventana_mediana' | 'ventana_pequeña' | 'ventana_balconera';
+  openingType: 'puerta' | 'puerta_externa' | 'hueco_paso' | 'ventana_grande' | 'ventana_mediana' | 'ventana_pequeña' | 'ventana_balconera';
   name?: string;
   width: number;
   height: number;
@@ -212,7 +212,7 @@ export function calculateRoom(room: RoomData, plan: FloorPlanData): RoomCalculat
       const area = op.width * op.height;
       openingsArea += area;
       
-      if (op.openingType === 'puerta' || op.openingType === 'puerta_externa') {
+      if (op.openingType === 'puerta' || op.openingType === 'puerta_externa' || op.openingType === 'hueco_paso') {
         doorCount++;
       } else {
         windowCount++;
@@ -804,6 +804,7 @@ export const OPENING_PRESETS = {
   ventana_grande: { width: 1.875, height: 1.25, sillHeight: 1.0, label: 'Ventana grande' },
   ventana_mediana: { width: 1.25, height: 1.25, sillHeight: 1.0, label: 'Ventana mediana' },
   ventana_pequeña: { width: 0.625, height: 1.25, sillHeight: 1.0, label: 'Ventana pequeña' },
+  hueco_paso: { width: 1.875, height: 2.25, sillHeight: 0, label: 'Hueco de paso' },
   puerta_externa: { width: 1.25, height: 2.25, sillHeight: 0, label: 'Puerta exterior' },
   puerta: { width: 0.93, height: 2.06, sillHeight: 0, label: 'Puerta interior' },
 } as const;

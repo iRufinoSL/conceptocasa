@@ -1031,12 +1031,12 @@ export function AccountingEntryWizard({ open, onOpenChange, onEntryCreated, budg
       <ScrollArea className="h-[250px] border rounded-lg">
         <div className="p-2 space-y-3">
           {(() => {
-            const query = contactSearch.trim().toLowerCase();
+            const query = contactSearch.trim();
             const matchingAccounts = query
               ? accounts.filter(
                   (a) =>
                     a.account_type === getContactAccountType() &&
-                    a.name.toLowerCase().includes(query)
+                    searchMatch(a.name, query)
                 )
               : accounts.filter((a) => a.account_type === getContactAccountType());
 
@@ -1145,7 +1145,7 @@ export function AccountingEntryWizard({ open, onOpenChange, onEntryCreated, budg
       if (debitAccountSearch === '') {
         return a.account_type === defaultType;
       }
-      return a.name.toLowerCase().includes(debitAccountSearch.toLowerCase());
+      return searchMatch(a.name, debitAccountSearch);
     });
   };
 
@@ -1157,7 +1157,7 @@ export function AccountingEntryWizard({ open, onOpenChange, onEntryCreated, budg
       if (creditAccountSearch === '') {
         return a.account_type === defaultType;
       }
-      return a.name.toLowerCase().includes(creditAccountSearch.toLowerCase());
+      return searchMatch(a.name, creditAccountSearch);
     });
   };
 
@@ -1501,7 +1501,7 @@ export function AccountingEntryWizard({ open, onOpenChange, onEntryCreated, budg
       if (treasuryAccountSearch === '') {
         return a.account_type === 'Tesorería';
       }
-      return a.name.toLowerCase().includes(treasuryAccountSearch.toLowerCase());
+      return searchMatch(a.name, treasuryAccountSearch);
     });
   };
 

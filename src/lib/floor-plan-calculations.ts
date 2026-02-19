@@ -321,7 +321,7 @@ export function calculateRoof(plan: FloorPlanData, rooms?: RoomData[]): number {
 // - Walls on the outer perimeter of all rooms = 'externa'
 // - Walls shared between two rooms = 'compartida'
 // - Other walls = 'interna'
-export function autoClassifyWalls(rooms: RoomData[]): Map<string, WallType> {
+export function autoClassifyWalls(rooms: RoomData[], plan?: FloorPlanData): Map<string, WallType> {
   const EPSILON = 0.05;
   const classification = new Map<string, WallType>();
   const sharedWalls = detectSharedWalls(rooms);
@@ -445,6 +445,23 @@ export function autoClassifyWalls(rooms: RoomData[]): Map<string, WallType> {
     });
   });
 
+  // Bajo cubierta override: rooms with height=0 in a dos_aguas roof
+  // only have hastiales (front/back walls, index 1 & 3) as external walls.
+  // Side walls (index 2 & 4) are roof slope, not physical walls → exterior_invisible.
+  if (plan && plan.roofType === 'dos_aguas') {
+    rooms.forEach(room => {
+      if (room.height !== undefined && room.height === 0) {
+        [2, 4].forEach(wallIdx => {
+          const key = `${room.id}::${wallIdx}`;
+          const current = classification.get(key);
+          if (current && isExteriorType(current) && !isInvisibleType(current)) {
+            classification.set(key, 'exterior_invisible');
+          }
+        });
+      }
+    });
+  }
+
   return classification;
 }
 
@@ -565,7 +582,7 @@ export function calculateInternalGableExtension(
 }
 
 export function calculateFloorPlanSummary(plan: FloorPlanData, rooms: RoomData[], floors?: FloorLevel[]): FloorPlanSummary {
-  const wallClassification = autoClassifyWalls(rooms);
+  const wallClassification = autoClassifyWalls(rooms, plan);
 
   // Apply auto-classification to rooms before calculating
   const classifiedRooms = rooms.map(room => ({

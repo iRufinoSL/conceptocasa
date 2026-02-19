@@ -18,7 +18,7 @@ import { deriveGridPositions, computeGridRuler, formatCoord, parseCoord, colToLe
 import { calculateFloorPlanSummary } from '@/lib/floor-plan-calculations';
 import { FloorPlanPdfExport } from './FloorPlanPdfExport';
 import { SnapshotRestoreButton } from './SnapshotRestoreButton';
-import type { FloorPlanData } from '@/lib/floor-plan-calculations';
+import type { FloorPlanData, RoomData } from '@/lib/floor-plan-calculations';
 
 interface FloorPlanTabProps {
   budgetId: string;
@@ -317,9 +317,14 @@ function LevelManagerPanel({ floors, onAdd, onUpdate, onDelete, saving, onClose,
   );
 }
 
-function FloorPlanSettingsPanel({ planData, onUpdate, saving, onClose }: {
+function FloorPlanSettingsPanel({ planData, onUpdate, rooms, floors, onUpdateRoom, onUpdateWall, onClassifyWalls, saving, onClose }: {
   planData: FloorPlanData;
   onUpdate: (data: Partial<FloorPlanData>) => Promise<void>;
+  rooms: RoomData[];
+  floors: Array<{ id: string; name: string; level: string; orderIndex: number }>;
+  onUpdateRoom: (roomId: string, data: any) => Promise<void>;
+  onUpdateWall: (wallId: string, data: any) => Promise<void>;
+  onClassifyWalls: () => Promise<void>;
   saving: boolean;
   onClose: () => void;
 }) {
@@ -329,6 +334,17 @@ function FloorPlanSettingsPanel({ planData, onUpdate, saving, onClose }: {
   const [roofType, setRoofType] = useState<string>(planData.roofType || 'dos_aguas');
   const [overhang, setOverhang] = useState(String(planData.roofOverhang));
   const [slope, setSlope] = useState(String(planData.roofSlopePercent));
+
+  // Per-level height overrides
+  const [levelHeights, setLevelHeights] = useState<Record<string, string>>(() => {
+    const map: Record<string, string> = {};
+    floors.forEach(f => {
+      const floorRooms = rooms.filter(r => r.floorId === f.id);
+      const firstHeight = floorRooms[0]?.height;
+      map[f.id] = firstHeight !== undefined ? String(firstHeight) : '';
+    });
+    return map;
+  });
 
   const hasChanges =
     parseFloat(height) !== planData.defaultHeight ||
@@ -348,7 +364,67 @@ function FloorPlanSettingsPanel({ planData, onUpdate, saving, onClose }: {
       roofSlopePercent: parseFloat(slope) || planData.roofSlopePercent,
     });
     toast.success('Parámetros actualizados');
-    onClose();
+  };
+
+  // Apply defaults to ALL rooms: height, wall thickness, and re-classify walls
+  const handleApplyAll = async () => {
+    const newHeight = parseFloat(height) || planData.defaultHeight;
+    const newExtThick = parseFloat(extThick) || planData.externalWallThickness;
+    const newIntThick = parseFloat(intThick) || planData.internalWallThickness;
+
+    // Save plan-level defaults first
+    await onUpdate({
+      defaultHeight: newHeight,
+      externalWallThickness: newExtThick,
+      internalWallThickness: newIntThick,
+      roofType: roofType as any,
+      roofOverhang: parseFloat(overhang) || planData.roofOverhang,
+      roofSlopePercent: parseFloat(slope) || planData.roofSlopePercent,
+    });
+
+    // Apply per-level heights
+    for (const floor of floors) {
+      const levelH = levelHeights[floor.id];
+      const floorRooms = rooms.filter(r => r.floorId === floor.id);
+      if (levelH !== undefined && levelH !== '') {
+        const h = parseFloat(levelH);
+        for (const room of floorRooms) {
+          if (room.height !== h) {
+            await onUpdateRoom(room.id, { height: h });
+          }
+        }
+      } else {
+        // Clear per-room height overrides → use plan default
+        for (const room of floorRooms) {
+          if (room.height !== undefined) {
+            await onUpdateRoom(room.id, { height: null });
+          }
+        }
+      }
+    }
+
+    // Update wall thicknesses
+    for (const room of rooms) {
+      for (const wall of room.walls) {
+        if (wall.id.startsWith('temp-')) continue;
+        const isExt = wall.wallType.startsWith('exterior');
+        const targetThickness = isExt ? newExtThick : newIntThick;
+        if (wall.thickness !== undefined && wall.thickness !== targetThickness) {
+          await onUpdateWall(wall.id, { thickness: targetThickness });
+        }
+      }
+    }
+
+    // Re-classify walls (fixes bajo cubierta external walls issue)
+    await onClassifyWalls();
+
+    toast.success('Todos los parámetros actualizados en todos los espacios');
+  };
+
+  // Check if level is bajo cubierta (height 0 or very small)
+  const isBajoCubierta = (floorId: string) => {
+    const h = levelHeights[floorId];
+    return h !== undefined && h !== '' && parseFloat(h) === 0;
   };
 
   return (
@@ -361,43 +437,98 @@ function FloorPlanSettingsPanel({ planData, onUpdate, saving, onClose }: {
           <Button variant="ghost" size="sm" onClick={onClose} className="h-7 px-2 text-xs">Cerrar</Button>
         </div>
       </CardHeader>
-      <CardContent>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          <div>
-            <Label className="text-xs">Altura espacios (m)</Label>
-            <Input type="number" step="0.1" value={height} onChange={e => setHeight(e.target.value)} disabled={saving} />
-          </div>
-          <div>
-            <Label className="text-xs">Espesor ext. (m)</Label>
-            <Input type="number" step="0.01" value={extThick} onChange={e => setExtThick(e.target.value)} disabled={saving} />
-          </div>
-          <div>
-            <Label className="text-xs">Espesor int. (m)</Label>
-            <Input type="number" step="0.01" value={intThick} onChange={e => setIntThick(e.target.value)} disabled={saving} />
-          </div>
-          <div>
-            <Label className="text-xs">Tipo tejado</Label>
-            <Select value={roofType} onValueChange={setRoofType}>
-              <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="dos_aguas">Dos aguas</SelectItem>
-                <SelectItem value="cuatro_aguas">Cuatro aguas</SelectItem>
-                <SelectItem value="plana">Plana</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <Label className="text-xs">Alero (m)</Label>
-            <Input type="number" step="0.1" value={overhang} onChange={e => setOverhang(e.target.value)} disabled={saving} />
-          </div>
-          <div>
-            <Label className="text-xs">Pendiente (%)</Label>
-            <Input type="number" step="1" value={slope} onChange={e => setSlope(e.target.value)} disabled={saving} />
+      <CardContent className="space-y-4">
+        {/* Plan-wide defaults */}
+        <div>
+          <h4 className="text-xs font-semibold text-muted-foreground mb-2">Valores por defecto</h4>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            <div>
+              <Label className="text-xs">Altura espacios (m)</Label>
+              <Input type="number" step="0.1" value={height} onChange={e => setHeight(e.target.value)} disabled={saving} />
+            </div>
+            <div>
+              <Label className="text-xs">Espesor ext. (m)</Label>
+              <Input type="number" step="0.01" value={extThick} onChange={e => setExtThick(e.target.value)} disabled={saving} />
+            </div>
+            <div>
+              <Label className="text-xs">Espesor int. (m)</Label>
+              <Input type="number" step="0.01" value={intThick} onChange={e => setIntThick(e.target.value)} disabled={saving} />
+            </div>
+            <div>
+              <Label className="text-xs">Tipo tejado</Label>
+              <Select value={roofType} onValueChange={setRoofType}>
+                <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="dos_aguas">Dos aguas</SelectItem>
+                  <SelectItem value="cuatro_aguas">Cuatro aguas</SelectItem>
+                  <SelectItem value="plana">Plana</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-xs">Alero (m)</Label>
+              <Input type="number" step="0.1" value={overhang} onChange={e => setOverhang(e.target.value)} disabled={saving} />
+            </div>
+            <div>
+              <Label className="text-xs">Pendiente (%)</Label>
+              <Input type="number" step="1" value={slope} onChange={e => setSlope(e.target.value)} disabled={saving} />
+            </div>
           </div>
         </div>
-        <Button onClick={handleSave} disabled={saving || !hasChanges} className="w-full mt-4" size="sm">
-          <Save className="h-4 w-4 mr-1" /> Guardar parámetros
-        </Button>
+
+        {/* Per-level overrides */}
+        {floors.length > 0 && (
+          <div className="border-t pt-3">
+            <h4 className="text-xs font-semibold text-muted-foreground mb-2">Altura por nivel</h4>
+            <div className="space-y-2">
+              {floors.map(f => {
+                const floorRooms = rooms.filter(r => r.floorId === f.id);
+                const roomCount = floorRooms.length;
+                const hasFloorRooms = floorRooms.some(r => r.hasFloor);
+                return (
+                  <div key={f.id} className="flex items-center gap-3 p-2 border rounded-lg bg-muted/30">
+                    <div className="flex-1">
+                      <span className="text-sm font-medium">{f.name}</span>
+                      <span className="text-[10px] text-muted-foreground ml-2">{roomCount} espacios</span>
+                      {isBajoCubierta(f.id) && (
+                        <Badge variant="outline" className="ml-2 text-[9px] h-4">Bajo cubierta</Badge>
+                      )}
+                    </div>
+                    <div className="w-24">
+                      <Input
+                        type="number"
+                        step="0.1"
+                        min="0"
+                        value={levelHeights[f.id] || ''}
+                        placeholder={height || '2.5'}
+                        onChange={e => setLevelHeights(prev => ({ ...prev, [f.id]: e.target.value }))}
+                        disabled={saving}
+                        className="h-8 text-sm text-center"
+                      />
+                    </div>
+                    <span className="text-[10px] text-muted-foreground w-6">m</span>
+                  </div>
+                );
+              })}
+            </div>
+            <p className="text-[10px] text-muted-foreground mt-1">
+              Altura 0m = bajo cubierta (solo hastiales como paredes externas). Vacío = usa valor por defecto.
+            </p>
+          </div>
+        )}
+
+        {/* Action buttons */}
+        <div className="flex gap-2 pt-2">
+          <Button onClick={handleSave} disabled={saving || !hasChanges} className="flex-1" size="sm" variant="outline">
+            <Save className="h-4 w-4 mr-1" /> Guardar parámetros
+          </Button>
+          <Button onClick={handleApplyAll} disabled={saving} className="flex-1" size="sm">
+            <RefreshCw className="h-4 w-4 mr-1" /> Actualizar todo
+          </Button>
+        </div>
+        <p className="text-[10px] text-muted-foreground">
+          «Guardar parámetros» guarda solo los valores por defecto. «Actualizar todo» aplica las alturas, espesores y reclasifica las paredes de todos los espacios.
+        </p>
       </CardContent>
     </Card>
   );
@@ -767,6 +898,11 @@ export function FloorPlanTab({ budgetId, budgetName = '', isAdmin }: FloorPlanTa
         <FloorPlanSettingsPanel
           planData={planData}
           onUpdate={updateFloorPlan}
+          rooms={rooms}
+          floors={floors}
+          onUpdateRoom={updateRoom}
+          onUpdateWall={updateWall}
+          onClassifyWalls={classifyPerimeterWalls}
           saving={saving}
           onClose={() => setShowSettings(false)}
         />

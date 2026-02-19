@@ -973,7 +973,7 @@ export function FloorPlanTab({ budgetId, budgetName = '', isAdmin }: FloorPlanTa
                   floorName={floorName}
                   onUpdateRoom={(data) => updateRoom(selectedRoom.id, data)}
                   onUpdateWall={(wallId, data) => updateWall(wallId, data)}
-                  onAddOpening={(wallId, type, w, h, sh) => addOpening(wallId, type, w, h, sh)}
+                  onAddOpening={(wallId, type, w, h, sh, px) => addOpening(wallId, type, w, h, sh, px)}
                   onDeleteOpening={(openingId) => deleteOpening(openingId)}
                   onDuplicateRoom={async (direction) => {
                     const newId = await duplicateRoom(selectedRoom.id, direction, true);

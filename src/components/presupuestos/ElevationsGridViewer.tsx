@@ -17,7 +17,7 @@ interface ElevationsGridViewerProps {
   rooms: RoomData[];
   floors?: FloorLevel[];
   onUpdateOpening: (openingId: string, data: { width?: number; height?: number; positionX?: number; openingType?: string }) => Promise<void>;
-  onAddOpening: (wallId: string, type: string, width: number, height: number, sillHeight?: number) => Promise<void>;
+  onAddOpening: (wallId: string, type: string, width: number, height: number, sillHeight?: number, positionX?: number) => Promise<void>;
   onDeleteOpening: (openingId: string) => Promise<void>;
   onUpdateWall?: (wallId: string, data: { wallType?: WallType; thickness?: number; height?: number }) => Promise<void>;
   saving: boolean;
@@ -366,6 +366,7 @@ export function ElevationsGridViewer({
           onOpenChange={setEditCardDialogOpen}
           card={editCard}
           currentWallType={syncedEditCardWallType}
+          liveRooms={rooms}
           onAddOpening={onAddOpening}
           onUpdateOpening={onUpdateOpening}
           onDeleteOpening={onDeleteOpening}
@@ -381,7 +382,7 @@ export function ElevationsGridViewer({
 function ElevationCardView({ card, onOpeningClick, onAddOpening, onCardDoubleClick, saving }: {
   card: ElevationCard;
   onOpeningClick: (op: OpeningData) => void;
-  onAddOpening: (wallId: string, type: string, width: number, height: number, sillHeight?: number) => Promise<void>;
+  onAddOpening: (wallId: string, type: string, width: number, height: number, sillHeight?: number, positionX?: number) => Promise<void>;
   onCardDoubleClick: (card: ElevationCard) => void;
   saving: boolean;
 }) {
@@ -576,7 +577,12 @@ function ElevationCardView({ card, onOpeningClick, onAddOpening, onCardDoubleCli
             onClick={e => e.stopPropagation()}>
             {Object.entries(OPENING_PRESETS).map(([key, preset]) => (
               <Button key={key} variant="ghost" size="sm" className="text-[9px] h-5 px-1.5"
-                onClick={() => onAddOpening(card.wallId!, key, preset.width, preset.height, preset.sillHeight)}
+                onClick={() => {
+                  const segPosX = card.segment
+                    ? (card.segment.startFraction + card.segment.endFraction) / 2
+                    : undefined;
+                  onAddOpening(card.wallId!, key, preset.width, preset.height, preset.sillHeight, segPosX);
+                }}
                 disabled={saving}>
                 <Plus className="h-2.5 w-2.5 mr-0.5" />
                 {preset.label}
@@ -602,12 +608,13 @@ const WALL_TYPE_OPTIONS: Array<{ value: WallType; label: string; description: st
   { value: 'interior_invisible', label: 'Invisible', description: 'Sin pared física (espacio abierto)' },
 ];
 
-function WallEditDialog({ open, onOpenChange, card, currentWallType, onAddOpening, onUpdateOpening, onDeleteOpening, onUpdateWall, saving }: {
+function WallEditDialog({ open, onOpenChange, card, currentWallType, liveRooms, onAddOpening, onUpdateOpening, onDeleteOpening, onUpdateWall, saving }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   card: ElevationCard;
   currentWallType?: WallType; // live wall type from updated rooms data
-  onAddOpening: (wallId: string, type: string, width: number, height: number, sillHeight?: number) => Promise<void>;
+  liveRooms: RoomData[]; // live rooms for up-to-date openings
+  onAddOpening: (wallId: string, type: string, width: number, height: number, sillHeight?: number, positionX?: number) => Promise<void>;
   onUpdateOpening: (id: string, data: { width?: number; height?: number; positionX?: number; openingType?: string }) => Promise<void>;
   onDeleteOpening: (id: string) => Promise<void>;
   onUpdateWall?: (wallId: string, data: { wallType?: WallType; thickness?: number; height?: number }) => Promise<void>;
@@ -625,10 +632,36 @@ function WallEditDialog({ open, onOpenChange, card, currentWallType, onAddOpenin
     setWallType(effectiveWallType);
   }
 
+  // Derive live openings from current rooms state (not from stale card snapshot)
+  // This ensures add/delete operations are immediately reflected in the dialog
+  const liveOpenings = useMemo(() => {
+    if (!card.wall || !card.room) return card.openings;
+    const liveRoom = liveRooms.find(r => r.id === card.room!.id);
+    if (!liveRoom) return card.openings;
+    const liveWall = liveRoom.walls.find(w => w.id === card.wall!.id);
+    if (!liveWall) return card.openings;
+
+    // If card has a segment, filter openings to only those within this segment's fraction range
+    if (card.segment) {
+      return liveWall.openings.filter(op =>
+        op.positionX >= card.segment!.startFraction - 0.01 &&
+        op.positionX <= card.segment!.endFraction + 0.01
+      );
+    }
+    return liveWall.openings;
+  }, [liveRooms, card]);
+
   const handleAdd = async (key: string) => {
     if (!card.wallId) return;
     const preset = OPENING_PRESETS[key as keyof typeof OPENING_PRESETS];
-    await onAddOpening(card.wallId, key, preset.width, preset.height, preset.sillHeight);
+    // Calculate position_x within the correct segment to avoid placing in wrong segment
+    // Default position is center of segment; if no segment, use 0.5 (center of wall)
+    let positionX = 0.5;
+    if (card.segment) {
+      // Place at center of this specific segment, expressed as fraction of full wall
+      positionX = (card.segment.startFraction + card.segment.endFraction) / 2;
+    }
+    await onAddOpening(card.wallId, key, preset.width, preset.height, preset.sillHeight, positionX);
   };
 
   const handleSaveOp = async (data: { width?: number; height?: number; positionX?: number; openingType?: string }) => {
@@ -682,11 +715,11 @@ function WallEditDialog({ open, onOpenChange, card, currentWallType, onAddOpenin
             </div>
           )}
 
-          {/* Existing openings */}
-          {card.openings.length > 0 && (
+          {/* Existing openings - use liveOpenings so add/delete are instantly reflected */}
+          {liveOpenings.length > 0 && (
             <div className="space-y-2">
-              <p className="text-xs font-semibold text-muted-foreground">Huecos ({card.openings.length})</p>
-              {card.openings.map(op => (
+              <p className="text-xs font-semibold text-muted-foreground">Huecos ({liveOpenings.length})</p>
+              {liveOpenings.map(op => (
                 <div key={op.id} className="flex items-center gap-2 border border-border rounded-md p-2">
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-medium">

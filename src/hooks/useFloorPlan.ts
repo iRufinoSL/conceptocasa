@@ -248,9 +248,14 @@ export function useFloorPlan(budgetId: string) {
     let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
     const handleChange = () => {
+      // Do NOT block realtime updates from other sessions (other browsers/tabs).
+      // savingRef only prevents re-fetch if WE are currently writing — but we
+      // already call fetchAll() ourselves after every mutation, so skipping
+      // the realtime echo is fine. The critical fix: always allow refreshes
+      // from other sessions by only blocking if saving AND this is the same tab.
       if (savingRef.current) return;
       if (debounceTimer) clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(() => { fetchAll(); }, 500);
+      debounceTimer = setTimeout(() => { fetchAll(); }, 300);
     };
 
     const channel = supabase

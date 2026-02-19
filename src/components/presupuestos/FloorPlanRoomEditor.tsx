@@ -24,7 +24,7 @@ interface FloorPlanRoomEditorProps {
   onDeleteRoom: (roomId: string) => Promise<void>;
   onDuplicateRoom?: (roomId: string) => Promise<string | undefined>;
   onUpdateWall: (wallId: string, data: any) => Promise<void>;
-  onAddOpening: (wallId: string, type: string, width: number, height: number, sillHeight?: number) => Promise<void>;
+  onAddOpening: (wallId: string, type: string, width: number, height: number, sillHeight?: number, positionX?: number) => Promise<void>;
   onUpdateOpening?: (openingId: string, data: { width?: number; height?: number; positionX?: number }) => Promise<void>;
   onDeleteOpening: (openingId: string) => Promise<void>;
   saving: boolean;

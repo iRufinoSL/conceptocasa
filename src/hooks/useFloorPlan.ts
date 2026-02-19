@@ -458,7 +458,7 @@ export function useFloorPlan(budgetId: string) {
     }
   };
 
-  const addOpening = async (wallId: string, openingType: string, width: number, height: number, sillHeight?: number) => {
+  const addOpening = async (wallId: string, openingType: string, width: number, height: number, sillHeight?: number, positionX?: number) => {
     setSaving(true);
     try {
       const { error } = await supabase
@@ -469,7 +469,7 @@ export function useFloorPlan(budgetId: string) {
           width,
           height,
           sill_height: sillHeight ?? 0,
-          position_x: 0.5,
+          position_x: positionX ?? 0.5,
         });
 
       if (error) throw error;

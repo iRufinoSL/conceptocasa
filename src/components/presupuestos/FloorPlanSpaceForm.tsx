@@ -20,7 +20,7 @@ interface FloorPlanSpaceFormProps {
   floorName?: string;
   onUpdateRoom: (data: { name?: string; width?: number; length?: number; hasFloor?: boolean; hasCeiling?: boolean }) => void | Promise<void>;
   onUpdateWall: (wallId: string, data: { wallType?: WallType }) => void | Promise<void>;
-  onAddOpening?: (wallId: string, type: string, width: number, height: number, sillHeight?: number) => Promise<void>;
+  onAddOpening?: (wallId: string, type: string, width: number, height: number, sillHeight?: number, positionX?: number) => Promise<void>;
   onDeleteOpening?: (openingId: string) => Promise<void>;
   onDuplicateRoom?: (direction: 'right' | 'down') => Promise<void>;
   onChangeCoordinate?: (col: number, row: number) => void | Promise<void>;

@@ -14,6 +14,7 @@ import { useFloorPlan } from '@/hooks/useFloorPlan';
 import { FloorPlanGridView } from './FloorPlanGridView';
 import { FloorPlanSpaceForm } from './FloorPlanSpaceForm';
 import { FloorPlanSummaryView } from './FloorPlanSummary';
+import { ElevationsGridViewer } from './ElevationsGridViewer';
 import { deriveGridPositions, computeGridRuler, formatCoord, parseCoord, colToLetter } from './FloorPlanGridView';
 import { calculateFloorPlanSummary } from '@/lib/floor-plan-calculations';
 import { FloorPlanPdfExport } from './FloorPlanPdfExport';
@@ -538,7 +539,7 @@ export function FloorPlanTab({ budgetId, budgetName = '', isAdmin }: FloorPlanTa
   const {
     floorPlan, rooms, floors, loading, saving,
     addRoom, updateRoom, updateWall, deleteRoom, duplicateRoom,
-    addOpening, deleteOpening, updateFloorPlan,
+    addOpening, updateOpening, deleteOpening, updateFloorPlan,
     classifyPerimeterWalls, syncToMeasurements, getPlanData, refetch,
     generateFromTemplate, deleteFloorPlan, groupRooms, ungroupRooms,
     undoLastChange, undoCount,
@@ -834,6 +835,9 @@ export function FloorPlanTab({ budgetId, budgetName = '', isAdmin }: FloorPlanTa
             <TabsTrigger value="cuadricula" className="text-xs h-7 px-3">
               <Layout className="h-3.5 w-3.5 mr-1" /> Cuadrícula
             </TabsTrigger>
+            <TabsTrigger value="alzados" className="text-xs h-7 px-3">
+              <Layers className="h-3.5 w-3.5 mr-1" /> Alzados
+            </TabsTrigger>
             <TabsTrigger value="resumen" className="text-xs h-7 px-3">
               <BarChart3 className="h-3.5 w-3.5 mr-1" /> Resumen m²
             </TabsTrigger>
@@ -1044,6 +1048,18 @@ export function FloorPlanTab({ budgetId, budgetName = '', isAdmin }: FloorPlanTa
             </Card>
           </div>
         </div>
+      )}
+
+      {viewTab === 'alzados' && planData && (
+        <ElevationsGridViewer
+          plan={planData}
+          rooms={rooms}
+          floors={floors}
+          onUpdateOpening={updateOpening}
+          onAddOpening={(wallId, type, w, h, sh) => addOpening(wallId, type, w, h, sh)}
+          onDeleteOpening={deleteOpening}
+          saving={saving}
+        />
       )}
 
       {viewTab === 'resumen' && planData && summary && (

@@ -120,39 +120,40 @@ export function ElevationsGridViewer({
       const roomH = room.height || plan.defaultHeight;
       const floorArea = room.width * room.length;
 
-      // Grouped rooms: aggregate surfaces per group, skip individual wall cards
+      // Grouped rooms: aggregate surfaces per group BUT still generate individual wall cards
       if (room.groupId) {
-        if (processedGroupSurfaces.has(room.groupId)) return;
-        processedGroupSurfaces.add(room.groupId);
-        const gRooms = rooms.filter(r => r.groupId === room.groupId);
-        const totalArea = gRooms.reduce((s, r) => s + r.width * r.length, 0);
-        const gName = room.groupName || room.groupId;
-        const sqSide = Math.sqrt(totalArea);
+        if (!processedGroupSurfaces.has(room.groupId)) {
+          processedGroupSurfaces.add(room.groupId);
+          const gRooms = rooms.filter(r => r.groupId === room.groupId);
+          const totalArea = gRooms.reduce((s, r) => s + r.width * r.length, 0);
+          const gName = room.groupName || room.groupId;
+          const sqSide = Math.sqrt(totalArea);
 
-        if (gRooms.some(r => r.hasFloor !== false)) {
+          if (gRooms.some(r => r.hasFloor !== false)) {
+            result.push({
+              id: `suelo-group-${room.groupId}`, label: 'Suelo', sublabel: gName,
+              category: 'suelo', width: sqSide, height: sqSide, room, openings: [],
+              canAddOpenings: false, fill: 'hsl(142, 40%, 90%)', stroke: 'hsl(142, 50%, 40%)',
+              badgeLabel: `Suelo · ${totalArea.toFixed(1)}m²`, badgeVariant: 'secondary', surfaceArea: totalArea,
+            });
+          }
+          if (gRooms.some(r => r.hasCeiling !== false || r.hasRoof)) {
+            result.push({
+              id: `techo-group-${room.groupId}`, label: 'Techo', sublabel: gName,
+              category: 'techo', width: sqSide, height: sqSide, room, openings: [],
+              canAddOpenings: false, fill: 'hsl(200, 30%, 92%)', stroke: 'hsl(200, 40%, 50%)',
+              badgeLabel: 'Techo', badgeVariant: 'outline', surfaceArea: totalArea,
+            });
+          }
           result.push({
-            id: `suelo-group-${room.groupId}`, label: 'Suelo', sublabel: gName,
-            category: 'suelo', width: sqSide, height: sqSide, room, openings: [],
-            canAddOpenings: false, fill: 'hsl(142, 40%, 90%)', stroke: 'hsl(142, 50%, 40%)',
-            badgeLabel: `Suelo · ${totalArea.toFixed(1)}m²`, badgeVariant: 'secondary', surfaceArea: totalArea,
+            id: `volumen-group-${room.groupId}`, label: 'Volumen', sublabel: gName,
+            category: 'volumen', width: sqSide, height: roomH, room, openings: [],
+            canAddOpenings: false, fill: 'hsl(280, 20%, 94%)', stroke: 'hsl(280, 30%, 55%)',
+            badgeLabel: 'Volumen', badgeVariant: 'outline', surfaceArea: totalArea,
+            volume: totalArea * roomH, roomHeight: roomH,
           });
         }
-        if (gRooms.some(r => r.hasCeiling !== false || r.hasRoof)) {
-          result.push({
-            id: `techo-group-${room.groupId}`, label: 'Techo', sublabel: gName,
-            category: 'techo', width: sqSide, height: sqSide, room, openings: [],
-            canAddOpenings: false, fill: 'hsl(200, 30%, 92%)', stroke: 'hsl(200, 40%, 50%)',
-            badgeLabel: 'Techo', badgeVariant: 'outline', surfaceArea: totalArea,
-          });
-        }
-        result.push({
-          id: `volumen-group-${room.groupId}`, label: 'Volumen', sublabel: gName,
-          category: 'volumen', width: sqSide, height: roomH, room, openings: [],
-          canAddOpenings: false, fill: 'hsl(280, 20%, 94%)', stroke: 'hsl(280, 30%, 55%)',
-          badgeLabel: 'Volumen', badgeVariant: 'outline', surfaceArea: totalArea,
-          volume: totalArea * roomH, roomHeight: roomH,
-        });
-        return; // Walls handled by perimeter walls below
+        // Continue to generate individual wall cards for this grouped room (don't return)
       }
 
       // Suelo - only if hasFloor

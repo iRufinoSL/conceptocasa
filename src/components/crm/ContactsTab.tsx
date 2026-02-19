@@ -86,6 +86,39 @@ export function ContactsTab({ contacts, searchTerm, onEdit, onDelete }: Contacts
     fetchContactActivities();
   }, [contacts]);
 
+  // Fetch related contacts map: contactId -> related contact names
+  const [relatedNamesMap, setRelatedNamesMap] = useState<Record<string, string[]>>({});
+  useEffect(() => {
+    const fetchRelations = async () => {
+      if (contacts.length === 0) return;
+      const { data } = await supabase
+        .from('crm_contact_relations')
+        .select('contact_id_a, contact_id_b');
+      if (!data || data.length === 0) return;
+
+      const contactNameMap: Record<string, string> = {};
+      contacts.forEach(c => {
+        contactNameMap[c.id] = `${c.name} ${c.surname || ''}`.trim();
+      });
+
+      const map: Record<string, string[]> = {};
+      data.forEach(rel => {
+        const nameB = contactNameMap[rel.contact_id_b];
+        const nameA = contactNameMap[rel.contact_id_a];
+        if (nameB) {
+          if (!map[rel.contact_id_a]) map[rel.contact_id_a] = [];
+          map[rel.contact_id_a].push(nameB);
+        }
+        if (nameA) {
+          if (!map[rel.contact_id_b]) map[rel.contact_id_b] = [];
+          map[rel.contact_id_b].push(nameA);
+        }
+      });
+      setRelatedNamesMap(map);
+    };
+    fetchRelations();
+  }, [contacts]);
+
   const activityNameById = useMemo(() => {
     const map: Record<string, string> = {};
     activities.forEach((a) => {
@@ -101,6 +134,9 @@ export function ContactsTab({ contacts, searchTerm, onEdit, onDelete }: Contacts
       result = result.filter((contact) => {
         const activityIds = contactActivitiesMap[contact.id] || [];
         const activityMatches = activityIds.some((id) => searchMatch(activityNameById[id] || '', searchTerm));
+
+        const relatedNames = relatedNamesMap[contact.id] || [];
+        const relatedMatch = relatedNames.some(name => searchMatch(name, searchTerm));
 
         return (
           searchMatch(contact.name, searchTerm) ||
@@ -118,7 +154,8 @@ export function ContactsTab({ contacts, searchTerm, onEdit, onDelete }: Contacts
           contact.tags?.some((tag) => searchMatch(tag, searchTerm)) ||
           contact.secondary_phones?.some((phone) => searchMatch(phone, searchTerm)) ||
           contact.secondary_emails?.some((email) => searchMatch(email, searchTerm)) ||
-          activityMatches
+          activityMatches ||
+          relatedMatch
         );
       });
     }
@@ -130,7 +167,7 @@ export function ContactsTab({ contacts, searchTerm, onEdit, onDelete }: Contacts
     });
 
     return result;
-  }, [contacts, searchTerm, contactActivitiesMap, activityNameById]);
+  }, [contacts, searchTerm, contactActivitiesMap, activityNameById, relatedNamesMap]);
 
   // Group contacts by activity (a contact can appear in multiple groups)
   const groupedContacts = useMemo(() => {

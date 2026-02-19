@@ -46,6 +46,7 @@ export function ContactSelectWithCreate({
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [loading, setLoading] = useState(false);
   const [showNewContactDialog, setShowNewContactDialog] = useState(false);
+  const [relatedNamesMap, setRelatedNamesMap] = useState<Record<string, string>>({});
 
   const fetchContacts = async () => {
     setLoading(true);
@@ -57,6 +58,34 @@ export function ContactSelectWithCreate({
 
       if (error) throw error;
       setContacts(data || []);
+
+      // Fetch related contacts for search
+      if (data && data.length > 0) {
+        const { data: relations } = await supabase
+          .from('crm_contact_relations')
+          .select('contact_id_a, contact_id_b');
+        if (relations && relations.length > 0) {
+          const nameMap: Record<string, string> = {};
+          data.forEach(c => { nameMap[c.id] = `${c.name} ${c.surname || ''}`.trim(); });
+
+          const relMap: Record<string, string[]> = {};
+          relations.forEach(rel => {
+            const nameB = nameMap[rel.contact_id_b];
+            const nameA = nameMap[rel.contact_id_a];
+            if (nameB) {
+              if (!relMap[rel.contact_id_a]) relMap[rel.contact_id_a] = [];
+              relMap[rel.contact_id_a].push(nameB);
+            }
+            if (nameA) {
+              if (!relMap[rel.contact_id_b]) relMap[rel.contact_id_b] = [];
+              relMap[rel.contact_id_b].push(nameA);
+            }
+          });
+          const flatMap: Record<string, string> = {};
+          Object.entries(relMap).forEach(([id, names]) => { flatMap[id] = names.join(' '); });
+          setRelatedNamesMap(flatMap);
+        }
+      }
     } catch (error) {
       console.error('Error fetching contacts:', error);
     } finally {
@@ -168,7 +197,7 @@ export function ContactSelectWithCreate({
                 {contacts.map((contact) => (
                   <CommandItem
                     key={contact.id}
-                    value={`${contact.name} ${contact.surname || ''} ${contact.city || ''} ${contact.email || ''}`}
+                    value={`${contact.name} ${contact.surname || ''} ${contact.city || ''} ${contact.email || ''} ${relatedNamesMap[contact.id] || ''}`}
                     onSelect={() => {
                       onChange(contact.id);
                       setOpen(false);

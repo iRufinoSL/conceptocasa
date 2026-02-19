@@ -673,7 +673,8 @@ export function calculateFloorPlanSummary(plan: FloorPlanData, rooms: RoomData[]
 
   roomCalcs.forEach((rc, idx) => {
     const room = classifiedRooms[idx];
-    totalUsableM2 += rc.floorArea;
+    // Only count usable area for rooms that have a floor (e.g. Level 2 bajo cubierta has no floor)
+    if (rc.hasFloor) totalUsableM2 += rc.floorArea;
     if (rc.hasFloor) totalFloorM2 += rc.floorArea;
     if (rc.hasCeiling) totalCeilingM2 += rc.ceilingArea;
     totalExternalWallM2 += rc.totalExternalWallArea;
@@ -734,7 +735,7 @@ export function calculateFloorPlanSummary(plan: FloorPlanData, rooms: RoomData[]
         floorId: floor.id,
         floorName: floor.name,
         floorLevel: floor.level,
-        totalUsableM2: floorRooms.reduce((s, r) => s + r.floorArea, 0),
+        totalUsableM2: floorRooms.filter(r => r.hasFloor).reduce((s, r) => s + r.floorArea, 0),
         totalBuiltM2: 0,
         totalExternalWallM2: floorRooms.reduce((s, r) => s + r.totalExternalWallArea + r.gableExternalArea, 0),
         totalInternalWallM2: floorRooms.reduce((s, r) => s + r.totalInternalWallArea + r.gableInternalArea, 0),
@@ -746,7 +747,7 @@ export function calculateFloorPlanSummary(plan: FloorPlanData, rooms: RoomData[]
         gableInternalM2: floorRooms.reduce((s, r) => s + r.gableInternalArea, 0),
         rooms: floorRooms,
       };
-      fs.totalBuiltM2 = fs.totalUsableM2; // simplified
+      fs.totalBuiltM2 = fs.totalUsableM2; // only includes rooms with floor
       floorSummaries.push(fs);
     });
 
@@ -757,8 +758,8 @@ export function calculateFloorPlanSummary(plan: FloorPlanData, rooms: RoomData[]
         floorId: 'unassigned',
         floorName: 'Sin nivel asignado',
         floorLevel: 'unassigned',
-        totalUsableM2: unassigned.reduce((s, r) => s + r.floorArea, 0),
-        totalBuiltM2: unassigned.reduce((s, r) => s + r.floorArea, 0),
+        totalUsableM2: unassigned.filter(r => r.hasFloor).reduce((s, r) => s + r.floorArea, 0),
+        totalBuiltM2: unassigned.filter(r => r.hasFloor).reduce((s, r) => s + r.floorArea, 0),
         totalExternalWallM2: unassigned.reduce((s, r) => s + r.totalExternalWallArea + r.gableExternalArea, 0),
         totalInternalWallM2: unassigned.reduce((s, r) => s + r.totalInternalWallArea + r.gableInternalArea, 0),
         totalFloorM2: unassigned.filter(r => r.hasFloor).reduce((s, r) => s + r.floorArea, 0),

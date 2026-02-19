@@ -994,6 +994,7 @@ export type Database = {
           budget_id: string
           count_raw: number | null
           created_at: string
+          description: string | null
           floor: string | null
           id: string
           manual_units: number | null
@@ -1008,6 +1009,7 @@ export type Database = {
           budget_id: string
           count_raw?: number | null
           created_at?: string
+          description?: string | null
           floor?: string | null
           id?: string
           manual_units?: number | null
@@ -1022,6 +1024,7 @@ export type Database = {
           budget_id?: string
           count_raw?: number | null
           created_at?: string
+          description?: string | null
           floor?: string | null
           id?: string
           manual_units?: number | null

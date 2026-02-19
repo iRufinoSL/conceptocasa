@@ -37,6 +37,7 @@ interface Measurement {
   id: string;
   budget_id: string;
   name: string;
+  description: string | null;
   manual_units: number | null;
   measurement_unit: string | null;
   source: string | null;
@@ -103,6 +104,7 @@ export function BudgetMeasurementsTab({ budgetId, isAdmin }: BudgetMeasurementsT
   const [editingMeasurement, setEditingMeasurement] = useState<Measurement | null>(null);
   const [formData, setFormData] = useState({
     name: '',
+    description: '' as string,
     manual_units: null as number | null,
     measurement_unit: 'ud',
     related_measurement_ids: [] as string[],
@@ -241,6 +243,7 @@ export function BudgetMeasurementsTab({ budgetId, isAdmin }: BudgetMeasurementsT
     setEditingMeasurement(null);
     setFormData({
       name: '',
+      description: '',
       manual_units: null,
       measurement_unit: 'ud',
       related_measurement_ids: [],
@@ -265,6 +268,7 @@ export function BudgetMeasurementsTab({ budgetId, isAdmin }: BudgetMeasurementsT
     setEditingMeasurement(measurement);
     setFormData({
       name: measurement.name,
+      description: measurement.description || '',
       manual_units: measurement.manual_units,
       measurement_unit: measurement.measurement_unit || 'ud',
       related_measurement_ids: relatedIds,
@@ -287,6 +291,7 @@ export function BudgetMeasurementsTab({ budgetId, isAdmin }: BudgetMeasurementsT
           .from('budget_measurements')
           .update({
             name: formData.name.trim(),
+            description: formData.description.trim() || null,
             manual_units: formData.manual_units,
             measurement_unit: formData.measurement_unit
           })
@@ -339,6 +344,7 @@ export function BudgetMeasurementsTab({ budgetId, isAdmin }: BudgetMeasurementsT
           .insert({
             budget_id: budgetId,
             name: formData.name.trim(),
+            description: formData.description.trim() || null,
             manual_units: formData.manual_units,
             measurement_unit: formData.measurement_unit
           })
@@ -1235,6 +1241,19 @@ export function BudgetMeasurementsTab({ budgetId, isAdmin }: BudgetMeasurementsT
                   placeholder="0,00"
                 />
               </div>
+            </div>
+
+            {/* Description field */}
+            <div className="space-y-2">
+              <Label htmlFor="description">Descripción</Label>
+              <textarea
+                id="description"
+                value={formData.description}
+                onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+                placeholder="Descripción de la medición"
+                className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                maxLength={1000}
+              />
             </div>
 
             {/* Related Measurements Section */}

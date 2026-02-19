@@ -322,18 +322,19 @@ export function FloorPlanGridView({
     const wall = room.walls.find(w => w.wallIndex === wallIndex);
     if (!wall) return null;
     const wins = wall.openings.filter(o => o.openingType.startsWith('ventana')).length;
-    const doors = wall.openings.filter(o => o.openingType.startsWith('puerta')).length;
+    const doors = wall.openings.filter(o => !o.openingType.startsWith('ventana')).length;
     if (wins === 0 && doors === 0) return null;
     const marks: React.ReactNode[] = [];
+    const isHoriz = side === 'top' || side === 'bottom';
     for (let i = 0; i < wins; i++) marks.push(
-      <div key={`w${i}`} className="bg-sky-400/80" style={{
-        ...(side === 'top' || side === 'bottom' ? { width: '10px', height: '3px' } : { width: '3px', height: '10px' }),
+      <div key={`w${i}`} className="bg-white border-2 border-cyan-500" style={{
+        ...(isHoriz ? { width: '14px', height: '6px' } : { width: '6px', height: '14px' }),
         borderRadius: '1px',
       }} />
     );
     for (let i = 0; i < doors; i++) marks.push(
-      <div key={`d${i}`} className="bg-amber-600/80" style={{
-        ...(side === 'top' || side === 'bottom' ? { width: '7px', height: '3px' } : { width: '3px', height: '7px' }),
+      <div key={`d${i}`} className="bg-white border-2 border-amber-600" style={{
+        ...(isHoriz ? { width: '10px', height: '6px' } : { width: '6px', height: '10px' }),
         borderRadius: '1px',
       }} />
     );

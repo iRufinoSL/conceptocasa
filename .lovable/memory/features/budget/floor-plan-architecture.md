@@ -31,3 +31,9 @@ Al añadir un nuevo espacio, se usa por defecto el nivel actualmente visible en 
 
 ## Deshacer (Undo)
 Limitado a 3 snapshots de posiciones (posX, posY, width, length). No cubre borrado de habitaciones ni niveles completos. Botón visible solo cuando hay snapshots disponibles.
+
+## Superficie útil y construida (Feb 2026)
+CORRECCIÓN: Solo los niveles con `hasFloor=true` en sus espacios contribuyen a la superficie útil y construida del resumen general. El Nivel 2 (bajo cubierta) típicamente tiene `hasFloor=false`, por lo que sus espacios NO se computan en el total de m² útiles ni construidos. Los suelos, techos y paredes de ese nivel siguen computándose individualmente, pero no suman al total global de superficie útil/construida.
+
+## Visualización de huecos (Feb 2026)
+Los huecos en el plano 2D Canvas se muestran como rectángulos blancos de tamaño ampliado (`sw + 10px`) que interrumpen claramente ambas líneas de la pared (incluso compartidas). Cada hueco lleva una letra identificativa: "P" (puerta) o "V" (ventana). En la vista de cuadrícula (GridView), los huecos se muestran como marcas blancas con borde de color más grande y visible.

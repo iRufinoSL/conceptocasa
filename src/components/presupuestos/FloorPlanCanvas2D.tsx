@@ -635,34 +635,34 @@ export function FloorPlanCanvas2D({
                         const halfT = sw / 2;
 
                         // All openings: white rectangle proportional to width on the wall
+                        // Made extra tall/wide to clearly interrupt the wall line on both sides
+                        const interruptSize = sw + 10; // large enough to cut through both wall lines when shared
                         if (isHoriz) {
                           const ox = startPos;
                           const cy = wall.wallIndex === 1 ? 0 : h;
-                          const rectH = sw + 4;
                           return (
                             <g key={`op-${oi}`} pointerEvents="none">
-                              {/* White rectangle background */}
-                              <rect x={ox} y={cy - rectH / 2} width={opWidth} height={rectH}
-                                fill="#ffffff" stroke={isDoor ? '#d97706' : '#06b6d4'} strokeWidth={1} />
-                              {isDoor && (
-                                <path d={`M ${ox},${cy} A ${opWidth},${opWidth} 0 0 ${(wall.wallIndex === 1 ? 1 : -1) > 0 ? 1 : 0} ${ox + opWidth},${cy + (wall.wallIndex === 1 ? 1 : -1) * opWidth * 0.05}`}
-                                  stroke="#d97706" strokeWidth={0.7} fill="none" opacity={0.4} />
-                              )}
+                              {/* White rectangle that clearly interrupts the wall */}
+                              <rect x={ox} y={cy - interruptSize / 2} width={opWidth} height={interruptSize}
+                                fill="#ffffff" stroke={isDoor ? '#d97706' : '#06b6d4'} strokeWidth={1.5} rx={1} />
+                              {/* Opening type label */}
+                              <text x={ox + opWidth / 2} y={cy + 1} textAnchor="middle" fontSize={6} fill={isDoor ? '#92400e' : '#0e7490'} fontWeight="600" dominantBaseline="middle">
+                                {isDoor ? 'P' : 'V'}
+                              </text>
                             </g>
                           );
                         } else {
                           const oy = startPos;
                           const cx = wall.wallIndex === 4 ? 0 : w;
-                          const rectW = sw + 4;
                           return (
                             <g key={`op-${oi}`} pointerEvents="none">
-                              {/* White rectangle background */}
-                              <rect x={cx - rectW / 2} y={oy} width={rectW} height={opWidth}
-                                fill="#ffffff" stroke={isDoor ? '#d97706' : '#06b6d4'} strokeWidth={1} />
-                              {isDoor && (
-                                <path d={`M ${cx},${oy} A ${opWidth},${opWidth} 0 0 ${(wall.wallIndex === 4 ? 1 : -1) > 0 ? 1 : 0} ${cx + (wall.wallIndex === 4 ? 1 : -1) * opWidth * 0.05},${oy + opWidth}`}
-                                  stroke="#d97706" strokeWidth={0.7} fill="none" opacity={0.4} />
-                              )}
+                              {/* White rectangle that clearly interrupts the wall */}
+                              <rect x={cx - interruptSize / 2} y={oy} width={interruptSize} height={opWidth}
+                                fill="#ffffff" stroke={isDoor ? '#d97706' : '#06b6d4'} strokeWidth={1.5} rx={1} />
+                              {/* Opening type label */}
+                              <text x={cx} y={oy + opWidth / 2 + 1} textAnchor="middle" fontSize={6} fill={isDoor ? '#92400e' : '#0e7490'} fontWeight="600" dominantBaseline="middle">
+                                {isDoor ? 'P' : 'V'}
+                              </text>
                             </g>
                           );
                         }

@@ -4,7 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { Plus, Search, Package, X, Link2, Pencil } from 'lucide-react';
+import { Plus, Search, Package, X, Link2, Pencil, ShoppingBag, ExternalLink } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { searchMatch } from '@/lib/search-utils';
 import { formatCurrency, formatNumber, formatPercent } from '@/lib/format-utils';
 import { NumericInput } from '@/components/ui/numeric-input';
@@ -79,6 +80,12 @@ export function TolosaResourcesPanel({ budgetId, tolosItemId, isAdmin, parentIte
   const [formData, setFormData] = useState(defaultForm);
   const [measurementUnits, setMeasurementUnits] = useState<number>(0);
   const [measurementUnitType, setMeasurementUnitType] = useState<string>('ud');
+
+  // External resources (from general resources catalogue)
+  const [externalCatalogueResources, setExternalCatalogueResources] = useState<any[]>([]);
+  const [externalSearchQuery, setExternalSearchQuery] = useState('');
+  const [loadingExternal, setLoadingExternal] = useState(false);
+  const [activeTab, setActiveTab] = useState<'budget' | 'external'>('budget');
 
   // Fetch measurements linked to this QUÉ? (own or inherited from ancestors)
   const fetchMeasurementUnits = useCallback(async () => {
@@ -163,9 +170,61 @@ export function TolosaResourcesPanel({ budgetId, tolosItemId, isAdmin, parentIte
     setAllResources((data as BudgetResource[]) || []);
   }, [budgetId]);
 
+  // Fetch resources from external catalogue (general resources table)
+  const fetchExternalCatalogueResources = useCallback(async (search?: string) => {
+    setLoadingExternal(true);
+    let query = (supabase as any)
+      .from('external_resources')
+      .select('id, name, description, unit_cost, unit_measure, resource_type, supplier_id, vat_included_percent')
+      .order('name')
+      .limit(50);
+    if (search && search.trim()) {
+      query = query.or(`name.ilike.%${search.trim()}%,description.ilike.%${search.trim()}%,resource_type.ilike.%${search.trim()}%`);
+    }
+    const { data } = await query;
+    setExternalCatalogueResources(data || []);
+    setLoadingExternal(false);
+  }, []);
+
+  // Import an external resource: create it as a budget resource and link it to this tolosa item
+  const importExternalResource = async (extRes: any) => {
+    try {
+      const vatPct = extRes.vat_included_percent ?? 21;
+      const payload = {
+        budget_id: budgetId,
+        name: extRes.name,
+        external_unit_cost: extRes.unit_cost ?? 0,
+        unit: extRes.unit_measure || 'ud',
+        resource_type: extRes.resource_type || 'Producto',
+        safety_margin_percent: 0.15,
+        sales_margin_percent: 0.25,
+        description: extRes.description || null,
+        supplier_id: extRes.supplier_id || null,
+        purchase_vat_percent: vatPct,
+        signed_subtotal: 0,
+      };
+      const { data: newRes, error } = await supabase
+        .from('budget_activity_resources')
+        .insert(payload as any)
+        .select()
+        .single();
+      if (error || !newRes) throw error || new Error('No data');
+      // Link to tolosa item
+      await supabase.from('tolosa_item_resources').insert({ tolosa_item_id: tolosItemId, resource_id: newRes.id });
+      toast.success(`"${extRes.name}" importado y vinculado al presupuesto`);
+      setExternalSearchQuery('');
+      setActiveTab('budget');
+      fetchLinked();
+      fetchAllResources();
+    } catch (err: any) {
+      toast.error('Error al importar recurso: ' + (err?.message || 'desconocido'));
+    }
+  };
+
   useEffect(() => { fetchLinked(); }, [fetchLinked]);
   useEffect(() => { fetchMeasurementUnits(); }, [fetchMeasurementUnits, measurementVersion]);
   useEffect(() => { if (showSearch) fetchAllResources(); }, [showSearch, fetchAllResources]);
+  useEffect(() => { if (activeTab === 'external') fetchExternalCatalogueResources(externalSearchQuery); }, [activeTab]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const prevSubtotalRef = useRef<number | null>(null);
   useEffect(() => {
@@ -339,7 +398,7 @@ export function TolosaResourcesPanel({ budgetId, tolosItemId, isAdmin, parentIte
           )}
         </h5>
         <div className="flex gap-1">
-          <Button size="sm" variant="outline" className="text-xs" onClick={() => setShowSearch(!showSearch)}>
+          <Button size="sm" variant="outline" className="text-xs" onClick={() => { setShowSearch(!showSearch); if (showSearch) setSearchQuery(''); }}>
             <Search className="h-3 w-3 mr-1" /> Buscar
           </Button>
           <Button size="sm" variant="outline" className="text-xs" onClick={openCreate}>
@@ -445,55 +504,121 @@ export function TolosaResourcesPanel({ budgetId, tolosItemId, isAdmin, parentIte
         </div>
       )}
 
-      {/* Search panel */}
+      {/* Search / Add panel with tabs: Budget resources vs External catalogue */}
       {showSearch && (
-        <div className="space-y-2 p-3 rounded border border-blue-200 bg-blue-50/30 dark:border-blue-800 dark:bg-blue-950/20">
-          <div className="flex items-center gap-2">
-            <Search className="h-4 w-4 text-muted-foreground shrink-0" />
-            <Input
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              placeholder="Buscar recurso por nombre, tipo..."
-              className="h-8 text-sm"
-              autoFocus
-            />
-            <Button size="sm" variant="ghost" className="shrink-0" onClick={() => { setShowSearch(false); setSearchQuery(''); }}>
+        <div className="space-y-2 p-3 rounded border border-border bg-muted/20">
+          <div className="flex items-center justify-between gap-2 mb-2">
+            <Tabs value={activeTab} onValueChange={v => { setActiveTab(v as 'budget' | 'external'); setSearchQuery(''); setExternalSearchQuery(''); }}>
+              <TabsList className="h-7">
+                <TabsTrigger value="budget" className="text-xs px-2 h-6">
+                  <Package className="h-3 w-3 mr-1" /> Del presupuesto
+                </TabsTrigger>
+                <TabsTrigger value="external" className="text-xs px-2 h-6" onClick={() => { if (activeTab !== 'external') fetchExternalCatalogueResources(); }}>
+                  <ShoppingBag className="h-3 w-3 mr-1" /> Catálogo general
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
+            <Button size="sm" variant="ghost" className="shrink-0 h-7 w-7 p-0" onClick={() => { setShowSearch(false); setSearchQuery(''); setExternalSearchQuery(''); }}>
               <X className="h-3 w-3" />
             </Button>
           </div>
-          {availableResources.length > 0 ? (
-            <div className="max-h-48 overflow-y-auto space-y-0.5">
-              {availableResources.slice(0, 30).map(r => (
-                <button
-                  key={r.id}
-                  className="w-full text-left px-3 py-1.5 text-sm hover:bg-accent rounded flex items-center justify-between gap-2 transition-colors"
-                  onClick={() => linkResource(r.id)}
-                >
-                  <div className="flex items-center gap-2 min-w-0">
-                    <Link2 className="h-3 w-3 text-primary shrink-0" />
-                    <span className="truncate font-medium">{r.name}</span>
-                    {r.resource_type && <Badge variant="outline" className="text-[9px] shrink-0">{r.resource_type}</Badge>}
-                  </div>
-                  <span className="text-xs font-mono text-muted-foreground shrink-0">
-                    {r.external_unit_cost != null ? formatCurrency(r.external_unit_cost) : '—'}
-                  </span>
-                </button>
-              ))}
-              {availableResources.length > 30 && (
-                <p className="text-xs text-muted-foreground text-center py-1">
-                  +{availableResources.length - 30} más — refina la búsqueda
-                </p>
+
+          {activeTab === 'budget' ? (
+            <>
+              <div className="flex items-center gap-2">
+                <Search className="h-4 w-4 text-muted-foreground shrink-0" />
+                <Input
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  placeholder="Buscar recurso del presupuesto por nombre, tipo..."
+                  className="h-8 text-sm"
+                  autoFocus
+                />
+              </div>
+              {availableResources.length > 0 ? (
+                <div className="max-h-48 overflow-y-auto space-y-0.5">
+                  {availableResources.slice(0, 30).map(r => (
+                    <button
+                      key={r.id}
+                      className="w-full text-left px-3 py-1.5 text-sm hover:bg-accent rounded flex items-center justify-between gap-2 transition-colors"
+                      onClick={() => linkResource(r.id)}
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <Link2 className="h-3 w-3 text-primary shrink-0" />
+                        <span className="truncate font-medium">{r.name}</span>
+                        {r.resource_type && <Badge variant="outline" className="text-[9px] shrink-0">{r.resource_type}</Badge>}
+                      </div>
+                      <span className="text-xs font-mono text-muted-foreground shrink-0">
+                        {r.external_unit_cost != null ? formatCurrency(r.external_unit_cost) : '—'}
+                      </span>
+                    </button>
+                  ))}
+                  {availableResources.length > 30 && (
+                    <p className="text-xs text-muted-foreground text-center py-1">
+                      +{availableResources.length - 30} más — refina la búsqueda
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <div className="text-center py-3 space-y-1">
+                  <p className="text-xs text-muted-foreground">
+                    {searchQuery ? 'No se encontraron recursos' : 'Todos los recursos ya están vinculados'}
+                  </p>
+                  <Button size="sm" variant="outline" className="text-xs" onClick={() => { setShowSearch(false); openCreate(); }}>
+                    <Plus className="h-3 w-3 mr-1" /> Crear nuevo recurso
+                  </Button>
+                </div>
               )}
-            </div>
+            </>
           ) : (
-            <div className="text-center py-3 space-y-1">
-              <p className="text-xs text-muted-foreground">
-                {searchQuery ? 'No se encontraron recursos' : 'Todos los recursos ya están vinculados'}
+            <>
+              <div className="flex items-center gap-2">
+                <Search className="h-4 w-4 text-muted-foreground shrink-0" />
+                <Input
+                  value={externalSearchQuery}
+                  onChange={e => { setExternalSearchQuery(e.target.value); fetchExternalCatalogueResources(e.target.value); }}
+                  placeholder="Buscar en catálogo general de recursos..."
+                  className="h-8 text-sm"
+                  autoFocus
+                />
+              </div>
+              {loadingExternal ? (
+                <p className="text-xs text-muted-foreground text-center py-3">Buscando en catálogo...</p>
+              ) : externalCatalogueResources.length > 0 ? (
+                <div className="max-h-48 overflow-y-auto space-y-0.5">
+                  {externalCatalogueResources.map(r => (
+                    <button
+                      key={r.id}
+                      className="w-full text-left px-3 py-1.5 text-sm hover:bg-accent rounded flex items-center justify-between gap-2 transition-colors"
+                      onClick={() => importExternalResource(r)}
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <ExternalLink className="h-3 w-3 text-emerald-600 shrink-0" />
+                        <span className="truncate font-medium">{r.name}</span>
+                        {r.resource_type && <Badge variant="outline" className="text-[9px] shrink-0">{r.resource_type}</Badge>}
+                        {r.description && <span className="text-[10px] text-muted-foreground truncate">{r.description}</span>}
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <span className="text-xs font-mono text-muted-foreground">
+                          {r.unit_cost != null ? formatCurrency(r.unit_cost) : '—'}
+                        </span>
+                        <Badge variant="secondary" className="text-[9px]">Importar</Badge>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-3">
+                  <ShoppingBag className="h-6 w-6 text-muted-foreground/40 mx-auto mb-1" />
+                  <p className="text-xs text-muted-foreground">
+                    {externalSearchQuery ? 'No se encontraron recursos en el catálogo' : 'Escribe para buscar en el catálogo general'}
+                  </p>
+                </div>
+              )}
+              <p className="text-[10px] text-muted-foreground pt-1 border-t">
+                Al importar, el recurso se copia al presupuesto y queda vinculado a este QUÉ?.
               </p>
-              <Button size="sm" variant="outline" className="text-xs" onClick={() => { setShowSearch(false); openCreate(); }}>
-                <Plus className="h-3 w-3 mr-1" /> Crear nuevo recurso
-              </Button>
-            </div>
+            </>
           )}
         </div>
       )}

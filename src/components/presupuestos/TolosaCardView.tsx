@@ -1,7 +1,8 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { Badge } from '@/components/ui/badge';
-import { ChevronDown, ChevronRight, Ruler, DollarSign, Users, MapPin, Minus, Plus } from 'lucide-react';
+import { ChevronDown, ChevronRight, Ruler, DollarSign, Users, MapPin, Minus, Plus, Edit2 } from 'lucide-react';
 import { formatCurrency, formatNumber } from '@/lib/format-utils';
+import { Button } from '@/components/ui/button';
 
 interface TolosItem {
   id: string;
@@ -40,6 +41,7 @@ interface TolosaCardViewProps {
   getCuanto: (itemId: string) => number;
   onItemClick?: (itemId: string) => void;
   onItemDoubleClick?: (itemId: string) => void;
+  onEditItem?: (itemId: string) => void;
 }
 
 const SIBLING_PALETTES = [
@@ -61,6 +63,7 @@ export function TolosaCardView({
   getCuanto,
   onItemClick,
   onItemDoubleClick,
+  onEditItem,
 }: TolosaCardViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const cardRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -193,19 +196,30 @@ export function TolosaCardView({
           onClick={() => handleSingleClick(item.id)}
           onDoubleClick={(e) => handleDoubleClick(e, item.id)}
         >
-          {/* Header with code + expand/collapse */}
+          {/* Header with code + expand/collapse + edit button */}
           <div className={`flex items-center justify-between gap-1 px-2.5 py-1.5 rounded-t-[10px] ${palette.header}`}>
             <Badge variant="outline" className="font-mono text-[10px] shrink-0 px-1.5 bg-background/50">{item.code}</Badge>
-            {hasChildren && (
-              <button
-                onClick={(e) => { e.stopPropagation(); toggleExpand(item.id); }}
-                className="flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium hover:bg-black/10 dark:hover:bg-white/10 transition-colors"
-                title={isExpanded ? 'Colapsar hijos' : `Expandir (${children.length} hijos)`}
-              >
-                {isExpanded ? <Minus className="h-3 w-3" /> : <Plus className="h-3 w-3" />}
-                <span>{children.length}</span>
-              </button>
-            )}
+            <div className="flex items-center gap-0.5 ml-auto">
+              {onEditItem && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); onEditItem(item.id); }}
+                  className="flex items-center gap-0.5 px-1 py-0.5 rounded text-[10px] font-medium hover:bg-black/10 dark:hover:bg-white/10 transition-colors opacity-60 hover:opacity-100"
+                  title="Abrir formulario de este QUÉ?"
+                >
+                  <Edit2 className="h-3 w-3" />
+                </button>
+              )}
+              {hasChildren && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); toggleExpand(item.id); }}
+                  className="flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium hover:bg-black/10 dark:hover:bg-white/10 transition-colors"
+                  title={isExpanded ? 'Colapsar hijos' : `Expandir (${children.length} hijos)`}
+                >
+                  {isExpanded ? <Minus className="h-3 w-3" /> : <Plus className="h-3 w-3" />}
+                  <span>{children.length}</span>
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Body */}

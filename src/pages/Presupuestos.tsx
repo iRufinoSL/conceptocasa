@@ -834,8 +834,8 @@ export default function Presupuestos() {
 
       {/* Form Dialog */}
       <Dialog open={formDialogOpen} onOpenChange={setFormDialogOpen}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
+        <DialogContent className="max-w-lg flex flex-col max-h-[90vh]">
+          <DialogHeader className="flex-shrink-0">
             <DialogTitle>
               {editingPresupuesto ? 'Editar Presupuesto' : 'Nuevo Presupuesto'}
             </DialogTitle>
@@ -846,6 +846,7 @@ export default function Presupuestos() {
             </DialogDescription>
           </DialogHeader>
 
+          <div className="overflow-y-auto flex-1 pr-1">
           <div className="space-y-4 py-4">
             <div className="space-y-2">
               <Label htmlFor="nombre">Nombre del Presupuesto *</Label>
@@ -1001,8 +1002,9 @@ export default function Presupuestos() {
               </div>
             )}
           </div>
+          </div>
 
-          <DialogFooter>
+          <DialogFooter className="flex-shrink-0 border-t pt-4">
             <Button variant="outline" onClick={() => setFormDialogOpen(false)}>
               Cancelar
             </Button>

@@ -12,7 +12,7 @@ import {
   ExternalLink, Building, User, Truck, FileText, Link, Unlink,
   Home, Ruler, Layers, Landmark, PenTool, RulerIcon, FolderOpen,
   CalendarDays, MessageSquare, Calculator, BarChart3, Timer, Settings,
-  ArrowUp, ArrowDown, ArrowLeft, ArrowRight, List, LayoutGrid
+  ArrowUp, ArrowDown, ArrowLeft, ArrowRight, List, LayoutGrid, ShoppingCart
 } from 'lucide-react';
 import { TolosaCardView } from './TolosaCardView';
 import { BudgetUrbanismTab } from './BudgetUrbanismTab';
@@ -1411,6 +1411,7 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
     { key: 'plano', label: 'Plano', icon: Layers },
     { key: 'anteproyecto', label: 'Ante-proyecto', icon: PenTool },
     { key: 'mediciones', label: 'Mediciones', icon: RulerIcon },
+    { key: 'lista-compra', label: 'Lista de Compra', icon: ShoppingCart },
     { key: 'documentos', label: 'Documentos', icon: FolderOpen },
     { key: 'agenda', label: 'Agenda', icon: CalendarDays },
     { key: 'comunicaciones', label: 'Comunicaciones', icon: MessageSquare },
@@ -1458,6 +1459,16 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
         return <BudgetAdministracionTab budgetId={budgetId} isAdmin={isAdmin} />;
       case 'resumen':
         return <BudgetVisualSummary budgetId={budgetId} budgetName="" />;
+      case 'lista-compra':
+        return (
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 pb-2 border-b">
+              <ShoppingCart className="h-4 w-4 text-primary" />
+              <span className="text-sm font-semibold">Lista de Compra del Presupuesto</span>
+            </div>
+            <BuyingListView budgetId={budgetId} budgetName="" isAdmin={isAdmin} />
+          </div>
+        );
       case 'timeline':
         return (
           <div className="space-y-6">

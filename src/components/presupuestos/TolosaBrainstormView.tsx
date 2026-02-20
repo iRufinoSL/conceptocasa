@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -20,6 +20,7 @@ import { BudgetMeasurementsTab } from './BudgetMeasurementsTab';
 import { TolosaMeasurementsPanel } from './TolosaMeasurementsPanel';
 import { TolosaResourcesPanel } from './TolosaResourcesPanel';
 import { BudgetAgendaTab } from './BudgetAgendaTab';
+import { BuyingListUnified } from './BuyingListUnified';
 import { BudgetAdministracionTab } from './BudgetAdministracionTab';
 import { BudgetSpacesTab } from './BudgetSpacesTab';
 import { FloorPlanTab } from './FloorPlanTab';
@@ -145,6 +146,7 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
   const [itemSubtotals, setItemSubtotals] = useState<Record<string, number>>({});
   const [itemSummaries, setItemSummaries] = useState<Record<string, { measurementUnits: number; measurementUnit: string; resourceSubtotal: number }>>({});
   const [viewMode, setViewMode] = useState<'list' | 'cards'>('list');
+  const [graphEntryItemId, setGraphEntryItemId] = useState<string | null>(null); // tracks item opened from graph card ✏️
   const [measurementVersions, setMeasurementVersions] = useState<Record<string, number>>({});
 
   const bumpMeasurementVersion = useCallback((itemId: string) => {
@@ -596,7 +598,13 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
   const toggleDetail = (id: string) => {
     setDetailOpenIds(prev => {
       const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
+      const isClosing = next.has(id);
+      isClosing ? next.delete(id) : next.add(id);
+      // If closing an item opened from graph ✏️ button, return to graph view
+      if (isClosing && graphEntryItemId === id) {
+        setGraphEntryItemId(null);
+        setTimeout(() => setViewMode('cards'), 0);
+      }
       return next;
     });
   };
@@ -1460,15 +1468,7 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
       case 'resumen':
         return <BudgetVisualSummary budgetId={budgetId} budgetName="" />;
       case 'lista-compra':
-        return (
-          <div className="space-y-2">
-            <div className="flex items-center gap-2 pb-2 border-b">
-              <ShoppingCart className="h-4 w-4 text-primary" />
-              <span className="text-sm font-semibold">Lista de Compra del Presupuesto</span>
-            </div>
-            <BuyingListView budgetId={budgetId} budgetName="" isAdmin={isAdmin} />
-          </div>
-        );
+        return <TolosaListaCompraView budgetId={budgetId} />;
       case 'timeline':
         return (
           <div className="space-y-6">
@@ -1967,6 +1967,25 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
               return n;
             });
           }}
+          onEditItem={(itemId) => {
+            // Edit button in graph card: switch to list view and open item detail form
+            setGraphEntryItemId(itemId); // remember origin for return navigation
+            setViewMode('list');
+            setExpandedIds(prev => {
+              const next = new Set(prev);
+              let current = items.find(i => i.id === itemId);
+              while (current?.parent_id) {
+                next.add(current.parent_id);
+                current = items.find(i => i.id === current!.parent_id);
+              }
+              return next;
+            });
+            setDetailOpenIds(prev => {
+              const n = new Set(prev);
+              n.add(itemId);
+              return n;
+            });
+          }}
         />
       ) : (
         <div className="space-y-1">
@@ -1982,6 +2001,47 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
           <span>{items.length - rootItems.length} sub-QUÉ?</span>
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── Self-contained Lista de Compra for Tolosa QUÉ? ───────────────────────────
+function TolosaListaCompraView({ budgetId }: { budgetId: string }) {
+  const [phases, setPhases] = useState<any[]>([]);
+  const [activities, setActivities] = useState<any[]>([]);
+  const [resources, setResources] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true);
+      const [{ data: ph }, { data: ac }, { data: re }] = await Promise.all([
+        supabase.from('budget_phases').select('*').eq('budget_id', budgetId).order('order_index'),
+        supabase.from('budget_activities').select('*').eq('budget_id', budgetId).order('name'),
+        supabase.from('budget_activity_resources').select('*').eq('budget_id', budgetId).order('name'),
+      ]);
+      setPhases(ph || []);
+      setActivities(ac || []);
+      setResources(re || []);
+      setLoading(false);
+    };
+    load();
+  }, [budgetId]);
+
+  if (loading) return <div className="text-sm text-muted-foreground py-4 text-center">Cargando lista de compra…</div>;
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-2 pb-2 border-b">
+        <ShoppingCart className="h-4 w-4 text-primary" />
+        <span className="text-sm font-semibold">Lista de Compra del Presupuesto</span>
+      </div>
+      <BuyingListUnified
+        budgetId={budgetId}
+        resources={resources}
+        phases={phases}
+        activities={activities}
+      />
     </div>
   );
 }

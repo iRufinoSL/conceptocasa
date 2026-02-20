@@ -559,16 +559,30 @@ export function TolosaResourcesPanel({ budgetId, tolosItemId, isAdmin, parentIte
                     </p>
                   )}
                 </div>
-              ) : (
-                <div className="text-center py-3 space-y-1">
-                  <p className="text-xs text-muted-foreground">
-                    {searchQuery ? 'No se encontraron recursos' : 'Todos los recursos ya están vinculados'}
+              ) : null}
+              {/* Always show "create new" option — highlighted when no results */}
+              <div className={`flex items-center gap-2 pt-1 ${availableResources.length === 0 ? 'border-t mt-1' : ''}`}>
+                {availableResources.length === 0 && (
+                  <p className="text-xs text-muted-foreground flex-1">
+                    {searchQuery ? `"${searchQuery}" no existe en el presupuesto` : 'Todos los recursos ya están vinculados'}
                   </p>
-                  <Button size="sm" variant="outline" className="text-xs" onClick={() => { setShowSearch(false); openCreate(); }}>
-                    <Plus className="h-3 w-3 mr-1" /> Crear nuevo recurso
-                  </Button>
-                </div>
-              )}
+                )}
+                <Button
+                  size="sm"
+                  variant={availableResources.length === 0 ? 'default' : 'outline'}
+                  className="text-xs shrink-0"
+                  onClick={() => {
+                    const prefillName = searchQuery.trim();
+                    setShowSearch(false);
+                    setSearchQuery('');
+                    setEditingResource(null);
+                    setFormData({ ...defaultForm, unit: measurementUnitType, name: prefillName });
+                    setShowFormDialog(true);
+                  }}
+                >
+                  <Plus className="h-3 w-3 mr-1" /> Crear nuevo recurso
+                </Button>
+              </div>
             </>
           ) : (
             <>
@@ -608,11 +622,28 @@ export function TolosaResourcesPanel({ budgetId, tolosItemId, isAdmin, parentIte
                   ))}
                 </div>
               ) : (
-                <div className="text-center py-3">
+                <div className="text-center py-3 space-y-2">
                   <ShoppingBag className="h-6 w-6 text-muted-foreground/40 mx-auto mb-1" />
                   <p className="text-xs text-muted-foreground">
-                    {externalSearchQuery ? 'No se encontraron recursos en el catálogo' : 'Escribe para buscar en el catálogo general'}
+                    {externalSearchQuery ? `"${externalSearchQuery}" no existe en el catálogo general` : 'Escribe para buscar en el catálogo general'}
                   </p>
+                  {externalSearchQuery && (
+                    <Button
+                      size="sm"
+                      variant="default"
+                      className="text-xs"
+                      onClick={() => {
+                        const prefillName = externalSearchQuery.trim();
+                        setShowSearch(false);
+                        setExternalSearchQuery('');
+                        setEditingResource(null);
+                        setFormData({ ...defaultForm, unit: measurementUnitType, name: prefillName });
+                        setShowFormDialog(true);
+                      }}
+                    >
+                      <Plus className="h-3 w-3 mr-1" /> Crear "{externalSearchQuery}" como nuevo recurso
+                    </Button>
+                  )}
                 </div>
               )}
               <p className="text-[10px] text-muted-foreground pt-1 border-t">

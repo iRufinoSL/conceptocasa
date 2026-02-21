@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { Trash2, Save, Unlink, Plus, DoorOpen, Copy, ArrowRight, ArrowDown, ChevronDown, ChevronRight } from 'lucide-react';
 import type { RoomData, WallType, FloorPlanData, OpeningData } from '@/lib/floor-plan-calculations';
-import { OPENING_PRESETS } from '@/lib/floor-plan-calculations';
+import { OPENING_PRESETS, metersToBlocks, blocksToMeters } from '@/lib/floor-plan-calculations';
 import { formatCoord, parseCoord } from './FloorPlanGridView';
 
 interface FloorPlanSpaceFormProps {
@@ -41,10 +41,16 @@ const WALL_TYPE_OPTIONS: { value: WallType; label: string }[] = [
 ];
 
 export function FloorPlanSpaceForm({ room, allRooms, planData, coordCol, coordRow, floorName, onUpdateRoom, onUpdateWall, onAddOpening, onDeleteOpening, onDuplicateRoom, onChangeCoordinate, onUngroupRoom, onDeleteRoom, saving }: FloorPlanSpaceFormProps) {
+  const isBlockMode = planData.scaleMode === 'bloque';
+  const blockL = planData.blockLengthMm || 625;
+  const blockH = planData.blockHeightMm || 250;
+
+  const toDisplay = (meters: number) => isBlockMode ? String(metersToBlocks(meters, blockL)) : String(meters);
+
   // Local buffered state for all editable fields
   const [localName, setLocalName] = useState(room.name);
-  const [localWidth, setLocalWidth] = useState(String(room.width));
-  const [localLength, setLocalLength] = useState(String(room.length));
+  const [localWidth, setLocalWidth] = useState(toDisplay(room.width));
+  const [localLength, setLocalLength] = useState(toDisplay(room.length));
   const [localHasFloor, setLocalHasFloor] = useState(room.hasFloor !== false);
   const [localHasCeiling, setLocalHasCeiling] = useState(room.hasCeiling !== false);
   const [localCoord, setLocalCoord] = useState(coordCol && coordRow ? formatCoord(coordCol, coordRow) : '');
@@ -58,8 +64,8 @@ export function FloorPlanSpaceForm({ room, allRooms, planData, coordCol, coordRo
   // Reset local state when a different room is selected
   useEffect(() => {
     setLocalName(room.name);
-    setLocalWidth(String(room.width));
-    setLocalLength(String(room.length));
+    setLocalWidth(toDisplay(room.width));
+    setLocalLength(toDisplay(room.length));
     setLocalHasFloor(room.hasFloor !== false);
     setLocalHasCeiling(room.hasCeiling !== false);
     setLocalCoord(coordCol && coordRow ? formatCoord(coordCol, coordRow) : '');
@@ -67,14 +73,16 @@ export function FloorPlanSpaceForm({ room, allRooms, planData, coordCol, coordRo
     room.walls.forEach(w => { map[w.id] = w.wallType; });
     setLocalWalls(map);
     setExpandedWall(null);
-  }, [room.id, coordCol, coordRow]);
+  }, [room.id, coordCol, coordRow, isBlockMode]);
 
   const parsedWidth = parseFloat(localWidth) || room.width;
   const parsedLength = parseFloat(localLength) || room.length;
   const parsedCoord = localCoord ? parseCoord(localCoord) : null;
   const parsedCol = parsedCoord?.col || 0;
   const parsedRow = parsedCoord?.row || 0;
-  const m2 = parsedWidth * parsedLength;
+  const m2 = isBlockMode
+    ? blocksToMeters(parsedWidth, blockL) * blocksToMeters(parsedLength, blockL)
+    : parsedWidth * parsedLength;
 
   // Group info
   const groupMembers = useMemo(() => {
@@ -83,11 +91,15 @@ export function FloorPlanSpaceForm({ room, allRooms, planData, coordCol, coordRo
   }, [room.groupId, allRooms]);
   const groupTotalM2 = groupMembers.reduce((s, r) => s + r.width * r.length, 0);
 
+  // Get the effective meter values (converting from blocks if needed)
+  const effectiveWidth = isBlockMode ? blocksToMeters(parsedWidth, blockL) : parsedWidth;
+  const effectiveLength = isBlockMode ? blocksToMeters(parsedLength, blockL) : parsedLength;
+
   // Detect if anything changed
   const roomChanged =
     localName !== room.name ||
-    parsedWidth !== room.width ||
-    parsedLength !== room.length ||
+    effectiveWidth !== room.width ||
+    effectiveLength !== room.length ||
     localHasFloor !== (room.hasFloor !== false) ||
     localHasCeiling !== (room.hasCeiling !== false);
 
@@ -107,8 +119,8 @@ export function FloorPlanSpaceForm({ room, allRooms, planData, coordCol, coordRo
     if (roomChanged) {
       const updates: Record<string, unknown> = {};
       if (localName !== room.name) updates.name = localName;
-      if (parsedWidth !== room.width) updates.width = parsedWidth;
-      if (parsedLength !== room.length) updates.length = parsedLength;
+      if (effectiveWidth !== room.width) updates.width = effectiveWidth;
+      if (effectiveLength !== room.length) updates.length = effectiveLength;
       if (localHasFloor !== (room.hasFloor !== false)) updates.hasFloor = localHasFloor;
       if (localHasCeiling !== (room.hasCeiling !== false)) updates.hasCeiling = localHasCeiling;
       await onUpdateRoom(updates as { name?: string; width?: number; length?: number; hasFloor?: boolean; hasCeiling?: boolean });
@@ -200,24 +212,35 @@ export function FloorPlanSpaceForm({ room, allRooms, planData, coordCol, coordRo
         {/* Dimensions */}
         <div className="grid grid-cols-2 gap-2">
           <div>
-            <Label className="text-xs">Ancho (m)</Label>
+            <Label className="text-xs">{isBlockMode ? 'Ancho (bloques)' : 'Ancho (m)'}</Label>
             <Input
-              type="number" step="0.1" value={localWidth}
+              type="number" step={isBlockMode ? '1' : '0.1'} value={localWidth}
               onChange={e => setLocalWidth(e.target.value)}
               disabled={saving}
             />
+            {isBlockMode && (
+              <span className="text-[10px] text-muted-foreground">
+                = {blocksToMeters(parsedWidth, blockL).toFixed(3)} m ({(parsedWidth * blockL).toFixed(0)} mm)
+              </span>
+            )}
           </div>
           <div>
-            <Label className="text-xs">Largo (m)</Label>
+            <Label className="text-xs">{isBlockMode ? 'Largo (bloques)' : 'Largo (m)'}</Label>
             <Input
-              type="number" step="0.1" value={localLength}
+              type="number" step={isBlockMode ? '1' : '0.1'} value={localLength}
               onChange={e => setLocalLength(e.target.value)}
               disabled={saving}
             />
+            {isBlockMode && (
+              <span className="text-[10px] text-muted-foreground">
+                = {blocksToMeters(parsedLength, blockL).toFixed(3)} m ({(parsedLength * blockL).toFixed(0)} mm)
+              </span>
+            )}
           </div>
         </div>
         <div className="text-xs text-muted-foreground font-medium">
-          Superficie: {m2.toFixed(1)} m²
+          Superficie: {m2.toFixed(isBlockMode ? 3 : 1)} m²
+          {isBlockMode && ` (${parsedWidth}×${parsedLength} bloques)`}
         </div>
 
         {/* Floor & Ceiling */}

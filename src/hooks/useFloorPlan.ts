@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import type { FloorPlanData, RoomData, WallData, OpeningData, WallType, FloorLevel } from '@/lib/floor-plan-calculations';
+import type { FloorPlanData, RoomData, WallData, OpeningData, WallType, FloorLevel, ScaleMode } from '@/lib/floor-plan-calculations';
 import { migrateLegacyWallType, autoClassifyWalls, isExteriorType } from '@/lib/floor-plan-calculations';
 
 interface DbFloorPlan {
@@ -16,6 +16,10 @@ interface DbFloorPlan {
   roof_overhang: number;
   roof_slope_percent: number;
   roof_type: string;
+  scale_mode: string;
+  block_length_mm: number;
+  block_height_mm: number;
+  block_width_mm: number;
 }
 
 interface DbRoom {
@@ -315,6 +319,10 @@ export function useFloorPlan(budgetId: string) {
       if (data.roofOverhang !== undefined) updates.roof_overhang = data.roofOverhang;
       if (data.roofSlopePercent !== undefined) updates.roof_slope_percent = data.roofSlopePercent;
       if (data.roofType !== undefined) updates.roof_type = data.roofType;
+      if (data.scaleMode !== undefined) updates.scale_mode = data.scaleMode;
+      if (data.blockLengthMm !== undefined) updates.block_length_mm = data.blockLengthMm;
+      if (data.blockHeightMm !== undefined) updates.block_height_mm = data.blockHeightMm;
+      if (data.blockWidthMm !== undefined) updates.block_width_mm = data.blockWidthMm;
 
       const { error } = await supabase
         .from('budget_floor_plans')
@@ -542,6 +550,10 @@ export function useFloorPlan(budgetId: string) {
         roofOverhang: Number(floorPlan.roof_overhang),
         roofSlopePercent: Number(floorPlan.roof_slope_percent),
         roofType: floorPlan.roof_type as any,
+        scaleMode: (floorPlan.scale_mode || 'metros') as ScaleMode,
+        blockLengthMm: Number(floorPlan.block_length_mm) || 625,
+        blockHeightMm: Number(floorPlan.block_height_mm) || 250,
+        blockWidthMm: Number(floorPlan.block_width_mm) || 300,
       };
 
       const summary = calculateFloorPlanSummary(planData, rooms);
@@ -851,6 +863,10 @@ export function useFloorPlan(budgetId: string) {
       roofOverhang: Number(floorPlan.roof_overhang),
       roofSlopePercent: Number(floorPlan.roof_slope_percent),
       roofType: floorPlan.roof_type as any,
+      scaleMode: (floorPlan.scale_mode || 'metros') as ScaleMode,
+      blockLengthMm: Number(floorPlan.block_length_mm) || 625,
+      blockHeightMm: Number(floorPlan.block_height_mm) || 250,
+      blockWidthMm: Number(floorPlan.block_width_mm) || 300,
     };
   };
 

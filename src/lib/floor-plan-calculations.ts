@@ -1,5 +1,7 @@
 // Floor plan calculation engine
 
+export type ScaleMode = 'metros' | 'bloque';
+
 export interface FloorPlanData {
   width: number;
   length: number;
@@ -9,6 +11,25 @@ export interface FloorPlanData {
   roofOverhang: number;
   roofSlopePercent: number;
   roofType: 'dos_aguas' | 'cuatro_aguas' | 'plana';
+  scaleMode: ScaleMode;
+  blockLengthMm: number; // largo del bloque en mm (default 625)
+  blockHeightMm: number; // alto del bloque en mm (default 250)
+  blockWidthMm: number;  // ancho/espesor del bloque en mm (default 300)
+}
+
+/** Convert block count to meters */
+export function blocksToMeters(blocks: number, blockSizeMm: number): number {
+  return blocks * blockSizeMm / 1000;
+}
+
+/** Convert meters to block count (rounded) */
+export function metersToBlocks(meters: number, blockSizeMm: number): number {
+  return Math.round(meters / (blockSizeMm / 1000) * 100) / 100;
+}
+
+/** Get wall thickness in meters from block width */
+export function blockWallThickness(plan: FloorPlanData): number {
+  return plan.blockWidthMm / 1000;
 }
 
 export interface FloorLevel {

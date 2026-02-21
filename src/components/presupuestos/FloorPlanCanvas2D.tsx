@@ -3,7 +3,7 @@ import type { FloorPlanData, RoomData, OutlineVertex } from '@/lib/floor-plan-ca
 import { autoClassifyWalls, generateExternalWallNames, computeWallSegments, isExteriorType, isInvisibleType, isCompartidaType, computeGroupPerimeterWalls, computeBuildingOutline } from '@/lib/floor-plan-calculations';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Maximize2 } from 'lucide-react';
+import { Maximize2, Map as MapIcon } from 'lucide-react';
 
 interface FloorPlanCanvas2DProps {
   plan: FloorPlanData;
@@ -488,19 +488,19 @@ export function FloorPlanCanvas2D({
             {z}%
           </button>
         ))}
-        <button
+        <Button
+          variant={showCorners ? 'default' : 'outline'}
+          size="sm"
+          className="h-7 text-[10px] px-2 ml-1 gap-1"
           onClick={() => setShowCorners(!showCorners)}
-          className={`text-[10px] px-1.5 py-0.5 rounded transition-colors ml-1 ${
-            showCorners
-              ? 'bg-primary text-primary-foreground font-semibold'
-              : 'bg-background text-muted-foreground hover:bg-accent/20 border border-border'
-          }`}
-          title="Mostrar/ocultar esquinas"
+          title="Mostrar/ocultar esquinas ABCD en el perímetro del edificio"
         >
-          ABCD
-        </button>
-        <Button variant="ghost" size="sm" className="h-6 w-6 p-0 ml-1" onClick={() => setGridFullscreen(true)} title="Pantalla completa">
-          <Maximize2 className="h-3.5 w-3.5" />
+          <MapIcon className="h-3 w-3" />
+          Esquinas ABCD
+        </Button>
+        <Button variant="outline" size="sm" className="h-7 text-[10px] px-2 ml-1 gap-1" onClick={() => setGridFullscreen(true)} title="Ampliar plano a pantalla completa">
+          <Maximize2 className="h-3 w-3" />
+          Pantalla completa
         </Button>
         <span className="text-[10px] text-muted-foreground ml-2">
           🖱️ Rueda=zoom · Fondo=pan · Flechas=mover · ESC=cancelar
@@ -1129,7 +1129,7 @@ export function FloorPlanCanvas2D({
 
       {/* Fullscreen dialog */}
       <Dialog open={gridFullscreen} onOpenChange={setGridFullscreen}>
-        <DialogContent className="max-w-[98vw] w-[98vw] max-h-[96vh] h-[96vh] flex flex-col overflow-hidden">
+        <DialogContent className="!max-w-none !w-screen !h-screen !m-0 !p-4 !rounded-none !translate-x-0 !translate-y-0 !top-0 !left-0 flex flex-col">
           <DialogHeader className="shrink-0">
             <DialogTitle className="text-sm">Plano 2D — Pantalla completa</DialogTitle>
             <DialogDescription className="sr-only">Vista completa del plano en 2D</DialogDescription>
@@ -1140,9 +1140,9 @@ export function FloorPlanCanvas2D({
               height="100%"
               style={{ cursor: 'default' }}
             >
-              <g transform={`translate(40, 40) scale(${Math.min(
-                (window.innerWidth * 0.9) / (plan.width * SCALE + 200),
-                (window.innerHeight * 0.8) / (plan.length * SCALE + 200)
+              <g transform={`translate(60, 60) scale(${Math.min(
+                (window.innerWidth * 0.85) / (plan.width * SCALE + 200),
+                (window.innerHeight * 0.75) / (plan.length * SCALE + 200)
               )})`}>
                 {renderSvgContent()}
 

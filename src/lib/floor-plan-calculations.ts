@@ -1683,6 +1683,213 @@ export function computeBuildingOutline(rooms: RoomData[]): OutlineVertex[] {
 }
 
 /**
+ * Compute composite walls from user-defined corners (ABCD + custom corners).
+ * Instead of using the auto-outline, this builds composite walls only from
+ * the corners the user has explicitly defined, avoiding phantom walls.
+ */
+export function computeCompositeWallsFromCorners(
+  rooms: RoomData[],
+  plan: FloorPlanData,
+  userCorners: Array<{ label: string; col: number; row: number; side: 'top' | 'right' | 'bottom' | 'left' }>,
+  cellSizeM: number = 1,
+): CompositeWall[] {
+  if (rooms.length === 0) return [];
+
+  const EPSILON = 0.05;
+
+  // Compute bounding box
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  rooms.forEach(r => {
+    minX = Math.min(minX, r.posX);
+    minY = Math.min(minY, r.posY);
+    maxX = Math.max(maxX, r.posX + r.width);
+    maxY = Math.max(maxY, r.posY + r.length);
+  });
+
+  // Main ABCD corners (absolute coordinates)
+  const mainCorners: Array<{ label: string; x: number; y: number; side: 'top' | 'right' | 'bottom' | 'left' }> = [
+    { label: 'A', x: minX, y: minY, side: 'top' },
+    { label: 'B', x: maxX, y: minY, side: 'right' },
+    { label: 'C', x: maxX, y: maxY, side: 'bottom' },
+    { label: 'D', x: minX, y: maxY, side: 'left' },
+  ];
+
+  // Convert user custom corners to absolute coordinates
+  // Custom corners are on the PERIMETER, so their position depends on the side
+  const customAbsolute = userCorners.map(cc => {
+    const absX = (cc.col - 1) * cellSizeM;
+    const absY = (cc.row - 1) * cellSizeM;
+    let x: number, y: number;
+    switch (cc.side) {
+      case 'top': x = absX + cellSizeM / 2; y = minY; break;
+      case 'bottom': x = absX + cellSizeM / 2; y = maxY; break;
+      case 'left': x = minX; y = absY + cellSizeM / 2; break;
+      case 'right': x = maxX; y = absY + cellSizeM / 2; break;
+    }
+    return { label: cc.label, x, y, side: cc.side };
+  });
+
+  // Group corners by side: top=AB, right=BC, bottom=CD, left=DA
+  const sideCorners: Record<string, Array<{ label: string; x: number; y: number }>> = {
+    top: [], right: [], bottom: [], left: [],
+  };
+
+  // Add custom corners to their sides
+  customAbsolute.forEach(cc => {
+    sideCorners[cc.side].push(cc);
+  });
+
+  // Build ordered corner lists per side (including start/end main corners)
+  // Top: A → ... → B (sort by X ascending)
+  // Right: B → ... → C (sort by Y ascending)
+  // Bottom: C → ... → D (sort by X descending)
+  // Left: D → ... → A (sort by Y descending)
+  const sides: Array<{
+    side: 'top' | 'right' | 'bottom' | 'left';
+    wallIndex: number;
+    startCorner: { label: string; x: number; y: number };
+    endCorner: { label: string; x: number; y: number };
+    sortFn: (a: { x: number; y: number }, b: { x: number; y: number }) => number;
+  }> = [
+    { side: 'top', wallIndex: 1, startCorner: mainCorners[0], endCorner: mainCorners[1], sortFn: (a, b) => a.x - b.x },
+    { side: 'right', wallIndex: 2, startCorner: mainCorners[1], endCorner: mainCorners[2], sortFn: (a, b) => a.y - b.y },
+    { side: 'bottom', wallIndex: 3, startCorner: mainCorners[2], endCorner: mainCorners[3], sortFn: (a, b) => b.x - a.x },
+    { side: 'left', wallIndex: 4, startCorner: mainCorners[3], endCorner: mainCorners[0], sortFn: (a, b) => b.y - a.y },
+  ];
+
+  const composites: CompositeWall[] = [];
+
+  sides.forEach(({ side, wallIndex, startCorner, endCorner, sortFn }) => {
+    const intermediates = [...sideCorners[side]].sort(sortFn);
+    const ordered = [startCorner, ...intermediates, endCorner];
+
+    for (let i = 0; i < ordered.length - 1; i++) {
+      const v1 = ordered[i];
+      const v2 = ordered[i + 1];
+      const isHoriz = side === 'top' || side === 'bottom';
+      const edgeLength = isHoriz ? Math.abs(v2.x - v1.x) : Math.abs(v2.y - v1.y);
+      if (edgeLength < EPSILON) continue;
+
+      const fixedCoord = isHoriz ? v1.y : v1.x;
+      const edgeStart = isHoriz ? Math.min(v1.x, v2.x) : Math.min(v1.y, v2.y);
+      const edgeEnd = isHoriz ? Math.max(v1.x, v2.x) : Math.max(v1.y, v2.y);
+
+      // Find rooms on this edge
+      const matchingRooms: Array<{
+        room: RoomData;
+        wall: WallData;
+        overlapStart: number;
+        overlapEnd: number;
+      }> = [];
+
+      rooms.forEach(room => {
+        let roomEdge: number, roomStart: number, roomEnd: number;
+        switch (wallIndex) {
+          case 1: roomEdge = room.posY; roomStart = room.posX; roomEnd = room.posX + room.width; break;
+          case 2: roomEdge = room.posX + room.width; roomStart = room.posY; roomEnd = room.posY + room.length; break;
+          case 3: roomEdge = room.posY + room.length; roomStart = room.posX; roomEnd = room.posX + room.width; break;
+          case 4: roomEdge = room.posX; roomStart = room.posY; roomEnd = room.posY + room.length; break;
+          default: return;
+        }
+
+        if (Math.abs(roomEdge - fixedCoord) > EPSILON) return;
+        const oStart = Math.max(edgeStart, roomStart);
+        const oEnd = Math.min(edgeEnd, roomEnd);
+        if (oEnd - oStart <= EPSILON) return;
+
+        const wall = room.walls.find(w => w.wallIndex === wallIndex);
+        if (!wall) return;
+        matchingRooms.push({ room, wall, overlapStart: oStart, overlapEnd: oEnd });
+      });
+
+      if (matchingRooms.length === 0) continue;
+
+      // Sort by position along edge
+      switch (side) {
+        case 'top': matchingRooms.sort((a, b) => a.overlapStart - b.overlapStart); break;
+        case 'right': matchingRooms.sort((a, b) => a.overlapStart - b.overlapStart); break;
+        case 'bottom': matchingRooms.sort((a, b) => b.overlapStart - a.overlapStart); break;
+        case 'left': matchingRooms.sort((a, b) => b.overlapStart - a.overlapStart); break;
+      }
+
+      let offset = 0;
+      const sections: CompositeWallSection[] = [];
+      let totalDoors = 0, totalWindows = 0;
+      const openingCounts: Record<string, number> = {};
+
+      matchingRooms.forEach(({ room, wall, overlapStart, overlapEnd }) => {
+        const sectionLen = overlapEnd - overlapStart;
+        let wallH: number;
+        const isBajoCub = room.height === 0 && plan.roofType === 'dos_aguas';
+        const isGableWall = isBajoCub && (wallIndex === 2 || wallIndex === 4);
+        if (isGableWall) {
+          const totalW = (maxX - minX) + 2 * plan.externalWallThickness;
+          wallH = (totalW / 2) * (plan.roofSlopePercent / 100);
+        } else if (wall.height && wall.height > 0) {
+          wallH = wall.height;
+        } else if (room.height && room.height > 0) {
+          wallH = room.height;
+        } else if (room.height === 0) {
+          wallH = 0;
+        } else {
+          wallH = plan.defaultHeight;
+        }
+
+        const fullWallLen = isHoriz ? room.width : room.length;
+        const sectionOpenings = wall.openings.filter(op => {
+          const opAbsPos = (isHoriz ? room.posX : room.posY) + op.positionX * fullWallLen;
+          return opAbsPos >= overlapStart - EPSILON && opAbsPos <= overlapEnd + EPSILON;
+        });
+
+        sectionOpenings.forEach(op => {
+          const key = op.openingType;
+          openingCounts[key] = (openingCounts[key] || 0) + 1;
+          if (key === 'puerta' || key === 'puerta_externa' || key === 'hueco_paso') totalDoors++;
+          else totalWindows++;
+        });
+
+        sections.push({
+          roomId: room.id, roomName: room.name, wallIndex,
+          wallId: wall.id, length: sectionLen, height: wallH,
+          wall, openings: sectionOpenings, startOffset: offset,
+          isGable: isGableWall,
+        });
+        offset += sectionLen;
+      });
+
+      let totalBlocks: { cols: number; rows: number; total: number } | undefined;
+      if (plan.scaleMode === 'bloque') {
+        const blockW = plan.blockLengthMm / 1000;
+        const blockH = plan.blockHeightMm / 1000;
+        if (blockW > 0 && blockH > 0) {
+          const maxH = Math.max(...sections.map(s => s.height));
+          totalBlocks = { cols: Math.ceil(edgeLength / blockW), rows: Math.ceil(maxH / blockH), total: Math.ceil(edgeLength / blockW) * Math.ceil(maxH / blockH) };
+        }
+      }
+
+      const openingDetails = Object.entries(openingCounts).map(([type, count]) => ({
+        type, count,
+        label: OPENING_PRESETS[type as keyof typeof OPENING_PRESETS]?.label || type,
+      }));
+
+      composites.push({
+        id: `cw-${v1.label}-${v2.label}`,
+        label: `Pared ${v1.label}${v2.label}`,
+        startCorner: { x: v1.x, y: v1.y, label: v1.label },
+        endCorner: { x: v2.x, y: v2.y, label: v2.label },
+        side,
+        totalLength: edgeLength,
+        sections,
+        isExterior: true,
+        objectSummary: { totalBlocks, doors: totalDoors, windows: totalWindows, openingDetails },
+      });
+    }
+  });
+
+  return composites;
+}
+
+/**
  * Compute composite walls from the building outline.
  * Each outline edge becomes a composite wall containing the room wall sections that form it.
  * All walls are viewed from the INTERIOR perspective.

@@ -9,8 +9,9 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Plus, Trash2, Box, Layers, ArrowUpDown, Maximize2, Merge, Unlink, Map as MapIcon, Printer } from 'lucide-react';
-import { OPENING_PRESETS, WALL_LABELS, WALL_SIDE_LETTERS, computeWallSegments, autoClassifyWalls, generateExternalWallNames, isExteriorType, isInvisibleType, computeBuildingOutline, computeCompositeWalls } from '@/lib/floor-plan-calculations';
+import { OPENING_PRESETS, WALL_LABELS, WALL_SIDE_LETTERS, computeWallSegments, autoClassifyWalls, generateExternalWallNames, isExteriorType, isInvisibleType, computeBuildingOutline, computeCompositeWalls, computeCompositeWallsFromCorners } from '@/lib/floor-plan-calculations';
 import type { RoomData, WallData, OpeningData, FloorPlanData, WallSegment, FloorLevel, WallType, BlockGroupData, OutlineVertex, CompositeWall } from '@/lib/floor-plan-calculations';
+import type { CustomCorner } from '@/hooks/useFloorPlan';
 
 interface ElevationsGridViewerProps {
   plan: FloorPlanData;
@@ -27,6 +28,7 @@ interface ElevationsGridViewerProps {
   focusWallId?: string;
   autoEditWallId?: string;
   budgetName?: string;
+  customCorners?: CustomCorner[];
 }
 
 type SurfaceCategory = 'cimentacion' | 'suelo' | 'techo' | 'pared' | 'volumen' | 'tejado' | 'faldon';
@@ -100,6 +102,7 @@ function getGablePeakHeight(plan: FloorPlanData, rooms: RoomData[]): number {
 export function ElevationsGridViewer({
   plan, rooms, floors, onUpdateOpening, onAddOpening, onDeleteOpening, onUpdateWall,
   onAddBlockGroup, onDeleteBlockGroup, onUpdateBlockGroup, saving, focusWallId, autoEditWallId, budgetName,
+  customCorners,
 }: ElevationsGridViewerProps) {
   const [selectedOpening, setSelectedOpening] = useState<OpeningData | null>(null);
   const [selectedOpeningWallLen, setSelectedOpeningWallLen] = useState<number>(1);
@@ -129,21 +132,29 @@ export function ElevationsGridViewer({
   const wallClassification = useMemo(() => autoClassifyWalls(rooms, plan), [rooms, plan]);
   const externalWallNames = useMemo(() => generateExternalWallNames(rooms, wallClassification), [rooms, wallClassification]);
 
-  // Building outline & composite walls — computed PER FLOOR to avoid mixing levels
+  // Building outline & composite walls — use user-defined corners when available
+  const cellSizeM = plan.scaleMode === 'bloque' ? plan.blockLengthMm / 1000 : 1;
+
   const perFloorComposites = useMemo(() => {
+    const hasUserCorners = customCorners && customCorners.length > 0;
+    
     if (!floors || floors.length <= 1) {
       // Single floor or no floors: compute from all rooms
-      const outline = computeBuildingOutline(rooms);
-      return [{ floorId: 'all', floorName: '', composites: computeCompositeWalls(rooms, outline, plan) }];
+      const composites = hasUserCorners
+        ? computeCompositeWallsFromCorners(rooms, plan, customCorners!, cellSizeM)
+        : (() => { const outline = computeBuildingOutline(rooms); return computeCompositeWalls(rooms, outline, plan); })();
+      return [{ floorId: 'all', floorName: '', composites }];
     }
     const sortedFloors = [...floors].sort((a, b) => a.orderIndex - b.orderIndex);
     return sortedFloors.map(floor => {
       const floorRooms = rooms.filter(r => r.floorId === floor.id);
       if (floorRooms.length === 0) return { floorId: floor.id, floorName: floor.name, composites: [] as CompositeWall[] };
-      const outline = computeBuildingOutline(floorRooms);
-      return { floorId: floor.id, floorName: floor.name, composites: computeCompositeWalls(floorRooms, outline, plan) };
+      const composites = hasUserCorners
+        ? computeCompositeWallsFromCorners(floorRooms, plan, customCorners!, cellSizeM)
+        : (() => { const outline = computeBuildingOutline(floorRooms); return computeCompositeWalls(floorRooms, outline, plan); })();
+      return { floorId: floor.id, floorName: floor.name, composites };
     }).filter(f => f.composites.length > 0);
-  }, [rooms, floors, plan]);
+  }, [rooms, floors, plan, customCorners, cellSizeM]);
 
   // Flat list of all composite walls (for counting)
   const allCompositeWalls = useMemo(() => perFloorComposites.flatMap(f => f.composites), [perFloorComposites]);

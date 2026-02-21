@@ -1,0 +1,1 @@
+ALTER TABLE public.budget_floor_plans ADD COLUMN custom_corners jsonb DEFAULT '[]'::jsonb;

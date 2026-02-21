@@ -872,6 +872,7 @@ export type Database = {
           block_width_mm: number
           budget_id: string
           created_at: string | null
+          custom_corners: Json | null
           default_height: number
           external_wall_thickness: number
           id: string
@@ -891,6 +892,7 @@ export type Database = {
           block_width_mm?: number
           budget_id: string
           created_at?: string | null
+          custom_corners?: Json | null
           default_height?: number
           external_wall_thickness?: number
           id?: string
@@ -910,6 +912,7 @@ export type Database = {
           block_width_mm?: number
           budget_id?: string
           created_at?: string | null
+          custom_corners?: Json | null
           default_height?: number
           external_wall_thickness?: number
           id?: string

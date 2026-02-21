@@ -811,17 +811,17 @@ function ElevationCardView({ card, plan, onOpeningClick, onAddOpening, onCardDou
           return <g className="block-pattern">{lines}</g>;
         })()}
 
-        {/* Direction arrows — only on external walls, viewed from exterior */}
+        {/* Direction arrows — walls viewed from INTERIOR */}
         {isWall && card.wall && isExteriorType(card.wall.wallType as string) && (() => {
           const wi = card.wall.wallIndex;
-          // External walls: viewed from EXTERIOR (flipped left-right vs interior)
-          const exteriorCornerMap: Record<number, [string, string]> = {
-            1: ['B', 'A'], // top wall from outside (standing north): left=B, right=A
-            2: ['C', 'B'], // right wall from outside (standing east): left=C, right=B
-            3: ['D', 'C'], // bottom wall from outside (standing south): left=D, right=C
-            4: ['A', 'D'], // left wall from outside (standing west): left=A, right=D
+          // Walls viewed from INTERIOR (standing inside the room)
+          const interiorCornerMap: Record<number, [string, string]> = {
+            1: ['A', 'B'], // top wall from inside: left=A(TL), right=B(TR)
+            2: ['B', 'C'], // right wall from inside: left=B(TR), right=C(BR)
+            3: ['C', 'D'], // bottom wall from inside: left=C(BR), right=D(BL)
+            4: ['D', 'A'], // left wall from inside: left=D(BL), right=A(TL)
           };
-          const [leftCorner, rightCorner] = exteriorCornerMap[wi] || ['?', '?'];
+          const [leftCorner, rightCorner] = interiorCornerMap[wi] || ['?', '?'];
           const arrowY = ry - 8;
           const fs = fsScale ? 9 : 7;
           return (
@@ -1279,13 +1279,13 @@ function FullscreenBlockGrid({ card, plan, blockCount, selectedBlocks, onToggleB
         });
       })}
 
-      {/* Direction arrows — only on external walls, from exterior */}
+      {/* Direction arrows — walls viewed from INTERIOR */}
       {card.wall && isExteriorType(card.wall.wallType as string) && (() => {
         const wi = card.wall.wallIndex;
-        const exteriorCornerMap: Record<number, [string, string]> = {
-          1: ['B', 'A'], 2: ['C', 'B'], 3: ['D', 'C'], 4: ['A', 'D'],
+        const interiorCornerMap: Record<number, [string, string]> = {
+          1: ['A', 'B'], 2: ['B', 'C'], 3: ['C', 'D'], 4: ['D', 'A'],
         };
-        const [leftCorner, rightCorner] = exteriorCornerMap[wi] || ['?', '?'];
+        const [leftCorner, rightCorner] = interiorCornerMap[wi] || ['?', '?'];
         return (
           <g>
             <text x={rx} y={ry - 10} textAnchor="start" fontSize={11} fontWeight={700} fill="hsl(222, 47%, 40%)">← {leftCorner}</text>
@@ -1415,8 +1415,8 @@ function CompositeWallCard({ compositeWall, plan, onOpeningClick }: {
               <rect x={sx} y={sy} width={sw2} height={sh2}
                 fill={sectionFill} stroke="hsl(222, 47%, 30%)" strokeWidth={1.2} rx={1} />
 
-              {/* Block pattern */}
-              {plan.scaleMode === 'bloque' && (() => {
+              {/* Block pattern — only for non-invisible walls */}
+              {plan.scaleMode === 'bloque' && !isInvisibleType(section.wall.wallType as string) && (() => {
                 const bwPx = (plan.blockLengthMm / 1000) * s;
                 const bhPx = (plan.blockHeightMm / 1000) * s;
                 if (bwPx < 3 || bhPx < 2) return null;

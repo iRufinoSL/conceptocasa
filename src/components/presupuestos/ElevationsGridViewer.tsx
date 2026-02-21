@@ -258,6 +258,11 @@ export function ElevationsGridViewer({
           wallHeight = roomGablePeakH; // triangle height = peak height
         }
 
+        // Non-gable walls of bajo cubierta rooms have height=0 → skip them entirely
+        if (roomIsBajoCubierta && !isGableWall && wallHeight === 0) {
+          return;
+        }
+
         if (segments.length === 0) {
           const invisible = isInvisibleType(wall.wallType as string);
           const isExternal = isExteriorType(wall.wallType as string);

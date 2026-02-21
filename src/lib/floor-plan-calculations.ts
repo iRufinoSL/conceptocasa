@@ -85,7 +85,6 @@ export interface WallData {
 }
 
 
-
 export interface OpeningData {
   id: string;
   openingType: 'puerta' | 'puerta_externa' | 'hueco_paso' | 'ventana_grande' | 'ventana_mediana' | 'ventana_pequeña' | 'ventana_balconera';
@@ -1830,7 +1829,8 @@ export function computeCompositeWallsFromCorners(
         } else if (room.height && room.height > 0) {
           wallH = room.height;
         } else if (room.height === 0) {
-          wallH = 0;
+          // Bajo cubierta non-gable wall: height=0, skip entirely
+          return;
         } else {
           wallH = plan.defaultHeight;
         }
@@ -1856,6 +1856,9 @@ export function computeCompositeWallsFromCorners(
         });
         offset += sectionLen;
       });
+
+      // Skip composite walls where no sections remain (all were bajo cubierta non-gable)
+      if (sections.length === 0) continue;
 
       let totalBlocks: { cols: number; rows: number; total: number } | undefined;
       if (plan.scaleMode === 'bloque') {
@@ -2002,7 +2005,8 @@ export function computeCompositeWalls(
       } else if (room.height && room.height > 0) {
         wallH = room.height;
       } else if (room.height === 0) {
-        wallH = 0;
+        // Bajo cubierta non-gable wall: skip entirely
+        return;
       } else {
         wallH = plan.defaultHeight;
       }
@@ -2039,6 +2043,9 @@ export function computeCompositeWalls(
       });
       offset += sectionLen;
     });
+
+    // Skip composite walls where no sections remain
+    if (sections.length === 0) continue;
 
     // Block count
     let totalBlocks: { cols: number; rows: number; total: number } | undefined;

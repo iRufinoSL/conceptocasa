@@ -8,7 +8,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { Plus, Trash2, Box, Layers, ArrowUpDown, Maximize2, Merge, Unlink, Map as MapIcon, Printer } from 'lucide-react';
+import { Plus, Trash2, Box, Layers, ArrowUpDown, Maximize2, Merge, Unlink, Map as MapIcon, Printer, FileDown } from 'lucide-react';
+import jsPDF from 'jspdf';
 import { OPENING_PRESETS, WALL_LABELS, WALL_SIDE_LETTERS, computeWallSegments, autoClassifyWalls, generateExternalWallNames, isExteriorType, isInvisibleType, computeBuildingOutline, computeCompositeWalls, computeCompositeWallsFromCorners } from '@/lib/floor-plan-calculations';
 import type { RoomData, WallData, OpeningData, FloorPlanData, WallSegment, FloorLevel, WallType, BlockGroupData, OutlineVertex, CompositeWall } from '@/lib/floor-plan-calculations';
 import type { CustomCorner } from '@/hooks/useFloorPlan';
@@ -617,6 +618,10 @@ export function ElevationsGridViewer({
                     compositeWall={cw}
                     plan={plan}
                     onOpeningClick={handleOpeningClick}
+                    onAddBlockGroup={onAddBlockGroup}
+                    onDeleteBlockGroup={onDeleteBlockGroup}
+                    saving={saving}
+                    rooms={rooms}
                     budgetName={budgetName}
                   />
                 ))}
@@ -1624,6 +1629,237 @@ function FullscreenBlockGrid({ card, plan, blockCount, selectedBlocks, onToggleB
 }
 
 // ──────────────────────────────────────────────────────────────────
+// Fullscreen interactive block grid for composite walls
+// ──────────────────────────────────────────────────────────────────
+
+function CompositeFullscreenBlockGrid({ compositeWall, plan, maxHeight, selectedBlocks, sectionBlockGroups, onToggleBlock, onOpeningClick }: {
+  compositeWall: CompositeWall;
+  plan: FloorPlanData;
+  maxHeight: number;
+  selectedBlocks: Set<string>;
+  sectionBlockGroups: Map<number, BlockGroupData[]>;
+  onToggleBlock: (key: string) => void;
+  onOpeningClick: (op: OpeningData) => void;
+}) {
+  const cw = compositeWall;
+  const blockWm = plan.blockLengthMm / 1000;
+  const blockHm = plan.blockHeightMm / 1000;
+  const padding = 60;
+  const maxW = window.innerWidth - padding * 2;
+  const maxH = window.innerHeight - 250;
+  const s = Math.min(maxW / cw.totalLength, maxH / maxHeight);
+  const svgW = cw.totalLength * s + padding * 2;
+  const totalH = maxHeight * s;
+  const svgH = totalH + padding * 2 + 30;
+  const rxs = padding;
+  const rys = padding / 2;
+  const bwPx = blockWm * s;
+  const bhPx = blockHm * s;
+
+  // Build group cell maps per section
+  const groupCellMaps = useMemo(() => {
+    const maps = new Map<number, Map<string, BlockGroupData>>();
+    sectionBlockGroups.forEach((groups, sIdx) => {
+      const map = new Map<string, BlockGroupData>();
+      groups.forEach(bg => {
+        for (let c = bg.startCol; c < bg.startCol + bg.spanCols; c++) {
+          for (let r = bg.startRow; r < bg.startRow + bg.spanRows; r++) {
+            map.set(`${c}-${r}`, bg);
+          }
+        }
+      });
+      maps.set(sIdx, map);
+    });
+    return maps;
+  }, [sectionBlockGroups]);
+
+  return (
+    <svg
+      data-composite-pdf={cw.id}
+      width="100%"
+      viewBox={`0 0 ${svgW} ${svgH}`}
+      style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', maxHeight: '85vh' }}
+    >
+      {/* Ground line */}
+      <line x1={rxs - 5} y1={rys + totalH} x2={rxs + cw.totalLength * s + 5} y2={rys + totalH}
+        stroke="hsl(25, 60%, 40%)" strokeWidth={2} />
+
+      {/* Sections with interactive blocks */}
+      {cw.sections.map((section, sIdx) => {
+        const sx = rxs + section.startOffset * s;
+        const sw2 = section.length * s;
+        const sh2 = section.height * s;
+        const sy = rys + totalH - sh2;
+        const sectionFill = sIdx % 2 === 0 ? 'hsl(30, 30%, 92%)' : 'hsl(30, 25%, 88%)';
+        const cols = Math.ceil(section.length / blockWm);
+        const rows = Math.ceil(section.height / blockHm);
+        const groupCellMap = groupCellMaps.get(sIdx) || new Map<string, BlockGroupData>();
+        const blockGroups = sectionBlockGroups.get(sIdx) || [];
+
+        if (section.isGable) {
+          // For gable sections, just render non-interactive SVG
+          const baseY = rys + totalH;
+          const peakX = sx + sw2 / 2;
+          const peakY = rys + totalH - sh2;
+          const trianglePath = `M ${sx} ${baseY} L ${peakX} ${peakY} L ${sx + sw2} ${baseY} Z`;
+          return (
+            <g key={`section-${sIdx}`}>
+              <path d={trianglePath} fill={sectionFill} stroke="hsl(222, 47%, 30%)" strokeWidth={1.2} />
+              {sIdx > 0 && <line x1={sx} y1={rys} x2={sx} y2={rys + totalH}
+                stroke="hsl(222, 47%, 40%)" strokeWidth={0.8} strokeDasharray="3 2" />}
+              <text x={sx + sw2 / 2} y={baseY - sh2 * 0.3} textAnchor="middle"
+                fontSize={10} fill="hsl(222, 47%, 30%)" fontWeight={600} opacity={0.7} pointerEvents="none">
+                {section.roomName}
+              </text>
+              <circle cx={peakX} cy={peakY} r={3} fill="hsl(15, 70%, 45%)" />
+            </g>
+          );
+        }
+
+        return (
+          <g key={`section-${sIdx}`}>
+            {/* Background */}
+            <rect x={sx} y={sy} width={sw2} height={sh2}
+              fill={sectionFill} stroke="hsl(222, 47%, 30%)" strokeWidth={1.2} rx={1} />
+
+            {/* Interactive blocks */}
+            {Array.from({ length: rows }, (_, r) => {
+              const yTop = sy + sh2 - (r + 1) * bhPx;
+              const offset = r % 2 === 0 ? 0 : bwPx / 2;
+              return Array.from({ length: cols }, (_, c) => {
+                const xLeft = sx + offset + c * bwPx;
+                const clippedX = Math.max(sx, xLeft);
+                const clippedW = Math.min(sx + sw2, xLeft + bwPx) - clippedX;
+                const clippedY = Math.max(sy, yTop);
+                const clippedH = Math.min(sy + sh2, yTop + bhPx) - clippedY;
+                if (clippedW <= 0 || clippedH <= 0) return null;
+
+                const cellKey = `${c}-${r}`;
+                const fullKey = `${sIdx}-${c}-${r}`;
+                const isSelected = selectedBlocks.has(fullKey);
+                const group = groupCellMap.get(cellKey);
+                const isGroupOrigin = group && group.startCol === c && group.startRow === r;
+
+                if (group && !isGroupOrigin) return null;
+
+                if (group && isGroupOrigin) {
+                  const gx = sx + (r % 2 === 0 ? 0 : bwPx / 2) + group.startCol * bwPx;
+                  const gy = sy + sh2 - (group.startRow + group.spanRows) * bhPx;
+                  const gw = group.spanCols * bwPx;
+                  const gh = group.spanRows * bhPx;
+                  const colorIdx = blockGroups.indexOf(group) % BLOCK_GROUP_COLORS.length;
+                  const color = group.color || BLOCK_GROUP_COLORS[colorIdx];
+                  return (
+                    <g key={`group-${sIdx}-${group.id}`}>
+                      <rect
+                        x={Math.max(sx, gx)} y={Math.max(sy, gy)}
+                        width={Math.min(sx + sw2, gx + gw) - Math.max(sx, gx)}
+                        height={Math.min(sy + sh2, gy + gh) - Math.max(sy, gy)}
+                        fill={color + '25'} stroke={color} strokeWidth={2.5} rx={2} />
+                      <text
+                        x={Math.max(sx, gx) + (Math.min(sx + sw2, gx + gw) - Math.max(sx, gx)) / 2}
+                        y={Math.max(sy, gy) + (Math.min(sy + sh2, gy + gh) - Math.max(sy, gy)) / 2 + 4}
+                        textAnchor="middle" fontSize={Math.min(12, gw / 8)}
+                        fill={color} fontWeight={700} pointerEvents="none">
+                        {group.name || `${group.spanCols}×${group.spanRows}`}
+                      </text>
+                    </g>
+                  );
+                }
+
+                return (
+                  <rect key={fullKey}
+                    x={clippedX + 0.5} y={clippedY + 0.5}
+                    width={clippedW - 1} height={clippedH - 1}
+                    fill={isSelected ? 'hsl(210, 80%, 60%, 0.4)' : 'transparent'}
+                    stroke={isSelected ? 'hsl(210, 80%, 50%)' : 'hsl(210, 50%, 60%)'}
+                    strokeWidth={isSelected ? 2 : 0.6}
+                    opacity={isSelected ? 1 : 0.7}
+                    rx={0.5} style={{ cursor: 'pointer' }}
+                    onClick={(e) => { e.stopPropagation(); onToggleBlock(fullKey); }}>
+                    <title>Bloque [{c},{r}] — {section.roomName}</title>
+                  </rect>
+                );
+              });
+            })}
+
+            {/* Section separator */}
+            {sIdx > 0 && <line x1={sx} y1={rys} x2={sx} y2={rys + totalH}
+              stroke="hsl(222, 47%, 40%)" strokeWidth={0.8} strokeDasharray="3 2" />}
+
+            {/* Room label */}
+            <text x={sx + sw2 / 2} y={sy + 12} textAnchor="middle"
+              fontSize={10} fill="hsl(222, 47%, 30%)" fontWeight={600} opacity={0.7} pointerEvents="none">
+              {section.roomName}
+            </text>
+
+            {/* Openings */}
+            {section.openings.map(op => {
+              const opCenterFraction = op.positionX;
+              const opCenterInSection = opCenterFraction * section.length;
+              const opWidthPx = op.width * s;
+              const opHeightPx = op.height * s;
+              const sillH = op.sillHeight ?? 0;
+              const opX = sx + (opCenterInSection / section.length) * sw2 - opWidthPx / 2;
+              const opY = sy + sh2 - opHeightPx - sillH * s;
+              const isDoor = op.openingType === 'puerta' || op.openingType === 'puerta_externa' || op.openingType === 'ventana_balconera';
+              return (
+                <g key={op.id} style={{ cursor: 'pointer' }}
+                  onClick={e => { e.stopPropagation(); onOpeningClick(op); }}>
+                  <rect x={opX} y={opY} width={opWidthPx} height={opHeightPx}
+                    fill={isDoor ? 'hsl(30, 80%, 95%)' : 'hsl(210, 80%, 95%)'}
+                    stroke={isDoor ? 'hsl(30, 80%, 45%)' : 'hsl(210, 80%, 45%)'}
+                    strokeWidth={1.5} rx={2} />
+                  <text x={opX + opWidthPx / 2} y={opY + opHeightPx / 2 + 4} textAnchor="middle"
+                    fontSize={10} fill="hsl(var(--foreground))" pointerEvents="none" opacity={0.8}>
+                    {OPENING_PRESETS[op.openingType as keyof typeof OPENING_PRESETS]?.label || op.openingType}
+                  </text>
+                  <text x={opX + opWidthPx / 2} y={opY + opHeightPx / 2 + 16} textAnchor="middle"
+                    fontSize={8} fill="hsl(var(--muted-foreground))" pointerEvents="none">
+                    {Math.round(op.width * 1000)}×{Math.round(op.height * 1000)}mm
+                  </text>
+                </g>
+              );
+            })}
+          </g>
+        );
+      })}
+
+      {/* Total dimension line */}
+      <line x1={rxs} y1={rys + totalH + 15} x2={rxs + cw.totalLength * s} y2={rys + totalH + 15}
+        stroke="hsl(25, 95%, 45%)" strokeWidth={0.8} />
+      <line x1={rxs} y1={rys + totalH + 10} x2={rxs} y2={rys + totalH + 20} stroke="hsl(25, 95%, 45%)" strokeWidth={0.5} />
+      <line x1={rxs + cw.totalLength * s} y1={rys + totalH + 10} x2={rxs + cw.totalLength * s} y2={rys + totalH + 20}
+        stroke="hsl(25, 95%, 45%)" strokeWidth={0.5} />
+      <text x={rxs + cw.totalLength * s / 2} y={rys + totalH + 30} textAnchor="middle"
+        fontSize={12} fill="hsl(25, 95%, 45%)" fontWeight={600}>
+        {cw.totalLength.toFixed(2)}m
+      </text>
+
+      {/* Height dimension */}
+      <line x1={rxs - 15} y1={rys} x2={rxs - 15} y2={rys + totalH}
+        stroke="hsl(25, 95%, 45%)" strokeWidth={0.8} />
+      <line x1={rxs - 20} y1={rys} x2={rxs - 10} y2={rys} stroke="hsl(25, 95%, 45%)" strokeWidth={0.5} />
+      <line x1={rxs - 20} y1={rys + totalH} x2={rxs - 10} y2={rys + totalH} stroke="hsl(25, 95%, 45%)" strokeWidth={0.5} />
+      <text x={rxs - 22} y={rys + totalH / 2} textAnchor="middle" fontSize={12} fill="hsl(25, 95%, 45%)" fontWeight={600}
+        transform={`rotate(-90, ${rxs - 22}, ${rys + totalH / 2})`}>
+        {maxHeight.toFixed(2)}m
+      </text>
+
+      {/* Corner labels */}
+      <text x={rxs - 3} y={rys + totalH + 30} textAnchor="end"
+        fontSize={13} fill="hsl(var(--primary))" fontWeight={800}>
+        {cw.startCorner.label}
+      </text>
+      <text x={rxs + cw.totalLength * s + 3} y={rys + totalH + 30} textAnchor="start"
+        fontSize={13} fill="hsl(var(--primary))" fontWeight={800}>
+        {cw.endCorner.label}
+      </text>
+    </svg>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────
 // Composite Wall Card — groups room walls along a building edge
 // ──────────────────────────────────────────────────────────────────
 
@@ -1631,13 +1867,18 @@ const SIDE_LABELS: Record<string, string> = {
   top: 'Norte', right: 'Este', bottom: 'Sur', left: 'Oeste',
 };
 
-function CompositeWallCard({ compositeWall, plan, onOpeningClick, budgetName }: {
+function CompositeWallCard({ compositeWall, plan, onOpeningClick, onAddBlockGroup, onDeleteBlockGroup, saving, rooms: liveRooms, budgetName }: {
   compositeWall: CompositeWall;
   plan: FloorPlanData;
   onOpeningClick: (op: OpeningData) => void;
+  onAddBlockGroup?: (wallId: string, startCol: number, startRow: number, spanCols: number, spanRows: number, name?: string, color?: string) => Promise<void>;
+  onDeleteBlockGroup?: (blockGroupId: string) => Promise<void>;
+  saving?: boolean;
+  rooms?: RoomData[];
   budgetName?: string;
 }) {
   const [fullscreen, setFullscreen] = useState(false);
+  const [selectedBlocks, setSelectedBlocks] = useState<Set<string>>(new Set()); // "sectionIdx-col-row" keys
   const cw = compositeWall;
   const maxHeight = Math.max(...cw.sections.map(s => s.height), 0);
 
@@ -1661,6 +1902,7 @@ function CompositeWallCard({ compositeWall, plan, onOpeningClick, budgetName }: 
 
     return (
       <svg
+        data-composite-pdf={cw.id}
         width="100%"
         viewBox={`0 0 ${sw} ${sh}`}
         className="mx-auto"
@@ -1705,7 +1947,7 @@ function CompositeWallCard({ compositeWall, plan, onOpeningClick, budgetName }: 
                     if (y <= peakY) break;
                     lines.push(
                       <line key={`bh-${idx}-${r}`} x1={sx} y1={y} x2={sx + sw2} y2={y}
-                        stroke="hsl(25, 30%, 65%)" strokeWidth={0.4} opacity={0.5} pointerEvents="none" />
+                        stroke="hsl(210, 50%, 35%)" strokeWidth={1.2} opacity={1} pointerEvents="none" />
                     );
                   }
                   for (let r = 0; r < rows; r++) {
@@ -1718,7 +1960,7 @@ function CompositeWallCard({ compositeWall, plan, onOpeningClick, budgetName }: 
                       if (x <= sx) continue;
                       lines.push(
                         <line key={`bv-${idx}-${r}-${c}`} x1={x} y1={yTop} x2={x} y2={Math.min(yBot, baseY)}
-                          stroke="hsl(25, 30%, 65%)" strokeWidth={0.3} opacity={0.4} pointerEvents="none" />
+                          stroke="hsl(210, 50%, 35%)" strokeWidth={1.0} opacity={1} pointerEvents="none" />
                       );
                     }
                   }
@@ -1772,7 +2014,7 @@ function CompositeWallCard({ compositeWall, plan, onOpeningClick, budgetName }: 
                   if (y <= sy) break;
                   lines.push(
                     <line key={`bh-${idx}-${r}`} x1={sx} y1={y} x2={sx + sw2} y2={y}
-                      stroke="hsl(25, 30%, 65%)" strokeWidth={0.4} opacity={0.5} pointerEvents="none" />
+                      stroke="hsl(210, 50%, 35%)" strokeWidth={1.2} opacity={1} pointerEvents="none" />
                   );
                 }
                 for (let r = 0; r < rows; r++) {
@@ -1783,10 +2025,10 @@ function CompositeWallCard({ compositeWall, plan, onOpeningClick, budgetName }: 
                     const x = sx + offset + c * bwPx;
                     if (x >= sx + sw2) break;
                     if (x <= sx) continue;
-                    lines.push(
-                      <line key={`bv-${idx}-${r}-${c}`} x1={x} y1={yTop} x2={x} y2={Math.min(yBot, sy + sh2)}
-                        stroke="hsl(25, 30%, 65%)" strokeWidth={0.3} opacity={0.4} pointerEvents="none" />
-                    );
+                  lines.push(
+                    <line key={`bv-${idx}-${r}-${c}`} x1={x} y1={yTop} x2={x} y2={Math.min(yBot, sy + sh2)}
+                      stroke="hsl(210, 50%, 35%)" strokeWidth={1.0} opacity={1} pointerEvents="none" />
+                  );
                   }
                 }
                 return <g>{lines}</g>;
@@ -1877,9 +2119,103 @@ function CompositeWallCard({ compositeWall, plan, onOpeningClick, budgetName }: 
     );
   };
 
+  // Get live block groups for each section from rooms state
+  const sectionBlockGroups = useMemo(() => {
+    if (!liveRooms) return new Map<number, BlockGroupData[]>();
+    const map = new Map<number, BlockGroupData[]>();
+    cw.sections.forEach((section, idx) => {
+      const room = liveRooms.find(r => r.id === section.roomId);
+      const wall = room?.walls.find(w => w.id === section.wallId);
+      map.set(idx, wall?.blockGroups || []);
+    });
+    return map;
+  }, [cw.sections, liveRooms]);
+
+  const allBlockGroups = useMemo(() => {
+    const all: Array<BlockGroupData & { sectionIdx: number; wallId: string }> = [];
+    sectionBlockGroups.forEach((groups, idx) => {
+      groups.forEach(bg => all.push({ ...bg, sectionIdx: idx, wallId: cw.sections[idx].wallId }));
+    });
+    return all;
+  }, [sectionBlockGroups, cw.sections]);
+
+  // PDF export handler — landscape A4
+  const handleExportPdf = useCallback(() => {
+    const svgEl = document.querySelector(`[data-composite-pdf="${cw.id}"]`) as SVGSVGElement | null;
+    if (!svgEl) return;
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+    const pageW = doc.internal.pageSize.getWidth();
+    const pageH = doc.internal.pageSize.getHeight();
+    const margin = 10;
+
+    // Header
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text(budgetName || '', margin, margin + 5);
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Pared compuesta: ${cw.label} — ${SIDE_LABELS[cw.side] || cw.side} — ${cw.totalLength.toFixed(2)}m × ${maxHeight.toFixed(2)}m`, margin, margin + 12);
+
+    // Serialize SVG to image
+    const svgClone = svgEl.cloneNode(true) as SVGSVGElement;
+    svgClone.setAttribute('width', '2400');
+    svgClone.removeAttribute('style');
+    const svgData = new XMLSerializer().serializeToString(svgClone);
+    const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+    const url = URL.createObjectURL(svgBlob);
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext('2d')!;
+      ctx.fillStyle = 'white';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0);
+      const imgData = canvas.toDataURL('image/png');
+      const availW = pageW - margin * 2;
+      const availH = pageH - margin * 2 - 20;
+      const ratio = Math.min(availW / img.width, availH / img.height);
+      const imgW = img.width * ratio;
+      const imgH = img.height * ratio;
+      doc.addImage(imgData, 'PNG', margin + (availW - imgW) / 2, margin + 18, imgW, imgH);
+      doc.save(`${cw.label}_${budgetName || 'alzado'}.pdf`);
+      URL.revokeObjectURL(url);
+    };
+    img.src = url;
+  }, [cw, budgetName, maxHeight]);
+
+  // Block grouping helpers for composite wall
+  const handleCompositeBlockGroup = useCallback(async () => {
+    if (!onAddBlockGroup || selectedBlocks.size < 2) return;
+    // Group selected blocks by section
+    const bySectionIdx = new Map<number, Array<{ col: number; row: number }>>();
+    selectedBlocks.forEach(key => {
+      const [sIdx, c, r] = key.split('-').map(Number);
+      if (!bySectionIdx.has(sIdx)) bySectionIdx.set(sIdx, []);
+      bySectionIdx.get(sIdx)!.push({ col: c, row: r });
+    });
+    // Create one group per section
+    for (const [sIdx, cells] of bySectionIdx) {
+      const section = cw.sections[sIdx];
+      if (!section) continue;
+      const minCol = Math.min(...cells.map(c => c.col));
+      const maxCol = Math.max(...cells.map(c => c.col));
+      const minRow = Math.min(...cells.map(c => c.row));
+      const maxRow = Math.max(...cells.map(c => c.row));
+      const spanCols = maxCol - minCol + 1;
+      const spanRows = maxRow - minRow + 1;
+      const name = `${(spanCols * plan.blockLengthMm).toFixed(0)}×${(spanRows * plan.blockHeightMm).toFixed(0)}×${plan.blockWidthMm}mm`;
+      await onAddBlockGroup(section.wallId, minCol, minRow, spanCols, spanRows, name);
+    }
+    setSelectedBlocks(new Set());
+  }, [onAddBlockGroup, selectedBlocks, cw.sections, plan]);
+
   // Avoid using a variable that doesn't exist in this scope
   // The openings are already calculated in CompositeWallSection, no need for room lookup
   const rooms_cache_ref: RoomData[] | null = null; // placeholder - openings already have positionX
+
+  const isBlockMode = plan.scaleMode === 'bloque';
 
   return (
     <>
@@ -1895,7 +2231,7 @@ function CompositeWallCard({ compositeWall, plan, onOpeningClick, budgetName }: 
             <div className="flex items-center gap-1 shrink-0">
               {cw.objectSummary.totalBlocks && (
                 <Badge variant="outline" className="text-[9px] h-4 bg-accent/30">
-                  {cw.objectSummary.totalBlocks.total} bloques
+                  {cw.objectSummary.totalBlocks.total} bloques · {plan.blockLengthMm}×{plan.blockHeightMm}mm
                 </Badge>
               )}
               {cw.objectSummary.doors > 0 && (
@@ -1926,8 +2262,8 @@ function CompositeWallCard({ compositeWall, plan, onOpeningClick, budgetName }: 
         </CardContent>
       </Card>
 
-      {/* Fullscreen dialog */}
-      <Dialog open={fullscreen} onOpenChange={setFullscreen}>
+      {/* Fullscreen dialog with block editing */}
+      <Dialog open={fullscreen} onOpenChange={(open) => { setFullscreen(open); if (!open) setSelectedBlocks(new Set()); }}>
         <DialogContent className="!max-w-none !w-screen !h-screen !m-0 !p-4 !rounded-none !translate-x-0 !translate-y-0 !top-0 !left-0 flex flex-col print:!p-2">
           <DialogHeader className="shrink-0">
             <DialogTitle className="text-sm flex items-center gap-2 flex-wrap">
@@ -1937,24 +2273,91 @@ function CompositeWallCard({ compositeWall, plan, onOpeningClick, budgetName }: 
               <Badge variant="outline" className="text-xs print:hidden">{cw.totalLength.toFixed(2)}m × {maxHeight.toFixed(2)}m</Badge>
               <Badge variant="secondary" className="text-xs print:hidden">{cw.sections.length} espacios</Badge>
               {cw.objectSummary.totalBlocks && (
-                <Badge variant="outline" className="text-xs print:hidden">{cw.objectSummary.totalBlocks.total} bloques</Badge>
+                <Badge variant="outline" className="text-xs print:hidden">
+                  {cw.objectSummary.totalBlocks.total} bloques · {plan.blockLengthMm}×{plan.blockHeightMm}mm
+                </Badge>
               )}
               {cw.objectSummary.openingDetails.map(od => (
                 <Badge key={od.type} variant="outline" className="text-xs print:hidden">
                   {od.count}× {od.label}
                 </Badge>
               ))}
-              <Button variant="outline" size="sm" className="h-7 text-xs ml-auto print:hidden" onClick={() => window.print()}>
-                <Printer className="h-3 w-3 mr-1" /> Imprimir
-              </Button>
+              <div className="flex items-center gap-1 ml-auto print:hidden">
+                <Button variant="outline" size="sm" className="h-7 text-xs" onClick={handleExportPdf}>
+                  <FileDown className="h-3 w-3 mr-1" /> PDF A4 horizontal
+                </Button>
+                <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => window.print()}>
+                  <Printer className="h-3 w-3 mr-1" /> Imprimir
+                </Button>
+              </div>
             </DialogTitle>
             <DialogDescription className="sr-only">Vista a pantalla completa de pared compuesta</DialogDescription>
           </DialogHeader>
+
+          {/* Block editing toolbar */}
+          {isBlockMode && (
+            <div className="shrink-0 flex items-center gap-2 flex-wrap border-b border-border/50 pb-2 print:hidden">
+              <span className="text-xs text-muted-foreground">
+                {selectedBlocks.size > 0
+                  ? `${selectedBlocks.size} bloques seleccionados`
+                  : 'Haz clic en los bloques para seleccionarlos'}
+              </span>
+              {selectedBlocks.size >= 2 && onAddBlockGroup && (
+                <Button size="sm" variant="default" className="h-7 text-xs gap-1"
+                  disabled={saving} onClick={handleCompositeBlockGroup}>
+                  <Merge className="h-3 w-3" /> Agrupar ({selectedBlocks.size})
+                </Button>
+              )}
+              {selectedBlocks.size > 0 && (
+                <Button size="sm" variant="outline" className="h-7 text-xs"
+                  onClick={() => setSelectedBlocks(new Set())}>
+                  Limpiar selección
+                </Button>
+              )}
+              {allBlockGroups.length > 0 && (
+                <div className="flex items-center gap-1 ml-auto flex-wrap">
+                  {allBlockGroups.map((bg, i) => (
+                    <Badge key={bg.id} variant="secondary"
+                      className="text-[10px] h-5 gap-1 cursor-pointer hover:bg-destructive/20 transition-colors"
+                      style={bg.color ? { backgroundColor: bg.color + '30', borderColor: bg.color } : undefined}>
+                      {bg.name || `${bg.spanCols}×${bg.spanRows}`}
+                      {onDeleteBlockGroup && (
+                        <button className="ml-0.5 hover:text-destructive"
+                          onClick={(e) => { e.stopPropagation(); onDeleteBlockGroup(bg.id); }}
+                          disabled={saving}>
+                          <Unlink className="h-2.5 w-2.5" />
+                        </button>
+                      )}
+                    </Badge>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="flex-1 overflow-auto flex items-center justify-center min-h-0">
-            {renderCompositeSvg(Math.min(
-              (window.innerHeight * 0.8) / maxHeight,
-              (window.innerWidth * 0.9) / cw.totalLength
-            ))}
+            {isBlockMode ? (
+              <CompositeFullscreenBlockGrid
+                compositeWall={cw}
+                plan={plan}
+                maxHeight={maxHeight}
+                selectedBlocks={selectedBlocks}
+                sectionBlockGroups={sectionBlockGroups}
+                onToggleBlock={(key) => {
+                  setSelectedBlocks(prev => {
+                    const next = new Set(prev);
+                    if (next.has(key)) next.delete(key); else next.add(key);
+                    return next;
+                  });
+                }}
+                onOpeningClick={onOpeningClick}
+              />
+            ) : (
+              renderCompositeSvg(Math.min(
+                (window.innerHeight * 0.8) / maxHeight,
+                (window.innerWidth * 0.9) / cw.totalLength
+              ))
+            )}
           </div>
         </DialogContent>
       </Dialog>

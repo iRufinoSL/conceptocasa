@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Plus, Link, Unlink, Undo2 } from 'lucide-react';
-import type { RoomData, FloorLevel, WallType } from '@/lib/floor-plan-calculations';
+import type { RoomData, FloorLevel, WallType, ScaleMode } from '@/lib/floor-plan-calculations';
 import { autoClassifyWalls, isExteriorType, isInvisibleType, isCompartidaType } from '@/lib/floor-plan-calculations';
 
 interface FloorPlanGridViewProps {
@@ -28,6 +28,10 @@ interface FloorPlanGridViewProps {
   onActiveFloorChange?: (floorName: string, floorId?: string) => void;
   /** Force switch to this floor tab (e.g. after creating a new floor) */
   forceActiveFloorId?: string;
+  /** Scale mode: 'metros' (1m cells) or 'bloque' (blockLengthMm cells) */
+  scaleMode?: ScaleMode;
+  /** Block length in mm (default 625), used when scaleMode='bloque' */
+  blockLengthMm?: number;
 }
 
 export interface PositionedRoom {
@@ -84,12 +88,12 @@ export function formatCoord(col: number, row: number): string {
   return `${colToLetter(col)}${row}`;
 }
 
-// Derive grid positions from room posX/posY based on 1m grid
-export function deriveGridPositions(floorRooms: RoomData[]): PositionedRoom[] {
+// Derive grid positions from room posX/posY based on cell size in meters
+export function deriveGridPositions(floorRooms: RoomData[], cellSizeM: number = 1): PositionedRoom[] {
   return floorRooms.map(r => ({
     room: r,
-    gridCol: Math.round(r.posX) + 1, // 1-based col from posX in meters
-    gridRow: Math.round(r.posY) + 1, // 1-based row from posY in meters
+    gridCol: Math.round(r.posX / cellSizeM) + 1, // 1-based col
+    gridRow: Math.round(r.posY / cellSizeM) + 1, // 1-based row
   }));
 }
 
@@ -166,7 +170,12 @@ export function FloorPlanGridView({
   rooms, floors, planWidth, planLength, selectedRoomId, onSelectRoom,
   onAddRoom, onGroupRooms, onUngroupRooms, onUndo, undoCount = 0, saving = false,
   gridRef, onActiveFloorChange, forceActiveFloorId,
+  scaleMode = 'metros', blockLengthMm = 625,
 }: FloorPlanGridViewProps) {
+  // Cell size in meters: 1m for 'metros', blockLengthMm/1000 for 'bloque'
+  const cellSizeM = scaleMode === 'bloque' ? blockLengthMm / 1000 : 1;
+  const cellLabel = scaleMode === 'bloque' ? `${blockLengthMm}mm` : '1m';
+
   const [activeFloorId, setActiveFloorId] = useState<string>(floors[0]?.id || '_none_');
   const [multiSelectMode, setMultiSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -179,7 +188,7 @@ export function FloorPlanGridView({
       setActiveFloorId(forceActiveFloorId);
     }
   }, [forceActiveFloorId]);
-  const CELL_SIZE = 48; // px per 1m cell
+  const CELL_SIZE = scaleMode === 'bloque' ? 30 : 48; // px per cell (smaller for block mode since there are more cells)
 
   const wallClassification = useMemo(() => autoClassifyWalls(rooms), [rooms]);
 
@@ -225,27 +234,27 @@ export function FloorPlanGridView({
 
   // Auto-expand grid to fit all placed rooms beyond the initial plan dimensions
   const totalCols = useMemo(() => {
-    const baseCols = Math.max(1, Math.ceil(planWidth));
+    const baseCols = Math.max(1, Math.ceil(planWidth / cellSizeM));
     if (placedRooms.length === 0) return baseCols;
-    const maxCol = Math.max(...placedRooms.map(r => Math.round(r.posX) + Math.max(1, Math.round(r.width))));
+    const maxCol = Math.max(...placedRooms.map(r => Math.round(r.posX / cellSizeM) + Math.max(1, Math.round(r.width / cellSizeM))));
     return Math.max(baseCols, maxCol);
-  }, [planWidth, placedRooms]);
+  }, [planWidth, placedRooms, cellSizeM]);
 
   const totalRows = useMemo(() => {
-    const baseRows = Math.max(1, Math.ceil(planLength));
+    const baseRows = Math.max(1, Math.ceil(planLength / cellSizeM));
     if (placedRooms.length === 0) return baseRows;
-    const maxRow = Math.max(...placedRooms.map(r => Math.round(r.posY) + Math.max(1, Math.round(r.length))));
+    const maxRow = Math.max(...placedRooms.map(r => Math.round(r.posY / cellSizeM) + Math.max(1, Math.round(r.length / cellSizeM))));
     return Math.max(baseRows, maxRow);
-  }, [planLength, placedRooms]);
+  }, [planLength, placedRooms, cellSizeM]);
 
   // Build a cell occupation map: key = "col,row" → roomId
   const cellMap = useMemo(() => {
     const map = new Map<string, { roomId: string; isOrigin: boolean }>();
     placedRooms.forEach(r => {
-      const startCol = Math.round(r.posX) + 1;
-      const startRow = Math.round(r.posY) + 1;
-      const spanCols = Math.max(1, Math.round(r.width));
-      const spanRows = Math.max(1, Math.round(r.length));
+      const startCol = Math.round(r.posX / cellSizeM) + 1;
+      const startRow = Math.round(r.posY / cellSizeM) + 1;
+      const spanCols = Math.max(1, Math.round(r.width / cellSizeM));
+      const spanRows = Math.max(1, Math.round(r.length / cellSizeM));
       for (let dc = 0; dc < spanCols; dc++) {
         for (let dr = 0; dr < spanRows; dr++) {
           const c = startCol + dc;
@@ -350,10 +359,10 @@ export function FloorPlanGridView({
   const renderGrid = () => {
     // Render rooms as absolutely positioned overlays on the grid
     const roomOverlays = placedRooms.map(room => {
-      const startCol = Math.round(room.posX) + 1;
-      const startRow = Math.round(room.posY) + 1;
-      const spanCols = Math.max(1, Math.round(room.width));
-      const spanRows = Math.max(1, Math.round(room.length));
+      const startCol = Math.round(room.posX / cellSizeM) + 1;
+      const startRow = Math.round(room.posY / cellSizeM) + 1;
+      const spanCols = Math.max(1, Math.round(room.width / cellSizeM));
+      const spanRows = Math.max(1, Math.round(room.length / cellSizeM));
 
       const wallInfo = getWallInfo(room, wallClassification);
       const ws1 = getWallStyle(wallInfo.get(1)!);
@@ -494,10 +503,10 @@ export function FloorPlanGridView({
 
           {/* Ghost underlay: faint outlines of the floor below */}
           {ghostRooms.map(room => {
-            const startCol = Math.round(room.posX) + 1;
-            const startRow = Math.round(room.posY) + 1;
-            const spanCols = Math.max(1, Math.round(room.width));
-            const spanRows = Math.max(1, Math.round(room.length));
+            const startCol = Math.round(room.posX / cellSizeM) + 1;
+            const startRow = Math.round(room.posY / cellSizeM) + 1;
+            const spanCols = Math.max(1, Math.round(room.width / cellSizeM));
+            const spanRows = Math.max(1, Math.round(room.length / cellSizeM));
             const left = 30 + (startCol - 1) * CELL_SIZE;
             const top = 20 + (startRow - 1) * CELL_SIZE;
             const width = spanCols * CELL_SIZE;
@@ -683,7 +692,9 @@ export function FloorPlanGridView({
         <CardHeader className="py-2">
           <div className="flex items-center justify-between">
             <CardTitle className="text-sm">
-              Plano {totalCols}×{totalRows}m ({totalCols * totalRows} m²)
+              {scaleMode === 'bloque'
+                ? `Plano ${totalCols}×${totalRows} bloques (${(totalCols * cellSizeM).toFixed(2)}×${(totalRows * cellSizeM).toFixed(2)}m)`
+                : `Plano ${totalCols}×${totalRows}m (${totalCols * totalRows} m²)`}
             </CardTitle>
             <Badge variant="secondary" className="text-xs">
               {placedRooms.length} colocados · {totalM2.toFixed(1)} m²
@@ -696,7 +707,7 @@ export function FloorPlanGridView({
       </Card>
 
       <p className="text-xs text-muted-foreground">
-        Cada celda = 1 m². Coordenadas: {levelPrefix ? `nivel ${levelPrefix} → ` : ''}columnas {levelPrefix ? `${levelPrefix}-` : ''}A01…, filas {levelPrefix ? `${levelPrefix}-` : ''}1…N. Clic en un espacio para editar. Líneas tenues = nivel inferior.
+        Cada celda = {scaleMode === 'bloque' ? `${blockLengthMm}×${blockLengthMm}mm (1 bloque)` : '1 m²'}. Coordenadas: {levelPrefix ? `nivel ${levelPrefix} → ` : ''}columnas {levelPrefix ? `${levelPrefix}-` : ''}A01…{colToLabel(totalCols)}, filas {levelPrefix ? `${levelPrefix}-` : ''}1…{totalRows}. Clic en un espacio para editar.
       </p>
     </div>
   );

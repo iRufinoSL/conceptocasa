@@ -79,6 +79,7 @@ export interface WallData {
   wallType: WallType;
   thickness?: number;
   height?: number;
+  elevationGroup?: string;
   openings: OpeningData[];
 }
 

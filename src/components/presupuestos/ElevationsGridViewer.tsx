@@ -790,7 +790,7 @@ function ElevationCardView({ card, plan, onOpeningClick, onAddOpening, onCardDou
             if (y <= ry) break;
             lines.push(
               <line key={`bh-${r}`} x1={rx} y1={y} x2={rx + rw} y2={y}
-                stroke="hsl(25, 40%, 55%)" strokeWidth={0.8} opacity={0.8} pointerEvents="none" />
+                stroke="hsl(210, 60%, 55%)" strokeWidth={0.8} opacity={0.8} pointerEvents="none" />
             );
           }
           for (let r = 0; r < rows; r++) {
@@ -804,7 +804,7 @@ function ElevationCardView({ card, plan, onOpeningClick, onAddOpening, onCardDou
               if (x <= rx) continue;
               lines.push(
                 <line key={`bv-${r}-${c}`} x1={x} y1={yTop} x2={x} y2={Math.min(yBot, ry + rh)}
-                  stroke="hsl(25, 40%, 55%)" strokeWidth={0.7} opacity={0.7} pointerEvents="none" />
+                  stroke="hsl(210, 60%, 55%)" strokeWidth={0.7} opacity={0.7} pointerEvents="none" />
               );
             }
           }
@@ -1266,9 +1266,9 @@ function FullscreenBlockGrid({ card, plan, blockCount, selectedBlocks, onToggleB
               width={clippedW - 1}
               height={clippedH - 1}
               fill={isSelected ? 'hsl(210, 80%, 60%, 0.4)' : 'transparent'}
-              stroke={isSelected ? 'hsl(210, 80%, 50%)' : 'hsl(25, 30%, 65%)'}
-              strokeWidth={isSelected ? 2 : 0.4}
-              opacity={isSelected ? 1 : 0.5}
+              stroke={isSelected ? 'hsl(210, 80%, 50%)' : 'hsl(210, 50%, 60%)'}
+              strokeWidth={isSelected ? 2 : 0.6}
+              opacity={isSelected ? 1 : 0.7}
               rx={0.5}
               style={{ cursor: 'pointer' }}
               onClick={(e) => { e.stopPropagation(); onToggleBlock(key); }}

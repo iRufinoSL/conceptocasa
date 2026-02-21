@@ -32,8 +32,7 @@ export default function FloorPlanPopout() {
   const handleMoveRoom = useCallback(async (roomId: string, posX: number, posY: number) => {
     pushUndo();
     await updateRoom(roomId, { posX, posY });
-    classifyPerimeterWalls();
-  }, [updateRoom, pushUndo, classifyPerimeterWalls]);
+  }, [updateRoom, pushUndo]);
 
   const handleResizeWall = useCallback(async (roomId: string, wallIndex: number, delta: number) => {
     const room = rooms.find(r => r.id === roomId);
@@ -56,8 +55,7 @@ export default function FloorPlanPopout() {
         await updateRoom(neighbor.neighborRoomId, applyResize(nRoom, neighbor.neighborWallIndex, delta));
       }
     }
-    classifyPerimeterWalls();
-  }, [rooms, updateRoom, sharedWallMap, classifyPerimeterWalls]);
+  }, [rooms, updateRoom, sharedWallMap]);
 
   if (!budgetId) {
     return <div className="flex items-center justify-center h-screen text-muted-foreground">No se especificó presupuesto</div>;

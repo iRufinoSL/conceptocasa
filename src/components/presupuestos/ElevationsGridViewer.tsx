@@ -1742,13 +1742,13 @@ function OpeningEditDialog({ open, onOpenChange, opening, wallLen, onSave, onDel
   const positionXFromMm = (mm: number, wMm: number) => wl > 0 ? ((mm + wMm / 2) / 1000) / wl : 0.5;
 
   // Sync when opening changes
-  useState(() => {
+  useEffect(() => {
     setWidthMm(Math.round(opening.width * 1000));
     setHeightMm(Math.round(opening.height * 1000));
     setSillHeightMm(Math.round((opening.sillHeight ?? 0) * 1000));
     setOpeningType(opening.openingType);
     setLeftEdgeMm(Math.round((opening.positionX * wl - opening.width / 2) * 1000));
-  });
+  }, [opening.id, opening.width, opening.height, opening.sillHeight, opening.positionX, opening.openingType, wl]);
 
   const handleSave = async () => {
     await onSave({

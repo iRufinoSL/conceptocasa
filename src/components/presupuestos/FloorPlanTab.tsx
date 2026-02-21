@@ -610,7 +610,7 @@ function FloorPlanSettingsPanel({ planData, onUpdate, rooms, floors, onUpdateRoo
 
 export function FloorPlanTab({ budgetId, budgetName = '', isAdmin }: FloorPlanTabProps) {
   const {
-    floorPlan, rooms, floors, loading, saving,
+    floorPlan, rooms, floors, customCorners, updateCustomCorners, loading, saving,
     addRoom, updateRoom, updateWall, deleteRoom, duplicateRoom,
     addOpening, updateOpening, deleteOpening, updateFloorPlan,
     classifyPerimeterWalls, syncToMeasurements, getPlanData, refetch,
@@ -1042,6 +1042,8 @@ export function FloorPlanTab({ budgetId, budgetName = '', isAdmin }: FloorPlanTa
               scaleMode={planData?.scaleMode}
               blockLengthMm={planData?.blockLengthMm}
               budgetName={budgetName}
+              customCorners={customCorners}
+              onCustomCornersChange={updateCustomCorners}
             />
           </div>
           <div className="space-y-4">
@@ -1167,6 +1169,7 @@ export function FloorPlanTab({ budgetId, budgetName = '', isAdmin }: FloorPlanTa
           saving={saving}
           focusWallId={elevationReturnContext?.wallId}
           budgetName={budgetName}
+          customCorners={customCorners}
         />
       )}
 

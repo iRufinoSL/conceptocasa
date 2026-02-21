@@ -4,6 +4,13 @@ import { toast } from 'sonner';
 import type { FloorPlanData, RoomData, WallData, OpeningData, WallType, FloorLevel, ScaleMode, BlockGroupData } from '@/lib/floor-plan-calculations';
 import { migrateLegacyWallType, autoClassifyWalls, isExteriorType } from '@/lib/floor-plan-calculations';
 
+export interface CustomCorner {
+  label: string;
+  col: number;
+  row: number;
+  side: 'top' | 'right' | 'bottom' | 'left';
+}
+
 interface DbFloorPlan {
   id: string;
   budget_id: string;
@@ -20,6 +27,7 @@ interface DbFloorPlan {
   block_length_mm: number;
   block_height_mm: number;
   block_width_mm: number;
+  custom_corners: any;
 }
 
 interface DbRoom {
@@ -94,6 +102,7 @@ export function useFloorPlan(budgetId: string) {
   const [floorPlan, setFloorPlan] = useState<(DbFloorPlan) | null>(null);
   const [rooms, setRooms] = useState<RoomData[]>([]);
   const [floors, setFloors] = useState<FloorLevel[]>([]);
+  const [customCorners, setCustomCornersState] = useState<CustomCorner[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, _setSaving] = useState(false);
   const savingRef = useRef(false);
@@ -127,6 +136,7 @@ export function useFloorPlan(budgetId: string) {
       }
 
       setFloorPlan(fp as DbFloorPlan);
+      setCustomCornersState(Array.isArray((fp as any).custom_corners) ? (fp as any).custom_corners : []);
 
       // Fetch floors
       const { data: floorsData } = await supabase
@@ -1290,10 +1300,25 @@ export function useFloorPlan(budgetId: string) {
     }
   };
 
+  const updateCustomCorners = async (corners: CustomCorner[]) => {
+    if (!floorPlan) return;
+    setCustomCornersState(corners);
+    try {
+      await supabase
+        .from('budget_floor_plans')
+        .update({ custom_corners: corners } as any)
+        .eq('id', floorPlan.id);
+    } catch (err) {
+      console.error('Error saving custom corners:', err);
+    }
+  };
+
   return {
     floorPlan,
     rooms,
     floors,
+    customCorners,
+    updateCustomCorners,
     loading,
     saving,
     createFloorPlan,

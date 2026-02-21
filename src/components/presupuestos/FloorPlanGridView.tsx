@@ -9,6 +9,7 @@ import { Plus, Link, Unlink, Undo2, Expand, Shrink, MapPin, Printer } from 'luci
 import { createPortal } from 'react-dom';
 import type { RoomData, FloorLevel, WallType, ScaleMode } from '@/lib/floor-plan-calculations';
 import { autoClassifyWalls, isExteriorType, isInvisibleType, isCompartidaType } from '@/lib/floor-plan-calculations';
+import type { CustomCorner } from '@/hooks/useFloorPlan';
 
 interface FloorPlanGridViewProps {
   rooms: RoomData[];
@@ -35,6 +36,10 @@ interface FloorPlanGridViewProps {
   blockLengthMm?: number;
   /** Budget name for print headers */
   budgetName?: string;
+  /** Persisted custom corners */
+  customCorners?: CustomCorner[];
+  /** Callback to persist custom corners */
+  onCustomCornersChange?: (corners: CustomCorner[]) => void;
 }
 
 export interface PositionedRoom {
@@ -174,6 +179,7 @@ export function FloorPlanGridView({
   onAddRoom, onGroupRooms, onUngroupRooms, onUndo, undoCount = 0, saving = false,
   gridRef, onActiveFloorChange, forceActiveFloorId,
   scaleMode = 'metros', blockLengthMm = 625, budgetName = '',
+  customCorners: externalCustomCorners, onCustomCornersChange,
 }: FloorPlanGridViewProps) {
   // Cell size in meters: 1m for 'metros', blockLengthMm/1000 for 'bloque'
   const cellSizeM = scaleMode === 'bloque' ? blockLengthMm / 1000 : 1;
@@ -186,7 +192,12 @@ export function FloorPlanGridView({
   const [groupNameInput, setGroupNameInput] = useState('');
   const [gridFullscreen, setGridFullscreen] = useState(false);
   const [showCorners, setShowCorners] = useState(true);
-  const [customCorners, setCustomCorners] = useState<Array<{ label: string; col: number; row: number; side: 'top' | 'right' | 'bottom' | 'left' }>>([]);
+  // Use external persisted corners, with local fallback
+  const customCorners = externalCustomCorners || [];
+  const setCustomCorners = (updater: CustomCorner[] | ((prev: CustomCorner[]) => CustomCorner[])) => {
+    const newCorners = typeof updater === 'function' ? updater(customCorners) : updater;
+    onCustomCornersChange?.(newCorners);
+  };
   const [newCornerLabel, setNewCornerLabel] = useState('');
   const [newCornerCoord, setNewCornerCoord] = useState('');
   const [newCornerSide, setNewCornerSide] = useState<'top' | 'right' | 'bottom' | 'left'>('top');
@@ -585,10 +596,10 @@ export function FloorPlanGridView({
             });
             // Main ABCD corners positioned outside the grid
             const mainCorners = [
-              { label: 'A', left: 30 + (minCol - 1) * CS, top: 20 + (minRow - 1) * CS - 16, anchor: 'top' as const },
-              { label: 'B', left: 30 + maxCol * CS, top: 20 + (minRow - 1) * CS - 16, anchor: 'top' as const },
-              { label: 'C', left: 30 + maxCol * CS, top: 20 + maxRow * CS + 2, anchor: 'bottom' as const },
-              { label: 'D', left: 30 + (minCol - 1) * CS, top: 20 + maxRow * CS + 2, anchor: 'bottom' as const },
+              { label: 'A', left: 30 + (minCol - 1) * CS - 12, top: 20 + (minRow - 1) * CS - 22, anchor: 'top' as const },
+              { label: 'B', left: 30 + maxCol * CS + 4, top: 20 + (minRow - 1) * CS - 22, anchor: 'top' as const },
+              { label: 'C', left: 30 + maxCol * CS + 4, top: 20 + maxRow * CS + 6, anchor: 'bottom' as const },
+              { label: 'D', left: 30 + (minCol - 1) * CS - 12, top: 20 + maxRow * CS + 6, anchor: 'bottom' as const },
             ];
             // Custom corners: positioned outside the grid on the specified side
             const customMarkers = customCorners.map(cc => {
@@ -597,13 +608,13 @@ export function FloorPlanGridView({
               let left: number, top: number;
               switch (cc.side) {
                 case 'top':
-                  left = colCenter; top = 20 + (cc.row - 1) * CS - 16; break;
+                  left = colCenter; top = 20 + (cc.row - 1) * CS - 22; break;
                 case 'bottom':
-                  left = colCenter; top = 20 + cc.row * CS + 2; break;
+                  left = colCenter; top = 20 + cc.row * CS + 6; break;
                 case 'left':
-                  left = 30 + (cc.col - 1) * CS - 18; top = rowCenter; break;
+                  left = 30 + (cc.col - 1) * CS - 22; top = rowCenter; break;
                 case 'right':
-                  left = 30 + cc.col * CS + 2; top = rowCenter; break;
+                  left = 30 + cc.col * CS + 6; top = rowCenter; break;
               }
               return { label: cc.label, left, top };
             });

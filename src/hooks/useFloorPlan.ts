@@ -41,6 +41,7 @@ interface DbWall {
   wall_type: string;
   thickness: number | null;
   height: number | null;
+  elevation_group: string | null;
 }
 
 interface DbOpening {
@@ -189,6 +190,7 @@ export function useFloorPlan(budgetId: string) {
               wallType,
               thickness: w.thickness || undefined,
               height: w.height || undefined,
+              elevationGroup: w.elevation_group || undefined,
               openings: openingsData
                 .filter(o => o.wall_id === w.id)
                 .map(o => ({
@@ -443,13 +445,14 @@ export function useFloorPlan(budgetId: string) {
     }
   };
 
-  const updateWall = async (wallId: string, data: { wallType?: WallType; thickness?: number; height?: number }) => {
+  const updateWall = async (wallId: string, data: { wallType?: WallType; thickness?: number; height?: number; elevationGroup?: string | null }) => {
     setSaving(true);
     try {
       const updates: any = {};
       if (data.wallType !== undefined) updates.wall_type = data.wallType;
       if (data.thickness !== undefined) updates.thickness = data.thickness;
       if (data.height !== undefined) updates.height = data.height;
+      if ('elevationGroup' in data) updates.elevation_group = data.elevationGroup;
 
       const { error } = await supabase
         .from('budget_floor_plan_walls')

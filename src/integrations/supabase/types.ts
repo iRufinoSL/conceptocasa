@@ -783,6 +783,7 @@ export type Database = {
       budget_floor_plan_walls: {
         Row: {
           created_at: string | null
+          elevation_group: string | null
           height: number | null
           id: string
           room_id: string
@@ -792,6 +793,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string | null
+          elevation_group?: string | null
           height?: number | null
           id?: string
           room_id: string
@@ -801,6 +803,7 @@ export type Database = {
         }
         Update: {
           created_at?: string | null
+          elevation_group?: string | null
           height?: number | null
           id?: string
           room_id?: string

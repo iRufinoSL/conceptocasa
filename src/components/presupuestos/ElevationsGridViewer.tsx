@@ -19,7 +19,7 @@ interface ElevationsGridViewerProps {
   onUpdateOpening: (openingId: string, data: { width?: number; height?: number; positionX?: number; openingType?: string }) => Promise<void>;
   onAddOpening: (wallId: string, type: string, width: number, height: number, sillHeight?: number, positionX?: number) => Promise<void>;
   onDeleteOpening: (openingId: string) => Promise<void>;
-  onUpdateWall?: (wallId: string, data: { wallType?: WallType; thickness?: number; height?: number }) => Promise<void>;
+  onUpdateWall?: (wallId: string, data: { wallType?: WallType; thickness?: number; height?: number; elevationGroup?: string | null }) => Promise<void>;
   saving: boolean;
 }
 
@@ -43,10 +43,11 @@ interface ElevationCard {
   stroke: string;
   badgeLabel?: string;
   badgeVariant?: 'default' | 'secondary' | 'outline';
-  isInvisible?: boolean;   // wall is invisible (interior_invisible)
+  isInvisible?: boolean;
   surfaceArea?: number;
   volume?: number;
   roomHeight?: number;
+  elevationGroup?: string;
 }
 
 // Group of 6 surfaces for a single room
@@ -75,9 +76,9 @@ export function ElevationsGridViewer({
 }: ElevationsGridViewerProps) {
   const [selectedOpening, setSelectedOpening] = useState<OpeningData | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
-  // Card that was double-clicked → opens edit dialog for its openings
   const [editCard, setEditCard] = useState<ElevationCard | null>(null);
   const [editCardDialogOpen, setEditCardDialogOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<'rooms' | 'groups'>('rooms');
 
   const wallSegmentsMap = useMemo(() => computeWallSegments(rooms), [rooms]);
   const wallClassification = useMemo(() => autoClassifyWalls(rooms), [rooms]);
@@ -189,6 +190,7 @@ export function ElevationsGridViewer({
             badgeLabel: invisible ? 'Invisible' : isExternal ? (wallName ? `Ext. ${wallName}` : 'Externa') : 'Interna',
             badgeVariant: invisible ? 'outline' : isExternal ? 'default' : 'outline',
             surfaceArea: invisible ? 0 : fullWallLen * wallHeight,
+            elevationGroup: wall.elevationGroup,
           });
           return;
         }
@@ -242,6 +244,7 @@ export function ElevationsGridViewer({
             badgeLabel,
             badgeVariant: invisible ? 'outline' : isExternal ? 'default' : 'outline',
             surfaceArea: invisible ? 0 : segLen * wallHeight,
+            elevationGroup: wall.elevationGroup,
           });
         });
       });
@@ -289,9 +292,68 @@ export function ElevationsGridViewer({
     setEditCardDialogOpen(true);
   }, []);
 
+  // Build elevation groups from all wall cards
+  const elevationGroups = useMemo(() => {
+    const allCards = roomGroups.flatMap(rg => rg.cards.filter(c => c.category === 'pared' && c.elevationGroup));
+    const groups = new Map<string, ElevationCard[]>();
+    allCards.forEach(card => {
+      const g = card.elevationGroup!;
+      if (!groups.has(g)) groups.set(g, []);
+      groups.get(g)!.push(card);
+    });
+    return Array.from(groups.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+  }, [roomGroups]);
+
+  const hasGroups = elevationGroups.length > 0;
+
   return (
-    <div className="space-y-6">
-      {floorGroups.map(({ floorId, floorName, roomGroups: floorRoomGroups }) => {
+    <div className="space-y-4">
+      {/* View mode toggle */}
+      {hasGroups && (
+        <div className="flex items-center gap-2">
+          <Button variant={viewMode === 'rooms' ? 'default' : 'outline'} size="sm" className="text-xs h-7"
+            onClick={() => setViewMode('rooms')}>
+            <Layers className="h-3 w-3 mr-1" /> Por espacio
+          </Button>
+          <Button variant={viewMode === 'groups' ? 'default' : 'outline'} size="sm" className="text-xs h-7"
+            onClick={() => setViewMode('groups')}>
+            <Box className="h-3 w-3 mr-1" /> Por grupo ({elevationGroups.length})
+          </Button>
+        </div>
+      )}
+
+      {/* Grouped view */}
+      {viewMode === 'groups' && hasGroups && (
+        <div className="space-y-4">
+          {elevationGroups.map(([groupName, cards]) => (
+            <Collapsible key={groupName} defaultOpen>
+              <CollapsibleTrigger className="flex items-center gap-2 w-full text-left group hover:bg-muted/50 rounded px-2 py-1.5 transition-colors border-b border-border/50 mb-2">
+                <ChevronRight className="h-4 w-4 text-foreground transition-transform group-data-[state=open]:rotate-90" />
+                <h3 className="text-sm font-bold text-foreground">{groupName}</h3>
+                <Badge variant="secondary" className="text-[10px] h-4">{cards.length} paredes</Badge>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 ml-4">
+                  {cards.map(card => (
+                    <ElevationCardView
+                      key={card.id}
+                      card={card}
+                      plan={plan}
+                      onOpeningClick={handleOpeningClick}
+                      onAddOpening={onAddOpening}
+                      onCardDoubleClick={handleCardDoubleClick}
+                      saving={saving}
+                    />
+                  ))}
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
+          ))}
+        </div>
+      )}
+
+      {/* Room-based view (default) */}
+      {viewMode === 'rooms' && floorGroups.map(({ floorId, floorName, roomGroups: floorRoomGroups }) => {
         const hasFloorHeader = floorName !== '';
         const content = (
           <div className="space-y-3">
@@ -314,6 +376,7 @@ export function ElevationsGridViewer({
                         <ElevationCardView
                           key={card.id}
                           card={card}
+                          plan={plan}
                           onOpeningClick={handleOpeningClick}
                           onAddOpening={onAddOpening}
                           onCardDoubleClick={handleCardDoubleClick}
@@ -379,8 +442,9 @@ export function ElevationsGridViewer({
 }
 
 // Individual elevation card
-function ElevationCardView({ card, onOpeningClick, onAddOpening, onCardDoubleClick, saving }: {
+function ElevationCardView({ card, plan, onOpeningClick, onAddOpening, onCardDoubleClick, saving }: {
   card: ElevationCard;
+  plan: FloorPlanData;
   onOpeningClick: (op: OpeningData) => void;
   onAddOpening: (wallId: string, type: string, width: number, height: number, sillHeight?: number, positionX?: number) => Promise<void>;
   onCardDoubleClick: (card: ElevationCard) => void;
@@ -427,6 +491,9 @@ function ElevationCardView({ card, onOpeningClick, onAddOpening, onCardDoubleCli
             )}
             {!card.isInvisible && (
               <Badge variant="outline" className="text-[9px] h-4">{area}m²</Badge>
+            )}
+            {card.elevationGroup && (
+              <Badge variant="secondary" className="text-[9px] h-4 bg-primary/10 text-primary">{card.elevationGroup}</Badge>
             )}
           </div>
         </div>
@@ -498,6 +565,42 @@ function ElevationCardView({ card, onOpeningClick, onAddOpening, onCardDoubleCli
               fill={card.fill} stroke={card.stroke}
               strokeWidth={1.5} rx={1}
             />
+
+            {/* Block pattern overlay when in bloque scale mode */}
+            {isWall && !card.isInvisible && plan.scaleMode === 'bloque' && (() => {
+              const blockWPx = (plan.blockLengthMm / 1000) * scale;
+              const blockHPx = (plan.blockHeightMm / 1000) * scale;
+              if (blockWPx < 3 || blockHPx < 2) return null; // too small to render
+              const rows = Math.ceil(rectH / blockHPx);
+              const cols = Math.ceil(rectW / blockWPx) + 1;
+              const lines: React.ReactElement[] = [];
+              // Horizontal lines (mortar joints)
+              for (let r = 1; r < rows; r++) {
+                const y = rectY + rectH - r * blockHPx;
+                if (y <= rectY) break;
+                lines.push(
+                  <line key={`bh-${r}`} x1={rectX} y1={y} x2={rectX + rectW} y2={y}
+                    stroke="hsl(25, 30%, 65%)" strokeWidth={0.5} opacity={0.6} pointerEvents="none" />
+                );
+              }
+              // Vertical lines (staggered per row)
+              for (let r = 0; r < rows; r++) {
+                const yTop = Math.max(rectY, rectY + rectH - (r + 1) * blockHPx);
+                const yBot = rectY + rectH - r * blockHPx;
+                if (yTop >= rectY + rectH) break;
+                const offset = r % 2 === 0 ? 0 : blockWPx / 2;
+                for (let c = 1; c < cols; c++) {
+                  const x = rectX + offset + c * blockWPx;
+                  if (x >= rectX + rectW) break;
+                  if (x <= rectX) continue;
+                  lines.push(
+                    <line key={`bv-${r}-${c}`} x1={x} y1={yTop} x2={x} y2={Math.min(yBot, rectY + rectH)}
+                      stroke="hsl(25, 30%, 65%)" strokeWidth={0.4} opacity={0.5} pointerEvents="none" />
+                  );
+                }
+              }
+              return <g className="block-pattern">{lines}</g>;
+            })()}
 
             {/* Width dimension (bottom) */}
             <line x1={rectX} y1={rectY + rectH + 12} x2={rectX + rectW} y2={rectY + rectH + 12}
@@ -617,7 +720,7 @@ function WallEditDialog({ open, onOpenChange, card, currentWallType, liveRooms, 
   onAddOpening: (wallId: string, type: string, width: number, height: number, sillHeight?: number, positionX?: number) => Promise<void>;
   onUpdateOpening: (id: string, data: { width?: number; height?: number; positionX?: number; openingType?: string }) => Promise<void>;
   onDeleteOpening: (id: string) => Promise<void>;
-  onUpdateWall?: (wallId: string, data: { wallType?: WallType; thickness?: number; height?: number }) => Promise<void>;
+  onUpdateWall?: (wallId: string, data: { wallType?: WallType; thickness?: number; height?: number; elevationGroup?: string | null }) => Promise<void>;
   saving: boolean;
 }) {
   const [editingOp, setEditingOp] = useState<OpeningData | null>(null);
@@ -625,6 +728,8 @@ function WallEditDialog({ open, onOpenChange, card, currentWallType, liveRooms, 
   const resolvedInitialType = (currentWallType || card.wall?.wallType || 'interior') as WallType;
   const [wallType, setWallType] = useState<WallType>(resolvedInitialType);
   const [wallTypeChanged, setWallTypeChanged] = useState(false);
+  const [elevGroup, setElevGroup] = useState(card.elevationGroup || '');
+  const [elevGroupChanged, setElevGroupChanged] = useState(false);
 
   // Sync wallType state when the live wall type changes (e.g. another user or after save)
   const effectiveWallType = currentWallType || (card.wall?.wallType as WallType);
@@ -712,6 +817,32 @@ function WallEditDialog({ open, onOpenChange, card, currentWallType, liveRooms, 
                   Guardar tipo de pared
                 </Button>
               )}
+            </div>
+          )}
+
+          {/* Elevation group assignment */}
+          {card.wall && !card.wall.id.startsWith('temp-') && onUpdateWall && (
+            <div className="border border-border rounded-md p-3 space-y-2 bg-muted/20">
+              <p className="text-xs font-semibold text-muted-foreground">Grupo de alzado</p>
+              <div className="flex items-center gap-2">
+                <Input
+                  className="h-8 text-xs flex-1"
+                  placeholder="Ej: Fachada Norte, Interior..."
+                  value={elevGroup}
+                  onChange={e => { setElevGroup(e.target.value); setElevGroupChanged(true); }}
+                />
+                {elevGroupChanged && (
+                  <Button size="sm" className="h-8 text-xs px-3" disabled={saving}
+                    onClick={async () => {
+                      if (!card.wall?.id || !onUpdateWall) return;
+                      await onUpdateWall(card.wall.id, { elevationGroup: elevGroup.trim() || null });
+                      setElevGroupChanged(false);
+                    }}>
+                    Guardar
+                  </Button>
+                )}
+              </div>
+              <p className="text-[10px] text-muted-foreground">Las paredes con el mismo nombre de grupo se mostrarán juntas en la vista "Por grupo"</p>
             </div>
           )}
 

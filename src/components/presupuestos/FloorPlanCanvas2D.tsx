@@ -1,6 +1,6 @@
 import { useMemo, useState, useCallback, useRef, useEffect } from 'react';
-import type { FloorPlanData, RoomData } from '@/lib/floor-plan-calculations';
-import { autoClassifyWalls, generateExternalWallNames, computeWallSegments, isExteriorType, isInvisibleType, isCompartidaType, computeGroupPerimeterWalls } from '@/lib/floor-plan-calculations';
+import type { FloorPlanData, RoomData, OutlineVertex } from '@/lib/floor-plan-calculations';
+import { autoClassifyWalls, generateExternalWallNames, computeWallSegments, isExteriorType, isInvisibleType, isCompartidaType, computeGroupPerimeterWalls, computeBuildingOutline } from '@/lib/floor-plan-calculations';
 
 interface FloorPlanCanvas2DProps {
   plan: FloorPlanData;
@@ -135,6 +135,7 @@ export function FloorPlanCanvas2D({
   const wallClassification = useMemo(() => autoClassifyWalls(rooms), [rooms]);
   const wallSegmentsMap = useMemo(() => computeWallSegments(rooms), [rooms]);
   const perimeterWalls = useMemo(() => computeGroupPerimeterWalls(rooms), [rooms]);
+  const buildingOutline = useMemo(() => computeBuildingOutline(rooms), [rooms]);
   const groupedRoomIds = useMemo(() => {
     const ids = new Set<string>();
     rooms.forEach(r => { if (r.groupId) ids.add(r.id); });
@@ -883,6 +884,97 @@ export function FloorPlanCanvas2D({
                 </g>
               );
             })}
+
+            {/* Building outline corners and edge measurements */}
+            {buildingOutline.length >= 3 && (() => {
+              const extT2 = plan.externalWallThickness;
+              const CORNER_R = 6;
+              const CORNER_FONT = 9;
+              const EDGE_FONT = 7;
+              const CORNER_BG = '#1e40af';
+              const CORNER_FG = '#ffffff';
+              const EDGE_COLOR = '#1e40af';
+
+              const elements: JSX.Element[] = [];
+
+              // Draw edges with measurements
+              for (let i = 0; i < buildingOutline.length; i++) {
+                const v1 = buildingOutline[i];
+                const v2 = buildingOutline[(i + 1) % buildingOutline.length];
+                const dx = v2.x - v1.x;
+                const dy = v2.y - v1.y;
+                const edgeLen = Math.sqrt(dx * dx + dy * dy);
+                if (edgeLen < 0.05) continue;
+
+                // Convert to SVG coordinates (offset by extT for exterior perimeter)
+                const sx1 = (v1.x - extT2) * SCALE * -1 + (rooms.reduce((mn, r) => Math.min(mn, r.posX), Infinity)) * SCALE + v1.x * SCALE;
+                // Simpler: just use v.x * SCALE, v.y * SCALE directly since outline coords are in room coordinate space
+                const px1 = v1.x * SCALE;
+                const py1 = v1.y * SCALE;
+                const px2 = v2.x * SCALE;
+                const py2 = v2.y * SCALE;
+
+                const mx = (px1 + px2) / 2;
+                const my = (py1 + py2) / 2;
+
+                // Edge line (subtle)
+                elements.push(
+                  <line key={`ol-edge-${i}`}
+                    x1={px1} y1={py1} x2={px2} y2={py2}
+                    stroke={EDGE_COLOR} strokeWidth={1.2} strokeDasharray="6 3" opacity={0.4} pointerEvents="none" />
+                );
+
+                // Measurement label offset outward
+                const isHoriz = Math.abs(dy) < 0.05;
+                const isVert = Math.abs(dx) < 0.05;
+                let labelX = mx;
+                let labelY = my;
+                const offset = 14;
+
+                if (isHoriz) {
+                  // Determine if this is on top or bottom
+                  const centerY = rooms.reduce((s, r) => s + r.posY + r.length / 2, 0) / rooms.length;
+                  labelY = v1.y < centerY ? my - offset : my + offset + 4;
+                } else if (isVert) {
+                  const centerX = rooms.reduce((s, r) => s + r.posX + r.width / 2, 0) / rooms.length;
+                  labelX = v1.x < centerX ? mx - offset - 8 : mx + offset + 8;
+                }
+
+                const edgeLenWithWalls = edgeLen + 2 * extT2;
+                elements.push(
+                  <text key={`ol-dim-${i}`}
+                    x={labelX} y={labelY}
+                    textAnchor="middle" dominantBaseline="middle"
+                    fontSize={EDGE_FONT} fontWeight="bold" fill={EDGE_COLOR} opacity={0.8} pointerEvents="none">
+                    {v1.label}{v2.label}: {edgeLenWithWalls.toFixed(2)}m
+                  </text>
+                );
+              }
+
+              // Draw corner markers
+              buildingOutline.forEach((v, i) => {
+                const cx = v.x * SCALE;
+                const cy = v.y * SCALE;
+
+                // Background circle
+                elements.push(
+                  <circle key={`ol-corner-bg-${i}`}
+                    cx={cx} cy={cy} r={CORNER_R}
+                    fill={CORNER_BG} stroke="#ffffff" strokeWidth={1.5} opacity={0.9} pointerEvents="none" />
+                );
+                // Label
+                elements.push(
+                  <text key={`ol-corner-lbl-${i}`}
+                    x={cx} y={cy + 1}
+                    textAnchor="middle" dominantBaseline="middle"
+                    fontSize={CORNER_FONT} fontWeight="bold" fill={CORNER_FG} pointerEvents="none">
+                    {v.label}
+                  </text>
+                );
+              });
+
+              return elements;
+            })()}
 
             {/* Magnetic alignment guides when dragging */}
             {liveDragOffset && (() => {

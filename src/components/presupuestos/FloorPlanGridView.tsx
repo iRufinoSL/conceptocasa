@@ -5,7 +5,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Plus, Link, Unlink, Undo2 } from 'lucide-react';
+import { Plus, Link, Unlink, Undo2, Expand, Shrink, MapPin } from 'lucide-react';
+import { createPortal } from 'react-dom';
 import type { RoomData, FloorLevel, WallType, ScaleMode } from '@/lib/floor-plan-calculations';
 import { autoClassifyWalls, isExteriorType, isInvisibleType, isCompartidaType } from '@/lib/floor-plan-calculations';
 
@@ -181,6 +182,8 @@ export function FloorPlanGridView({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [selectedEmptyCells, setSelectedEmptyCells] = useState<Set<string>>(new Set()); // "col,row"
   const [groupNameInput, setGroupNameInput] = useState('');
+  const [gridFullscreen, setGridFullscreen] = useState(false);
+  const [showCorners, setShowCorners] = useState(true);
 
   // Force switch to a specific floor tab when requested (e.g. after creating a new floor)
   useEffect(() => {
@@ -558,6 +561,42 @@ export function FloorPlanGridView({
 
           {/* Room overlays */}
           {roomOverlays}
+
+          {/* Corner markers ABCD */}
+          {showCorners && placedRooms.length > 0 && (() => {
+            // Find bounding box of all placed rooms
+            let minCol = Infinity, minRow = Infinity, maxCol = -Infinity, maxRow = -Infinity;
+            placedRooms.forEach(r => {
+              const sc = Math.round(r.posX / cellSizeM) + 1;
+              const sr = Math.round(r.posY / cellSizeM) + 1;
+              const ec = sc + Math.max(1, Math.round(r.width / cellSizeM));
+              const er = sr + Math.max(1, Math.round(r.length / cellSizeM));
+              minCol = Math.min(minCol, sc);
+              minRow = Math.min(minRow, sr);
+              maxCol = Math.max(maxCol, ec);
+              maxRow = Math.max(maxRow, er);
+            });
+            const corners = [
+              { label: 'A', left: 30 + (minCol - 1) * CELL_SIZE, top: 20 + (minRow - 1) * CELL_SIZE },
+              { label: 'B', left: 30 + (maxCol) * CELL_SIZE, top: 20 + (minRow - 1) * CELL_SIZE },
+              { label: 'C', left: 30 + (maxCol) * CELL_SIZE, top: 20 + (maxRow) * CELL_SIZE },
+              { label: 'D', left: 30 + (minCol - 1) * CELL_SIZE, top: 20 + (maxRow) * CELL_SIZE },
+            ];
+            return corners.map(c => (
+              <div
+                key={`corner-${c.label}`}
+                className="absolute z-30 flex items-center justify-center rounded-full bg-primary text-primary-foreground font-bold text-xs"
+                style={{
+                  left: c.left - 12,
+                  top: c.top - 12,
+                  width: 24,
+                  height: 24,
+                }}
+              >
+                {c.label}
+              </div>
+            ));
+          })()}
         </div>
       </div>
     );
@@ -610,6 +649,24 @@ export function FloorPlanGridView({
               <Undo2 className="h-4 w-4 mr-1" /> Deshacer ({undoCount})
             </Button>
           )}
+          <Button
+            variant={showCorners ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setShowCorners(!showCorners)}
+            title="Mostrar/ocultar esquinas ABCD"
+          >
+            <MapPin className="h-4 w-4 mr-1" />
+            ABCD
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setGridFullscreen(true)}
+            title="Ampliar cuadrícula a pantalla completa"
+          >
+            <Expand className="h-4 w-4 mr-1" />
+            Pantalla completa
+          </Button>
         </div>
       </div>
 
@@ -709,6 +766,22 @@ export function FloorPlanGridView({
       <p className="text-xs text-muted-foreground">
         Cada celda = {scaleMode === 'bloque' ? `${blockLengthMm}×${blockLengthMm}mm (1 bloque)` : '1 m²'}. Coordenadas: {levelPrefix ? `nivel ${levelPrefix} → ` : ''}columnas {levelPrefix ? `${levelPrefix}-` : ''}A01…{colToLabel(totalCols)}, filas {levelPrefix ? `${levelPrefix}-` : ''}1…{totalRows}. Clic en un espacio para editar.
       </p>
+
+      {/* Fullscreen overlay via portal */}
+      {gridFullscreen && createPortal(
+        <div className="fixed inset-0 z-[9999] bg-background flex flex-col">
+          <div className="flex items-center justify-between px-4 py-2 border-b border-border bg-muted/30 shrink-0">
+            <span className="text-sm font-medium">Cuadrícula — Pantalla completa · {currentFloorName}</span>
+            <Button variant="ghost" size="sm" onClick={() => setGridFullscreen(false)}>
+              <Shrink className="h-4 w-4 mr-1" /> Cerrar
+            </Button>
+          </div>
+          <div className="flex-1 overflow-auto p-4">
+            {renderGrid()}
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 }

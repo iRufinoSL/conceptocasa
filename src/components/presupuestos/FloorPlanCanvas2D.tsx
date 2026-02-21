@@ -619,55 +619,94 @@ export function FloorPlanCanvas2D({
                         );
                       })}
 
-                      {/* Openings — skip for grouped rooms (rendered via perimeter walls) */}
-                      {!groupedRoomIds.has(room.id) && wall.openings.map((op, oi) => {
-                        const opCenter = op.positionX;
-                        const opSeg = segments.find(s => opCenter >= s.startFraction - 0.01 && opCenter <= s.endFraction + 0.01);
-                        const isOnInvisible = opSeg ? isInvisibleType(opSeg.segmentType) : false;
-                        if (isOnInvisible) return null;
-
-                        const wallLen = isHoriz ? room.width : room.length;
-                        const opWidth = op.width * SCALE;
-                        const centerPos = op.positionX * wallLen * SCALE;
-                        const startPos = centerPos - opWidth / 2;
-                        const isDoor = op.openingType === 'puerta' || op.openingType === 'puerta_externa' || op.openingType === 'hueco_paso';
-                        const opSegStroke = opSeg ? (isExteriorType(opSeg.segmentType) ? plan.externalWallThickness * SCALE : plan.internalWallThickness * SCALE) : 2;
-                        const sw = Math.max(opSegStroke, 2);
-                        const halfT = sw / 2;
-
-                        // All openings: white rectangle proportional to width on the wall
-                        // Made extra tall/wide to clearly interrupt the wall line on both sides
-                        const interruptSize = sw + 10; // large enough to cut through both wall lines when shared
-                        if (isHoriz) {
-                          const ox = startPos;
-                          const cy = wall.wallIndex === 1 ? 0 : h;
-                          return (
-                            <g key={`op-${oi}`} pointerEvents="none">
-                              {/* White rectangle that clearly interrupts the wall */}
-                              <rect x={ox} y={cy - interruptSize / 2} width={opWidth} height={interruptSize}
-                                fill="#ffffff" stroke={isDoor ? '#d97706' : '#06b6d4'} strokeWidth={1.5} rx={1} />
-                              {/* Opening type label */}
-                              <text x={ox + opWidth / 2} y={cy + 1} textAnchor="middle" fontSize={6} fill={isDoor ? '#92400e' : '#0e7490'} fontWeight="600" dominantBaseline="middle">
-                                {isDoor ? 'P' : 'V'}
-                              </text>
-                            </g>
-                          );
-                        } else {
-                          const oy = startPos;
-                          const cx = wall.wallIndex === 4 ? 0 : w;
-                          return (
-                            <g key={`op-${oi}`} pointerEvents="none">
-                              {/* White rectangle that clearly interrupts the wall */}
-                              <rect x={cx - interruptSize / 2} y={oy} width={interruptSize} height={opWidth}
-                                fill="#ffffff" stroke={isDoor ? '#d97706' : '#06b6d4'} strokeWidth={1.5} rx={1} />
-                              {/* Opening type label */}
-                              <text x={cx} y={oy + opWidth / 2 + 1} textAnchor="middle" fontSize={6} fill={isDoor ? '#92400e' : '#0e7490'} fontWeight="600" dominantBaseline="middle">
-                                {isDoor ? 'P' : 'V'}
-                              </text>
-                            </g>
-                          );
+                      {/* Openings — centered on wall midpoint, proportional to real dimensions */}
+                      {!groupedRoomIds.has(room.id) && (() => {
+                        // Collect openings from this wall + neighbor shared wall
+                        const allOpenings: { op: typeof wall.openings[0]; fromNeighbor: boolean }[] = [];
+                        wall.openings.forEach(op => allOpenings.push({ op, fromNeighbor: false }));
+                        // If shared wall, also render neighbor's openings on this wall
+                        const sharedInfo = sharedWallKeys?.has(wallKey);
+                        if (sharedInfo) {
+                          const neighborEntry = rooms.find(nr => {
+                            if (nr.id === room.id) return false;
+                            const EPSILON = 0.05;
+                            switch (wall.wallIndex) {
+                              case 1: return Math.abs(nr.posY + nr.length - room.posY) < EPSILON;
+                              case 2: return Math.abs(nr.posX - (room.posX + room.width)) < EPSILON;
+                              case 3: return Math.abs(nr.posY - (room.posY + room.length)) < EPSILON;
+                              case 4: return Math.abs(nr.posX + nr.width - room.posX) < EPSILON;
+                              default: return false;
+                            }
+                          });
+                          if (neighborEntry) {
+                            const oppositeIdx = wall.wallIndex === 1 ? 3 : wall.wallIndex === 2 ? 4 : wall.wallIndex === 3 ? 1 : 2;
+                            const neighborWall = neighborEntry.walls.find(nw => nw.wallIndex === oppositeIdx);
+                            if (neighborWall) {
+                              const neighborWallLen = (oppositeIdx === 1 || oppositeIdx === 3) ? neighborEntry.width : neighborEntry.length;
+                              const thisWallLen = isHoriz ? room.width : room.length;
+                              neighborWall.openings.forEach(nop => {
+                                // Convert neighbor positionX to this wall's coordinate space
+                                const absPos = nop.positionX * neighborWallLen;
+                                const mappedPosX = thisWallLen > 0 ? absPos / thisWallLen : 0.5;
+                                allOpenings.push({ op: { ...nop, positionX: mappedPosX }, fromNeighbor: true });
+                              });
+                            }
+                          }
                         }
-                      })}
+
+                        return allOpenings.map(({ op, fromNeighbor }, oi) => {
+                          const opCenter = op.positionX;
+                          const opSeg = segments.find(s => opCenter >= s.startFraction - 0.01 && opCenter <= s.endFraction + 0.01);
+                          const isOnInvisible = opSeg ? isInvisibleType(opSeg.segmentType) : false;
+                          if (isOnInvisible) return null;
+
+                          const wallLen = isHoriz ? room.width : room.length;
+                          const opWidth = op.width * SCALE;
+                          const centerPos = op.positionX * wallLen * SCALE;
+                          const startPos = centerPos - opWidth / 2;
+                          const isDoor = op.openingType === 'puerta' || op.openingType === 'puerta_externa' || op.openingType === 'hueco_paso';
+
+                          // Determine wall thickness to center the marker
+                          const isExtWall = opSeg ? isExteriorType(opSeg.segmentType) : false;
+                          const wallThickPx = isExtWall ? extT * SCALE : plan.internalWallThickness * SCALE;
+                          const markerThick = wallThickPx + 4; // slightly larger than wall for visibility
+
+                          if (isHoriz) {
+                            const ox = startPos;
+                            // Center on wall midpoint: exterior walls extend outward
+                            const wallCenter = wall.wallIndex === 1
+                              ? (isExtWall ? -wallThickPx / 2 : 0)
+                              : (isExtWall ? h + wallThickPx / 2 : h);
+                            return (
+                              <g key={`op-${oi}${fromNeighbor ? '-n' : ''}`} pointerEvents="none">
+                                <rect x={ox} y={wallCenter - markerThick / 2} width={opWidth} height={markerThick}
+                                  fill="#ffffff" stroke={isDoor ? '#d97706' : '#06b6d4'}
+                                  strokeWidth={fromNeighbor ? 1 : 1.5} rx={1}
+                                  strokeDasharray={fromNeighbor ? '3 2' : undefined} />
+                                <text x={ox + opWidth / 2} y={wallCenter + 1} textAnchor="middle" fontSize={Math.min(6, opWidth * 0.6)} fill={isDoor ? '#92400e' : '#0e7490'} fontWeight="600" dominantBaseline="middle">
+                                  {isDoor ? 'P' : 'V'}
+                                </text>
+                              </g>
+                            );
+                          } else {
+                            const oy = startPos;
+                            const wallCenter = wall.wallIndex === 4
+                              ? (isExtWall ? -wallThickPx / 2 : 0)
+                              : (isExtWall ? w + wallThickPx / 2 : w);
+                            return (
+                              <g key={`op-${oi}${fromNeighbor ? '-n' : ''}`} pointerEvents="none">
+                                <rect x={wallCenter - markerThick / 2} y={oy} width={markerThick} height={opWidth}
+                                  fill="#ffffff" stroke={isDoor ? '#d97706' : '#06b6d4'}
+                                  strokeWidth={fromNeighbor ? 1 : 1.5} rx={1}
+                                  strokeDasharray={fromNeighbor ? '3 2' : undefined} />
+                                <text x={wallCenter} y={oy + opWidth / 2 + 1} textAnchor="middle" fontSize={Math.min(6, opWidth * 0.6)} fill={isDoor ? '#92400e' : '#0e7490'} fontWeight="600" dominantBaseline="middle">
+                                  {isDoor ? 'P' : 'V'}
+                                </text>
+                              </g>
+                            );
+                          }
+                        });
+                      })()}
                     </g>
                     );
                   })}

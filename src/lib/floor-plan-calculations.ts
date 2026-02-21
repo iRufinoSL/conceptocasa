@@ -1429,3 +1429,414 @@ export function perimeterPositionToCell(
   }
   return null;
 }
+
+// ═══════════════════════════════════════════════════════════════════
+// Building Outline & Composite Walls
+// ═══════════════════════════════════════════════════════════════════
+
+export interface OutlineVertex {
+  x: number;
+  y: number;
+  label: string; // A, B, C, D... or B1, B2 for sub-corners
+}
+
+export interface CompositeWallSection {
+  roomId: string;
+  roomName: string;
+  wallIndex: number;
+  wallId: string;
+  length: number;
+  height: number;
+  wall: WallData;
+  openings: OpeningData[];
+  startOffset: number; // meters from start of composite wall
+}
+
+export interface CompositeWall {
+  id: string;
+  label: string; // "AB", "BC", etc.
+  startCorner: OutlineVertex;
+  endCorner: OutlineVertex;
+  side: 'top' | 'right' | 'bottom' | 'left';
+  totalLength: number;
+  sections: CompositeWallSection[];
+  isExterior: boolean;
+  objectSummary: {
+    totalBlocks?: { cols: number; rows: number; total: number };
+    doors: number;
+    windows: number;
+    openingDetails: Array<{ type: string; count: number; label: string }>;
+  };
+}
+
+function round4(n: number): number { return Math.round(n * 10000) / 10000; }
+
+/**
+ * Compute the building outline polygon by tracing the boundary of the union of all rooms.
+ * Returns clockwise-ordered vertices with labels (A, B, C, D...).
+ */
+export function computeBuildingOutline(rooms: RoomData[]): OutlineVertex[] {
+  if (rooms.length === 0) return [];
+
+  const EPSILON = 0.02;
+
+  // Collect unique x/y coords
+  const xSet = new Set<number>();
+  const ySet = new Set<number>();
+  rooms.forEach(r => {
+    xSet.add(round4(r.posX));
+    xSet.add(round4(r.posX + r.width));
+    ySet.add(round4(r.posY));
+    ySet.add(round4(r.posY + r.length));
+  });
+
+  const xs = Array.from(xSet).sort((a, b) => a - b);
+  const ys = Array.from(ySet).sort((a, b) => a - b);
+  if (xs.length < 2 || ys.length < 2) return [];
+
+  const ncols = xs.length - 1;
+  const nrows = ys.length - 1;
+
+  // Build occupancy grid
+  const grid: boolean[][] = Array.from({ length: ncols }, () => Array(nrows).fill(false));
+  for (let i = 0; i < ncols; i++) {
+    for (let j = 0; j < nrows; j++) {
+      const cx = (xs[i] + xs[i + 1]) / 2;
+      const cy = (ys[j] + ys[j + 1]) / 2;
+      grid[i][j] = rooms.some(r =>
+        cx >= r.posX - EPSILON && cx <= r.posX + r.width + EPSILON &&
+        cy >= r.posY - EPSILON && cy <= r.posY + r.length + EPSILON
+      );
+    }
+  }
+
+  // Extract clockwise boundary edges (filled cell on right side of direction)
+  interface DirEdge { x1: number; y1: number; x2: number; y2: number; dx: number; dy: number; }
+  const boundaryEdges: DirEdge[] = [];
+
+  for (let i = 0; i < ncols; i++) {
+    for (let j = 0; j < nrows; j++) {
+      if (!grid[i][j]) continue;
+      if (j === 0 || !grid[i][j - 1])
+        boundaryEdges.push({ x1: xs[i], y1: ys[j], x2: xs[i + 1], y2: ys[j], dx: 1, dy: 0 });
+      if (i === ncols - 1 || !grid[i + 1][j])
+        boundaryEdges.push({ x1: xs[i + 1], y1: ys[j], x2: xs[i + 1], y2: ys[j + 1], dx: 0, dy: 1 });
+      if (j === nrows - 1 || !grid[i][j + 1])
+        boundaryEdges.push({ x1: xs[i + 1], y1: ys[j + 1], x2: xs[i], y2: ys[j + 1], dx: -1, dy: 0 });
+      if (i === 0 || !grid[i - 1][j])
+        boundaryEdges.push({ x1: xs[i], y1: ys[j + 1], x2: xs[i], y2: ys[j], dx: 0, dy: -1 });
+    }
+  }
+
+  if (boundaryEdges.length === 0) return [];
+
+  // Build adjacency map
+  const ptKey = (x: number, y: number) => `${round4(x)},${round4(y)}`;
+  const startMap = new Map<string, DirEdge[]>();
+  boundaryEdges.forEach(e => {
+    const k = ptKey(e.x1, e.y1);
+    if (!startMap.has(k)) startMap.set(k, []);
+    startMap.get(k)!.push(e);
+  });
+
+  // Find starting edge: topmost row, then leftmost
+  let startEdge = boundaryEdges[0];
+  for (const e of boundaryEdges) {
+    if (e.y1 < startEdge.y1 - EPSILON ||
+        (Math.abs(e.y1 - startEdge.y1) < EPSILON && e.x1 < startEdge.x1 - EPSILON)) {
+      startEdge = e;
+    }
+  }
+
+  // Chain edges into polygon
+  const polygon: Array<{ x: number; y: number }> = [];
+  const used = new Set<DirEdge>();
+  let current = startEdge;
+
+  for (let iter = 0; iter < boundaryEdges.length + 1; iter++) {
+    used.add(current);
+    polygon.push({ x: current.x1, y: current.y1 });
+
+    const nextKey = ptKey(current.x2, current.y2);
+    const candidates = (startMap.get(nextKey) || []).filter(e => !used.has(e));
+    if (candidates.length === 0) break;
+
+    if (candidates.length === 1) {
+      current = candidates[0];
+    } else {
+      // Pick rightmost turn (smallest clockwise angle)
+      let best = candidates[0];
+      let bestAngle = Infinity;
+      for (const c of candidates) {
+        const cross = current.dx * c.dy - current.dy * c.dx;
+        const dot = current.dx * c.dx + current.dy * c.dy;
+        let angle = Math.atan2(cross, dot);
+        if (angle < bestAngle) { bestAngle = angle; best = c; }
+      }
+      current = best;
+    }
+  }
+
+  // Remove collinear vertices
+  const simplified: Array<{ x: number; y: number }> = [];
+  for (let i = 0; i < polygon.length; i++) {
+    const prev = polygon[(i - 1 + polygon.length) % polygon.length];
+    const curr = polygon[i];
+    const next = polygon[(i + 1) % polygon.length];
+    const cross = (curr.x - prev.x) * (next.y - curr.y) - (curr.y - prev.y) * (next.x - curr.x);
+    if (Math.abs(cross) > EPSILON * EPSILON) {
+      simplified.push(curr);
+    }
+  }
+
+  if (simplified.length < 3) return [];
+
+  // ── Label corners ──
+  // Determine bounding box corners
+  const minX = Math.min(...simplified.map(v => v.x));
+  const maxX = Math.max(...simplified.map(v => v.x));
+  const minY = Math.min(...simplified.map(v => v.y));
+  const maxY = Math.max(...simplified.map(v => v.y));
+
+  // Find which simplified vertex is closest to each bbox corner
+  const bboxCorners = [
+    { x: minX, y: minY, letter: 'A' }, // top-left
+    { x: maxX, y: minY, letter: 'B' }, // top-right
+    { x: maxX, y: maxY, letter: 'C' }, // bottom-right
+    { x: minX, y: maxY, letter: 'D' }, // bottom-left
+  ];
+
+  // Assign primary corner indices
+  const primaryIndices = new Map<number, string>();
+  for (const bc of bboxCorners) {
+    let bestIdx = 0;
+    let bestDist = Infinity;
+    for (let i = 0; i < simplified.length; i++) {
+      const d = Math.abs(simplified[i].x - bc.x) + Math.abs(simplified[i].y - bc.y);
+      if (d < bestDist) { bestDist = d; bestIdx = i; }
+    }
+    primaryIndices.set(bestIdx, bc.letter);
+  }
+
+  // Build ordered primary corners list sorted by polygon index
+  const primaryList = Array.from(primaryIndices.entries()).sort((a, b) => a[0] - b[0]);
+
+  // Assign labels: primary corners get their letter, intermediate corners get sub-labels
+  const labels: string[] = new Array(simplified.length).fill('');
+  for (const [idx, letter] of primaryList) {
+    labels[idx] = letter;
+  }
+
+  // For corners between two primary corners, assign sub-labels
+  for (let p = 0; p < primaryList.length; p++) {
+    const [startIdx, startLetter] = primaryList[p];
+    const [endIdx] = primaryList[(p + 1) % primaryList.length];
+
+    // Collect intermediate indices between startIdx and endIdx (wrapping)
+    const intermediates: number[] = [];
+    let i = (startIdx + 1) % simplified.length;
+    while (i !== endIdx) {
+      intermediates.push(i);
+      i = (i + 1) % simplified.length;
+    }
+
+    if (intermediates.length > 0) {
+      // This primary corner has sub-corners → rename primary as letter+"1"
+      // and intermediates get letter+"2", letter+"3", etc.
+      // But the END primary also might need renaming
+      const nextLetter = primaryList[(p + 1) % primaryList.length][1];
+      labels[startIdx] = startLetter + '1';
+      intermediates.forEach((idx, i) => {
+        labels[idx] = startLetter + String(i + 2);
+      });
+      // If the next primary hasn't been relabeled yet, keep it
+      // (it will be relabeled when processing its own segment if needed)
+    }
+  }
+
+  // Ensure primary corners that weren't relabeled keep their letter
+  for (const [idx, letter] of primaryList) {
+    if (!labels[idx] || labels[idx] === '') labels[idx] = letter;
+  }
+
+  return simplified.map((v, i) => ({
+    x: v.x,
+    y: v.y,
+    label: labels[i] || String.fromCharCode(65 + (i % 26)),
+  }));
+}
+
+/**
+ * Compute composite walls from the building outline.
+ * Each outline edge becomes a composite wall containing the room wall sections that form it.
+ * External walls are viewed from outside, internal from inside.
+ */
+export function computeCompositeWalls(
+  rooms: RoomData[],
+  outline: OutlineVertex[],
+  plan: FloorPlanData,
+): CompositeWall[] {
+  if (outline.length < 3 || rooms.length === 0) return [];
+
+  const EPSILON = 0.05;
+  const composites: CompositeWall[] = [];
+
+  for (let i = 0; i < outline.length; i++) {
+    const v1 = outline[i];
+    const v2 = outline[(i + 1) % outline.length];
+    const dx = v2.x - v1.x;
+    const dy = v2.y - v1.y;
+    const edgeLength = Math.sqrt(dx * dx + dy * dy);
+    if (edgeLength < EPSILON) continue;
+
+    // Determine side
+    let side: 'top' | 'right' | 'bottom' | 'left';
+    let wallIndex: number;
+    let fixedCoord: number;
+    let edgeStart: number;
+    let edgeEnd: number;
+
+    if (Math.abs(dy) < EPSILON && dx > 0) {
+      side = 'top'; wallIndex = 1; fixedCoord = v1.y;
+      edgeStart = v1.x; edgeEnd = v2.x;
+    } else if (Math.abs(dx) < EPSILON && dy > 0) {
+      side = 'right'; wallIndex = 2; fixedCoord = v1.x;
+      edgeStart = v1.y; edgeEnd = v2.y;
+    } else if (Math.abs(dy) < EPSILON && dx < 0) {
+      side = 'bottom'; wallIndex = 3; fixedCoord = v1.y;
+      edgeStart = v2.x; edgeEnd = v1.x;
+    } else if (Math.abs(dx) < EPSILON && dy < 0) {
+      side = 'left'; wallIndex = 4; fixedCoord = v1.x;
+      edgeStart = v2.y; edgeEnd = v1.y;
+    } else continue; // diagonal edge, skip
+
+    // Find rooms that have a wall on this edge
+    const matchingRooms: Array<{
+      room: RoomData;
+      wall: WallData;
+      overlapStart: number;
+      overlapEnd: number;
+    }> = [];
+
+    rooms.forEach(room => {
+      let roomEdge: number;
+      let roomStart: number;
+      let roomEnd: number;
+
+      switch (wallIndex) {
+        case 1: roomEdge = room.posY; roomStart = room.posX; roomEnd = room.posX + room.width; break;
+        case 2: roomEdge = room.posX + room.width; roomStart = room.posY; roomEnd = room.posY + room.length; break;
+        case 3: roomEdge = room.posY + room.length; roomStart = room.posX; roomEnd = room.posX + room.width; break;
+        case 4: roomEdge = room.posX; roomStart = room.posY; roomEnd = room.posY + room.length; break;
+        default: return;
+      }
+
+      if (Math.abs(roomEdge - fixedCoord) > EPSILON) return;
+
+      const oStart = Math.max(edgeStart, roomStart);
+      const oEnd = Math.min(edgeEnd, roomEnd);
+      if (oEnd - oStart <= EPSILON) return;
+
+      const wall = room.walls.find(w => w.wallIndex === wallIndex);
+      if (!wall) return;
+
+      matchingRooms.push({ room, wall, overlapStart: oStart, overlapEnd: oEnd });
+    });
+
+    if (matchingRooms.length === 0) continue;
+
+    // Sort by position along the edge
+    // For external view: sort depends on side (viewed from outside)
+    // Top: standing north facing south → left=east(maxX), right=west(minX) → descending X
+    // Right: standing east facing west → left=south(maxY), right=north(minY) → descending Y
+    // Bottom: standing south facing north → left=west(minX), right=east(maxX) → ascending X
+    // Left: standing west facing east → left=north(minY), right=south(maxY) → ascending Y
+    switch (side) {
+      case 'top': matchingRooms.sort((a, b) => b.overlapStart - a.overlapStart); break; // descending X
+      case 'right': matchingRooms.sort((a, b) => b.overlapStart - a.overlapStart); break; // descending Y
+      case 'bottom': matchingRooms.sort((a, b) => a.overlapStart - b.overlapStart); break; // ascending X
+      case 'left': matchingRooms.sort((a, b) => a.overlapStart - b.overlapStart); break; // ascending Y
+    }
+
+    // Build sections
+    let offset = 0;
+    const sections: CompositeWallSection[] = [];
+    let totalDoors = 0;
+    let totalWindows = 0;
+    const openingCounts: Record<string, number> = {};
+
+    matchingRooms.forEach(({ room, wall, overlapStart, overlapEnd }) => {
+      const sectionLen = overlapEnd - overlapStart;
+      const wallH = wall.height || room.height || plan.defaultHeight;
+
+      // Filter openings to this section
+      const isHoriz = wallIndex === 1 || wallIndex === 3;
+      const fullWallLen = isHoriz ? room.width : room.length;
+      const sectionOpenings = wall.openings.filter(op => {
+        const opAbsPos = (isHoriz ? room.posX : room.posY) + op.positionX * fullWallLen;
+        return opAbsPos >= overlapStart - EPSILON && opAbsPos <= overlapEnd + EPSILON;
+      });
+
+      sectionOpenings.forEach(op => {
+        const key = op.openingType;
+        openingCounts[key] = (openingCounts[key] || 0) + 1;
+        if (key === 'puerta' || key === 'puerta_externa' || key === 'hueco_paso') {
+          totalDoors++;
+        } else {
+          totalWindows++;
+        }
+      });
+
+      sections.push({
+        roomId: room.id,
+        roomName: room.name,
+        wallIndex,
+        wallId: wall.id,
+        length: sectionLen,
+        height: wallH,
+        wall,
+        openings: sectionOpenings,
+        startOffset: offset,
+      });
+      offset += sectionLen;
+    });
+
+    // Block count
+    let totalBlocks: { cols: number; rows: number; total: number } | undefined;
+    if (plan.scaleMode === 'bloque') {
+      const blockW = plan.blockLengthMm / 1000;
+      const blockH = plan.blockHeightMm / 1000;
+      if (blockW > 0 && blockH > 0) {
+        const maxH = Math.max(...sections.map(s => s.height));
+        const cols = Math.ceil(edgeLength / blockW);
+        const rows = Math.ceil(maxH / blockH);
+        totalBlocks = { cols, rows, total: cols * rows };
+      }
+    }
+
+    const openingDetails = Object.entries(openingCounts).map(([type, count]) => ({
+      type,
+      count,
+      label: OPENING_PRESETS[type as keyof typeof OPENING_PRESETS]?.label || type,
+    }));
+
+    composites.push({
+      id: `cw-${v1.label}-${v2.label}`,
+      label: `Pared ${v1.label}${v2.label}`,
+      startCorner: v1,
+      endCorner: v2,
+      side,
+      totalLength: edgeLength,
+      sections,
+      isExterior: true,
+      objectSummary: {
+        totalBlocks,
+        doors: totalDoors,
+        windows: totalWindows,
+        openingDetails,
+      },
+    });
+  }
+
+  return composites;
+}

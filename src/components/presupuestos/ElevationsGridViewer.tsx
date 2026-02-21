@@ -8,9 +8,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { Plus, Trash2, Box, Layers, ArrowUpDown, Maximize2, Merge, Unlink } from 'lucide-react';
-import { OPENING_PRESETS, WALL_LABELS, computeWallSegments, autoClassifyWalls, generateExternalWallNames, isExteriorType, isInvisibleType } from '@/lib/floor-plan-calculations';
-import type { RoomData, WallData, OpeningData, FloorPlanData, WallSegment, FloorLevel, WallType, BlockGroupData } from '@/lib/floor-plan-calculations';
+import { Plus, Trash2, Box, Layers, ArrowUpDown, Maximize2, Merge, Unlink, Map } from 'lucide-react';
+import { OPENING_PRESETS, WALL_LABELS, computeWallSegments, autoClassifyWalls, generateExternalWallNames, isExteriorType, isInvisibleType, computeBuildingOutline, computeCompositeWalls } from '@/lib/floor-plan-calculations';
+import type { RoomData, WallData, OpeningData, FloorPlanData, WallSegment, FloorLevel, WallType, BlockGroupData, OutlineVertex, CompositeWall } from '@/lib/floor-plan-calculations';
 
 interface ElevationsGridViewerProps {
   plan: FloorPlanData;
@@ -80,11 +80,15 @@ export function ElevationsGridViewer({
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editCard, setEditCard] = useState<ElevationCard | null>(null);
   const [editCardDialogOpen, setEditCardDialogOpen] = useState(false);
-  const [viewMode, setViewMode] = useState<'rooms' | 'groups'>('rooms');
+  const [viewMode, setViewMode] = useState<'rooms' | 'groups' | 'composite'>('rooms');
 
   const wallSegmentsMap = useMemo(() => computeWallSegments(rooms), [rooms]);
   const wallClassification = useMemo(() => autoClassifyWalls(rooms), [rooms]);
   const externalWallNames = useMemo(() => generateExternalWallNames(rooms, wallClassification), [rooms, wallClassification]);
+
+  // Building outline & composite walls
+  const buildingOutline = useMemo(() => computeBuildingOutline(rooms), [rooms]);
+  const compositeWalls = useMemo(() => computeCompositeWalls(rooms, buildingOutline, plan), [rooms, buildingOutline, plan]);
 
   // Sync editCard wall data when rooms refresh (e.g. after saving wall type)
   // This ensures the WallEditDialog always shows the current wall type
@@ -311,18 +315,29 @@ export function ElevationsGridViewer({
   return (
     <div className="space-y-4">
       {/* View mode toggle */}
-      {hasGroups && (
-        <div className="flex items-center gap-2">
-          <Button variant={viewMode === 'rooms' ? 'default' : 'outline'} size="sm" className="text-xs h-7"
-            onClick={() => setViewMode('rooms')}>
-            <Layers className="h-3 w-3 mr-1" /> Por espacio
-          </Button>
+      <div className="flex items-center gap-2 flex-wrap">
+        <Button variant={viewMode === 'rooms' ? 'default' : 'outline'} size="sm" className="text-xs h-7"
+          onClick={() => setViewMode('rooms')}>
+          <Layers className="h-3 w-3 mr-1" /> Por espacio
+        </Button>
+        {hasGroups && (
           <Button variant={viewMode === 'groups' ? 'default' : 'outline'} size="sm" className="text-xs h-7"
             onClick={() => setViewMode('groups')}>
             <Box className="h-3 w-3 mr-1" /> Por grupo ({elevationGroups.length})
           </Button>
-        </div>
-      )}
+        )}
+        {compositeWalls.length > 0 && (
+          <Button variant={viewMode === 'composite' ? 'default' : 'outline'} size="sm" className="text-xs h-7"
+            onClick={() => setViewMode('composite')}>
+            <Map className="h-3 w-3 mr-1" /> Paredes compuestas ({compositeWalls.length})
+          </Button>
+        )}
+        {viewMode === 'composite' && buildingOutline.length > 0 && (
+          <span className="text-[10px] text-muted-foreground ml-2">
+            Esquinas: {buildingOutline.map(v => v.label).join(' → ')} → {buildingOutline[0]?.label}
+          </span>
+        )}
+      </div>
 
       {/* Grouped view */}
       {viewMode === 'groups' && hasGroups && (
@@ -352,6 +367,20 @@ export function ElevationsGridViewer({
                 </div>
               </CollapsibleContent>
             </Collapsible>
+          ))}
+        </div>
+      )}
+
+      {/* Composite walls view */}
+      {viewMode === 'composite' && compositeWalls.length > 0 && (
+        <div className="space-y-4">
+          {compositeWalls.map(cw => (
+            <CompositeWallCard
+              key={cw.id}
+              compositeWall={cw}
+              plan={plan}
+              onOpeningClick={handleOpeningClick}
+            />
           ))}
         </div>
       )}
@@ -1039,6 +1068,266 @@ function FullscreenBlockGrid({ card, plan, blockCount, selectedBlocks, onToggleB
         );
       })}
     </svg>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────
+// Composite Wall Card — groups room walls along a building edge
+// ──────────────────────────────────────────────────────────────────
+
+const SIDE_LABELS: Record<string, string> = {
+  top: 'Norte', right: 'Este', bottom: 'Sur', left: 'Oeste',
+};
+
+function CompositeWallCard({ compositeWall, plan, onOpeningClick }: {
+  compositeWall: CompositeWall;
+  plan: FloorPlanData;
+  onOpeningClick: (op: OpeningData) => void;
+}) {
+  const [fullscreen, setFullscreen] = useState(false);
+  const cw = compositeWall;
+  const maxHeight = Math.max(...cw.sections.map(s => s.height), 0);
+
+  // SVG dimensions
+  const padding = 40;
+  const maxW = 600;
+  const scale = Math.min((maxW - padding * 2) / cw.totalLength, 80);
+  const svgW = cw.totalLength * scale + padding * 2;
+  const svgH = maxHeight * scale + padding * 2 + 30;
+  const rx = padding;
+  const ry = padding / 2;
+  const rw = cw.totalLength * scale;
+
+  const renderCompositeSvg = (fsScale?: number) => {
+    const s = fsScale || scale;
+    const sw = cw.totalLength * s + padding * 2;
+    const totalH = maxHeight * s;
+    const sh = totalH + padding * 2 + 30;
+    const rxs = padding;
+    const rys = padding / 2;
+
+    return (
+      <svg
+        width="100%"
+        viewBox={`0 0 ${sw} ${sh}`}
+        className="mx-auto"
+        style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', maxHeight: fsScale ? '85vh' : '200px' }}
+      >
+        {/* Ground line */}
+        <line x1={rxs - 5} y1={rys + totalH} x2={rxs + cw.totalLength * s + 5} y2={rys + totalH}
+          stroke="hsl(25, 60%, 40%)" strokeWidth={1.5} />
+
+        {/* Room sections */}
+        {cw.sections.map((section, idx) => {
+          const sx = rxs + section.startOffset * s;
+          const sw2 = section.length * s;
+          const sh2 = section.height * s;
+          const sy = rys + totalH - sh2;
+
+          const sectionFill = idx % 2 === 0 ? 'hsl(30, 30%, 92%)' : 'hsl(30, 25%, 88%)';
+
+          return (
+            <g key={`section-${idx}`}>
+              {/* Section rectangle */}
+              <rect x={sx} y={sy} width={sw2} height={sh2}
+                fill={sectionFill} stroke="hsl(222, 47%, 30%)" strokeWidth={1.2} rx={1} />
+
+              {/* Block pattern */}
+              {plan.scaleMode === 'bloque' && (() => {
+                const bwPx = (plan.blockLengthMm / 1000) * s;
+                const bhPx = (plan.blockHeightMm / 1000) * s;
+                if (bwPx < 3 || bhPx < 2) return null;
+                const rows = Math.ceil(sh2 / bhPx);
+                const cols = Math.ceil(sw2 / bwPx) + 1;
+                const lines: React.ReactElement[] = [];
+                for (let r = 1; r < rows; r++) {
+                  const y = sy + sh2 - r * bhPx;
+                  if (y <= sy) break;
+                  lines.push(
+                    <line key={`bh-${idx}-${r}`} x1={sx} y1={y} x2={sx + sw2} y2={y}
+                      stroke="hsl(25, 30%, 65%)" strokeWidth={0.4} opacity={0.5} pointerEvents="none" />
+                  );
+                }
+                for (let r = 0; r < rows; r++) {
+                  const yTop = Math.max(sy, sy + sh2 - (r + 1) * bhPx);
+                  const yBot = sy + sh2 - r * bhPx;
+                  const offset = r % 2 === 0 ? 0 : bwPx / 2;
+                  for (let c = 1; c < cols; c++) {
+                    const x = sx + offset + c * bwPx;
+                    if (x >= sx + sw2) break;
+                    if (x <= sx) continue;
+                    lines.push(
+                      <line key={`bv-${idx}-${r}-${c}`} x1={x} y1={yTop} x2={x} y2={Math.min(yBot, sy + sh2)}
+                        stroke="hsl(25, 30%, 65%)" strokeWidth={0.3} opacity={0.4} pointerEvents="none" />
+                    );
+                  }
+                }
+                return <g>{lines}</g>;
+              })()}
+
+              {/* Section separator line */}
+              {idx > 0 && (
+                <line x1={sx} y1={rys} x2={sx} y2={rys + totalH}
+                  stroke="hsl(222, 47%, 40%)" strokeWidth={0.8} strokeDasharray="3 2" />
+              )}
+
+              {/* Room label */}
+              <text x={sx + sw2 / 2} y={sy + 12} textAnchor="middle"
+                fontSize={fsScale ? 10 : 7} fill="hsl(222, 47%, 30%)" fontWeight={600} opacity={0.7}
+                pointerEvents="none">
+                {section.roomName}
+              </text>
+
+              {/* Openings */}
+              {section.openings.map(op => {
+                const isHoriz = section.wallIndex === 1 || section.wallIndex === 3;
+                const room = cw.sections.find(sec => sec.roomId === section.roomId);
+                if (!room) return null;
+                // Calculate opening position within this section
+                const fullWallLen = isHoriz
+                  ? (rooms_cache_ref?.find(r => r.id === section.roomId)?.width || section.length)
+                  : (rooms_cache_ref?.find(r => r.id === section.roomId)?.length || section.length);
+                const opCenterFraction = op.positionX;
+                const opCenterInSection = opCenterFraction * fullWallLen;
+                // Check if this opening is within the section bounds
+                const opWidthPx = op.width * s;
+                const opHeightPx = op.height * s;
+                const sillH = op.sillHeight ?? 0;
+                const opX = sx + (opCenterInSection / section.length) * sw2 - opWidthPx / 2;
+                const opY = sy + sh2 - opHeightPx - sillH * s;
+                const isDoor = op.openingType === 'puerta' || op.openingType === 'puerta_externa' || op.openingType === 'ventana_balconera';
+
+                return (
+                  <g key={op.id} style={{ cursor: 'pointer' }}
+                    onClick={e => { e.stopPropagation(); onOpeningClick(op); }}>
+                    <rect x={opX} y={opY} width={opWidthPx} height={opHeightPx}
+                      fill={isDoor ? 'hsl(30, 80%, 95%)' : 'hsl(210, 80%, 95%)'}
+                      stroke={isDoor ? 'hsl(30, 80%, 45%)' : 'hsl(210, 80%, 45%)'}
+                      strokeWidth={1} rx={1} />
+                    <text x={opX + opWidthPx / 2} y={opY + opHeightPx / 2 + 3} textAnchor="middle"
+                      fontSize={fsScale ? 9 : 6} fill="hsl(var(--foreground))" pointerEvents="none" opacity={0.8}>
+                      {OPENING_PRESETS[op.openingType as keyof typeof OPENING_PRESETS]?.label || op.openingType}
+                    </text>
+                  </g>
+                );
+              })}
+            </g>
+          );
+        })}
+
+        {/* Total dimension line */}
+        <line x1={rxs} y1={rys + totalH + 12} x2={rxs + cw.totalLength * s} y2={rys + totalH + 12}
+          stroke="hsl(25, 95%, 45%)" strokeWidth={0.6} />
+        <line x1={rxs} y1={rys + totalH + 8} x2={rxs} y2={rys + totalH + 16} stroke="hsl(25, 95%, 45%)" strokeWidth={0.4} />
+        <line x1={rxs + cw.totalLength * s} y1={rys + totalH + 8} x2={rxs + cw.totalLength * s} y2={rys + totalH + 16}
+          stroke="hsl(25, 95%, 45%)" strokeWidth={0.4} />
+        <text x={rxs + cw.totalLength * s / 2} y={rys + totalH + 25} textAnchor="middle"
+          fontSize={fsScale ? 11 : 8} fill="hsl(25, 95%, 45%)" fontWeight={600}>
+          {cw.totalLength.toFixed(2)}m
+        </text>
+
+        {/* Height dimension */}
+        <line x1={rxs - 12} y1={rys} x2={rxs - 12} y2={rys + totalH}
+          stroke="hsl(25, 95%, 45%)" strokeWidth={0.6} />
+        <line x1={rxs - 16} y1={rys} x2={rxs - 8} y2={rys} stroke="hsl(25, 95%, 45%)" strokeWidth={0.4} />
+        <line x1={rxs - 16} y1={rys + totalH} x2={rxs - 8} y2={rys + totalH} stroke="hsl(25, 95%, 45%)" strokeWidth={0.4} />
+        <text x={rxs - 18} y={rys + totalH / 2} textAnchor="middle"
+          fontSize={fsScale ? 11 : 8} fill="hsl(25, 95%, 45%)" fontWeight={600}
+          transform={`rotate(-90, ${rxs - 18}, ${rys + totalH / 2})`}>
+          {maxHeight.toFixed(2)}m
+        </text>
+
+        {/* Corner labels */}
+        <text x={rxs - 3} y={rys + totalH + 25} textAnchor="end"
+          fontSize={fsScale ? 13 : 9} fill="hsl(var(--primary))" fontWeight={800}>
+          {cw.startCorner.label}
+        </text>
+        <text x={rxs + cw.totalLength * s + 3} y={rys + totalH + 25} textAnchor="start"
+          fontSize={fsScale ? 13 : 9} fill="hsl(var(--primary))" fontWeight={800}>
+          {cw.endCorner.label}
+        </text>
+      </svg>
+    );
+  };
+
+  // Avoid using a variable that doesn't exist in this scope
+  // The openings are already calculated in CompositeWallSection, no need for room lookup
+  const rooms_cache_ref: RoomData[] | null = null; // placeholder - openings already have positionX
+
+  return (
+    <>
+      <Card className="overflow-hidden hover:shadow-md transition-shadow group">
+        <CardHeader className="py-2 px-3 border-b border-border/50">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <CardTitle className="text-sm font-bold">{cw.label}</CardTitle>
+              <Badge variant="default" className="text-[9px] h-4">{SIDE_LABELS[cw.side] || cw.side}</Badge>
+              <Badge variant="outline" className="text-[9px] h-4">{cw.totalLength.toFixed(2)}m</Badge>
+              <Badge variant="secondary" className="text-[9px] h-4">{cw.sections.length} espacios</Badge>
+            </div>
+            <div className="flex items-center gap-1 shrink-0">
+              {cw.objectSummary.totalBlocks && (
+                <Badge variant="outline" className="text-[9px] h-4 bg-accent/30">
+                  {cw.objectSummary.totalBlocks.total} bloques
+                </Badge>
+              )}
+              {cw.objectSummary.doors > 0 && (
+                <Badge variant="outline" className="text-[9px] h-4">{cw.objectSummary.doors} puertas</Badge>
+              )}
+              {cw.objectSummary.windows > 0 && (
+                <Badge variant="outline" className="text-[9px] h-4">{cw.objectSummary.windows} ventanas</Badge>
+              )}
+              <Button variant="ghost" size="sm" className="h-5 w-5 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                onClick={() => setFullscreen(true)} title="Ampliar">
+                <Maximize2 className="h-3 w-3" />
+              </Button>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="p-2">
+          {renderCompositeSvg()}
+          {/* Object summary */}
+          {cw.objectSummary.openingDetails.length > 0 && (
+            <div className="flex items-center gap-1 flex-wrap mt-1.5 pt-1 border-t border-border/30">
+              {cw.objectSummary.openingDetails.map(od => (
+                <Badge key={od.type} variant="outline" className="text-[9px] h-4">
+                  {od.count}× {od.label}
+                </Badge>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Fullscreen dialog */}
+      <Dialog open={fullscreen} onOpenChange={setFullscreen}>
+        <DialogContent className="!max-w-none !w-screen !h-screen !m-0 !p-4 !rounded-none !translate-x-0 !translate-y-0 !top-0 !left-0 flex flex-col">
+          <DialogHeader className="shrink-0">
+            <DialogTitle className="text-sm flex items-center gap-2 flex-wrap">
+              {cw.label}
+              <Badge variant="default" className="text-xs">{SIDE_LABELS[cw.side]}</Badge>
+              <Badge variant="outline" className="text-xs">{cw.totalLength.toFixed(2)}m × {maxHeight.toFixed(2)}m</Badge>
+              <Badge variant="secondary" className="text-xs">{cw.sections.length} espacios</Badge>
+              {cw.objectSummary.totalBlocks && (
+                <Badge variant="outline" className="text-xs">{cw.objectSummary.totalBlocks.total} bloques</Badge>
+              )}
+              {cw.objectSummary.openingDetails.map(od => (
+                <Badge key={od.type} variant="outline" className="text-xs">
+                  {od.count}× {od.label}
+                </Badge>
+              ))}
+            </DialogTitle>
+            <DialogDescription className="sr-only">Vista a pantalla completa de pared compuesta</DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 overflow-auto flex items-center justify-center min-h-0">
+            {renderCompositeSvg(Math.min(
+              (window.innerHeight * 0.8) / maxHeight,
+              (window.innerWidth * 0.9) / cw.totalLength
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 

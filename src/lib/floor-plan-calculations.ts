@@ -217,7 +217,11 @@ function getWallLength(room: RoomData, wallIndex: number): number {
 }
 
 function getWallHeight(wall: WallData, room: RoomData, plan: FloorPlanData): number {
-  return wall.height || room.height || plan.defaultHeight;
+  if (wall.height != null && wall.height > 0) return wall.height;
+  if (room.height != null && room.height > 0) return room.height;
+  // height === 0 means bajo cubierta — return 0 so gable logic can handle it
+  if (room.height === 0) return 0;
+  return plan.defaultHeight;
 }
 
 function getWallThickness(wall: WallData, plan: FloorPlanData): number {
@@ -481,13 +485,14 @@ export function autoClassifyWalls(rooms: RoomData[], plan?: FloorPlanData): Map<
     });
   });
 
-  // Bajo cubierta override: rooms with height=0 in a dos_aguas roof
-  // only have hastiales (front/back walls, index 1 & 3) as external walls.
-  // Side walls (index 2 & 4) are roof slope, not physical walls → exterior_invisible.
+  // Bajo cubierta override: rooms with height=0 in a dos_aguas roof.
+  // The ridge runs along the Y axis (length), so:
+  // - Walls 1 (top/AB) & 3 (bottom/CD) are under the roof slope → exterior_invisible
+  // - Walls 2 (right/BC) & 4 (left/DA) are the gable/hastial walls → remain exterior
   if (plan && plan.roofType === 'dos_aguas') {
     rooms.forEach(room => {
       if (room.height !== undefined && room.height === 0) {
-        [2, 4].forEach(wallIdx => {
+        [1, 3].forEach(wallIdx => {
           const key = `${room.id}::${wallIdx}`;
           const current = classification.get(key);
           if (current && isExteriorType(current) && !isInvisibleType(current)) {
@@ -509,7 +514,7 @@ export function autoClassifyWalls(rooms: RoomData[], plan?: FloorPlanData): Map<
 export function calculateGables(plan: FloorPlanData, rooms: RoomData[], wallClassification: Map<string, WallType>): GableCalculation[] {
   if (plan.roofType === 'plana' || plan.roofSlopePercent === 0 || rooms.length === 0) return [];
   
-  // For dos_aguas: gables on the front (wallIndex 1) and back (wallIndex 3) sides
+  // For dos_aguas: ridge runs along Y (length), gables on right (wallIndex 2) and left (wallIndex 4)
   // For cuatro_aguas: no gables (hip roof has slopes on all sides)
   if (plan.roofType === 'cuatro_aguas') return [];
 
@@ -533,17 +538,17 @@ export function calculateGables(plan: FloorPlanData, rooms: RoomData[], wallClas
   const EPSILON = 0.05;
   const gables: GableCalculation[] = [];
 
-  // Front gable (top side, wallIndex 1) and Back gable (bottom side, wallIndex 3)
-  const sides: Array<{ side: 'front' | 'back'; wallIndex: number; edgeY: number }> = [
-    { side: 'front', wallIndex: 1, edgeY: minY },
-    { side: 'back', wallIndex: 3, edgeY: maxY },
+  // Right gable (wallIndex 2, BC side) and Left gable (wallIndex 4, DA side)
+  const sides: Array<{ side: 'front' | 'back'; wallIndex: number; edgeCoord: number }> = [
+    { side: 'front', wallIndex: 2, edgeCoord: maxX },   // right edge (BC)
+    { side: 'back', wallIndex: 4, edgeCoord: minX },    // left edge (DA)
   ];
 
-  sides.forEach(({ side, wallIndex, edgeY }) => {
+  sides.forEach(({ side, wallIndex, edgeCoord }) => {
     // Find rooms touching this gable edge
     const touchingRooms = rooms.filter(r => {
-      if (wallIndex === 1) return Math.abs(r.posY - edgeY) < EPSILON;
-      return Math.abs(r.posY + r.length - edgeY) < EPSILON;
+      if (wallIndex === 2) return Math.abs(r.posX + r.width - edgeCoord) < EPSILON;
+      return Math.abs(r.posX - edgeCoord) < EPSILON;
     });
 
     if (touchingRooms.length === 0) {
@@ -551,10 +556,10 @@ export function calculateGables(plan: FloorPlanData, rooms: RoomData[], wallClas
       return;
     }
 
-    // Distribute gable area proportionally by room width
-    const totalTouchingWidth = touchingRooms.reduce((s, r) => s + r.width, 0);
+    // Distribute gable area proportionally by room length (Y dimension for walls 2,4)
+    const totalTouchingLen = touchingRooms.reduce((s, r) => s + r.length, 0);
     const roomPortions = touchingRooms.map(r => {
-      const proportion = r.width / Math.max(totalTouchingWidth, 0.01);
+      const proportion = r.length / Math.max(totalTouchingLen, 0.01);
       const portionArea = triangleArea * proportion;
       const key = `${r.id}::${wallIndex}`;
       const wt = wallClassification.get(key) || 'interior';

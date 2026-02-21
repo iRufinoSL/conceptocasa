@@ -72,7 +72,27 @@ function getOpeningSillHeight(op: OpeningData): number {
 }
 
 function getWallHeight(wall: WallData, room: RoomData, plan: FloorPlanData): number {
-  return wall.height || room.height || plan.defaultHeight;
+  if (wall.height != null && wall.height > 0) return wall.height;
+  if (room.height != null && room.height > 0) return room.height;
+  if (room.height === 0) return 0;
+  return plan.defaultHeight;
+}
+
+/** Check if a room is bajo cubierta (height=0 with dos_aguas roof) */
+function isBajoCubierta(room: RoomData, plan: FloorPlanData): boolean {
+  return room.height === 0 && plan.roofType === 'dos_aguas';
+}
+
+/** Calculate gable peak height for a bajo cubierta room */
+function getGablePeakHeight(plan: FloorPlanData, rooms: RoomData[]): number {
+  let minX = Infinity, maxX = Infinity;
+  rooms.forEach(r => {
+    minX = Math.min(minX, r.posX);
+    maxX = Math.max(maxX !== Infinity ? maxX : r.posX + r.width, r.posX + r.width);
+  });
+  if (minX === Infinity) return 0;
+  const totalWidth = (maxX - minX) + 2 * plan.externalWallThickness;
+  return (totalWidth / 2) * (plan.roofSlopePercent / 100);
 }
 
 export function ElevationsGridViewer({
@@ -104,12 +124,33 @@ export function ElevationsGridViewer({
   const [autoEditTriggered, setAutoEditTriggered] = useState(false);
 
   const wallSegmentsMap = useMemo(() => computeWallSegments(rooms), [rooms]);
-  const wallClassification = useMemo(() => autoClassifyWalls(rooms), [rooms]);
+  const wallClassification = useMemo(() => autoClassifyWalls(rooms, plan), [rooms, plan]);
   const externalWallNames = useMemo(() => generateExternalWallNames(rooms, wallClassification), [rooms, wallClassification]);
 
-  // Building outline & composite walls
+  // Building outline & composite walls — computed PER FLOOR to avoid mixing levels
+  const perFloorComposites = useMemo(() => {
+    if (!floors || floors.length <= 1) {
+      // Single floor or no floors: compute from all rooms
+      const outline = computeBuildingOutline(rooms);
+      return [{ floorId: 'all', floorName: '', composites: computeCompositeWalls(rooms, outline, plan) }];
+    }
+    const sortedFloors = [...floors].sort((a, b) => a.orderIndex - b.orderIndex);
+    return sortedFloors.map(floor => {
+      const floorRooms = rooms.filter(r => r.floorId === floor.id);
+      if (floorRooms.length === 0) return { floorId: floor.id, floorName: floor.name, composites: [] as CompositeWall[] };
+      const outline = computeBuildingOutline(floorRooms);
+      return { floorId: floor.id, floorName: floor.name, composites: computeCompositeWalls(floorRooms, outline, plan) };
+    }).filter(f => f.composites.length > 0);
+  }, [rooms, floors, plan]);
+
+  // Flat list of all composite walls (for counting)
+  const allCompositeWalls = useMemo(() => perFloorComposites.flatMap(f => f.composites), [perFloorComposites]);
+
+  // Building outline for display (global, for the outline label)
   const buildingOutline = useMemo(() => computeBuildingOutline(rooms), [rooms]);
-  const compositeWalls = useMemo(() => computeCompositeWalls(rooms, buildingOutline, plan), [rooms, buildingOutline, plan]);
+
+  // Gable peak height for bajo cubierta rooms
+  const gablePeakHeight = useMemo(() => getGablePeakHeight(plan, rooms), [plan, rooms]);
 
   // Sync editCard wall data when rooms refresh (e.g. after saving wall type)
   // This ensures the WallEditDialog always shows the current wall type
@@ -431,10 +472,10 @@ export function ElevationsGridViewer({
             <Box className="h-3 w-3 mr-1" /> Por grupo ({elevationGroups.length})
           </Button>
         )}
-        {compositeWalls.length > 0 && (
+        {allCompositeWalls.length > 0 && (
           <Button variant={viewMode === 'composite' ? 'default' : 'outline'} size="sm" className="text-xs h-7"
             onClick={() => setViewMode('composite')}>
-            <MapIcon className="h-3 w-3 mr-1" /> Paredes compuestas ({compositeWalls.length})
+            <MapIcon className="h-3 w-3 mr-1" /> Paredes compuestas ({allCompositeWalls.length})
           </Button>
         )}
         {viewMode === 'composite' && buildingOutline.length > 0 && (
@@ -477,87 +518,42 @@ export function ElevationsGridViewer({
         </div>
       )}
 
-      {/* Composite walls view — grouped by floor level */}
-      {viewMode === 'composite' && compositeWalls.length > 0 && (() => {
-        // Group composites by floor: each composite may have sections from different floors
-        // We create per-floor filtered composites
-        const sortedFloors2 = floors ? [...floors].sort((a, b) => a.orderIndex - b.orderIndex) : [];
-        
-        if (sortedFloors2.length <= 1) {
-          // No multi-floor → show all composites as-is
-          return (
-            <div className="space-y-4">
-              {compositeWalls.map(cw => (
-                <CompositeWallCard
-                  key={cw.id}
-                  compositeWall={cw}
-                  plan={plan}
-                  onOpeningClick={handleOpeningClick}
-                  budgetName={budgetName}
-                />
-              ))}
-            </div>
-          );
-        }
-
-        // Multi-floor: for each floor, filter composite sections to rooms of that floor
-        return (
-          <div className="space-y-4">
-            {sortedFloors2.map(floor => {
-              const floorRoomIds = new Set(rooms.filter(r => r.floorId === floor.id).map(r => r.id));
-              if (floorRoomIds.size === 0) return null;
-
-              // Filter each composite wall to only include sections from this floor
-              const floorComposites = compositeWalls
-                .map(cw => {
-                  const floorSections = cw.sections.filter(s => floorRoomIds.has(s.roomId));
-                  if (floorSections.length === 0) return null;
-                  
-                  // Recalculate offsets for filtered sections
-                  let offset = 0;
-                  const adjustedSections = floorSections.map(s => {
-                    const adjusted = { ...s, startOffset: offset };
-                    offset += s.length;
-                    return adjusted;
-                  });
-
-                  return {
-                    ...cw,
-                    id: `${cw.id}-${floor.id}`,
-                    sections: adjustedSections,
-                    totalLength: adjustedSections.reduce((sum, s) => sum + s.length, 0),
-                  };
-                })
-                .filter(Boolean) as typeof compositeWalls;
-
-              if (floorComposites.length === 0) return null;
-
+      {/* Composite walls view — now computed per floor */}
+      {viewMode === 'composite' && allCompositeWalls.length > 0 && (
+        <div className="space-y-4">
+          {perFloorComposites.map(({ floorId, floorName, composites }) => {
+            if (composites.length === 0) return null;
+            const content = (
+              <div className="space-y-3">
+                {composites.map(cw => (
+                  <CompositeWallCard
+                    key={cw.id}
+                    compositeWall={cw}
+                    plan={plan}
+                    onOpeningClick={handleOpeningClick}
+                    budgetName={budgetName}
+                  />
+                ))}
+              </div>
+            );
+            if (floorName) {
               return (
-                <Collapsible key={floor.id} defaultOpen>
+                <Collapsible key={floorId} defaultOpen>
                   <CollapsibleTrigger className="flex items-center gap-2 w-full text-left group hover:bg-muted/50 rounded px-2 py-1.5 transition-colors border-b border-border/50 mb-2">
                     <ChevronRight className="h-4 w-4 text-foreground transition-transform group-data-[state=open]:rotate-90" />
-                    <h3 className="text-sm font-bold text-foreground">{floor.name}</h3>
-                    <Badge variant="secondary" className="text-[10px] h-4">{floorComposites.length} paredes</Badge>
+                    <h3 className="text-sm font-bold text-foreground">{floorName}</h3>
+                    <Badge variant="secondary" className="text-[10px] h-4">{composites.length} paredes</Badge>
                   </CollapsibleTrigger>
-                  <CollapsibleContent className="ml-2">
-                    <div className="space-y-3">
-                      {floorComposites.map(cw => (
-                        <CompositeWallCard
-                          key={cw.id}
-                          compositeWall={cw}
-                          plan={plan}
-                          onOpeningClick={handleOpeningClick}
-                          budgetName={budgetName}
-                        />
-                      ))}
-                    </div>
-                  </CollapsibleContent>
+                  <CollapsibleContent className="ml-2">{content}</CollapsibleContent>
                 </Collapsible>
               );
-            })}
-          </div>
-        );
-      })()}
+            }
+            return <div key={floorId}>{content}</div>;
+          })}
+        </div>
+      )}
+
+
 
       {/* Room-based view (default) */}
       {viewMode === 'rooms' && floorGroups.map(({ floorId, floorName, roomGroups: floorRoomGroups }) => {

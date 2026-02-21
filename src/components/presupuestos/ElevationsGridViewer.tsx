@@ -890,8 +890,8 @@ function ElevationCardView({ card, plan, onOpeningClick, onAddOpening, onCardDou
               const y = baseY - r * blockHPx;
               if (y <= ry) break;
               lines.push(
-                <line key={`bh-${r}`} x1={rx} y1={y} x2={rx + rw} y2={y}
-                  stroke="hsl(210, 60%, 55%)" strokeWidth={0.8} opacity={0.8} pointerEvents="none" />
+              <line key={`bh-${r}`} x1={rx} y1={y} x2={rx + rw} y2={y}
+                  stroke="hsl(210, 50%, 35%)" strokeWidth={1.2} opacity={1} pointerEvents="none" />
               );
             }
             for (let r = 0; r < rows; r++) {
@@ -904,7 +904,7 @@ function ElevationCardView({ card, plan, onOpeningClick, onAddOpening, onCardDou
                 if (x <= rx) continue;
                 lines.push(
                   <line key={`bv-${r}-${c}`} x1={x} y1={yTop} x2={x} y2={Math.min(yBot, baseY)}
-                    stroke="hsl(210, 60%, 55%)" strokeWidth={0.7} opacity={0.7} pointerEvents="none" />
+                    stroke="hsl(210, 50%, 35%)" strokeWidth={1.0} opacity={1} pointerEvents="none" />
                 );
               }
             }
@@ -1055,7 +1055,7 @@ function ElevationCardView({ card, plan, onOpeningClick, onAddOpening, onCardDou
             if (y <= ry) break;
             lines.push(
               <line key={`bh-${r}`} x1={rx} y1={y} x2={rx + rw} y2={y}
-                stroke="hsl(210, 60%, 55%)" strokeWidth={0.8} opacity={0.8} pointerEvents="none" />
+                stroke="hsl(210, 50%, 35%)" strokeWidth={1.2} opacity={1} pointerEvents="none" />
             );
           }
           for (let r = 0; r < rows; r++) {
@@ -1069,7 +1069,7 @@ function ElevationCardView({ card, plan, onOpeningClick, onAddOpening, onCardDou
               if (x <= rx) continue;
               lines.push(
                 <line key={`bv-${r}-${c}`} x1={x} y1={yTop} x2={x} y2={Math.min(yBot, ry + rh)}
-                  stroke="hsl(210, 60%, 55%)" strokeWidth={0.7} opacity={0.7} pointerEvents="none" />
+                  stroke="hsl(210, 50%, 35%)" strokeWidth={1.0} opacity={1} pointerEvents="none" />
               );
             }
           }
@@ -1201,7 +1201,7 @@ function ElevationCardView({ card, plan, onOpeningClick, onAddOpening, onCardDou
           <div className="flex items-center gap-1 shrink-0">
             {blockCount && (
               <Badge variant="outline" className="text-[9px] h-4 bg-accent/30">
-                {blockCount.total} bloques ({blockCount.cols}×{blockCount.rows})
+                {blockCount.total} bloques ({blockCount.cols}×{blockCount.rows}) · {plan.blockLengthMm}×{plan.blockHeightMm}mm
               </Badge>
             )}
             {card.badgeLabel && (
@@ -1292,7 +1292,7 @@ function ElevationCardView({ card, plan, onOpeningClick, onAddOpening, onCardDou
             {card.sublabel && <span className="text-muted-foreground font-normal">— {card.sublabel}</span>}
             {blockCount && (
               <Badge variant="outline" className="text-xs print:hidden">
-                {blockCount.total} bloques ({blockCount.cols}×{blockCount.rows})
+                {blockCount.total} bloques ({blockCount.cols}×{blockCount.rows}) · {plan.blockLengthMm}×{plan.blockHeightMm}mm
               </Badge>
             )}
             {!card.isInvisible && (

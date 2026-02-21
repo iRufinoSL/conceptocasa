@@ -184,9 +184,10 @@ export function FloorPlanGridView({
   const [groupNameInput, setGroupNameInput] = useState('');
   const [gridFullscreen, setGridFullscreen] = useState(false);
   const [showCorners, setShowCorners] = useState(true);
-  const [customCorners, setCustomCorners] = useState<Array<{ label: string; col: number; row: number }>>([]);
+  const [customCorners, setCustomCorners] = useState<Array<{ label: string; col: number; row: number; side: 'top' | 'right' | 'bottom' | 'left' }>>([]);
   const [newCornerLabel, setNewCornerLabel] = useState('');
   const [newCornerCoord, setNewCornerCoord] = useState('');
+  const [newCornerSide, setNewCornerSide] = useState<'top' | 'right' | 'bottom' | 'left'>('top');
 
   // Force switch to a specific floor tab when requested (e.g. after creating a new floor)
   useEffect(() => {
@@ -580,27 +581,41 @@ export function FloorPlanGridView({
               maxCol = Math.max(maxCol, ec);
               maxRow = Math.max(maxRow, er);
             });
-            const corners = [
-              { label: 'A', left: 30 + (minCol - 1) * CS, top: 20 + (minRow - 1) * CS },
-              { label: 'B', left: 30 + (maxCol) * CS, top: 20 + (minRow - 1) * CS },
-              { label: 'C', left: 30 + (maxCol) * CS, top: 20 + (maxRow) * CS },
-              { label: 'D', left: 30 + (minCol - 1) * CS, top: 20 + (maxRow) * CS },
+            // Main ABCD corners positioned outside the grid
+            const mainCorners = [
+              { label: 'A', left: 30 + (minCol - 1) * CS, top: 20 + (minRow - 1) * CS - 16, anchor: 'top' as const },
+              { label: 'B', left: 30 + maxCol * CS, top: 20 + (minRow - 1) * CS - 16, anchor: 'top' as const },
+              { label: 'C', left: 30 + maxCol * CS, top: 20 + maxRow * CS + 2, anchor: 'bottom' as const },
+              { label: 'D', left: 30 + (minCol - 1) * CS, top: 20 + maxRow * CS + 2, anchor: 'bottom' as const },
             ];
-            // Add custom corners
-            const allCorners = [...corners, ...customCorners.map(cc => ({
-              label: cc.label,
-              left: 30 + (cc.col - 1) * CS,
-              top: 20 + (cc.row - 1) * CS,
-            }))];
+            // Custom corners: positioned outside the grid on the specified side
+            const customMarkers = customCorners.map(cc => {
+              const colCenter = 30 + (cc.col - 1) * CS + CS / 2;
+              const rowCenter = 20 + (cc.row - 1) * CS + CS / 2;
+              let left: number, top: number;
+              switch (cc.side) {
+                case 'top':
+                  left = colCenter; top = 20 + (cc.row - 1) * CS - 16; break;
+                case 'bottom':
+                  left = colCenter; top = 20 + cc.row * CS + 2; break;
+                case 'left':
+                  left = 30 + (cc.col - 1) * CS - 18; top = rowCenter; break;
+                case 'right':
+                  left = 30 + cc.col * CS + 2; top = rowCenter; break;
+              }
+              return { label: cc.label, left, top };
+            });
+            const allCorners = [...mainCorners, ...customMarkers];
             return allCorners.map(c => (
               <div
                 key={`corner-${c.label}`}
-                className="absolute z-30 flex items-center justify-center rounded-full bg-primary text-primary-foreground font-bold text-xs"
+                className="absolute z-30 flex items-center justify-center rounded-full bg-primary text-primary-foreground font-bold text-[10px]"
                 style={{
-                  left: c.left - 12,
-                  top: c.top - 12,
-                  width: 24,
-                  height: 24,
+                  left: c.left - 10,
+                  top: c.top - 4,
+                  width: 20,
+                  height: 16,
+                  whiteSpace: 'nowrap',
                 }}
               >
                 {c.label}
@@ -675,13 +690,26 @@ export function FloorPlanGridView({
               onChange={e => setNewCornerLabel(e.target.value)}
               placeholder="A1"
               className="w-14 h-8 text-xs"
+              title="Etiqueta del marcador"
             />
             <Input
               value={newCornerCoord}
               onChange={e => setNewCornerCoord(e.target.value)}
               placeholder="R18"
               className="w-16 h-8 text-xs"
+              title="Coordenada de la celda (ej: R18)"
             />
+            <select
+              value={newCornerSide}
+              onChange={e => setNewCornerSide(e.target.value as any)}
+              className="h-8 text-xs border rounded px-1 bg-background text-foreground"
+              title="Lado donde colocar el marcador"
+            >
+              <option value="top">↑ Arriba</option>
+              <option value="right">→ Derecha</option>
+              <option value="bottom">↓ Abajo</option>
+              <option value="left">← Izquierda</option>
+            </select>
             <Button
               variant="outline"
               size="sm"
@@ -689,7 +717,7 @@ export function FloorPlanGridView({
                 if (!newCornerLabel.trim() || !newCornerCoord.trim()) return;
                 const parsed = parseCoord(newCornerCoord.trim());
                 if (!parsed) return;
-                setCustomCorners(prev => [...prev, { label: newCornerLabel.trim(), col: parsed.col, row: parsed.row }]);
+                setCustomCorners(prev => [...prev, { label: newCornerLabel.trim(), col: parsed.col, row: parsed.row, side: newCornerSide }]);
                 setNewCornerLabel('');
                 setNewCornerCoord('');
               }}

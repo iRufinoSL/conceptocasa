@@ -228,7 +228,7 @@ export function ElevationsGridViewer({
           const displayType = wall.wallType as string;
           const invisible = isInvisibleType(displayType);
           const ownOpenings = wall.openings.filter(op => {
-            return op.positionX >= seg.startFraction - 0.01 && op.positionX <= seg.endFraction + 0.01;
+            return op.positionX >= seg.startFraction - 0.05 && op.positionX <= seg.endFraction + 0.05;
           });
 
           const isExternal = isExteriorType(displayType);
@@ -443,7 +443,7 @@ export function ElevationsGridViewer({
                 ? <Badge variant="secondary" className="text-[9px] h-4 ml-1">Grupo: {room.groupName}</Badge>
                 : null;
               return (
-                <Collapsible key={room.id} defaultOpen={false}>
+                <Collapsible key={room.id} defaultOpen={!!focusWallId && cards.some(c => c.wallId === focusWallId)}>
                   <CollapsibleTrigger className="flex items-center gap-2 w-full text-left group hover:bg-muted/50 rounded px-2 py-1 transition-colors">
                     <ChevronRight className="h-4 w-4 text-muted-foreground transition-transform group-data-[state=open]:rotate-90" />
                     <h4 className="text-sm font-semibold text-muted-foreground">{room.name}</h4>
@@ -660,11 +660,12 @@ function ElevationCardView({ card, plan, onOpeningClick, onAddOpening, onCardDou
           } else {
             opCenterInSegment = op.positionX;
           }
-          opCenterInSegment = Math.max(0.05, Math.min(0.95, opCenterInSegment));
+          opCenterInSegment = Math.max(0, Math.min(1, opCenterInSegment));
           const opWidthPx = op.width * s;
           const opHeightPx = op.height * s;
           const sillH = getOpeningSillHeight(op);
-          const opX = rx + opCenterInSegment * rw - opWidthPx / 2;
+          const rawOpX = rx + opCenterInSegment * rw - opWidthPx / 2;
+          const opX = Math.max(rx, Math.min(rawOpX, rx + rw - opWidthPx));
           const opY = ry + rh - opHeightPx - sillH * s;
           const isDoor = op.openingType === 'puerta' || op.openingType === 'puerta_externa' || op.openingType === 'ventana_balconera';
           return (
@@ -1091,11 +1092,12 @@ function FullscreenBlockGrid({ card, plan, blockCount, selectedBlocks, onToggleB
         } else {
           opCenterInSegment = op.positionX;
         }
-        opCenterInSegment = Math.max(0.05, Math.min(0.95, opCenterInSegment));
+        opCenterInSegment = Math.max(0, Math.min(1, opCenterInSegment));
         const opWidthPx = op.width * s;
         const opHeightPx = op.height * s;
         const sillH = op.sillHeight ?? 0;
-        const opX = rx + opCenterInSegment * rw - opWidthPx / 2;
+        const rawOpX = rx + opCenterInSegment * rw - opWidthPx / 2;
+        const opX = Math.max(rx, Math.min(rawOpX, rx + rw - opWidthPx));
         const opY = ry + rh - opHeightPx - sillH * s;
         const isDoor = op.openingType === 'puerta' || op.openingType === 'puerta_externa' || op.openingType === 'ventana_balconera';
         return (

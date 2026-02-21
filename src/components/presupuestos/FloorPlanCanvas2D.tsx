@@ -656,50 +656,53 @@ export function FloorPlanCanvas2D({
 
                         return allOpenings.map(({ op, fromNeighbor }, oi) => {
                           const opCenter = op.positionX;
-                          const opSeg = segments.find(s => opCenter >= s.startFraction - 0.01 && opCenter <= s.endFraction + 0.01);
+                          const opSeg = segments.find(s => opCenter >= s.startFraction - 0.05 && opCenter <= s.endFraction + 0.05);
                           const isOnInvisible = opSeg ? isInvisibleType(opSeg.segmentType) : false;
                           if (isOnInvisible) return null;
 
                           const wallLen = isHoriz ? room.width : room.length;
-                          const opWidth = op.width * SCALE;
-                          const centerPos = op.positionX * wallLen * SCALE;
-                          const startPos = centerPos - opWidth / 2;
+                          const opWidth = Math.max(op.width * SCALE, 4); // proportional, min 4px
+                          const leftEdgePos = (op.positionX * wallLen - op.width / 2) * SCALE;
+                          // Clamp to wall bounds
+                          const clampedLeft = Math.max(0, Math.min(leftEdgePos, wallLen * SCALE - opWidth));
                           const isDoor = op.openingType === 'puerta' || op.openingType === 'puerta_externa' || op.openingType === 'hueco_paso';
 
-                          // Determine wall thickness to center the marker
+                          // Determine wall thickness to center the marker ON the wall structural line
                           const isExtWall = opSeg ? isExteriorType(opSeg.segmentType) : false;
                           const wallThickPx = isExtWall ? extT * SCALE : plan.internalWallThickness * SCALE;
-                          const markerThick = wallThickPx + 4; // slightly larger than wall for visibility
+                          const markerThick = Math.max(wallThickPx + 4, 6);
 
                           if (isHoriz) {
-                            const ox = startPos;
-                            // Center on wall midpoint: exterior walls extend outward
-                            const wallCenter = wall.wallIndex === 1
-                              ? (isExtWall ? -wallThickPx / 2 : 0)
-                              : (isExtWall ? h + wallThickPx / 2 : h);
+                            const ox = clampedLeft;
+                            // Center marker on the wall's structural line
+                            const wallLineY = wall.wallIndex === 1 ? 0 : h;
+                            const wallMidY = isExtWall
+                              ? (wall.wallIndex === 1 ? -wallThickPx / 2 : h + wallThickPx / 2)
+                              : wallLineY;
                             return (
                               <g key={`op-${oi}${fromNeighbor ? '-n' : ''}`} pointerEvents="none">
-                                <rect x={ox} y={wallCenter - markerThick / 2} width={opWidth} height={markerThick}
+                                <rect x={ox} y={wallMidY - markerThick / 2} width={opWidth} height={markerThick}
                                   fill="#ffffff" stroke={isDoor ? '#d97706' : '#06b6d4'}
                                   strokeWidth={fromNeighbor ? 1 : 1.5} rx={1}
                                   strokeDasharray={fromNeighbor ? '3 2' : undefined} />
-                                <text x={ox + opWidth / 2} y={wallCenter + 1} textAnchor="middle" fontSize={Math.min(6, opWidth * 0.6)} fill={isDoor ? '#92400e' : '#0e7490'} fontWeight="600" dominantBaseline="middle">
+                                <text x={ox + opWidth / 2} y={wallMidY + 1} textAnchor="middle" fontSize={Math.min(6, opWidth * 0.6)} fill={isDoor ? '#92400e' : '#0e7490'} fontWeight="600" dominantBaseline="middle">
                                   {isDoor ? 'P' : 'V'}
                                 </text>
                               </g>
                             );
                           } else {
-                            const oy = startPos;
-                            const wallCenter = wall.wallIndex === 4
-                              ? (isExtWall ? -wallThickPx / 2 : 0)
-                              : (isExtWall ? w + wallThickPx / 2 : w);
+                            const oy = clampedLeft;
+                            const wallLineX = wall.wallIndex === 4 ? 0 : w;
+                            const wallMidX = isExtWall
+                              ? (wall.wallIndex === 4 ? -wallThickPx / 2 : w + wallThickPx / 2)
+                              : wallLineX;
                             return (
                               <g key={`op-${oi}${fromNeighbor ? '-n' : ''}`} pointerEvents="none">
-                                <rect x={wallCenter - markerThick / 2} y={oy} width={markerThick} height={opWidth}
+                                <rect x={wallMidX - markerThick / 2} y={oy} width={markerThick} height={opWidth}
                                   fill="#ffffff" stroke={isDoor ? '#d97706' : '#06b6d4'}
                                   strokeWidth={fromNeighbor ? 1 : 1.5} rx={1}
                                   strokeDasharray={fromNeighbor ? '3 2' : undefined} />
-                                <text x={wallCenter} y={oy + opWidth / 2 + 1} textAnchor="middle" fontSize={Math.min(6, opWidth * 0.6)} fill={isDoor ? '#92400e' : '#0e7490'} fontWeight="600" dominantBaseline="middle">
+                                <text x={wallMidX} y={oy + opWidth / 2 + 1} textAnchor="middle" fontSize={Math.min(6, opWidth * 0.6)} fill={isDoor ? '#92400e' : '#0e7490'} fontWeight="600" dominantBaseline="middle">
                                   {isDoor ? 'P' : 'V'}
                                 </text>
                               </g>

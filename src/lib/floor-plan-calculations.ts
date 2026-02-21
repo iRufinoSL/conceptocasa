@@ -1679,7 +1679,7 @@ export function computeBuildingOutline(rooms: RoomData[]): OutlineVertex[] {
 /**
  * Compute composite walls from the building outline.
  * Each outline edge becomes a composite wall containing the room wall sections that form it.
- * External walls are viewed from outside, internal from inside.
+ * All walls are viewed from the INTERIOR perspective.
  */
 export function computeCompositeWalls(
   rooms: RoomData[],
@@ -1756,16 +1756,16 @@ export function computeCompositeWalls(
     if (matchingRooms.length === 0) continue;
 
     // Sort by position along the edge
-    // For external view: sort depends on side (viewed from outside)
-    // Top: standing north facing south → left=east(maxX), right=west(minX) → descending X
-    // Right: standing east facing west → left=south(maxY), right=north(minY) → descending Y
-    // Bottom: standing south facing north → left=west(minX), right=east(maxX) → ascending X
-    // Left: standing west facing east → left=north(minY), right=south(maxY) → ascending Y
+    // For INTERIOR view: sort depends on side (viewed from inside)
+    // Top: standing inside looking north → left=A(minX), right=B(maxX) → ascending X
+    // Right: standing inside looking east → left=B(minY), right=C(maxY) → ascending Y
+    // Bottom: standing inside looking south → left=C(maxX), right=D(minX) → descending X
+    // Left: standing inside looking west → left=D(maxY), right=A(minY) → descending Y
     switch (side) {
-      case 'top': matchingRooms.sort((a, b) => b.overlapStart - a.overlapStart); break; // descending X
-      case 'right': matchingRooms.sort((a, b) => b.overlapStart - a.overlapStart); break; // descending Y
-      case 'bottom': matchingRooms.sort((a, b) => a.overlapStart - b.overlapStart); break; // ascending X
-      case 'left': matchingRooms.sort((a, b) => a.overlapStart - b.overlapStart); break; // ascending Y
+      case 'top': matchingRooms.sort((a, b) => a.overlapStart - b.overlapStart); break; // ascending X
+      case 'right': matchingRooms.sort((a, b) => a.overlapStart - b.overlapStart); break; // ascending Y
+      case 'bottom': matchingRooms.sort((a, b) => b.overlapStart - a.overlapStart); break; // descending X
+      case 'left': matchingRooms.sort((a, b) => b.overlapStart - a.overlapStart); break; // descending Y
     }
 
     // Build sections

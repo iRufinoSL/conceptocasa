@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { Plus, Trash2, Box, Layers, ArrowUpDown, Maximize2, Merge, Unlink, Map } from 'lucide-react';
+import { Plus, Trash2, Box, Layers, ArrowUpDown, Maximize2, Merge, Unlink, Map as MapIcon } from 'lucide-react';
 import { OPENING_PRESETS, WALL_LABELS, computeWallSegments, autoClassifyWalls, generateExternalWallNames, isExteriorType, isInvisibleType, computeBuildingOutline, computeCompositeWalls } from '@/lib/floor-plan-calculations';
 import type { RoomData, WallData, OpeningData, FloorPlanData, WallSegment, FloorLevel, WallType, BlockGroupData, OutlineVertex, CompositeWall } from '@/lib/floor-plan-calculations';
 
@@ -329,7 +329,7 @@ export function ElevationsGridViewer({
         {compositeWalls.length > 0 && (
           <Button variant={viewMode === 'composite' ? 'default' : 'outline'} size="sm" className="text-xs h-7"
             onClick={() => setViewMode('composite')}>
-            <Map className="h-3 w-3 mr-1" /> Paredes compuestas ({compositeWalls.length})
+            <MapIcon className="h-3 w-3 mr-1" /> Paredes compuestas ({compositeWalls.length})
           </Button>
         )}
         {viewMode === 'composite' && buildingOutline.length > 0 && (

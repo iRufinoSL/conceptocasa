@@ -475,19 +475,85 @@ export function ElevationsGridViewer({
         </div>
       )}
 
-      {/* Composite walls view */}
-      {viewMode === 'composite' && compositeWalls.length > 0 && (
-        <div className="space-y-4">
-          {compositeWalls.map(cw => (
-            <CompositeWallCard
-              key={cw.id}
-              compositeWall={cw}
-              plan={plan}
-              onOpeningClick={handleOpeningClick}
-            />
-          ))}
-        </div>
-      )}
+      {/* Composite walls view — grouped by floor level */}
+      {viewMode === 'composite' && compositeWalls.length > 0 && (() => {
+        // Group composites by floor: each composite may have sections from different floors
+        // We create per-floor filtered composites
+        const sortedFloors2 = floors ? [...floors].sort((a, b) => a.orderIndex - b.orderIndex) : [];
+        
+        if (sortedFloors2.length <= 1) {
+          // No multi-floor → show all composites as-is
+          return (
+            <div className="space-y-4">
+              {compositeWalls.map(cw => (
+                <CompositeWallCard
+                  key={cw.id}
+                  compositeWall={cw}
+                  plan={plan}
+                  onOpeningClick={handleOpeningClick}
+                />
+              ))}
+            </div>
+          );
+        }
+
+        // Multi-floor: for each floor, filter composite sections to rooms of that floor
+        return (
+          <div className="space-y-4">
+            {sortedFloors2.map(floor => {
+              const floorRoomIds = new Set(rooms.filter(r => r.floorId === floor.id).map(r => r.id));
+              if (floorRoomIds.size === 0) return null;
+
+              // Filter each composite wall to only include sections from this floor
+              const floorComposites = compositeWalls
+                .map(cw => {
+                  const floorSections = cw.sections.filter(s => floorRoomIds.has(s.roomId));
+                  if (floorSections.length === 0) return null;
+                  
+                  // Recalculate offsets for filtered sections
+                  let offset = 0;
+                  const adjustedSections = floorSections.map(s => {
+                    const adjusted = { ...s, startOffset: offset };
+                    offset += s.length;
+                    return adjusted;
+                  });
+
+                  return {
+                    ...cw,
+                    id: `${cw.id}-${floor.id}`,
+                    sections: adjustedSections,
+                    totalLength: adjustedSections.reduce((sum, s) => sum + s.length, 0),
+                  };
+                })
+                .filter(Boolean) as typeof compositeWalls;
+
+              if (floorComposites.length === 0) return null;
+
+              return (
+                <Collapsible key={floor.id} defaultOpen>
+                  <CollapsibleTrigger className="flex items-center gap-2 w-full text-left group hover:bg-muted/50 rounded px-2 py-1.5 transition-colors border-b border-border/50 mb-2">
+                    <ChevronRight className="h-4 w-4 text-foreground transition-transform group-data-[state=open]:rotate-90" />
+                    <h3 className="text-sm font-bold text-foreground">{floor.name}</h3>
+                    <Badge variant="secondary" className="text-[10px] h-4">{floorComposites.length} paredes</Badge>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className="ml-2">
+                    <div className="space-y-3">
+                      {floorComposites.map(cw => (
+                        <CompositeWallCard
+                          key={cw.id}
+                          compositeWall={cw}
+                          plan={plan}
+                          onOpeningClick={handleOpeningClick}
+                        />
+                      ))}
+                    </div>
+                  </CollapsibleContent>
+                </Collapsible>
+              );
+            })}
+          </div>
+        );
+      })()}
 
       {/* Room-based view (default) */}
       {viewMode === 'rooms' && floorGroups.map(({ floorId, floorName, roomGroups: floorRoomGroups }) => {

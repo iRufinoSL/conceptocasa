@@ -870,12 +870,22 @@ export const WALL_LABELS: Record<number, string> = {
   4: 'Pared Izquierda',
 };
 
-// Side letters for external wall naming: A=top, B=right, C=bottom, D=left
+// Corner-based wall side naming:
+// A=top-left, B=top-right, C=bottom-right, D=bottom-left
+// Top wall (1) runs A→B, Right wall (2) runs B→C, Bottom wall (3) runs C→D, Left wall (4) runs D→A
 export const WALL_SIDE_LETTERS: Record<number, string> = {
-  1: 'A', // top
-  2: 'B', // right
-  3: 'C', // bottom
-  4: 'D', // left
+  1: 'A', // top side starts at corner A
+  2: 'B', // right side starts at corner B
+  3: 'C', // bottom side starts at corner C
+  4: 'D', // left side starts at corner D
+};
+
+// Next corner clockwise: A→B, B→C, C→D, D→A
+export const WALL_SIDE_END_LETTERS: Record<number, string> = {
+  1: 'B', // top ends at B
+  2: 'C', // right ends at C
+  3: 'D', // bottom ends at D
+  4: 'A', // left ends at A
 };
 
 /**
@@ -918,7 +928,7 @@ export function generateExternalWallNames(
   [1, 2, 3, 4].forEach(side => {
     const sorted = sortByPosition(side);
     const letter = WALL_SIDE_LETTERS[side];
-    const nextLetter = WALL_SIDE_LETTERS[side === 4 ? 1 : side + 1];
+    const nextLetter = WALL_SIDE_END_LETTERS[side];
     
     if (sorted.length === 1) {
       names.set(sorted[0].key, `${letter}${nextLetter}`);

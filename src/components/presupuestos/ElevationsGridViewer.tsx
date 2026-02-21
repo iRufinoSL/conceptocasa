@@ -491,7 +491,7 @@ function ElevationCardView({ card, plan, onOpeningClick, onAddOpening, onCardDou
         width="100%"
         viewBox={`0 0 ${sw} ${sh}`}
         className="mx-auto"
-        style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', maxHeight: fsScale ? '80vh' : '180px' }}
+        style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', maxHeight: fsScale ? '90vh' : '180px' }}
       >
         {isWall && (
           <>
@@ -713,9 +713,9 @@ function ElevationCardView({ card, plan, onOpeningClick, onAddOpening, onCardDou
 
     {/* Fullscreen dialog */}
     <Dialog open={fullscreen} onOpenChange={setFullscreen}>
-      <DialogContent className="max-w-[95vw] max-h-[95vh] w-auto">
-        <DialogHeader>
-          <DialogTitle className="text-sm flex items-center gap-2">
+      <DialogContent className="!max-w-none !w-screen !h-screen !m-0 !p-4 !rounded-none !translate-x-0 !translate-y-0 !top-0 !left-0 flex flex-col">
+        <DialogHeader className="shrink-0">
+          <DialogTitle className="text-sm flex items-center gap-2 flex-wrap">
             {card.label}
             {card.sublabel && <span className="text-muted-foreground font-normal">— {card.sublabel}</span>}
             {blockCount && (
@@ -728,11 +728,14 @@ function ElevationCardView({ card, plan, onOpeningClick, onAddOpening, onCardDou
             )}
           </DialogTitle>
         </DialogHeader>
-        <div className="overflow-auto flex items-center justify-center">
+        <div className="flex-1 overflow-auto flex items-center justify-center min-h-0">
           {card.isInvisible ? (
             <p className="text-muted-foreground italic">Pared invisible</p>
           ) : (
-            renderSvg(Math.min(200, (window.innerWidth * 0.85) / card.width))
+            renderSvg(Math.min(
+              (window.innerHeight * 0.85) / card.height,
+              (window.innerWidth * 0.9) / card.width
+            ))
           )}
         </div>
       </DialogContent>

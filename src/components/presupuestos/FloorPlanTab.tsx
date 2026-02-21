@@ -1017,21 +1017,24 @@ export function FloorPlanTab({ budgetId, budgetName = '', isAdmin }: FloorPlanTa
               gridRef={gridRef}
               onActiveFloorChange={handleActiveFloorChange}
               forceActiveFloorId={forceActiveFloorId}
+              scaleMode={planData?.scaleMode}
+              blockLengthMm={planData?.blockLengthMm}
             />
           </div>
           <div className="space-y-4">
             {selectedRoom && planData ? (() => {
               // Compute coordinate for selected room
+              const cellSizeM = planData.scaleMode === 'bloque' ? planData.blockLengthMm / 1000 : 1;
               const isUnplaced = selectedRoom.posX < 0 || selectedRoom.posY < 0;
-              const coordCol = isUnplaced ? undefined : Math.round(selectedRoom.posX) + 1;
-              const coordRow = isUnplaced ? undefined : Math.round(selectedRoom.posY) + 1;
+              const coordCol = isUnplaced ? undefined : Math.round(selectedRoom.posX / cellSizeM) + 1;
+              const coordRow = isUnplaced ? undefined : Math.round(selectedRoom.posY / cellSizeM) + 1;
               const floorObj = floors.find(f => f.id === selectedRoom.floorId);
               const floorName = floorObj?.name;
 
               const handleChangeCoordinate = async (targetCol: number, targetRow: number) => {
-                const posX = targetCol - 1;
-                const posY = targetRow - 1;
-                await updateRoom(selectedRoom.id, { posX: Math.round(posX * 100) / 100, posY: Math.round(posY * 100) / 100 });
+                const posX = (targetCol - 1) * cellSizeM;
+                const posY = (targetRow - 1) * cellSizeM;
+                await updateRoom(selectedRoom.id, { posX: Math.round(posX * 1000) / 1000, posY: Math.round(posY * 1000) / 1000 });
                 toast.success(`${selectedRoom.name} movido a ${formatCoord(targetCol, targetRow)}`);
               };
 

@@ -335,6 +335,10 @@ function FloorPlanSettingsPanel({ planData, onUpdate, rooms, floors, onUpdateRoo
   const [roofType, setRoofType] = useState<string>(planData.roofType || 'dos_aguas');
   const [overhang, setOverhang] = useState(String(planData.roofOverhang));
   const [slope, setSlope] = useState(String(planData.roofSlopePercent));
+  const [scaleMode, setScaleMode] = useState<string>(planData.scaleMode || 'metros');
+  const [blockLenMm, setBlockLenMm] = useState(String(planData.blockLengthMm || 625));
+  const [blockHMm, setBlockHMm] = useState(String(planData.blockHeightMm || 250));
+  const [blockWMm, setBlockWMm] = useState(String(planData.blockWidthMm || 300));
 
   // Per-level height overrides
   const [levelHeights, setLevelHeights] = useState<Record<string, string>>(() => {
@@ -353,17 +357,34 @@ function FloorPlanSettingsPanel({ planData, onUpdate, rooms, floors, onUpdateRoo
     parseFloat(intThick) !== planData.internalWallThickness ||
     roofType !== (planData.roofType || 'dos_aguas') ||
     parseFloat(overhang) !== planData.roofOverhang ||
-    parseFloat(slope) !== planData.roofSlopePercent;
+    parseFloat(slope) !== planData.roofSlopePercent ||
+    scaleMode !== (planData.scaleMode || 'metros') ||
+    parseFloat(blockLenMm) !== (planData.blockLengthMm || 625) ||
+    parseFloat(blockHMm) !== (planData.blockHeightMm || 250) ||
+    parseFloat(blockWMm) !== (planData.blockWidthMm || 300);
+
+  const scaleUpdate = {
+    scaleMode: scaleMode as any,
+    blockLengthMm: parseFloat(blockLenMm) || 625,
+    blockHeightMm: parseFloat(blockHMm) || 250,
+    blockWidthMm: parseFloat(blockWMm) || 300,
+  };
 
   const handleSave = async () => {
-    await onUpdate({
+    const updates: Partial<FloorPlanData> = {
       defaultHeight: parseFloat(height) || planData.defaultHeight,
       externalWallThickness: parseFloat(extThick) || planData.externalWallThickness,
       internalWallThickness: parseFloat(intThick) || planData.internalWallThickness,
       roofType: roofType as any,
       roofOverhang: parseFloat(overhang) || planData.roofOverhang,
       roofSlopePercent: parseFloat(slope) || planData.roofSlopePercent,
-    });
+      ...scaleUpdate,
+    };
+    // When in block mode, auto-set ext wall thickness from block width
+    if (scaleMode === 'bloque') {
+      updates.externalWallThickness = (parseFloat(blockWMm) || 300) / 1000;
+    }
+    await onUpdate(updates);
     toast.success('Parámetros actualizados');
   };
 
@@ -374,13 +395,15 @@ function FloorPlanSettingsPanel({ planData, onUpdate, rooms, floors, onUpdateRoo
     const newIntThick = parseFloat(intThick) || planData.internalWallThickness;
 
     // Save plan-level defaults first
+    const extThickness = scaleMode === 'bloque' ? (parseFloat(blockWMm) || 300) / 1000 : newExtThick;
     await onUpdate({
       defaultHeight: newHeight,
-      externalWallThickness: newExtThick,
+      externalWallThickness: extThickness,
       internalWallThickness: newIntThick,
       roofType: roofType as any,
       roofOverhang: parseFloat(overhang) || planData.roofOverhang,
       roofSlopePercent: parseFloat(slope) || planData.roofSlopePercent,
+      ...scaleUpdate,
     });
 
     // Apply per-level heights
@@ -477,7 +500,56 @@ function FloorPlanSettingsPanel({ planData, onUpdate, rooms, floors, onUpdateRoo
           </div>
         </div>
 
-        {/* Per-level overrides */}
+        {/* Scale / Block configuration */}
+        <div className="border-t pt-3">
+          <h4 className="text-xs font-semibold text-muted-foreground mb-2">Escala de trabajo</h4>
+          <div className="flex gap-2 mb-3">
+            <Button
+              variant={scaleMode === 'metros' ? 'default' : 'outline'}
+              size="sm"
+              className="flex-1 text-xs"
+              onClick={() => setScaleMode('metros')}
+            >
+              Metros (1m)
+            </Button>
+            <Button
+              variant={scaleMode === 'bloque' ? 'default' : 'outline'}
+              size="sm"
+              className="flex-1 text-xs"
+              onClick={() => setScaleMode('bloque')}
+            >
+              Bloque625
+            </Button>
+          </div>
+          {scaleMode === 'bloque' && (
+            <div className="space-y-2 p-2 border rounded-lg bg-muted/30">
+              <p className="text-[10px] text-muted-foreground mb-2">
+                Dimensiones del bloque. Largo×Alto×Ancho (espesor pared).
+              </p>
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <Label className="text-[10px]">Largo (mm)</Label>
+                  <Input type="number" step="1" value={blockLenMm} onChange={e => setBlockLenMm(e.target.value)} disabled={saving} className="h-8 text-xs" />
+                </div>
+                <div>
+                  <Label className="text-[10px]">Alto (mm)</Label>
+                  <Input type="number" step="1" value={blockHMm} onChange={e => setBlockHMm(e.target.value)} disabled={saving} className="h-8 text-xs" />
+                </div>
+                <div>
+                  <Label className="text-[10px]">Ancho (mm)</Label>
+                  <Input type="number" step="1" value={blockWMm} onChange={e => setBlockWMm(e.target.value)} disabled={saving} className="h-8 text-xs" />
+                </div>
+              </div>
+              <p className="text-[10px] text-muted-foreground">
+                Bloque {blockLenMm}×{blockHMm}×{blockWMm} mm → Espesor ext. = {blockWMm} mm ({(parseFloat(blockWMm) / 1000).toFixed(3)} m)
+              </p>
+              <p className="text-[10px] text-muted-foreground">
+                Ej: 6 bloques ancho = {((parseFloat(blockLenMm) || 625) * 6 / 1000).toFixed(3)} m · 10 bloques alto = {((parseFloat(blockHMm) || 250) * 10 / 1000).toFixed(3)} m
+              </p>
+            </div>
+          )}
+        </div>
+
         {floors.length > 0 && (
           <div className="border-t pt-3">
             <h4 className="text-xs font-semibold text-muted-foreground mb-2">Altura por nivel</h4>

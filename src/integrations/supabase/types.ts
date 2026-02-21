@@ -820,6 +820,9 @@ export type Database = {
       }
       budget_floor_plans: {
         Row: {
+          block_height_mm: number
+          block_length_mm: number
+          block_width_mm: number
           budget_id: string
           created_at: string | null
           default_height: number
@@ -831,10 +834,14 @@ export type Database = {
           roof_overhang: number | null
           roof_slope_percent: number | null
           roof_type: string | null
+          scale_mode: string
           updated_at: string | null
           width: number
         }
         Insert: {
+          block_height_mm?: number
+          block_length_mm?: number
+          block_width_mm?: number
           budget_id: string
           created_at?: string | null
           default_height?: number
@@ -846,10 +853,14 @@ export type Database = {
           roof_overhang?: number | null
           roof_slope_percent?: number | null
           roof_type?: string | null
+          scale_mode?: string
           updated_at?: string | null
           width?: number
         }
         Update: {
+          block_height_mm?: number
+          block_length_mm?: number
+          block_width_mm?: number
           budget_id?: string
           created_at?: string | null
           default_height?: number
@@ -861,6 +872,7 @@ export type Database = {
           roof_overhang?: number | null
           roof_slope_percent?: number | null
           roof_type?: string | null
+          scale_mode?: string
           updated_at?: string | null
           width?: number
         }

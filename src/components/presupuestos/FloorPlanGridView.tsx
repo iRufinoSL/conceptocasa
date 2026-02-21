@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Plus, Link, Unlink, Undo2, Expand, Shrink, MapPin } from 'lucide-react';
+import { Plus, Link, Unlink, Undo2, Expand, Shrink, MapPin, Printer } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import type { RoomData, FloorLevel, WallType, ScaleMode } from '@/lib/floor-plan-calculations';
 import { autoClassifyWalls, isExteriorType, isInvisibleType, isCompartidaType } from '@/lib/floor-plan-calculations';
@@ -33,6 +33,8 @@ interface FloorPlanGridViewProps {
   scaleMode?: ScaleMode;
   /** Block length in mm (default 625), used when scaleMode='bloque' */
   blockLengthMm?: number;
+  /** Budget name for print headers */
+  budgetName?: string;
 }
 
 export interface PositionedRoom {
@@ -171,7 +173,7 @@ export function FloorPlanGridView({
   rooms, floors, planWidth, planLength, selectedRoomId, onSelectRoom,
   onAddRoom, onGroupRooms, onUngroupRooms, onUndo, undoCount = 0, saving = false,
   gridRef, onActiveFloorChange, forceActiveFloorId,
-  scaleMode = 'metros', blockLengthMm = 625,
+  scaleMode = 'metros', blockLengthMm = 625, budgetName = '',
 }: FloorPlanGridViewProps) {
   // Cell size in meters: 1m for 'metros', blockLengthMm/1000 for 'bloque'
   const cellSizeM = scaleMode === 'bloque' ? blockLengthMm / 1000 : 1;
@@ -606,21 +608,28 @@ export function FloorPlanGridView({
               return { label: cc.label, left, top };
             });
             const allCorners = [...mainCorners, ...customMarkers];
-            return allCorners.map(c => (
-              <div
-                key={`corner-${c.label}`}
-                className="absolute z-30 flex items-center justify-center rounded-full bg-primary text-primary-foreground font-bold text-[10px]"
-                style={{
-                  left: c.left - 10,
-                  top: c.top - 4,
-                  width: 20,
-                  height: 16,
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {c.label}
-              </div>
-            ));
+            return allCorners.map((c, idx) => {
+              const isCustom = idx >= mainCorners.length;
+              return (
+                <div
+                  key={`corner-${c.label}-${idx}`}
+                  className={`absolute z-30 flex items-center justify-center rounded-full bg-primary text-primary-foreground font-bold text-[10px] ${isCustom ? 'cursor-pointer hover:bg-destructive hover:text-destructive-foreground transition-colors' : ''}`}
+                  style={{
+                    left: c.left - 10,
+                    top: c.top - 4,
+                    width: 20,
+                    height: 16,
+                    whiteSpace: 'nowrap',
+                  }}
+                  title={isCustom ? `Clic para borrar ${c.label}` : undefined}
+                  onClick={isCustom ? () => {
+                    setCustomCorners(prev => prev.filter((_, ci) => ci !== idx - mainCorners.length));
+                  } : undefined}
+                >
+                  {c.label}
+                </div>
+              );
+            });
           })()}
         </div>
       </div>
@@ -843,12 +852,17 @@ export function FloorPlanGridView({
 
       {/* Fullscreen overlay via portal — bigger cells */}
       {gridFullscreen && createPortal(
-        <div className="fixed inset-0 z-[9999] bg-background flex flex-col">
-          <div className="flex items-center justify-between px-4 py-2 border-b border-border bg-muted/30 shrink-0">
-            <span className="text-sm font-medium">Cuadrícula — Pantalla completa · {currentFloorName}</span>
-            <Button variant="ghost" size="sm" onClick={() => setGridFullscreen(false)}>
-              <Shrink className="h-4 w-4 mr-1" /> Cerrar
-            </Button>
+        <div className="fixed inset-0 z-[9999] bg-background flex flex-col print:static print:z-auto">
+          <div className="flex items-center justify-between px-4 py-2 border-b border-border bg-muted/30 shrink-0 print:border-0">
+            <span className="text-sm font-medium print:text-lg print:font-bold">{budgetName || 'Cuadrícula'} — {currentFloorName}</span>
+            <div className="flex items-center gap-2 print:hidden">
+              <Button variant="outline" size="sm" onClick={() => window.print()}>
+                <Printer className="h-4 w-4 mr-1" /> Imprimir
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => setGridFullscreen(false)}>
+                <Shrink className="h-4 w-4 mr-1" /> Cerrar
+              </Button>
+            </div>
           </div>
           <div className="flex-1 overflow-auto p-4">
             {(() => {

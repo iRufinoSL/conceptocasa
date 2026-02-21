@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useEffect } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { Plus, Trash2, Box, Layers, ArrowUpDown, Maximize2, Merge, Unlink, Map as MapIcon } from 'lucide-react';
+import { Plus, Trash2, Box, Layers, ArrowUpDown, Maximize2, Merge, Unlink, Map as MapIcon, Printer } from 'lucide-react';
 import { OPENING_PRESETS, WALL_LABELS, WALL_SIDE_LETTERS, computeWallSegments, autoClassifyWalls, generateExternalWallNames, isExteriorType, isInvisibleType, computeBuildingOutline, computeCompositeWalls } from '@/lib/floor-plan-calculations';
 import type { RoomData, WallData, OpeningData, FloorPlanData, WallSegment, FloorLevel, WallType, BlockGroupData, OutlineVertex, CompositeWall } from '@/lib/floor-plan-calculations';
 
@@ -26,6 +26,7 @@ interface ElevationsGridViewerProps {
   saving: boolean;
   focusWallId?: string;
   autoEditWallId?: string;
+  budgetName?: string;
 }
 
 type SurfaceCategory = 'cimentacion' | 'suelo' | 'techo' | 'pared' | 'volumen' | 'tejado';
@@ -76,7 +77,7 @@ function getWallHeight(wall: WallData, room: RoomData, plan: FloorPlanData): num
 
 export function ElevationsGridViewer({
   plan, rooms, floors, onUpdateOpening, onAddOpening, onDeleteOpening, onUpdateWall,
-  onAddBlockGroup, onDeleteBlockGroup, onUpdateBlockGroup, saving, focusWallId, autoEditWallId,
+  onAddBlockGroup, onDeleteBlockGroup, onUpdateBlockGroup, saving, focusWallId, autoEditWallId, budgetName,
 }: ElevationsGridViewerProps) {
   const [selectedOpening, setSelectedOpening] = useState<OpeningData | null>(null);
   const [selectedOpeningWallLen, setSelectedOpeningWallLen] = useState<number>(1);
@@ -466,6 +467,7 @@ export function ElevationsGridViewer({
                       onAddBlockGroup={onAddBlockGroup}
                       onDeleteBlockGroup={onDeleteBlockGroup}
                       saving={saving}
+                      budgetName={budgetName}
                     />
                   ))}
                 </div>
@@ -491,6 +493,7 @@ export function ElevationsGridViewer({
                   compositeWall={cw}
                   plan={plan}
                   onOpeningClick={handleOpeningClick}
+                  budgetName={budgetName}
                 />
               ))}
             </div>
@@ -544,6 +547,7 @@ export function ElevationsGridViewer({
                           compositeWall={cw}
                           plan={plan}
                           onOpeningClick={handleOpeningClick}
+                          budgetName={budgetName}
                         />
                       ))}
                     </div>
@@ -586,6 +590,7 @@ export function ElevationsGridViewer({
                           onAddBlockGroup={onAddBlockGroup}
                           onDeleteBlockGroup={onDeleteBlockGroup}
                           saving={saving}
+                          budgetName={budgetName}
                         />
                       ))}
                     </div>
@@ -646,9 +651,15 @@ export function ElevationsGridViewer({
 
       {/* Grid fullscreen dialog */}
       <Dialog open={gridFullscreen} onOpenChange={setGridFullscreen}>
-        <DialogContent className="max-w-[98vw] w-[98vw] max-h-[96vh] h-[96vh] flex flex-col overflow-hidden">
+        <DialogContent className="max-w-[98vw] w-[98vw] max-h-[96vh] h-[96vh] flex flex-col overflow-hidden print:!max-w-none print:!w-full print:!h-auto">
           <DialogHeader className="shrink-0">
-            <DialogTitle className="text-sm">Alzados — Pantalla completa</DialogTitle>
+            <DialogTitle className="text-sm flex items-center gap-2">
+              {budgetName && <span className="font-bold print:text-lg">{budgetName} —</span>}
+              Alzados — Pantalla completa
+              <Button variant="outline" size="sm" className="h-7 text-xs ml-auto print:hidden" onClick={() => window.print()}>
+                <Printer className="h-3 w-3 mr-1" /> Imprimir
+              </Button>
+            </DialogTitle>
             <DialogDescription className="sr-only">Vista completa de todos los alzados</DialogDescription>
           </DialogHeader>
           <div className="flex-1 overflow-auto">
@@ -676,6 +687,7 @@ export function ElevationsGridViewer({
                               onAddBlockGroup={onAddBlockGroup}
                               onDeleteBlockGroup={onDeleteBlockGroup}
                               saving={saving}
+                              budgetName={budgetName}
                             />
                           ))}
                         </div>
@@ -705,7 +717,7 @@ export function ElevationsGridViewer({
 }
 
 // Individual elevation card
-function ElevationCardView({ card, plan, onOpeningClick, onAddOpening, onCardDoubleClick, onAddBlockGroup, onDeleteBlockGroup, saving }: {
+function ElevationCardView({ card, plan, onOpeningClick, onAddOpening, onCardDoubleClick, onAddBlockGroup, onDeleteBlockGroup, saving, budgetName }: {
   card: ElevationCard;
   plan: FloorPlanData;
   onOpeningClick: (op: OpeningData) => void;
@@ -714,6 +726,7 @@ function ElevationCardView({ card, plan, onOpeningClick, onAddOpening, onCardDou
   onAddBlockGroup?: (wallId: string, startCol: number, startRow: number, spanCols: number, spanRows: number, name?: string, color?: string) => Promise<void>;
   onDeleteBlockGroup?: (blockGroupId: string) => Promise<void>;
   saving: boolean;
+  budgetName?: string;
 }) {
   const [fullscreen, setFullscreen] = useState(false);
   const [selectedBlocks, setSelectedBlocks] = useState<Set<string>>(new Set()); // "col-row" keys
@@ -1019,24 +1032,28 @@ function ElevationCardView({ card, plan, onOpeningClick, onAddOpening, onCardDou
 
     {/* Fullscreen dialog with interactive block editing */}
     <Dialog open={fullscreen} onOpenChange={(open) => { setFullscreen(open); if (!open) setSelectedBlocks(new Set()); }}>
-      <DialogContent className="!max-w-none !w-screen !h-screen !m-0 !p-4 !rounded-none !translate-x-0 !translate-y-0 !top-0 !left-0 flex flex-col">
+      <DialogContent className="!max-w-none !w-screen !h-screen !m-0 !p-4 !rounded-none !translate-x-0 !translate-y-0 !top-0 !left-0 flex flex-col print:!p-2">
         <DialogHeader className="shrink-0">
           <DialogTitle className="text-sm flex items-center gap-2 flex-wrap">
+            {budgetName && <span className="font-bold print:text-lg">{budgetName} —</span>}
             {card.label}
             {card.sublabel && <span className="text-muted-foreground font-normal">— {card.sublabel}</span>}
             {blockCount && (
-              <Badge variant="outline" className="text-xs">
+              <Badge variant="outline" className="text-xs print:hidden">
                 {blockCount.total} bloques ({blockCount.cols}×{blockCount.rows})
               </Badge>
             )}
             {!card.isInvisible && (
-              <Badge variant="outline" className="text-xs">{area}m²</Badge>
+              <Badge variant="outline" className="text-xs print:hidden">{area}m²</Badge>
             )}
             {isWall && plan.scaleMode === 'bloque' && (card.wall?.blockGroups?.length ?? 0) > 0 && (
-              <Badge variant="secondary" className="text-xs">
+              <Badge variant="secondary" className="text-xs print:hidden">
                 {card.wall!.blockGroups!.length} grupos
               </Badge>
             )}
+            <Button variant="outline" size="sm" className="h-7 text-xs ml-auto print:hidden" onClick={() => window.print()}>
+              <Printer className="h-3 w-3 mr-1" /> Imprimir
+            </Button>
           </DialogTitle>
           <DialogDescription className="sr-only">Vista a pantalla completa del alzado</DialogDescription>
         </DialogHeader>
@@ -1362,10 +1379,11 @@ const SIDE_LABELS: Record<string, string> = {
   top: 'Norte', right: 'Este', bottom: 'Sur', left: 'Oeste',
 };
 
-function CompositeWallCard({ compositeWall, plan, onOpeningClick }: {
+function CompositeWallCard({ compositeWall, plan, onOpeningClick, budgetName }: {
   compositeWall: CompositeWall;
   plan: FloorPlanData;
   onOpeningClick: (op: OpeningData) => void;
+  budgetName?: string;
 }) {
   const [fullscreen, setFullscreen] = useState(false);
   const cw = compositeWall;
@@ -1584,21 +1602,25 @@ function CompositeWallCard({ compositeWall, plan, onOpeningClick }: {
 
       {/* Fullscreen dialog */}
       <Dialog open={fullscreen} onOpenChange={setFullscreen}>
-        <DialogContent className="!max-w-none !w-screen !h-screen !m-0 !p-4 !rounded-none !translate-x-0 !translate-y-0 !top-0 !left-0 flex flex-col">
+        <DialogContent className="!max-w-none !w-screen !h-screen !m-0 !p-4 !rounded-none !translate-x-0 !translate-y-0 !top-0 !left-0 flex flex-col print:!p-2">
           <DialogHeader className="shrink-0">
             <DialogTitle className="text-sm flex items-center gap-2 flex-wrap">
+              {budgetName && <span className="font-bold print:text-lg">{budgetName} —</span>}
               {cw.label}
-              <Badge variant="default" className="text-xs">{SIDE_LABELS[cw.side]}</Badge>
-              <Badge variant="outline" className="text-xs">{cw.totalLength.toFixed(2)}m × {maxHeight.toFixed(2)}m</Badge>
-              <Badge variant="secondary" className="text-xs">{cw.sections.length} espacios</Badge>
+              <Badge variant="default" className="text-xs print:hidden">{SIDE_LABELS[cw.side]}</Badge>
+              <Badge variant="outline" className="text-xs print:hidden">{cw.totalLength.toFixed(2)}m × {maxHeight.toFixed(2)}m</Badge>
+              <Badge variant="secondary" className="text-xs print:hidden">{cw.sections.length} espacios</Badge>
               {cw.objectSummary.totalBlocks && (
-                <Badge variant="outline" className="text-xs">{cw.objectSummary.totalBlocks.total} bloques</Badge>
+                <Badge variant="outline" className="text-xs print:hidden">{cw.objectSummary.totalBlocks.total} bloques</Badge>
               )}
               {cw.objectSummary.openingDetails.map(od => (
-                <Badge key={od.type} variant="outline" className="text-xs">
+                <Badge key={od.type} variant="outline" className="text-xs print:hidden">
                   {od.count}× {od.label}
                 </Badge>
               ))}
+              <Button variant="outline" size="sm" className="h-7 text-xs ml-auto print:hidden" onClick={() => window.print()}>
+                <Printer className="h-3 w-3 mr-1" /> Imprimir
+              </Button>
             </DialogTitle>
             <DialogDescription className="sr-only">Vista a pantalla completa de pared compuesta</DialogDescription>
           </DialogHeader>

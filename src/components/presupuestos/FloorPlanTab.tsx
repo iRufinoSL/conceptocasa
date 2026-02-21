@@ -1041,6 +1041,7 @@ export function FloorPlanTab({ budgetId, budgetName = '', isAdmin }: FloorPlanTa
               forceActiveFloorId={forceActiveFloorId}
               scaleMode={planData?.scaleMode}
               blockLengthMm={planData?.blockLengthMm}
+              budgetName={budgetName}
             />
           </div>
           <div className="space-y-4">
@@ -1165,6 +1166,7 @@ export function FloorPlanTab({ budgetId, budgetName = '', isAdmin }: FloorPlanTa
           onUpdateBlockGroup={updateBlockGroup}
           saving={saving}
           focusWallId={elevationReturnContext?.wallId}
+          budgetName={budgetName}
         />
       )}
 

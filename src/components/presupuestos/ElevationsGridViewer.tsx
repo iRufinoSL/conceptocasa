@@ -25,6 +25,7 @@ interface ElevationsGridViewerProps {
   onUpdateBlockGroup?: (blockGroupId: string, data: { name?: string; color?: string; spanCols?: number; spanRows?: number }) => Promise<void>;
   saving: boolean;
   focusWallId?: string;
+  autoEditWallId?: string;
 }
 
 type SurfaceCategory = 'cimentacion' | 'suelo' | 'techo' | 'pared' | 'volumen' | 'tejado';
@@ -75,9 +76,10 @@ function getWallHeight(wall: WallData, room: RoomData, plan: FloorPlanData): num
 
 export function ElevationsGridViewer({
   plan, rooms, floors, onUpdateOpening, onAddOpening, onDeleteOpening, onUpdateWall,
-  onAddBlockGroup, onDeleteBlockGroup, onUpdateBlockGroup, saving, focusWallId,
+  onAddBlockGroup, onDeleteBlockGroup, onUpdateBlockGroup, saving, focusWallId, autoEditWallId,
 }: ElevationsGridViewerProps) {
   const [selectedOpening, setSelectedOpening] = useState<OpeningData | null>(null);
+  const [selectedOpeningWallLen, setSelectedOpeningWallLen] = useState<number>(1);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editCard, setEditCard] = useState<ElevationCard | null>(null);
   const [editCardDialogOpen, setEditCardDialogOpen] = useState(false);
@@ -96,6 +98,9 @@ export function ElevationsGridViewer({
       }, 300);
     }
   }, [focusWallId]);
+
+  // Auto-open the WallEditDialog for a specific wall (from space form eye icon)
+  const [autoEditTriggered, setAutoEditTriggered] = useState(false);
 
   const wallSegmentsMap = useMemo(() => computeWallSegments(rooms), [rooms]);
   const wallClassification = useMemo(() => autoClassifyWalls(rooms), [rooms]);
@@ -274,6 +279,21 @@ export function ElevationsGridViewer({
     });
   }, [rooms, plan, wallSegmentsMap, wallClassification, externalWallNames]);
 
+  // Auto-open the WallEditDialog for a specific wall (from space form eye icon)
+  useEffect(() => {
+    if (autoEditWallId && !autoEditTriggered && roomGroups.length > 0) {
+      for (const rg of roomGroups) {
+        const card = rg.cards.find(c => c.wallId === autoEditWallId && c.category === 'pared');
+        if (card) {
+          setEditCard(card);
+          setEditCardDialogOpen(true);
+          setAutoEditTriggered(true);
+          break;
+        }
+      }
+    }
+  }, [autoEditWallId, autoEditTriggered, roomGroups]);
+
   // Group by floor
   const floorGroups: Array<{ floorId: string; floorName: string; roomGroups: RoomElevationGroup[] }> = useMemo(() => {
     const sortedFloors = floors ? [...floors].sort((a, b) => a.orderIndex - b.orderIndex) : [];
@@ -296,9 +316,21 @@ export function ElevationsGridViewer({
   }, [roomGroups, floors, rooms]);
 
   const handleOpeningClick = useCallback((op: OpeningData) => {
+    // Find the wall length for this opening
+    let wLen = 1;
+    for (const room of rooms) {
+      for (const wall of room.walls) {
+        if (wall.openings.some(o => o.id === op.id)) {
+          const isHoriz = wall.wallIndex === 1 || wall.wallIndex === 3;
+          wLen = isHoriz ? room.width : room.length;
+          break;
+        }
+      }
+    }
     setSelectedOpening(op);
+    setSelectedOpeningWallLen(wLen);
     setEditDialogOpen(true);
-  }, []);
+  }, [rooms]);
 
   const handleSaveOpening = useCallback(async (data: { width?: number; height?: number; sillHeight?: number; positionX?: number; openingType?: string }) => {
     if (!selectedOpening) return;
@@ -462,6 +494,7 @@ export function ElevationsGridViewer({
           open={editDialogOpen}
           onOpenChange={setEditDialogOpen}
           opening={selectedOpening}
+          wallLen={selectedOpeningWallLen}
           onSave={handleSaveOpening}
           onDelete={async () => {
             await onDeleteOpening(selectedOpening.id);
@@ -1496,41 +1529,53 @@ function WallEditDialog({ open, onOpenChange, card, currentWallType, liveRooms, 
           )}
 
           {/* Existing openings - use liveOpenings so add/delete are instantly reflected */}
-          {liveOpenings.length > 0 && (
-            <div className="space-y-2">
-              <p className="text-xs font-semibold text-muted-foreground">Huecos ({liveOpenings.length})</p>
-              {liveOpenings.map(op => (
-                <div key={op.id} className="flex items-center gap-2 border border-border rounded-md p-2">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-medium">
-                      {OPENING_PRESETS[op.openingType as keyof typeof OPENING_PRESETS]?.label || op.openingType}
-                    </p>
-                    <p className="text-[10px] text-muted-foreground">
-                      {op.width.toFixed(2)} × {op.height.toFixed(2)} m · suelo: {(op.sillHeight ?? 0).toFixed(2)} m · pos. {(op.positionX * 100).toFixed(0)}%
-                    </p>
+          {(() => {
+            const isHoriz = card.wall ? (card.wall.wallIndex === 1 || card.wall.wallIndex === 3) : true;
+            const fullWallLen = card.room ? (isHoriz ? card.room.width : card.room.length) : card.width;
+            return (
+              <>
+                {liveOpenings.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-xs font-semibold text-muted-foreground">Huecos ({liveOpenings.length})</p>
+                    {liveOpenings.map(op => {
+                      const leftEdgeMm = Math.round((op.positionX * fullWallLen - op.width / 2) * 1000);
+                      return (
+                        <div key={op.id} className="flex items-center gap-2 border border-border rounded-md p-2">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-medium">
+                              {OPENING_PRESETS[op.openingType as keyof typeof OPENING_PRESETS]?.label || op.openingType}
+                            </p>
+                            <p className="text-[10px] text-muted-foreground">
+                              {op.width.toFixed(2)} × {op.height.toFixed(2)} m · suelo: {(op.sillHeight ?? 0).toFixed(2)} m · pos. {leftEdgeMm} mm
+                            </p>
+                          </div>
+                          <Button variant="outline" size="sm" className="h-7 text-[10px] px-2"
+                            onClick={() => setEditingOp(op)}>
+                            Editar
+                          </Button>
+                          <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive hover:text-destructive"
+                            onClick={async () => { await onDeleteOpening(op.id); }} disabled={saving}>
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      );
+                    })}
                   </div>
-                  <Button variant="outline" size="sm" className="h-7 text-[10px] px-2"
-                    onClick={() => setEditingOp(op)}>
-                    Editar
-                  </Button>
-                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive hover:text-destructive"
-                    onClick={async () => { await onDeleteOpening(op.id); }} disabled={saving}>
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
-                </div>
-              ))}
-            </div>
-          )}
+                )}
 
-          {/* Inline edit for selected opening */}
-          {editingOp && (
-            <InlineOpeningEditor
-              opening={editingOp}
-              onSave={handleSaveOp}
-              onCancel={() => setEditingOp(null)}
-              saving={saving}
-            />
-          )}
+                {/* Inline edit for selected opening */}
+                {editingOp && (
+                  <InlineOpeningEditor
+                    opening={editingOp}
+                    wallLen={fullWallLen}
+                    onSave={handleSaveOp}
+                    onCancel={() => setEditingOp(null)}
+                    saving={saving}
+                  />
+                )}
+              </>
+            );
+          })()}
 
           {/* Add opening */}
           {card.canAddOpenings && card.wallId && (
@@ -1553,8 +1598,9 @@ function WallEditDialog({ open, onOpenChange, card, currentWallType, liveRooms, 
   );
 }
 
-function InlineOpeningEditor({ opening, onSave, onCancel, saving }: {
+function InlineOpeningEditor({ opening, wallLen, onSave, onCancel, saving }: {
   opening: OpeningData;
+  wallLen?: number;
   onSave: (data: { width?: number; height?: number; sillHeight?: number; positionX?: number; openingType?: string }) => Promise<void>;
   onCancel: () => void;
   saving: boolean;
@@ -1562,8 +1608,11 @@ function InlineOpeningEditor({ opening, onSave, onCancel, saving }: {
   const [width, setWidth] = useState(opening.width);
   const [height, setHeight] = useState(opening.height);
   const [sillHeight, setSillHeight] = useState(opening.sillHeight ?? 0);
-  const [positionX, setPositionX] = useState(opening.positionX);
   const [openingType, setOpeningType] = useState(opening.openingType);
+  const wl = wallLen || 1;
+  const initLeftMm = Math.round((opening.positionX * wl - opening.width / 2) * 1000);
+  const [leftEdgeMm, setLeftEdgeMm] = useState(initLeftMm);
+  const positionXFromMm = (mm: number, w: number) => wl > 0 ? (mm / 1000 + w / 2) / wl : 0.5;
 
   return (
     <div className="border border-primary/30 rounded-md p-3 space-y-3 bg-muted/20">
@@ -1597,18 +1646,19 @@ function InlineOpeningEditor({ opening, onSave, onCancel, saving }: {
         </div>
       </div>
       <div>
-        <Label className="text-xs">Posición en pared</Label>
+        <Label className="text-xs">Posición esq. izq. (mm desde borde izq.)</Label>
         <div className="flex items-center gap-2">
-          <input type="range" min="0" max="1" step="0.01"
-            className="flex-1 accent-primary"
-            value={positionX}
-            onChange={e => setPositionX(Number(e.target.value))} />
-          <span className="text-xs text-muted-foreground w-10 text-right">{(positionX * 100).toFixed(0)}%</span>
+          <Input type="number" step="1" className="h-8 text-xs w-24"
+            value={leftEdgeMm}
+            onChange={e => setLeftEdgeMm(Number(e.target.value))} />
+          <span className="text-[10px] text-muted-foreground">
+            de {Math.round(wl * 1000)} mm
+          </span>
         </div>
       </div>
       <div className="flex justify-end gap-2">
         <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={onCancel}>Cancelar</Button>
-        <Button size="sm" className="h-7 text-xs" onClick={() => onSave({ width, height, sillHeight, positionX, openingType })} disabled={saving}>
+        <Button size="sm" className="h-7 text-xs" onClick={() => onSave({ width, height, sillHeight, positionX: positionXFromMm(leftEdgeMm, width), openingType })} disabled={saving}>
           Guardar
         </Button>
       </div>
@@ -1617,10 +1667,11 @@ function InlineOpeningEditor({ opening, onSave, onCancel, saving }: {
 }
 
 // Opening properties edit dialog (single click on opening)
-function OpeningEditDialog({ open, onOpenChange, opening, onSave, onDelete, saving }: {
+function OpeningEditDialog({ open, onOpenChange, opening, wallLen, onSave, onDelete, saving }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   opening: OpeningData;
+  wallLen?: number;
   onSave: (data: { width?: number; height?: number; sillHeight?: number; positionX?: number; openingType?: string }) => Promise<void>;
   onDelete: () => Promise<void>;
   saving: boolean;
@@ -1628,20 +1679,23 @@ function OpeningEditDialog({ open, onOpenChange, opening, onSave, onDelete, savi
   const [width, setWidth] = useState(opening.width);
   const [height, setHeight] = useState(opening.height);
   const [sillHeight, setSillHeight] = useState(opening.sillHeight ?? 0);
-  const [positionX, setPositionX] = useState(opening.positionX);
   const [openingType, setOpeningType] = useState(opening.openingType);
+  const wl = wallLen || 1;
+  const initLeftMm = Math.round((opening.positionX * wl - opening.width / 2) * 1000);
+  const [leftEdgeMm, setLeftEdgeMm] = useState(initLeftMm);
+  const positionXFromMm = (mm: number, w: number) => wl > 0 ? (mm / 1000 + w / 2) / wl : 0.5;
 
   // Sync when opening changes
   useState(() => {
     setWidth(opening.width);
     setHeight(opening.height);
     setSillHeight(opening.sillHeight ?? 0);
-    setPositionX(opening.positionX);
     setOpeningType(opening.openingType);
+    setLeftEdgeMm(Math.round((opening.positionX * wl - opening.width / 2) * 1000));
   });
 
   const handleSave = async () => {
-    await onSave({ width, height, sillHeight, positionX, openingType });
+    await onSave({ width, height, sillHeight, positionX: positionXFromMm(leftEdgeMm, width), openingType });
     onOpenChange(false);
   };
 
@@ -1683,13 +1737,14 @@ function OpeningEditDialog({ open, onOpenChange, opening, onSave, onDelete, savi
             </div>
           </div>
           <div>
-            <Label className="text-xs">Posición (%)</Label>
+            <Label className="text-xs">Posición esq. izq. (mm desde borde izq.)</Label>
             <div className="flex items-center gap-2">
-              <input type="range" min="0" max="1" step="0.01"
-                className="flex-1 accent-primary"
-                value={positionX}
-                onChange={e => setPositionX(Number(e.target.value))} />
-              <span className="text-xs text-muted-foreground w-10 text-right">{(positionX * 100).toFixed(0)}%</span>
+              <Input type="number" step="1" className="h-8 text-xs w-24"
+                value={leftEdgeMm}
+                onChange={e => setLeftEdgeMm(Number(e.target.value))} />
+              <span className="text-[10px] text-muted-foreground">
+                de {Math.round(wl * 1000)} mm
+              </span>
             </div>
           </div>
           <div className="flex justify-between pt-2">

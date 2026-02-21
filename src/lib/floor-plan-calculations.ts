@@ -1465,6 +1465,7 @@ export interface CompositeWallSection {
   wall: WallData;
   openings: OpeningData[];
   startOffset: number; // meters from start of composite wall
+  isGable?: boolean; // triangular gable wall (bajo cubierta)
 }
 
 export interface CompositeWall {
@@ -1782,7 +1783,22 @@ export function computeCompositeWalls(
 
     matchingRooms.forEach(({ room, wall, overlapStart, overlapEnd }) => {
       const sectionLen = overlapEnd - overlapStart;
-      const wallH = wall.height || room.height || plan.defaultHeight;
+      // For bajo cubierta gable walls (height=0, wallIndex 2 or 4): use gable peak height
+      let wallH: number;
+      const isBajoCub = room.height === 0 && plan.roofType === 'dos_aguas';
+      const isGableWall = isBajoCub && (wallIndex === 2 || wallIndex === 4);
+      if (isGableWall) {
+        const totalW = (rooms.reduce((mx, r) => Math.max(mx, r.posX + r.width), -Infinity) - rooms.reduce((mn, r) => Math.min(mn, r.posX), Infinity)) + 2 * plan.externalWallThickness;
+        wallH = (totalW / 2) * (plan.roofSlopePercent / 100);
+      } else if (wall.height && wall.height > 0) {
+        wallH = wall.height;
+      } else if (room.height && room.height > 0) {
+        wallH = room.height;
+      } else if (room.height === 0) {
+        wallH = 0;
+      } else {
+        wallH = plan.defaultHeight;
+      }
 
       // Filter openings to this section
       const isHoriz = wallIndex === 1 || wallIndex === 3;
@@ -1812,6 +1828,7 @@ export function computeCompositeWalls(
         wall,
         openings: sectionOpenings,
         startOffset: offset,
+        isGable: isGableWall,
       });
       offset += sectionLen;
     });

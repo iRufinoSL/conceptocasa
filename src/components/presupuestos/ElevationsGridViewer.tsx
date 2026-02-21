@@ -745,6 +745,15 @@ function ElevationCardView({ card, plan, onOpeningClick, onAddOpening, onCardDou
               {card.sublabel && (
                 <p className="text-[10px] text-muted-foreground truncate">{card.sublabel}</p>
               )}
+              {isWall && card.wall && (
+                <p className="text-[9px] text-muted-foreground/70 italic">
+                  {WALL_TYPE_OPTIONS.find(o => o.value === (card.wall?.wallType as string))?.label || card.wall.wallType}
+                  {' · '}
+                  <span className="underline cursor-pointer hover:text-primary" onClick={e => { e.stopPropagation(); onCardDoubleClick(card); }}>
+                    cambiar
+                  </span>
+                </p>
+              )}
             </div>
           </div>
           <div className="flex items-center gap-1 shrink-0">

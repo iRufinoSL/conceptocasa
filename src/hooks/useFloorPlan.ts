@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import type { FloorPlanData, RoomData, WallData, OpeningData, WallType, FloorLevel, ScaleMode } from '@/lib/floor-plan-calculations';
+import type { FloorPlanData, RoomData, WallData, OpeningData, WallType, FloorLevel, ScaleMode, BlockGroupData } from '@/lib/floor-plan-calculations';
 import { migrateLegacyWallType, autoClassifyWalls, isExteriorType } from '@/lib/floor-plan-calculations';
 
 interface DbFloorPlan {
@@ -169,12 +169,14 @@ export function useFloorPlan(budgetId: string) {
 
       // Fetch openings
       let openingsData: DbOpening[] = [];
+      let blockGroupsData: any[] = [];
       if (wallIds.length > 0) {
-        const { data } = await supabase
-          .from('budget_floor_plan_openings')
-          .select('*')
-          .in('wall_id', wallIds);
-        openingsData = (data || []) as DbOpening[];
+        const [openingsRes, blockGroupsRes] = await Promise.all([
+          supabase.from('budget_floor_plan_openings').select('*').in('wall_id', wallIds),
+          supabase.from('budget_floor_plan_block_groups').select('*').in('wall_id', wallIds),
+        ]);
+        openingsData = (openingsRes.data || []) as DbOpening[];
+        blockGroupsData = blockGroupsRes.data || [];
       }
 
       // Build tree
@@ -201,6 +203,18 @@ export function useFloorPlan(budgetId: string) {
                   height: o.height,
                   sillHeight: o.sill_height ?? 0,
                   positionX: o.position_x,
+                })),
+              blockGroups: blockGroupsData
+                .filter((bg: any) => bg.wall_id === w.id)
+                .map((bg: any) => ({
+                  id: bg.id,
+                  wallId: bg.wall_id,
+                  startCol: bg.start_col,
+                  startRow: bg.start_row,
+                  spanCols: bg.span_cols,
+                  spanRows: bg.span_rows,
+                  name: bg.name || undefined,
+                  color: bg.color || undefined,
                 })),
             };
           });
@@ -1221,6 +1235,61 @@ export function useFloorPlan(budgetId: string) {
     }
   };
 
+  const addBlockGroup = async (wallId: string, startCol: number, startRow: number, spanCols: number, spanRows: number, name?: string, color?: string) => {
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from('budget_floor_plan_block_groups')
+        .insert({ wall_id: wallId, start_col: startCol, start_row: startRow, span_cols: spanCols, span_rows: spanRows, name: name || null, color: color || null });
+      if (error) throw error;
+      await fetchAll();
+    } catch (err) {
+      console.error('Error adding block group:', err);
+      toast.error('Error al agrupar bloques');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const deleteBlockGroup = async (blockGroupId: string) => {
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from('budget_floor_plan_block_groups')
+        .delete()
+        .eq('id', blockGroupId);
+      if (error) throw error;
+      await fetchAll();
+    } catch (err) {
+      console.error('Error deleting block group:', err);
+      toast.error('Error al eliminar grupo de bloques');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const updateBlockGroup = async (blockGroupId: string, data: { name?: string; color?: string; spanCols?: number; spanRows?: number }) => {
+    setSaving(true);
+    try {
+      const updates: any = {};
+      if (data.name !== undefined) updates.name = data.name;
+      if (data.color !== undefined) updates.color = data.color;
+      if (data.spanCols !== undefined) updates.span_cols = data.spanCols;
+      if (data.spanRows !== undefined) updates.span_rows = data.spanRows;
+      const { error } = await supabase
+        .from('budget_floor_plan_block_groups')
+        .update(updates)
+        .eq('id', blockGroupId);
+      if (error) throw error;
+      await fetchAll();
+    } catch (err) {
+      console.error('Error updating block group:', err);
+      toast.error('Error al actualizar grupo');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return {
     floorPlan,
     rooms,
@@ -1250,6 +1319,9 @@ export function useFloorPlan(budgetId: string) {
     ungroupRooms,
     undoLastChange,
     undoCount,
+    addBlockGroup,
+    deleteBlockGroup,
+    updateBlockGroup,
     refetch: fetchAll,
   };
 }

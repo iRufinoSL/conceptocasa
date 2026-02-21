@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Plus, Trash2, Box, Layers, ArrowUpDown, Maximize2, Merge, Unlink, Map as MapIcon } from 'lucide-react';
-import { OPENING_PRESETS, WALL_LABELS, computeWallSegments, autoClassifyWalls, generateExternalWallNames, isExteriorType, isInvisibleType, computeBuildingOutline, computeCompositeWalls } from '@/lib/floor-plan-calculations';
+import { OPENING_PRESETS, WALL_LABELS, WALL_SIDE_LETTERS, computeWallSegments, autoClassifyWalls, generateExternalWallNames, isExteriorType, isInvisibleType, computeBuildingOutline, computeCompositeWalls } from '@/lib/floor-plan-calculations';
 import type { RoomData, WallData, OpeningData, FloorPlanData, WallSegment, FloorLevel, WallType, BlockGroupData, OutlineVertex, CompositeWall } from '@/lib/floor-plan-calculations';
 
 interface ElevationsGridViewerProps {
@@ -631,13 +631,43 @@ function ElevationCardView({ card, plan, onOpeningClick, onAddOpening, onCardDou
           return <g className="block-pattern">{lines}</g>;
         })()}
 
+        {/* Direction arrows A↔B above elevation */}
+        {isWall && card.wall && (() => {
+          const wi = card.wall.wallIndex;
+          // Corner labels when viewing the wall from the outside (left-to-right)
+          const cornerMap: Record<number, [string, string]> = {
+            1: ['D', 'B'], // top wall: left=D, right=B
+            2: ['A', 'C'], // right wall: left=A, right=C
+            3: ['B', 'D'], // bottom wall: left=B, right=D
+            4: ['C', 'A'], // left wall: left=C, right=A
+          };
+          const [leftCorner, rightCorner] = cornerMap[wi] || ['?', '?'];
+          const arrowY = ry - 8;
+          const fs = fsScale ? 9 : 7;
+          return (
+            <g>
+              {/* Left corner label */}
+              <text x={rx} y={arrowY} textAnchor="start" fontSize={fs} fontWeight={700} fill="hsl(222, 47%, 40%)">
+                ← {leftCorner}
+              </text>
+              {/* Right corner label */}
+              <text x={rx + rw} y={arrowY} textAnchor="end" fontSize={fs} fontWeight={700} fill="hsl(222, 47%, 40%)">
+                {rightCorner} →
+              </text>
+              {/* Arrow line */}
+              <line x1={rx + 12} y1={arrowY - 3} x2={rx + rw - 12} y2={arrowY - 3}
+                stroke="hsl(222, 47%, 40%)" strokeWidth={0.5} opacity={0.4} />
+            </g>
+          );
+        })()}
+
         {/* Dimensions */}
         <line x1={rx} y1={ry + rh + 12} x2={rx + rw} y2={ry + rh + 12}
           stroke="hsl(25, 95%, 45%)" strokeWidth={0.6} />
         <line x1={rx} y1={ry + rh + 8} x2={rx} y2={ry + rh + 16} stroke="hsl(25, 95%, 45%)" strokeWidth={0.4} />
         <line x1={rx + rw} y1={ry + rh + 8} x2={rx + rw} y2={ry + rh + 16} stroke="hsl(25, 95%, 45%)" strokeWidth={0.4} />
         <text x={rx + rw / 2} y={ry + rh + 24} textAnchor="middle" fontSize={fsScale ? 10 : 8} fill="hsl(25, 95%, 45%)" fontWeight={600}>
-          {card.width.toFixed(2)}m
+          {Math.round(card.width * 1000)} mm
         </text>
         <line x1={rx - 12} y1={ry} x2={rx - 12} y2={ry + rh}
           stroke="hsl(25, 95%, 45%)" strokeWidth={0.6} />
@@ -645,7 +675,7 @@ function ElevationCardView({ card, plan, onOpeningClick, onAddOpening, onCardDou
         <line x1={rx - 16} y1={ry + rh} x2={rx - 8} y2={ry + rh} stroke="hsl(25, 95%, 45%)" strokeWidth={0.4} />
         <text x={rx - 18} y={ry + rh / 2} textAnchor="middle" fontSize={fsScale ? 10 : 8} fill="hsl(25, 95%, 45%)" fontWeight={600}
           transform={`rotate(-90, ${rx - 18}, ${ry + rh / 2})`}>
-          {card.height.toFixed(2)}m
+          {Math.round(card.height * 1000)} mm
         </text>
 
         {/* Openings */}
@@ -1063,13 +1093,29 @@ function FullscreenBlockGrid({ card, plan, blockCount, selectedBlocks, onToggleB
         });
       })}
 
+      {/* Direction arrows */}
+      {card.wall && (() => {
+        const wi = card.wall.wallIndex;
+        const cornerMap: Record<number, [string, string]> = {
+          1: ['D', 'B'], 2: ['A', 'C'], 3: ['B', 'D'], 4: ['C', 'A'],
+        };
+        const [leftCorner, rightCorner] = cornerMap[wi] || ['?', '?'];
+        return (
+          <g>
+            <text x={rx} y={ry - 10} textAnchor="start" fontSize={11} fontWeight={700} fill="hsl(222, 47%, 40%)">← {leftCorner}</text>
+            <text x={rx + rw} y={ry - 10} textAnchor="end" fontSize={11} fontWeight={700} fill="hsl(222, 47%, 40%)">{rightCorner} →</text>
+            <line x1={rx + 18} y1={ry - 13} x2={rx + rw - 18} y2={ry - 13} stroke="hsl(222, 47%, 40%)" strokeWidth={0.5} opacity={0.4} />
+          </g>
+        );
+      })()}
+
       {/* Dimension lines */}
       <line x1={rx} y1={ry + rh + 15} x2={rx + rw} y2={ry + rh + 15}
         stroke="hsl(25, 95%, 45%)" strokeWidth={0.8} />
       <line x1={rx} y1={ry + rh + 10} x2={rx} y2={ry + rh + 20} stroke="hsl(25, 95%, 45%)" strokeWidth={0.5} />
       <line x1={rx + rw} y1={ry + rh + 10} x2={rx + rw} y2={ry + rh + 20} stroke="hsl(25, 95%, 45%)" strokeWidth={0.5} />
       <text x={rx + rw / 2} y={ry + rh + 30} textAnchor="middle" fontSize={12} fill="hsl(25, 95%, 45%)" fontWeight={600}>
-        {card.width.toFixed(2)}m ({blockCount.cols} bloques)
+        {Math.round(card.width * 1000)} mm ({blockCount.cols} bloques)
       </text>
       <line x1={rx - 15} y1={ry} x2={rx - 15} y2={ry + rh}
         stroke="hsl(25, 95%, 45%)" strokeWidth={0.8} />
@@ -1077,7 +1123,7 @@ function FullscreenBlockGrid({ card, plan, blockCount, selectedBlocks, onToggleB
       <line x1={rx - 20} y1={ry + rh} x2={rx - 10} y2={ry + rh} stroke="hsl(25, 95%, 45%)" strokeWidth={0.5} />
       <text x={rx - 22} y={ry + rh / 2} textAnchor="middle" fontSize={12} fill="hsl(25, 95%, 45%)" fontWeight={600}
         transform={`rotate(-90, ${rx - 22}, ${ry + rh / 2})`}>
-        {card.height.toFixed(2)}m ({blockCount.rows} filas)
+        {Math.round(card.height * 1000)} mm ({blockCount.rows} filas)
       </text>
 
       {/* Openings overlay */}
@@ -1113,7 +1159,7 @@ function FullscreenBlockGrid({ card, plan, blockCount, selectedBlocks, onToggleB
             </text>
             <text x={opX + opWidthPx / 2} y={opY + opHeightPx / 2 + 16} textAnchor="middle"
               fontSize={8} fill="hsl(var(--muted-foreground))" pointerEvents="none">
-              {op.width.toFixed(2)}×{op.height.toFixed(2)}m
+              {Math.round(op.width * 1000)}×{Math.round(op.height * 1000)}mm
             </text>
           </g>
         );
@@ -1475,7 +1521,7 @@ function WallEditDialog({ open, onOpenChange, card, currentWallType, liveRooms, 
             {card.sublabel && <span className="text-muted-foreground font-normal">— {card.sublabel}</span>}
           </DialogTitle>
           <DialogDescription className="text-xs">
-            {card.width.toFixed(2)} m × {card.height.toFixed(2)} m
+            {Math.round(card.width * 1000)} mm × {Math.round(card.height * 1000)} mm
             {card.badgeLabel && ` · ${card.badgeLabel}`}
           </DialogDescription>
         </DialogHeader>
@@ -1548,7 +1594,7 @@ function WallEditDialog({ open, onOpenChange, card, currentWallType, liveRooms, 
                               {OPENING_PRESETS[op.openingType as keyof typeof OPENING_PRESETS]?.label || op.openingType}
                             </p>
                             <p className="text-[10px] text-muted-foreground">
-                              {op.width.toFixed(2)} × {op.height.toFixed(2)} m · suelo: {(op.sillHeight ?? 0).toFixed(2)} m · pos. {leftEdgeMm} mm
+                              {Math.round(op.width * 1000)} × {Math.round(op.height * 1000)} mm · suelo: {Math.round((op.sillHeight ?? 0) * 1000)} mm · pos. {leftEdgeMm} mm
                             </p>
                           </div>
                           <Button variant="outline" size="sm" className="h-7 text-[10px] px-2"
@@ -1607,14 +1653,15 @@ function InlineOpeningEditor({ opening, wallLen, onSave, onCancel, saving }: {
   onCancel: () => void;
   saving: boolean;
 }) {
-  const [width, setWidth] = useState(opening.width);
-  const [height, setHeight] = useState(opening.height);
-  const [sillHeight, setSillHeight] = useState(opening.sillHeight ?? 0);
+  // All UI in mm, stored in m
+  const [widthMm, setWidthMm] = useState(Math.round(opening.width * 1000));
+  const [heightMm, setHeightMm] = useState(Math.round(opening.height * 1000));
+  const [sillHeightMm, setSillHeightMm] = useState(Math.round((opening.sillHeight ?? 0) * 1000));
   const [openingType, setOpeningType] = useState(opening.openingType);
   const wl = wallLen || 1;
   const initLeftMm = Math.round((opening.positionX * wl - opening.width / 2) * 1000);
   const [leftEdgeMm, setLeftEdgeMm] = useState(initLeftMm);
-  const positionXFromMm = (mm: number, w: number) => wl > 0 ? (mm / 1000 + w / 2) / wl : 0.5;
+  const positionXFromMm = (mm: number, wMm: number) => wl > 0 ? ((mm + wMm / 2) / 1000) / wl : 0.5;
 
   return (
     <div className="border border-primary/30 rounded-md p-3 space-y-3 bg-muted/20">
@@ -1632,19 +1679,19 @@ function InlineOpeningEditor({ opening, wallLen, onSave, onCancel, saving }: {
       </div>
       <div className="grid grid-cols-3 gap-2">
         <div>
-          <Label className="text-xs">Ancho (m)</Label>
-          <Input type="number" step="0.01" className="h-8 text-xs"
-            value={width} onChange={e => setWidth(Number(e.target.value))} />
+          <Label className="text-xs">Ancho (mm)</Label>
+          <Input type="number" step="1" className="h-8 text-xs"
+            value={widthMm} onChange={e => setWidthMm(Number(e.target.value))} />
         </div>
         <div>
-          <Label className="text-xs">Alto (m)</Label>
-          <Input type="number" step="0.01" className="h-8 text-xs"
-            value={height} onChange={e => setHeight(Number(e.target.value))} />
+          <Label className="text-xs">Alto (mm)</Label>
+          <Input type="number" step="1" className="h-8 text-xs"
+            value={heightMm} onChange={e => setHeightMm(Number(e.target.value))} />
         </div>
         <div>
-          <Label className="text-xs">Dist. suelo (m)</Label>
-          <Input type="number" step="0.01" className="h-8 text-xs"
-            value={sillHeight} onChange={e => setSillHeight(Number(e.target.value))} />
+          <Label className="text-xs">Dist. suelo (mm)</Label>
+          <Input type="number" step="1" className="h-8 text-xs"
+            value={sillHeightMm} onChange={e => setSillHeightMm(Number(e.target.value))} />
         </div>
       </div>
       <div>
@@ -1660,7 +1707,13 @@ function InlineOpeningEditor({ opening, wallLen, onSave, onCancel, saving }: {
       </div>
       <div className="flex justify-end gap-2">
         <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={onCancel}>Cancelar</Button>
-        <Button size="sm" className="h-7 text-xs" onClick={() => onSave({ width, height, sillHeight, positionX: positionXFromMm(leftEdgeMm, width), openingType })} disabled={saving}>
+        <Button size="sm" className="h-7 text-xs" onClick={() => onSave({
+          width: widthMm / 1000,
+          height: heightMm / 1000,
+          sillHeight: sillHeightMm / 1000,
+          positionX: positionXFromMm(leftEdgeMm, widthMm),
+          openingType,
+        })} disabled={saving}>
           Guardar
         </Button>
       </div>
@@ -1678,26 +1731,33 @@ function OpeningEditDialog({ open, onOpenChange, opening, wallLen, onSave, onDel
   onDelete: () => Promise<void>;
   saving: boolean;
 }) {
-  const [width, setWidth] = useState(opening.width);
-  const [height, setHeight] = useState(opening.height);
-  const [sillHeight, setSillHeight] = useState(opening.sillHeight ?? 0);
+  // All UI in mm, stored in m
+  const [widthMm, setWidthMm] = useState(Math.round(opening.width * 1000));
+  const [heightMm, setHeightMm] = useState(Math.round(opening.height * 1000));
+  const [sillHeightMm, setSillHeightMm] = useState(Math.round((opening.sillHeight ?? 0) * 1000));
   const [openingType, setOpeningType] = useState(opening.openingType);
   const wl = wallLen || 1;
   const initLeftMm = Math.round((opening.positionX * wl - opening.width / 2) * 1000);
   const [leftEdgeMm, setLeftEdgeMm] = useState(initLeftMm);
-  const positionXFromMm = (mm: number, w: number) => wl > 0 ? (mm / 1000 + w / 2) / wl : 0.5;
+  const positionXFromMm = (mm: number, wMm: number) => wl > 0 ? ((mm + wMm / 2) / 1000) / wl : 0.5;
 
   // Sync when opening changes
   useState(() => {
-    setWidth(opening.width);
-    setHeight(opening.height);
-    setSillHeight(opening.sillHeight ?? 0);
+    setWidthMm(Math.round(opening.width * 1000));
+    setHeightMm(Math.round(opening.height * 1000));
+    setSillHeightMm(Math.round((opening.sillHeight ?? 0) * 1000));
     setOpeningType(opening.openingType);
     setLeftEdgeMm(Math.round((opening.positionX * wl - opening.width / 2) * 1000));
   });
 
   const handleSave = async () => {
-    await onSave({ width, height, sillHeight, positionX: positionXFromMm(leftEdgeMm, width), openingType });
+    await onSave({
+      width: widthMm / 1000,
+      height: heightMm / 1000,
+      sillHeight: sillHeightMm / 1000,
+      positionX: positionXFromMm(leftEdgeMm, widthMm),
+      openingType,
+    });
     onOpenChange(false);
   };
 
@@ -1723,19 +1783,19 @@ function OpeningEditDialog({ open, onOpenChange, opening, wallLen, onSave, onDel
           </div>
           <div className="grid grid-cols-3 gap-2">
             <div>
-              <Label className="text-xs">Ancho (m)</Label>
-              <Input type="number" step="0.01" className="h-8 text-xs"
-                value={width} onChange={e => setWidth(Number(e.target.value))} />
+              <Label className="text-xs">Ancho (mm)</Label>
+              <Input type="number" step="1" className="h-8 text-xs"
+                value={widthMm} onChange={e => setWidthMm(Number(e.target.value))} />
             </div>
             <div>
-              <Label className="text-xs">Alto (m)</Label>
-              <Input type="number" step="0.01" className="h-8 text-xs"
-                value={height} onChange={e => setHeight(Number(e.target.value))} />
+              <Label className="text-xs">Alto (mm)</Label>
+              <Input type="number" step="1" className="h-8 text-xs"
+                value={heightMm} onChange={e => setHeightMm(Number(e.target.value))} />
             </div>
             <div>
-              <Label className="text-xs">Dist. suelo (m)</Label>
-              <Input type="number" step="0.01" className="h-8 text-xs"
-                value={sillHeight} onChange={e => setSillHeight(Number(e.target.value))} />
+              <Label className="text-xs">Dist. suelo (mm)</Label>
+              <Input type="number" step="1" className="h-8 text-xs"
+                value={sillHeightMm} onChange={e => setSillHeightMm(Number(e.target.value))} />
             </div>
           </div>
           <div>

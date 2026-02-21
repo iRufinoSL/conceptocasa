@@ -184,6 +184,9 @@ export function FloorPlanGridView({
   const [groupNameInput, setGroupNameInput] = useState('');
   const [gridFullscreen, setGridFullscreen] = useState(false);
   const [showCorners, setShowCorners] = useState(true);
+  const [customCorners, setCustomCorners] = useState<Array<{ label: string; col: number; row: number }>>([]);
+  const [newCornerLabel, setNewCornerLabel] = useState('');
+  const [newCornerCoord, setNewCornerCoord] = useState('');
 
   // Force switch to a specific floor tab when requested (e.g. after creating a new floor)
   useEffect(() => {
@@ -191,7 +194,7 @@ export function FloorPlanGridView({
       setActiveFloorId(forceActiveFloorId);
     }
   }, [forceActiveFloorId]);
-  const CELL_SIZE = scaleMode === 'bloque' ? 30 : 48; // px per cell (smaller for block mode since there are more cells)
+  const CELL_SIZE = scaleMode === 'bloque' ? 30 : 48; // px per cell (normal view)
 
   const wallClassification = useMemo(() => autoClassifyWalls(rooms), [rooms]);
 
@@ -359,7 +362,8 @@ export function FloorPlanGridView({
     return <div className={posClasses[side]}>{marks}</div>;
   };
 
-  const renderGrid = () => {
+  const renderGrid = (overrideCellSize?: number) => {
+    const CS = overrideCellSize || CELL_SIZE;
     // Render rooms as absolutely positioned overlays on the grid
     const roomOverlays = placedRooms.map(room => {
       const startCol = Math.round(room.posX / cellSizeM) + 1;
@@ -380,11 +384,11 @@ export function FloorPlanGridView({
       const coord = levelPrefix ? `${levelPrefix}-${formatCoord(startCol, startRow)}` : formatCoord(startCol, startRow);
       const groupColor = room.groupId ? getGroupColor(room.groupId) : undefined;
 
-      // Position: col header (30px) + (startCol-1)*CELL_SIZE, row header (20px) + (startRow-1)*CELL_SIZE
-      const left = 30 + (startCol - 1) * CELL_SIZE;
-      const top = 20 + (startRow - 1) * CELL_SIZE;
-      const width = spanCols * CELL_SIZE;
-      const height = spanRows * CELL_SIZE;
+      // Position: col header (30px) + (startCol-1)*CS, row header (20px) + (startRow-1)*CS
+      const left = 30 + (startCol - 1) * CS;
+      const top = 20 + (startRow - 1) * CS;
+      const width = spanCols * CS;
+      const height = spanRows * CS;
 
       return (
         <div
@@ -438,8 +442,8 @@ export function FloorPlanGridView({
         <div
           className="relative"
           style={{
-            width: 30 + totalCols * CELL_SIZE + 1,
-            height: 20 + totalRows * CELL_SIZE + 1,
+            width: 30 + totalCols * CS + 1,
+            height: 20 + totalRows * CS + 1,
           }}
         >
           {/* Column headers with level prefix */}
@@ -448,9 +452,9 @@ export function FloorPlanGridView({
               key={`ch-${ci}`}
               className="absolute text-[9px] font-extrabold text-blue-600 dark:text-blue-400 text-center"
               style={{
-                left: 30 + ci * CELL_SIZE,
+                left: 30 + ci * CS,
                 top: 0,
-                width: CELL_SIZE,
+                width: CS,
                 height: 20,
                 lineHeight: '20px',
               }}
@@ -466,10 +470,10 @@ export function FloorPlanGridView({
               className="absolute text-[9px] font-extrabold text-blue-600 dark:text-blue-400 text-center"
               style={{
                 left: 0,
-                top: 20 + ri * CELL_SIZE,
+                top: 20 + ri * CS,
                 width: 30,
-                height: CELL_SIZE,
-                lineHeight: `${CELL_SIZE}px`,
+                height: CS,
+                lineHeight: `${CS}px`,
               }}
             >
               {rowToLabel(ri + 1, levelPrefix)}
@@ -483,10 +487,10 @@ export function FloorPlanGridView({
               key={`vl-${ci}`}
               className="absolute bg-muted-foreground/10"
               style={{
-                left: 30 + ci * CELL_SIZE,
+                left: 30 + ci * CS,
                 top: 20,
                 width: 1,
-                height: totalRows * CELL_SIZE,
+                height: totalRows * CS,
               }}
             />
           ))}
@@ -497,8 +501,8 @@ export function FloorPlanGridView({
               className="absolute bg-muted-foreground/10"
               style={{
                 left: 30,
-                top: 20 + ri * CELL_SIZE,
-                width: totalCols * CELL_SIZE,
+                top: 20 + ri * CS,
+                width: totalCols * CS,
                 height: 1,
               }}
             />
@@ -510,10 +514,10 @@ export function FloorPlanGridView({
             const startRow = Math.round(room.posY / cellSizeM) + 1;
             const spanCols = Math.max(1, Math.round(room.width / cellSizeM));
             const spanRows = Math.max(1, Math.round(room.length / cellSizeM));
-            const left = 30 + (startCol - 1) * CELL_SIZE;
-            const top = 20 + (startRow - 1) * CELL_SIZE;
-            const width = spanCols * CELL_SIZE;
-            const height = spanRows * CELL_SIZE;
+            const left = 30 + (startCol - 1) * CS;
+            const top = 20 + (startRow - 1) * CS;
+            const width = spanCols * CS;
+            const height = spanRows * CS;
             return (
               <div
                 key={`ghost-${room.id}`}
@@ -544,10 +548,10 @@ export function FloorPlanGridView({
                 key={`empty-${cellKey}`}
                 className={`absolute cursor-pointer transition-colors z-5 ${isEmptySelected ? 'bg-blue-300/50 ring-2 ring-blue-500' : 'hover:bg-blue-100/30'}`}
                 style={{
-                  left: 30 + (col - 1) * CELL_SIZE,
-                  top: 20 + (row - 1) * CELL_SIZE,
-                  width: CELL_SIZE,
-                  height: CELL_SIZE,
+                  left: 30 + (col - 1) * CS,
+                  top: 20 + (row - 1) * CS,
+                  width: CS,
+                  height: CS,
                 }}
                 onClick={() => toggleEmptyCell(col, row)}
               >
@@ -577,12 +581,18 @@ export function FloorPlanGridView({
               maxRow = Math.max(maxRow, er);
             });
             const corners = [
-              { label: 'A', left: 30 + (minCol - 1) * CELL_SIZE, top: 20 + (minRow - 1) * CELL_SIZE },
-              { label: 'B', left: 30 + (maxCol) * CELL_SIZE, top: 20 + (minRow - 1) * CELL_SIZE },
-              { label: 'C', left: 30 + (maxCol) * CELL_SIZE, top: 20 + (maxRow) * CELL_SIZE },
-              { label: 'D', left: 30 + (minCol - 1) * CELL_SIZE, top: 20 + (maxRow) * CELL_SIZE },
+              { label: 'A', left: 30 + (minCol - 1) * CS, top: 20 + (minRow - 1) * CS },
+              { label: 'B', left: 30 + (maxCol) * CS, top: 20 + (minRow - 1) * CS },
+              { label: 'C', left: 30 + (maxCol) * CS, top: 20 + (maxRow) * CS },
+              { label: 'D', left: 30 + (minCol - 1) * CS, top: 20 + (maxRow) * CS },
             ];
-            return corners.map(c => (
+            // Add custom corners
+            const allCorners = [...corners, ...customCorners.map(cc => ({
+              label: cc.label,
+              left: 30 + (cc.col - 1) * CS,
+              top: 20 + (cc.row - 1) * CS,
+            }))];
+            return allCorners.map(c => (
               <div
                 key={`corner-${c.label}`}
                 className="absolute z-30 flex items-center justify-center rounded-full bg-primary text-primary-foreground font-bold text-xs"
@@ -658,6 +668,42 @@ export function FloorPlanGridView({
             <MapPin className="h-4 w-4 mr-1" />
             ABCD
           </Button>
+          {/* Add custom corner */}
+          <div className="flex items-center gap-1">
+            <Input
+              value={newCornerLabel}
+              onChange={e => setNewCornerLabel(e.target.value)}
+              placeholder="A1"
+              className="w-14 h-8 text-xs"
+            />
+            <Input
+              value={newCornerCoord}
+              onChange={e => setNewCornerCoord(e.target.value)}
+              placeholder="R18"
+              className="w-16 h-8 text-xs"
+            />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                if (!newCornerLabel.trim() || !newCornerCoord.trim()) return;
+                const parsed = parseCoord(newCornerCoord.trim());
+                if (!parsed) return;
+                setCustomCorners(prev => [...prev, { label: newCornerLabel.trim(), col: parsed.col, row: parsed.row }]);
+                setNewCornerLabel('');
+                setNewCornerCoord('');
+              }}
+              disabled={!newCornerLabel.trim() || !newCornerCoord.trim()}
+              title="Añadir esquina intermedia"
+            >
+              <Plus className="h-3 w-3" />
+            </Button>
+            {customCorners.length > 0 && (
+              <Button variant="ghost" size="sm" onClick={() => setCustomCorners([])} className="text-xs h-8 px-2">
+                Borrar
+              </Button>
+            )}
+          </div>
           <Button
             variant="outline"
             size="sm"
@@ -767,7 +813,7 @@ export function FloorPlanGridView({
         Cada celda = {scaleMode === 'bloque' ? `${blockLengthMm}×${blockLengthMm}mm (1 bloque)` : '1 m²'}. Coordenadas: {levelPrefix ? `nivel ${levelPrefix} → ` : ''}columnas {levelPrefix ? `${levelPrefix}-` : ''}A01…{colToLabel(totalCols)}, filas {levelPrefix ? `${levelPrefix}-` : ''}1…{totalRows}. Clic en un espacio para editar.
       </p>
 
-      {/* Fullscreen overlay via portal */}
+      {/* Fullscreen overlay via portal — bigger cells */}
       {gridFullscreen && createPortal(
         <div className="fixed inset-0 z-[9999] bg-background flex flex-col">
           <div className="flex items-center justify-between px-4 py-2 border-b border-border bg-muted/30 shrink-0">
@@ -777,7 +823,15 @@ export function FloorPlanGridView({
             </Button>
           </div>
           <div className="flex-1 overflow-auto p-4">
-            {renderGrid()}
+            {(() => {
+              // Calculate a bigger cell size to fill the viewport
+              const availW = window.innerWidth - 80; // padding + header col
+              const availH = window.innerHeight - 100; // padding + header row + toolbar
+              const csW = Math.floor(availW / totalCols);
+              const csH = Math.floor(availH / totalRows);
+              const bigCS = Math.max(CELL_SIZE, Math.min(csW, csH, 120)); // cap at 120px
+              return renderGrid(bigCS);
+            })()}
           </div>
         </div>,
         document.body

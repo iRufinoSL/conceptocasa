@@ -1165,6 +1165,7 @@ export function FloorPlanTab({ budgetId, budgetName = '', isAdmin }: FloorPlanTa
           onUpdateBlockGroup={updateBlockGroup}
           saving={saving}
           focusWallId={elevationReturnContext?.wallId}
+          autoEditWallId={elevationReturnContext?.wallId}
         />
       )}
 

@@ -1,9 +1,9 @@
 import { useMemo, useState, useCallback, useRef, useEffect } from 'react';
 import type { FloorPlanData, RoomData, OutlineVertex } from '@/lib/floor-plan-calculations';
 import { autoClassifyWalls, generateExternalWallNames, computeWallSegments, isExteriorType, isInvisibleType, isCompartidaType, computeGroupPerimeterWalls, computeBuildingOutline } from '@/lib/floor-plan-calculations';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Maximize2, Map as MapIcon } from 'lucide-react';
+import { Expand, X, Map as MapIcon } from 'lucide-react';
+import { createPortal } from 'react-dom';
 
 interface FloorPlanCanvas2DProps {
   plan: FloorPlanData;
@@ -499,7 +499,7 @@ export function FloorPlanCanvas2D({
           Esquinas ABCD
         </Button>
         <Button variant="outline" size="sm" className="h-7 text-[10px] px-2 ml-1 gap-1" onClick={() => setGridFullscreen(true)} title="Ampliar plano a pantalla completa">
-          <Maximize2 className="h-3 w-3" />
+          <Expand className="h-3 w-3" />
           Pantalla completa
         </Button>
         <span className="text-[10px] text-muted-foreground ml-2">
@@ -1127,13 +1127,15 @@ export function FloorPlanCanvas2D({
         </svg>
       </div>
 
-      {/* Fullscreen dialog */}
-      <Dialog open={gridFullscreen} onOpenChange={setGridFullscreen}>
-        <DialogContent className="!max-w-none !w-screen !h-screen !m-0 !p-4 !rounded-none !translate-x-0 !translate-y-0 !top-0 !left-0 flex flex-col">
-          <DialogHeader className="shrink-0">
-            <DialogTitle className="text-sm">Plano 2D — Pantalla completa</DialogTitle>
-            <DialogDescription className="sr-only">Vista completa del plano en 2D</DialogDescription>
-          </DialogHeader>
+      {/* Fullscreen overlay via portal */}
+      {gridFullscreen && createPortal(
+        <div className="fixed inset-0 z-[9999] bg-background flex flex-col">
+          <div className="flex items-center justify-between px-4 py-2 border-b border-border bg-muted/30 shrink-0">
+            <span className="text-sm font-medium">Plano 2D — Pantalla completa</span>
+            <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => setGridFullscreen(false)}>
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
           <div className="flex-1 overflow-hidden" style={{ minHeight: 0 }}>
             <svg
               width="100%"
@@ -1170,7 +1172,6 @@ export function FloorPlanCanvas2D({
                   return (
                     <g key={room.id} transform={`translate(${x}, ${y})`}>
                       <rect x={0} y={0} width={w} height={h} fill={color} opacity={0.75} rx={2} />
-                      {/* Walls */}
                       {roomWallSegments.map(({ wall, wallKey, segments, isHoriz, wx1, wy1, wx2, wy2 }) => {
                         if (intraGroupWallKeys.has(wallKey)) return null;
                         return (
@@ -1180,30 +1181,22 @@ export function FloorPlanCanvas2D({
                               const isInvisible = isInvisibleType(seg.segmentType) || wallManualInvisible;
                               const isExternal = !isInvisible && isExteriorType(seg.segmentType);
                               const isShared = isCompartidaType(seg.segmentType);
-
                               const baseThickness = isInvisible ? plan.internalWallThickness * SCALE * 0.5
                                 : isExternal ? plan.externalWallThickness * SCALE : plan.internalWallThickness * SCALE;
                               const strokeWidth = isInvisible ? Math.max(baseThickness, 1.5)
                                 : Math.max(baseThickness, isExternal ? 4 : 3);
-
                               let sx1: number, sy1: number, sx2: number, sy2: number;
                               if (isHoriz) {
-                                sx1 = wx1 + seg.startFraction * (wx2 - wx1);
-                                sy1 = wy1;
-                                sx2 = wx1 + seg.endFraction * (wx2 - wx1);
-                                sy2 = wy2;
+                                sx1 = wx1 + seg.startFraction * (wx2 - wx1); sy1 = wy1;
+                                sx2 = wx1 + seg.endFraction * (wx2 - wx1); sy2 = wy2;
                               } else {
-                                sx1 = wx1;
-                                sy1 = wy1 + seg.startFraction * (wy2 - wy1);
-                                sx2 = wx2;
-                                sy2 = wy1 + seg.endFraction * (wy2 - wy1);
+                                sx1 = wx1; sy1 = wy1 + seg.startFraction * (wy2 - wy1);
+                                sx2 = wx2; sy2 = wy1 + seg.endFraction * (wy2 - wy1);
                               }
-
                               const segColor = isInvisible ? WALL_INVIS_COLOR
                                 : isShared ? SHARED_WALL_COLOR
                                 : isExternal ? WALL_EXT_COLOR
                                 : WALL_INT_COLOR;
-
                               return (
                                 <line key={`seg-${si}`} x1={sx1} y1={sy1} x2={sx2} y2={sy2}
                                   stroke={segColor} strokeWidth={strokeWidth}
@@ -1214,7 +1207,6 @@ export function FloorPlanCanvas2D({
                           </g>
                         );
                       })}
-                      {/* Room label */}
                       <text x={w / 2} y={h / 2} textAnchor="middle" dominantBaseline="middle"
                         fontSize={9} fontWeight="bold" fill="#1e293b" pointerEvents="none">
                         {room.name} · {(room.width * room.length).toFixed(1)}m²
@@ -1238,8 +1230,9 @@ export function FloorPlanCanvas2D({
               </g>
             </svg>
           </div>
-        </DialogContent>
-      </Dialog>
+        </div>,
+        document.body
+      )}
     </div>
   );
 }

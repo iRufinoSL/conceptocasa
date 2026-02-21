@@ -42,11 +42,8 @@ function getWallHeight(wall: WallData, room: RoomData, plan: FloorPlanData): num
   return wall.height || room.height || plan.defaultHeight;
 }
 
-function getOpeningBaseY(op: OpeningData): number {
-  if (op.openingType === 'puerta' || op.openingType === 'puerta_externa' || op.openingType === 'hueco_paso' || op.openingType === 'ventana_balconera') {
-    return 0;
-  }
-  return 0.9;
+function getOpeningSillHeight(op: OpeningData): number {
+  return op.sillHeight ?? 0;
 }
 
 type DragMode = 'move' | 'resize-left' | 'resize-right';
@@ -408,9 +405,9 @@ export function WallElevationView({
 
               const opWidthPx = op.width * SCALE;
               const opHeightPx = op.height * SCALE;
-              const baseY = getOpeningBaseY(op);
+              const sillH = getOpeningSillHeight(op);
               const opX = wallX + opCenterInSegment * wallW - opWidthPx / 2;
-              const opY = wallY + wallH - opHeightPx - baseY * SCALE;
+              const opY = wallY + wallH - opHeightPx - sillH * SCALE;
               const isDoor = op.openingType === 'puerta' || op.openingType === 'puerta_externa' || op.openingType === 'hueco_paso' || op.openingType === 'ventana_balconera';
               const isSelected = selectedOpeningId === op.id;
 

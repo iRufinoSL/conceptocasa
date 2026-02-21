@@ -16,7 +16,7 @@ interface ElevationsGridViewerProps {
   plan: FloorPlanData;
   rooms: RoomData[];
   floors?: FloorLevel[];
-  onUpdateOpening: (openingId: string, data: { width?: number; height?: number; positionX?: number; openingType?: string }) => Promise<void>;
+  onUpdateOpening: (openingId: string, data: { width?: number; height?: number; sillHeight?: number; positionX?: number; openingType?: string }) => Promise<void>;
   onAddOpening: (wallId: string, type: string, width: number, height: number, sillHeight?: number, positionX?: number) => Promise<void>;
   onDeleteOpening: (openingId: string) => Promise<void>;
   onUpdateWall?: (wallId: string, data: { wallType?: WallType; thickness?: number; height?: number; elevationGroup?: string | null }) => Promise<void>;
@@ -60,11 +60,9 @@ const CARD_SCALE = 60;
 const CARD_PADDING = 20;
 const MAX_CARD_WIDTH = 400;
 
-function getOpeningBaseY(op: OpeningData): number {
-  if (op.openingType === 'puerta' || op.openingType === 'puerta_externa' || op.openingType === 'ventana_balconera') {
-    return 0;
-  }
-  return 0.9;
+function getOpeningSillHeight(op: OpeningData): number {
+  // Use the stored sillHeight (meters from floor)
+  return op.sillHeight ?? 0;
 }
 
 function getWallHeight(wall: WallData, room: RoomData, plan: FloorPlanData): number {
@@ -279,7 +277,7 @@ export function ElevationsGridViewer({
     setEditDialogOpen(true);
   }, []);
 
-  const handleSaveOpening = useCallback(async (data: { width?: number; height?: number; positionX?: number; openingType?: string }) => {
+  const handleSaveOpening = useCallback(async (data: { width?: number; height?: number; sillHeight?: number; positionX?: number; openingType?: string }) => {
     if (!selectedOpening) return;
     await onUpdateOpening(selectedOpening.id, data);
     setSelectedOpening(prev => prev ? { ...prev, ...data } as OpeningData : null);
@@ -577,9 +575,9 @@ function ElevationCardView({ card, plan, onOpeningClick, onAddOpening, onCardDou
           opCenterInSegment = Math.max(0.05, Math.min(0.95, opCenterInSegment));
           const opWidthPx = op.width * s;
           const opHeightPx = op.height * s;
-          const baseY = getOpeningBaseY(op);
+          const sillH = getOpeningSillHeight(op);
           const opX = rx + opCenterInSegment * rw - opWidthPx / 2;
-          const opY = ry + rh - opHeightPx - baseY * s;
+          const opY = ry + rh - opHeightPx - sillH * s;
           const isDoor = op.openingType === 'puerta' || op.openingType === 'puerta_externa' || op.openingType === 'ventana_balconera';
           return (
             <g key={op.id} style={{ cursor: 'pointer' }}
@@ -763,7 +761,7 @@ function WallEditDialog({ open, onOpenChange, card, currentWallType, liveRooms, 
   currentWallType?: WallType; // live wall type from updated rooms data
   liveRooms: RoomData[]; // live rooms for up-to-date openings
   onAddOpening: (wallId: string, type: string, width: number, height: number, sillHeight?: number, positionX?: number) => Promise<void>;
-  onUpdateOpening: (id: string, data: { width?: number; height?: number; positionX?: number; openingType?: string }) => Promise<void>;
+  onUpdateOpening: (id: string, data: { width?: number; height?: number; sillHeight?: number; positionX?: number; openingType?: string }) => Promise<void>;
   onDeleteOpening: (id: string) => Promise<void>;
   onUpdateWall?: (wallId: string, data: { wallType?: WallType; thickness?: number; height?: number; elevationGroup?: string | null }) => Promise<void>;
   saving: boolean;
@@ -814,7 +812,7 @@ function WallEditDialog({ open, onOpenChange, card, currentWallType, liveRooms, 
     await onAddOpening(card.wallId, key, preset.width, preset.height, preset.sillHeight, positionX);
   };
 
-  const handleSaveOp = async (data: { width?: number; height?: number; positionX?: number; openingType?: string }) => {
+  const handleSaveOp = async (data: { width?: number; height?: number; sillHeight?: number; positionX?: number; openingType?: string }) => {
     if (!editingOp) return;
     await onUpdateOpening(editingOp.id, data);
     setEditingOp(null);
@@ -902,7 +900,7 @@ function WallEditDialog({ open, onOpenChange, card, currentWallType, liveRooms, 
                       {OPENING_PRESETS[op.openingType as keyof typeof OPENING_PRESETS]?.label || op.openingType}
                     </p>
                     <p className="text-[10px] text-muted-foreground">
-                      {op.width.toFixed(2)} × {op.height.toFixed(2)} m · pos. {(op.positionX * 100).toFixed(0)}%
+                      {op.width.toFixed(2)} × {op.height.toFixed(2)} m · suelo: {(op.sillHeight ?? 0).toFixed(2)} m · pos. {(op.positionX * 100).toFixed(0)}%
                     </p>
                   </div>
                   <Button variant="outline" size="sm" className="h-7 text-[10px] px-2"
@@ -951,12 +949,13 @@ function WallEditDialog({ open, onOpenChange, card, currentWallType, liveRooms, 
 
 function InlineOpeningEditor({ opening, onSave, onCancel, saving }: {
   opening: OpeningData;
-  onSave: (data: { width?: number; height?: number; positionX?: number; openingType?: string }) => Promise<void>;
+  onSave: (data: { width?: number; height?: number; sillHeight?: number; positionX?: number; openingType?: string }) => Promise<void>;
   onCancel: () => void;
   saving: boolean;
 }) {
   const [width, setWidth] = useState(opening.width);
   const [height, setHeight] = useState(opening.height);
+  const [sillHeight, setSillHeight] = useState(opening.sillHeight ?? 0);
   const [positionX, setPositionX] = useState(opening.positionX);
   const [openingType, setOpeningType] = useState(opening.openingType);
 
@@ -974,16 +973,21 @@ function InlineOpeningEditor({ opening, onSave, onCancel, saving }: {
           </SelectContent>
         </Select>
       </div>
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-3 gap-2">
         <div>
           <Label className="text-xs">Ancho (m)</Label>
-          <Input type="number" step="0.05" className="h-8 text-xs"
+          <Input type="number" step="0.01" className="h-8 text-xs"
             value={width} onChange={e => setWidth(Number(e.target.value))} />
         </div>
         <div>
           <Label className="text-xs">Alto (m)</Label>
-          <Input type="number" step="0.05" className="h-8 text-xs"
+          <Input type="number" step="0.01" className="h-8 text-xs"
             value={height} onChange={e => setHeight(Number(e.target.value))} />
+        </div>
+        <div>
+          <Label className="text-xs">Dist. suelo (m)</Label>
+          <Input type="number" step="0.01" className="h-8 text-xs"
+            value={sillHeight} onChange={e => setSillHeight(Number(e.target.value))} />
         </div>
       </div>
       <div>
@@ -998,7 +1002,7 @@ function InlineOpeningEditor({ opening, onSave, onCancel, saving }: {
       </div>
       <div className="flex justify-end gap-2">
         <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={onCancel}>Cancelar</Button>
-        <Button size="sm" className="h-7 text-xs" onClick={() => onSave({ width, height, positionX, openingType })} disabled={saving}>
+        <Button size="sm" className="h-7 text-xs" onClick={() => onSave({ width, height, sillHeight, positionX, openingType })} disabled={saving}>
           Guardar
         </Button>
       </div>
@@ -1011,12 +1015,13 @@ function OpeningEditDialog({ open, onOpenChange, opening, onSave, onDelete, savi
   open: boolean;
   onOpenChange: (open: boolean) => void;
   opening: OpeningData;
-  onSave: (data: { width?: number; height?: number; positionX?: number; openingType?: string }) => Promise<void>;
+  onSave: (data: { width?: number; height?: number; sillHeight?: number; positionX?: number; openingType?: string }) => Promise<void>;
   onDelete: () => Promise<void>;
   saving: boolean;
 }) {
   const [width, setWidth] = useState(opening.width);
   const [height, setHeight] = useState(opening.height);
+  const [sillHeight, setSillHeight] = useState(opening.sillHeight ?? 0);
   const [positionX, setPositionX] = useState(opening.positionX);
   const [openingType, setOpeningType] = useState(opening.openingType);
 
@@ -1024,12 +1029,13 @@ function OpeningEditDialog({ open, onOpenChange, opening, onSave, onDelete, savi
   useState(() => {
     setWidth(opening.width);
     setHeight(opening.height);
+    setSillHeight(opening.sillHeight ?? 0);
     setPositionX(opening.positionX);
     setOpeningType(opening.openingType);
   });
 
   const handleSave = async () => {
-    await onSave({ width, height, positionX, openingType });
+    await onSave({ width, height, sillHeight, positionX, openingType });
     onOpenChange(false);
   };
 
@@ -1053,16 +1059,21 @@ function OpeningEditDialog({ open, onOpenChange, opening, onSave, onDelete, savi
               </SelectContent>
             </Select>
           </div>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-3 gap-2">
             <div>
               <Label className="text-xs">Ancho (m)</Label>
-              <Input type="number" step="0.05" className="h-8 text-xs"
+              <Input type="number" step="0.01" className="h-8 text-xs"
                 value={width} onChange={e => setWidth(Number(e.target.value))} />
             </div>
             <div>
               <Label className="text-xs">Alto (m)</Label>
-              <Input type="number" step="0.05" className="h-8 text-xs"
+              <Input type="number" step="0.01" className="h-8 text-xs"
                 value={height} onChange={e => setHeight(Number(e.target.value))} />
+            </div>
+            <div>
+              <Label className="text-xs">Dist. suelo (m)</Label>
+              <Input type="number" step="0.01" className="h-8 text-xs"
+                value={sillHeight} onChange={e => setSillHeight(Number(e.target.value))} />
             </div>
           </div>
           <div>

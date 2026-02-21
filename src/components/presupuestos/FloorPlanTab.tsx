@@ -616,6 +616,7 @@ export function FloorPlanTab({ budgetId, budgetName = '', isAdmin }: FloorPlanTa
     generateFromTemplate, deleteFloorPlan, groupRooms, ungroupRooms,
     undoLastChange, undoCount,
     addFloor, updateFloor, deleteFloor,
+    addBlockGroup, deleteBlockGroup, updateBlockGroup,
   } = useFloorPlan(budgetId);
 
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
@@ -1134,6 +1135,9 @@ export function FloorPlanTab({ budgetId, budgetName = '', isAdmin }: FloorPlanTa
           onAddOpening={(wallId, type, w, h, sh) => addOpening(wallId, type, w, h, sh)}
           onDeleteOpening={deleteOpening}
           onUpdateWall={updateWall}
+          onAddBlockGroup={addBlockGroup}
+          onDeleteBlockGroup={deleteBlockGroup}
+          onUpdateBlockGroup={updateBlockGroup}
           saving={saving}
         />
       )}

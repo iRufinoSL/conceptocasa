@@ -8,9 +8,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { Plus, Trash2, Box, Layers, ArrowUpDown, Maximize2 } from 'lucide-react';
+import { Plus, Trash2, Box, Layers, ArrowUpDown, Maximize2, Merge, Unlink } from 'lucide-react';
 import { OPENING_PRESETS, WALL_LABELS, computeWallSegments, autoClassifyWalls, generateExternalWallNames, isExteriorType, isInvisibleType } from '@/lib/floor-plan-calculations';
-import type { RoomData, WallData, OpeningData, FloorPlanData, WallSegment, FloorLevel, WallType } from '@/lib/floor-plan-calculations';
+import type { RoomData, WallData, OpeningData, FloorPlanData, WallSegment, FloorLevel, WallType, BlockGroupData } from '@/lib/floor-plan-calculations';
 
 interface ElevationsGridViewerProps {
   plan: FloorPlanData;
@@ -20,6 +20,9 @@ interface ElevationsGridViewerProps {
   onAddOpening: (wallId: string, type: string, width: number, height: number, sillHeight?: number, positionX?: number) => Promise<void>;
   onDeleteOpening: (openingId: string) => Promise<void>;
   onUpdateWall?: (wallId: string, data: { wallType?: WallType; thickness?: number; height?: number; elevationGroup?: string | null }) => Promise<void>;
+  onAddBlockGroup?: (wallId: string, startCol: number, startRow: number, spanCols: number, spanRows: number, name?: string, color?: string) => Promise<void>;
+  onDeleteBlockGroup?: (blockGroupId: string) => Promise<void>;
+  onUpdateBlockGroup?: (blockGroupId: string, data: { name?: string; color?: string; spanCols?: number; spanRows?: number }) => Promise<void>;
   saving: boolean;
 }
 
@@ -70,7 +73,8 @@ function getWallHeight(wall: WallData, room: RoomData, plan: FloorPlanData): num
 }
 
 export function ElevationsGridViewer({
-  plan, rooms, floors, onUpdateOpening, onAddOpening, onDeleteOpening, onUpdateWall, saving,
+  plan, rooms, floors, onUpdateOpening, onAddOpening, onDeleteOpening, onUpdateWall,
+  onAddBlockGroup, onDeleteBlockGroup, onUpdateBlockGroup, saving,
 }: ElevationsGridViewerProps) {
   const [selectedOpening, setSelectedOpening] = useState<OpeningData | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -340,6 +344,8 @@ export function ElevationsGridViewer({
                       onOpeningClick={handleOpeningClick}
                       onAddOpening={onAddOpening}
                       onCardDoubleClick={handleCardDoubleClick}
+                      onAddBlockGroup={onAddBlockGroup}
+                      onDeleteBlockGroup={onDeleteBlockGroup}
                       saving={saving}
                     />
                   ))}
@@ -378,6 +384,8 @@ export function ElevationsGridViewer({
                           onOpeningClick={handleOpeningClick}
                           onAddOpening={onAddOpening}
                           onCardDoubleClick={handleCardDoubleClick}
+                          onAddBlockGroup={onAddBlockGroup}
+                          onDeleteBlockGroup={onDeleteBlockGroup}
                           saving={saving}
                         />
                       ))}
@@ -440,15 +448,18 @@ export function ElevationsGridViewer({
 }
 
 // Individual elevation card
-function ElevationCardView({ card, plan, onOpeningClick, onAddOpening, onCardDoubleClick, saving }: {
+function ElevationCardView({ card, plan, onOpeningClick, onAddOpening, onCardDoubleClick, onAddBlockGroup, onDeleteBlockGroup, saving }: {
   card: ElevationCard;
   plan: FloorPlanData;
   onOpeningClick: (op: OpeningData) => void;
   onAddOpening: (wallId: string, type: string, width: number, height: number, sillHeight?: number, positionX?: number) => Promise<void>;
   onCardDoubleClick: (card: ElevationCard) => void;
+  onAddBlockGroup?: (wallId: string, startCol: number, startRow: number, spanCols: number, spanRows: number, name?: string, color?: string) => Promise<void>;
+  onDeleteBlockGroup?: (blockGroupId: string) => Promise<void>;
   saving: boolean;
 }) {
   const [fullscreen, setFullscreen] = useState(false);
+  const [selectedBlocks, setSelectedBlocks] = useState<Set<string>>(new Set()); // "col-row" keys
   const scale = Math.min(CARD_SCALE, (MAX_CARD_WIDTH - CARD_PADDING * 2 - 30) / card.width);
   const svgW = card.width * scale + CARD_PADDING * 2 + 30;
   const svgH = card.height * scale + CARD_PADDING * 2 + 30;
@@ -711,8 +722,8 @@ function ElevationCardView({ card, plan, onOpeningClick, onAddOpening, onCardDou
       </CardContent>
     </Card>
 
-    {/* Fullscreen dialog */}
-    <Dialog open={fullscreen} onOpenChange={setFullscreen}>
+    {/* Fullscreen dialog with interactive block editing */}
+    <Dialog open={fullscreen} onOpenChange={(open) => { setFullscreen(open); if (!open) setSelectedBlocks(new Set()); }}>
       <DialogContent className="!max-w-none !w-screen !h-screen !m-0 !p-4 !rounded-none !translate-x-0 !translate-y-0 !top-0 !left-0 flex flex-col">
         <DialogHeader className="shrink-0">
           <DialogTitle className="text-sm flex items-center gap-2 flex-wrap">
@@ -726,11 +737,100 @@ function ElevationCardView({ card, plan, onOpeningClick, onAddOpening, onCardDou
             {!card.isInvisible && (
               <Badge variant="outline" className="text-xs">{area}m²</Badge>
             )}
+            {isWall && plan.scaleMode === 'bloque' && (card.wall?.blockGroups?.length ?? 0) > 0 && (
+              <Badge variant="secondary" className="text-xs">
+                {card.wall!.blockGroups!.length} grupos
+              </Badge>
+            )}
           </DialogTitle>
+          <DialogDescription className="sr-only">Vista a pantalla completa del alzado</DialogDescription>
         </DialogHeader>
+
+        {/* Block editing toolbar */}
+        {isWall && plan.scaleMode === 'bloque' && !card.isInvisible && blockCount && (
+          <div className="shrink-0 flex items-center gap-2 flex-wrap border-b border-border/50 pb-2">
+            <span className="text-xs text-muted-foreground">
+              {selectedBlocks.size > 0
+                ? `${selectedBlocks.size} bloques seleccionados`
+                : 'Haz clic en los bloques para seleccionarlos'}
+            </span>
+            {selectedBlocks.size >= 2 && onAddBlockGroup && card.wallId && (
+              <Button
+                size="sm"
+                variant="default"
+                className="h-7 text-xs gap-1"
+                disabled={saving}
+                onClick={async () => {
+                  const cells = Array.from(selectedBlocks).map(k => {
+                    const [c, r] = k.split('-').map(Number);
+                    return { col: c, row: r };
+                  });
+                  const minCol = Math.min(...cells.map(c => c.col));
+                  const maxCol = Math.max(...cells.map(c => c.col));
+                  const minRow = Math.min(...cells.map(c => c.row));
+                  const maxRow = Math.max(...cells.map(c => c.row));
+                  const spanCols = maxCol - minCol + 1;
+                  const spanRows = maxRow - minRow + 1;
+                  const blockW = plan.blockLengthMm;
+                  const blockH = plan.blockHeightMm;
+                  const name = `${(spanCols * blockW).toFixed(0)}×${(spanRows * blockH).toFixed(0)}×${plan.blockWidthMm}mm`;
+                  await onAddBlockGroup(card.wallId!, minCol, minRow, spanCols, spanRows, name);
+                  setSelectedBlocks(new Set());
+                }}
+              >
+                <Merge className="h-3 w-3" /> Agrupar ({selectedBlocks.size})
+              </Button>
+            )}
+            {selectedBlocks.size > 0 && (
+              <Button size="sm" variant="outline" className="h-7 text-xs"
+                onClick={() => setSelectedBlocks(new Set())}>
+                Limpiar selección
+              </Button>
+            )}
+            {(card.wall?.blockGroups?.length ?? 0) > 0 && (
+              <div className="flex items-center gap-1 ml-auto flex-wrap">
+                {card.wall!.blockGroups!.map(bg => (
+                  <Badge
+                    key={bg.id}
+                    variant="secondary"
+                    className="text-[10px] h-5 gap-1 cursor-pointer hover:bg-destructive/20 transition-colors"
+                    style={bg.color ? { backgroundColor: bg.color + '30', borderColor: bg.color } : undefined}
+                  >
+                    {bg.name || `${bg.spanCols}×${bg.spanRows}`}
+                    {onDeleteBlockGroup && (
+                      <button
+                        className="ml-0.5 hover:text-destructive"
+                        onClick={(e) => { e.stopPropagation(); onDeleteBlockGroup(bg.id); }}
+                        disabled={saving}
+                      >
+                        <Unlink className="h-2.5 w-2.5" />
+                      </button>
+                    )}
+                  </Badge>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         <div className="flex-1 overflow-auto flex items-center justify-center min-h-0">
           {card.isInvisible ? (
             <p className="text-muted-foreground italic">Pared invisible</p>
+          ) : isWall && plan.scaleMode === 'bloque' && blockCount ? (
+            <FullscreenBlockGrid
+              card={card}
+              plan={plan}
+              blockCount={blockCount}
+              selectedBlocks={selectedBlocks}
+              onToggleBlock={(key) => {
+                setSelectedBlocks(prev => {
+                  const next = new Set(prev);
+                  if (next.has(key)) next.delete(key); else next.add(key);
+                  return next;
+                });
+              }}
+              onOpeningClick={onOpeningClick}
+            />
           ) : (
             renderSvg(Math.min(
               (window.innerHeight * 0.85) / card.height,
@@ -741,6 +841,204 @@ function ElevationCardView({ card, plan, onOpeningClick, onAddOpening, onCardDou
       </DialogContent>
     </Dialog>
     </>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────
+// Fullscreen interactive block grid
+// ──────────────────────────────────────────────────────────────────
+
+const BLOCK_GROUP_COLORS = [
+  'hsl(210, 70%, 55%)', 'hsl(340, 70%, 55%)', 'hsl(150, 60%, 45%)',
+  'hsl(45, 80%, 50%)', 'hsl(280, 60%, 55%)', 'hsl(15, 80%, 55%)',
+  'hsl(180, 60%, 45%)', 'hsl(330, 50%, 55%)',
+];
+
+function FullscreenBlockGrid({ card, plan, blockCount, selectedBlocks, onToggleBlock, onOpeningClick }: {
+  card: ElevationCard;
+  plan: FloorPlanData;
+  blockCount: { cols: number; rows: number; total: number };
+  selectedBlocks: Set<string>;
+  onToggleBlock: (key: string) => void;
+  onOpeningClick: (op: OpeningData) => void;
+}) {
+  const blockGroups = card.wall?.blockGroups || [];
+
+  // Build a map of which cells are covered by groups
+  const groupCellMap = useMemo(() => {
+    const map = new Map<string, BlockGroupData>();
+    blockGroups.forEach(bg => {
+      for (let c = bg.startCol; c < bg.startCol + bg.spanCols; c++) {
+        for (let r = bg.startRow; r < bg.startRow + bg.spanRows; r++) {
+          map.set(`${c}-${r}`, bg);
+        }
+      }
+    });
+    return map;
+  }, [blockGroups]);
+
+  // Calculate scale to fit viewport
+  const blockWm = plan.blockLengthMm / 1000;
+  const blockHm = plan.blockHeightMm / 1000;
+  const wallWm = card.width;
+  const wallHm = card.height;
+  const padding = 60;
+  const maxW = window.innerWidth - padding * 2;
+  const maxH = window.innerHeight - 200;
+  const s = Math.min(maxW / wallWm, maxH / wallHm);
+  const svgW = wallWm * s + padding * 2;
+  const svgH = wallHm * s + padding * 2;
+  const rx = padding;
+  const ry = padding / 2;
+  const rw = wallWm * s;
+  const rh = wallHm * s;
+  const bwPx = blockWm * s;
+  const bhPx = blockHm * s;
+
+  return (
+    <svg
+      width="100%"
+      viewBox={`0 0 ${svgW} ${svgH}`}
+      style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', maxHeight: '85vh' }}
+    >
+      {/* Ground line */}
+      <line x1={rx - 5} y1={ry + rh} x2={rx + rw + 5} y2={ry + rh}
+        stroke="hsl(25, 60%, 40%)" strokeWidth={2} />
+
+      {/* Wall background */}
+      <rect x={rx} y={ry} width={rw} height={rh}
+        fill={card.fill} stroke={card.stroke} strokeWidth={1.5} rx={1} />
+
+      {/* Individual blocks */}
+      {Array.from({ length: blockCount.rows }, (_, r) => {
+        const yTop = ry + rh - (r + 1) * bhPx;
+        const offset = r % 2 === 0 ? 0 : bwPx / 2;
+
+        return Array.from({ length: blockCount.cols }, (_, c) => {
+          const xLeft = rx + offset + c * bwPx;
+          const clippedX = Math.max(rx, xLeft);
+          const clippedW = Math.min(rx + rw, xLeft + bwPx) - clippedX;
+          const clippedY = Math.max(ry, yTop);
+          const clippedH = Math.min(ry + rh, yTop + bhPx) - clippedY;
+          if (clippedW <= 0 || clippedH <= 0) return null;
+
+          const key = `${c}-${r}`;
+          const isSelected = selectedBlocks.has(key);
+          const group = groupCellMap.get(key);
+          const isGroupOrigin = group && group.startCol === c && group.startRow === r;
+
+          if (group && !isGroupOrigin) return null;
+
+          if (group && isGroupOrigin) {
+            const gx = rx + (r % 2 === 0 ? 0 : bwPx / 2) + group.startCol * bwPx;
+            const gy = ry + rh - (group.startRow + group.spanRows) * bhPx;
+            const gw = group.spanCols * bwPx;
+            const gh = group.spanRows * bhPx;
+            const colorIdx = blockGroups.indexOf(group) % BLOCK_GROUP_COLORS.length;
+            const color = group.color || BLOCK_GROUP_COLORS[colorIdx];
+
+            return (
+              <g key={`group-${group.id}`}>
+                <rect
+                  x={Math.max(rx, gx)} y={Math.max(ry, gy)}
+                  width={Math.min(rx + rw, gx + gw) - Math.max(rx, gx)}
+                  height={Math.min(ry + rh, gy + gh) - Math.max(ry, gy)}
+                  fill={color + '25'}
+                  stroke={color}
+                  strokeWidth={2.5}
+                  rx={2}
+                />
+                <text
+                  x={Math.max(rx, gx) + (Math.min(rx + rw, gx + gw) - Math.max(rx, gx)) / 2}
+                  y={Math.max(ry, gy) + (Math.min(ry + rh, gy + gh) - Math.max(ry, gy)) / 2 + 4}
+                  textAnchor="middle"
+                  fontSize={Math.min(12, gw / 8)}
+                  fill={color}
+                  fontWeight={700}
+                  pointerEvents="none"
+                >
+                  {group.name || `${group.spanCols}×${group.spanRows}`}
+                </text>
+              </g>
+            );
+          }
+
+          return (
+            <rect
+              key={key}
+              x={clippedX + 0.5}
+              y={clippedY + 0.5}
+              width={clippedW - 1}
+              height={clippedH - 1}
+              fill={isSelected ? 'hsl(210, 80%, 60%, 0.4)' : 'transparent'}
+              stroke={isSelected ? 'hsl(210, 80%, 50%)' : 'hsl(25, 30%, 65%)'}
+              strokeWidth={isSelected ? 2 : 0.4}
+              opacity={isSelected ? 1 : 0.5}
+              rx={0.5}
+              style={{ cursor: 'pointer' }}
+              onClick={(e) => { e.stopPropagation(); onToggleBlock(key); }}
+            >
+              <title>Bloque [{c},{r}] — {plan.blockLengthMm}×{plan.blockHeightMm}×{plan.blockWidthMm}mm</title>
+            </rect>
+          );
+        });
+      })}
+
+      {/* Dimension lines */}
+      <line x1={rx} y1={ry + rh + 15} x2={rx + rw} y2={ry + rh + 15}
+        stroke="hsl(25, 95%, 45%)" strokeWidth={0.8} />
+      <line x1={rx} y1={ry + rh + 10} x2={rx} y2={ry + rh + 20} stroke="hsl(25, 95%, 45%)" strokeWidth={0.5} />
+      <line x1={rx + rw} y1={ry + rh + 10} x2={rx + rw} y2={ry + rh + 20} stroke="hsl(25, 95%, 45%)" strokeWidth={0.5} />
+      <text x={rx + rw / 2} y={ry + rh + 30} textAnchor="middle" fontSize={12} fill="hsl(25, 95%, 45%)" fontWeight={600}>
+        {card.width.toFixed(2)}m ({blockCount.cols} bloques)
+      </text>
+      <line x1={rx - 15} y1={ry} x2={rx - 15} y2={ry + rh}
+        stroke="hsl(25, 95%, 45%)" strokeWidth={0.8} />
+      <line x1={rx - 20} y1={ry} x2={rx - 10} y2={ry} stroke="hsl(25, 95%, 45%)" strokeWidth={0.5} />
+      <line x1={rx - 20} y1={ry + rh} x2={rx - 10} y2={ry + rh} stroke="hsl(25, 95%, 45%)" strokeWidth={0.5} />
+      <text x={rx - 22} y={ry + rh / 2} textAnchor="middle" fontSize={12} fill="hsl(25, 95%, 45%)" fontWeight={600}
+        transform={`rotate(-90, ${rx - 22}, ${ry + rh / 2})`}>
+        {card.height.toFixed(2)}m ({blockCount.rows} filas)
+      </text>
+
+      {/* Openings overlay */}
+      {card.openings.map(op => {
+        const isHoriz = card.wall ? (card.wall.wallIndex === 1 || card.wall.wallIndex === 3) : true;
+        const fullWallLen = card.room ? (isHoriz ? card.room.width : card.room.length) : card.width;
+        const seg = card.segment;
+        let opCenterInSegment: number;
+        if (seg) {
+          const opMeters = op.positionX * fullWallLen;
+          opCenterInSegment = (opMeters - seg.startMeters) / (seg.endMeters - seg.startMeters);
+        } else {
+          opCenterInSegment = op.positionX;
+        }
+        opCenterInSegment = Math.max(0.05, Math.min(0.95, opCenterInSegment));
+        const opWidthPx = op.width * s;
+        const opHeightPx = op.height * s;
+        const sillH = op.sillHeight ?? 0;
+        const opX = rx + opCenterInSegment * rw - opWidthPx / 2;
+        const opY = ry + rh - opHeightPx - sillH * s;
+        const isDoor = op.openingType === 'puerta' || op.openingType === 'puerta_externa' || op.openingType === 'ventana_balconera';
+        return (
+          <g key={op.id} style={{ cursor: 'pointer' }}
+            onClick={e => { e.stopPropagation(); onOpeningClick(op); }}>
+            <rect x={opX} y={opY} width={opWidthPx} height={opHeightPx}
+              fill={isDoor ? 'hsl(30, 80%, 95%)' : 'hsl(210, 80%, 95%)'}
+              stroke={isDoor ? 'hsl(30, 80%, 45%)' : 'hsl(210, 80%, 45%)'}
+              strokeWidth={1.5} rx={2} />
+            <text x={opX + opWidthPx / 2} y={opY + opHeightPx / 2 + 4} textAnchor="middle"
+              fontSize={10} fill="hsl(var(--foreground))" pointerEvents="none" opacity={0.8}>
+              {OPENING_PRESETS[op.openingType as keyof typeof OPENING_PRESETS]?.label || op.openingType}
+            </text>
+            <text x={opX + opWidthPx / 2} y={opY + opHeightPx / 2 + 16} textAnchor="middle"
+              fontSize={8} fill="hsl(var(--muted-foreground))" pointerEvents="none">
+              {op.width.toFixed(2)}×{op.height.toFixed(2)}m
+            </text>
+          </g>
+        );
+      })}
+    </svg>
   );
 }
 

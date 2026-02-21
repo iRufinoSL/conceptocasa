@@ -81,7 +81,10 @@ export interface WallData {
   height?: number;
   elevationGroup?: string;
   openings: OpeningData[];
+  blockGroups?: BlockGroupData[];
 }
+
+
 
 export interface OpeningData {
   id: string;
@@ -91,6 +94,17 @@ export interface OpeningData {
   height: number;
   sillHeight: number; // altura sobre el suelo en metros
   positionX: number; // 0-1 fraction along the wall
+}
+
+export interface BlockGroupData {
+  id: string;
+  wallId: string;
+  startCol: number;
+  startRow: number;
+  spanCols: number;
+  spanRows: number;
+  name?: string;
+  color?: string;
 }
 
 export interface WallSegment {

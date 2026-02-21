@@ -661,6 +661,50 @@ export type Database = {
           },
         ]
       }
+      budget_floor_plan_block_groups: {
+        Row: {
+          color: string | null
+          created_at: string | null
+          id: string
+          name: string | null
+          span_cols: number
+          span_rows: number
+          start_col: number
+          start_row: number
+          wall_id: string
+        }
+        Insert: {
+          color?: string | null
+          created_at?: string | null
+          id?: string
+          name?: string | null
+          span_cols?: number
+          span_rows?: number
+          start_col: number
+          start_row: number
+          wall_id: string
+        }
+        Update: {
+          color?: string | null
+          created_at?: string | null
+          id?: string
+          name?: string | null
+          span_cols?: number
+          span_rows?: number
+          start_col?: number
+          start_row?: number
+          wall_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "budget_floor_plan_block_groups_wall_id_fkey"
+            columns: ["wall_id"]
+            isOneToOne: false
+            referencedRelation: "budget_floor_plan_walls"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       budget_floor_plan_openings: {
         Row: {
           created_at: string | null

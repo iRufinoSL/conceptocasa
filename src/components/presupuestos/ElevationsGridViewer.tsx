@@ -29,7 +29,7 @@ interface ElevationsGridViewerProps {
   budgetName?: string;
 }
 
-type SurfaceCategory = 'cimentacion' | 'suelo' | 'techo' | 'pared' | 'volumen' | 'tejado';
+type SurfaceCategory = 'cimentacion' | 'suelo' | 'techo' | 'pared' | 'volumen' | 'tejado' | 'faldon';
 
 interface ElevationCard {
   id: string;
@@ -54,6 +54,8 @@ interface ElevationCard {
   volume?: number;
   roomHeight?: number;
   elevationGroup?: string;
+  isGable?: boolean;
+  gablePeakH?: number; // peak height of gable triangle in meters
 }
 
 // Group of 6 surfaces for a single room
@@ -226,23 +228,33 @@ export function ElevationsGridViewer({
         roomHeight: roomH,
       });
 
+      // Detect bajo cubierta gable
+      const roomIsBajoCubierta = isBajoCubierta(room, plan);
+      const roomGablePeakH = roomIsBajoCubierta ? gablePeakHeight : 0;
+
       // 4 Walls (always all 4, including invisible ones)
       room.walls.forEach(wall => {
         const key = `${room.id}::${wall.wallIndex}`;
         const segments = wallSegmentsMap.get(key) || [];
-        const wallHeight = getWallHeight(wall, room, plan);
+        let wallHeight = getWallHeight(wall, room, plan);
         const isHoriz = wall.wallIndex === 1 || wall.wallIndex === 3;
         const fullWallLen = isHoriz ? room.width : room.length;
 
+        // Gable walls (hastiales): wallIndex 2 (BC) and 4 (DA) in bajo cubierta
+        const isGableWall = roomIsBajoCubierta && (wall.wallIndex === 2 || wall.wallIndex === 4) && !isInvisibleType(wall.wallType as string);
+        if (isGableWall) {
+          wallHeight = roomGablePeakH; // triangle height = peak height
+        }
+
         if (segments.length === 0) {
-          // No computed segments → render a simple wall card (may be invisible)
           const invisible = isInvisibleType(wall.wallType as string);
           const isExternal = isExteriorType(wall.wallType as string);
           const wallName = externalWallNames.get(key);
           const canAdd = !wall.id.startsWith('temp-') && !invisible;
+          const gableArea = isGableWall ? (fullWallLen * roomGablePeakH) / 2 : 0;
           cards.push({
             id: `wall-${room.id}-${wall.wallIndex}-noseg`,
-            label: WALL_LABELS[wall.wallIndex],
+            label: isGableWall ? `${WALL_LABELS[wall.wallIndex]} (Hastial)` : WALL_LABELS[wall.wallIndex],
             sublabel: room.name,
             category: 'pared',
             width: fullWallLen,
@@ -257,16 +269,16 @@ export function ElevationsGridViewer({
             stroke: invisible ? 'hsl(0, 0%, 70%)' : isExternal ? 'hsl(222, 47%, 30%)' : 'hsl(25, 80%, 50%)',
             badgeLabel: invisible ? 'Invisible' : isExternal ? (wallName ? `Ext. ${wallName}` : 'Externa') : 'Interna',
             badgeVariant: invisible ? 'outline' : isExternal ? 'default' : 'outline',
-            surfaceArea: invisible ? 0 : fullWallLen * wallHeight,
+            surfaceArea: isGableWall ? gableArea : (invisible ? 0 : fullWallLen * wallHeight),
             elevationGroup: wall.elevationGroup,
+            isGable: isGableWall,
+            gablePeakH: isGableWall ? roomGablePeakH : undefined,
           });
           return;
         }
 
         segments.forEach((seg, si) => {
           const segLen = seg.endMeters - seg.startMeters;
-          // Use wall.wallType (manual DB type) for VISUAL display; seg.segmentType is for calculations
-          // This ensures edits to wall type are always reflected in the Alzados view
           const displayType = wall.wallType as string;
           const invisible = isInvisibleType(displayType);
           const ownOpenings = wall.openings.filter(op => {
@@ -275,7 +287,9 @@ export function ElevationsGridViewer({
 
           const isExternal = isExteriorType(displayType);
           const visibleSegCount = segments.filter(s => !isInvisibleType(s.segmentType)).length;
-          const wallLabel = visibleSegCount > 1 ? `${WALL_LABELS[wall.wallIndex]} ${si + 1}` : WALL_LABELS[wall.wallIndex];
+          const wallLabel = isGableWall
+            ? `${WALL_LABELS[wall.wallIndex]} (Hastial)`
+            : (visibleSegCount > 1 ? `${WALL_LABELS[wall.wallIndex]} ${si + 1}` : WALL_LABELS[wall.wallIndex]);
           const wallName = externalWallNames.get(key);
           const canAdd = !wall.id.startsWith('temp-') && !invisible;
 
@@ -292,6 +306,7 @@ export function ElevationsGridViewer({
             badgeLabel = 'Interna';
           }
 
+          const gableArea = isGableWall ? (segLen * roomGablePeakH) / 2 : 0;
           cards.push({
             id: `wall-${room.id}-${wall.wallIndex}-${si}`,
             label: wallLabel,
@@ -311,11 +326,71 @@ export function ElevationsGridViewer({
             stroke: invisible ? 'hsl(0, 0%, 70%)' : isExternal ? 'hsl(222, 47%, 30%)' : 'hsl(25, 80%, 50%)',
             badgeLabel,
             badgeVariant: invisible ? 'outline' : isExternal ? 'default' : 'outline',
-            surfaceArea: invisible ? 0 : segLen * wallHeight,
+            surfaceArea: isGableWall ? gableArea : (invisible ? 0 : segLen * wallHeight),
             elevationGroup: wall.elevationGroup,
+            isGable: isGableWall,
+            gablePeakH: isGableWall ? roomGablePeakH : undefined,
           });
         });
       });
+
+      // Faldones (roof slope panels) for bajo cubierta rooms
+      if (roomIsBajoCubierta && plan.roofType === 'dos_aguas') {
+        // Calculate building dimensions for this floor
+        const floorRooms = rooms.filter(r => r.floorId === room.floorId && isBajoCubierta(r, plan));
+        let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+        floorRooms.forEach(r => {
+          minX = Math.min(minX, r.posX);
+          maxX = Math.max(maxX, r.posX + r.width);
+          minY = Math.min(minY, r.posY);
+          maxY = Math.max(maxY, r.posY + r.length);
+        });
+        const totalWidth = (maxX - minX) + 2 * plan.externalWallThickness;
+        const totalLength = (maxY - minY) + 2 * plan.externalWallThickness;
+        const halfWidth = totalWidth / 2;
+        const rise = halfWidth * (plan.roofSlopePercent / 100);
+        const slopeWidth = Math.sqrt(halfWidth * halfWidth + rise * rise);
+
+        // Only add faldones once per floor (check if this is the first bajo cubierta room)
+        const isFirstBajoCubierta = floorRooms.length === 0 || floorRooms[0].id === room.id;
+        if (isFirstBajoCubierta) {
+          // Faldón superior (AB side) - width=AB, length=BC direction
+          cards.push({
+            id: `faldon-sup-${room.floorId || room.id}`,
+            label: 'Faldón Superior (AB)',
+            sublabel: `${Math.round(totalWidth * 1000)} mm × ${Math.round(totalLength * 1000)} mm`,
+            category: 'faldon',
+            width: totalWidth,
+            height: totalLength,
+            room,
+            openings: [],
+            canAddOpenings: false,
+            fill: 'hsl(15, 60%, 92%)',
+            stroke: 'hsl(15, 70%, 45%)',
+            badgeLabel: `Pendiente ${plan.roofSlopePercent}% · Faldón ${Math.round(slopeWidth * 1000)} mm`,
+            badgeVariant: 'default',
+            surfaceArea: slopeWidth * totalLength,
+          });
+
+          // Faldón inferior (CD side)
+          cards.push({
+            id: `faldon-inf-${room.floorId || room.id}`,
+            label: 'Faldón Inferior (CD)',
+            sublabel: `${Math.round(totalWidth * 1000)} mm × ${Math.round(totalLength * 1000)} mm`,
+            category: 'faldon',
+            width: totalWidth,
+            height: totalLength,
+            room,
+            openings: [],
+            canAddOpenings: false,
+            fill: 'hsl(15, 50%, 90%)',
+            stroke: 'hsl(15, 60%, 40%)',
+            badgeLabel: `Pendiente ${plan.roofSlopePercent}% · Faldón ${Math.round(slopeWidth * 1000)} mm`,
+            badgeVariant: 'default',
+            surfaceArea: slopeWidth * totalLength,
+          });
+        }
+      }
 
       return { room, cards };
     });
@@ -738,6 +813,7 @@ function ElevationCardView({ card, plan, onOpeningClick, onAddOpening, onCardDou
   const categoryIcon = card.category === 'suelo' ? <Layers className="h-3 w-3" />
     : card.category === 'techo' ? <ArrowUpDown className="h-3 w-3" />
     : card.category === 'volumen' ? <Box className="h-3 w-3" />
+    : card.category === 'faldon' ? <Layers className="h-3 w-3" />
     : null;
 
   const isWall = card.category === 'pared';
@@ -762,6 +838,175 @@ function ElevationCardView({ card, plan, onOpeningClick, onAddOpening, onCardDou
     const ry = CARD_PADDING;
     const rw = card.width * s;
     const rh = card.height * s;
+
+    // Gable (triangular) rendering
+    if (card.isGable && card.gablePeakH && card.gablePeakH > 0) {
+      const peakX = rx + rw / 2;
+      const baseY = ry + rh;
+      const trianglePath = `M ${rx} ${baseY} L ${peakX} ${ry} L ${rx + rw} ${baseY} Z`;
+
+      return (
+        <svg
+          width="100%"
+          viewBox={`0 0 ${sw} ${sh}`}
+          className="mx-auto"
+          style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', maxHeight: fsScale ? '90vh' : '180px' }}
+        >
+          {/* Ground line */}
+          <line x1={rx - 5} y1={baseY} x2={rx + rw + 5} y2={baseY}
+            stroke="hsl(25, 60%, 40%)" strokeWidth={1.5} />
+          {Array.from({ length: Math.ceil((rw + 10) / 6) }, (_, i) => (
+            <line key={`gh-${i}`}
+              x1={rx - 5 + i * 6} y1={baseY + 1.5}
+              x2={rx - 5 + i * 6 - 4} y2={baseY + 5}
+              stroke="hsl(25, 60%, 40%)" strokeWidth={0.4} opacity={0.5}
+            />
+          ))}
+
+          {/* Triangle shape */}
+          <path d={trianglePath} fill={card.fill} stroke={card.stroke} strokeWidth={1.5} />
+
+          {/* Block pattern inside triangle (clipped) */}
+          {plan.scaleMode === 'bloque' && (() => {
+            const blockWPx = (plan.blockLengthMm / 1000) * s;
+            const blockHPx = (plan.blockHeightMm / 1000) * s;
+            if (blockWPx < 3 || blockHPx < 2) return null;
+            const clipId = `gable-clip-${card.id}`;
+            const rows = Math.ceil(rh / blockHPx);
+            const cols = Math.ceil(rw / blockWPx) + 1;
+            const lines: React.ReactElement[] = [];
+            for (let r = 1; r < rows; r++) {
+              const y = baseY - r * blockHPx;
+              if (y <= ry) break;
+              lines.push(
+                <line key={`bh-${r}`} x1={rx} y1={y} x2={rx + rw} y2={y}
+                  stroke="hsl(210, 60%, 55%)" strokeWidth={0.8} opacity={0.8} pointerEvents="none" />
+              );
+            }
+            for (let r = 0; r < rows; r++) {
+              const yTop = Math.max(ry, baseY - (r + 1) * blockHPx);
+              const yBot = baseY - r * blockHPx;
+              const offset = r % 2 === 0 ? 0 : blockWPx / 2;
+              for (let c = 1; c < cols; c++) {
+                const x = rx + offset + c * blockWPx;
+                if (x >= rx + rw) break;
+                if (x <= rx) continue;
+                lines.push(
+                  <line key={`bv-${r}-${c}`} x1={x} y1={yTop} x2={x} y2={Math.min(yBot, baseY)}
+                    stroke="hsl(210, 60%, 55%)" strokeWidth={0.7} opacity={0.7} pointerEvents="none" />
+                );
+              }
+            }
+            return (
+              <>
+                <defs>
+                  <clipPath id={clipId}>
+                    <path d={trianglePath} />
+                  </clipPath>
+                </defs>
+                <g clipPath={`url(#${clipId})`}>{lines}</g>
+              </>
+            );
+          })()}
+
+          {/* Corner labels */}
+          {card.wall && isExteriorType(card.wall.wallType as string) && (() => {
+            const wi = card.wall.wallIndex;
+            const interiorCornerMap: Record<number, [string, string]> = {
+              1: ['A', 'B'], 2: ['B', 'C'], 3: ['C', 'D'], 4: ['D', 'A'],
+            };
+            const [leftCorner, rightCorner] = interiorCornerMap[wi] || ['?', '?'];
+            const arrowY = ry - 8;
+            const fs = fsScale ? 9 : 7;
+            return (
+              <g>
+                <text x={rx} y={arrowY} textAnchor="start" fontSize={fs} fontWeight={700} fill="hsl(222, 47%, 40%)">← {leftCorner}</text>
+                <text x={rx + rw} y={arrowY} textAnchor="end" fontSize={fs} fontWeight={700} fill="hsl(222, 47%, 40%)">{rightCorner} →</text>
+              </g>
+            );
+          })()}
+
+          {/* Dimensions - base */}
+          <line x1={rx} y1={baseY + 12} x2={rx + rw} y2={baseY + 12}
+            stroke="hsl(25, 95%, 45%)" strokeWidth={0.6} />
+          <line x1={rx} y1={baseY + 8} x2={rx} y2={baseY + 16} stroke="hsl(25, 95%, 45%)" strokeWidth={0.4} />
+          <line x1={rx + rw} y1={baseY + 8} x2={rx + rw} y2={baseY + 16} stroke="hsl(25, 95%, 45%)" strokeWidth={0.4} />
+          <text x={rx + rw / 2} y={baseY + 24} textAnchor="middle" fontSize={fsScale ? 10 : 8} fill="hsl(25, 95%, 45%)" fontWeight={600}>
+            {Math.round(card.width * 1000)} mm (base)
+          </text>
+          {/* Dimensions - height */}
+          <line x1={rx - 12} y1={ry} x2={rx - 12} y2={baseY}
+            stroke="hsl(25, 95%, 45%)" strokeWidth={0.6} />
+          <line x1={rx - 16} y1={ry} x2={rx - 8} y2={ry} stroke="hsl(25, 95%, 45%)" strokeWidth={0.4} />
+          <line x1={rx - 16} y1={baseY} x2={rx - 8} y2={baseY} stroke="hsl(25, 95%, 45%)" strokeWidth={0.4} />
+          <text x={rx - 18} y={ry + rh / 2} textAnchor="middle" fontSize={fsScale ? 10 : 8} fill="hsl(25, 95%, 45%)" fontWeight={600}
+            transform={`rotate(-90, ${rx - 18}, ${ry + rh / 2})`}>
+            {Math.round(card.gablePeakH! * 1000)} mm (cumbrera)
+          </text>
+          {/* Slope line dimension */}
+          {(() => {
+            const slopeLen = Math.sqrt((card.width / 2) ** 2 + card.gablePeakH! ** 2);
+            return (
+              <text x={rx + rw * 0.25} y={ry + rh * 0.4} textAnchor="middle"
+                fontSize={fsScale ? 9 : 7} fill="hsl(15, 70%, 45%)" fontWeight={600}
+                transform={`rotate(${Math.atan2(card.gablePeakH!, card.width / 2) * -180 / Math.PI}, ${rx + rw * 0.25}, ${ry + rh * 0.4})`}>
+                {Math.round(slopeLen * 1000)} mm
+              </text>
+            );
+          })()}
+          {/* Peak marker */}
+          <circle cx={peakX} cy={ry} r={3} fill="hsl(15, 70%, 45%)" />
+          <text x={peakX} y={ry - 6} textAnchor="middle" fontSize={fsScale ? 8 : 6} fill="hsl(15, 70%, 45%)" fontWeight={700}>
+            Cumbrera
+          </text>
+        </svg>
+      );
+    }
+
+    // Faldón (roof slope panel) rendering
+    if (card.category === 'faldon') {
+      return (
+        <svg
+          width="100%"
+          viewBox={`0 0 ${sw} ${sh}`}
+          className="mx-auto"
+          style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', maxHeight: fsScale ? '90vh' : '180px' }}
+        >
+          {/* Slope panel as parallelogram */}
+          <rect x={rx} y={ry} width={rw} height={rh}
+            fill={card.fill} stroke={card.stroke} strokeWidth={1.5} rx={1} />
+          {/* Slope hatching */}
+          {Array.from({ length: Math.ceil(rw / 12) + Math.ceil(rh / 12) }, (_, i) => {
+            const x = rx + i * 12;
+            return (
+              <line key={`sh-${i}`} x1={x} y1={ry} x2={x - rh * 0.3} y2={ry + rh}
+                stroke="hsl(15, 50%, 55%)" strokeWidth={0.4} opacity={0.3} pointerEvents="none" />
+            );
+          })}
+          {/* Width dimension (horizontal) */}
+          <line x1={rx} y1={ry + rh + 12} x2={rx + rw} y2={ry + rh + 12}
+            stroke="hsl(25, 95%, 45%)" strokeWidth={0.6} />
+          <line x1={rx} y1={ry + rh + 8} x2={rx} y2={ry + rh + 16} stroke="hsl(25, 95%, 45%)" strokeWidth={0.4} />
+          <line x1={rx + rw} y1={ry + rh + 8} x2={rx + rw} y2={ry + rh + 16} stroke="hsl(25, 95%, 45%)" strokeWidth={0.4} />
+          <text x={rx + rw / 2} y={ry + rh + 24} textAnchor="middle" fontSize={fsScale ? 10 : 8} fill="hsl(25, 95%, 45%)" fontWeight={600}>
+            {Math.round(card.width * 1000)} mm (ancho)
+          </text>
+          {/* Length dimension (vertical) */}
+          <line x1={rx - 12} y1={ry} x2={rx - 12} y2={ry + rh}
+            stroke="hsl(25, 95%, 45%)" strokeWidth={0.6} />
+          <line x1={rx - 16} y1={ry} x2={rx - 8} y2={ry} stroke="hsl(25, 95%, 45%)" strokeWidth={0.4} />
+          <line x1={rx - 16} y1={ry + rh} x2={rx - 8} y2={ry + rh} stroke="hsl(25, 95%, 45%)" strokeWidth={0.4} />
+          <text x={rx - 18} y={ry + rh / 2} textAnchor="middle" fontSize={fsScale ? 10 : 8} fill="hsl(25, 95%, 45%)" fontWeight={600}
+            transform={`rotate(-90, ${rx - 18}, ${ry + rh / 2})`}>
+            {Math.round(card.height * 1000)} mm (largo)
+          </text>
+          {/* Area label */}
+          <text x={rx + rw / 2} y={ry + rh / 2} textAnchor="middle" fontSize={fsScale ? 12 : 9} fill="hsl(15, 70%, 40%)" fontWeight={700}>
+            {card.surfaceArea?.toFixed(2)} m²
+          </text>
+        </svg>
+      );
+    }
 
     return (
       <svg
@@ -1124,7 +1369,7 @@ function ElevationCardView({ card, plan, onOpeningClick, onAddOpening, onCardDou
         <div className="flex-1 overflow-auto flex items-center justify-center min-h-0">
           {card.isInvisible ? (
             <p className="text-muted-foreground italic">Pared invisible</p>
-          ) : isWall && plan.scaleMode === 'bloque' && blockCount ? (
+          ) : isWall && plan.scaleMode === 'bloque' && blockCount && !card.isGable ? (
             <FullscreenBlockGrid
               card={card}
               plan={plan}
@@ -1422,6 +1667,80 @@ function CompositeWallCard({ compositeWall, plan, onOpeningClick, budgetName }: 
           const sy = rys + totalH - sh2;
 
           const sectionFill = idx % 2 === 0 ? 'hsl(30, 30%, 92%)' : 'hsl(30, 25%, 88%)';
+          const isGableSection = section.isGable && section.height > 0;
+
+          // For gable sections, render a triangle instead of rectangle
+          if (isGableSection) {
+            const baseY = rys + totalH;
+            const peakX = sx + sw2 / 2;
+            const peakY = rys + totalH - sh2;
+            const trianglePath = `M ${sx} ${baseY} L ${peakX} ${peakY} L ${sx + sw2} ${baseY} Z`;
+            const clipId = `comp-gable-clip-${idx}`;
+
+            return (
+              <g key={`section-${idx}`}>
+                <path d={trianglePath} fill={sectionFill} stroke="hsl(222, 47%, 30%)" strokeWidth={1.2} />
+
+                {/* Block pattern inside triangle */}
+                {plan.scaleMode === 'bloque' && !isInvisibleType(section.wall.wallType as string) && (() => {
+                  const bwPx = (plan.blockLengthMm / 1000) * s;
+                  const bhPx = (plan.blockHeightMm / 1000) * s;
+                  if (bwPx < 3 || bhPx < 2) return null;
+                  const rows = Math.ceil(sh2 / bhPx);
+                  const cols = Math.ceil(sw2 / bwPx) + 1;
+                  const lines: React.ReactElement[] = [];
+                  for (let r = 1; r < rows; r++) {
+                    const y = baseY - r * bhPx;
+                    if (y <= peakY) break;
+                    lines.push(
+                      <line key={`bh-${idx}-${r}`} x1={sx} y1={y} x2={sx + sw2} y2={y}
+                        stroke="hsl(25, 30%, 65%)" strokeWidth={0.4} opacity={0.5} pointerEvents="none" />
+                    );
+                  }
+                  for (let r = 0; r < rows; r++) {
+                    const yTop = Math.max(peakY, baseY - (r + 1) * bhPx);
+                    const yBot = baseY - r * bhPx;
+                    const offset = r % 2 === 0 ? 0 : bwPx / 2;
+                    for (let c = 1; c < cols; c++) {
+                      const x = sx + offset + c * bwPx;
+                      if (x >= sx + sw2) break;
+                      if (x <= sx) continue;
+                      lines.push(
+                        <line key={`bv-${idx}-${r}-${c}`} x1={x} y1={yTop} x2={x} y2={Math.min(yBot, baseY)}
+                          stroke="hsl(25, 30%, 65%)" strokeWidth={0.3} opacity={0.4} pointerEvents="none" />
+                      );
+                    }
+                  }
+                  return (
+                    <>
+                      <defs>
+                        <clipPath id={clipId}>
+                          <path d={trianglePath} />
+                        </clipPath>
+                      </defs>
+                      <g clipPath={`url(#${clipId})`}>{lines}</g>
+                    </>
+                  );
+                })()}
+
+                {/* Section separator */}
+                {idx > 0 && (
+                  <line x1={sx} y1={rys} x2={sx} y2={rys + totalH}
+                    stroke="hsl(222, 47%, 40%)" strokeWidth={0.8} strokeDasharray="3 2" />
+                )}
+
+                {/* Room label */}
+                <text x={sx + sw2 / 2} y={baseY - sh2 * 0.3} textAnchor="middle"
+                  fontSize={fsScale ? 10 : 7} fill="hsl(222, 47%, 30%)" fontWeight={600} opacity={0.7}
+                  pointerEvents="none">
+                  {section.roomName}
+                </text>
+
+                {/* Peak marker */}
+                <circle cx={peakX} cy={peakY} r={fsScale ? 3 : 2} fill="hsl(15, 70%, 45%)" />
+              </g>
+            );
+          }
 
           return (
             <g key={`section-${idx}`}>

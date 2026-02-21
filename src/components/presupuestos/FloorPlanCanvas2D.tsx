@@ -1,6 +1,9 @@
 import { useMemo, useState, useCallback, useRef, useEffect } from 'react';
 import type { FloorPlanData, RoomData, OutlineVertex } from '@/lib/floor-plan-calculations';
 import { autoClassifyWalls, generateExternalWallNames, computeWallSegments, isExteriorType, isInvisibleType, isCompartidaType, computeGroupPerimeterWalls, computeBuildingOutline } from '@/lib/floor-plan-calculations';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Maximize2 } from 'lucide-react';
 
 interface FloorPlanCanvas2DProps {
   plan: FloorPlanData;
@@ -335,6 +338,10 @@ export function FloorPlanCanvas2D({
   const ZOOM_STEPS = [50, 75, 100, 125, 150, 200, 250, 300];
   const extT = plan.externalWallThickness;
 
+  const isDraggingAnything = !!dragging && dragging.type !== 'pan';
+  const [showCorners, setShowCorners] = useState(true);
+  const [gridFullscreen, setGridFullscreen] = useState(false);
+
   if (rooms.length === 0) {
     return (
       <div className="flex items-center justify-center h-64 bg-muted/30 rounded-lg border border-dashed border-border">
@@ -373,7 +380,96 @@ export function FloorPlanCanvas2D({
     return { w: Math.max(w, SCALE * 0.3), h: Math.max(h, SCALE * 0.3) };
   };
 
-  const isDraggingAnything = !!dragging && dragging.type !== 'pan';
+
+
+
+  // Render the SVG content (shared between inline and fullscreen)
+  const renderSvgContent = () => (
+    <>
+      {/* Grid */}
+      {(() => {
+        const lines: JSX.Element[] = [];
+        const gridW = plan.width * SCALE;
+        const gridH = plan.length * SCALE;
+        const step = GRID_SNAP * SCALE;
+        for (let gx = 0; gx <= gridW; gx += step) {
+          lines.push(<line key={`gv-${gx}`} x1={gx} y1={0} x2={gx} y2={gridH} stroke="#e5e7eb" strokeWidth={0.3} opacity={0.5} />);
+        }
+        for (let gy = 0; gy <= gridH; gy += step) {
+          lines.push(<line key={`gh-${gy}`} x1={0} y1={gy} x2={gridW} y2={gy} stroke="#e5e7eb" strokeWidth={0.3} opacity={0.5} />);
+        }
+        return lines;
+      })()}
+
+      {/* Background hit area for pan */}
+      <rect data-bg="true" x={-500} y={-500} width={plan.width * SCALE + 1000} height={plan.length * SCALE + 1000} fill="transparent" />
+
+      {/* Plan outline */}
+      <rect x={0} y={0} width={plan.width * SCALE} height={plan.length * SCALE}
+        stroke="#d1d5db" strokeWidth={1} strokeDasharray="8 4" fill="none" />
+
+      {/* External perimeter with corner-based labels */}
+      {perimeterDims && (
+        <>
+          <rect
+            x={perimeterDims.extMinX} y={perimeterDims.extMinY}
+            width={perimeterDims.extMaxX - perimeterDims.extMinX}
+            height={perimeterDims.extMaxY - perimeterDims.extMinY}
+            stroke={DIM_COLOR} strokeWidth={0.8} strokeDasharray="4 3" fill="none" opacity={0.5}
+          />
+          {/* Top dim: A→B */}
+          <line x1={perimeterDims.extMinX} y1={perimeterDims.extMinY - 18} x2={perimeterDims.extMaxX} y2={perimeterDims.extMinY - 18}
+            stroke={DIM_COLOR} strokeWidth={0.6} />
+          <text x={(perimeterDims.extMinX + perimeterDims.extMaxX) / 2} y={perimeterDims.extMinY - 22}
+            textAnchor="middle" fontSize={7} fontWeight="bold" fill={DIM_COLOR}>
+            A→B: {perimeterDims.topLen.toFixed(2)}m
+          </text>
+          {/* Right dim: B→C */}
+          <line x1={perimeterDims.extMaxX + 18} y1={perimeterDims.extMinY} x2={perimeterDims.extMaxX + 18} y2={perimeterDims.extMaxY}
+            stroke={DIM_COLOR} strokeWidth={0.6} />
+          <text x={perimeterDims.extMaxX + 22} y={(perimeterDims.extMinY + perimeterDims.extMaxY) / 2}
+            textAnchor="start" fontSize={7} fontWeight="bold" fill={DIM_COLOR}
+            transform={`rotate(90, ${perimeterDims.extMaxX + 22}, ${(perimeterDims.extMinY + perimeterDims.extMaxY) / 2})`}>
+            B→C: {perimeterDims.rightLen.toFixed(2)}m
+          </text>
+          {/* Bottom dim: C→D */}
+          <line x1={perimeterDims.extMinX} y1={perimeterDims.extMaxY + 18} x2={perimeterDims.extMaxX} y2={perimeterDims.extMaxY + 18}
+            stroke={DIM_COLOR} strokeWidth={0.6} />
+          <text x={(perimeterDims.extMinX + perimeterDims.extMaxX) / 2} y={perimeterDims.extMaxY + 28}
+            textAnchor="middle" fontSize={7} fontWeight="bold" fill={DIM_COLOR}>
+            C←D: {perimeterDims.topLen.toFixed(2)}m
+          </text>
+          {/* Left dim: D→A */}
+          <line x1={perimeterDims.extMinX - 18} y1={perimeterDims.extMinY} x2={perimeterDims.extMinX - 18} y2={perimeterDims.extMaxY}
+            stroke={DIM_COLOR} strokeWidth={0.6} />
+          <text x={perimeterDims.extMinX - 22} y={(perimeterDims.extMinY + perimeterDims.extMaxY) / 2}
+            textAnchor="start" fontSize={7} fontWeight="bold" fill={DIM_COLOR}
+            transform={`rotate(-90, ${perimeterDims.extMinX - 22}, ${(perimeterDims.extMinY + perimeterDims.extMaxY) / 2})`}>
+            D→A: {perimeterDims.rightLen.toFixed(2)}m
+          </text>
+
+          {/* Corner markers on perimeter */}
+          {showCorners && (() => {
+            const corners = [
+              { x: perimeterDims.extMinX, y: perimeterDims.extMinY, label: 'A' },
+              { x: perimeterDims.extMaxX, y: perimeterDims.extMinY, label: 'B' },
+              { x: perimeterDims.extMaxX, y: perimeterDims.extMaxY, label: 'C' },
+              { x: perimeterDims.extMinX, y: perimeterDims.extMaxY, label: 'D' },
+            ];
+            return corners.map(c => (
+              <g key={`corner-${c.label}`}>
+                <circle cx={c.x} cy={c.y} r={8} fill="#1e40af" stroke="#ffffff" strokeWidth={1.5} opacity={0.9} />
+                <text x={c.x} y={c.y + 1} textAnchor="middle" dominantBaseline="middle"
+                  fontSize={9} fontWeight="bold" fill="#ffffff" pointerEvents="none">
+                  {c.label}
+                </text>
+              </g>
+            ));
+          })()}
+        </>
+      )}
+    </>
+  );
 
   return (
     <div className="w-full bg-background rounded-lg border border-border">
@@ -392,6 +488,20 @@ export function FloorPlanCanvas2D({
             {z}%
           </button>
         ))}
+        <button
+          onClick={() => setShowCorners(!showCorners)}
+          className={`text-[10px] px-1.5 py-0.5 rounded transition-colors ml-1 ${
+            showCorners
+              ? 'bg-primary text-primary-foreground font-semibold'
+              : 'bg-background text-muted-foreground hover:bg-accent/20 border border-border'
+          }`}
+          title="Mostrar/ocultar esquinas"
+        >
+          ABCD
+        </button>
+        <Button variant="ghost" size="sm" className="h-6 w-6 p-0 ml-1" onClick={() => setGridFullscreen(true)} title="Pantalla completa">
+          <Maximize2 className="h-3.5 w-3.5" />
+        </Button>
         <span className="text-[10px] text-muted-foreground ml-2">
           🖱️ Rueda=zoom · Fondo=pan · Flechas=mover · ESC=cancelar
         </span>
@@ -419,69 +529,7 @@ export function FloorPlanCanvas2D({
           }}
         >
           <g transform={`translate(${pan.x}, ${pan.y}) scale(${zoom})`}>
-            {/* Grid */}
-            {(() => {
-              const lines: JSX.Element[] = [];
-              const gridW = plan.width * SCALE;
-              const gridH = plan.length * SCALE;
-              const step = GRID_SNAP * SCALE;
-              for (let gx = 0; gx <= gridW; gx += step) {
-                lines.push(<line key={`gv-${gx}`} x1={gx} y1={0} x2={gx} y2={gridH} stroke="#e5e7eb" strokeWidth={0.3} opacity={0.5} />);
-              }
-              for (let gy = 0; gy <= gridH; gy += step) {
-                lines.push(<line key={`gh-${gy}`} x1={0} y1={gy} x2={gridW} y2={gy} stroke="#e5e7eb" strokeWidth={0.3} opacity={0.5} />);
-              }
-              return lines;
-            })()}
-
-            {/* Background hit area for pan */}
-            <rect data-bg="true" x={-500} y={-500} width={plan.width * SCALE + 1000} height={plan.length * SCALE + 1000} fill="transparent" />
-
-            {/* Plan outline */}
-            <rect x={0} y={0} width={plan.width * SCALE} height={plan.length * SCALE}
-              stroke="#d1d5db" strokeWidth={1} strokeDasharray="8 4" fill="none" />
-
-            {/* External perimeter */}
-            {perimeterDims && (
-              <>
-                <rect
-                  x={perimeterDims.extMinX} y={perimeterDims.extMinY}
-                  width={perimeterDims.extMaxX - perimeterDims.extMinX}
-                  height={perimeterDims.extMaxY - perimeterDims.extMinY}
-                  stroke={DIM_COLOR} strokeWidth={0.8} strokeDasharray="4 3" fill="none" opacity={0.5}
-                />
-                {/* Top dim */}
-                <line x1={perimeterDims.extMinX} y1={perimeterDims.extMinY - 18} x2={perimeterDims.extMaxX} y2={perimeterDims.extMinY - 18}
-                  stroke={DIM_COLOR} strokeWidth={0.6} />
-                <text x={(perimeterDims.extMinX + perimeterDims.extMaxX) / 2} y={perimeterDims.extMinY - 22}
-                  textAnchor="middle" fontSize={7} fontWeight="bold" fill={DIM_COLOR}>
-                  A: {perimeterDims.topLen.toFixed(2)}m
-                </text>
-                {/* Right dim */}
-                <line x1={perimeterDims.extMaxX + 18} y1={perimeterDims.extMinY} x2={perimeterDims.extMaxX + 18} y2={perimeterDims.extMaxY}
-                  stroke={DIM_COLOR} strokeWidth={0.6} />
-                <text x={perimeterDims.extMaxX + 22} y={(perimeterDims.extMinY + perimeterDims.extMaxY) / 2}
-                  textAnchor="start" fontSize={7} fontWeight="bold" fill={DIM_COLOR}
-                  transform={`rotate(90, ${perimeterDims.extMaxX + 22}, ${(perimeterDims.extMinY + perimeterDims.extMaxY) / 2})`}>
-                  B: {perimeterDims.rightLen.toFixed(2)}m
-                </text>
-                {/* Bottom dim */}
-                <line x1={perimeterDims.extMinX} y1={perimeterDims.extMaxY + 18} x2={perimeterDims.extMaxX} y2={perimeterDims.extMaxY + 18}
-                  stroke={DIM_COLOR} strokeWidth={0.6} />
-                <text x={(perimeterDims.extMinX + perimeterDims.extMaxX) / 2} y={perimeterDims.extMaxY + 28}
-                  textAnchor="middle" fontSize={7} fontWeight="bold" fill={DIM_COLOR}>
-                  C: {perimeterDims.topLen.toFixed(2)}m
-                </text>
-                {/* Left dim */}
-                <line x1={perimeterDims.extMinX - 18} y1={perimeterDims.extMinY} x2={perimeterDims.extMinX - 18} y2={perimeterDims.extMaxY}
-                  stroke={DIM_COLOR} strokeWidth={0.6} />
-                <text x={perimeterDims.extMinX - 22} y={(perimeterDims.extMinY + perimeterDims.extMaxY) / 2}
-                  textAnchor="start" fontSize={7} fontWeight="bold" fill={DIM_COLOR}
-                  transform={`rotate(-90, ${perimeterDims.extMinX - 22}, ${(perimeterDims.extMinY + perimeterDims.extMaxY) / 2})`}>
-                  D: {perimeterDims.rightLen.toFixed(2)}m
-                </text>
-              </>
-            )}
+            {renderSvgContent()}
 
             {/* Rooms */}
             {rooms.map(room => {
@@ -1078,6 +1126,120 @@ export function FloorPlanCanvas2D({
           </g>
         </svg>
       </div>
+
+      {/* Fullscreen dialog */}
+      <Dialog open={gridFullscreen} onOpenChange={setGridFullscreen}>
+        <DialogContent className="max-w-[98vw] w-[98vw] max-h-[96vh] h-[96vh] flex flex-col overflow-hidden">
+          <DialogHeader className="shrink-0">
+            <DialogTitle className="text-sm">Plano 2D — Pantalla completa</DialogTitle>
+            <DialogDescription className="sr-only">Vista completa del plano en 2D</DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 overflow-hidden" style={{ minHeight: 0 }}>
+            <svg
+              width="100%"
+              height="100%"
+              style={{ cursor: 'default' }}
+            >
+              <g transform={`translate(40, 40) scale(${Math.min(
+                (window.innerWidth * 0.9) / (plan.width * SCALE + 200),
+                (window.innerHeight * 0.8) / (plan.length * SCALE + 200)
+              )})`}>
+                {renderSvgContent()}
+
+                {/* Rooms in fullscreen */}
+                {rooms.map(room => {
+                  const x = room.posX * SCALE;
+                  const y = room.posY * SCALE;
+                  const w = room.width * SCALE;
+                  const h = room.length * SCALE;
+                  const color = getRoomColor(room.name);
+                  const roomWallSegments = room.walls.map(wall => {
+                    const wallKey = `${room.id}::${wall.wallIndex}`;
+                    const segments = wallSegmentsMap.get(wallKey) || [];
+                    const isHoriz = wall.wallIndex === 1 || wall.wallIndex === 3;
+                    let wx1: number, wy1: number, wx2: number, wy2: number;
+                    switch (wall.wallIndex) {
+                      case 1: wx1 = 0; wy1 = 0; wx2 = w; wy2 = 0; break;
+                      case 2: wx1 = w; wy1 = 0; wx2 = w; wy2 = h; break;
+                      case 3: wx1 = 0; wy1 = h; wx2 = w; wy2 = h; break;
+                      case 4: default: wx1 = 0; wy1 = 0; wx2 = 0; wy2 = h; break;
+                    }
+                    return { wall, wallKey, segments, isHoriz, wx1, wy1, wx2, wy2 };
+                  });
+
+                  return (
+                    <g key={room.id} transform={`translate(${x}, ${y})`}>
+                      <rect x={0} y={0} width={w} height={h} fill={color} opacity={0.75} rx={2} />
+                      {/* Walls */}
+                      {roomWallSegments.map(({ wall, wallKey, segments, isHoriz, wx1, wy1, wx2, wy2 }) => {
+                        if (intraGroupWallKeys.has(wallKey)) return null;
+                        return (
+                          <g key={wallKey}>
+                            {segments.map((seg, si) => {
+                              const wallManualInvisible = isInvisibleType(wall.wallType);
+                              const isInvisible = isInvisibleType(seg.segmentType) || wallManualInvisible;
+                              const isExternal = !isInvisible && isExteriorType(seg.segmentType);
+                              const isShared = isCompartidaType(seg.segmentType);
+
+                              const baseThickness = isInvisible ? plan.internalWallThickness * SCALE * 0.5
+                                : isExternal ? plan.externalWallThickness * SCALE : plan.internalWallThickness * SCALE;
+                              const strokeWidth = isInvisible ? Math.max(baseThickness, 1.5)
+                                : Math.max(baseThickness, isExternal ? 4 : 3);
+
+                              let sx1: number, sy1: number, sx2: number, sy2: number;
+                              if (isHoriz) {
+                                sx1 = wx1 + seg.startFraction * (wx2 - wx1);
+                                sy1 = wy1;
+                                sx2 = wx1 + seg.endFraction * (wx2 - wx1);
+                                sy2 = wy2;
+                              } else {
+                                sx1 = wx1;
+                                sy1 = wy1 + seg.startFraction * (wy2 - wy1);
+                                sx2 = wx2;
+                                sy2 = wy1 + seg.endFraction * (wy2 - wy1);
+                              }
+
+                              const segColor = isInvisible ? WALL_INVIS_COLOR
+                                : isShared ? SHARED_WALL_COLOR
+                                : isExternal ? WALL_EXT_COLOR
+                                : WALL_INT_COLOR;
+
+                              return (
+                                <line key={`seg-${si}`} x1={sx1} y1={sy1} x2={sx2} y2={sy2}
+                                  stroke={segColor} strokeWidth={strokeWidth}
+                                  strokeDasharray={isInvisible ? '4 3' : undefined}
+                                  pointerEvents="none" />
+                              );
+                            })}
+                          </g>
+                        );
+                      })}
+                      {/* Room label */}
+                      <text x={w / 2} y={h / 2} textAnchor="middle" dominantBaseline="middle"
+                        fontSize={9} fontWeight="bold" fill="#1e293b" pointerEvents="none">
+                        {room.name} · {(room.width * room.length).toFixed(1)}m²
+                      </text>
+                    </g>
+                  );
+                })}
+
+                {/* Building outline corners */}
+                {showCorners && buildingOutline.length >= 3 && buildingOutline.map((v, i) => (
+                  <g key={`fs-corner-${i}`}>
+                    <circle cx={v.x * SCALE} cy={v.y * SCALE} r={8}
+                      fill="#1e40af" stroke="#ffffff" strokeWidth={1.5} opacity={0.9} pointerEvents="none" />
+                    <text x={v.x * SCALE} y={v.y * SCALE + 1}
+                      textAnchor="middle" dominantBaseline="middle"
+                      fontSize={9} fontWeight="bold" fill="#ffffff" pointerEvents="none">
+                      {v.label}
+                    </text>
+                  </g>
+                ))}
+              </g>
+            </svg>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

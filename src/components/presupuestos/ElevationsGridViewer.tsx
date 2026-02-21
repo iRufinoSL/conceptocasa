@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -24,6 +24,7 @@ interface ElevationsGridViewerProps {
   onDeleteBlockGroup?: (blockGroupId: string) => Promise<void>;
   onUpdateBlockGroup?: (blockGroupId: string, data: { name?: string; color?: string; spanCols?: number; spanRows?: number }) => Promise<void>;
   saving: boolean;
+  focusWallId?: string;
 }
 
 type SurfaceCategory = 'cimentacion' | 'suelo' | 'techo' | 'pared' | 'volumen' | 'tejado';
@@ -74,13 +75,27 @@ function getWallHeight(wall: WallData, room: RoomData, plan: FloorPlanData): num
 
 export function ElevationsGridViewer({
   plan, rooms, floors, onUpdateOpening, onAddOpening, onDeleteOpening, onUpdateWall,
-  onAddBlockGroup, onDeleteBlockGroup, onUpdateBlockGroup, saving,
+  onAddBlockGroup, onDeleteBlockGroup, onUpdateBlockGroup, saving, focusWallId,
 }: ElevationsGridViewerProps) {
   const [selectedOpening, setSelectedOpening] = useState<OpeningData | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editCard, setEditCard] = useState<ElevationCard | null>(null);
   const [editCardDialogOpen, setEditCardDialogOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'rooms' | 'groups' | 'composite'>('rooms');
+
+  // Scroll to focused wall on mount
+  useEffect(() => {
+    if (focusWallId) {
+      setTimeout(() => {
+        const el = document.querySelector(`[data-wall-id="${focusWallId}"]`);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          el.classList.add('ring-2', 'ring-primary', 'ring-offset-2');
+          setTimeout(() => el.classList.remove('ring-2', 'ring-primary', 'ring-offset-2'), 3000);
+        }
+      }, 300);
+    }
+  }, [focusWallId]);
 
   const wallSegmentsMap = useMemo(() => computeWallSegments(rooms), [rooms]);
   const wallClassification = useMemo(() => autoClassifyWalls(rooms), [rooms]);
@@ -652,6 +667,7 @@ function ElevationCardView({ card, plan, onOpeningClick, onAddOpening, onCardDou
   return (
     <>
     <Card
+      data-wall-id={card.wallId || undefined}
       className="overflow-hidden hover:shadow-md transition-shadow cursor-pointer group"
       title={isWall ? 'Doble clic para editar huecos' : undefined}
       onDoubleClick={isWall ? () => onCardDoubleClick(card) : undefined}

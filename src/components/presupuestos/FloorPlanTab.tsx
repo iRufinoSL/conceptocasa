@@ -13,6 +13,7 @@ import { toast } from 'sonner';
 import { useFloorPlan } from '@/hooks/useFloorPlan';
 import { FloorPlanGridView } from './FloorPlanGridView';
 import { FloorPlanSpaceForm } from './FloorPlanSpaceForm';
+import { ArrowLeft } from 'lucide-react';
 import { FloorPlanSummaryView } from './FloorPlanSummary';
 import { ElevationsGridViewer } from './ElevationsGridViewer';
 import { deriveGridPositions, computeGridRuler, formatCoord, parseCoord, colToLetter } from './FloorPlanGridView';
@@ -621,6 +622,7 @@ export function FloorPlanTab({ budgetId, budgetName = '', isAdmin }: FloorPlanTa
 
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
   const [viewTab, setViewTab] = useState('cuadricula');
+  const [elevationReturnContext, setElevationReturnContext] = useState<{ roomId: string; wallId: string } | null>(null);
   const [activeFloorTab, setActiveFloorTab] = useState('0');
   const [showAddSpace, setShowAddSpace] = useState(false);
   const [newSpaceName, setNewSpaceName] = useState('');
@@ -903,19 +905,38 @@ export function FloorPlanTab({ budgetId, budgetName = '', isAdmin }: FloorPlanTa
     <div className="space-y-4">
       {/* Toolbar */}
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <Tabs value={viewTab} onValueChange={setViewTab}>
-          <TabsList className="h-8">
-            <TabsTrigger value="cuadricula" className="text-xs h-7 px-3">
-              <Layout className="h-3.5 w-3.5 mr-1" /> Cuadrícula
-            </TabsTrigger>
-            <TabsTrigger value="alzados" className="text-xs h-7 px-3">
-              <Layers className="h-3.5 w-3.5 mr-1" /> Alzados
-            </TabsTrigger>
-            <TabsTrigger value="resumen" className="text-xs h-7 px-3">
-              <BarChart3 className="h-3.5 w-3.5 mr-1" /> Resumen m²
-            </TabsTrigger>
-          </TabsList>
-        </Tabs>
+        <div className="flex items-center gap-2">
+          {elevationReturnContext && viewTab === 'alzados' && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setSelectedRoomId(elevationReturnContext.roomId);
+                setViewTab('cuadricula');
+                setElevationReturnContext(null);
+              }}
+              className="gap-1"
+            >
+              <ArrowLeft className="h-3.5 w-3.5" /> Volver al espacio
+            </Button>
+          )}
+          <Tabs value={viewTab} onValueChange={(v) => {
+            setViewTab(v);
+            if (v !== 'alzados') setElevationReturnContext(null);
+          }}>
+            <TabsList className="h-8">
+              <TabsTrigger value="cuadricula" className="text-xs h-7 px-3">
+                <Layout className="h-3.5 w-3.5 mr-1" /> Cuadrícula
+              </TabsTrigger>
+              <TabsTrigger value="alzados" className="text-xs h-7 px-3">
+                <Layers className="h-3.5 w-3.5 mr-1" /> Alzados
+              </TabsTrigger>
+              <TabsTrigger value="resumen" className="text-xs h-7 px-3">
+                <BarChart3 className="h-3.5 w-3.5 mr-1" /> Resumen m²
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+        </div>
 
         <div className="flex items-center gap-2 flex-wrap">
           <Button
@@ -1058,6 +1079,10 @@ export function FloorPlanTab({ budgetId, budgetName = '', isAdmin }: FloorPlanTa
                   onChangeCoordinate={handleChangeCoordinate}
                   onUngroupRoom={selectedRoom.groupId ? () => ungroupRooms(selectedRoom.groupId!) : undefined}
                   onDeleteRoom={() => { deleteRoom(selectedRoom.id); setSelectedRoomId(null); }}
+                  onNavigateToElevation={(wallId, _wallIndex) => {
+                    setElevationReturnContext({ roomId: selectedRoom.id, wallId });
+                    setViewTab('alzados');
+                  }}
                   saving={saving}
                 />
               );
@@ -1139,6 +1164,7 @@ export function FloorPlanTab({ budgetId, budgetName = '', isAdmin }: FloorPlanTa
           onDeleteBlockGroup={deleteBlockGroup}
           onUpdateBlockGroup={updateBlockGroup}
           saving={saving}
+          focusWallId={elevationReturnContext?.wallId}
         />
       )}
 

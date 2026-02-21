@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
-import { Trash2, Save, Unlink, Plus, DoorOpen, Copy, ArrowRight, ArrowDown, ChevronDown, ChevronRight } from 'lucide-react';
+import { Trash2, Save, Unlink, Plus, DoorOpen, Copy, ArrowRight, ArrowDown, ChevronDown, ChevronRight, Eye } from 'lucide-react';
 import type { RoomData, WallType, FloorPlanData, OpeningData } from '@/lib/floor-plan-calculations';
 import { OPENING_PRESETS, metersToBlocks, blocksToMeters } from '@/lib/floor-plan-calculations';
 import { formatCoord, parseCoord } from './FloorPlanGridView';
@@ -26,6 +26,7 @@ interface FloorPlanSpaceFormProps {
   onChangeCoordinate?: (col: number, row: number) => void | Promise<void>;
   onUngroupRoom?: (groupId: string) => void;
   onDeleteRoom: () => void;
+  onNavigateToElevation?: (wallId: string, wallIndex: number) => void;
   saving: boolean;
 }
 
@@ -40,7 +41,7 @@ const WALL_TYPE_OPTIONS: { value: WallType; label: string }[] = [
   { value: 'interior_invisible', label: 'Int. invisible' },
 ];
 
-export function FloorPlanSpaceForm({ room, allRooms, planData, coordCol, coordRow, floorName, onUpdateRoom, onUpdateWall, onAddOpening, onDeleteOpening, onDuplicateRoom, onChangeCoordinate, onUngroupRoom, onDeleteRoom, saving }: FloorPlanSpaceFormProps) {
+export function FloorPlanSpaceForm({ room, allRooms, planData, coordCol, coordRow, floorName, onUpdateRoom, onUpdateWall, onAddOpening, onDeleteOpening, onDuplicateRoom, onChangeCoordinate, onUngroupRoom, onDeleteRoom, onNavigateToElevation, saving }: FloorPlanSpaceFormProps) {
   const isBlockMode = planData.scaleMode === 'bloque';
   const blockL = planData.blockLengthMm || 625;
   const blockH = planData.blockHeightMm || 250;
@@ -310,6 +311,17 @@ export function FloorPlanSpaceForm({ room, allRooms, planData, coordCol, coordRo
                           ))}
                         </SelectContent>
                       </Select>
+                      {onNavigateToElevation && !wall.id.startsWith('temp-') && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 w-7 p-0 shrink-0"
+                          title="Ver alzado de esta pared"
+                          onClick={() => onNavigateToElevation(wall.id, wall.wallIndex)}
+                        >
+                          <Eye className="h-3.5 w-3.5 text-primary" />
+                        </Button>
+                      )}
                     </div>
 
                     {/* Openings section */}

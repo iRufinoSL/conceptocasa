@@ -294,26 +294,78 @@ export function ElevationsGridViewer({
     }
   }, [autoEditWallId, autoEditTriggered, roomGroups]);
 
+  // Sort rooms by grid position: top-to-bottom then left-to-right, grouped spaces together
+  const sortedRoomGroups = useMemo(() => {
+    // Build a map of groupId → rooms for grouping
+    const groupMap = new Map<string, RoomElevationGroup[]>();
+    const ungrouped: RoomElevationGroup[] = [];
+    const processed = new Set<string>();
+
+    roomGroups.forEach(rg => {
+      if (rg.room.groupId) {
+        if (!groupMap.has(rg.room.groupId)) groupMap.set(rg.room.groupId, []);
+        groupMap.get(rg.room.groupId)!.push(rg);
+      } else {
+        ungrouped.push(rg);
+      }
+    });
+
+    // Sort function: by posY first (top-to-bottom), then posX (left-to-right)
+    const sortByPos = (a: RoomElevationGroup, b: RoomElevationGroup) => {
+      const dy = a.room.posY - b.room.posY;
+      if (Math.abs(dy) > 0.1) return dy;
+      return a.room.posX - b.room.posX;
+    };
+
+    // Sort ungrouped by position
+    ungrouped.sort(sortByPos);
+
+    // Sort each group internally by position
+    groupMap.forEach(group => group.sort(sortByPos));
+
+    // Merge: for each room in position order, if it's grouped, insert the whole group at the first member's position
+    const allByPos = [...roomGroups].sort(sortByPos);
+    const result: RoomElevationGroup[] = [];
+
+    allByPos.forEach(rg => {
+      if (processed.has(rg.room.id)) return;
+      if (rg.room.groupId && groupMap.has(rg.room.groupId)) {
+        const group = groupMap.get(rg.room.groupId)!;
+        group.forEach(g => {
+          if (!processed.has(g.room.id)) {
+            result.push(g);
+            processed.add(g.room.id);
+          }
+        });
+      } else {
+        result.push(rg);
+        processed.add(rg.room.id);
+      }
+    });
+
+    return result;
+  }, [roomGroups]);
+
   // Group by floor
   const floorGroups: Array<{ floorId: string; floorName: string; roomGroups: RoomElevationGroup[] }> = useMemo(() => {
     const sortedFloors = floors ? [...floors].sort((a, b) => a.orderIndex - b.orderIndex) : [];
     if (sortedFloors.length === 0) {
-      return [{ floorId: 'all', floorName: '', roomGroups }];
+      return [{ floorId: 'all', floorName: '', roomGroups: sortedRoomGroups }];
     }
     const result: Array<{ floorId: string; floorName: string; roomGroups: RoomElevationGroup[] }> = [];
     sortedFloors.forEach(floor => {
-      const floorRooms = roomGroups.filter(rg => rg.room.floorId === floor.id);
+      const floorRooms = sortedRoomGroups.filter(rg => rg.room.floorId === floor.id);
       if (floorRooms.length > 0) {
         result.push({ floorId: floor.id, floorName: floor.name, roomGroups: floorRooms });
       }
     });
     const assignedIds = new Set(rooms.filter(r => r.floorId && sortedFloors.some(f => f.id === r.floorId)).map(r => r.id));
-    const unassigned = roomGroups.filter(rg => !assignedIds.has(rg.room.id));
+    const unassigned = sortedRoomGroups.filter(rg => !assignedIds.has(rg.room.id));
     if (unassigned.length > 0) {
       result.push({ floorId: 'unassigned', floorName: 'Sin nivel asignado', roomGroups: unassigned });
     }
     return result;
-  }, [roomGroups, floors, rooms]);
+  }, [sortedRoomGroups, floors, rooms]);
 
   const handleOpeningClick = useCallback((op: OpeningData) => {
     // Find the wall length for this opening
@@ -359,10 +411,15 @@ export function ElevationsGridViewer({
 
   const hasGroups = elevationGroups.length > 0;
 
+  const [gridFullscreen, setGridFullscreen] = useState(false);
+
   return (
     <div className="space-y-4">
       {/* View mode toggle */}
       <div className="flex items-center gap-2 flex-wrap">
+        <Button variant="ghost" size="sm" className="h-7 w-7 p-0 ml-auto" onClick={() => setGridFullscreen(true)} title="Pantalla completa">
+          <Maximize2 className="h-4 w-4" />
+        </Button>
         <Button variant={viewMode === 'rooms' ? 'default' : 'outline'} size="sm" className="text-xs h-7"
           onClick={() => setViewMode('rooms')}>
           <Layers className="h-3 w-3 mr-1" /> Por espacio
@@ -520,6 +577,63 @@ export function ElevationsGridViewer({
           saving={saving}
         />
       )}
+
+      {/* Grid fullscreen dialog */}
+      <Dialog open={gridFullscreen} onOpenChange={setGridFullscreen}>
+        <DialogContent className="max-w-[98vw] w-[98vw] max-h-[96vh] h-[96vh] flex flex-col overflow-hidden">
+          <DialogHeader className="shrink-0">
+            <DialogTitle className="text-sm">Alzados — Pantalla completa</DialogTitle>
+            <DialogDescription className="sr-only">Vista completa de todos los alzados</DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 overflow-auto">
+            {floorGroups.map(({ floorId, floorName, roomGroups: floorRoomGroups }) => {
+              const hasFloorHeader = floorName !== '';
+              const content = (
+                <div className="space-y-3">
+                  {floorRoomGroups.map(({ room, cards }) => (
+                    <Collapsible key={room.id} defaultOpen>
+                      <CollapsibleTrigger className="flex items-center gap-2 w-full text-left group hover:bg-muted/50 rounded px-2 py-1 transition-colors">
+                        <ChevronRight className="h-4 w-4 text-muted-foreground transition-transform group-data-[state=open]:rotate-90" />
+                        <h4 className="text-sm font-semibold text-muted-foreground">{room.name}</h4>
+                        <Badge variant="outline" className="text-[10px] h-4">{cards.filter(c => c.category === 'pared').length} paredes</Badge>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent>
+                        <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 mt-2 ml-4">
+                          {cards.map(card => (
+                            <ElevationCardView
+                              key={card.id}
+                              card={card}
+                              plan={plan}
+                              onOpeningClick={handleOpeningClick}
+                              onAddOpening={onAddOpening}
+                              onCardDoubleClick={handleCardDoubleClick}
+                              onAddBlockGroup={onAddBlockGroup}
+                              onDeleteBlockGroup={onDeleteBlockGroup}
+                              saving={saving}
+                            />
+                          ))}
+                        </div>
+                      </CollapsibleContent>
+                    </Collapsible>
+                  ))}
+                </div>
+              );
+              if (hasFloorHeader) {
+                return (
+                  <Collapsible key={floorId} defaultOpen>
+                    <CollapsibleTrigger className="flex items-center gap-2 w-full text-left group hover:bg-muted/50 rounded px-2 py-1.5 transition-colors border-b border-border/50 mb-2">
+                      <ChevronRight className="h-4 w-4 text-foreground transition-transform group-data-[state=open]:rotate-90" />
+                      <h3 className="text-sm font-bold text-foreground">{floorName}</h3>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent className="ml-2">{content}</CollapsibleContent>
+                  </Collapsible>
+                );
+              }
+              return <div key={floorId}>{content}</div>;
+            })}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -631,30 +745,27 @@ function ElevationCardView({ card, plan, onOpeningClick, onAddOpening, onCardDou
           return <g className="block-pattern">{lines}</g>;
         })()}
 
-        {/* Direction arrows A↔B above elevation */}
-        {isWall && card.wall && (() => {
+        {/* Direction arrows — only on external walls, viewed from exterior */}
+        {isWall && card.wall && isExteriorType(card.wall.wallType as string) && (() => {
           const wi = card.wall.wallIndex;
-          // Corner labels when viewing the wall from the outside (left-to-right)
-          const cornerMap: Record<number, [string, string]> = {
-            1: ['D', 'B'], // top wall: left=D, right=B
-            2: ['A', 'C'], // right wall: left=A, right=C
-            3: ['B', 'D'], // bottom wall: left=B, right=D
-            4: ['C', 'A'], // left wall: left=C, right=A
+          // External walls: viewed from EXTERIOR (flipped left-right vs interior)
+          const exteriorCornerMap: Record<number, [string, string]> = {
+            1: ['B', 'A'], // top wall from outside (standing north): left=B, right=A
+            2: ['C', 'B'], // right wall from outside (standing east): left=C, right=B
+            3: ['D', 'C'], // bottom wall from outside (standing south): left=D, right=C
+            4: ['A', 'D'], // left wall from outside (standing west): left=A, right=D
           };
-          const [leftCorner, rightCorner] = cornerMap[wi] || ['?', '?'];
+          const [leftCorner, rightCorner] = exteriorCornerMap[wi] || ['?', '?'];
           const arrowY = ry - 8;
           const fs = fsScale ? 9 : 7;
           return (
             <g>
-              {/* Left corner label */}
               <text x={rx} y={arrowY} textAnchor="start" fontSize={fs} fontWeight={700} fill="hsl(222, 47%, 40%)">
                 ← {leftCorner}
               </text>
-              {/* Right corner label */}
               <text x={rx + rw} y={arrowY} textAnchor="end" fontSize={fs} fontWeight={700} fill="hsl(222, 47%, 40%)">
                 {rightCorner} →
               </text>
-              {/* Arrow line */}
               <line x1={rx + 12} y1={arrowY - 3} x2={rx + rw - 12} y2={arrowY - 3}
                 stroke="hsl(222, 47%, 40%)" strokeWidth={0.5} opacity={0.4} />
             </g>
@@ -1102,13 +1213,13 @@ function FullscreenBlockGrid({ card, plan, blockCount, selectedBlocks, onToggleB
         });
       })}
 
-      {/* Direction arrows */}
-      {card.wall && (() => {
+      {/* Direction arrows — only on external walls, from exterior */}
+      {card.wall && isExteriorType(card.wall.wallType as string) && (() => {
         const wi = card.wall.wallIndex;
-        const cornerMap: Record<number, [string, string]> = {
-          1: ['D', 'B'], 2: ['A', 'C'], 3: ['B', 'D'], 4: ['C', 'A'],
+        const exteriorCornerMap: Record<number, [string, string]> = {
+          1: ['B', 'A'], 2: ['C', 'B'], 3: ['D', 'C'], 4: ['A', 'D'],
         };
-        const [leftCorner, rightCorner] = cornerMap[wi] || ['?', '?'];
+        const [leftCorner, rightCorner] = exteriorCornerMap[wi] || ['?', '?'];
         return (
           <g>
             <text x={rx} y={ry - 10} textAnchor="start" fontSize={11} fontWeight={700} fill="hsl(222, 47%, 40%)">← {leftCorner}</text>

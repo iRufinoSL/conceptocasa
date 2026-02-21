@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { Plus, Trash2, Box, Layers, ArrowUpDown } from 'lucide-react';
+import { Plus, Trash2, Box, Layers, ArrowUpDown, Maximize2 } from 'lucide-react';
 import { OPENING_PRESETS, WALL_LABELS, computeWallSegments, autoClassifyWalls, generateExternalWallNames, isExteriorType, isInvisibleType } from '@/lib/floor-plan-calculations';
 import type { RoomData, WallData, OpeningData, FloorPlanData, WallSegment, FloorLevel, WallType } from '@/lib/floor-plan-calculations';
 
@@ -450,6 +450,7 @@ function ElevationCardView({ card, plan, onOpeningClick, onAddOpening, onCardDou
   onCardDoubleClick: (card: ElevationCard) => void;
   saving: boolean;
 }) {
+  const [fullscreen, setFullscreen] = useState(false);
   const scale = Math.min(CARD_SCALE, (MAX_CARD_WIDTH - CARD_PADDING * 2 - 30) / card.width);
   const svgW = card.width * scale + CARD_PADDING * 2 + 30;
   const svgH = card.height * scale + CARD_PADDING * 2 + 30;
@@ -466,7 +467,152 @@ function ElevationCardView({ card, plan, onOpeningClick, onAddOpening, onCardDou
 
   const isWall = card.category === 'pared';
 
+  // Block count calculation
+  const blockCount = useMemo(() => {
+    if (!isWall || card.isInvisible || plan.scaleMode !== 'bloque') return null;
+    const blockW = plan.blockLengthMm / 1000;
+    const blockH = plan.blockHeightMm / 1000;
+    if (blockW <= 0 || blockH <= 0) return null;
+    const cols = Math.ceil(card.width / blockW);
+    const rows = Math.ceil(card.height / blockH);
+    return { cols, rows, total: cols * rows };
+  }, [isWall, card.isInvisible, card.width, card.height, plan.scaleMode, plan.blockLengthMm, plan.blockHeightMm]);
+
+  // SVG render function shared between inline and fullscreen
+  const renderSvg = (fsScale?: number) => {
+    const s = fsScale || scale;
+    const sw = card.width * s + CARD_PADDING * 2 + 30;
+    const sh = card.height * s + CARD_PADDING * 2 + 30;
+    const rx = CARD_PADDING + 20;
+    const ry = CARD_PADDING;
+    const rw = card.width * s;
+    const rh = card.height * s;
+
+    return (
+      <svg
+        width="100%"
+        viewBox={`0 0 ${sw} ${sh}`}
+        className="mx-auto"
+        style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', maxHeight: fsScale ? '80vh' : '180px' }}
+      >
+        {isWall && (
+          <>
+            <line x1={rx - 5} y1={ry + rh} x2={rx + rw + 5} y2={ry + rh}
+              stroke="hsl(25, 60%, 40%)" strokeWidth={1.5} />
+            {Array.from({ length: Math.ceil((rw + 10) / 6) }, (_, i) => (
+              <line key={`gh-${i}`}
+                x1={rx - 5 + i * 6} y1={ry + rh + 1.5}
+                x2={rx - 5 + i * 6 - 4} y2={ry + rh + 5}
+                stroke="hsl(25, 60%, 40%)" strokeWidth={0.4} opacity={0.5}
+              />
+            ))}
+          </>
+        )}
+        <rect x={rx} y={ry} width={rw} height={rh}
+          fill={card.fill} stroke={card.stroke} strokeWidth={1.5} rx={1} />
+
+        {/* Block pattern */}
+        {isWall && !card.isInvisible && plan.scaleMode === 'bloque' && (() => {
+          const blockWPx = (plan.blockLengthMm / 1000) * s;
+          const blockHPx = (plan.blockHeightMm / 1000) * s;
+          if (blockWPx < 3 || blockHPx < 2) return null;
+          const rows = Math.ceil(rh / blockHPx);
+          const cols = Math.ceil(rw / blockWPx) + 1;
+          const lines: React.ReactElement[] = [];
+          for (let r = 1; r < rows; r++) {
+            const y = ry + rh - r * blockHPx;
+            if (y <= ry) break;
+            lines.push(
+              <line key={`bh-${r}`} x1={rx} y1={y} x2={rx + rw} y2={y}
+                stroke="hsl(25, 30%, 65%)" strokeWidth={0.5} opacity={0.6} pointerEvents="none" />
+            );
+          }
+          for (let r = 0; r < rows; r++) {
+            const yTop = Math.max(ry, ry + rh - (r + 1) * blockHPx);
+            const yBot = ry + rh - r * blockHPx;
+            if (yTop >= ry + rh) break;
+            const offset = r % 2 === 0 ? 0 : blockWPx / 2;
+            for (let c = 1; c < cols; c++) {
+              const x = rx + offset + c * blockWPx;
+              if (x >= rx + rw) break;
+              if (x <= rx) continue;
+              lines.push(
+                <line key={`bv-${r}-${c}`} x1={x} y1={yTop} x2={x} y2={Math.min(yBot, ry + rh)}
+                  stroke="hsl(25, 30%, 65%)" strokeWidth={0.4} opacity={0.5} pointerEvents="none" />
+              );
+            }
+          }
+          return <g className="block-pattern">{lines}</g>;
+        })()}
+
+        {/* Dimensions */}
+        <line x1={rx} y1={ry + rh + 12} x2={rx + rw} y2={ry + rh + 12}
+          stroke="hsl(25, 95%, 45%)" strokeWidth={0.6} />
+        <line x1={rx} y1={ry + rh + 8} x2={rx} y2={ry + rh + 16} stroke="hsl(25, 95%, 45%)" strokeWidth={0.4} />
+        <line x1={rx + rw} y1={ry + rh + 8} x2={rx + rw} y2={ry + rh + 16} stroke="hsl(25, 95%, 45%)" strokeWidth={0.4} />
+        <text x={rx + rw / 2} y={ry + rh + 24} textAnchor="middle" fontSize={fsScale ? 10 : 8} fill="hsl(25, 95%, 45%)" fontWeight={600}>
+          {card.width.toFixed(2)}m
+        </text>
+        <line x1={rx - 12} y1={ry} x2={rx - 12} y2={ry + rh}
+          stroke="hsl(25, 95%, 45%)" strokeWidth={0.6} />
+        <line x1={rx - 16} y1={ry} x2={rx - 8} y2={ry} stroke="hsl(25, 95%, 45%)" strokeWidth={0.4} />
+        <line x1={rx - 16} y1={ry + rh} x2={rx - 8} y2={ry + rh} stroke="hsl(25, 95%, 45%)" strokeWidth={0.4} />
+        <text x={rx - 18} y={ry + rh / 2} textAnchor="middle" fontSize={fsScale ? 10 : 8} fill="hsl(25, 95%, 45%)" fontWeight={600}
+          transform={`rotate(-90, ${rx - 18}, ${ry + rh / 2})`}>
+          {card.height.toFixed(2)}m
+        </text>
+
+        {/* Openings */}
+        {card.openings.map(op => {
+          const isHoriz = card.wall ? (card.wall.wallIndex === 1 || card.wall.wallIndex === 3) : true;
+          const fullWallLen = card.room ? (isHoriz ? card.room.width : card.room.length) : card.width;
+          const seg = card.segment;
+          let opCenterInSegment: number;
+          if (seg) {
+            const opMeters = op.positionX * fullWallLen;
+            opCenterInSegment = (opMeters - seg.startMeters) / (seg.endMeters - seg.startMeters);
+          } else {
+            opCenterInSegment = op.positionX;
+          }
+          opCenterInSegment = Math.max(0.05, Math.min(0.95, opCenterInSegment));
+          const opWidthPx = op.width * s;
+          const opHeightPx = op.height * s;
+          const baseY = getOpeningBaseY(op);
+          const opX = rx + opCenterInSegment * rw - opWidthPx / 2;
+          const opY = ry + rh - opHeightPx - baseY * s;
+          const isDoor = op.openingType === 'puerta' || op.openingType === 'puerta_externa' || op.openingType === 'ventana_balconera';
+          return (
+            <g key={op.id} style={{ cursor: 'pointer' }}
+              onClick={e => { e.stopPropagation(); onOpeningClick(op); }}>
+              <rect x={opX} y={opY} width={opWidthPx} height={opHeightPx}
+                fill={isDoor ? 'hsl(30, 80%, 95%)' : 'hsl(210, 80%, 95%)'}
+                stroke={isDoor ? 'hsl(30, 80%, 45%)' : 'hsl(210, 80%, 45%)'}
+                strokeWidth={1.2} rx={1} />
+              {!isDoor && (
+                <>
+                  <line x1={opX} y1={opY + opHeightPx / 2} x2={opX + opWidthPx} y2={opY + opHeightPx / 2}
+                    stroke="hsl(210, 80%, 70%)" strokeWidth={0.5} pointerEvents="none" />
+                  <line x1={opX + opWidthPx / 2} y1={opY} x2={opX + opWidthPx / 2} y2={opY + opHeightPx}
+                    stroke="hsl(210, 80%, 70%)" strokeWidth={0.5} pointerEvents="none" />
+                </>
+              )}
+              {isDoor && (
+                <circle cx={opX + opWidthPx * 0.8} cy={opY + opHeightPx * 0.55} r={1.5}
+                  fill="hsl(30, 80%, 45%)" pointerEvents="none" />
+              )}
+              <text x={opX + opWidthPx / 2} y={opY + opHeightPx / 2 + 3} textAnchor="middle"
+                fontSize={fsScale ? 8 : 6} fill="hsl(var(--foreground))" pointerEvents="none" opacity={0.8}>
+                {OPENING_PRESETS[op.openingType as keyof typeof OPENING_PRESETS]?.label || op.openingType}
+              </text>
+            </g>
+          );
+        })}
+      </svg>
+    );
+  };
+
   return (
+    <>
     <Card
       className="overflow-hidden hover:shadow-md transition-shadow cursor-pointer group"
       title={isWall ? 'Doble clic para editar huecos' : undefined}
@@ -484,6 +630,11 @@ function ElevationCardView({ card, plan, onOpeningClick, onAddOpening, onCardDou
             </div>
           </div>
           <div className="flex items-center gap-1 shrink-0">
+            {blockCount && (
+              <Badge variant="outline" className="text-[9px] h-4 bg-accent/30">
+                {blockCount.total} bloques ({blockCount.cols}×{blockCount.rows})
+              </Badge>
+            )}
             {card.badgeLabel && (
               <Badge variant={card.badgeVariant || 'secondary'} className="text-[9px] h-4">
                 {card.badgeLabel}
@@ -494,6 +645,13 @@ function ElevationCardView({ card, plan, onOpeningClick, onAddOpening, onCardDou
             )}
             {card.elevationGroup && (
               <Badge variant="secondary" className="text-[9px] h-4 bg-primary/10 text-primary">{card.elevationGroup}</Badge>
+            )}
+            {!card.isInvisible && card.category !== 'volumen' && (
+              <Button variant="ghost" size="sm" className="h-5 w-5 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                onClick={e => { e.stopPropagation(); setFullscreen(true); }}
+                title="Ampliar">
+                <Maximize2 className="h-3 w-3" />
+              </Button>
             )}
           </div>
         </div>
@@ -530,148 +688,7 @@ function ElevationCardView({ card, plan, onOpeningClick, onAddOpening, onCardDou
             </svg>
           </div>
         ) : (
-          <svg
-            width="100%"
-            viewBox={`0 0 ${svgW} ${svgH}`}
-            className="mx-auto"
-            style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', maxHeight: '180px' }}
-          >
-            {/* Ground line for walls */}
-            {isWall && (
-              <>
-                <line
-                  x1={rectX - 5} y1={rectY + rectH}
-                  x2={rectX + rectW + 5} y2={rectY + rectH}
-                  stroke="hsl(25, 60%, 40%)" strokeWidth={1.5}
-                />
-                {Array.from({ length: Math.ceil((rectW + 10) / 6) }, (_, i) => (
-                  <line key={`gh-${i}`}
-                    x1={rectX - 5 + i * 6} y1={rectY + rectH + 1.5}
-                    x2={rectX - 5 + i * 6 - 4} y2={rectY + rectH + 5}
-                    stroke="hsl(25, 60%, 40%)" strokeWidth={0.4} opacity={0.5}
-                  />
-                ))}
-                {/* Double-click hint */}
-                <text x={rectX + rectW / 2} y={rectY - 5} textAnchor="middle"
-                  fontSize={6.5} fill="hsl(var(--muted-foreground))" opacity={0.6}>
-                  doble clic para editar huecos
-                </text>
-              </>
-            )}
-
-            {/* Main rectangle */}
-            <rect
-              x={rectX} y={rectY} width={rectW} height={rectH}
-              fill={card.fill} stroke={card.stroke}
-              strokeWidth={1.5} rx={1}
-            />
-
-            {/* Block pattern overlay when in bloque scale mode */}
-            {isWall && !card.isInvisible && plan.scaleMode === 'bloque' && (() => {
-              const blockWPx = (plan.blockLengthMm / 1000) * scale;
-              const blockHPx = (plan.blockHeightMm / 1000) * scale;
-              if (blockWPx < 3 || blockHPx < 2) return null; // too small to render
-              const rows = Math.ceil(rectH / blockHPx);
-              const cols = Math.ceil(rectW / blockWPx) + 1;
-              const lines: React.ReactElement[] = [];
-              // Horizontal lines (mortar joints)
-              for (let r = 1; r < rows; r++) {
-                const y = rectY + rectH - r * blockHPx;
-                if (y <= rectY) break;
-                lines.push(
-                  <line key={`bh-${r}`} x1={rectX} y1={y} x2={rectX + rectW} y2={y}
-                    stroke="hsl(25, 30%, 65%)" strokeWidth={0.5} opacity={0.6} pointerEvents="none" />
-                );
-              }
-              // Vertical lines (staggered per row)
-              for (let r = 0; r < rows; r++) {
-                const yTop = Math.max(rectY, rectY + rectH - (r + 1) * blockHPx);
-                const yBot = rectY + rectH - r * blockHPx;
-                if (yTop >= rectY + rectH) break;
-                const offset = r % 2 === 0 ? 0 : blockWPx / 2;
-                for (let c = 1; c < cols; c++) {
-                  const x = rectX + offset + c * blockWPx;
-                  if (x >= rectX + rectW) break;
-                  if (x <= rectX) continue;
-                  lines.push(
-                    <line key={`bv-${r}-${c}`} x1={x} y1={yTop} x2={x} y2={Math.min(yBot, rectY + rectH)}
-                      stroke="hsl(25, 30%, 65%)" strokeWidth={0.4} opacity={0.5} pointerEvents="none" />
-                  );
-                }
-              }
-              return <g className="block-pattern">{lines}</g>;
-            })()}
-
-            {/* Width dimension (bottom) */}
-            <line x1={rectX} y1={rectY + rectH + 12} x2={rectX + rectW} y2={rectY + rectH + 12}
-              stroke="hsl(25, 95%, 45%)" strokeWidth={0.6} />
-            <line x1={rectX} y1={rectY + rectH + 8} x2={rectX} y2={rectY + rectH + 16} stroke="hsl(25, 95%, 45%)" strokeWidth={0.4} />
-            <line x1={rectX + rectW} y1={rectY + rectH + 8} x2={rectX + rectW} y2={rectY + rectH + 16} stroke="hsl(25, 95%, 45%)" strokeWidth={0.4} />
-            <text x={rectX + rectW / 2} y={rectY + rectH + 24} textAnchor="middle" fontSize={8} fill="hsl(25, 95%, 45%)" fontWeight={600}>
-              {card.width.toFixed(2)}m
-            </text>
-
-            {/* Height dimension (left) */}
-            <line x1={rectX - 12} y1={rectY} x2={rectX - 12} y2={rectY + rectH}
-              stroke="hsl(25, 95%, 45%)" strokeWidth={0.6} />
-            <line x1={rectX - 16} y1={rectY} x2={rectX - 8} y2={rectY} stroke="hsl(25, 95%, 45%)" strokeWidth={0.4} />
-            <line x1={rectX - 16} y1={rectY + rectH} x2={rectX - 8} y2={rectY + rectH} stroke="hsl(25, 95%, 45%)" strokeWidth={0.4} />
-            <text x={rectX - 18} y={rectY + rectH / 2} textAnchor="middle" fontSize={8} fill="hsl(25, 95%, 45%)" fontWeight={600}
-              transform={`rotate(-90, ${rectX - 18}, ${rectY + rectH / 2})`}>
-              {card.height.toFixed(2)}m
-            </text>
-
-            {/* Openings (walls only) */}
-            {card.openings.map(op => {
-              const isHoriz = card.wall ? (card.wall.wallIndex === 1 || card.wall.wallIndex === 3) : true;
-              const fullWallLen = card.room ? (isHoriz ? card.room.width : card.room.length) : card.width;
-              const seg = card.segment;
-
-              let opCenterInSegment: number;
-              if (seg) {
-                const opMeters = op.positionX * fullWallLen;
-                opCenterInSegment = (opMeters - seg.startMeters) / (seg.endMeters - seg.startMeters);
-              } else {
-                opCenterInSegment = op.positionX;
-              }
-              opCenterInSegment = Math.max(0.05, Math.min(0.95, opCenterInSegment));
-
-              const opWidthPx = op.width * scale;
-              const opHeightPx = op.height * scale;
-              const baseY = getOpeningBaseY(op);
-              const opX = rectX + opCenterInSegment * rectW - opWidthPx / 2;
-              const opY = rectY + rectH - opHeightPx - baseY * scale;
-              const isDoor = op.openingType === 'puerta' || op.openingType === 'puerta_externa' || op.openingType === 'ventana_balconera';
-
-              return (
-                <g key={op.id} style={{ cursor: 'pointer' }}
-                  onClick={e => { e.stopPropagation(); onOpeningClick(op); }}>
-                  <rect
-                    x={opX} y={opY} width={opWidthPx} height={opHeightPx}
-                    fill={isDoor ? 'hsl(30, 80%, 95%)' : 'hsl(210, 80%, 95%)'}
-                    stroke={isDoor ? 'hsl(30, 80%, 45%)' : 'hsl(210, 80%, 45%)'}
-                    strokeWidth={1.2} rx={1}
-                  />
-                  {!isDoor && (
-                    <>
-                      <line x1={opX} y1={opY + opHeightPx / 2} x2={opX + opWidthPx} y2={opY + opHeightPx / 2}
-                        stroke="hsl(210, 80%, 70%)" strokeWidth={0.5} pointerEvents="none" />
-                      <line x1={opX + opWidthPx / 2} y1={opY} x2={opX + opWidthPx / 2} y2={opY + opHeightPx}
-                        stroke="hsl(210, 80%, 70%)" strokeWidth={0.5} pointerEvents="none" />
-                    </>
-                  )}
-                  {isDoor && (
-                    <circle cx={opX + opWidthPx * 0.8} cy={opY + opHeightPx * 0.55} r={1.5}
-                      fill="hsl(30, 80%, 45%)" pointerEvents="none" />
-                  )}
-                  <text x={opX + opWidthPx / 2} y={opY + opHeightPx / 2 + 3} textAnchor="middle"
-                    fontSize={6} fill="hsl(var(--foreground))" pointerEvents="none" opacity={0.8}>
-                    {OPENING_PRESETS[op.openingType as keyof typeof OPENING_PRESETS]?.label || op.openingType}
-                  </text>
-                </g>
-              );
-            })}
-          </svg>
+          renderSvg()
         )}
 
         {/* Quick add openings for wall cards (single-click zone, stop propagation) */}
@@ -695,6 +712,34 @@ function ElevationCardView({ card, plan, onOpeningClick, onAddOpening, onCardDou
         )}
       </CardContent>
     </Card>
+
+    {/* Fullscreen dialog */}
+    <Dialog open={fullscreen} onOpenChange={setFullscreen}>
+      <DialogContent className="max-w-[95vw] max-h-[95vh] w-auto">
+        <DialogHeader>
+          <DialogTitle className="text-sm flex items-center gap-2">
+            {card.label}
+            {card.sublabel && <span className="text-muted-foreground font-normal">— {card.sublabel}</span>}
+            {blockCount && (
+              <Badge variant="outline" className="text-xs">
+                {blockCount.total} bloques ({blockCount.cols}×{blockCount.rows})
+              </Badge>
+            )}
+            {!card.isInvisible && (
+              <Badge variant="outline" className="text-xs">{area}m²</Badge>
+            )}
+          </DialogTitle>
+        </DialogHeader>
+        <div className="overflow-auto flex items-center justify-center">
+          {card.isInvisible ? (
+            <p className="text-muted-foreground italic">Pared invisible</p>
+          ) : (
+            renderSvg(Math.min(200, (window.innerWidth * 0.85) / card.width))
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }
 

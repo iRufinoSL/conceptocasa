@@ -247,7 +247,7 @@ export function useFloorPlan(budgetId: string) {
           posY: Number(r.pos_y),
           width: Number(r.width),
           length: Number(r.length),
-          height: r.height ? Number(r.height) : undefined,
+          height: r.height != null ? Number(r.height) : undefined,
           hasFloor: r.has_floor !== false,
           hasCeiling: r.has_ceiling !== false,
           hasRoof: r.has_roof !== false,

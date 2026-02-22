@@ -965,7 +965,13 @@ function ElevationCardView({ card, plan, onOpeningClick, onAddOpening, onCardDou
     doc.setFont('helvetica', 'normal');
     doc.text(`Alzado: ${label}`, margin, margin + 12);
     const svgClone = svgEl.cloneNode(true) as SVGSVGElement;
-    svgClone.setAttribute('width', '2400');
+    const vb = svgEl.getAttribute('viewBox')?.split(' ').map(Number) || [0, 0, 2400, 600];
+    const vbW = vb[2] || 2400;
+    const vbH = vb[3] || 600;
+    const renderW = 3000;
+    const renderH = Math.round(renderW * (vbH / vbW));
+    svgClone.setAttribute('width', String(renderW));
+    svgClone.setAttribute('height', String(renderH));
     svgClone.removeAttribute('style');
     const svgData = new XMLSerializer().serializeToString(svgClone);
     const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
@@ -973,18 +979,18 @@ function ElevationCardView({ card, plan, onOpeningClick, onAddOpening, onCardDou
     const img = new Image();
     img.onload = () => {
       const canvas = document.createElement('canvas');
-      canvas.width = img.width;
-      canvas.height = img.height;
+      canvas.width = renderW;
+      canvas.height = renderH;
       const ctx = canvas.getContext('2d')!;
       ctx.fillStyle = 'white';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.drawImage(img, 0, 0);
+      ctx.drawImage(img, 0, 0, renderW, renderH);
       const imgData = canvas.toDataURL('image/png');
       const availW = pageW - margin * 2;
       const availH = pageH - margin * 2 - 20;
-      const ratio = Math.min(availW / img.width, availH / img.height);
-      const imgW = img.width * ratio;
-      const imgH = img.height * ratio;
+      const ratio = Math.min(availW / renderW, availH / renderH);
+      const imgW = renderW * ratio;
+      const imgH = renderH * ratio;
       doc.addImage(imgData, 'PNG', margin + (availW - imgW) / 2, margin + 18, imgW, imgH);
       doc.save(`${label.replace(/[^a-zA-Z0-9áéíóúñÁÉÍÓÚÑ ]/g, '_')}.pdf`);
       URL.revokeObjectURL(url);
@@ -1598,9 +1604,6 @@ function ElevationCardView({ card, plan, onOpeningClick, onAddOpening, onCardDou
             <div className="flex items-center gap-1 ml-auto print:hidden">
               <Button variant="outline" size="sm" className="h-7 text-xs" onClick={handleCardPdfExport}>
                 <FileDown className="h-3 w-3 mr-1" /> PDF A4
-              </Button>
-              <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => window.print()}>
-                <Printer className="h-3 w-3 mr-1" /> Imprimir
               </Button>
             </div>
           </DialogTitle>
@@ -2685,9 +2688,15 @@ function CompositeWallCard({ compositeWall, plan, onOpeningClick, onAddBlockGrou
     doc.setFont('helvetica', 'normal');
     doc.text(`Pared compuesta: ${cw.label} — ${SIDE_LABELS[cw.side] || cw.side} — ${Math.round(cw.totalLength * 1000)} × ${Math.round(maxHeight * 1000)} mm`, margin, margin + 12);
 
-    // Serialize SVG to image
+    // Serialize SVG to image — use viewBox dimensions for proper aspect ratio
     const svgClone = svgEl.cloneNode(true) as SVGSVGElement;
-    svgClone.setAttribute('width', '2400');
+    const vb = svgEl.getAttribute('viewBox')?.split(' ').map(Number) || [0, 0, 2400, 600];
+    const vbW = vb[2] || 2400;
+    const vbH = vb[3] || 600;
+    const renderW = 3000;
+    const renderH = Math.round(renderW * (vbH / vbW));
+    svgClone.setAttribute('width', String(renderW));
+    svgClone.setAttribute('height', String(renderH));
     svgClone.removeAttribute('style');
     const svgData = new XMLSerializer().serializeToString(svgClone);
     const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
@@ -2695,18 +2704,18 @@ function CompositeWallCard({ compositeWall, plan, onOpeningClick, onAddBlockGrou
     const img = new Image();
     img.onload = () => {
       const canvas = document.createElement('canvas');
-      canvas.width = img.width;
-      canvas.height = img.height;
+      canvas.width = renderW;
+      canvas.height = renderH;
       const ctx = canvas.getContext('2d')!;
       ctx.fillStyle = 'white';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.drawImage(img, 0, 0);
+      ctx.drawImage(img, 0, 0, renderW, renderH);
       const imgData = canvas.toDataURL('image/png');
       const availW = pageW - margin * 2;
       const availH = pageH - margin * 2 - 20;
-      const ratio = Math.min(availW / img.width, availH / img.height);
-      const imgW = img.width * ratio;
-      const imgH = img.height * ratio;
+      const ratio = Math.min(availW / renderW, availH / renderH);
+      const imgW = renderW * ratio;
+      const imgH = renderH * ratio;
       doc.addImage(imgData, 'PNG', margin + (availW - imgW) / 2, margin + 18, imgW, imgH);
       doc.save(`${cw.label}_${budgetName || 'alzado'}.pdf`);
       URL.revokeObjectURL(url);
@@ -2892,9 +2901,6 @@ function CompositeWallCard({ compositeWall, plan, onOpeningClick, onAddBlockGrou
               <div className="flex items-center gap-1 ml-auto print:hidden">
                 <Button variant="outline" size="sm" className="h-7 text-xs" onClick={handleExportPdf}>
                   <FileDown className="h-3 w-3 mr-1" /> PDF A4 horizontal
-                </Button>
-                <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => window.print()}>
-                  <Printer className="h-3 w-3 mr-1" /> Imprimir
                 </Button>
               </div>
             </DialogTitle>

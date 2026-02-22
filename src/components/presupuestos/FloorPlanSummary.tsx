@@ -222,7 +222,7 @@ export function FloorPlanSummaryView({ summary }: FloorPlanSummaryProps) {
               {rc.walls.map(w => (
                 <div key={w.wallIndex} className="flex justify-between">
                   <span className="text-muted-foreground">
-                    {w.wallIndex === 1 ? '1. Pared Superior' : w.wallIndex === 2 ? '2. Pared Derecha' : w.wallIndex === 3 ? '3. Pared Inferior' : '4. Pared Izquierda'}
+                    {w.wallIndex === 1 ? 'Pared Superior (1)' : w.wallIndex === 2 ? 'Pared Derecha (2)' : w.wallIndex === 3 ? 'Pared Inferior (3)' : 'Pared Izquierda (4)'}
                     {' '}({w.wallType})
                     {w.openings.length > 0 && (
                       <span className="ml-1 text-primary">

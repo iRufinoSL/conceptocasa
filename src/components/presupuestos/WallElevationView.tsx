@@ -294,7 +294,7 @@ export function WallElevationView({
         </Button>
         <div className="flex flex-col items-center gap-1">
           <div className="flex items-center gap-2 text-sm">
-            <span className="font-medium">{room.name} — {WALL_LABELS[wall.wallIndex]}</span>
+            <span className="font-medium">{room.name} — {WALL_LABELS[wall.wallIndex]} ({totalSegments > 1 ? `${wall.wallIndex}${segmentIndex + 1}` : wall.wallIndex})</span>
             {totalSegments > 1 && (
               <Badge variant="secondary" className="text-[10px]">
                 Segmento {segmentIndex + 1}/{totalSegments}

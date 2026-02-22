@@ -837,16 +837,25 @@ export function ElevationsGridViewer({
 }
 
 // Inline wall type selector for elevation cards
-function InlineWallTypeSelect({ wallId, currentType, onUpdateWall, saving }: {
+function InlineWallTypeSelect({ wallId, currentType, onUpdateWall, saving, displayOnly }: {
   wallId: string;
   currentType: WallType;
   onUpdateWall?: (wallId: string, data: { wallType?: WallType }) => Promise<void>;
   saving: boolean;
+  displayOnly?: boolean;
 }) {
   const handleChange = async (v: string) => {
-    if (!onUpdateWall) return;
+    if (!onUpdateWall || displayOnly) return;
     await onUpdateWall(wallId, { wallType: v as WallType });
   };
+  const label = WALL_TYPE_OPTIONS.find(o => o.value === currentType)?.label || currentType;
+  if (displayOnly) {
+    return (
+      <span className="text-[9px] text-muted-foreground/70 italic" title="Tipo calculado por segmento (editar desde Plano)">
+        {label}
+      </span>
+    );
+  }
   return (
     <Select value={currentType} onValueChange={handleChange} disabled={saving || !onUpdateWall}>
       <SelectTrigger className="h-5 text-[9px] px-1.5 w-auto min-w-[90px] border-muted">
@@ -1255,12 +1264,21 @@ function ElevationCardView({ card, plan, onOpeningClick, onAddOpening, onCardDou
               )}
               {isWall && card.wall && !card.wall.id.startsWith('temp-') && (
                 <div className="flex items-center gap-1 mt-0.5" onClick={e => e.stopPropagation()}>
-                  <InlineWallTypeSelect
-                    wallId={card.wall.id}
-                    currentType={(card.wall.wallType as WallType)}
-                    onUpdateWall={onUpdateWall}
-                    saving={saving}
-                  />
+                  {card.segment ? (
+                    <InlineWallTypeSelect
+                      wallId={card.wall.id}
+                      currentType={(card.segment.segmentType as WallType)}
+                      displayOnly
+                      saving={saving}
+                    />
+                  ) : (
+                    <InlineWallTypeSelect
+                      wallId={card.wall.id}
+                      currentType={(card.wall.wallType as WallType)}
+                      onUpdateWall={onUpdateWall}
+                      saving={saving}
+                    />
+                  )}
                 </div>
               )}
             </div>

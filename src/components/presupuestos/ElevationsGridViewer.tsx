@@ -2194,6 +2194,10 @@ function CompositeWallCard({ compositeWall, plan, onOpeningClick, onAddBlockGrou
 }) {
   const [fullscreen, setFullscreen] = useState(false);
   const [selectedBlocks, setSelectedBlocks] = useState<Set<string>>(new Set());
+  const [fsSelectedOpeningId, setFsSelectedOpeningId] = useState<string | null>(null);
+  const [fsDragState, setFsDragState] = useState<{
+    openingId: string; startX: number; startPosX: number; wallLength: number; opWidth: number; scale: number;
+  } | null>(null);
   const cw = compositeWall;
   const maxHeight = Math.max(...cw.sections.map(s => s.height), 0);
 
@@ -2221,7 +2225,11 @@ function CompositeWallCard({ compositeWall, plan, onOpeningClick, onAddBlockGrou
         width="100%"
         viewBox={`0 0 ${sw} ${sh}`}
         className="mx-auto"
-        style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', maxHeight: fsScale ? '85vh' : '200px' }}
+        style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', maxHeight: fsScale ? '85vh' : '200px', cursor: fsDragState ? 'grabbing' : 'default' }}
+        onMouseMove={fsScale ? handleCompositeFsMouseMove : undefined}
+        onMouseUp={fsScale ? () => setFsDragState(null) : undefined}
+        onMouseLeave={fsScale ? () => setFsDragState(null) : undefined}
+        onClick={fsScale ? () => { if (!fsDragState) setFsSelectedOpeningId(null); } : undefined}
       >
         {/* Ground line */}
         <line x1={rxs - 5} y1={rys + totalH} x2={rxs + cw.totalLength * s + 5} y2={rys + totalH}
@@ -2370,38 +2378,67 @@ function CompositeWallCard({ compositeWall, plan, onOpeningClick, onAddBlockGrou
               </text>
 
               {/* Openings */}
-              {section.openings.map(op => {
-                const isHoriz = section.wallIndex === 1 || section.wallIndex === 3;
-                const room = cw.sections.find(sec => sec.roomId === section.roomId);
-                if (!room) return null;
-                // Calculate opening position within this section
-                const fullWallLen = isHoriz
-                  ? (rooms_cache_ref?.find(r => r.id === section.roomId)?.width || section.length)
-                  : (rooms_cache_ref?.find(r => r.id === section.roomId)?.length || section.length);
-                const opCenterFraction = op.positionX;
-                const opCenterInSection = opCenterFraction * fullWallLen;
-                // Check if this opening is within the section bounds
-                const opWidthPx = op.width * s;
-                const opHeightPx = op.height * s;
-                const sillH = op.sillHeight ?? 0;
-                const opX = sx + (opCenterInSection / section.length) * sw2 - opWidthPx / 2;
-                const opY = sy + sh2 - opHeightPx - sillH * s;
-                const isDoor = op.openingType === 'puerta' || op.openingType === 'puerta_externa' || op.openingType === 'ventana_balconera';
+              {(() => {
+                // Use live openings from liveRooms for accurate positions
+                const liveRoom = liveRooms?.find(r => r.id === section.roomId);
+                const liveWall = liveRoom?.walls.find(w => w.id === section.wallId);
+                const liveOpenings = liveWall?.openings || section.openings;
+                return liveOpenings.map(op => {
+                  const isHoriz = section.wallIndex === 1 || section.wallIndex === 3;
+                  const fullWallLen = isHoriz
+                    ? (liveRoom?.width || section.length)
+                    : (liveRoom?.length || section.length);
+                  const opCenterFraction = op.positionX;
+                  const opCenterInSection = opCenterFraction * fullWallLen;
+                  const opWidthPx = op.width * s;
+                  const opHeightPx = op.height * s;
+                  const sillH = op.sillHeight ?? 0;
+                  const opX = sx + (opCenterInSection / section.length) * sw2 - opWidthPx / 2;
+                  const opY = sy + sh2 - opHeightPx - sillH * s;
+                  const isDoor = op.openingType === 'puerta' || op.openingType === 'puerta_externa' || op.openingType === 'ventana_balconera';
+                  const isSelected = fsScale && fsSelectedOpeningId === op.id;
 
-                return (
-                  <g key={op.id} style={{ cursor: 'pointer' }}
-                    onClick={e => { e.stopPropagation(); onOpeningClick(op); }}>
-                    <rect x={opX} y={opY} width={opWidthPx} height={opHeightPx}
-                      fill={isDoor ? 'hsl(30, 80%, 95%)' : 'hsl(210, 80%, 95%)'}
-                      stroke={isDoor ? 'hsl(30, 80%, 45%)' : 'hsl(210, 80%, 45%)'}
-                      strokeWidth={1} rx={1} />
-                    <text x={opX + opWidthPx / 2} y={opY + opHeightPx / 2 + 3} textAnchor="middle"
-                      fontSize={fsScale ? 9 : 6} fill="hsl(var(--foreground))" pointerEvents="none" opacity={0.8}>
-                      {OPENING_PRESETS[op.openingType as keyof typeof OPENING_PRESETS]?.label || op.openingType}
-                    </text>
-                  </g>
-                );
-              })}
+                  return (
+                    <g key={op.id}
+                      style={{ cursor: fsScale ? (fsDragState ? 'grabbing' : 'grab') : 'pointer' }}
+                      onClick={e => {
+                        e.stopPropagation();
+                        if (fsScale) { setFsSelectedOpeningId(op.id); }
+                        else { onOpeningClick(op); }
+                      }}
+                      onMouseDown={fsScale && onUpdateOpening ? e => {
+                        e.preventDefault(); e.stopPropagation();
+                        setFsSelectedOpeningId(op.id);
+                        setFsDragState({
+                          openingId: op.id, startX: e.clientX, startPosX: op.positionX,
+                          wallLength: fullWallLen, opWidth: op.width, scale: s,
+                        });
+                      } : undefined}>
+                      <rect x={opX} y={opY} width={opWidthPx} height={opHeightPx}
+                        fill={isDoor ? 'hsl(30, 80%, 95%)' : 'hsl(210, 80%, 95%)'}
+                        stroke={isSelected ? 'hsl(var(--primary))' : (isDoor ? 'hsl(30, 80%, 45%)' : 'hsl(210, 80%, 45%)')}
+                        strokeWidth={isSelected ? 2 : 1} rx={1} />
+                      <text x={opX + opWidthPx / 2} y={opY + opHeightPx / 2 + 3} textAnchor="middle"
+                        fontSize={fsScale ? 9 : 6} fill="hsl(var(--foreground))" pointerEvents="none" opacity={0.8}>
+                        {OPENING_PRESETS[op.openingType as keyof typeof OPENING_PRESETS]?.label || op.openingType}
+                      </text>
+                      {/* Reference measurements for selected opening */}
+                      {isSelected && (
+                        <>
+                          <text x={opX + opWidthPx / 2} y={opY - 4} textAnchor="middle"
+                            fontSize={8} fill="hsl(var(--primary))" fontWeight={600}>
+                            {Math.round(op.width * 1000)}×{Math.round(op.height * 1000)}mm
+                          </text>
+                          <text x={opX + opWidthPx / 2} y={sy + sh2 + 10} textAnchor="middle"
+                            fontSize={7} fill="hsl(25, 95%, 45%)">
+                            alféizar: {Math.round(sillH * 1000)}mm
+                          </text>
+                        </>
+                      )}
+                    </g>
+                  );
+                });
+              })()}
             </g>
           );
         })}
@@ -2533,9 +2570,57 @@ function CompositeWallCard({ compositeWall, plan, onOpeningClick, onAddBlockGrou
     setSelectedBlocks(new Set());
   }, [onAddBlockGroup, selectedBlocks, cw.sections, plan]);
 
-  // Avoid using a variable that doesn't exist in this scope
-  // The openings are already calculated in CompositeWallSection, no need for room lookup
-  const rooms_cache_ref: RoomData[] | null = null; // placeholder - openings already have positionX
+  // Use liveRooms for accurate opening positions
+  const rooms_cache_ref: RoomData[] | null = liveRooms || null;
+
+  // Arrow key handler for opening movement in composite fullscreen
+  useEffect(() => {
+    if (!fullscreen || !fsSelectedOpeningId || !onUpdateOpening) return;
+    const handleKey = (e: KeyboardEvent) => {
+      if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Delete'].includes(e.key)) return;
+      e.preventDefault();
+      if (e.key === 'Delete' && onDeleteOpening) {
+        onDeleteOpening(fsSelectedOpeningId);
+        setFsSelectedOpeningId(null);
+        return;
+      }
+      // Find the opening across all sections
+      for (const section of cw.sections) {
+        const liveRoom = liveRooms?.find(r => r.id === section.roomId);
+        const liveWall = liveRoom?.walls.find(w => w.id === section.wallId);
+        const op = liveWall?.openings.find(o => o.id === fsSelectedOpeningId);
+        if (!op) continue;
+        const isHoriz = section.wallIndex === 1 || section.wallIndex === 3;
+        const fullWallLen = isHoriz ? (liveRoom!.width) : (liveRoom!.length);
+        const step = e.shiftKey ? 0.005 : 0.001; // ~5mm or ~1mm
+        if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+          const dir = e.key === 'ArrowRight' ? 1 : -1;
+          const deltaFraction = (step * dir);
+          const halfW = (op.width / 2) / fullWallLen;
+          const newPosX = Math.max(halfW, Math.min(1 - halfW, op.positionX + deltaFraction));
+          onUpdateOpening(fsSelectedOpeningId, { positionX: newPosX });
+        } else {
+          const dir = e.key === 'ArrowUp' ? 1 : -1;
+          const newSill = Math.max(0, (op.sillHeight ?? 0) + step * dir);
+          onUpdateOpening(fsSelectedOpeningId, { sillHeight: newSill });
+        }
+        break;
+      }
+    };
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [fullscreen, fsSelectedOpeningId, onUpdateOpening, onDeleteOpening, cw.sections, liveRooms]);
+
+  // Drag handler for composite fullscreen
+  const handleCompositeFsMouseMove = useCallback((e: React.MouseEvent) => {
+    if (!fsDragState || !onUpdateOpening) return;
+    const deltaPixels = e.clientX - fsDragState.startX;
+    const deltaMeters = deltaPixels / fsDragState.scale;
+    const deltaFraction = deltaMeters / fsDragState.wallLength;
+    const halfW = (fsDragState.opWidth / 2) / fsDragState.wallLength;
+    const newPosX = Math.max(halfW, Math.min(1 - halfW, fsDragState.startPosX + deltaFraction));
+    onUpdateOpening(fsDragState.openingId, { positionX: newPosX });
+  }, [fsDragState, onUpdateOpening]);
 
   const isBlockMode = plan.scaleMode === 'bloque';
 
@@ -2615,7 +2700,7 @@ function CompositeWallCard({ compositeWall, plan, onOpeningClick, onAddBlockGrou
       </Card>
 
       {/* Fullscreen dialog with block editing */}
-      <Dialog open={fullscreen} onOpenChange={(open) => { setFullscreen(open); if (!open) setSelectedBlocks(new Set()); }}>
+      <Dialog open={fullscreen} onOpenChange={(open) => { setFullscreen(open); if (!open) { setSelectedBlocks(new Set()); setFsSelectedOpeningId(null); setFsDragState(null); } }}>
         <DialogContent className="!max-w-none !w-screen !h-screen !m-0 !p-4 !rounded-none !translate-x-0 !translate-y-0 !top-0 !left-0 flex flex-col print:!p-2">
           <DialogHeader className="shrink-0">
             <DialogTitle className="text-sm flex items-center gap-2 flex-wrap">
@@ -2645,6 +2730,22 @@ function CompositeWallCard({ compositeWall, plan, onOpeningClick, onAddBlockGrou
             </DialogTitle>
             <DialogDescription className="sr-only">Vista a pantalla completa de pared compuesta</DialogDescription>
           </DialogHeader>
+
+          {/* Opening movement toolbar */}
+          {fsSelectedOpeningId && onUpdateOpening && (
+            <div className="shrink-0 flex items-center gap-2 flex-wrap border-b border-border/50 pb-2 print:hidden">
+              <span className="text-xs text-primary font-medium">
+                Hueco seleccionado — ←→ mover · ↑↓ alféizar · Shift=5mm · Supr=borrar
+              </span>
+              {onDeleteOpening && (
+                <Button variant="destructive" size="sm" className="h-6 text-[10px] ml-auto"
+                  onClick={() => { onDeleteOpening(fsSelectedOpeningId); setFsSelectedOpeningId(null); }}
+                  disabled={saving}>
+                  <Trash2 className="h-3 w-3 mr-1" /> Eliminar hueco
+                </Button>
+              )}
+            </div>
+          )}
 
           {/* Block editing toolbar */}
           {isBlockMode && (

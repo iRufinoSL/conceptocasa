@@ -423,34 +423,55 @@ export function FloorPlanGridView({
     setMultiSelectMode(false);
   };
 
-  // Opening marks for walls
-  const renderOpeningMarks = (room: RoomData, wallIndex: number, side: 'top' | 'right' | 'bottom' | 'left') => {
+  // Opening marks for walls — positioned proportionally using positionX and sized by opening width
+  const renderOpeningMarks = (room: RoomData, wallIndex: number, side: 'top' | 'right' | 'bottom' | 'left', roomWidthPx: number, roomHeightPx: number) => {
     const wall = room.walls.find(w => w.wallIndex === wallIndex);
-    if (!wall) return null;
-    const wins = wall.openings.filter(o => o.openingType.startsWith('ventana')).length;
-    const doors = wall.openings.filter(o => !o.openingType.startsWith('ventana')).length;
-    if (wins === 0 && doors === 0) return null;
-    const marks: React.ReactNode[] = [];
+    if (!wall || wall.openings.length === 0) return null;
     const isHoriz = side === 'top' || side === 'bottom';
-    for (let i = 0; i < wins; i++) marks.push(
-      <div key={`w${i}`} className="bg-white border-2 border-cyan-500" style={{
-        ...(isHoriz ? { width: '14px', height: '6px' } : { width: '6px', height: '14px' }),
-        borderRadius: '1px',
-      }} />
-    );
-    for (let i = 0; i < doors; i++) marks.push(
-      <div key={`d${i}`} className="bg-white border-2 border-amber-600" style={{
-        ...(isHoriz ? { width: '10px', height: '6px' } : { width: '6px', height: '10px' }),
-        borderRadius: '1px',
-      }} />
-    );
-    const posClasses: Record<string, string> = {
-      top: 'absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 flex gap-0.5',
-      bottom: 'absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 flex gap-0.5',
-      left: 'absolute left-0 top-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col gap-0.5',
-      right: 'absolute right-0 top-1/2 translate-x-1/2 -translate-y-1/2 flex flex-col gap-0.5',
-    };
-    return <div className={posClasses[side]}>{marks}</div>;
+    // Wall length in meters
+    const wallLenM = isHoriz ? room.width : room.length;
+    // Container length in px
+    const containerPx = isHoriz ? roomWidthPx : roomHeightPx;
+
+    return wall.openings.map((op, i) => {
+      const isWindow = op.openingType.startsWith('ventana');
+      const borderColor = isWindow ? '#06b6d4' : '#d97706'; // cyan-500 / amber-600
+      // Opening width as fraction of wall
+      const opWidthFraction = wallLenM > 0 ? op.width / wallLenM : 0.2;
+      const opWidthPx = Math.max(4, Math.round(opWidthFraction * containerPx));
+      // Position: positionX is 0-1 fraction (center of opening along wall)
+      const centerFraction = op.positionX ?? 0.5;
+      const centerPx = centerFraction * containerPx;
+      const MARK_THICKNESS = 6;
+
+      if (isHoriz) {
+        return (
+          <div key={op.id || `o${i}`} className="absolute" style={{
+            left: centerPx - opWidthPx / 2,
+            ...(side === 'top' ? { top: -MARK_THICKNESS / 2 } : { bottom: -MARK_THICKNESS / 2 }),
+            width: opWidthPx,
+            height: MARK_THICKNESS,
+            backgroundColor: 'white',
+            border: `2px solid ${borderColor}`,
+            borderRadius: 1,
+            zIndex: 30,
+          }} />
+        );
+      } else {
+        return (
+          <div key={op.id || `o${i}`} className="absolute" style={{
+            top: centerPx - opWidthPx / 2,
+            ...(side === 'left' ? { left: -MARK_THICKNESS / 2 } : { right: -MARK_THICKNESS / 2 }),
+            width: MARK_THICKNESS,
+            height: opWidthPx,
+            backgroundColor: 'white',
+            border: `2px solid ${borderColor}`,
+            borderRadius: 1,
+            zIndex: 30,
+          }} />
+        );
+      }
+    });
   };
 
   const renderGrid = (overrideCellSize?: number) => {
@@ -516,10 +537,10 @@ export function FloorPlanGridView({
             else onSelectRoom(room.id === selectedRoomId ? null : room.id);
           }}
         >
-          {renderOpeningMarks(room, 1, 'top')}
-          {renderOpeningMarks(room, 2, 'right')}
-          {renderOpeningMarks(room, 3, 'bottom')}
-          {renderOpeningMarks(room, 4, 'left')}
+          {renderOpeningMarks(room, 1, 'top', width, height)}
+          {renderOpeningMarks(room, 2, 'right', width, height)}
+          {renderOpeningMarks(room, 3, 'bottom', width, height)}
+          {renderOpeningMarks(room, 4, 'left', width, height)}
 
           <div className="font-bold text-center max-w-full px-0.5 leading-tight break-words" style={{ fontSize: `${nameFontSize}px`, lineHeight: '1.2' }}>{room.name}</div>
           <div className="font-semibold" style={{ fontSize: `${m2FontSize}px` }}>{m2} m²</div>

@@ -69,7 +69,18 @@ export function FloorPlanSpaceForm({ room, allRooms, planData, coordCol, coordRo
   }, [allRooms, room.floorId]);
 
   // Compute wall segments dynamically based on room adjacency (same floor only)
-  const wallSegmentsMap = useMemo(() => computeWallSegments(sameFloorRooms), [sameFloorRooms]);
+  const wallSegmentsMap = useMemo(() => {
+    const map = computeWallSegments(sameFloorRooms);
+    // Debug: log segments for the current room
+    [1,2,3,4].forEach(wi => {
+      const k = `${room.id}::${wi}`;
+      const segs = map.get(k);
+      if (segs && segs.length > 1) {
+        console.log(`[SEG] ${room.name} wall ${wi}: ${segs.length} segments`, segs.map(s => ({ start: s.startMeters.toFixed(3), end: s.endMeters.toFixed(3), type: s.segmentType, neighbor: s.neighborRoomId?.slice(0,8) })));
+      }
+    });
+    return map;
+  }, [sameFloorRooms, room.id, room.name]);
 
   // Reset local state when a different room is selected
   useEffect(() => {

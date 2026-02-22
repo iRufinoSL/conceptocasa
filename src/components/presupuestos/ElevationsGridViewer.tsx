@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { Plus, Trash2, Box, Layers, ArrowUpDown, Maximize2, Merge, Unlink, Map as MapIcon, Printer, FileDown } from 'lucide-react';
+import { Plus, Trash2, Box, Layers, ArrowUpDown, Maximize2, Merge, Unlink, Map as MapIcon, Printer, FileDown, Ruler } from 'lucide-react';
 import jsPDF from 'jspdf';
 import { OPENING_PRESETS, WALL_LABELS, WALL_SIDE_LETTERS, computeWallSegments, autoClassifyWalls, generateExternalWallNames, isExteriorType, isInvisibleType, computeBuildingOutline, computeCompositeWalls, computeCompositeWallsFromCorners } from '@/lib/floor-plan-calculations';
 import type { RoomData, WallData, OpeningData, FloorPlanData, WallSegment, FloorLevel, WallType, BlockGroupData, OutlineVertex, CompositeWall } from '@/lib/floor-plan-calculations';
@@ -1936,7 +1936,7 @@ function FullscreenBlockGrid({ card, plan, blockCount, selectedBlocks, onToggleB
 // Fullscreen interactive block grid for composite walls
 // ──────────────────────────────────────────────────────────────────
 
-function CompositeFullscreenBlockGrid({ compositeWall, plan, maxHeight, selectedBlocks, sectionBlockGroups, onToggleBlock, onOpeningClick }: {
+function CompositeFullscreenBlockGrid({ compositeWall, plan, maxHeight, selectedBlocks, sectionBlockGroups, onToggleBlock, onOpeningClick, rulerLines, rulerDraw, totalLength }: {
   compositeWall: CompositeWall;
   plan: FloorPlanData;
   maxHeight: number;
@@ -1944,6 +1944,9 @@ function CompositeFullscreenBlockGrid({ compositeWall, plan, maxHeight, selected
   sectionBlockGroups: Map<number, BlockGroupData[]>;
   onToggleBlock: (key: string) => void;
   onOpeningClick: (op: OpeningData) => void;
+  rulerLines?: Array<{ x1: number; y1: number; x2: number; y2: number }>;
+  rulerDraw?: { x1: number; y1: number } | null;
+  totalLength?: number;
 }) {
   const cw = compositeWall;
   const blockWm = plan.blockLengthMm / 1000;
@@ -2107,14 +2110,27 @@ function CompositeFullscreenBlockGrid({ compositeWall, plan, maxHeight, selected
 
             {/* Openings */}
             {section.openings.map(op => {
+              const isHoriz = section.wallIndex === 1 || section.wallIndex === 3;
+              const fullWallLen = isHoriz ? section.length : section.length;
               const opCenterFraction = op.positionX;
-              const opCenterInSection = opCenterFraction * section.length;
+              const opCenterInSection = opCenterFraction * fullWallLen;
               const opWidthPx = op.width * s;
               const opHeightPx = op.height * s;
               const sillH = op.sillHeight ?? 0;
               const opX = sx + (opCenterInSection / section.length) * sw2 - opWidthPx / 2;
               const opY = sy + sh2 - opHeightPx - sillH * s;
               const isDoor = op.openingType === 'puerta' || op.openingType === 'puerta_externa' || op.openingType === 'ventana_balconera';
+              const distLeft = opCenterInSection - op.width / 2;
+              const distRight = section.length - (opCenterInSection + op.width / 2);
+              const distBottom = sillH;
+              const distTop = section.height - sillH - op.height;
+              const dColor = 'hsl(200, 70%, 40%)';
+              const dStroke = 'hsl(200, 70%, 55%)';
+              const dDash = '2 1.5';
+              const opLeft = opX;
+              const opRight = opX + opWidthPx;
+              const opTop = opY;
+              const opBottom = opY + opHeightPx;
               return (
                 <g key={op.id} style={{ cursor: 'pointer' }}
                   onClick={e => { e.stopPropagation(); onOpeningClick(op); }}>
@@ -2126,8 +2142,26 @@ function CompositeFullscreenBlockGrid({ compositeWall, plan, maxHeight, selected
                     fontSize={10} fill="hsl(var(--foreground))" pointerEvents="none" opacity={0.8}>
                     {OPENING_PRESETS[op.openingType as keyof typeof OPENING_PRESETS]?.label || op.openingType}
                   </text>
-                  <text x={opX + opWidthPx / 2} y={opY + opHeightPx / 2 + 16} textAnchor="middle"
-                    fontSize={8} fill="hsl(var(--muted-foreground))" pointerEvents="none">
+                  {/* 4-edge distance annotations */}
+                  <line x1={sx} y1={opTop + opHeightPx / 2} x2={opLeft} y2={opTop + opHeightPx / 2}
+                    stroke={dStroke} strokeWidth={0.5} strokeDasharray={dDash} />
+                  <text x={(sx + opLeft) / 2} y={opTop + opHeightPx / 2 - 2} textAnchor="middle"
+                    fontSize={8} fill={dColor} fontWeight={600}>{Math.round(distLeft * 1000)}</text>
+                  <line x1={opRight} y1={opTop + opHeightPx / 2} x2={sx + sw2} y2={opTop + opHeightPx / 2}
+                    stroke={dStroke} strokeWidth={0.5} strokeDasharray={dDash} />
+                  <text x={(opRight + sx + sw2) / 2} y={opTop + opHeightPx / 2 - 2} textAnchor="middle"
+                    fontSize={8} fill={dColor} fontWeight={600}>{Math.round(distRight * 1000)}</text>
+                  <line x1={opLeft + opWidthPx / 2} y1={opBottom} x2={opLeft + opWidthPx / 2} y2={sy + sh2}
+                    stroke={dStroke} strokeWidth={0.5} strokeDasharray={dDash} />
+                  <text x={opLeft + opWidthPx / 2 + 3} y={(opBottom + sy + sh2) / 2 + 3} textAnchor="start"
+                    fontSize={8} fill={dColor} fontWeight={600}>{Math.round(distBottom * 1000)}</text>
+                  <line x1={opLeft + opWidthPx / 2} y1={sy} x2={opLeft + opWidthPx / 2} y2={opTop}
+                    stroke={dStroke} strokeWidth={0.5} strokeDasharray={dDash} />
+                  <text x={opLeft + opWidthPx / 2 + 3} y={(sy + opTop) / 2 + 3} textAnchor="start"
+                    fontSize={8} fill={dColor} fontWeight={600}>{Math.round(distTop * 1000)}</text>
+                  {/* Opening size */}
+                  <text x={opX + opWidthPx / 2} y={opY - 4} textAnchor="middle"
+                    fontSize={8} fill="hsl(var(--primary))" fontWeight={600}>
                     {Math.round(op.width * 1000)}×{Math.round(op.height * 1000)}mm
                   </text>
                 </g>
@@ -2167,6 +2201,35 @@ function CompositeFullscreenBlockGrid({ compositeWall, plan, maxHeight, selected
         fontSize={13} fill="hsl(var(--primary))" fontWeight={800}>
         {cw.endCorner.label}
       </text>
+      {/* Ruler lines */}
+      {rulerLines && rulerLines.map((rl, i) => {
+        const dx = (rl.x2 - rl.x1);
+        const dy = (rl.y2 - rl.y1);
+        const distPx = Math.sqrt(dx * dx + dy * dy);
+        const distM = distPx / s;
+        const midX = (rl.x1 + rl.x2) / 2;
+        const midY = (rl.y1 + rl.y2) / 2;
+        return (
+          <g key={`ruler-${i}`}>
+            <line x1={rl.x1} y1={rl.y1} x2={rl.x2} y2={rl.y2}
+              stroke="hsl(350, 80%, 50%)" strokeWidth={1.5} strokeDasharray="4 2" />
+            <circle cx={rl.x1} cy={rl.y1} r={3} fill="hsl(350, 80%, 50%)" />
+            <circle cx={rl.x2} cy={rl.y2} r={3} fill="hsl(350, 80%, 50%)" />
+            <rect x={midX - 28} y={midY - 8} width={56} height={16} rx={3}
+              fill="hsl(350, 80%, 50%)" opacity={0.9} />
+            <text x={midX} y={midY + 4} textAnchor="middle"
+              fontSize={10} fill="white" fontWeight={700}>
+              {Math.round(distM * 1000)} mm
+            </text>
+          </g>
+        );
+      })}
+      {/* Active ruler draw point */}
+      {rulerDraw && (
+        <circle cx={rulerDraw.x1} cy={rulerDraw.y1} r={4} fill="hsl(350, 80%, 50%)" opacity={0.7}>
+          <animate attributeName="r" values="3;5;3" dur="1s" repeatCount="indefinite" />
+        </circle>
+      )}
     </svg>
   );
 }
@@ -2198,6 +2261,11 @@ function CompositeWallCard({ compositeWall, plan, onOpeningClick, onAddBlockGrou
   const [fsDragState, setFsDragState] = useState<{
     openingId: string; startX: number; startPosX: number; wallLength: number; opWidth: number; scale: number;
   } | null>(null);
+  // Ruler tool state
+  const [rulerMode, setRulerMode] = useState(false);
+  const [rulerLines, setRulerLines] = useState<Array<{ x1: number; y1: number; x2: number; y2: number }>>([]);
+  const [rulerDraw, setRulerDraw] = useState<{ x1: number; y1: number } | null>(null);
+  const rulerSvgRef = useRef<SVGSVGElement | null>(null);
   const cw = compositeWall;
   const maxHeight = Math.max(...cw.sections.map(s => s.height), 0);
 
@@ -2422,19 +2490,50 @@ function CompositeWallCard({ compositeWall, plan, onOpeningClick, onAddBlockGrou
                         fontSize={fsScale ? 9 : 6} fill="hsl(var(--foreground))" pointerEvents="none" opacity={0.8}>
                         {OPENING_PRESETS[op.openingType as keyof typeof OPENING_PRESETS]?.label || op.openingType}
                       </text>
-                      {/* Reference measurements for selected opening */}
-                      {isSelected && (
-                        <>
-                          <text x={opX + opWidthPx / 2} y={opY - 4} textAnchor="middle"
-                            fontSize={8} fill="hsl(var(--primary))" fontWeight={600}>
-                            {Math.round(op.width * 1000)}×{Math.round(op.height * 1000)}mm
-                          </text>
-                          <text x={opX + opWidthPx / 2} y={sy + sh2 + 10} textAnchor="middle"
-                            fontSize={7} fill="hsl(25, 95%, 45%)">
-                            alféizar: {Math.round(sillH * 1000)}mm
-                          </text>
-                        </>
-                      )}
+                      {/* 4-edge distance annotations */}
+                      {(() => {
+                        const distLeft = opCenterInSection - op.width / 2; // distance from section left to opening left (meters)
+                        const distRight = section.length - (opCenterInSection + op.width / 2);
+                        const distBottom = sillH;
+                        const distTop = section.height - sillH - op.height;
+                        const fz = fsScale ? 8 : 5.5;
+                        const dColor = 'hsl(200, 70%, 40%)';
+                        const dStroke = 'hsl(200, 70%, 55%)';
+                        const dDash = '2 1.5';
+                        const opLeft = opX;
+                        const opRight = opX + opWidthPx;
+                        const opTop = opY;
+                        const opBottom = opY + opHeightPx;
+                        return (
+                          <>
+                            {/* Left distance */}
+                            <line x1={sx} y1={opTop + opHeightPx / 2} x2={opLeft} y2={opTop + opHeightPx / 2}
+                              stroke={dStroke} strokeWidth={0.5} strokeDasharray={dDash} />
+                            <text x={(sx + opLeft) / 2} y={opTop + opHeightPx / 2 - 2} textAnchor="middle"
+                              fontSize={fz} fill={dColor} fontWeight={600}>{Math.round(distLeft * 1000)}</text>
+                            {/* Right distance */}
+                            <line x1={opRight} y1={opTop + opHeightPx / 2} x2={sx + sw2} y2={opTop + opHeightPx / 2}
+                              stroke={dStroke} strokeWidth={0.5} strokeDasharray={dDash} />
+                            <text x={(opRight + sx + sw2) / 2} y={opTop + opHeightPx / 2 - 2} textAnchor="middle"
+                              fontSize={fz} fill={dColor} fontWeight={600}>{Math.round(distRight * 1000)}</text>
+                            {/* Bottom (sill) distance */}
+                            <line x1={opLeft + opWidthPx / 2} y1={opBottom} x2={opLeft + opWidthPx / 2} y2={sy + sh2}
+                              stroke={dStroke} strokeWidth={0.5} strokeDasharray={dDash} />
+                            <text x={opLeft + opWidthPx / 2 + 3} y={(opBottom + sy + sh2) / 2 + 3} textAnchor="start"
+                              fontSize={fz} fill={dColor} fontWeight={600}>{Math.round(distBottom * 1000)}</text>
+                            {/* Top distance */}
+                            <line x1={opLeft + opWidthPx / 2} y1={sy} x2={opLeft + opWidthPx / 2} y2={opTop}
+                              stroke={dStroke} strokeWidth={0.5} strokeDasharray={dDash} />
+                            <text x={opLeft + opWidthPx / 2 + 3} y={(sy + opTop) / 2 + 3} textAnchor="start"
+                              fontSize={fz} fill={dColor} fontWeight={600}>{Math.round(distTop * 1000)}</text>
+                          </>
+                        );
+                      })()}
+                      {/* Opening size label */}
+                      <text x={opX + opWidthPx / 2} y={opY - 4} textAnchor="middle"
+                        fontSize={fsScale ? 8 : 5.5} fill="hsl(var(--primary))" fontWeight={600}>
+                        {Math.round(op.width * 1000)}×{Math.round(op.height * 1000)}mm
+                      </text>
                     </g>
                   );
                 });
@@ -2474,6 +2573,35 @@ function CompositeWallCard({ compositeWall, plan, onOpeningClick, onAddBlockGrou
           fontSize={fsScale ? 13 : 9} fill="hsl(var(--primary))" fontWeight={800}>
           {cw.endCorner.label}
         </text>
+
+        {/* Ruler lines (fullscreen only) */}
+        {fsScale && rulerLines.map((rl, i) => {
+          const dx = (rl.x2 - rl.x1);
+          const dy = (rl.y2 - rl.y1);
+          const distPx = Math.sqrt(dx * dx + dy * dy);
+          const distM = distPx / s;
+          const midX = (rl.x1 + rl.x2) / 2;
+          const midY = (rl.y1 + rl.y2) / 2;
+          return (
+            <g key={`ruler-${i}`}>
+              <line x1={rl.x1} y1={rl.y1} x2={rl.x2} y2={rl.y2}
+                stroke="hsl(350, 80%, 50%)" strokeWidth={1.5} strokeDasharray="4 2" />
+              <circle cx={rl.x1} cy={rl.y1} r={3} fill="hsl(350, 80%, 50%)" />
+              <circle cx={rl.x2} cy={rl.y2} r={3} fill="hsl(350, 80%, 50%)" />
+              <rect x={midX - 28} y={midY - 8} width={56} height={16} rx={3}
+                fill="hsl(350, 80%, 50%)" opacity={0.9} />
+              <text x={midX} y={midY + 4} textAnchor="middle"
+                fontSize={10} fill="white" fontWeight={700}>
+                {Math.round(distM * 1000)} mm
+              </text>
+            </g>
+          );
+        })}
+        {fsScale && rulerDraw && (
+          <circle cx={rulerDraw.x1} cy={rulerDraw.y1} r={4} fill="hsl(350, 80%, 50%)" opacity={0.7}>
+            <animate attributeName="r" values="3;5;3" dur="1s" repeatCount="indefinite" />
+          </circle>
+        )}
       </svg>
     );
   };
@@ -2788,7 +2916,47 @@ function CompositeWallCard({ compositeWall, plan, onOpeningClick, onAddBlockGrou
             </div>
           )}
 
-          <div className="flex-1 overflow-auto flex items-center justify-center min-h-0">
+          {/* Ruler toolbar */}
+          <div className="shrink-0 flex items-center gap-2 border-b border-border/50 pb-2 print:hidden">
+            <Button size="sm" variant={rulerMode ? 'default' : 'outline'} className="h-7 text-xs gap-1"
+              onClick={() => { setRulerMode(!rulerMode); setRulerDraw(null); }}>
+              <Ruler className="h-3 w-3" /> {rulerMode ? 'Regla activa' : 'Regla'}
+            </Button>
+            {rulerLines.length > 0 && (
+              <>
+                <span className="text-xs text-muted-foreground">{rulerLines.length} medida{rulerLines.length > 1 ? 's' : ''}</span>
+                <Button size="sm" variant="outline" className="h-7 text-xs"
+                  onClick={() => { setRulerLines([]); setRulerDraw(null); }}>
+                  Borrar medidas
+                </Button>
+              </>
+            )}
+            {rulerMode && (
+              <span className="text-xs text-muted-foreground ml-2">
+                Haz clic en dos puntos del alzado para medir la distancia
+              </span>
+            )}
+          </div>
+
+          <div className="flex-1 overflow-auto flex items-center justify-center min-h-0 relative"
+            onMouseDown={rulerMode ? (e) => {
+              const svgEl = rulerSvgRef.current || (e.currentTarget.querySelector('svg') as SVGSVGElement);
+              if (!svgEl) return;
+              rulerSvgRef.current = svgEl;
+              const rect = svgEl.getBoundingClientRect();
+              const viewBox = svgEl.viewBox.baseVal;
+              const scaleX = viewBox.width / rect.width;
+              const scaleY = viewBox.height / rect.height;
+              const svgX = (e.clientX - rect.left) * scaleX;
+              const svgY = (e.clientY - rect.top) * scaleY;
+              if (rulerDraw) {
+                setRulerLines(prev => [...prev, { x1: rulerDraw.x1, y1: rulerDraw.y1, x2: svgX, y2: svgY }]);
+                setRulerDraw(null);
+              } else {
+                setRulerDraw({ x1: svgX, y1: svgY });
+              }
+            } : undefined}
+          >
             {isBlockMode ? (
               <CompositeFullscreenBlockGrid
                 compositeWall={cw}
@@ -2797,6 +2965,7 @@ function CompositeWallCard({ compositeWall, plan, onOpeningClick, onAddBlockGrou
                 selectedBlocks={selectedBlocks}
                 sectionBlockGroups={sectionBlockGroups}
                 onToggleBlock={(key) => {
+                  if (rulerMode) return;
                   setSelectedBlocks(prev => {
                     const next = new Set(prev);
                     if (next.has(key)) next.delete(key); else next.add(key);
@@ -2804,6 +2973,9 @@ function CompositeWallCard({ compositeWall, plan, onOpeningClick, onAddBlockGrou
                   });
                 }}
                 onOpeningClick={onOpeningClick}
+                rulerLines={rulerLines}
+                rulerDraw={rulerDraw}
+                totalLength={cw.totalLength}
               />
             ) : (
               renderCompositeSvg(Math.min(

@@ -1605,6 +1605,9 @@ function ElevationCardView({ card, plan, onOpeningClick, onAddOpening, onCardDou
               <Button variant="outline" size="sm" className="h-7 text-xs" onClick={handleCardPdfExport}>
                 <FileDown className="h-3 w-3 mr-1" /> PDF A4
               </Button>
+              <Button variant="destructive" size="sm" className="h-7 text-xs" onClick={() => setFullscreen(false)}>
+                ✕ Cerrar
+              </Button>
             </div>
           </DialogTitle>
           <DialogDescription className="sr-only">Vista a pantalla completa del alzado</DialogDescription>
@@ -2901,6 +2904,9 @@ function CompositeWallCard({ compositeWall, plan, onOpeningClick, onAddBlockGrou
               <div className="flex items-center gap-1 ml-auto print:hidden">
                 <Button variant="outline" size="sm" className="h-7 text-xs" onClick={handleExportPdf}>
                   <FileDown className="h-3 w-3 mr-1" /> PDF A4 horizontal
+                </Button>
+                <Button variant="destructive" size="sm" className="h-7 text-xs" onClick={() => setFullscreen(false)}>
+                  ✕ Cerrar
                 </Button>
               </div>
             </DialogTitle>

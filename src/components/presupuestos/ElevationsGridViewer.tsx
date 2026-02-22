@@ -276,7 +276,7 @@ export function ElevationsGridViewer({
           const gableArea = isGableWall ? (fullWallLen * roomGablePeakH) / 2 : 0;
           cards.push({
             id: `wall-${room.id}-${wall.wallIndex}-noseg`,
-            label: isGableWall ? `${WALL_LABELS[wall.wallIndex]} (Hastial)` : WALL_LABELS[wall.wallIndex],
+            label: isGableWall ? `${WALL_LABELS[wall.wallIndex]} (Hastial)` : `${WALL_LABELS[wall.wallIndex]} (${wall.wallIndex})`,
             sublabel: room.name,
             category: 'pared',
             width: fullWallLen,
@@ -311,7 +311,7 @@ export function ElevationsGridViewer({
           const visibleSegCount = segments.filter(s => !isInvisibleType(s.segmentType)).length;
           const wallLabel = isGableWall
             ? `${WALL_LABELS[wall.wallIndex]} (Hastial)`
-            : (visibleSegCount > 1 ? `${WALL_LABELS[wall.wallIndex]} ${si + 1}` : WALL_LABELS[wall.wallIndex]);
+            : (segments.length > 1 ? `${WALL_LABELS[wall.wallIndex]} (${wall.wallIndex}${si + 1})` : `${WALL_LABELS[wall.wallIndex]} (${wall.wallIndex})`);
           const wallName = externalWallNames.get(key);
           const canAdd = !wall.id.startsWith('temp-') && !invisible;
 

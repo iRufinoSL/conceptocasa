@@ -212,8 +212,8 @@ export function FloorPlanGridView({
     }
   }, [forceActiveFloorId]);
   const CELL_SIZE = scaleMode === 'bloque' ? 30 : 48; // px per cell (normal view)
-  const COL_HEADER_W = 44; // px width for row headers (left margin)
-  const ROW_HEADER_H = 28; // px height for column headers (top margin)
+  const COL_HEADER_W = 76; // px width for row headers (left margin ~2cm)
+  const ROW_HEADER_H = 52; // px height for column headers (top margin ~2cm)
 
   const wallClassification = useMemo(() => autoClassifyWalls(rooms), [rooms]);
 

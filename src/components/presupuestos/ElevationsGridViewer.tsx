@@ -624,6 +624,7 @@ export function ElevationsGridViewer({
                       onCardDoubleClick={handleCardDoubleClick}
                       onAddBlockGroup={onAddBlockGroup}
                       onDeleteBlockGroup={onDeleteBlockGroup}
+                      onUpdateWall={onUpdateWall}
                       saving={saving}
                       budgetName={budgetName}
                     />
@@ -706,6 +707,7 @@ export function ElevationsGridViewer({
                           onCardDoubleClick={handleCardDoubleClick}
                           onAddBlockGroup={onAddBlockGroup}
                           onDeleteBlockGroup={onDeleteBlockGroup}
+                          onUpdateWall={onUpdateWall}
                           saving={saving}
                           budgetName={budgetName}
                         />
@@ -803,6 +805,7 @@ export function ElevationsGridViewer({
                               onCardDoubleClick={handleCardDoubleClick}
                               onAddBlockGroup={onAddBlockGroup}
                               onDeleteBlockGroup={onDeleteBlockGroup}
+                              onUpdateWall={onUpdateWall}
                               saving={saving}
                               budgetName={budgetName}
                             />
@@ -833,8 +836,35 @@ export function ElevationsGridViewer({
   );
 }
 
+// Inline wall type selector for elevation cards
+function InlineWallTypeSelect({ wallId, currentType, onUpdateWall, saving }: {
+  wallId: string;
+  currentType: WallType;
+  onUpdateWall?: (wallId: string, data: { wallType?: WallType }) => Promise<void>;
+  saving: boolean;
+}) {
+  const handleChange = async (v: string) => {
+    if (!onUpdateWall) return;
+    await onUpdateWall(wallId, { wallType: v as WallType });
+  };
+  return (
+    <Select value={currentType} onValueChange={handleChange} disabled={saving || !onUpdateWall}>
+      <SelectTrigger className="h-5 text-[9px] px-1.5 w-auto min-w-[90px] border-muted">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {WALL_TYPE_OPTIONS.map(opt => (
+          <SelectItem key={opt.value} value={opt.value} className="text-xs">
+            {opt.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
 // Individual elevation card
-function ElevationCardView({ card, plan, onOpeningClick, onAddOpening, onCardDoubleClick, onAddBlockGroup, onDeleteBlockGroup, saving, budgetName }: {
+function ElevationCardView({ card, plan, onOpeningClick, onAddOpening, onCardDoubleClick, onAddBlockGroup, onDeleteBlockGroup, onUpdateWall, saving, budgetName }: {
   card: ElevationCard;
   plan: FloorPlanData;
   onOpeningClick: (op: OpeningData) => void;
@@ -842,6 +872,7 @@ function ElevationCardView({ card, plan, onOpeningClick, onAddOpening, onCardDou
   onCardDoubleClick: (card: ElevationCard) => void;
   onAddBlockGroup?: (wallId: string, startCol: number, startRow: number, spanCols: number, spanRows: number, name?: string, color?: string) => Promise<void>;
   onDeleteBlockGroup?: (blockGroupId: string) => Promise<void>;
+  onUpdateWall?: (wallId: string, data: { wallType?: WallType }) => Promise<void>;
   saving: boolean;
   budgetName?: string;
 }) {
@@ -1222,14 +1253,15 @@ function ElevationCardView({ card, plan, onOpeningClick, onAddOpening, onCardDou
               {card.sublabel && (
                 <p className="text-[10px] text-muted-foreground truncate">{card.sublabel}</p>
               )}
-              {isWall && card.wall && (
-                <p className="text-[9px] text-muted-foreground/70 italic">
-                  {WALL_TYPE_OPTIONS.find(o => o.value === (card.wall?.wallType as string))?.label || card.wall.wallType}
-                  {' · '}
-                  <span className="underline cursor-pointer hover:text-primary" onClick={e => { e.stopPropagation(); onCardDoubleClick(card); }}>
-                    cambiar
-                  </span>
-                </p>
+              {isWall && card.wall && !card.wall.id.startsWith('temp-') && (
+                <div className="flex items-center gap-1 mt-0.5" onClick={e => e.stopPropagation()}>
+                  <InlineWallTypeSelect
+                    wallId={card.wall.id}
+                    currentType={(card.wall.wallType as WallType)}
+                    onUpdateWall={onUpdateWall}
+                    saving={saving}
+                  />
+                </div>
               )}
             </div>
           </div>

@@ -16,7 +16,7 @@ import { FloorPlanSpaceForm } from './FloorPlanSpaceForm';
 import { ArrowLeft } from 'lucide-react';
 import { FloorPlanSummaryView } from './FloorPlanSummary';
 import { ElevationsGridViewer } from './ElevationsGridViewer';
-import { deriveGridPositions, computeGridRuler, formatCoord, parseCoord, colToLetter } from './FloorPlanGridView';
+import { deriveGridPositions, computeGridRuler, formatCoord, parseCoord } from './FloorPlanGridView';
 import { calculateFloorPlanSummary } from '@/lib/floor-plan-calculations';
 import { FloorPlanPdfExport } from './FloorPlanPdfExport';
 import { SnapshotRestoreButton } from './SnapshotRestoreButton';
@@ -1049,6 +1049,10 @@ export function FloorPlanTab({ budgetId, budgetName = '', isAdmin }: FloorPlanTa
               budgetName={budgetName}
               customCorners={customCorners}
               onCustomCornersChange={updateCustomCorners}
+              roofType={planData?.roofType}
+              roofSlopePercent={planData?.roofSlopePercent}
+              roofOverhang={planData?.roofOverhang}
+              defaultHeight={planData?.defaultHeight}
             />
           </div>
           <div className="space-y-4">

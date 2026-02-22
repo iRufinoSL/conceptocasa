@@ -1799,7 +1799,9 @@ export function computeCompositeWallsFromCorners(
   };
 
   // Add custom corners to their sides
-  customAbsolute.forEach(cc => {
+  // Skip corners marked as isMain — they duplicate the hardcoded ABCD corners
+  customAbsolute.forEach((cc, idx) => {
+    if ((userCorners[idx] as any).isMain) return;
     sideCorners[cc.side].push(cc);
   });
 
@@ -1989,9 +1991,11 @@ export function computeCompositeWallsFromCorners(
   });
 
   // ── Cross-side composite walls: markers on opposite sides at same col/row ──
+  // Only use non-main custom corners for cross-side detection
+  const nonMainAbsolute = customAbsolute.filter((_, idx) => !(userCorners[idx] as any).isMain);
   // Vertical interior walls: top↔bottom markers sharing the same X (col)
-  const topCustom = customAbsolute.filter(c => c.side === 'top');
-  const bottomCustom = customAbsolute.filter(c => c.side === 'bottom');
+  const topCustom = nonMainAbsolute.filter(c => c.side === 'top');
+  const bottomCustom = nonMainAbsolute.filter(c => c.side === 'bottom');
 
   topCustom.forEach(tc => {
     bottomCustom.forEach(bc => {
@@ -2127,8 +2131,8 @@ export function computeCompositeWallsFromCorners(
   });
 
   // Horizontal interior walls: left↔right markers sharing the same Y (row)
-  const leftCustom = customAbsolute.filter(c => c.side === 'left');
-  const rightCustom = customAbsolute.filter(c => c.side === 'right');
+  const leftCustom = nonMainAbsolute.filter(c => c.side === 'left');
+  const rightCustom = nonMainAbsolute.filter(c => c.side === 'right');
 
   leftCustom.forEach(lc => {
     rightCustom.forEach(rc => {

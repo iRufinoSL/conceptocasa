@@ -97,12 +97,33 @@ function magneticSnap(
   };
 }
 
-const WALL_EXT_COLOR = '#1e2d4d';
-const WALL_INT_COLOR = '#d97706';
-const WALL_INVIS_COLOR = '#9ca3af';
+// Wall style definitions — 6 exact types, no extras
 const WALL_SELECTED_COLOR = '#6366f1';
 const DIM_COLOR = '#c2410c';
-const SHARED_WALL_COLOR = '#059669';
+
+const EXT_STROKE_WIDTH = 5;   // thick for all exterior types
+const INT_STROKE_WIDTH = 2.5; // thin for all interior types
+
+function getWallStyle(segType: string): { color: string; width: number; dash?: string } {
+  const t = (segType || '').toLowerCase();
+  // Exterior invisible
+  if (t.includes('exterior') && t.includes('invisible'))
+    return { color: '#9ca3af', width: EXT_STROKE_WIDTH, dash: '6 3' };
+  // Exterior compartida
+  if (t.includes('exterior') && t.includes('compartida'))
+    return { color: '#2563eb', width: EXT_STROKE_WIDTH };
+  // Exterior simple
+  if (t.includes('exterior'))
+    return { color: '#000000', width: EXT_STROKE_WIDTH };
+  // Interior invisible
+  if (t.includes('invisible'))
+    return { color: '#9ca3af', width: INT_STROKE_WIDTH, dash: '4 3' };
+  // Interior compartida
+  if (t.includes('compartida'))
+    return { color: '#16a34a', width: INT_STROKE_WIDTH };
+  // Interior simple (default)
+  return { color: '#f97316', width: INT_STROKE_WIDTH };
+}
 
 type DragState = {
   type: 'pan';
@@ -602,17 +623,9 @@ export function FloorPlanCanvas2D({
                       {segments.map((seg, si) => {
                         const segKey = `${wallKey}::${si}`;
                         const isSegSelected = selectedWallKey === segKey;
-                        // Detect shared from segment type OR from prop
-                        const isShared = isCompartidaType(seg.segmentType) || (sharedWallKeys?.has(wallKey) ?? false);
-                        // Detect invisible from segment type OR from wall's manual override
-                        const wallManualInvisible = isInvisibleType(wall.wallType);
-                        const isInvisible = isInvisibleType(seg.segmentType) || wallManualInvisible;
-                        const isExternal = !isInvisible && isExteriorType(seg.segmentType);
-
-                        const baseThickness = isInvisible ? plan.internalWallThickness * SCALE * 0.5
-                          : isExternal ? plan.externalWallThickness * SCALE : plan.internalWallThickness * SCALE;
-                        const strokeWidth = isInvisible ? Math.max(baseThickness, 1.5)
-                          : Math.max(baseThickness, isExternal ? 4 : 3);
+                        const style = isSegSelected
+                          ? { color: WALL_SELECTED_COLOR, width: getWallStyle(seg.segmentType).width, dash: getWallStyle(seg.segmentType).dash }
+                          : getWallStyle(seg.segmentType);
 
                         let sx1: number, sy1: number, sx2: number, sy2: number;
                         if (isHoriz) {
@@ -626,12 +639,6 @@ export function FloorPlanCanvas2D({
                           sx2 = wx2;
                           sy2 = wy1 + seg.endFraction * (wy2 - wy1);
                         }
-
-                        const segColor = isSegSelected ? WALL_SELECTED_COLOR
-                          : isInvisible ? WALL_INVIS_COLOR
-                          : isShared ? SHARED_WALL_COLOR
-                          : isExternal ? WALL_EXT_COLOR
-                          : WALL_INT_COLOR;
 
                         return (
                           <g key={`seg-${si}`}>
@@ -651,17 +658,12 @@ export function FloorPlanCanvas2D({
                             {/* Selection glow */}
                             {isSegSelected && (
                               <line x1={sx1} y1={sy1} x2={sx2} y2={sy2}
-                                stroke={WALL_SELECTED_COLOR} strokeWidth={8} strokeLinecap="round" opacity={0.3} pointerEvents="none" />
+                                stroke={WALL_SELECTED_COLOR} strokeWidth={style.width + 4} strokeLinecap="round" opacity={0.3} pointerEvents="none" />
                             )}
-                            {/* Shared wall glow */}
-                            {isShared && !isSegSelected && (
-                              <line x1={sx1} y1={sy1} x2={sx2} y2={sy2}
-                                stroke={SHARED_WALL_COLOR} strokeWidth={6} strokeLinecap="round" opacity={0.15} pointerEvents="none" />
-                            )}
-                            {/* Visible wall */}
+                            {/* Wall line */}
                             <line x1={sx1} y1={sy1} x2={sx2} y2={sy2}
-                              stroke={segColor} strokeWidth={strokeWidth}
-                              strokeDasharray={isInvisible ? '4 3' : undefined}
+                              stroke={style.color} strokeWidth={style.width}
+                              strokeDasharray={style.dash}
                               pointerEvents="none" />
                           </g>
                         );
@@ -773,14 +775,14 @@ export function FloorPlanCanvas2D({
                         <rect key={`ext-${wallKey}`}
                           x={0} y={wall.wallIndex === 1 ? -extThick : h}
                           width={w} height={extThick}
-                          fill={WALL_EXT_COLOR} opacity={0.12} pointerEvents="none" />
+                          fill="#000000" opacity={0.12} pointerEvents="none" />
                       );
                     } else {
                       return (
                         <rect key={`ext-${wallKey}`}
                           x={wall.wallIndex === 4 ? -extThick : w} y={0}
                           width={extThick} height={h}
-                          fill={WALL_EXT_COLOR} opacity={0.12} pointerEvents="none" />
+                          fill="#000000" opacity={0.12} pointerEvents="none" />
                       );
                     }
                   })}
@@ -1110,17 +1112,21 @@ export function FloorPlanCanvas2D({
             {/* Legend */}
             {perimeterDims && (
               <g transform={`translate(${perimeterDims.extMinX}, ${perimeterDims.extMaxY + 24})`} pointerEvents="none">
-                <rect x={0} y={0} width={12} height={4} fill={WALL_EXT_COLOR} />
-                <text x={16} y={4} fontSize={7} fill="#64748b">Externa</text>
-                <rect x={65} y={0} width={12} height={3} fill={WALL_INT_COLOR} />
-                <text x={81} y={4} fontSize={7} fill="#64748b">Interna</text>
-                <line x1={130} y1={1.5} x2={142} y2={1.5} stroke={WALL_INVIS_COLOR} strokeWidth={1.5} strokeDasharray="4 3" />
-                <text x={146} y={4} fontSize={7} fill="#64748b">Invisible</text>
-                <line x1={195} y1={-1} x2={207} y2={-1} stroke="#06b6d4" strokeWidth={1} />
-                <line x1={195} y1={3} x2={207} y2={3} stroke="#06b6d4" strokeWidth={1} />
-                <text x={211} y={4} fontSize={7} fill="#64748b">Ventana</text>
-                <rect x={260} y={0} width={12} height={3} fill={SHARED_WALL_COLOR} />
-                <text x={276} y={4} fontSize={7} fill="#64748b">Compartida</text>
+                <rect x={0} y={0} width={12} height={4} fill="#000000" />
+                <text x={16} y={4} fontSize={7} fill="#64748b">Ext.</text>
+                <rect x={45} y={0} width={12} height={4} fill="#2563eb" />
+                <text x={61} y={4} fontSize={7} fill="#64748b">Ext.comp.</text>
+                <line x1={110} y1={2} x2={122} y2={2} stroke="#9ca3af" strokeWidth={4} strokeDasharray="4 3" />
+                <text x={126} y={4} fontSize={7} fill="#64748b">Ext.inv.</text>
+                <rect x={170} y={0.5} width={12} height={3} fill="#f97316" />
+                <text x={186} y={4} fontSize={7} fill="#64748b">Int.</text>
+                <rect x={210} y={0.5} width={12} height={3} fill="#16a34a" />
+                <text x={226} y={4} fontSize={7} fill="#64748b">Int.comp.</text>
+                <line x1={275} y1={2} x2={287} y2={2} stroke="#9ca3af" strokeWidth={2} strokeDasharray="4 3" />
+                <text x={291} y={4} fontSize={7} fill="#64748b">Int.inv.</text>
+                <line x1={330} y1={-1} x2={342} y2={-1} stroke="#06b6d4" strokeWidth={1} />
+                <line x1={330} y1={3} x2={342} y2={3} stroke="#06b6d4" strokeWidth={1} />
+                <text x={346} y={4} fontSize={7} fill="#64748b">Ventana</text>
               </g>
             )}
           </g>
@@ -1177,14 +1183,7 @@ export function FloorPlanCanvas2D({
                         return (
                           <g key={wallKey}>
                             {segments.map((seg, si) => {
-                              const wallManualInvisible = isInvisibleType(wall.wallType);
-                              const isInvisible = isInvisibleType(seg.segmentType) || wallManualInvisible;
-                              const isExternal = !isInvisible && isExteriorType(seg.segmentType);
-                              const isShared = isCompartidaType(seg.segmentType);
-                              const baseThickness = isInvisible ? plan.internalWallThickness * SCALE * 0.5
-                                : isExternal ? plan.externalWallThickness * SCALE : plan.internalWallThickness * SCALE;
-                              const strokeWidth = isInvisible ? Math.max(baseThickness, 1.5)
-                                : Math.max(baseThickness, isExternal ? 4 : 3);
+                              const style = getWallStyle(seg.segmentType);
                               let sx1: number, sy1: number, sx2: number, sy2: number;
                               if (isHoriz) {
                                 sx1 = wx1 + seg.startFraction * (wx2 - wx1); sy1 = wy1;
@@ -1193,14 +1192,10 @@ export function FloorPlanCanvas2D({
                                 sx1 = wx1; sy1 = wy1 + seg.startFraction * (wy2 - wy1);
                                 sx2 = wx2; sy2 = wy1 + seg.endFraction * (wy2 - wy1);
                               }
-                              const segColor = isInvisible ? WALL_INVIS_COLOR
-                                : isShared ? SHARED_WALL_COLOR
-                                : isExternal ? WALL_EXT_COLOR
-                                : WALL_INT_COLOR;
                               return (
                                 <line key={`seg-${si}`} x1={sx1} y1={sy1} x2={sx2} y2={sy2}
-                                  stroke={segColor} strokeWidth={strokeWidth}
-                                  strokeDasharray={isInvisible ? '4 3' : undefined}
+                                  stroke={style.color} strokeWidth={style.width}
+                                  strokeDasharray={style.dash}
                                   pointerEvents="none" />
                               );
                             })}

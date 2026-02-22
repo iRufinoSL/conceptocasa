@@ -129,7 +129,26 @@ export function ElevationsGridViewer({
   // Auto-open the WallEditDialog for a specific wall (from space form eye icon)
   const [autoEditTriggered, setAutoEditTriggered] = useState(false);
 
-  const wallSegmentsMap = useMemo(() => computeWallSegments(rooms), [rooms]);
+  // Compute wall segments per floor to avoid cross-floor false adjacencies
+  const wallSegmentsMap = useMemo(() => {
+    if (!floors || floors.length <= 1) {
+      return computeWallSegments(rooms);
+    }
+    // Compute segments separately per floor, then merge maps
+    const merged = new Map<string, WallSegment[]>();
+    floors.forEach(floor => {
+      const floorRooms = rooms.filter(r => r.floorId === floor.id);
+      const floorMap = computeWallSegments(floorRooms);
+      floorMap.forEach((v, k) => merged.set(k, v));
+    });
+    // Also handle rooms without a floorId
+    const orphanRooms = rooms.filter(r => !r.floorId);
+    if (orphanRooms.length > 0) {
+      const orphanMap = computeWallSegments(orphanRooms);
+      orphanMap.forEach((v, k) => merged.set(k, v));
+    }
+    return merged;
+  }, [rooms, floors]);
   const wallClassification = useMemo(() => autoClassifyWalls(rooms, plan), [rooms, plan]);
   const externalWallNames = useMemo(() => generateExternalWallNames(rooms, wallClassification), [rooms, wallClassification]);
 

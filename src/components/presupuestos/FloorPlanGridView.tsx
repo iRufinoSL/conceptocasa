@@ -844,6 +844,113 @@ export function FloorPlanGridView({
               );
             });
           })()}
+
+          {/* Dimension lines between corner markers */}
+          {showCorners && placedRooms.length > 0 && boundingBox && (() => {
+            const { minCol, minRow, maxCol, maxRow } = boundingBox;
+            const mainFromStorage = floorCorners.filter(c => c.isMain);
+            const lp = cornerLevelPrefix;
+            const getMainLbl = (pos: string, def: string) => {
+              const found = mainFromStorage.find(c => c.mainPosition === pos);
+              const s = found?.label || def;
+              return lp && !s.startsWith(lp) ? `${lp}${s}` : s;
+            };
+
+            type CP = { label: string; col: number; row: number };
+            const customByS = (side: string) =>
+              floorCorners.filter(c => !c.isMain && c.side === side).map(c => ({ label: c.label, col: c.col, row: c.row }));
+
+            const topAll: CP[] = [
+              { label: getMainLbl('TL', 'A'), col: minCol, row: minRow },
+              ...customByS('top'),
+              { label: getMainLbl('TR', 'B'), col: maxCol, row: minRow },
+            ].sort((a, b) => a.col - b.col);
+
+            const bottomAll: CP[] = [
+              { label: getMainLbl('BL', 'D'), col: minCol, row: maxRow },
+              ...customByS('bottom'),
+              { label: getMainLbl('BR', 'C'), col: maxCol, row: maxRow },
+            ].sort((a, b) => a.col - b.col);
+
+            const leftAll: CP[] = [
+              { label: getMainLbl('TL', 'A'), col: minCol, row: minRow },
+              ...customByS('left'),
+              { label: getMainLbl('BL', 'D'), col: minCol, row: maxRow },
+            ].sort((a, b) => a.row - b.row);
+
+            const rightAll: CP[] = [
+              { label: getMainLbl('TR', 'B'), col: maxCol, row: minRow },
+              ...customByS('right'),
+              { label: getMainLbl('BR', 'C'), col: maxCol, row: maxRow },
+            ].sort((a, b) => a.row - b.row);
+
+            const dimLines: React.ReactNode[] = [];
+            const DIM_OFF = 34;
+            const fmtDist = (blocks: number) => {
+              const mm = blocks * blockLengthMm;
+              return `${(mm / 1000).toFixed(3)}m`;
+            };
+
+            // Horizontal dimension segments
+            const hDims = (pts: CP[], y: number, prefix: string) => {
+              for (let i = 0; i < pts.length - 1; i++) {
+                const x1 = COL_HEADER_W + (pts[i].col - 1) * CS;
+                const x2 = COL_HEADER_W + (pts[i + 1].col - 1) * CS;
+                const blocks = pts[i + 1].col - pts[i].col;
+                if (blocks <= 0) continue;
+                const lbl = fmtDist(blocks);
+                const mx = (x1 + x2) / 2;
+                const tw = Math.max(50, lbl.length * 6 + 10);
+                dimLines.push(
+                  <g key={`${prefix}-${i}`}>
+                    <line x1={x1} y1={y} x2={x2} y2={y} stroke="#2563eb" strokeWidth={1} />
+                    <line x1={x1} y1={y - 5} x2={x1} y2={y + 5} stroke="#2563eb" strokeWidth={1.5} />
+                    <line x1={x2} y1={y - 5} x2={x2} y2={y + 5} stroke="#2563eb" strokeWidth={1.5} />
+                    <rect x={mx - tw / 2} y={y - 8} width={tw} height={14} rx={3} fill="#2563eb" opacity={0.9} />
+                    <text x={mx} y={y + 2} textAnchor="middle" fontSize={8} fontWeight="bold" fill="white">{lbl}</text>
+                  </g>
+                );
+              }
+            };
+
+            // Vertical dimension segments
+            const vDims = (pts: CP[], x: number, prefix: string) => {
+              for (let i = 0; i < pts.length - 1; i++) {
+                const y1 = ROW_HEADER_H + (pts[i].row - 1) * CS;
+                const y2 = ROW_HEADER_H + (pts[i + 1].row - 1) * CS;
+                const blocks = pts[i + 1].row - pts[i].row;
+                if (blocks <= 0) continue;
+                const lbl = fmtDist(blocks);
+                const my = (y1 + y2) / 2;
+                const tw = Math.max(50, lbl.length * 6 + 10);
+                dimLines.push(
+                  <g key={`${prefix}-${i}`}>
+                    <line x1={x} y1={y1} x2={x} y2={y2} stroke="#2563eb" strokeWidth={1} />
+                    <line x1={x - 5} y1={y1} x2={x + 5} y2={y1} stroke="#2563eb" strokeWidth={1.5} />
+                    <line x1={x - 5} y1={y2} x2={x + 5} y2={y2} stroke="#2563eb" strokeWidth={1.5} />
+                    <rect x={x - tw / 2} y={my - 7} width={tw} height={14} rx={3} fill="#2563eb" opacity={0.9} />
+                    <text x={x} y={my + 3} textAnchor="middle" fontSize={8} fontWeight="bold" fill="white">{lbl}</text>
+                  </g>
+                );
+              }
+            };
+
+            hDims(topAll, ROW_HEADER_H + (minRow - 1) * CS - DIM_OFF, 'dt');
+            hDims(bottomAll, ROW_HEADER_H + (maxRow - 1) * CS + CS + DIM_OFF, 'db');
+            vDims(leftAll, COL_HEADER_W + (minCol - 1) * CS - DIM_OFF, 'dl');
+            vDims(rightAll, COL_HEADER_W + (maxCol - 1) * CS + DIM_OFF, 'dr');
+
+            return (
+              <svg className="absolute inset-0 pointer-events-none" style={{
+                width: COL_HEADER_W + totalCols * CS + 80,
+                height: ROW_HEADER_H + totalRows * CS + 80,
+                zIndex: 28,
+                overflow: 'visible',
+              }}>
+                {dimLines}
+              </svg>
+            );
+          })()}
         </div>
       </div>
     );

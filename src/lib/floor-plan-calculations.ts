@@ -1781,15 +1781,14 @@ export function computeCompositeWallsFromCorners(
 
   // Convert user custom corners to absolute coordinates
   // Custom corners are on the PERIMETER, so their position depends on the side
+  // Position uses the RIGHT/BOTTOM edge of the cell (col * cellSizeM) to match grid dimension lines
   const customAbsolute = userCorners.map(cc => {
-    const absX = (cc.col - 1) * cellSizeM;
-    const absY = (cc.row - 1) * cellSizeM;
     let x: number, y: number;
     switch (cc.side) {
-      case 'top': x = absX + cellSizeM / 2; y = minY; break;
-      case 'bottom': x = absX + cellSizeM / 2; y = maxY; break;
-      case 'left': x = minX; y = absY + cellSizeM / 2; break;
-      case 'right': x = maxX; y = absY + cellSizeM / 2; break;
+      case 'top': x = cc.col * cellSizeM; y = minY; break;
+      case 'bottom': x = cc.col * cellSizeM; y = maxY; break;
+      case 'left': x = minX; y = cc.row * cellSizeM; break;
+      case 'right': x = maxX; y = cc.row * cellSizeM; break;
     }
     return { label: cc.label, x, y, side: cc.side };
   });

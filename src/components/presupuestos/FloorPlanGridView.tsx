@@ -67,17 +67,34 @@ export function rowToLabel(row: number, levelPrefix?: string): string {
   return levelPrefix ? `${levelPrefix}-${num}` : num;
 }
 
-/** Parse coordinate like "1-05/04" or "05/04" or "1-05" → { col, row }. Also supports legacy "A1" format. */
+/** Parse coordinate in multiple formats:
+ * - Compact: "1-1710" → level 1, col 17, row 10
+ * - Slash:   "1-05/04" or "05/04" → col 5, row 4
+ * - Legacy letter: "A1" → col 1, row 1
+ */
 export function parseCoord(coord: string): { col: number; row: number } | null {
-  // New numeric format: "1-05/04" or "05/04"
-  const stripped = coord.replace(/^\d+-/, '');
-  const numMatch = stripped.match(/^(\d+)\/(\d+)$/);
-  if (numMatch) return { col: parseInt(numMatch[1]), row: parseInt(numMatch[2]) };
+  // Strip level prefix and keep it for compact format detection
+  const levelMatch = coord.match(/^(\d+)-(.+)$/);
+  const body = levelMatch ? levelMatch[2] : coord;
+
+  // Slash format: "05/04"
+  const slashMatch = body.match(/^(\d+)\/(\d+)$/);
+  if (slashMatch) return { col: parseInt(slashMatch[1]), row: parseInt(slashMatch[2]) };
+
+  // Compact 4-digit format: "1710" → col 17, row 10 (CCRR)
+  const compactMatch = body.match(/^(\d{4})$/);
+  if (compactMatch) {
+    const col = parseInt(body.substring(0, 2));
+    const row = parseInt(body.substring(2, 4));
+    if (col > 0 && row > 0) return { col, row };
+  }
+
   // Single number (column only, assume row=1)
-  const singleMatch = stripped.match(/^(\d+)$/);
+  const singleMatch = body.match(/^(\d{1,2})$/);
   if (singleMatch) return { col: parseInt(singleMatch[1]), row: 1 };
+
   // Legacy letter format: "A1", "B02"
-  const letterMatch = stripped.toUpperCase().match(/^([A-Z]+)(\d+)$/);
+  const letterMatch = body.toUpperCase().match(/^([A-Z]+)(\d+)$/);
   if (letterMatch) {
     let col = 0;
     for (let i = 0; i < letterMatch[1].length; i++) col = col * 26 + (letterMatch[1].charCodeAt(i) - 64);
@@ -845,8 +862,8 @@ export function FloorPlanGridView({
             <Input
               value={newCornerCoord}
               onChange={e => setNewCornerCoord(e.target.value)}
-              placeholder="R18"
-              className="w-16 h-8 text-xs"
+              placeholder="1-1704"
+              className="w-20 h-8 text-xs"
               title="Coordenada de la celda (ej: R18)"
             />
             <select
@@ -1148,7 +1165,7 @@ export function FloorPlanGridView({
       })()}
 
       <p className="text-xs text-muted-foreground">
-        Cada celda = {scaleMode === 'bloque' ? `${blockLengthMm}×${blockLengthMm}mm (1 bloque)` : '1 m²'}. Coordenadas: {levelPrefix ? `nivel ${levelPrefix} → ` : ''}horizontal {colToLabel(1, levelPrefix)}…{colToLabel(totalCols, levelPrefix)}, vertical {rowToLabel(1, levelPrefix)}…{rowToLabel(totalRows, levelPrefix)}. Ej: {formatCoord(5, 4, levelPrefix)}. Clic en un espacio para editar.
+        Cada celda = {scaleMode === 'bloque' ? `${blockLengthMm}×${blockLengthMm}mm (1 bloque)` : '1 m²'}. Coordenadas: formato compacto {levelPrefix || '1'}-CCRR (ej: {levelPrefix || '1'}-1704 = col 17, fila 4) o con barra {formatCoord(5, 4, levelPrefix)}. Clic en un espacio para editar.
       </p>
 
       {/* Fullscreen overlay via portal — bigger cells */}

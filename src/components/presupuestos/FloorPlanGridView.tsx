@@ -559,7 +559,7 @@ export function FloorPlanGridView({
               style={{
                 left: 2,
                 top: ROW_HEADER_H + ri * CS,
-                width: COL_HEADER_W - 22,
+                width: COL_HEADER_W - 46,
                 height: CS,
                 display: 'flex',
                 alignItems: 'center',

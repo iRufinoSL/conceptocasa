@@ -655,6 +655,7 @@ export function ElevationsGridViewer({
                     onDeleteBlockGroup={onDeleteBlockGroup}
                     onDeleteOpening={onDeleteOpening}
                     onUpdateOpening={onUpdateOpening}
+                    onUpdateWall={onUpdateWall}
                     saving={saving}
                     rooms={rooms}
                     budgetName={budgetName}
@@ -2178,7 +2179,7 @@ const SIDE_LABELS: Record<string, string> = {
   top: 'Norte', right: 'Este', bottom: 'Sur', left: 'Oeste',
 };
 
-function CompositeWallCard({ compositeWall, plan, onOpeningClick, onAddBlockGroup, onDeleteBlockGroup, onDeleteOpening, onUpdateOpening, saving, rooms: liveRooms, budgetName }: {
+function CompositeWallCard({ compositeWall, plan, onOpeningClick, onAddBlockGroup, onDeleteBlockGroup, onDeleteOpening, onUpdateOpening, onUpdateWall, saving, rooms: liveRooms, budgetName }: {
   compositeWall: CompositeWall;
   plan: FloorPlanData;
   onOpeningClick: (op: OpeningData) => void;
@@ -2186,6 +2187,7 @@ function CompositeWallCard({ compositeWall, plan, onOpeningClick, onAddBlockGrou
   onDeleteBlockGroup?: (blockGroupId: string) => Promise<void>;
   onDeleteOpening?: (openingId: string) => Promise<void>;
   onUpdateOpening?: (openingId: string, data: { width?: number; height?: number; sillHeight?: number; positionX?: number; openingType?: string }) => Promise<void>;
+  onUpdateWall?: (wallId: string, data: { wallType?: WallType; thickness?: number; height?: number; elevationGroup?: string | null }) => Promise<void>;
   saving?: boolean;
   rooms?: RoomData[];
   budgetName?: string;
@@ -2559,6 +2561,20 @@ function CompositeWallCard({ compositeWall, plan, onOpeningClick, onAddBlockGrou
               )}
               {cw.objectSummary.windows > 0 && (
                 <Badge variant="outline" className="text-[9px] h-4">{cw.objectSummary.windows} ventanas</Badge>
+              )}
+              {onUpdateWall && (
+                <Button variant="ghost" size="sm" className="h-5 w-5 p-0 opacity-0 group-hover:opacity-100 transition-opacity text-destructive hover:text-destructive/80"
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    if (!confirm(`¿Eliminar el alzado compuesto "${cw.label}"? Se desvinculará el grupo de elevación de todas las paredes.`)) return;
+                    for (const section of cw.sections) {
+                      await onUpdateWall(section.wallId, { elevationGroup: null });
+                    }
+                  }}
+                  disabled={saving}
+                  title="Eliminar alzado compuesto">
+                  <Trash2 className="h-3 w-3" />
+                </Button>
               )}
               <Button variant="ghost" size="sm" className="h-5 w-5 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
                 onClick={() => setFullscreen(true)} title="Ampliar">

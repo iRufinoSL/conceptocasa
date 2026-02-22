@@ -158,12 +158,15 @@ export function ElevationsGridViewer({
   const perFloorComposites = useMemo(() => {
     const hasUserCorners = customCorners && customCorners.length > 0;
     
+    const filterHidden = (composites: CompositeWall[]) =>
+      composites.filter(cw => !cw.sections.every(s => s.wall.elevationGroup === '__hidden__'));
+
     if (!floors || floors.length <= 1) {
       // Single floor or no floors: compute from all rooms
       const composites = hasUserCorners
         ? computeCompositeWallsFromCorners(rooms, plan, customCorners!, cellSizeM)
         : (() => { const outline = computeBuildingOutline(rooms); return computeCompositeWalls(rooms, outline, plan); })();
-      return [{ floorId: 'all', floorName: '', composites }];
+      return [{ floorId: 'all', floorName: '', composites: filterHidden(composites) }];
     }
     const sortedFloors = [...floors].sort((a, b) => a.orderIndex - b.orderIndex);
     return sortedFloors.map(floor => {
@@ -177,7 +180,7 @@ export function ElevationsGridViewer({
       const composites = hasFloorCorners
         ? computeCompositeWallsFromCorners(floorRooms, plan, floorCorners, cellSizeM)
         : (() => { const outline = computeBuildingOutline(floorRooms); return computeCompositeWalls(floorRooms, outline, plan); })();
-      return { floorId: floor.id, floorName: floor.name, composites };
+      return { floorId: floor.id, floorName: floor.name, composites: filterHidden(composites) };
     }).filter(f => f.composites.length > 0);
   }, [rooms, floors, plan, customCorners, cellSizeM]);
 
@@ -2818,9 +2821,9 @@ function CompositeWallCard({ compositeWall, plan, onOpeningClick, onAddBlockGrou
                 <Button variant="ghost" size="sm" className="h-5 w-5 p-0 opacity-0 group-hover:opacity-100 transition-opacity text-destructive hover:text-destructive/80"
                   onClick={async (e) => {
                     e.stopPropagation();
-                    if (!confirm(`¿Eliminar el alzado compuesto "${cw.label}"? Se desvinculará el grupo de elevación de todas las paredes.`)) return;
+                    if (!confirm(`¿Eliminar el alzado compuesto "${cw.label}"? Se ocultará de la vista.`)) return;
                     for (const section of cw.sections) {
-                      await onUpdateWall(section.wallId, { elevationGroup: null });
+                      await onUpdateWall(section.wallId, { elevationGroup: '__hidden__' });
                     }
                   }}
                   disabled={saving}

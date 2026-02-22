@@ -1053,6 +1053,11 @@ export function FloorPlanTab({ budgetId, budgetName = '', isAdmin }: FloorPlanTa
               roofSlopePercent={planData?.roofSlopePercent}
               roofOverhang={planData?.roofOverhang}
               defaultHeight={planData?.defaultHeight}
+              onRecalculateSegments={async () => {
+                await classifyPerimeterWalls();
+                await refetch();
+                toast.success('Segmentos recalculados');
+              }}
             />
           </div>
           <div className="space-y-4">

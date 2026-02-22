@@ -541,7 +541,7 @@ export function FloorPlanGridView({
                 left: COL_HEADER_W + ci * CS,
                 top: 2,
                 width: CS,
-                height: ROW_HEADER_H - 4,
+                height: ROW_HEADER_H - 20,
                 display: 'flex',
                 alignItems: 'flex-start',
                 justifyContent: 'center',
@@ -559,7 +559,7 @@ export function FloorPlanGridView({
               style={{
                 left: 2,
                 top: ROW_HEADER_H + ri * CS,
-                width: COL_HEADER_W - 6,
+                width: COL_HEADER_W - 22,
                 height: CS,
                 display: 'flex',
                 alignItems: 'center',
@@ -857,8 +857,10 @@ export function FloorPlanGridView({
             };
 
             type CP = { label: string; col: number; row: number };
+            // Custom corners: +1 to col/row so they represent the RIGHT/BOTTOM edge of their cell
+            // This way block count = nextCol - currentCol matches real block count
             const customByS = (side: string) =>
-              floorCorners.filter(c => !c.isMain && c.side === side).map(c => ({ label: c.label, col: c.col, row: c.row }));
+              floorCorners.filter(c => !c.isMain && c.side === side).map(c => ({ label: c.label, col: c.col + 1, row: c.row + 1 }));
 
             const topAll: CP[] = [
               { label: getMainLbl('TL', 'A'), col: minCol, row: minRow },
@@ -885,7 +887,8 @@ export function FloorPlanGridView({
             ].sort((a, b) => a.row - b.row);
 
             const dimLines: React.ReactNode[] = [];
-            const DIM_OFF = 34;
+            const DIM_OFF_INNER = 10; // close to grid (top/left — between headers and grid)
+            const DIM_OFF_OUTER = 34; // outside grid (bottom/right)
             const fmtDist = (blocks: number) => {
               const mm = blocks * blockLengthMm;
               return `${(mm / 1000).toFixed(3)}m`;
@@ -935,10 +938,10 @@ export function FloorPlanGridView({
               }
             };
 
-            hDims(topAll, ROW_HEADER_H + (minRow - 1) * CS - DIM_OFF, 'dt');
-            hDims(bottomAll, ROW_HEADER_H + (maxRow - 1) * CS + CS + DIM_OFF, 'db');
-            vDims(leftAll, COL_HEADER_W + (minCol - 1) * CS - DIM_OFF, 'dl');
-            vDims(rightAll, COL_HEADER_W + (maxCol - 1) * CS + CS + DIM_OFF, 'dr');
+            hDims(topAll, ROW_HEADER_H + (minRow - 1) * CS - DIM_OFF_INNER, 'dt');
+            hDims(bottomAll, ROW_HEADER_H + (maxRow - 1) * CS + CS + DIM_OFF_OUTER, 'db');
+            vDims(leftAll, COL_HEADER_W + (minCol - 1) * CS - DIM_OFF_INNER, 'dl');
+            vDims(rightAll, COL_HEADER_W + (maxCol - 1) * CS + CS + DIM_OFF_OUTER, 'dr');
 
             return (
               <svg className="absolute inset-0 pointer-events-none" style={{

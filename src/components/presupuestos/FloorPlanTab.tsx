@@ -1191,7 +1191,14 @@ export function FloorPlanTab({ budgetId, budgetName = '', isAdmin }: FloorPlanTa
       )}
 
       {viewTab === 'resumen' && planData && summary && (
-        <FloorPlanSummaryView summary={summary} />
+        <FloorPlanSummaryView
+          summary={summary}
+          onRecalculate={async () => {
+            await classifyPerimeterWalls();
+            await refetch();
+          }}
+          recalculating={saving}
+        />
       )}
     </div>
   );

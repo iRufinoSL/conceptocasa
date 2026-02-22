@@ -1,12 +1,15 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, RefreshCw } from 'lucide-react';
 import type { FloorPlanSummary as Summary, WallCalculation } from '@/lib/floor-plan-calculations';
 import { OPENING_PRESETS, isInvisibleType } from '@/lib/floor-plan-calculations';
 
 interface FloorPlanSummaryProps {
   summary: Summary;
+  onRecalculate?: () => void;
+  recalculating?: boolean;
 }
 
 function fmt(n: number, unit = 'm²'): string {
@@ -33,9 +36,18 @@ function SummaryGrid({ label, data }: { label: string; data: Array<{ label: stri
   );
 }
 
-export function FloorPlanSummaryView({ summary }: FloorPlanSummaryProps) {
+export function FloorPlanSummaryView({ summary, onRecalculate, recalculating }: FloorPlanSummaryProps) {
   return (
     <div className="space-y-4">
+      {/* Recalculate button */}
+      {onRecalculate && (
+        <div className="flex justify-end">
+          <Button variant="outline" size="sm" onClick={onRecalculate} disabled={recalculating}>
+            <RefreshCw className={`h-4 w-4 mr-1 ${recalculating ? 'animate-spin' : ''}`} />
+            Recalcular segmentos
+          </Button>
+        </div>
+      )}
       {/* Global summary */}
       <Card>
         <CardHeader className="pb-3">

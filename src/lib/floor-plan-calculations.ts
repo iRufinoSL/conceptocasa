@@ -1838,7 +1838,15 @@ export function computeCompositeWallsFromCorners(
       // Only add thickness at corners that are main ABCD corners (not custom intermediate ones)
       const isV1Main = ['A', 'B', 'C', 'D'].includes(v1.label);
       const isV2Main = ['A', 'B', 'C', 'D'].includes(v2.label);
-      const edgeLength = interiorLength + (isV1Main ? ewt : 0) + (isV2Main ? ewt : 0);
+      let edgeLength = interiorLength + (isV1Main ? ewt : 0) + (isV2Main ? ewt : 0);
+      // In block mode, snap to exact block count so measurements match the grid
+      if (plan.scaleMode === 'bloque') {
+        const blockW = plan.blockLengthMm / 1000;
+        if (blockW > 0) {
+          const numBlocks = Math.round(edgeLength / blockW);
+          edgeLength = numBlocks * blockW;
+        }
+      }
 
       const fixedCoord = isHoriz ? v1.y : v1.x;
       const edgeStart = isHoriz ? Math.min(v1.x, v2.x) : Math.min(v1.y, v2.y);
@@ -1994,7 +2002,15 @@ export function computeCompositeWalls(
     const cross2 = (v2.x - v1.x) * (next.y - v2.y) - (v2.y - v1.y) * (next.x - v2.x);
     const v1Convex = cross1 <= 0;
     const v2Convex = cross2 <= 0;
-    const edgeLength = interiorLength + (v1Convex ? ewt : 0) + (v2Convex ? ewt : 0);
+    let edgeLength = interiorLength + (v1Convex ? ewt : 0) + (v2Convex ? ewt : 0);
+    // In block mode, snap to exact block count so measurements match the grid
+    if (plan.scaleMode === 'bloque') {
+      const blockW = plan.blockLengthMm / 1000;
+      if (blockW > 0) {
+        const numBlocks = Math.round(edgeLength / blockW);
+        edgeLength = numBlocks * blockW;
+      }
+    }
 
     // Determine side
     let side: 'top' | 'right' | 'bottom' | 'left';

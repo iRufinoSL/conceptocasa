@@ -221,6 +221,8 @@ export function FloorPlanGridView({
   // Corner edit
   const [editingCornerIdx, setEditingCornerIdx] = useState<number | null>(null);
   const [editingCornerLabel, setEditingCornerLabel] = useState('');
+  const [editingCornerCoord, setEditingCornerCoord] = useState('');
+  const [editingCornerSide, setEditingCornerSide] = useState<'top' | 'right' | 'bottom' | 'left'>('top');
 
   // Force switch to a specific floor tab when requested (e.g. after creating a new floor)
   useEffect(() => {
@@ -709,7 +711,9 @@ export function FloorPlanGridView({
             const lp = cornerLevelPrefix;
             const getMainLabel = (pos: string, defaultLabel: string) => {
               const found = mainFromStorage.find(c => c.mainPosition === pos);
-              return found?.label || `${lp}${defaultLabel}`;
+              const storedLabel = found?.label || defaultLabel;
+              // Always ensure level prefix on main corners
+              return lp && !storedLabel.startsWith(lp) ? `${lp}${storedLabel}` : storedLabel;
             };
             const getMainIdx = (pos: string) => {
               const found = mainFromStorage.find(c => c.mainPosition === pos);
@@ -753,30 +757,48 @@ export function FloorPlanGridView({
                   }}
                 >
                   {isEditing ? (
-                    <div className="flex items-center gap-0.5 bg-primary rounded-full px-1 h-5">
+                    <div className="flex items-center gap-0.5 bg-primary rounded-full px-1.5 h-6" onClick={e => e.stopPropagation()}>
                       <input
                         autoFocus
-                        className="w-12 h-4 text-[10px] text-center bg-transparent border-b border-primary-foreground outline-none text-primary-foreground"
+                        className="w-10 h-4 text-[10px] text-center bg-transparent border-b border-primary-foreground outline-none text-primary-foreground"
                         value={editingCornerLabel}
                         onChange={e => setEditingCornerLabel(e.target.value)}
-                        onKeyDown={e => {
-                          if (e.key === 'Enter') {
-                            if (editingCornerLabel.trim() && c.idx >= 0) {
-                              setCustomCorners(prev => prev.map((cc, i) => i === c.idx ? { ...cc, label: editingCornerLabel.trim() } : cc));
-                            }
-                            setEditingCornerIdx(null);
-                          }
-                          if (e.key === 'Escape') setEditingCornerIdx(null);
-                        }}
-                        onClick={e => e.stopPropagation()}
+                        placeholder="ID"
+                        onKeyDown={e => { if (e.key === 'Escape') setEditingCornerIdx(null); }}
                       />
+                      <input
+                        className="w-14 h-4 text-[10px] text-center bg-transparent border-b border-primary-foreground outline-none text-primary-foreground"
+                        value={editingCornerCoord}
+                        onChange={e => setEditingCornerCoord(e.target.value)}
+                        placeholder="col/row"
+                        title="Coordenada (ej: 1-0504 o 05/04)"
+                        onKeyDown={e => { if (e.key === 'Escape') setEditingCornerIdx(null); }}
+                      />
+                      <select
+                        className="h-4 text-[9px] bg-transparent border-none outline-none text-primary-foreground"
+                        value={editingCornerSide}
+                        onChange={e => setEditingCornerSide(e.target.value as any)}
+                      >
+                        <option value="top">↑</option>
+                        <option value="right">→</option>
+                        <option value="bottom">↓</option>
+                        <option value="left">←</option>
+                      </select>
                       <button
                         className="flex items-center justify-center w-4 h-4 rounded-full bg-green-500 hover:bg-green-600 text-white"
                         title="Guardar"
                         onClick={(e) => {
                           e.stopPropagation();
-                          if (editingCornerLabel.trim() && c.idx >= 0) {
-                            setCustomCorners(prev => prev.map((cc, i) => i === c.idx ? { ...cc, label: editingCornerLabel.trim() } : cc));
+                          if (c.idx >= 0) {
+                            const parsed = parseCoord(editingCornerCoord.trim());
+                            setCustomCorners(prev => prev.map((cc, i) => {
+                              if (i !== c.idx) return cc;
+                              const updates: Partial<CustomCorner> = {};
+                              if (editingCornerLabel.trim()) updates.label = editingCornerLabel.trim();
+                              if (parsed) { updates.col = parsed.col; updates.row = parsed.row; }
+                              updates.side = editingCornerSide;
+                              return { ...cc, ...updates };
+                            }));
                           }
                           setEditingCornerIdx(null);
                         }}
@@ -804,8 +826,11 @@ export function FloorPlanGridView({
                       title={`Clic para editar ${c.label}`}
                       onClick={() => {
                         if (c.idx >= 0) {
+                          const corner = customCorners[c.idx];
                           setEditingCornerIdx(c.idx);
                           setEditingCornerLabel(c.label);
+                          setEditingCornerCoord(formatCoord(corner.col, corner.row, levelPrefix));
+                          setEditingCornerSide(corner.side || 'top');
                         }
                       }}
                     >

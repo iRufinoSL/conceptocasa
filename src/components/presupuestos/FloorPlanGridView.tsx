@@ -516,7 +516,7 @@ export function FloorPlanGridView({
           {renderOpeningMarks(room, 3, 'bottom')}
           {renderOpeningMarks(room, 4, 'left')}
 
-          <div className="text-[9px] font-bold truncate max-w-full px-0.5 leading-tight">{room.name}</div>
+          <div className="text-[9px] font-bold text-center max-w-full px-0.5 leading-tight break-words line-clamp-2">{room.name}</div>
           <div className="text-[10px] font-semibold">{m2} m²</div>
           <div className="text-[8px] text-muted-foreground">{room.width.toFixed(1)}×{room.length.toFixed(1)}</div>
           <Badge variant="outline" className="text-[7px] px-0.5 py-0 h-3 mt-0.5">{coord}</Badge>

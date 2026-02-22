@@ -938,7 +938,7 @@ export function FloorPlanGridView({
             hDims(topAll, ROW_HEADER_H + (minRow - 1) * CS - DIM_OFF, 'dt');
             hDims(bottomAll, ROW_HEADER_H + (maxRow - 1) * CS + CS + DIM_OFF, 'db');
             vDims(leftAll, COL_HEADER_W + (minCol - 1) * CS - DIM_OFF, 'dl');
-            vDims(rightAll, COL_HEADER_W + (maxCol - 1) * CS + DIM_OFF, 'dr');
+            vDims(rightAll, COL_HEADER_W + (maxCol - 1) * CS + CS + DIM_OFF, 'dr');
 
             return (
               <svg className="absolute inset-0 pointer-events-none" style={{

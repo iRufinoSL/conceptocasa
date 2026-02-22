@@ -150,8 +150,13 @@ export function ElevationsGridViewer({
     return sortedFloors.map(floor => {
       const floorRooms = rooms.filter(r => r.floorId === floor.id);
       if (floorRooms.length === 0) return { floorId: floor.id, floorName: floor.name, composites: [] as CompositeWall[] };
-      const composites = hasUserCorners
-        ? computeCompositeWallsFromCorners(floorRooms, plan, customCorners!, cellSizeM)
+      // Filter custom corners to only those belonging to this floor (or without floorId for backwards compat)
+      const floorCorners = hasUserCorners
+        ? customCorners!.filter(c => !c.floorId || c.floorId === floor.id)
+        : [];
+      const hasFloorCorners = floorCorners.length > 0;
+      const composites = hasFloorCorners
+        ? computeCompositeWallsFromCorners(floorRooms, plan, floorCorners, cellSizeM)
         : (() => { const outline = computeBuildingOutline(floorRooms); return computeCompositeWalls(floorRooms, outline, plan); })();
       return { floorId: floor.id, floorName: floor.name, composites };
     }).filter(f => f.composites.length > 0);
@@ -1695,8 +1700,14 @@ function CompositeFullscreenBlockGrid({ compositeWall, plan, maxHeight, selected
         const sw2 = section.length * s;
         const sh2 = section.height * s;
         const sy = rys + totalH - sh2;
-        const sectionFill = sIdx % 2 === 0 ? 'hsl(30, 30%, 92%)' : 'hsl(30, 25%, 88%)';
-        const cols = Math.ceil(section.length / blockWm);
+          const isSectionInvisible = isInvisibleType(section.wall.wallType as string);
+          const sectionFill = isSectionInvisible
+            ? 'hsl(260, 15%, 93%)'
+            : (sIdx % 2 === 0 ? 'hsl(30, 30%, 92%)' : 'hsl(30, 25%, 88%)');
+        // Calculate global cols for this section (aligned to composite wall origin)
+        const globalStartCol = Math.max(0, Math.floor((section.startOffset) / blockWm));
+        const globalEndCol = Math.ceil((section.startOffset + section.length) / blockWm);
+        const cols = globalEndCol - globalStartCol + 1;
         const rows = Math.ceil(section.height / blockHm);
         const groupCellMap = groupCellMaps.get(sIdx) || new Map<string, BlockGroupData>();
         const blockGroups = sectionBlockGroups.get(sIdx) || [];
@@ -1731,8 +1742,10 @@ function CompositeFullscreenBlockGrid({ compositeWall, plan, maxHeight, selected
             {Array.from({ length: rows }, (_, r) => {
               const yTop = sy + sh2 - (r + 1) * bhPx;
               const offset = r % 2 === 0 ? 0 : bwPx / 2;
-              return Array.from({ length: cols }, (_, c) => {
-                const xLeft = sx + offset + c * bwPx;
+              return Array.from({ length: cols }, (_, ci) => {
+                const c = globalStartCol + ci;
+                // Position block using global composite wall origin
+                const xLeft = rxs + offset + c * bwPx;
                 const clippedX = Math.max(sx, xLeft);
                 const clippedW = Math.min(sx + sw2, xLeft + bwPx) - clippedX;
                 const clippedY = Math.max(sy, yTop);
@@ -1924,7 +1937,10 @@ function CompositeWallCard({ compositeWall, plan, onOpeningClick, onAddBlockGrou
           const sh2 = section.height * s;
           const sy = rys + totalH - sh2;
 
-          const sectionFill = idx % 2 === 0 ? 'hsl(30, 30%, 92%)' : 'hsl(30, 25%, 88%)';
+          const isSectionInvisible = isInvisibleType(section.wall.wallType as string);
+          const sectionFill = isSectionInvisible
+            ? 'hsl(260, 15%, 93%)'
+            : (idx % 2 === 0 ? 'hsl(30, 30%, 92%)' : 'hsl(30, 25%, 88%)');
           const isGableSection = section.isGable && section.height > 0;
 
           // For gable sections, render a triangle instead of rectangle
@@ -1940,12 +1956,11 @@ function CompositeWallCard({ compositeWall, plan, onOpeningClick, onAddBlockGrou
                 <path d={trianglePath} fill={sectionFill} stroke="hsl(222, 47%, 30%)" strokeWidth={1.2} />
 
                 {/* Block pattern inside triangle */}
-                {plan.scaleMode === 'bloque' && !isInvisibleType(section.wall.wallType as string) && (() => {
+                {plan.scaleMode === 'bloque' && !isSectionInvisible && (() => {
                   const bwPx = (plan.blockLengthMm / 1000) * s;
                   const bhPx = (plan.blockHeightMm / 1000) * s;
                   if (bwPx < 3 || bhPx < 2) return null;
                   const rows = Math.ceil(sh2 / bhPx);
-                  const cols = Math.ceil(sw2 / bwPx) + 1;
                   const lines: React.ReactElement[] = [];
                   for (let r = 1; r < rows; r++) {
                     const y = baseY - r * bhPx;
@@ -1959,10 +1974,12 @@ function CompositeWallCard({ compositeWall, plan, onOpeningClick, onAddBlockGrou
                     const yTop = Math.max(peakY, baseY - (r + 1) * bhPx);
                     const yBot = baseY - r * bhPx;
                     const offset = r % 2 === 0 ? 0 : bwPx / 2;
-                    for (let c = 1; c < cols; c++) {
-                      const x = sx + offset + c * bwPx;
-                      if (x >= sx + sw2) break;
-                      if (x <= sx) continue;
+                    // Align vertical lines to composite wall origin
+                    const globalStartCol = Math.floor((sx - rxs - offset) / bwPx);
+                    const globalEndCol = Math.ceil((sx + sw2 - rxs - offset) / bwPx);
+                    for (let c = globalStartCol; c <= globalEndCol; c++) {
+                      const x = rxs + offset + c * bwPx;
+                      if (x <= sx || x >= sx + sw2) continue;
                       lines.push(
                         <line key={`bv-${idx}-${r}-${c}`} x1={x} y1={yTop} x2={x} y2={Math.min(yBot, baseY)}
                           stroke="hsl(210, 50%, 35%)" strokeWidth={1.0} opacity={1} pointerEvents="none" />
@@ -2006,14 +2023,14 @@ function CompositeWallCard({ compositeWall, plan, onOpeningClick, onAddBlockGrou
               <rect x={sx} y={sy} width={sw2} height={sh2}
                 fill={sectionFill} stroke="hsl(222, 47%, 30%)" strokeWidth={1.2} rx={1} />
 
-              {/* Block pattern — only for non-invisible walls */}
-              {plan.scaleMode === 'bloque' && !isInvisibleType(section.wall.wallType as string) && (() => {
+              {/* Block pattern — only for non-invisible walls, aligned to composite wall origin */}
+              {plan.scaleMode === 'bloque' && !isSectionInvisible && (() => {
                 const bwPx = (plan.blockLengthMm / 1000) * s;
                 const bhPx = (plan.blockHeightMm / 1000) * s;
                 if (bwPx < 3 || bhPx < 2) return null;
                 const rows = Math.ceil(sh2 / bhPx);
-                const cols = Math.ceil(sw2 / bwPx) + 1;
                 const lines: React.ReactElement[] = [];
+                // Horizontal lines (per section)
                 for (let r = 1; r < rows; r++) {
                   const y = sy + sh2 - r * bhPx;
                   if (y <= sy) break;
@@ -2022,18 +2039,21 @@ function CompositeWallCard({ compositeWall, plan, onOpeningClick, onAddBlockGrou
                       stroke="hsl(210, 50%, 35%)" strokeWidth={1.2} opacity={1} pointerEvents="none" />
                   );
                 }
+                // Vertical lines — aligned to composite wall origin (rxs) so blocks are continuous
                 for (let r = 0; r < rows; r++) {
                   const yTop = Math.max(sy, sy + sh2 - (r + 1) * bhPx);
                   const yBot = sy + sh2 - r * bhPx;
                   const offset = r % 2 === 0 ? 0 : bwPx / 2;
-                  for (let c = 1; c < cols; c++) {
-                    const x = sx + offset + c * bwPx;
-                    if (x >= sx + sw2) break;
-                    if (x <= sx) continue;
-                  lines.push(
-                    <line key={`bv-${idx}-${r}-${c}`} x1={x} y1={yTop} x2={x} y2={Math.min(yBot, sy + sh2)}
-                      stroke="hsl(210, 50%, 35%)" strokeWidth={1.0} opacity={1} pointerEvents="none" />
-                  );
+                  // Calculate global block columns from composite wall origin
+                  const globalStartCol = Math.floor((sx - rxs - offset) / bwPx);
+                  const globalEndCol = Math.ceil((sx + sw2 - rxs - offset) / bwPx);
+                  for (let c = globalStartCol; c <= globalEndCol; c++) {
+                    const x = rxs + offset + c * bwPx;
+                    if (x <= sx || x >= sx + sw2) continue;
+                    lines.push(
+                      <line key={`bv-${idx}-${r}-${c}`} x1={x} y1={yTop} x2={x} y2={Math.min(yBot, sy + sh2)}
+                        stroke="hsl(210, 50%, 35%)" strokeWidth={1.0} opacity={1} pointerEvents="none" />
+                    );
                   }
                 }
                 return <g>{lines}</g>;

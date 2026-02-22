@@ -1895,6 +1895,9 @@ export function computeCompositeWallsFromCorners(
       let totalDoors = 0, totalWindows = 0;
       const openingCounts: Record<string, number> = {};
 
+      // Compute raw section lengths first
+      const rawSections: Array<{ room: RoomData; wall: WallData; sectionLen: number; wallH: number; sectionOpenings: OpeningData[]; isGableWall: boolean }> = [];
+
       matchingRooms.forEach(({ room, wall, overlapStart, overlapEnd }) => {
         const sectionLen = overlapEnd - overlapStart;
         let wallH: number;
@@ -1908,7 +1911,6 @@ export function computeCompositeWallsFromCorners(
         } else if (room.height && room.height > 0) {
           wallH = room.height;
         } else if (room.height === 0) {
-          // Bajo cubierta non-gable wall: height=0, skip entirely
           return;
         } else {
           wallH = plan.defaultHeight;
@@ -1920,6 +1922,25 @@ export function computeCompositeWallsFromCorners(
           return opAbsPos >= overlapStart - EPSILON && opAbsPos <= overlapEnd + EPSILON;
         });
 
+        rawSections.push({ room, wall, sectionLen, wallH, sectionOpenings, isGableWall });
+      });
+
+      if (rawSections.length === 0) continue;
+
+      // Distribute edgeLength proportionally across sections so they sum to edgeLength
+      const rawTotal = rawSections.reduce((sum, s) => sum + s.sectionLen, 0);
+      const scale = rawTotal > 0 ? edgeLength / rawTotal : 1;
+
+      rawSections.forEach(({ room, wall, sectionLen, wallH, sectionOpenings, isGableWall }) => {
+        let adjustedLen = sectionLen * scale;
+        // In block mode, snap individual section to whole blocks
+        if (plan.scaleMode === 'bloque') {
+          const blockW = plan.blockLengthMm / 1000;
+          if (blockW > 0) {
+            adjustedLen = Math.round(adjustedLen / blockW) * blockW;
+          }
+        }
+
         sectionOpenings.forEach(op => {
           const key = op.openingType;
           openingCounts[key] = (openingCounts[key] || 0) + 1;
@@ -1929,11 +1950,11 @@ export function computeCompositeWallsFromCorners(
 
         sections.push({
           roomId: room.id, roomName: room.name, wallIndex,
-          wallId: wall.id, length: sectionLen, height: wallH,
+          wallId: wall.id, length: adjustedLen, height: wallH,
           wall, openings: sectionOpenings, startOffset: offset,
           isGable: isGableWall,
         });
-        offset += sectionLen;
+        offset += adjustedLen;
       });
 
       // Skip composite walls where no sections remain (all were bajo cubierta non-gable)

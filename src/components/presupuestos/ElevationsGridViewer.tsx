@@ -2178,15 +2178,15 @@ function CompositeFullscreenBlockGrid({ compositeWall, plan, maxHeight, selected
       {cw.sections.map((section, idx) => {
         const sx = rxs + section.startOffset * s;
         const sw2 = section.length * s;
-        const dimY = rys + totalH + 8;
+        const dimY = rys + totalH + 12;
         const secColor = 'hsl(210, 60%, 45%)';
         return (
           <g key={`sec-dim-${idx}`}>
-            <line x1={sx} y1={dimY} x2={sx + sw2} y2={dimY} stroke={secColor} strokeWidth={0.6} />
-            <line x1={sx} y1={dimY - 4} x2={sx} y2={dimY + 4} stroke={secColor} strokeWidth={0.5} />
-            <line x1={sx + sw2} y1={dimY - 4} x2={sx + sw2} y2={dimY + 4} stroke={secColor} strokeWidth={0.5} />
-            <text x={sx + sw2 / 2} y={dimY - 3} textAnchor="middle"
-              fontSize={9} fill={secColor} fontWeight={600}>
+            <line x1={sx} y1={dimY} x2={sx + sw2} y2={dimY} stroke={secColor} strokeWidth={0.8} />
+            <line x1={sx} y1={dimY - 5} x2={sx} y2={dimY + 5} stroke={secColor} strokeWidth={0.6} />
+            <line x1={sx + sw2} y1={dimY - 5} x2={sx + sw2} y2={dimY + 5} stroke={secColor} strokeWidth={0.6} />
+            <text x={sx + sw2 / 2} y={dimY - 5} textAnchor="middle"
+              fontSize={10} fill={secColor} fontWeight={700}>
               {Math.round(section.length * 1000)} mm
             </text>
           </g>
@@ -2194,13 +2194,13 @@ function CompositeFullscreenBlockGrid({ compositeWall, plan, maxHeight, selected
       })}
 
       {/* Total dimension line */}
-      <line x1={rxs} y1={rys + totalH + 22} x2={rxs + cw.totalLength * s} y2={rys + totalH + 22}
-        stroke="hsl(25, 95%, 45%)" strokeWidth={0.8} />
-      <line x1={rxs} y1={rys + totalH + 17} x2={rxs} y2={rys + totalH + 27} stroke="hsl(25, 95%, 45%)" strokeWidth={0.5} />
-      <line x1={rxs + cw.totalLength * s} y1={rys + totalH + 17} x2={rxs + cw.totalLength * s} y2={rys + totalH + 27}
-        stroke="hsl(25, 95%, 45%)" strokeWidth={0.5} />
-      <text x={rxs + cw.totalLength * s / 2} y={rys + totalH + 37} textAnchor="middle"
-        fontSize={12} fill="hsl(25, 95%, 45%)" fontWeight={600}>
+      <line x1={rxs} y1={rys + totalH + 30} x2={rxs + cw.totalLength * s} y2={rys + totalH + 30}
+        stroke="hsl(25, 95%, 45%)" strokeWidth={1} />
+      <line x1={rxs} y1={rys + totalH + 24} x2={rxs} y2={rys + totalH + 36} stroke="hsl(25, 95%, 45%)" strokeWidth={0.6} />
+      <line x1={rxs + cw.totalLength * s} y1={rys + totalH + 24} x2={rxs + cw.totalLength * s} y2={rys + totalH + 36}
+        stroke="hsl(25, 95%, 45%)" strokeWidth={0.6} />
+      <text x={rxs + cw.totalLength * s / 2} y={rys + totalH + 46} textAnchor="middle"
+        fontSize={13} fill="hsl(25, 95%, 45%)" fontWeight={700}>
         {Math.round(cw.totalLength * 1000)} mm
       </text>
 
@@ -2215,11 +2215,11 @@ function CompositeFullscreenBlockGrid({ compositeWall, plan, maxHeight, selected
       </text>
 
       {/* Corner labels */}
-      <text x={rxs - 3} y={rys + totalH + 37} textAnchor="end"
+      <text x={rxs - 3} y={rys + totalH + 46} textAnchor="end"
         fontSize={13} fill="hsl(var(--primary))" fontWeight={800}>
         {cw.startCorner.label}
       </text>
-      <text x={rxs + cw.totalLength * s + 3} y={rys + totalH + 37} textAnchor="start"
+      <text x={rxs + cw.totalLength * s + 3} y={rys + totalH + 46} textAnchor="start"
         fontSize={13} fill="hsl(var(--primary))" fontWeight={800}>
         {cw.endCorner.label}
       </text>
@@ -2568,16 +2568,16 @@ function CompositeWallCard({ compositeWall, plan, onOpeningClick, onAddBlockGrou
         {cw.sections.map((section, idx) => {
           const sx = rxs + section.startOffset * s;
           const sw2 = section.length * s;
-          const dimY = rys + totalH + 6;
+          const dimY = rys + totalH + 10;
           const secColor = 'hsl(210, 60%, 45%)';
-          const fz = fsScale ? 9 : 6;
+          const fz = fsScale ? 10 : 7;
           return (
             <g key={`sec-dim-${idx}`}>
-              <line x1={sx} y1={dimY} x2={sx + sw2} y2={dimY} stroke={secColor} strokeWidth={0.5} />
-              <line x1={sx} y1={dimY - 3} x2={sx} y2={dimY + 3} stroke={secColor} strokeWidth={0.4} />
-              <line x1={sx + sw2} y1={dimY - 3} x2={sx + sw2} y2={dimY + 3} stroke={secColor} strokeWidth={0.4} />
-              <text x={sx + sw2 / 2} y={dimY - 2} textAnchor="middle"
-                fontSize={fz} fill={secColor} fontWeight={600}>
+              <line x1={sx} y1={dimY} x2={sx + sw2} y2={dimY} stroke={secColor} strokeWidth={0.6} />
+              <line x1={sx} y1={dimY - 4} x2={sx} y2={dimY + 4} stroke={secColor} strokeWidth={0.5} />
+              <line x1={sx + sw2} y1={dimY - 4} x2={sx + sw2} y2={dimY + 4} stroke={secColor} strokeWidth={0.5} />
+              <text x={sx + sw2 / 2} y={dimY - 4} textAnchor="middle"
+                fontSize={fz} fill={secColor} fontWeight={700}>
                 {Math.round(section.length * 1000)} mm
               </text>
             </g>
@@ -2585,13 +2585,13 @@ function CompositeWallCard({ compositeWall, plan, onOpeningClick, onAddBlockGrou
         })}
 
         {/* Total dimension line */}
-        <line x1={rxs} y1={rys + totalH + 18} x2={rxs + cw.totalLength * s} y2={rys + totalH + 18}
-          stroke="hsl(25, 95%, 45%)" strokeWidth={0.6} />
-        <line x1={rxs} y1={rys + totalH + 14} x2={rxs} y2={rys + totalH + 22} stroke="hsl(25, 95%, 45%)" strokeWidth={0.4} />
-        <line x1={rxs + cw.totalLength * s} y1={rys + totalH + 14} x2={rxs + cw.totalLength * s} y2={rys + totalH + 22}
-          stroke="hsl(25, 95%, 45%)" strokeWidth={0.4} />
-        <text x={rxs + cw.totalLength * s / 2} y={rys + totalH + 32} textAnchor="middle"
-          fontSize={fsScale ? 11 : 8} fill="hsl(25, 95%, 45%)" fontWeight={600}>
+        <line x1={rxs} y1={rys + totalH + 26} x2={rxs + cw.totalLength * s} y2={rys + totalH + 26}
+          stroke="hsl(25, 95%, 45%)" strokeWidth={0.8} />
+        <line x1={rxs} y1={rys + totalH + 20} x2={rxs} y2={rys + totalH + 32} stroke="hsl(25, 95%, 45%)" strokeWidth={0.5} />
+        <line x1={rxs + cw.totalLength * s} y1={rys + totalH + 20} x2={rxs + cw.totalLength * s} y2={rys + totalH + 32}
+          stroke="hsl(25, 95%, 45%)" strokeWidth={0.5} />
+        <text x={rxs + cw.totalLength * s / 2} y={rys + totalH + 42} textAnchor="middle"
+          fontSize={fsScale ? 12 : 9} fill="hsl(25, 95%, 45%)" fontWeight={700}>
           {Math.round(cw.totalLength * 1000)} mm
         </text>
 
@@ -2607,11 +2607,11 @@ function CompositeWallCard({ compositeWall, plan, onOpeningClick, onAddBlockGrou
         </text>
 
         {/* Corner labels */}
-        <text x={rxs - 3} y={rys + totalH + 32} textAnchor="end"
+        <text x={rxs - 3} y={rys + totalH + 42} textAnchor="end"
           fontSize={fsScale ? 13 : 9} fill="hsl(var(--primary))" fontWeight={800}>
           {cw.startCorner.label}
         </text>
-        <text x={rxs + cw.totalLength * s + 3} y={rys + totalH + 32} textAnchor="start"
+        <text x={rxs + cw.totalLength * s + 3} y={rys + totalH + 42} textAnchor="start"
           fontSize={fsScale ? 13 : 9} fill="hsl(var(--primary))" fontWeight={800}>
           {cw.endCorner.label}
         </text>

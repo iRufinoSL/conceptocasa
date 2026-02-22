@@ -11,6 +11,7 @@ export interface CustomCorner {
   side: 'top' | 'right' | 'bottom' | 'left';
   isMain?: boolean;
   mainPosition?: 'TL' | 'TR' | 'BR' | 'BL';
+  floorId?: string;
 }
 
 interface DbFloorPlan {

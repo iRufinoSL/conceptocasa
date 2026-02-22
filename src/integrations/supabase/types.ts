@@ -831,6 +831,7 @@ export type Database = {
           height: number | null
           id: string
           room_id: string
+          segment_type_overrides: Json | null
           thickness: number | null
           wall_index: number
           wall_type: string
@@ -841,6 +842,7 @@ export type Database = {
           height?: number | null
           id?: string
           room_id: string
+          segment_type_overrides?: Json | null
           thickness?: number | null
           wall_index: number
           wall_type?: string
@@ -851,6 +853,7 @@ export type Database = {
           height?: number | null
           id?: string
           room_id?: string
+          segment_type_overrides?: Json | null
           thickness?: number | null
           wall_index?: number
           wall_type?: string

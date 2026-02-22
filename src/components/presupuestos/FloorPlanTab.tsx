@@ -611,7 +611,7 @@ function FloorPlanSettingsPanel({ planData, onUpdate, rooms, floors, onUpdateRoo
 export function FloorPlanTab({ budgetId, budgetName = '', isAdmin }: FloorPlanTabProps) {
   const {
     floorPlan, rooms, floors, customCorners, updateCustomCorners, loading, saving,
-    addRoom, updateRoom, updateWall, deleteRoom, duplicateRoom,
+    addRoom, updateRoom, updateWall, updateWallSegmentType, deleteRoom, duplicateRoom,
     addOpening, updateOpening, deleteOpening, updateFloorPlan,
     classifyPerimeterWalls, syncToMeasurements, getPlanData, refetch,
     generateFromTemplate, deleteFloorPlan, groupRooms, ungroupRooms,
@@ -1087,6 +1087,7 @@ export function FloorPlanTab({ budgetId, budgetName = '', isAdmin }: FloorPlanTa
                   floorName={floorName}
                   onUpdateRoom={(data) => updateRoom(selectedRoom.id, data)}
                   onUpdateWall={(wallId, data) => updateWall(wallId, data)}
+                  onUpdateWallSegmentType={(wallId, segIdx, segType) => updateWallSegmentType(wallId, segIdx, segType)}
                   onAddOpening={(wallId, type, w, h, sh, px) => addOpening(wallId, type, w, h, sh, px)}
                   onDeleteOpening={(openingId) => deleteOpening(openingId)}
                   onDuplicateRoom={async (direction) => {

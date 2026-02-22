@@ -206,6 +206,7 @@ export function useFloorPlan(budgetId: string) {
               thickness: w.thickness || undefined,
               height: w.height || undefined,
               elevationGroup: w.elevation_group || undefined,
+              segmentTypeOverrides: (w as any).segment_type_overrides || undefined,
               openings: openingsData
                 .filter(o => o.wall_id === w.id)
                 .map(o => ({
@@ -491,6 +492,28 @@ export function useFloorPlan(budgetId: string) {
     } catch (err) {
       console.error('Error updating wall:', err);
       toast.error('Error al actualizar pared');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const updateWallSegmentType = async (wallId: string, segmentIndex: number, newType: WallType) => {
+    setSaving(true);
+    try {
+      const wall = rooms.flatMap(r => r.walls).find(w => w.id === wallId);
+      const currentOverrides = wall?.segmentTypeOverrides || {};
+      const newOverrides = { ...currentOverrides, [String(segmentIndex)]: newType };
+
+      const { error } = await supabase
+        .from('budget_floor_plan_walls')
+        .update({ segment_type_overrides: newOverrides } as any)
+        .eq('id', wallId);
+
+      if (error) throw error;
+      await fetchAll();
+    } catch (err) {
+      console.error('Error updating wall segment type:', err);
+      toast.error('Error al actualizar tipo de segmento');
     } finally {
       setSaving(false);
     }
@@ -1341,6 +1364,7 @@ export function useFloorPlan(budgetId: string) {
     deleteRoom,
     duplicateRoom,
     updateWall,
+    updateWallSegmentType,
     addOpening,
     updateOpening,
     deleteOpening,

@@ -1,0 +1,1 @@
+ALTER TABLE public.budget_floor_plan_walls ADD COLUMN IF NOT EXISTS segment_type_overrides JSONB DEFAULT NULL;

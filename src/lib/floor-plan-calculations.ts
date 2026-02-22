@@ -82,6 +82,7 @@ export interface WallData {
   elevationGroup?: string;
   openings: OpeningData[];
   blockGroups?: BlockGroupData[];
+  segmentTypeOverrides?: Record<string, WallType>; // key = segment index "0","1",etc.
 }
 
 
@@ -1283,6 +1284,17 @@ export function computeWallSegments(rooms: RoomData[]): Map<string, WallSegment[
           startMeters: 0,
           endMeters: wallLen,
           segmentType: fullType,
+        });
+      }
+
+      // Apply per-segment type overrides from the wall's stored overrides
+      const wall2 = room.walls.find(w => w.wallIndex === wallIdx);
+      if (wall2?.segmentTypeOverrides && segments.length > 1) {
+        segments.forEach((seg, idx) => {
+          const override = wall2.segmentTypeOverrides?.[String(idx)];
+          if (override) {
+            seg.segmentType = override;
+          }
         });
       }
 

@@ -625,6 +625,8 @@ export function ElevationsGridViewer({
                       onAddBlockGroup={onAddBlockGroup}
                       onDeleteBlockGroup={onDeleteBlockGroup}
                       onUpdateWall={onUpdateWall}
+                      onUpdateOpening={onUpdateOpening}
+                      onDeleteOpening={onDeleteOpening}
                       saving={saving}
                       budgetName={budgetName}
                     />
@@ -651,6 +653,8 @@ export function ElevationsGridViewer({
                     onOpeningClick={handleOpeningClick}
                     onAddBlockGroup={onAddBlockGroup}
                     onDeleteBlockGroup={onDeleteBlockGroup}
+                    onDeleteOpening={onDeleteOpening}
+                    onUpdateOpening={onUpdateOpening}
                     saving={saving}
                     rooms={rooms}
                     budgetName={budgetName}
@@ -708,6 +712,8 @@ export function ElevationsGridViewer({
                           onAddBlockGroup={onAddBlockGroup}
                           onDeleteBlockGroup={onDeleteBlockGroup}
                           onUpdateWall={onUpdateWall}
+                          onUpdateOpening={onUpdateOpening}
+                          onDeleteOpening={onDeleteOpening}
                           saving={saving}
                           budgetName={budgetName}
                         />
@@ -806,6 +812,8 @@ export function ElevationsGridViewer({
                               onAddBlockGroup={onAddBlockGroup}
                               onDeleteBlockGroup={onDeleteBlockGroup}
                               onUpdateWall={onUpdateWall}
+                              onUpdateOpening={onUpdateOpening}
+                              onDeleteOpening={onDeleteOpening}
                               saving={saving}
                               budgetName={budgetName}
                             />
@@ -873,7 +881,7 @@ function InlineWallTypeSelect({ wallId, currentType, onUpdateWall, saving, displ
 }
 
 // Individual elevation card
-function ElevationCardView({ card, plan, onOpeningClick, onAddOpening, onCardDoubleClick, onAddBlockGroup, onDeleteBlockGroup, onUpdateWall, saving, budgetName }: {
+function ElevationCardView({ card, plan, onOpeningClick, onAddOpening, onCardDoubleClick, onAddBlockGroup, onDeleteBlockGroup, onUpdateWall, onUpdateOpening, onDeleteOpening, saving, budgetName }: {
   card: ElevationCard;
   plan: FloorPlanData;
   onOpeningClick: (op: OpeningData) => void;
@@ -882,11 +890,103 @@ function ElevationCardView({ card, plan, onOpeningClick, onAddOpening, onCardDou
   onAddBlockGroup?: (wallId: string, startCol: number, startRow: number, spanCols: number, spanRows: number, name?: string, color?: string) => Promise<void>;
   onDeleteBlockGroup?: (blockGroupId: string) => Promise<void>;
   onUpdateWall?: (wallId: string, data: { wallType?: WallType }) => Promise<void>;
+  onUpdateOpening?: (openingId: string, data: { width?: number; height?: number; sillHeight?: number; positionX?: number; openingType?: string }) => Promise<void>;
+  onDeleteOpening?: (openingId: string) => Promise<void>;
   saving: boolean;
   budgetName?: string;
 }) {
   const [fullscreen, setFullscreen] = useState(false);
-  const [selectedBlocks, setSelectedBlocks] = useState<Set<string>>(new Set()); // "col-row" keys
+  const [selectedBlocks, setSelectedBlocks] = useState<Set<string>>(new Set());
+  const [fsSelectedOpeningId, setFsSelectedOpeningId] = useState<string | null>(null);
+  const [fsDragState, setFsDragState] = useState<{
+    openingId: string; startX: number; startPosX: number; wallLength: number; opWidth: number; scale: number;
+  } | null>(null);
+
+  // Arrow key handler for pixel-by-pixel opening movement in fullscreen
+  useEffect(() => {
+    if (!fullscreen || !fsSelectedOpeningId || !onUpdateOpening) return;
+    const handleKey = (e: KeyboardEvent) => {
+      if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Delete'].includes(e.key)) return;
+      e.preventDefault();
+      if (e.key === 'Delete' && onDeleteOpening) {
+        onDeleteOpening(fsSelectedOpeningId);
+        setFsSelectedOpeningId(null);
+        return;
+      }
+      const step = e.shiftKey ? 0.005 : 0.001; // 5mm or 1mm
+      const isHoriz = card.wall ? (card.wall.wallIndex === 1 || card.wall.wallIndex === 3) : true;
+      const fullWallLen = card.room ? (isHoriz ? card.room.width : card.room.length) : card.width;
+      const op = card.openings.find(o => o.id === fsSelectedOpeningId);
+      if (!op) return;
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+        const dir = e.key === 'ArrowLeft' ? -1 : 1;
+        const deltaFraction = (step * dir) / fullWallLen;
+        const halfW = (op.width / 2) / fullWallLen;
+        const newPosX = Math.max(halfW, Math.min(1 - halfW, op.positionX + deltaFraction));
+        onUpdateOpening(fsSelectedOpeningId, { positionX: newPosX });
+      } else {
+        const dir = e.key === 'ArrowUp' ? 1 : -1;
+        const newSill = Math.max(0, (op.sillHeight ?? 0) + step * dir);
+        onUpdateOpening(fsSelectedOpeningId, { sillHeight: newSill });
+      }
+    };
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [fullscreen, fsSelectedOpeningId, onUpdateOpening, onDeleteOpening, card]);
+
+  // Drag handlers for fullscreen opening movement
+  const handleFsMouseMove = (e: React.MouseEvent) => {
+    if (!fsDragState || !onUpdateOpening) return;
+    const deltaPixels = e.clientX - fsDragState.startX;
+    const deltaMeters = deltaPixels / fsDragState.scale;
+    const deltaFraction = deltaMeters / fsDragState.wallLength;
+    const halfW = (fsDragState.opWidth / 2) / fsDragState.wallLength;
+    const newPosX = Math.max(halfW, Math.min(1 - halfW, fsDragState.startPosX + deltaFraction));
+    onUpdateOpening(fsDragState.openingId, { positionX: newPosX });
+  };
+
+  // PDF export for individual card
+  const handleCardPdfExport = useCallback(() => {
+    const svgEl = document.querySelector(`[data-card-pdf="${card.id}"]`) as SVGSVGElement | null;
+    if (!svgEl) return;
+    const label = `${card.label}${card.sublabel ? ' — ' + card.sublabel : ''}`;
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+    const pageW = doc.internal.pageSize.getWidth();
+    const pageH = doc.internal.pageSize.getHeight();
+    const margin = 10;
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text(budgetName || '', margin, margin + 5);
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Alzado: ${label}`, margin, margin + 12);
+    const svgClone = svgEl.cloneNode(true) as SVGSVGElement;
+    svgClone.setAttribute('width', '2400');
+    svgClone.removeAttribute('style');
+    const svgData = new XMLSerializer().serializeToString(svgClone);
+    const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+    const url = URL.createObjectURL(svgBlob);
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext('2d')!;
+      ctx.fillStyle = 'white';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0);
+      const imgData = canvas.toDataURL('image/png');
+      const availW = pageW - margin * 2;
+      const availH = pageH - margin * 2 - 20;
+      const ratio = Math.min(availW / img.width, availH / img.height);
+      const imgW = img.width * ratio;
+      const imgH = img.height * ratio;
+      doc.addImage(imgData, 'PNG', margin + (availW - imgW) / 2, margin + 18, imgW, imgH);
+      doc.save(`${label.replace(/[^a-zA-Z0-9áéíóúñÁÉÍÓÚÑ ]/g, '_')}.pdf`);
+      URL.revokeObjectURL(url);
+    };
+    img.src = url;
+  }, [card, budgetName]);
   const scale = Math.min(CARD_SCALE, (MAX_CARD_WIDTH - CARD_PADDING * 2 - 30) / card.width);
   const svgW = card.width * scale + CARD_PADDING * 2 + 30;
   const svgH = card.height * scale + CARD_PADDING * 2 + 30;
@@ -1096,10 +1196,15 @@ function ElevationCardView({ card, plan, onOpeningClick, onAddOpening, onCardDou
 
     return (
       <svg
+        data-card-pdf={fsScale ? card.id : undefined}
         width="100%"
         viewBox={`0 0 ${sw} ${sh}`}
         className="mx-auto"
-        style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', maxHeight: fsScale ? '90vh' : '180px' }}
+        style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', maxHeight: fsScale ? '90vh' : '180px', cursor: fsDragState ? 'grabbing' : 'default' }}
+        onMouseMove={fsScale ? handleFsMouseMove : undefined}
+        onMouseUp={fsScale ? () => setFsDragState(null) : undefined}
+        onMouseLeave={fsScale ? () => setFsDragState(null) : undefined}
+        onClick={fsScale ? () => { if (!fsDragState) setFsSelectedOpeningId(null); } : undefined}
       >
         {isWall && (
           <>
@@ -1215,13 +1320,33 @@ function ElevationCardView({ card, plan, onOpeningClick, onAddOpening, onCardDou
           const opX = Math.max(rx, Math.min(rawOpX, rx + rw - opWidthPx));
           const opY = ry + rh - opHeightPx - sillH * s;
           const isDoor = op.openingType === 'puerta' || op.openingType === 'puerta_externa' || op.openingType === 'ventana_balconera';
+          const isSelected = fsScale && fsSelectedOpeningId === op.id;
           return (
-            <g key={op.id} style={{ cursor: 'pointer' }}
-              onClick={e => { e.stopPropagation(); onOpeningClick(op); }}>
+            <g key={op.id}
+              style={{ cursor: fsScale ? (fsDragState ? 'grabbing' : 'grab') : 'pointer' }}
+              onClick={e => {
+                e.stopPropagation();
+                if (fsScale) { setFsSelectedOpeningId(op.id); }
+                else { onOpeningClick(op); }
+              }}
+              onMouseDown={fsScale && onUpdateOpening ? e => {
+                e.preventDefault(); e.stopPropagation();
+                setFsSelectedOpeningId(op.id);
+                setFsDragState({
+                  openingId: op.id, startX: e.clientX, startPosX: op.positionX,
+                  wallLength: fullWallLen, opWidth: op.width, scale: s,
+                });
+              } : undefined}
+            >
+              {/* Selection highlight */}
+              {isSelected && (
+                <rect x={opX - 3} y={opY - 3} width={opWidthPx + 6} height={opHeightPx + 6}
+                  fill="none" stroke="hsl(var(--primary))" strokeWidth={2} strokeDasharray="4,2" rx={3} pointerEvents="none" />
+              )}
               <rect x={opX} y={opY} width={opWidthPx} height={opHeightPx}
                 fill={isDoor ? 'hsl(30, 80%, 95%)' : 'hsl(210, 80%, 95%)'}
-                stroke={isDoor ? 'hsl(30, 80%, 45%)' : 'hsl(210, 80%, 45%)'}
-                strokeWidth={1.2} rx={1} />
+                stroke={isSelected ? 'hsl(var(--primary))' : isDoor ? 'hsl(30, 80%, 45%)' : 'hsl(210, 80%, 45%)'}
+                strokeWidth={isSelected ? 2 : 1.2} rx={1} />
               {!isDoor && (
                 <>
                   <line x1={opX} y1={opY + opHeightPx / 2} x2={opX + opWidthPx} y2={opY + opHeightPx / 2}
@@ -1238,6 +1363,84 @@ function ElevationCardView({ card, plan, onOpeningClick, onAddOpening, onCardDou
                 fontSize={fsScale ? 8 : 6} fill="hsl(var(--foreground))" pointerEvents="none" opacity={0.8}>
                 {OPENING_PRESETS[op.openingType as keyof typeof OPENING_PRESETS]?.label || op.openingType}
               </text>
+
+              {/* Reference measurements — fullscreen only */}
+              {fsScale && (
+                <g pointerEvents="none" opacity={0.85}>
+                  {/* Sill height — bottom of opening to floor */}
+                  {sillH > 0.001 && (
+                    <>
+                      <line x1={opX + opWidthPx + 5} y1={opY + opHeightPx} x2={opX + opWidthPx + 5} y2={ry + rh}
+                        stroke="hsl(150, 60%, 40%)" strokeWidth={0.6} strokeDasharray="2,1" />
+                      <line x1={opX + opWidthPx + 2} y1={opY + opHeightPx} x2={opX + opWidthPx + 8} y2={opY + opHeightPx}
+                        stroke="hsl(150, 60%, 40%)" strokeWidth={0.4} />
+                      <line x1={opX + opWidthPx + 2} y1={ry + rh} x2={opX + opWidthPx + 8} y2={ry + rh}
+                        stroke="hsl(150, 60%, 40%)" strokeWidth={0.4} />
+                      <text x={opX + opWidthPx + 10} y={opY + opHeightPx + (ry + rh - opY - opHeightPx) / 2 + 3}
+                        fontSize={7} fill="hsl(150, 60%, 40%)" fontWeight={600}>
+                        {Math.round(sillH * 1000)} mm
+                      </text>
+                    </>
+                  )}
+                  {/* Top gap — top of opening to top of wall */}
+                  {(() => {
+                    const topGap = card.height - sillH - op.height;
+                    if (topGap <= 0.001) return null;
+                    return (
+                      <>
+                        <line x1={opX + opWidthPx + 5} y1={ry} x2={opX + opWidthPx + 5} y2={opY}
+                          stroke="hsl(200, 60%, 40%)" strokeWidth={0.6} strokeDasharray="2,1" />
+                        <line x1={opX + opWidthPx + 2} y1={ry} x2={opX + opWidthPx + 8} y2={ry}
+                          stroke="hsl(200, 60%, 40%)" strokeWidth={0.4} />
+                        <line x1={opX + opWidthPx + 2} y1={opY} x2={opX + opWidthPx + 8} y2={opY}
+                          stroke="hsl(200, 60%, 40%)" strokeWidth={0.4} />
+                        <text x={opX + opWidthPx + 10} y={ry + (opY - ry) / 2 + 3}
+                          fontSize={7} fill="hsl(200, 60%, 40%)" fontWeight={600}>
+                          {Math.round(topGap * 1000)} mm
+                        </text>
+                      </>
+                    );
+                  })()}
+                  {/* Left distance — left edge of opening to left wall edge */}
+                  {(() => {
+                    const leftDist = (opX - rx) / s;
+                    if (leftDist < 0.001) return null;
+                    return (
+                      <>
+                        <line x1={rx} y1={opY + opHeightPx + 5} x2={opX} y2={opY + opHeightPx + 5}
+                          stroke="hsl(30, 60%, 45%)" strokeWidth={0.6} strokeDasharray="2,1" />
+                        <line x1={rx} y1={opY + opHeightPx + 2} x2={rx} y2={opY + opHeightPx + 8}
+                          stroke="hsl(30, 60%, 45%)" strokeWidth={0.4} />
+                        <line x1={opX} y1={opY + opHeightPx + 2} x2={opX} y2={opY + opHeightPx + 8}
+                          stroke="hsl(30, 60%, 45%)" strokeWidth={0.4} />
+                        <text x={rx + (opX - rx) / 2} y={opY + opHeightPx + 14}
+                          textAnchor="middle" fontSize={7} fill="hsl(30, 60%, 45%)" fontWeight={600}>
+                          {Math.round(leftDist * 1000)} mm
+                        </text>
+                      </>
+                    );
+                  })()}
+                  {/* Right distance — right edge of opening to right wall edge */}
+                  {(() => {
+                    const rightDist = (rx + rw - opX - opWidthPx) / s;
+                    if (rightDist < 0.001) return null;
+                    return (
+                      <>
+                        <line x1={opX + opWidthPx} y1={opY + opHeightPx + 5} x2={rx + rw} y2={opY + opHeightPx + 5}
+                          stroke="hsl(30, 60%, 45%)" strokeWidth={0.6} strokeDasharray="2,1" />
+                        <line x1={opX + opWidthPx} y1={opY + opHeightPx + 2} x2={opX + opWidthPx} y2={opY + opHeightPx + 8}
+                          stroke="hsl(30, 60%, 45%)" strokeWidth={0.4} />
+                        <line x1={rx + rw} y1={opY + opHeightPx + 2} x2={rx + rw} y2={opY + opHeightPx + 8}
+                          stroke="hsl(30, 60%, 45%)" strokeWidth={0.4} />
+                        <text x={opX + opWidthPx + (rx + rw - opX - opWidthPx) / 2} y={opY + opHeightPx + 14}
+                          textAnchor="middle" fontSize={7} fill="hsl(30, 60%, 45%)" fontWeight={600}>
+                          {Math.round(rightDist * 1000)} mm
+                        </text>
+                      </>
+                    );
+                  })()}
+                </g>
+              )}
             </g>
           );
         })}
@@ -1388,12 +1591,32 @@ function ElevationCardView({ card, plan, onOpeningClick, onAddOpening, onCardDou
                 {card.wall!.blockGroups!.length} grupos
               </Badge>
             )}
-            <Button variant="outline" size="sm" className="h-7 text-xs ml-auto print:hidden" onClick={() => window.print()}>
-              <Printer className="h-3 w-3 mr-1" /> Imprimir
-            </Button>
+            <div className="flex items-center gap-1 ml-auto print:hidden">
+              <Button variant="outline" size="sm" className="h-7 text-xs" onClick={handleCardPdfExport}>
+                <FileDown className="h-3 w-3 mr-1" /> PDF A4
+              </Button>
+              <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => window.print()}>
+                <Printer className="h-3 w-3 mr-1" /> Imprimir
+              </Button>
+            </div>
           </DialogTitle>
           <DialogDescription className="sr-only">Vista a pantalla completa del alzado</DialogDescription>
         </DialogHeader>
+        {/* Fullscreen opening controls */}
+        {fsSelectedOpeningId && (
+          <div className="shrink-0 flex items-center gap-2 flex-wrap border-b border-border/50 pb-2 print:hidden">
+            <span className="text-xs text-primary font-medium">
+              ← → mover horizontal · ↑ ↓ altura suelo · Shift = 5mm · Supr = eliminar
+            </span>
+            {onDeleteOpening && (
+              <Button variant="destructive" size="sm" className="h-6 text-[10px] ml-auto"
+                onClick={() => { onDeleteOpening(fsSelectedOpeningId); setFsSelectedOpeningId(null); }}
+                disabled={saving}>
+                <Trash2 className="h-3 w-3 mr-1" /> Eliminar hueco
+              </Button>
+            )}
+          </div>
+        )}
 
         {/* Block editing toolbar */}
         {isWall && plan.scaleMode === 'bloque' && !card.isInvisible && blockCount && (
@@ -1955,18 +2178,20 @@ const SIDE_LABELS: Record<string, string> = {
   top: 'Norte', right: 'Este', bottom: 'Sur', left: 'Oeste',
 };
 
-function CompositeWallCard({ compositeWall, plan, onOpeningClick, onAddBlockGroup, onDeleteBlockGroup, saving, rooms: liveRooms, budgetName }: {
+function CompositeWallCard({ compositeWall, plan, onOpeningClick, onAddBlockGroup, onDeleteBlockGroup, onDeleteOpening, onUpdateOpening, saving, rooms: liveRooms, budgetName }: {
   compositeWall: CompositeWall;
   plan: FloorPlanData;
   onOpeningClick: (op: OpeningData) => void;
   onAddBlockGroup?: (wallId: string, startCol: number, startRow: number, spanCols: number, spanRows: number, name?: string, color?: string) => Promise<void>;
   onDeleteBlockGroup?: (blockGroupId: string) => Promise<void>;
+  onDeleteOpening?: (openingId: string) => Promise<void>;
+  onUpdateOpening?: (openingId: string, data: { width?: number; height?: number; sillHeight?: number; positionX?: number; openingType?: string }) => Promise<void>;
   saving?: boolean;
   rooms?: RoomData[];
   budgetName?: string;
 }) {
   const [fullscreen, setFullscreen] = useState(false);
-  const [selectedBlocks, setSelectedBlocks] = useState<Set<string>>(new Set()); // "sectionIdx-col-row" keys
+  const [selectedBlocks, setSelectedBlocks] = useState<Set<string>>(new Set());
   const cw = compositeWall;
   const maxHeight = Math.max(...cw.sections.map(s => s.height), 0);
 
@@ -2344,7 +2569,7 @@ function CompositeWallCard({ compositeWall, plan, onOpeningClick, onAddBlockGrou
         </CardHeader>
         <CardContent className="p-2">
           {renderCompositeSvg()}
-          {/* Object summary */}
+          {/* Object summary with delete buttons */}
           {cw.objectSummary.openingDetails.length > 0 && (
             <div className="flex items-center gap-1 flex-wrap mt-1.5 pt-1 border-t border-border/30">
               {cw.objectSummary.openingDetails.map(od => (
@@ -2352,6 +2577,22 @@ function CompositeWallCard({ compositeWall, plan, onOpeningClick, onAddBlockGrou
                   {od.count}× {od.label}
                 </Badge>
               ))}
+            </div>
+          )}
+          {/* Individual openings with delete */}
+          {onDeleteOpening && cw.sections.flatMap(s => s.openings).length > 0 && (
+            <div className="flex items-center gap-1 flex-wrap mt-1 pt-1 border-t border-border/30">
+              {cw.sections.flatMap(section => section.openings.map(op => (
+                <div key={op.id} className="flex items-center gap-0.5 text-[9px] bg-muted/40 rounded px-1 py-0.5">
+                  <span>{OPENING_PRESETS[op.openingType as keyof typeof OPENING_PRESETS]?.label || op.openingType}</span>
+                  <span className="text-muted-foreground">{Math.round(op.width * 1000)}×{Math.round(op.height * 1000)}</span>
+                  <button className="ml-0.5 text-destructive hover:text-destructive/80"
+                    onClick={e => { e.stopPropagation(); onDeleteOpening(op.id); }}
+                    disabled={saving}>
+                    <Trash2 className="h-2.5 w-2.5" />
+                  </button>
+                </div>
+              )))}
             </div>
           )}
         </CardContent>

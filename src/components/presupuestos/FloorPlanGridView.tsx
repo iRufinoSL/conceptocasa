@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Plus, Link, Unlink, Undo2, Expand, Shrink, MapPin, Printer, Ruler, Trash2, Check } from 'lucide-react';
+import { Plus, Link, Unlink, Undo2, Expand, Shrink, MapPin, Printer, Ruler, Trash2, Check, RefreshCw } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import type { RoomData, FloorLevel, WallType, ScaleMode } from '@/lib/floor-plan-calculations';
 import { autoClassifyWalls, isExteriorType, isInvisibleType, isCompartidaType } from '@/lib/floor-plan-calculations';
@@ -45,6 +45,8 @@ interface FloorPlanGridViewProps {
   roofSlopePercent?: number;
   roofOverhang?: number;
   defaultHeight?: number;
+  /** Callback to recalculate wall segments */
+  onRecalculateSegments?: () => Promise<void>;
 }
 
 export interface PositionedRoom {
@@ -194,6 +196,7 @@ export function FloorPlanGridView({
   scaleMode = 'metros', blockLengthMm = 625, budgetName = '',
   customCorners: externalCustomCorners, onCustomCornersChange,
   roofType, roofSlopePercent = 20, roofOverhang = 0.6, defaultHeight = 2.5,
+  onRecalculateSegments,
 }: FloorPlanGridViewProps) {
   // Cell size in meters: 1m for 'metros', blockLengthMm/1000 for 'bloque'
   const cellSizeM = scaleMode === 'bloque' ? blockLengthMm / 1000 : 1;
@@ -911,6 +914,20 @@ export function FloorPlanGridView({
             <Ruler className="h-4 w-4 mr-1" />
             Regla
           </Button>
+          {onRecalculateSegments && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={async () => {
+                await onRecalculateSegments();
+              }}
+              disabled={saving}
+              title="Recalcular segmentos de paredes compartidas"
+            >
+              <RefreshCw className={`h-4 w-4 mr-1 ${saving ? 'animate-spin' : ''}`} />
+              Segmentos
+            </Button>
+          )}
           {/* Add custom corner */}
           <div className="flex items-center gap-1">
             <Input

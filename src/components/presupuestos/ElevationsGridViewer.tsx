@@ -2145,7 +2145,7 @@ function CompositeFullscreenBlockGrid({ compositeWall, plan, maxHeight, selected
         stroke="hsl(25, 95%, 45%)" strokeWidth={0.5} />
       <text x={rxs + cw.totalLength * s / 2} y={rys + totalH + 30} textAnchor="middle"
         fontSize={12} fill="hsl(25, 95%, 45%)" fontWeight={600}>
-        {cw.totalLength.toFixed(2)}m
+        {Math.round(cw.totalLength * 1000)} mm
       </text>
 
       {/* Height dimension */}
@@ -2155,7 +2155,7 @@ function CompositeFullscreenBlockGrid({ compositeWall, plan, maxHeight, selected
       <line x1={rxs - 20} y1={rys + totalH} x2={rxs - 10} y2={rys + totalH} stroke="hsl(25, 95%, 45%)" strokeWidth={0.5} />
       <text x={rxs - 22} y={rys + totalH / 2} textAnchor="middle" fontSize={12} fill="hsl(25, 95%, 45%)" fontWeight={600}
         transform={`rotate(-90, ${rxs - 22}, ${rys + totalH / 2})`}>
-        {maxHeight.toFixed(2)}m
+        {Math.round(maxHeight * 1000)} mm
       </text>
 
       {/* Corner labels */}
@@ -2414,7 +2414,7 @@ function CompositeWallCard({ compositeWall, plan, onOpeningClick, onAddBlockGrou
           stroke="hsl(25, 95%, 45%)" strokeWidth={0.4} />
         <text x={rxs + cw.totalLength * s / 2} y={rys + totalH + 25} textAnchor="middle"
           fontSize={fsScale ? 11 : 8} fill="hsl(25, 95%, 45%)" fontWeight={600}>
-          {cw.totalLength.toFixed(2)}m
+          {Math.round(cw.totalLength * 1000)} mm
         </text>
 
         {/* Height dimension */}
@@ -2425,7 +2425,7 @@ function CompositeWallCard({ compositeWall, plan, onOpeningClick, onAddBlockGrou
         <text x={rxs - 18} y={rys + totalH / 2} textAnchor="middle"
           fontSize={fsScale ? 11 : 8} fill="hsl(25, 95%, 45%)" fontWeight={600}
           transform={`rotate(-90, ${rxs - 18}, ${rys + totalH / 2})`}>
-          {maxHeight.toFixed(2)}m
+          {Math.round(maxHeight * 1000)} mm
         </text>
 
         {/* Corner labels */}
@@ -2476,7 +2476,7 @@ function CompositeWallCard({ compositeWall, plan, onOpeningClick, onAddBlockGrou
     doc.text(budgetName || '', margin, margin + 5);
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
-    doc.text(`Pared compuesta: ${cw.label} — ${SIDE_LABELS[cw.side] || cw.side} — ${cw.totalLength.toFixed(2)}m × ${maxHeight.toFixed(2)}m`, margin, margin + 12);
+    doc.text(`Pared compuesta: ${cw.label} — ${SIDE_LABELS[cw.side] || cw.side} — ${Math.round(cw.totalLength * 1000)} × ${Math.round(maxHeight * 1000)} mm`, margin, margin + 12);
 
     // Serialize SVG to image
     const svgClone = svgEl.cloneNode(true) as SVGSVGElement;
@@ -2547,7 +2547,7 @@ function CompositeWallCard({ compositeWall, plan, onOpeningClick, onAddBlockGrou
             <div className="flex items-center gap-2 min-w-0">
               <CardTitle className="text-sm font-bold">{cw.label}</CardTitle>
               <Badge variant="default" className="text-[9px] h-4">{SIDE_LABELS[cw.side] || cw.side}</Badge>
-              <Badge variant="outline" className="text-[9px] h-4">{cw.totalLength.toFixed(2)}m</Badge>
+              <Badge variant="outline" className="text-[9px] h-4">{Math.round(cw.totalLength * 1000)} mm</Badge>
               <Badge variant="secondary" className="text-[9px] h-4">{cw.sections.length} espacios</Badge>
             </div>
             <div className="flex items-center gap-1 shrink-0">
@@ -2622,7 +2622,7 @@ function CompositeWallCard({ compositeWall, plan, onOpeningClick, onAddBlockGrou
               {budgetName && <span className="font-bold print:text-lg">{budgetName} —</span>}
               {cw.label}
               <Badge variant="default" className="text-xs print:hidden">{SIDE_LABELS[cw.side]}</Badge>
-              <Badge variant="outline" className="text-xs print:hidden">{cw.totalLength.toFixed(2)}m × {maxHeight.toFixed(2)}m</Badge>
+              <Badge variant="outline" className="text-xs print:hidden">{Math.round(cw.totalLength * 1000)} × {Math.round(maxHeight * 1000)} mm</Badge>
               <Badge variant="secondary" className="text-xs print:hidden">{cw.sections.length} espacios</Badge>
               {cw.objectSummary.totalBlocks && (
                 <Badge variant="outline" className="text-xs print:hidden">

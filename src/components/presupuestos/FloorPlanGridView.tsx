@@ -40,6 +40,11 @@ interface FloorPlanGridViewProps {
   customCorners?: CustomCorner[];
   /** Callback to persist custom corners */
   onCustomCornersChange?: (corners: CustomCorner[]) => void;
+  /** Roof parameters for bajo cubierta slope grids */
+  roofType?: 'dos_aguas' | 'cuatro_aguas' | 'plana';
+  roofSlopePercent?: number;
+  roofOverhang?: number;
+  defaultHeight?: number;
 }
 
 export interface PositionedRoom {
@@ -50,50 +55,41 @@ export interface PositionedRoom {
 
 const THRESHOLD = 0.15;
 
-/** Convert column index (1-based) to letter(s): 1→A, 2→B, ..., 27→AA */
-export function colToLetter(col: number): string {
-  let s = '';
-  let c = col;
-  while (c > 0) {
-    c--;
-    s = String.fromCharCode(65 + (c % 26)) + s;
-    c = Math.floor(c / 26);
-  }
-  return s;
-}
-
-/** Column label with correlative number: 1→A01, 2→B02, 3→C03 */
+/** Column label: 2-digit padded with level prefix. col=1, level="1" → "1-01" */
 export function colToLabel(col: number, levelPrefix?: string): string {
-  const base = `${colToLetter(col)}${String(col).padStart(2, '0')}`;
-  return levelPrefix ? `${levelPrefix}-${base}` : base;
+  const num = String(col).padStart(2, '0');
+  return levelPrefix ? `${levelPrefix}-${num}` : num;
 }
 
-/** Row label with optional level prefix: "1" or "2-1" */
+/** Row label: 2-digit padded with level prefix. row=4, level="1" → "1-04" */
 export function rowToLabel(row: number, levelPrefix?: string): string {
-  return levelPrefix ? `${levelPrefix}-${row}` : String(row);
+  const num = String(row).padStart(2, '0');
+  return levelPrefix ? `${levelPrefix}-${num}` : num;
 }
 
-/** Convert letter(s) to column index (1-based): A→1, B→2, AA→27 */
-export function letterToCol(letters: string): number {
-  let col = 0;
-  for (let i = 0; i < letters.length; i++) {
-    col = col * 26 + (letters.charCodeAt(i) - 64);
-  }
-  return col;
-}
-
-/** Parse coordinate like "A1", "A01", "2-A01" → { col: 1, row: 1 } (strips level prefix) */
+/** Parse coordinate like "1-05/04" or "05/04" or "1-05" → { col, row }. Also supports legacy "A1" format. */
 export function parseCoord(coord: string): { col: number; row: number } | null {
-  // Strip optional level prefix like "2-" or "1-"
-  const stripped = coord.replace(/^\d+-/, '').toUpperCase();
-  const m = stripped.match(/^([A-Z]+)(\d+)$/);
-  if (!m) return null;
-  return { col: letterToCol(m[1]), row: parseInt(m[2]) };
+  // New numeric format: "1-05/04" or "05/04"
+  const stripped = coord.replace(/^\d+-/, '');
+  const numMatch = stripped.match(/^(\d+)\/(\d+)$/);
+  if (numMatch) return { col: parseInt(numMatch[1]), row: parseInt(numMatch[2]) };
+  // Single number (column only, assume row=1)
+  const singleMatch = stripped.match(/^(\d+)$/);
+  if (singleMatch) return { col: parseInt(singleMatch[1]), row: 1 };
+  // Legacy letter format: "A1", "B02"
+  const letterMatch = stripped.toUpperCase().match(/^([A-Z]+)(\d+)$/);
+  if (letterMatch) {
+    let col = 0;
+    for (let i = 0; i < letterMatch[1].length; i++) col = col * 26 + (letterMatch[1].charCodeAt(i) - 64);
+    return { col, row: parseInt(letterMatch[2]) };
+  }
+  return null;
 }
 
-/** Format coordinate: col=1, row=1 → "A1" */
-export function formatCoord(col: number, row: number): string {
-  return `${colToLetter(col)}${row}`;
+/** Format coordinate: col=5, row=4, level="1" → "1-05/04" */
+export function formatCoord(col: number, row: number, levelPrefix?: string): string {
+  const base = `${String(col).padStart(2, '0')}/${String(row).padStart(2, '0')}`;
+  return levelPrefix ? `${levelPrefix}-${base}` : base;
 }
 
 // Derive grid positions from room posX/posY based on cell size in meters
@@ -180,6 +176,7 @@ export function FloorPlanGridView({
   gridRef, onActiveFloorChange, forceActiveFloorId,
   scaleMode = 'metros', blockLengthMm = 625, budgetName = '',
   customCorners: externalCustomCorners, onCustomCornersChange,
+  roofType, roofSlopePercent = 20, roofOverhang = 0.6, defaultHeight = 2.5,
 }: FloorPlanGridViewProps) {
   // Cell size in meters: 1m for 'metros', blockLengthMm/1000 for 'bloque'
   const cellSizeM = scaleMode === 'bloque' ? blockLengthMm / 1000 : 1;
@@ -215,6 +212,8 @@ export function FloorPlanGridView({
     }
   }, [forceActiveFloorId]);
   const CELL_SIZE = scaleMode === 'bloque' ? 30 : 48; // px per cell (normal view)
+  const COL_HEADER_W = 44; // px width for row headers (left margin)
+  const ROW_HEADER_H = 28; // px height for column headers (top margin)
 
   const wallClassification = useMemo(() => autoClassifyWalls(rooms), [rooms]);
 
@@ -236,6 +235,10 @@ export function FloorPlanGridView({
   // Level prefix for coordinates: floor orderIndex + 1 (e.g. "1" for Level 1, "2" for Level 2)
   const currentFloorObj = effectiveFloors.find(f => f.id === currentFloorId);
   const levelPrefix = effectiveFloors.length > 1 ? String((currentFloorObj?.orderIndex ?? 0) + 1) : undefined;
+
+  // Detect bajo cubierta floor
+  const isBajoCubierta = currentFloorObj?.level === 'bajo_cubierta' || (currentFloorObj?.name || '').toLowerCase().includes('bajo cubierta');
+  const showSlopeGrids = isBajoCubierta && roofType === 'dos_aguas';
 
   // Ghost underlay: rooms from the floor directly below the current one
   const ghostRooms = useMemo(() => {
@@ -433,12 +436,12 @@ export function FloorPlanGridView({
       const isMultiSelected = selectedIds.has(room.id);
       const m2 = (room.width * room.length).toFixed(1);
       const colorClass = getSpaceColor(room.name);
-      const coord = levelPrefix ? `${levelPrefix}-${formatCoord(startCol, startRow)}` : formatCoord(startCol, startRow);
+      const coord = formatCoord(startCol, startRow, levelPrefix);
       const groupColor = room.groupId ? getGroupColor(room.groupId) : undefined;
 
-      // Position: col header (30px) + (startCol-1)*CS, row header (20px) + (startRow-1)*CS
-      const left = 30 + (startCol - 1) * CS;
-      const top = 20 + (startRow - 1) * CS;
+      // Position: COL_HEADER_W + (startCol-1)*CS, ROW_HEADER_H + (startRow-1)*CS
+      const left = COL_HEADER_W + (startCol - 1) * CS;
+      const top = ROW_HEADER_H + (startRow - 1) * CS;
       const width = spanCols * CS;
       const height = spanRows * CS;
 
@@ -494,38 +497,42 @@ export function FloorPlanGridView({
         <div
           className="relative"
           style={{
-            width: 30 + totalCols * CS + 1,
-            height: 20 + totalRows * CS + 1,
+            width: COL_HEADER_W + totalCols * CS + 1,
+            height: ROW_HEADER_H + totalRows * CS + 1,
           }}
         >
-          {/* Column headers with level prefix */}
+          {/* Column headers — separated ~10px from grid edge for readability */}
           {Array.from({ length: totalCols }, (_, ci) => (
             <div
               key={`ch-${ci}`}
-              className="absolute text-[9px] font-extrabold text-blue-600 dark:text-blue-400 text-center"
+              className="absolute text-[8px] font-bold text-blue-600 dark:text-blue-400 text-center leading-none"
               style={{
-                left: 30 + ci * CS,
-                top: 0,
+                left: COL_HEADER_W + ci * CS,
+                top: 2,
                 width: CS,
-                height: 20,
-                lineHeight: '20px',
+                height: ROW_HEADER_H - 4,
+                display: 'flex',
+                alignItems: 'flex-start',
+                justifyContent: 'center',
               }}
             >
               {colToLabel(ci + 1, levelPrefix)}
             </div>
           ))}
 
-          {/* Row headers with level prefix */}
+          {/* Row headers — separated ~10px from grid edge */}
           {Array.from({ length: totalRows }, (_, ri) => (
             <div
               key={`rh-${ri}`}
-              className="absolute text-[9px] font-extrabold text-blue-600 dark:text-blue-400 text-center"
+              className="absolute text-[8px] font-bold text-blue-600 dark:text-blue-400 text-right leading-none"
               style={{
-                left: 0,
-                top: 20 + ri * CS,
-                width: 30,
+                left: 2,
+                top: ROW_HEADER_H + ri * CS,
+                width: COL_HEADER_W - 6,
                 height: CS,
-                lineHeight: `${CS}px`,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'flex-end',
               }}
             >
               {rowToLabel(ri + 1, levelPrefix)}
@@ -539,8 +546,8 @@ export function FloorPlanGridView({
               key={`vl-${ci}`}
               className="absolute bg-muted-foreground/10"
               style={{
-                left: 30 + ci * CS,
-                top: 20,
+                left: COL_HEADER_W + ci * CS,
+                top: ROW_HEADER_H,
                 width: 1,
                 height: totalRows * CS,
               }}
@@ -552,8 +559,8 @@ export function FloorPlanGridView({
               key={`hl-${ri}`}
               className="absolute bg-muted-foreground/10"
               style={{
-                left: 30,
-                top: 20 + ri * CS,
+                left: COL_HEADER_W,
+                top: ROW_HEADER_H + ri * CS,
                 width: totalCols * CS,
                 height: 1,
               }}
@@ -566,8 +573,8 @@ export function FloorPlanGridView({
             const startRow = Math.round(room.posY / cellSizeM) + 1;
             const spanCols = Math.max(1, Math.round(room.width / cellSizeM));
             const spanRows = Math.max(1, Math.round(room.length / cellSizeM));
-            const left = 30 + (startCol - 1) * CS;
-            const top = 20 + (startRow - 1) * CS;
+            const left = COL_HEADER_W + (startCol - 1) * CS;
+            const top = ROW_HEADER_H + (startRow - 1) * CS;
             const width = spanCols * CS;
             const height = spanRows * CS;
             return (
@@ -600,8 +607,8 @@ export function FloorPlanGridView({
                 key={`empty-${cellKey}`}
                 className={`absolute cursor-pointer transition-colors z-5 ${isEmptySelected ? 'bg-blue-300/50 ring-2 ring-blue-500' : 'hover:bg-blue-100/30'}`}
                 style={{
-                  left: 30 + (col - 1) * CS,
-                  top: 20 + (row - 1) * CS,
+                  left: COL_HEADER_W + (col - 1) * CS,
+                  top: ROW_HEADER_H + (row - 1) * CS,
                   width: CS,
                   height: CS,
                 }}
@@ -628,8 +635,8 @@ export function FloorPlanGridView({
                 key={`ruler-${col}-${row}`}
                 className={`absolute cursor-crosshair z-25 ${isRulerPoint ? 'bg-primary/30' : 'hover:bg-primary/10'}`}
                 style={{
-                  left: 30 + (col - 1) * CS,
-                  top: 20 + (row - 1) * CS,
+                  left: COL_HEADER_W + (col - 1) * CS,
+                  top: ROW_HEADER_H + (row - 1) * CS,
                   width: CS,
                   height: CS,
                 }}
@@ -645,17 +652,17 @@ export function FloorPlanGridView({
           {/* Ruler line */}
           {rulerMode && rulerPoints.length === 2 && (() => {
             const [p1, p2] = rulerPoints;
-            const x1 = 30 + (p1.col - 0.5) * CS;
-            const y1 = 20 + (p1.row - 0.5) * CS;
-            const x2 = 30 + (p2.col - 0.5) * CS;
-            const y2 = 20 + (p2.row - 0.5) * CS;
+            const x1 = COL_HEADER_W + (p1.col - 0.5) * CS;
+            const y1 = ROW_HEADER_H + (p1.row - 0.5) * CS;
+            const x2 = COL_HEADER_W + (p2.col - 0.5) * CS;
+            const y2 = ROW_HEADER_H + (p2.row - 0.5) * CS;
             const dx = (p2.col - p1.col) * cellSizeM;
             const dy = (p2.row - p1.row) * cellSizeM;
             const dist = Math.sqrt(dx * dx + dy * dy);
             const midX = (x1 + x2) / 2;
             const midY = (y1 + y2) / 2;
             return (
-              <svg className="absolute inset-0 pointer-events-none" style={{ width: 30 + totalCols * CS + 1, height: 20 + totalRows * CS + 1, zIndex: 35 }}>
+              <svg className="absolute inset-0 pointer-events-none" style={{ width: COL_HEADER_W + totalCols * CS + 1, height: ROW_HEADER_H + totalRows * CS + 1, zIndex: 35 }}>
                 <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="hsl(var(--primary))" strokeWidth={2} strokeDasharray="6 3" />
                 <circle cx={x1} cy={y1} r={4} fill="hsl(var(--primary))" />
                 <circle cx={x2} cy={y2} r={4} fill="hsl(var(--primary))" />
@@ -683,23 +690,23 @@ export function FloorPlanGridView({
             };
 
             const mainCorners = [
-              { label: getMainLabel('TL', 'A'), left: 30 + (minCol - 1) * CS - 12, top: 20 + (minRow - 1) * CS - 22, idx: getMainIdx('TL'), isMain: true },
-              { label: getMainLabel('TR', 'B'), left: 30 + maxCol * CS + 4, top: 20 + (minRow - 1) * CS - 22, idx: getMainIdx('TR'), isMain: true },
-              { label: getMainLabel('BR', 'C'), left: 30 + maxCol * CS + 4, top: 20 + maxRow * CS + 6, idx: getMainIdx('BR'), isMain: true },
-              { label: getMainLabel('BL', 'D'), left: 30 + (minCol - 1) * CS - 12, top: 20 + maxRow * CS + 6, idx: getMainIdx('BL'), isMain: true },
+              { label: getMainLabel('TL', 'A'), left: COL_HEADER_W + (minCol - 1) * CS - 12, top: ROW_HEADER_H + (minRow - 1) * CS - 22, idx: getMainIdx('TL'), isMain: true },
+              { label: getMainLabel('TR', 'B'), left: COL_HEADER_W + maxCol * CS + 4, top: ROW_HEADER_H + (minRow - 1) * CS - 22, idx: getMainIdx('TR'), isMain: true },
+              { label: getMainLabel('BR', 'C'), left: COL_HEADER_W + maxCol * CS + 4, top: ROW_HEADER_H + maxRow * CS + 6, idx: getMainIdx('BR'), isMain: true },
+              { label: getMainLabel('BL', 'D'), left: COL_HEADER_W + (minCol - 1) * CS - 12, top: ROW_HEADER_H + maxRow * CS + 6, idx: getMainIdx('BL'), isMain: true },
             ];
 
             const customMarkers = customCorners
               .filter(c => !c.isMain)
               .map(cc => {
-                const colCenter = 30 + (cc.col - 1) * CS + CS / 2;
-                const rowCenter = 20 + (cc.row - 1) * CS + CS / 2;
+                const colCenter = COL_HEADER_W + (cc.col - 1) * CS + CS / 2;
+                const rowCenter = ROW_HEADER_H + (cc.row - 1) * CS + CS / 2;
                 let left: number, top: number;
                 switch (cc.side) {
-                  case 'top':    left = colCenter; top = 20 + (cc.row - 1) * CS - 22; break;
-                  case 'bottom': left = colCenter; top = 20 + cc.row * CS + 6; break;
-                  case 'left':   left = 30 + (cc.col - 1) * CS - 22; top = rowCenter; break;
-                  case 'right':  left = 30 + cc.col * CS + 6; top = rowCenter; break;
+                  case 'top':    left = colCenter; top = ROW_HEADER_H + (cc.row - 1) * CS - 22; break;
+                  case 'bottom': left = colCenter; top = ROW_HEADER_H + cc.row * CS + 6; break;
+                  case 'left':   left = COL_HEADER_W + (cc.col - 1) * CS - 22; top = rowCenter; break;
+                  case 'right':  left = COL_HEADER_W + cc.col * CS + 6; top = rowCenter; break;
                 }
                 return { label: cc.label, left, top, idx: customCorners.indexOf(cc), isMain: false };
               });
@@ -980,8 +987,168 @@ export function FloorPlanGridView({
         </CardContent>
       </Card>
 
+      {/* Bajo cubierta: slope grids for dos aguas roof */}
+      {showSlopeGrids && (() => {
+        // Ridge runs along Y axis (length). Each slope = half the building width.
+        const halfWidthM = (planWidth + 2 * roofOverhang) / 2;
+        const slopeRatio = roofSlopePercent / 100;
+        const riseM = halfWidthM * slopeRatio; // height of ridge above wall top
+        const slopeLengthM = Math.sqrt(halfWidthM * halfWidthM + riseM * riseM);
+        const slopeCols = Math.max(1, Math.ceil((planLength + 2 * roofOverhang) / cellSizeM)); // along length
+        const slopeRows = Math.max(1, Math.ceil(slopeLengthM / cellSizeM));
+        const sCS = Math.min(CELL_SIZE, 36); // slightly smaller cells for slope grids
+
+        const renderSlopeGrid = (slopeName: string, slopeIdx: number) => {
+          const sLevelPrefix = levelPrefix ? `${levelPrefix}` : '2';
+          const slopeLabel = slopeIdx === 0 ? 'Faldón izquierdo (↗)' : 'Faldón derecho (↘)';
+          return (
+            <Card key={`slope-${slopeIdx}`}>
+              <CardHeader className="py-2">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-xs flex items-center gap-2">
+                    <span className="inline-block w-3 h-3 rounded-sm" style={{ 
+                      background: slopeIdx === 0 
+                        ? 'linear-gradient(135deg, hsl(var(--primary) / 0.3), hsl(var(--primary) / 0.1))' 
+                        : 'linear-gradient(225deg, hsl(var(--primary) / 0.3), hsl(var(--primary) / 0.1))'
+                    }} />
+                    {slopeLabel}
+                  </CardTitle>
+                  <Badge variant="outline" className="text-[10px]">
+                    {slopeLengthM.toFixed(2)}m × {((planLength + 2 * roofOverhang)).toFixed(2)}m · pendiente {roofSlopePercent}%
+                  </Badge>
+                </div>
+              </CardHeader>
+              <CardContent className="p-2">
+                <div className="overflow-auto border rounded-lg bg-muted/20">
+                  <div
+                    className="relative"
+                    style={{
+                      width: COL_HEADER_W + slopeCols * sCS + 1,
+                      height: ROW_HEADER_H + slopeRows * sCS + 1,
+                    }}
+                  >
+                    {/* Column headers */}
+                    {Array.from({ length: slopeCols }, (_, ci) => (
+                      <div
+                        key={`sch-${slopeIdx}-${ci}`}
+                        className="absolute text-[7px] font-bold text-muted-foreground text-center leading-none"
+                        style={{
+                          left: COL_HEADER_W + ci * sCS,
+                          top: 2,
+                          width: sCS,
+                          height: ROW_HEADER_H - 4,
+                          display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
+                        }}
+                      >
+                        {colToLabel(ci + 1, sLevelPrefix)}
+                      </div>
+                    ))}
+                    {/* Row headers */}
+                    {Array.from({ length: slopeRows }, (_, ri) => {
+                      // Show height at this row (distance from eave to ridge)
+                      const heightAtRow = slopeIdx === 0 
+                        ? riseM * (slopeRows - ri) / slopeRows 
+                        : riseM * (slopeRows - ri) / slopeRows;
+                      return (
+                        <div
+                          key={`srh-${slopeIdx}-${ri}`}
+                          className="absolute text-[7px] font-bold text-muted-foreground text-right leading-none"
+                          style={{
+                            left: 2, top: ROW_HEADER_H + ri * sCS, width: COL_HEADER_W - 6, height: sCS,
+                            display: 'flex', alignItems: 'center', justifyContent: 'flex-end',
+                          }}
+                        >
+                          {rowToLabel(ri + 1, sLevelPrefix)}
+                        </div>
+                      );
+                    })}
+                    {/* Grid lines */}
+                    {Array.from({ length: slopeCols + 1 }, (_, ci) => (
+                      <div key={`svl-${slopeIdx}-${ci}`} className="absolute bg-muted-foreground/10"
+                        style={{ left: COL_HEADER_W + ci * sCS, top: ROW_HEADER_H, width: 1, height: slopeRows * sCS }} />
+                    ))}
+                    {Array.from({ length: slopeRows + 1 }, (_, ri) => (
+                      <div key={`shl-${slopeIdx}-${ri}`} className="absolute bg-muted-foreground/10"
+                        style={{ left: COL_HEADER_W, top: ROW_HEADER_H + ri * sCS, width: slopeCols * sCS, height: 1 }} />
+                    ))}
+                    {/* Ridge line indicator (top row) */}
+                    <div className="absolute" style={{
+                      left: COL_HEADER_W,
+                      top: ROW_HEADER_H,
+                      width: slopeCols * sCS,
+                      height: 2,
+                      background: 'hsl(var(--destructive))',
+                      opacity: 0.5,
+                    }} />
+                    <div className="absolute text-[7px] font-bold" style={{
+                      left: COL_HEADER_W + slopeCols * sCS + 4,
+                      top: ROW_HEADER_H - 6,
+                      color: 'hsl(var(--destructive))',
+                      whiteSpace: 'nowrap',
+                    }}>
+                      Cumbrera (+{riseM.toFixed(2)}m)
+                    </div>
+                    {/* Eave line indicator (bottom row) */}
+                    <div className="absolute" style={{
+                      left: COL_HEADER_W,
+                      top: ROW_HEADER_H + slopeRows * sCS - 1,
+                      width: slopeCols * sCS,
+                      height: 2,
+                      background: 'hsl(var(--primary))',
+                      opacity: 0.3,
+                    }} />
+                    <div className="absolute text-[7px]" style={{
+                      left: COL_HEADER_W + slopeCols * sCS + 4,
+                      top: ROW_HEADER_H + slopeRows * sCS - 8,
+                      color: 'hsl(var(--muted-foreground))',
+                      whiteSpace: 'nowrap',
+                    }}>
+                      Alero
+                    </div>
+                    {/* Slope angle visualization - diagonal line */}
+                    <svg className="absolute inset-0 pointer-events-none" style={{ 
+                      width: COL_HEADER_W + slopeCols * sCS + 1, 
+                      height: ROW_HEADER_H + slopeRows * sCS + 1,
+                      zIndex: 5 
+                    }}>
+                      {/* Slope angle indicator on the left side */}
+                      <line
+                        x1={COL_HEADER_W}
+                        y1={ROW_HEADER_H}
+                        x2={COL_HEADER_W}
+                        y2={ROW_HEADER_H + slopeRows * sCS}
+                        stroke="hsl(var(--primary) / 0.2)"
+                        strokeWidth={1}
+                        strokeDasharray="4 2"
+                      />
+                    </svg>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          );
+        };
+
+        return (
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <Badge variant="secondary" className="text-xs">
+                🏠 Bajo cubierta — Tejado a dos aguas
+              </Badge>
+              <span className="text-[10px] text-muted-foreground">
+                Cumbrera: +{riseM.toFixed(2)}m sobre muro · Pendiente: {roofSlopePercent}% · Vuelo: {roofOverhang}m
+              </span>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {renderSlopeGrid('left', 0)}
+              {renderSlopeGrid('right', 1)}
+            </div>
+          </div>
+        );
+      })()}
+
       <p className="text-xs text-muted-foreground">
-        Cada celda = {scaleMode === 'bloque' ? `${blockLengthMm}×${blockLengthMm}mm (1 bloque)` : '1 m²'}. Coordenadas: {levelPrefix ? `nivel ${levelPrefix} → ` : ''}columnas {levelPrefix ? `${levelPrefix}-` : ''}A01…{colToLabel(totalCols)}, filas {levelPrefix ? `${levelPrefix}-` : ''}1…{totalRows}. Clic en un espacio para editar.
+        Cada celda = {scaleMode === 'bloque' ? `${blockLengthMm}×${blockLengthMm}mm (1 bloque)` : '1 m²'}. Coordenadas: {levelPrefix ? `nivel ${levelPrefix} → ` : ''}horizontal {colToLabel(1, levelPrefix)}…{colToLabel(totalCols, levelPrefix)}, vertical {rowToLabel(1, levelPrefix)}…{rowToLabel(totalRows, levelPrefix)}. Ej: {formatCoord(5, 4, levelPrefix)}. Clic en un espacio para editar.
       </p>
 
       {/* Fullscreen overlay via portal — bigger cells */}

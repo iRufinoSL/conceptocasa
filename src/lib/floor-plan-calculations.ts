@@ -85,6 +85,7 @@ export interface WallData {
 }
 
 
+
 export interface OpeningData {
   id: string;
   openingType: 'puerta' | 'puerta_externa' | 'hueco_paso' | 'ventana_grande' | 'ventana_mediana' | 'ventana_pequeña' | 'ventana_balconera';
@@ -208,8 +209,32 @@ export interface FloorPlanSummary {
   
   rooms: RoomCalculation[];
 }
+/**
+ * Calculate auto wall height for bajo cubierta rooms under dos_aguas roof.
+ * Ridge runs along Y axis. Height at X = riseM - slopeRatio * |X - ridgeX|.
+ */
+export function calcBajoCubiertaWallHeight(
+  room: RoomData, wallIndex: number, plan: FloorPlanData, allRooms: RoomData[]
+): number | undefined {
+  if (room.height !== 0 || plan.roofType !== 'dos_aguas') return undefined;
+  let bbMinX = Infinity, bbMaxX = -Infinity;
+  allRooms.forEach(r => { if (r.posX >= 0) { bbMinX = Math.min(bbMinX, r.posX); bbMaxX = Math.max(bbMaxX, r.posX + r.width); } });
+  if (!isFinite(bbMinX)) return undefined;
+  const buildingWidth = bbMaxX - bbMinX;
+  const ridgeX = bbMinX + buildingWidth / 2;
+  const halfWidth = buildingWidth / 2 + plan.roofOverhang;
+  const slopeRatio = plan.roofSlopePercent / 100;
+  const riseM = halfWidth * slopeRatio;
+  const getH = (x: number) => Math.max(0, riseM - Math.abs(x - ridgeX) * slopeRatio);
+  switch (wallIndex) {
+    case 2: return getH(room.posX + room.width);
+    case 4: return getH(room.posX);
+    case 1: case 3: return (getH(room.posX) + getH(room.posX + room.width)) / 2;
+    default: return undefined;
+  }
+}
 
-// Get wall length based on room dimensions and wall index
+
 function getWallLength(room: RoomData, wallIndex: number): number {
   // 1=top (width), 2=right (length), 3=bottom (width), 4=left (length)
   return (wallIndex === 1 || wallIndex === 3) ? room.width : room.length;

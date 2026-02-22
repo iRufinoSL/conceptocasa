@@ -9,6 +9,8 @@ export interface CustomCorner {
   col: number;
   row: number;
   side: 'top' | 'right' | 'bottom' | 'left';
+  isMain?: boolean;
+  mainPosition?: 'TL' | 'TR' | 'BR' | 'BL';
 }
 
 interface DbFloorPlan {

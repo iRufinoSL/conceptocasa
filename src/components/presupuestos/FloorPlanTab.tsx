@@ -936,6 +936,11 @@ export function FloorPlanTab({ budgetId, budgetName = '', isAdmin }: FloorPlanTa
               </TabsTrigger>
             </TabsList>
           </Tabs>
+          {planData && (
+            <Badge variant="outline" className="text-xs font-mono h-7 flex items-center gap-1">
+              📐 {planData.scaleMode === 'bloque' ? `Bloque ${planData.blockLengthMm}×${planData.blockHeightMm}mm` : 'Metros (1m)'}
+            </Badge>
+          )}
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
@@ -1121,14 +1126,20 @@ export function FloorPlanTab({ budgetId, budgetName = '', isAdmin }: FloorPlanTa
                 )}
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <Label className="text-xs">Ancho (m)</Label>
-                    <Input type="number" step="0.1" value={newSpaceWidth}
+                    <Label className="text-xs">{planData?.scaleMode === 'bloque' ? `Ancho (bloques ${planData.blockLengthMm}mm)` : 'Ancho (m)'}</Label>
+                    <Input type="number" step={planData?.scaleMode === 'bloque' ? '1' : '0.1'} value={newSpaceWidth}
                       onChange={e => setNewSpaceWidth(Number(e.target.value))} disabled={saving} />
+                    {planData?.scaleMode === 'bloque' && (
+                      <span className="text-[10px] text-muted-foreground">= {(newSpaceWidth * (planData.blockLengthMm || 625) / 1000).toFixed(3)} m</span>
+                    )}
                   </div>
                   <div>
-                    <Label className="text-xs">Largo (m)</Label>
-                    <Input type="number" step="0.1" value={newSpaceLength}
+                    <Label className="text-xs">{planData?.scaleMode === 'bloque' ? `Largo (bloques ${planData.blockLengthMm}mm)` : 'Largo (m)'}</Label>
+                    <Input type="number" step={planData?.scaleMode === 'bloque' ? '1' : '0.1'} value={newSpaceLength}
                       onChange={e => setNewSpaceLength(Number(e.target.value))} disabled={saving} />
+                    {planData?.scaleMode === 'bloque' && (
+                      <span className="text-[10px] text-muted-foreground">= {(newSpaceLength * (planData.blockLengthMm || 625) / 1000).toFixed(3)} m</span>
+                    )}
                   </div>
                 </div>
                 <p className="text-[10px] text-muted-foreground">
@@ -1138,7 +1149,9 @@ export function FloorPlanTab({ budgetId, budgetName = '', isAdmin }: FloorPlanTa
                   onClick={async () => {
                     if (!newSpaceName.trim()) { toast.error('Indica un nombre'); return; }
                     const targetFloor = newSpaceFloorId || activeGridFloorId || floors[0]?.id;
-                    await addRoom(newSpaceName.trim(), newSpaceWidth, newSpaceLength, targetFloor);
+                    const w = planData?.scaleMode === 'bloque' ? newSpaceWidth * (planData.blockLengthMm || 625) / 1000 : newSpaceWidth;
+                    const l = planData?.scaleMode === 'bloque' ? newSpaceLength * (planData.blockLengthMm || 625) / 1000 : newSpaceLength;
+                    await addRoom(newSpaceName.trim(), w, l, targetFloor);
                     setNewSpaceName('');
                     toast.success('Espacio añadido a la cabecera');
                   }}

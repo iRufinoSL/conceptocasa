@@ -1757,7 +1757,9 @@ export function computeCompositeWallsFromCorners(
     maxY = Math.max(maxY, r.posY + r.length);
   });
 
-  // Main ABCD corners (absolute coordinates)
+  const ewt = plan.externalWallThickness;
+
+  // Main ABCD corners (interior room boundary coordinates)
   const mainCorners: Array<{ label: string; x: number; y: number; side: 'top' | 'right' | 'bottom' | 'left' }> = [
     { label: 'A', x: minX, y: minY, side: 'top' },
     { label: 'B', x: maxX, y: minY, side: 'right' },
@@ -1818,8 +1820,13 @@ export function computeCompositeWallsFromCorners(
       const v1 = ordered[i];
       const v2 = ordered[i + 1];
       const isHoriz = side === 'top' || side === 'bottom';
-      const edgeLength = isHoriz ? Math.abs(v2.x - v1.x) : Math.abs(v2.y - v1.y);
-      if (edgeLength < EPSILON) continue;
+      const interiorLength = isHoriz ? Math.abs(v2.x - v1.x) : Math.abs(v2.y - v1.y);
+      if (interiorLength < EPSILON) continue;
+      // Exterior edge length: add wall thickness at each end (perpendicular walls)
+      // Only add thickness at corners that are main ABCD corners (not custom intermediate ones)
+      const isV1Main = ['A', 'B', 'C', 'D'].includes(v1.label);
+      const isV2Main = ['A', 'B', 'C', 'D'].includes(v2.label);
+      const edgeLength = interiorLength + (isV1Main ? ewt : 0) + (isV2Main ? ewt : 0);
 
       const fixedCoord = isHoriz ? v1.y : v1.x;
       const edgeStart = isHoriz ? Math.min(v1.x, v2.x) : Math.min(v1.y, v2.y);
@@ -1957,6 +1964,7 @@ export function computeCompositeWalls(
   if (outline.length < 3 || rooms.length === 0) return [];
 
   const EPSILON = 0.05;
+  const ewt = plan.externalWallThickness;
   const composites: CompositeWall[] = [];
 
   for (let i = 0; i < outline.length; i++) {
@@ -1964,8 +1972,17 @@ export function computeCompositeWalls(
     const v2 = outline[(i + 1) % outline.length];
     const dx = v2.x - v1.x;
     const dy = v2.y - v1.y;
-    const edgeLength = Math.sqrt(dx * dx + dy * dy);
-    if (edgeLength < EPSILON) continue;
+    const interiorLength = Math.sqrt(dx * dx + dy * dy);
+    if (interiorLength < EPSILON) continue;
+    // Add wall thickness at convex (exterior) corners
+    const prev = outline[(i - 1 + outline.length) % outline.length];
+    const next = outline[(i + 2) % outline.length];
+    // Cross product to detect convexity (clockwise outline: cross < 0 = convex)
+    const cross1 = (v1.x - prev.x) * (v2.y - v1.y) - (v1.y - prev.y) * (v2.x - v1.x);
+    const cross2 = (v2.x - v1.x) * (next.y - v2.y) - (v2.y - v1.y) * (next.x - v2.x);
+    const v1Convex = cross1 <= 0;
+    const v2Convex = cross2 <= 0;
+    const edgeLength = interiorLength + (v1Convex ? ewt : 0) + (v2Convex ? ewt : 0);
 
     // Determine side
     let side: 'top' | 'right' | 'bottom' | 'left';

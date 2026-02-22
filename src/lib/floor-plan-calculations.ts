@@ -117,6 +117,17 @@ export interface WallSegment {
   neighborWallIndex?: number;
 }
 
+export interface WallSegmentCalc {
+  segmentIndex: number;
+  segmentType: WallType;
+  lengthM: number;
+  grossArea: number;
+  openingsArea: number;
+  netArea: number;
+  neighborRoomId?: string;
+  neighborRoomName?: string;
+}
+
 export interface WallCalculation {
   wallIndex: number;
   wallType: WallType;
@@ -128,6 +139,7 @@ export interface WallCalculation {
   netArea: number;
   baseLength: number; // length of wall base (for linear meters)
   openings: { type: string; area: number; count: number }[];
+  segments?: WallSegmentCalc[];
 }
 
 export interface GableCalculation {
@@ -683,13 +695,26 @@ export function calculateFloorPlanSummary(plan: FloorPlanData, rooms: RoomData[]
       // Calculate area per segment instead of using whole-wall type
       let wallExtArea = 0;
       let wallIntArea = 0;
-      segments.forEach(seg => {
+      const segCalcs: import('./floor-plan-calculations').WallSegmentCalc[] = [];
+      segments.forEach((seg, si) => {
         const segLength = seg.endMeters - seg.startMeters;
         const segGrossArea = segLength * wallCalc.wallHeight;
         // Distribute openings proportionally across segments
         const segFraction = segLength / Math.max(wallCalc.wallLength, 0.001);
         const segOpeningsArea = wallCalc.openingsArea * segFraction;
         const segNetArea = Math.max(0, segGrossArea - segOpeningsArea);
+
+        const neighborRoom = seg.neighborRoomId ? rooms.find(r => r.id === seg.neighborRoomId) : undefined;
+        segCalcs.push({
+          segmentIndex: si,
+          segmentType: seg.segmentType,
+          lengthM: segLength,
+          grossArea: segGrossArea,
+          openingsArea: segOpeningsArea,
+          netArea: segNetArea,
+          neighborRoomId: seg.neighborRoomId,
+          neighborRoomName: neighborRoom?.name,
+        });
 
         if (isInvisibleType(seg.segmentType)) {
           // Don't count invisible segments
@@ -699,6 +724,8 @@ export function calculateFloorPlanSummary(plan: FloorPlanData, rooms: RoomData[]
           wallIntArea += segNetArea;
         }
       });
+
+      wallCalc.segments = segCalcs;
 
       segExtArea += wallExtArea;
       segIntArea += wallIntArea;

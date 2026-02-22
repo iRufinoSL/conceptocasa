@@ -2,8 +2,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { ChevronRight } from 'lucide-react';
-import type { FloorPlanSummary as Summary } from '@/lib/floor-plan-calculations';
-import { OPENING_PRESETS } from '@/lib/floor-plan-calculations';
+import type { FloorPlanSummary as Summary, WallCalculation } from '@/lib/floor-plan-calculations';
+import { OPENING_PRESETS, isInvisibleType } from '@/lib/floor-plan-calculations';
 
 interface FloorPlanSummaryProps {
   summary: Summary;
@@ -219,27 +219,56 @@ export function FloorPlanSummaryView({ summary }: FloorPlanSummaryProps) {
           <CardContent>
             <div className="space-y-1 text-xs">
               <span className="font-semibold text-muted-foreground">8 elementos de la estancia:</span>
-              {rc.walls.map(w => (
-                <div key={w.wallIndex} className="flex justify-between">
-                  <span className="text-muted-foreground">
-                    {w.wallIndex === 1 ? 'Pared Superior (1)' : w.wallIndex === 2 ? 'Pared Derecha (2)' : w.wallIndex === 3 ? 'Pared Inferior (3)' : 'Pared Izquierda (4)'}
-                    {' '}({w.wallType})
-                    {w.openings.length > 0 && (
-                      <span className="ml-1 text-primary">
-                        ({w.openings.map(o => `${o.count}×${OPENING_PRESETS[o.type as keyof typeof OPENING_PRESETS]?.label || o.type}`).join(', ')})
+              {rc.walls.map(w => {
+                const WALL_NAMES: Record<number, string> = { 1: 'Pared Superior', 2: 'Pared Derecha', 3: 'Pared Inferior', 4: 'Pared Izquierda' };
+                const hasMultipleSegments = w.segments && w.segments.length > 1;
+                
+                if (hasMultipleSegments) {
+                  return w.segments!.map((seg, si) => (
+                    <div key={`${w.wallIndex}-${si}`} className="flex justify-between">
+                      <span className="text-muted-foreground">
+                        {WALL_NAMES[w.wallIndex]} ({w.wallIndex}{si + 1})
+                        {' '}({seg.segmentType})
+                        {seg.neighborRoomName && (
+                          <span className="ml-1 text-accent-foreground text-[10px]">↔ {seg.neighborRoomName}</span>
+                        )}
                       </span>
-                    )}
-                  </span>
-                  <span>
-                    {w.wallType.endsWith('_invisible') ? <span className="text-muted-foreground italic">0.00 m² (invisible)</span> : fmt(w.netArea)}
-                    {w.openingsArea > 0 && !w.wallType.endsWith('_invisible') && (
-                      <span className="text-muted-foreground ml-1">
-                        (bruto: {fmt(w.grossArea)}, huecos: -{fmt(w.openingsArea)})
+                      <span>
+                        {isInvisibleType(seg.segmentType)
+                          ? <span className="text-muted-foreground italic">0.00 m² (invisible)</span>
+                          : fmt(seg.netArea)}
+                        {seg.openingsArea > 0 && !isInvisibleType(seg.segmentType) && (
+                          <span className="text-muted-foreground ml-1">
+                            (bruto: {fmt(seg.grossArea)}, huecos: -{fmt(seg.openingsArea)})
+                          </span>
+                        )}
                       </span>
-                    )}
-                  </span>
-                </div>
-              ))}
+                    </div>
+                  ));
+                }
+                
+                return (
+                  <div key={w.wallIndex} className="flex justify-between">
+                    <span className="text-muted-foreground">
+                      {WALL_NAMES[w.wallIndex]} ({w.wallIndex})
+                      {' '}({w.wallType})
+                      {w.openings.length > 0 && (
+                        <span className="ml-1 text-primary">
+                          ({w.openings.map(o => `${o.count}×${OPENING_PRESETS[o.type as keyof typeof OPENING_PRESETS]?.label || o.type}`).join(', ')})
+                        </span>
+                      )}
+                    </span>
+                    <span>
+                      {w.wallType.endsWith('_invisible') ? <span className="text-muted-foreground italic">0.00 m² (invisible)</span> : fmt(w.netArea)}
+                      {w.openingsArea > 0 && !w.wallType.endsWith('_invisible') && (
+                        <span className="text-muted-foreground ml-1">
+                          (bruto: {fmt(w.grossArea)}, huecos: -{fmt(w.openingsArea)})
+                        </span>
+                      )}
+                    </span>
+                  </div>
+                );
+              })}
               {/* Gable areas */}
               {(rc.gableExternalArea > 0 || rc.gableInternalArea > 0) && (
                 <div className="flex justify-between text-primary">

@@ -20,6 +20,7 @@ interface FloorPlanSpaceFormProps {
   floorName?: string;
   onUpdateRoom: (data: { name?: string; width?: number; length?: number; hasFloor?: boolean; hasCeiling?: boolean }) => void | Promise<void>;
   onUpdateWall: (wallId: string, data: { wallType?: WallType }) => void | Promise<void>;
+  onUpdateWallSegmentType?: (wallId: string, segmentIndex: number, segmentType: WallType) => void | Promise<void>;
   onAddOpening?: (wallId: string, type: string, width: number, height: number, sillHeight?: number, positionX?: number) => Promise<void>;
   onDeleteOpening?: (openingId: string) => Promise<void>;
   onDuplicateRoom?: (direction: 'right' | 'down') => Promise<void>;
@@ -41,7 +42,7 @@ const WALL_TYPE_OPTIONS: { value: WallType; label: string }[] = [
   { value: 'interior_invisible', label: 'Int. invisible' },
 ];
 
-export function FloorPlanSpaceForm({ room, allRooms, planData, coordCol, coordRow, floorName, onUpdateRoom, onUpdateWall, onAddOpening, onDeleteOpening, onDuplicateRoom, onChangeCoordinate, onUngroupRoom, onDeleteRoom, onNavigateToElevation, saving }: FloorPlanSpaceFormProps) {
+export function FloorPlanSpaceForm({ room, allRooms, planData, coordCol, coordRow, floorName, onUpdateRoom, onUpdateWall, onUpdateWallSegmentType, onAddOpening, onDeleteOpening, onDuplicateRoom, onChangeCoordinate, onUngroupRoom, onDeleteRoom, onNavigateToElevation, saving }: FloorPlanSpaceFormProps) {
   const isBlockMode = planData.scaleMode === 'bloque';
   const blockL = planData.blockLengthMm || 625;
   const blockH = planData.blockHeightMm || 250;
@@ -362,14 +363,33 @@ export function FloorPlanSpaceForm({ room, allRooms, planData, coordCol, coordRo
                           const neighborRoom = seg.neighborRoomId ? sameFloorRooms.find(r => r.id === seg.neighborRoomId) : undefined;
                           const baseName = WALL_NAMES[wall.wallIndex - 1].split(' ')[0];
                           return (
-                            <div key={si} className="flex items-center gap-2 text-[10px] bg-accent/30 rounded px-2 py-1">
+                            <div key={si} className="flex items-center gap-2 text-[10px] bg-accent/30 rounded px-2 py-1 flex-wrap">
                               <Badge variant="outline" className="text-[9px] px-1 py-0">
                                 {baseName} ({wall.wallIndex}{si + 1})
                               </Badge>
                               <span>{(seg.endMeters - seg.startMeters).toFixed(2)}m</span>
-                              <Badge variant={seg.segmentType.includes('exterior') ? 'default' : 'secondary'} className="text-[9px] px-1 py-0">
-                                {seg.segmentType.replace('_', ' ')}
-                              </Badge>
+                              {onUpdateWallSegmentType ? (
+                                <Select
+                                  value={seg.segmentType}
+                                  onValueChange={v => onUpdateWallSegmentType(wall.id, si, v as WallType)}
+                                  disabled={saving}
+                                >
+                                  <SelectTrigger className="h-5 text-[9px] w-auto min-w-[100px] px-1 py-0">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {WALL_TYPE_OPTIONS.map(opt => (
+                                      <SelectItem key={opt.value} value={opt.value} className="text-xs">
+                                        {opt.label}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              ) : (
+                                <Badge variant={seg.segmentType.includes('exterior') ? 'default' : 'secondary'} className="text-[9px] px-1 py-0">
+                                  {seg.segmentType.replace('_', ' ')}
+                                </Badge>
+                              )}
                               {neighborRoom && (
                                 <span className="text-muted-foreground">↔ {neighborRoom.name}</span>
                               )}

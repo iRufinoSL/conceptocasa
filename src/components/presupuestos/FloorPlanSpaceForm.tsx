@@ -283,47 +283,26 @@ export function FloorPlanSpaceForm({ room, allRooms, planData, coordCol, coordRo
             {room.walls
               .slice()
               .sort((a, b) => a.wallIndex - b.wallIndex)
-              .flatMap(wall => {
+              .map(wall => {
                 const segKey = `${room.id}::${wall.wallIndex}`;
                 const segments = wallSegmentsMap.get(segKey) || [];
                 const hasMultipleSegments = segments.length > 1;
-
-                if (!hasMultipleSegments) {
-                  // Single wall — render as before
-                  return [{ wall, segIndex: null, segment: null }];
-                }
-                // Multiple segments — render each as a separate entry
-                return segments.map((seg, si) => ({ wall, segIndex: si, segment: seg }));
-              })
-              .map(({ wall, segIndex, segment }) => {
-                const wallKey = segIndex !== null ? `${wall.id}::${segIndex}` : wall.id;
-                const expandKey = segIndex !== null ? wall.wallIndex * 10 + segIndex : wall.wallIndex;
-                const isExpanded = expandedWall === expandKey;
-                const openingCount = segIndex === null ? wall.openings.length : 0; // openings only on unsegmented walls for now
-
-                const baseName = WALL_NAMES[wall.wallIndex - 1].split(' ')[0]; // "Superior", "Derecha", etc.
-                const displayName = segIndex !== null
-                  ? `${baseName} (${wall.wallIndex}${segIndex + 1})`
-                  : WALL_NAMES[wall.wallIndex - 1];
-
-                const neighborRoom = segment?.neighborRoomId ? sameFloorRooms.find(r => r.id === segment.neighborRoomId) : undefined;
-                const segLen = segment ? (segment.endMeters - segment.startMeters).toFixed(2) : null;
-                const segType = segment ? segment.segmentType : (localWalls[wall.id] || wall.wallType);
+                const isExpanded = expandedWall === wall.wallIndex;
+                const openingCount = wall.openings.length;
 
                 return (
-                  <div key={wallKey} className="border rounded-md p-2 space-y-2">
+                  <div key={wall.id} className="border rounded-md p-2 space-y-2">
                     <div className="flex items-center gap-2">
                       <button
                         className="text-xs shrink-0 text-muted-foreground text-left font-medium hover:text-foreground flex items-center gap-1"
-                        onClick={() => setExpandedWall(isExpanded ? null : expandKey)}
+                        onClick={() => setExpandedWall(isExpanded ? null : wall.wallIndex)}
                       >
                         {isExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-                        {displayName}
-                        {segLen && (
-                          <span className="text-[9px] text-muted-foreground ml-1">{segLen}m</span>
-                        )}
-                        {neighborRoom && (
-                          <span className="text-[9px] text-muted-foreground">↔ {neighborRoom.name}</span>
+                        {WALL_NAMES[wall.wallIndex - 1]}
+                        {hasMultipleSegments && (
+                          <Badge variant="secondary" className="ml-1 text-[9px] px-1 py-0 h-3.5">
+                            {segments.length} seg.
+                          </Badge>
                         )}
                         {openingCount > 0 && (
                           <Badge variant="secondary" className="ml-1 text-[9px] px-1 py-0 h-3.5">
@@ -332,30 +311,24 @@ export function FloorPlanSpaceForm({ room, allRooms, planData, coordCol, coordRo
                         )}
                       </button>
 
-                      {segIndex !== null ? (
-                        <Badge variant={segType.includes('exterior') ? 'default' : 'outline'} className="text-[9px] px-1.5 py-0.5 h-5 shrink-0">
-                          {segType.replace('_', ' ')}
-                        </Badge>
-                      ) : (
-                        <Select
-                          value={localWalls[wall.id] || wall.wallType}
-                          onValueChange={v => setLocalWalls(prev => ({ ...prev, [wall.id]: v as WallType }))}
-                          disabled={saving}
-                        >
-                          <SelectTrigger className="h-8 text-xs">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {WALL_TYPE_OPTIONS.map(opt => (
-                              <SelectItem key={opt.value} value={opt.value} className="text-xs">
-                                {opt.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      )}
+                      <Select
+                        value={localWalls[wall.id] || wall.wallType}
+                        onValueChange={v => setLocalWalls(prev => ({ ...prev, [wall.id]: v as WallType }))}
+                        disabled={saving}
+                      >
+                        <SelectTrigger className="h-8 text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {WALL_TYPE_OPTIONS.map(opt => (
+                            <SelectItem key={opt.value} value={opt.value} className="text-xs">
+                              {opt.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
 
-                      {onNavigateToElevation && !wall.id.startsWith('temp-') && segIndex === null && (
+                      {onNavigateToElevation && !wall.id.startsWith('temp-') && (
                         <Button
                           variant="ghost"
                           size="sm"
@@ -368,8 +341,35 @@ export function FloorPlanSpaceForm({ room, allRooms, planData, coordCol, coordRo
                       )}
                     </div>
 
-                    {/* Openings section — only for non-segmented walls */}
-                    {isExpanded && segIndex === null && (
+                    {/* Segments detail */}
+                    {isExpanded && hasMultipleSegments && (
+                      <div className="pl-2 space-y-1">
+                        <Label className="text-[10px] text-muted-foreground font-semibold">
+                          Segmentos ({segments.length}):
+                        </Label>
+                        {segments.map((seg, si) => {
+                          const neighborRoom = seg.neighborRoomId ? sameFloorRooms.find(r => r.id === seg.neighborRoomId) : undefined;
+                          const baseName = WALL_NAMES[wall.wallIndex - 1].split(' ')[0];
+                          return (
+                            <div key={si} className="flex items-center gap-2 text-[10px] bg-accent/30 rounded px-2 py-1">
+                              <Badge variant="outline" className="text-[9px] px-1 py-0">
+                                {baseName} ({wall.wallIndex}{si + 1})
+                              </Badge>
+                              <span>{(seg.endMeters - seg.startMeters).toFixed(2)}m</span>
+                              <Badge variant={seg.segmentType.includes('exterior') ? 'default' : 'secondary'} className="text-[9px] px-1 py-0">
+                                {seg.segmentType.replace('_', ' ')}
+                              </Badge>
+                              {neighborRoom && (
+                                <span className="text-muted-foreground">↔ {neighborRoom.name}</span>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {/* Openings section */}
+                    {isExpanded && (
                       <div className="pl-2 space-y-1.5">
                         {wall.openings.map(op => (
                           <div key={op.id} className="flex items-center justify-between text-[10px] bg-muted/40 rounded px-2 py-1">

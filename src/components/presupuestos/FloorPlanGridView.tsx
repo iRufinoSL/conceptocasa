@@ -1,11 +1,11 @@
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo, useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Plus, Link, Unlink, Undo2, Expand, Shrink, MapPin, Printer } from 'lucide-react';
+import { Plus, Link, Unlink, Undo2, Expand, Shrink, MapPin, Printer, Ruler } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import type { RoomData, FloorLevel, WallType, ScaleMode } from '@/lib/floor-plan-calculations';
 import { autoClassifyWalls, isExteriorType, isInvisibleType, isCompartidaType } from '@/lib/floor-plan-calculations';
@@ -201,6 +201,12 @@ export function FloorPlanGridView({
   const [newCornerLabel, setNewCornerLabel] = useState('');
   const [newCornerCoord, setNewCornerCoord] = useState('');
   const [newCornerSide, setNewCornerSide] = useState<'top' | 'right' | 'bottom' | 'left'>('top');
+  // Ruler tool
+  const [rulerMode, setRulerMode] = useState(false);
+  const [rulerPoints, setRulerPoints] = useState<{col: number; row: number}[]>([]);
+  // Corner edit
+  const [editingCornerIdx, setEditingCornerIdx] = useState<number | null>(null);
+  const [editingCornerLabel, setEditingCornerLabel] = useState('');
 
   // Force switch to a specific floor tab when requested (e.g. after creating a new floor)
   useEffect(() => {
@@ -290,6 +296,38 @@ export function FloorPlanGridView({
   const unplacedRooms = useMemo(() => {
     return currentFloorRooms.filter(r => r.posX < 0 || r.posY < 0);
   }, [currentFloorRooms]);
+
+  // Bounding box of placed rooms in grid coordinates
+  const boundingBox = useMemo(() => {
+    if (placedRooms.length === 0) return null;
+    let minCol = Infinity, minRow = Infinity, maxCol = -Infinity, maxRow = -Infinity;
+    placedRooms.forEach(r => {
+      const sc = Math.round(r.posX / cellSizeM) + 1;
+      const sr = Math.round(r.posY / cellSizeM) + 1;
+      const ec = sc + Math.max(1, Math.round(r.width / cellSizeM));
+      const er = sr + Math.max(1, Math.round(r.length / cellSizeM));
+      minCol = Math.min(minCol, sc);
+      minRow = Math.min(minRow, sr);
+      maxCol = Math.max(maxCol, ec);
+      maxRow = Math.max(maxRow, er);
+    });
+    return { minCol, minRow, maxCol, maxRow };
+  }, [placedRooms, cellSizeM]);
+
+  // Auto-init main corners if none exist
+  const autoInitRef = useRef(false);
+  useEffect(() => {
+    if (autoInitRef.current || !boundingBox || !onCustomCornersChange) return;
+    if (customCorners.some(c => c.isMain)) { autoInitRef.current = true; return; }
+    const mainCorners: CustomCorner[] = [
+      { label: 'A', col: boundingBox.minCol, row: boundingBox.minRow, side: 'top', isMain: true, mainPosition: 'TL' },
+      { label: 'B', col: boundingBox.maxCol, row: boundingBox.minRow, side: 'top', isMain: true, mainPosition: 'TR' },
+      { label: 'C', col: boundingBox.maxCol, row: boundingBox.maxRow, side: 'bottom', isMain: true, mainPosition: 'BR' },
+      { label: 'D', col: boundingBox.minCol, row: boundingBox.maxRow, side: 'bottom', isMain: true, mainPosition: 'BL' },
+    ];
+    setCustomCorners([...customCorners, ...mainCorners]);
+    autoInitRef.current = true;
+  }, [boundingBox]);
 
   const currentFloorGroups = useMemo(() => {
     const groups = new Map<string, { name: string; rooms: RoomData[] }>();
@@ -580,64 +618,140 @@ export function FloorPlanGridView({
           {/* Room overlays */}
           {roomOverlays}
 
-          {/* Corner markers ABCD */}
-          {showCorners && placedRooms.length > 0 && (() => {
-            // Find bounding box of all placed rooms
-            let minCol = Infinity, minRow = Infinity, maxCol = -Infinity, maxRow = -Infinity;
-            placedRooms.forEach(r => {
-              const sc = Math.round(r.posX / cellSizeM) + 1;
-              const sr = Math.round(r.posY / cellSizeM) + 1;
-              const ec = sc + Math.max(1, Math.round(r.width / cellSizeM));
-              const er = sr + Math.max(1, Math.round(r.length / cellSizeM));
-              minCol = Math.min(minCol, sc);
-              minRow = Math.min(minRow, sr);
-              maxCol = Math.max(maxCol, ec);
-              maxRow = Math.max(maxRow, er);
-            });
-            // Main ABCD corners positioned outside the grid
+          {/* Ruler mode: click targets */}
+          {rulerMode && Array.from({ length: totalCols * totalRows }, (_, i) => {
+            const col = (i % totalCols) + 1;
+            const row = Math.floor(i / totalCols) + 1;
+            const isRulerPoint = rulerPoints.some(p => p.col === col && p.row === row);
+            return (
+              <div
+                key={`ruler-${col}-${row}`}
+                className={`absolute cursor-crosshair z-25 ${isRulerPoint ? 'bg-primary/30' : 'hover:bg-primary/10'}`}
+                style={{
+                  left: 30 + (col - 1) * CS,
+                  top: 20 + (row - 1) * CS,
+                  width: CS,
+                  height: CS,
+                }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (rulerPoints.length >= 2) setRulerPoints([{ col, row }]);
+                  else setRulerPoints(prev => [...prev, { col, row }]);
+                }}
+              />
+            );
+          })}
+
+          {/* Ruler line */}
+          {rulerMode && rulerPoints.length === 2 && (() => {
+            const [p1, p2] = rulerPoints;
+            const x1 = 30 + (p1.col - 0.5) * CS;
+            const y1 = 20 + (p1.row - 0.5) * CS;
+            const x2 = 30 + (p2.col - 0.5) * CS;
+            const y2 = 20 + (p2.row - 0.5) * CS;
+            const dx = (p2.col - p1.col) * cellSizeM;
+            const dy = (p2.row - p1.row) * cellSizeM;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            const midX = (x1 + x2) / 2;
+            const midY = (y1 + y2) / 2;
+            return (
+              <svg className="absolute inset-0 pointer-events-none" style={{ width: 30 + totalCols * CS + 1, height: 20 + totalRows * CS + 1, zIndex: 35 }}>
+                <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="hsl(var(--primary))" strokeWidth={2} strokeDasharray="6 3" />
+                <circle cx={x1} cy={y1} r={4} fill="hsl(var(--primary))" />
+                <circle cx={x2} cy={y2} r={4} fill="hsl(var(--primary))" />
+                <rect x={midX - 35} y={midY - 10} width={70} height={20} rx={4} fill="hsl(var(--primary))" />
+                <text x={midX} y={midY + 4} textAnchor="middle" fontSize={10} fontWeight="bold" fill="white">
+                  {dist.toFixed(2)} m
+                </text>
+              </svg>
+            );
+          })()}
+
+          {/* Corner markers — all editable */}
+          {showCorners && placedRooms.length > 0 && boundingBox && (() => {
+            const { minCol, minRow, maxCol, maxRow } = boundingBox;
+
+            // Get main corner labels from customCorners
+            const mainFromStorage = customCorners.filter(c => c.isMain);
+            const getMainLabel = (pos: string, defaultLabel: string) => {
+              const found = mainFromStorage.find(c => c.mainPosition === pos);
+              return found?.label || defaultLabel;
+            };
+            const getMainIdx = (pos: string) => {
+              const found = mainFromStorage.find(c => c.mainPosition === pos);
+              return found ? customCorners.indexOf(found) : -1;
+            };
+
             const mainCorners = [
-              { label: 'A', left: 30 + (minCol - 1) * CS - 12, top: 20 + (minRow - 1) * CS - 22, anchor: 'top' as const },
-              { label: 'B', left: 30 + maxCol * CS + 4, top: 20 + (minRow - 1) * CS - 22, anchor: 'top' as const },
-              { label: 'C', left: 30 + maxCol * CS + 4, top: 20 + maxRow * CS + 6, anchor: 'bottom' as const },
-              { label: 'D', left: 30 + (minCol - 1) * CS - 12, top: 20 + maxRow * CS + 6, anchor: 'bottom' as const },
+              { label: getMainLabel('TL', 'A'), left: 30 + (minCol - 1) * CS - 12, top: 20 + (minRow - 1) * CS - 22, idx: getMainIdx('TL'), isMain: true },
+              { label: getMainLabel('TR', 'B'), left: 30 + maxCol * CS + 4, top: 20 + (minRow - 1) * CS - 22, idx: getMainIdx('TR'), isMain: true },
+              { label: getMainLabel('BR', 'C'), left: 30 + maxCol * CS + 4, top: 20 + maxRow * CS + 6, idx: getMainIdx('BR'), isMain: true },
+              { label: getMainLabel('BL', 'D'), left: 30 + (minCol - 1) * CS - 12, top: 20 + maxRow * CS + 6, idx: getMainIdx('BL'), isMain: true },
             ];
-            // Custom corners: positioned outside the grid on the specified side
-            const customMarkers = customCorners.map(cc => {
-              const colCenter = 30 + (cc.col - 1) * CS + CS / 2;
-              const rowCenter = 20 + (cc.row - 1) * CS + CS / 2;
-              let left: number, top: number;
-              switch (cc.side) {
-                case 'top':
-                  left = colCenter; top = 20 + (cc.row - 1) * CS - 22; break;
-                case 'bottom':
-                  left = colCenter; top = 20 + cc.row * CS + 6; break;
-                case 'left':
-                  left = 30 + (cc.col - 1) * CS - 22; top = rowCenter; break;
-                case 'right':
-                  left = 30 + cc.col * CS + 6; top = rowCenter; break;
-              }
-              return { label: cc.label, left, top };
-            });
+
+            const customMarkers = customCorners
+              .filter(c => !c.isMain)
+              .map(cc => {
+                const colCenter = 30 + (cc.col - 1) * CS + CS / 2;
+                const rowCenter = 20 + (cc.row - 1) * CS + CS / 2;
+                let left: number, top: number;
+                switch (cc.side) {
+                  case 'top':    left = colCenter; top = 20 + (cc.row - 1) * CS - 22; break;
+                  case 'bottom': left = colCenter; top = 20 + cc.row * CS + 6; break;
+                  case 'left':   left = 30 + (cc.col - 1) * CS - 22; top = rowCenter; break;
+                  case 'right':  left = 30 + cc.col * CS + 6; top = rowCenter; break;
+                }
+                return { label: cc.label, left, top, idx: customCorners.indexOf(cc), isMain: false };
+              });
+
             const allCorners = [...mainCorners, ...customMarkers];
-            return allCorners.map((c, idx) => {
-              const isCustom = idx >= mainCorners.length;
+
+            return allCorners.map((c, renderIdx) => {
+              const isEditing = editingCornerIdx === c.idx && c.idx >= 0;
               return (
                 <div
-                  key={`corner-${c.label}-${idx}`}
-                  className={`absolute z-30 flex items-center justify-center rounded-full bg-primary text-primary-foreground font-bold text-[10px] ${isCustom ? 'cursor-pointer hover:bg-destructive hover:text-destructive-foreground transition-colors' : ''}`}
+                  key={`corner-${c.label}-${renderIdx}`}
+                  className={`absolute z-30 flex items-center justify-center rounded-full bg-primary text-primary-foreground font-bold text-[10px]
+                    ${c.isMain ? 'cursor-text' : 'cursor-pointer hover:bg-destructive hover:text-destructive-foreground'} transition-colors`}
                   style={{
-                    left: c.left - 10,
+                    left: c.left - (isEditing ? 25 : 10),
                     top: c.top - 4,
-                    width: 20,
+                    width: isEditing ? 50 : 20,
                     height: 16,
                     whiteSpace: 'nowrap',
                   }}
-                  title={isCustom ? `Clic para borrar ${c.label}` : undefined}
-                  onClick={isCustom ? () => {
-                    setCustomCorners(prev => prev.filter((_, ci) => ci !== idx - mainCorners.length));
-                  } : undefined}
+                  title={c.isMain ? `Doble-clic para renombrar ${c.label}` : `Clic para borrar ${c.label}`}
+                  onClick={() => {
+                    if (!c.isMain && c.idx >= 0) {
+                      setCustomCorners(prev => prev.filter((_, i) => i !== c.idx));
+                    }
+                  }}
+                  onDoubleClick={() => {
+                    if (c.idx >= 0) {
+                      setEditingCornerIdx(c.idx);
+                      setEditingCornerLabel(c.label);
+                    }
+                  }}
                 >
-                  {c.label}
+                  {isEditing ? (
+                    <input
+                      autoFocus
+                      className="w-10 h-4 text-[10px] text-center bg-transparent border-b border-primary-foreground outline-none text-primary-foreground"
+                      value={editingCornerLabel}
+                      onChange={e => setEditingCornerLabel(e.target.value)}
+                      onBlur={() => {
+                        if (editingCornerLabel.trim() && c.idx >= 0) {
+                          setCustomCorners(prev => prev.map((cc, i) => i === c.idx ? { ...cc, label: editingCornerLabel.trim() } : cc));
+                        }
+                        setEditingCornerIdx(null);
+                      }}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                        if (e.key === 'Escape') setEditingCornerIdx(null);
+                      }}
+                      onClick={e => e.stopPropagation()}
+                    />
+                  ) : c.label}
                 </div>
               );
             });
@@ -702,6 +816,15 @@ export function FloorPlanGridView({
           >
             <MapPin className="h-4 w-4 mr-1" />
             ABCD
+          </Button>
+          <Button
+            variant={rulerMode ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => { setRulerMode(!rulerMode); setRulerPoints([]); }}
+            title="Herramienta regla: medir distancia entre dos puntos"
+          >
+            <Ruler className="h-4 w-4 mr-1" />
+            Regla
           </Button>
           {/* Add custom corner */}
           <div className="flex items-center gap-1">

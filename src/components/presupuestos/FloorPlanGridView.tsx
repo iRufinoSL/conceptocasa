@@ -455,6 +455,11 @@ export function FloorPlanGridView({
 
   const renderGrid = (overrideCellSize?: number) => {
     const CS = overrideCellSize || CELL_SIZE;
+    const fontScale = CS / CELL_SIZE; // 1.0 at default, >1 when enlarged
+    const nameFontSize = Math.max(9, Math.round(9 * fontScale));
+    const m2FontSize = Math.max(10, Math.round(10 * fontScale));
+    const dimFontSize = Math.max(8, Math.round(8 * fontScale));
+    const coordFontSize = Math.max(7, Math.round(7 * fontScale));
     // Render rooms as absolutely positioned overlays on the grid
     const roomOverlays = placedRooms.map(room => {
       const startCol = Math.round(room.posX / cellSizeM) + 1;
@@ -516,10 +521,10 @@ export function FloorPlanGridView({
           {renderOpeningMarks(room, 3, 'bottom')}
           {renderOpeningMarks(room, 4, 'left')}
 
-          <div className="text-[9px] font-bold text-center max-w-full px-0.5 leading-tight break-words line-clamp-2">{room.name}</div>
-          <div className="text-[10px] font-semibold">{m2} m²</div>
-          <div className="text-[8px] text-muted-foreground">{room.width.toFixed(1)}×{room.length.toFixed(1)}</div>
-          <Badge variant="outline" className="text-[7px] px-0.5 py-0 h-3 mt-0.5">{coord}</Badge>
+          <div className="font-bold text-center max-w-full px-0.5 leading-tight break-words" style={{ fontSize: `${nameFontSize}px`, lineHeight: '1.2' }}>{room.name}</div>
+          <div className="font-semibold" style={{ fontSize: `${m2FontSize}px` }}>{m2} m²</div>
+          <div className="text-muted-foreground" style={{ fontSize: `${dimFontSize}px` }}>{room.width.toFixed(1)}×{room.length.toFixed(1)}</div>
+          <Badge variant="outline" className="px-0.5 py-0 mt-0.5" style={{ fontSize: `${coordFontSize}px`, height: `${Math.max(12, Math.round(12 * fontScale))}px` }}>{coord}</Badge>
 
           {multiSelectMode && (
             <div className={`absolute top-0.5 right-0.5 w-3 h-3 rounded-full border ${isMultiSelected ? 'bg-blue-500 border-blue-500' : 'border-muted-foreground/50 bg-background'}`} />

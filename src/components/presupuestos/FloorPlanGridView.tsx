@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Plus, Link, Unlink, Undo2, Expand, Shrink, MapPin, Printer, Ruler, Trash2, Check, RefreshCw } from 'lucide-react';
+import { Plus, Link, Unlink, Undo2, Expand, Shrink, MapPin, Printer, Ruler, Trash2, Check, RefreshCw, RotateCw } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import type { RoomData, FloorLevel, WallType, ScaleMode } from '@/lib/floor-plan-calculations';
 import { autoClassifyWalls, isExteriorType, isInvisibleType, isCompartidaType } from '@/lib/floor-plan-calculations';
@@ -208,6 +208,7 @@ export function FloorPlanGridView({
   const [selectedEmptyCells, setSelectedEmptyCells] = useState<Set<string>>(new Set()); // "col,row"
   const [groupNameInput, setGroupNameInput] = useState('');
   const [gridFullscreen, setGridFullscreen] = useState(false);
+  const [printOrientation, setPrintOrientation] = useState<'landscape' | 'portrait'>('landscape');
   const [showCorners, setShowCorners] = useState(true);
   // Use external persisted corners, with local fallback
   const customCorners = externalCustomCorners || [];
@@ -1364,11 +1365,62 @@ export function FloorPlanGridView({
 
       {/* Fullscreen overlay via portal — bigger cells */}
       {gridFullscreen && createPortal(
-        <div className="fixed inset-0 z-[9999] bg-background flex flex-col print:static print:z-auto">
-          <div className="flex items-center justify-between px-4 py-2 border-b border-border bg-muted/30 shrink-0 print:border-0">
-            <span className="text-sm font-medium print:text-lg print:font-bold">{budgetName || 'Cuadrícula'} — {currentFloorName}</span>
-            <div className="flex items-center gap-2 print:hidden">
-              <Button variant="outline" size="sm" onClick={() => window.print()}>
+        <div className="fixed inset-0 z-[9999] bg-background flex flex-col floorplan-fullscreen-container">
+          {/* Dynamic print style for orientation */}
+          <style>{`
+            @media print {
+              @page { size: A4 ${printOrientation}; margin: 10mm; }
+              .floorplan-fullscreen-container {
+                position: static !important;
+                z-index: auto !important;
+                height: auto !important;
+                overflow: visible !important;
+              }
+              .floorplan-fullscreen-container .floorplan-print-header {
+                display: flex !important;
+                justify-content: space-between;
+                align-items: center;
+                padding: 4mm 0;
+                border-bottom: 1px solid #999;
+                margin-bottom: 4mm;
+              }
+              .floorplan-fullscreen-container .floorplan-toolbar {
+                display: none !important;
+              }
+              .floorplan-fullscreen-container .floorplan-grid-wrap {
+                overflow: visible !important;
+                padding: 0 !important;
+                display: flex;
+                align-items: flex-start;
+                justify-content: center;
+              }
+              .floorplan-fullscreen-container .floorplan-grid-wrap > div {
+                transform-origin: top left;
+              }
+            }
+          `}</style>
+          {/* Header visible only on print */}
+          <div className="hidden floorplan-print-header">
+            <span style={{ fontSize: '14pt', fontWeight: 'bold' }}>{budgetName || 'Plano'} — {currentFloorName}</span>
+            <span style={{ fontSize: '9pt', color: '#666' }}>Escala: {cellLabel}</span>
+          </div>
+          {/* Toolbar — hidden on print */}
+          <div className="flex items-center justify-between px-4 py-2 border-b border-border bg-muted/30 shrink-0 floorplan-toolbar">
+            <span className="text-sm font-medium">{budgetName || 'Cuadrícula'} — {currentFloorName}</span>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPrintOrientation(prev => prev === 'landscape' ? 'portrait' : 'landscape')}
+                title={printOrientation === 'landscape' ? 'Cambiar a vertical' : 'Cambiar a horizontal'}
+              >
+                <RotateCw className="h-4 w-4 mr-1" />
+                {printOrientation === 'landscape' ? 'Horizontal' : 'Vertical'}
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => {
+                // Inject scaled grid for print
+                window.print();
+              }}>
                 <Printer className="h-4 w-4 mr-1" /> Imprimir
               </Button>
               <Button variant="ghost" size="sm" onClick={() => setGridFullscreen(false)}>
@@ -1376,14 +1428,14 @@ export function FloorPlanGridView({
               </Button>
             </div>
           </div>
-          <div className="flex-1 overflow-auto p-4">
+          <div className="flex-1 overflow-auto p-4 floorplan-grid-wrap">
             {(() => {
               // Calculate a bigger cell size to fill the viewport
-              const availW = window.innerWidth - 80; // padding + header col
-              const availH = window.innerHeight - 100; // padding + header row + toolbar
+              const availW = window.innerWidth - 80;
+              const availH = window.innerHeight - 100;
               const csW = Math.floor(availW / totalCols);
               const csH = Math.floor(availH / totalRows);
-              const bigCS = Math.max(CELL_SIZE, Math.min(csW, csH, 120)); // cap at 120px
+              const bigCS = Math.max(CELL_SIZE, Math.min(csW, csH, 120));
               return renderGrid(bigCS);
             })()}
           </div>

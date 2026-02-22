@@ -320,7 +320,8 @@ export function ElevationsGridViewer({
 
         segments.forEach((seg, si) => {
           const segLen = seg.endMeters - seg.startMeters;
-          const displayType = wall.wallType as string;
+          // Use the segment's computed type, NOT the wall's stored type
+          const displayType = segments.length > 1 ? seg.segmentType : (wall.wallType as string);
           const invisible = isInvisibleType(displayType);
           const ownOpenings = wall.openings.filter(op => {
             return op.positionX >= seg.startFraction - 0.05 && op.positionX <= seg.endFraction + 0.05;
@@ -1250,9 +1251,9 @@ function ElevationCardView({ card, plan, onOpeningClick, onAddOpening, onCardDou
               <Badge variant="secondary" className="text-[9px] h-4 bg-primary/10 text-primary">{card.elevationGroup}</Badge>
             )}
             {!card.isInvisible && card.category !== 'volumen' && (
-              <Button variant="ghost" size="sm" className="h-5 w-5 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+              <Button variant="ghost" size="sm" className="h-5 w-5 p-0"
                 onClick={e => { e.stopPropagation(); setFullscreen(true); }}
-                title="Ampliar">
+                title="Ampliar alzado a pantalla completa">
                 <Maximize2 className="h-3 w-3" />
               </Button>
             )}

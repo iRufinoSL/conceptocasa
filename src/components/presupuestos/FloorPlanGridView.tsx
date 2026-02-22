@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Plus, Link, Unlink, Undo2, Expand, Shrink, MapPin, Printer, Ruler } from 'lucide-react';
+import { Plus, Link, Unlink, Undo2, Expand, Shrink, MapPin, Printer, Ruler, Trash2, Check } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import type { RoomData, FloorLevel, WallType, ScaleMode } from '@/lib/floor-plan-calculations';
 import { autoClassifyWalls, isExteriorType, isInvisibleType, isCompartidaType } from '@/lib/floor-plan-calculations';
@@ -334,20 +334,29 @@ export function FloorPlanGridView({
     return { minCol, minRow, maxCol, maxRow };
   }, [placedRooms, cellSizeM]);
 
-  // Auto-init main corners if none exist
-  const autoInitRef = useRef(false);
+  // Filter corners for current floor only
+  const floorCorners = useMemo(() => customCorners.filter(c => !c.floorId || c.floorId === currentFloorId), [customCorners, currentFloorId]);
+  const nonFloorCorners = useMemo(() => customCorners.filter(c => c.floorId && c.floorId !== currentFloorId), [customCorners, currentFloorId]);
+
+  // Level label prefix for corner marks (e.g. "1" for level 1)
+  const cornerLevelPrefix = effectiveFloors.length > 1 ? String((currentFloorObj?.orderIndex ?? 0) + 1) : '';
+
+  // Auto-init main corners per floor if none exist for this floor
+  const autoInitRef = useRef<Set<string>>(new Set());
   useEffect(() => {
-    if (autoInitRef.current || !boundingBox || !onCustomCornersChange) return;
-    if (customCorners.some(c => c.isMain)) { autoInitRef.current = true; return; }
+    if (autoInitRef.current.has(currentFloorId) || !boundingBox || !onCustomCornersChange) return;
+    const hasMainForFloor = customCorners.some(c => c.isMain && (!c.floorId || c.floorId === currentFloorId));
+    if (hasMainForFloor) { autoInitRef.current.add(currentFloorId); return; }
+    const lp = cornerLevelPrefix;
     const mainCorners: CustomCorner[] = [
-      { label: 'A', col: boundingBox.minCol, row: boundingBox.minRow, side: 'top', isMain: true, mainPosition: 'TL' },
-      { label: 'B', col: boundingBox.maxCol, row: boundingBox.minRow, side: 'top', isMain: true, mainPosition: 'TR' },
-      { label: 'C', col: boundingBox.maxCol, row: boundingBox.maxRow, side: 'bottom', isMain: true, mainPosition: 'BR' },
-      { label: 'D', col: boundingBox.minCol, row: boundingBox.maxRow, side: 'bottom', isMain: true, mainPosition: 'BL' },
+      { label: `${lp}A`, col: boundingBox.minCol, row: boundingBox.minRow, side: 'top', isMain: true, mainPosition: 'TL', floorId: currentFloorId },
+      { label: `${lp}B`, col: boundingBox.maxCol, row: boundingBox.minRow, side: 'top', isMain: true, mainPosition: 'TR', floorId: currentFloorId },
+      { label: `${lp}C`, col: boundingBox.maxCol, row: boundingBox.maxRow, side: 'bottom', isMain: true, mainPosition: 'BR', floorId: currentFloorId },
+      { label: `${lp}D`, col: boundingBox.minCol, row: boundingBox.maxRow, side: 'bottom', isMain: true, mainPosition: 'BL', floorId: currentFloorId },
     ];
     setCustomCorners([...customCorners, ...mainCorners]);
-    autoInitRef.current = true;
-  }, [boundingBox]);
+    autoInitRef.current.add(currentFloorId);
+  }, [boundingBox, currentFloorId]);
 
   const currentFloorGroups = useMemo(() => {
     const groups = new Map<string, { name: string; rooms: RoomData[] }>();
@@ -691,15 +700,16 @@ export function FloorPlanGridView({
             );
           })()}
 
-          {/* Corner markers — all editable */}
+          {/* Corner markers — filtered by floor, with edit/delete UI */}
           {showCorners && placedRooms.length > 0 && boundingBox && (() => {
             const { minCol, minRow, maxCol, maxRow } = boundingBox;
 
-            // Get main corner labels from customCorners
-            const mainFromStorage = customCorners.filter(c => c.isMain);
+            // Get main corner labels from floor-specific corners
+            const mainFromStorage = floorCorners.filter(c => c.isMain);
+            const lp = cornerLevelPrefix;
             const getMainLabel = (pos: string, defaultLabel: string) => {
               const found = mainFromStorage.find(c => c.mainPosition === pos);
-              return found?.label || defaultLabel;
+              return found?.label || `${lp}${defaultLabel}`;
             };
             const getMainIdx = (pos: string) => {
               const found = mainFromStorage.find(c => c.mainPosition === pos);
@@ -713,7 +723,7 @@ export function FloorPlanGridView({
               { label: getMainLabel('BL', 'D'), left: COL_HEADER_W + (minCol - 1) * CS - 12, top: ROW_HEADER_H + maxRow * CS + 6, idx: getMainIdx('BL'), isMain: true },
             ];
 
-            const customMarkers = customCorners
+            const customMarkers = floorCorners
               .filter(c => !c.isMain)
               .map(cc => {
                 const colCenter = COL_HEADER_W + (cc.col - 1) * CS + CS / 2;
@@ -735,47 +745,73 @@ export function FloorPlanGridView({
               return (
                 <div
                   key={`corner-${c.label}-${renderIdx}`}
-                  className={`absolute z-30 flex items-center justify-center rounded-full bg-primary text-primary-foreground font-bold text-[10px]
-                    ${c.isMain ? 'cursor-text' : 'cursor-pointer hover:bg-destructive hover:text-destructive-foreground'} transition-colors`}
+                  className="absolute z-30"
                   style={{
-                    left: c.left - (isEditing ? 25 : 10),
+                    left: c.left - (isEditing ? 40 : 10),
                     top: c.top - 4,
-                    width: isEditing ? 50 : 20,
-                    height: 16,
                     whiteSpace: 'nowrap',
-                  }}
-                  title={c.isMain ? `Doble-clic para renombrar ${c.label}` : `Clic para borrar ${c.label}`}
-                  onClick={() => {
-                    if (!c.isMain && c.idx >= 0) {
-                      setCustomCorners(prev => prev.filter((_, i) => i !== c.idx));
-                    }
-                  }}
-                  onDoubleClick={() => {
-                    if (c.idx >= 0) {
-                      setEditingCornerIdx(c.idx);
-                      setEditingCornerLabel(c.label);
-                    }
                   }}
                 >
                   {isEditing ? (
-                    <input
-                      autoFocus
-                      className="w-10 h-4 text-[10px] text-center bg-transparent border-b border-primary-foreground outline-none text-primary-foreground"
-                      value={editingCornerLabel}
-                      onChange={e => setEditingCornerLabel(e.target.value)}
-                      onBlur={() => {
-                        if (editingCornerLabel.trim() && c.idx >= 0) {
-                          setCustomCorners(prev => prev.map((cc, i) => i === c.idx ? { ...cc, label: editingCornerLabel.trim() } : cc));
+                    <div className="flex items-center gap-0.5 bg-primary rounded-full px-1 h-5">
+                      <input
+                        autoFocus
+                        className="w-12 h-4 text-[10px] text-center bg-transparent border-b border-primary-foreground outline-none text-primary-foreground"
+                        value={editingCornerLabel}
+                        onChange={e => setEditingCornerLabel(e.target.value)}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter') {
+                            if (editingCornerLabel.trim() && c.idx >= 0) {
+                              setCustomCorners(prev => prev.map((cc, i) => i === c.idx ? { ...cc, label: editingCornerLabel.trim() } : cc));
+                            }
+                            setEditingCornerIdx(null);
+                          }
+                          if (e.key === 'Escape') setEditingCornerIdx(null);
+                        }}
+                        onClick={e => e.stopPropagation()}
+                      />
+                      <button
+                        className="flex items-center justify-center w-4 h-4 rounded-full bg-green-500 hover:bg-green-600 text-white"
+                        title="Guardar"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (editingCornerLabel.trim() && c.idx >= 0) {
+                            setCustomCorners(prev => prev.map((cc, i) => i === c.idx ? { ...cc, label: editingCornerLabel.trim() } : cc));
+                          }
+                          setEditingCornerIdx(null);
+                        }}
+                      >
+                        <Check className="h-3 w-3" />
+                      </button>
+                      {!c.isMain && (
+                        <button
+                          className="flex items-center justify-center w-4 h-4 rounded-full bg-destructive hover:bg-destructive/80 text-destructive-foreground"
+                          title="Borrar"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setCustomCorners(prev => prev.filter((_, i) => i !== c.idx));
+                            setEditingCornerIdx(null);
+                          }}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <div
+                      className="flex items-center justify-center rounded-full bg-primary text-primary-foreground font-bold text-[10px] cursor-pointer hover:ring-2 hover:ring-primary/50 transition-all"
+                      style={{ width: 20, height: 16 }}
+                      title={`Clic para editar ${c.label}`}
+                      onClick={() => {
+                        if (c.idx >= 0) {
+                          setEditingCornerIdx(c.idx);
+                          setEditingCornerLabel(c.label);
                         }
-                        setEditingCornerIdx(null);
                       }}
-                      onKeyDown={e => {
-                        if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
-                        if (e.key === 'Escape') setEditingCornerIdx(null);
-                      }}
-                      onClick={e => e.stopPropagation()}
-                    />
-                  ) : c.label}
+                    >
+                      {c.label}
+                    </div>
+                  )}
                 </div>
               );
             });
@@ -884,7 +920,10 @@ export function FloorPlanGridView({
                 if (!newCornerLabel.trim() || !newCornerCoord.trim()) return;
                 const parsed = parseCoord(newCornerCoord.trim());
                 if (!parsed) return;
-                setCustomCorners(prev => [...prev, { label: newCornerLabel.trim(), col: parsed.col, row: parsed.row, side: newCornerSide }]);
+                const labelWithPrefix = cornerLevelPrefix && !newCornerLabel.trim().startsWith(cornerLevelPrefix)
+                  ? `${cornerLevelPrefix}${newCornerLabel.trim()}`
+                  : newCornerLabel.trim();
+                setCustomCorners(prev => [...prev, { label: labelWithPrefix, col: parsed.col, row: parsed.row, side: newCornerSide, floorId: currentFloorId }]);
                 setNewCornerLabel('');
                 setNewCornerCoord('');
               }}
@@ -893,9 +932,12 @@ export function FloorPlanGridView({
             >
               <Plus className="h-3 w-3" />
             </Button>
-            {customCorners.length > 0 && (
-              <Button variant="ghost" size="sm" onClick={() => setCustomCorners([])} className="text-xs h-8 px-2">
-                Borrar
+            {floorCorners.filter(c => !c.isMain).length > 0 && (
+              <Button variant="ghost" size="sm" onClick={() => {
+                // Only remove custom (non-main) corners of this floor
+                setCustomCorners(prev => prev.filter(c => c.isMain || (c.floorId && c.floorId !== currentFloorId)));
+              }} className="text-xs h-8 px-2">
+                Borrar todas
               </Button>
             )}
           </div>

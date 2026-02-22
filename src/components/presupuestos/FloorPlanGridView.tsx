@@ -533,8 +533,8 @@ export function FloorPlanGridView({
         <div
           className="relative"
           style={{
-            width: COL_HEADER_W + totalCols * CS + 1,
-            height: ROW_HEADER_H + totalRows * CS + 1,
+            width: COL_HEADER_W + totalCols * CS + 80,
+            height: ROW_HEADER_H + totalRows * CS + 60,
           }}
         >
           {/* Column headers — separated ~10px from grid edge for readability */}
@@ -1433,12 +1433,12 @@ export function FloorPlanGridView({
             </div>
           </div>
           <div className="flex-1 overflow-auto p-4">
-            <div ref={printGridRef} style={{ background: '#ffffff', display: 'inline-block' }}>
+            <div ref={printGridRef} style={{ background: '#ffffff', display: 'inline-block', padding: '4px' }}>
               {(() => {
                 const availW = window.innerWidth - 80;
                 const availH = window.innerHeight - 100;
-                const csW = Math.floor(availW / totalCols);
-                const csH = Math.floor(availH / totalRows);
+                const csW = Math.floor(availW / (totalCols + 3));
+                const csH = Math.floor(availH / (totalRows + 3));
                 const bigCS = Math.max(CELL_SIZE, Math.min(csW, csH, 120));
                 return renderGrid(bigCS);
               })()}

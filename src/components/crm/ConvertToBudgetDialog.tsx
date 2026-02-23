@@ -478,6 +478,40 @@ ${profile.mensaje_adicional || 'Ninguno'}
       if (floorError) console.error('Error creating floor:', floorError);
     }
 
+    // Create "Bajo Cubierta" level when roof has slopes (2 or 4 aguas)
+    const espaciosDetalle = (profile as any).espacios_detalle as {
+      usoBajoCubierta?: string;
+    } | null;
+    const usoBajoCubierta = espaciosDetalle?.usoBajoCubierta;
+
+    if ((roofType === 'dos_aguas' || roofType === 'cuatro_aguas') && usoBajoCubierta && usoBajoCubierta.toLowerCase() !== 'nada') {
+      const bajoCubiertaLevel = numPlantas;
+      const { error: bcFloorError } = await supabase
+        .from('budget_floors')
+        .insert({
+          floor_plan_id: planData.id,
+          name: 'Nivel 2 - Bajo Cubierta',
+          level: `nivel_${bajoCubiertaLevel}`,
+          order_index: bajoCubiertaLevel,
+        });
+      if (bcFloorError) console.error('Error creating bajo cubierta floor:', bcFloorError);
+
+      // Create a space for the bajo cubierta usage
+      const spaceType = usoBajoCubierta === 'habitable' ? 'Habitación' : 'Almacén';
+      const spaceName = usoBajoCubierta === 'habitable' ? 'Bajo Cubierta (Habitable)' : 'Bajo Cubierta (Almacén)';
+      const { error: spaceError } = await supabase
+        .from('budget_spaces')
+        .insert({
+          budget_id: budgetId,
+          name: spaceName,
+          space_type: spaceType,
+          level: 'Nivel 2',
+          observations: `Cumbrera a 30°, uso: ${usoBajoCubierta}`,
+          opciones: ['A'],
+        });
+      if (spaceError) console.error('Error creating bajo cubierta space:', spaceError);
+    }
+
     console.log('Floor plan created with block scale 600x250x300mm');
   };
 

@@ -242,13 +242,42 @@ ${profile.mensaje_adicional || 'Ninguno'}
       plantas?: Record<string, { habPequenas: number; habMedianas: number; habGrandes: number }>;
     } | null;
 
+    // Fallback: try to parse room data from the predesign message text if espacios_detalle is null
+    const parseRoomDataFromMessage = (): { plantas: Record<string, { habPequenas: number; habMedianas: number; habGrandes: number }>; usoBajoCubierta: string | null } | null => {
+      const msg = (profile as any).mensaje_adicional as string | null;
+      if (!msg) return null;
+      const plantas: Record<string, { habPequenas: number; habMedianas: number; habGrandes: number }> = {};
+      // Look for "Planta X: N pequeñas, M medianas, L grandes"
+      const plantaRegex = /Planta\s*(\d+):\s*(\d+)\s*pequeñas?,\s*(\d+)\s*medianas?,\s*(\d+)\s*grandes?/gi;
+      let match;
+      while ((match = plantaRegex.exec(msg)) !== null) {
+        plantas[`planta${match[1]}`] = {
+          habPequenas: parseInt(match[2]) || 0,
+          habMedianas: parseInt(match[3]) || 0,
+          habGrandes: parseInt(match[4]) || 0,
+        };
+      }
+      // Look for uso bajo cubierta
+      let usoBajoCubierta: string | null = null;
+      const bcMatch = msg.match(/[Uu]so bajo cubierta:\s*(\w+)/);
+      if (bcMatch) usoBajoCubierta = bcMatch[1].toLowerCase();
+      
+      if (Object.keys(plantas).length > 0 || usoBajoCubierta) {
+        return { plantas, usoBajoCubierta };
+      }
+      return null;
+    };
+
+    const fallbackData = !espaciosDetalle ? parseRoomDataFromMessage() : null;
+    const effectiveEspacios = espaciosDetalle || fallbackData;
+
     const getLevelName = (plantaNum: number): string => {
       if (numPlantas === 1) return 'Nivel 1';
       return `Nivel ${plantaNum}`;
     };
 
     // Create rooms from per-floor room type data
-    if (espaciosDetalle?.plantas) {
+    if (effectiveEspacios?.plantas) {
       for (let p = 1; p <= numPlantas; p++) {
         const plantaKey = `planta${p}`;
         const plantaData = espaciosDetalle.plantas[plantaKey];
@@ -479,10 +508,18 @@ ${profile.mensaje_adicional || 'Ninguno'}
     }
 
     // Create "Bajo Cubierta" level when roof has slopes (2 or 4 aguas)
-    const espaciosDetalle = (profile as any).espacios_detalle as {
+    const floorEspaciosDetalle = (profile as any).espacios_detalle as {
       usoBajoCubierta?: string;
     } | null;
-    const usoBajoCubierta = espaciosDetalle?.usoBajoCubierta;
+    // Fallback: parse from mensaje_adicional if espacios_detalle is null
+    let usoBajoCubierta = floorEspaciosDetalle?.usoBajoCubierta;
+    if (!usoBajoCubierta) {
+      const msg = (profile as any).mensaje_adicional as string | null;
+      if (msg) {
+        const bcMatch = msg.match(/[Uu]so bajo cubierta:\s*(\w+)/);
+        if (bcMatch) usoBajoCubierta = bcMatch[1].toLowerCase();
+      }
+    }
 
     if ((roofType === 'dos_aguas' || roofType === 'cuatro_aguas') && usoBajoCubierta && usoBajoCubierta.toLowerCase() !== 'nada') {
       const bajoCubiertaLevel = numPlantas;

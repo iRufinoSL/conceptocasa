@@ -96,14 +96,14 @@ export function ConvertToBudgetDialog({
 
   // Create new form
   const [newBudgetName, setNewBudgetName] = useState('');
-  const [newBudgetVersion, setNewBudgetVersion] = useState('1.0');
+  const [newBudgetVersion, setNewBudgetVersion] = useState('9.0');
   const [newBudgetPoblacion, setNewBudgetPoblacion] = useState('');
 
   // Clone form
   const [cloneSourceBudgetId, setCloneSourceBudgetId] = useState<string>('');
   const [cloneMode, setCloneMode] = useState<CloneMode>('template');
   const [cloneName, setCloneName] = useState('');
-  const [cloneVersion, setCloneVersion] = useState('1.0');
+  const [cloneVersion, setCloneVersion] = useState('9.0');
   const [clonePoblacion, setClonePoblacion] = useState('');
   const [cloneProvincia, setCloneProvincia] = useState('');
 
@@ -128,7 +128,7 @@ export function ConvertToBudgetDialog({
   useEffect(() => {
     if (cloneSourceBudgetId && profile) {
       setCloneName(opportunityName);
-      setCloneVersion('1.0');
+      setCloneVersion('9.0');
       setClonePoblacion(profile.poblacion || '');
       setCloneProvincia(profile.provincia || '');
     }
@@ -586,7 +586,7 @@ ${profile.mensaje_adicional || 'Ninguno'}
         .insert({
           nombre: newBudgetName.trim(),
           codigo_correlativo: nextCode,
-          version: newBudgetVersion.trim() || '1.0',
+          version: newBudgetVersion.trim() || '9.0',
           poblacion: newBudgetPoblacion.trim(),
           project_id: projectId,
         })
@@ -634,7 +634,7 @@ ${profile.mensaje_adicional || 'Ninguno'}
         cloneSourceBudgetId,
         {
           nombre: cloneName.trim(),
-          version: cloneVersion.trim() || '1.0',
+          version: cloneVersion.trim() || '9.0',
           poblacion: clonePoblacion.trim(),
           provincia: cloneProvincia.trim() || undefined,
           project_id: projectId,
@@ -781,7 +781,7 @@ ${profile.mensaje_adicional || 'Ninguno'}
                     <Input
                       value={cloneVersion}
                       onChange={(e) => setCloneVersion(e.target.value)}
-                      placeholder="1.0"
+                      placeholder="9.0"
                     />
                   </div>
                   <div className="space-y-2">
@@ -819,7 +819,7 @@ ${profile.mensaje_adicional || 'Ninguno'}
                     <Input
                       value={newBudgetVersion}
                       onChange={(e) => setNewBudgetVersion(e.target.value)}
-                      placeholder="1.0"
+                      placeholder="9.0"
                     />
                   </div>
                   <div className="space-y-2">

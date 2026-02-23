@@ -61,8 +61,19 @@ const HousingProfileForm = ({ open, onOpenChange }: HousingProfileFormProps) => 
     m2Planta1: "",
     m2Planta2: "",
     m2Planta3: "",
+    // Habitaciones por planta (pequeñas, medianas, grandes)
+    planta1HabPequenas: "",
+    planta1HabMedianas: "",
+    planta1HabGrandes: "",
+    planta2HabPequenas: "",
+    planta2HabMedianas: "",
+    planta2HabGrandes: "",
+    planta3HabPequenas: "",
+    planta3HabMedianas: "",
+    planta3HabGrandes: "",
     formaGeometrica: "",
     tipoTejado: "",
+    usoBajoCubierta: "",
     numHabitacionesTotal: "",
     numHabitacionesConBano: "",
     numBanosTotal: "",
@@ -205,6 +216,12 @@ CARACTERÍSTICAS DE LA VIVIENDA:
 - M² planta 1: ${formData.m2Planta1 || "No especificado"}${parseInt(formData.numPlantas) >= 2 ? `\n- M² planta 2: ${formData.m2Planta2 || "No especificado"}` : ''}${parseInt(formData.numPlantas) >= 3 ? `\n- M² planta 3: ${formData.m2Planta3 || "No especificado"}` : ''}
 - Forma geométrica de la planta: ${formData.formaGeometrica || "No especificado"}
 - Tipo de tejado: ${formData.tipoTejado || "No especificado"}
+${(formData.tipoTejado === '2-caidas' || formData.tipoTejado === '4-caidas') ? `- Uso bajo cubierta: ${formData.usoBajoCubierta || "No especificado"}` : ''}
+
+HABITACIONES POR PLANTA:
+${parseInt(formData.numPlantas) >= 1 ? `- Planta 1: ${formData.planta1HabPequenas || 0} pequeñas, ${formData.planta1HabMedianas || 0} medianas, ${formData.planta1HabGrandes || 0} grandes` : ''}
+${parseInt(formData.numPlantas) >= 2 ? `- Planta 2: ${formData.planta2HabPequenas || 0} pequeñas, ${formData.planta2HabMedianas || 0} medianas, ${formData.planta2HabGrandes || 0} grandes` : ''}
+${parseInt(formData.numPlantas) >= 3 ? `- Planta 3: ${formData.planta3HabPequenas || 0} pequeñas, ${formData.planta3HabMedianas || 0} medianas, ${formData.planta3HabGrandes || 0} grandes` : ''}
 
 DISTRIBUCIÓN:
 - Nº habitaciones total: ${formData.numHabitacionesTotal || "No especificado"}
@@ -275,6 +292,16 @@ ${formData.message || "Sin mensaje adicional"}
           m2Planta3: formData.m2Planta3,
           formaGeometrica: formData.formaGeometrica,
           tipoTejado: formData.tipoTejado,
+          usoBajoCubierta: formData.usoBajoCubierta,
+          planta1HabPequenas: formData.planta1HabPequenas,
+          planta1HabMedianas: formData.planta1HabMedianas,
+          planta1HabGrandes: formData.planta1HabGrandes,
+          planta2HabPequenas: formData.planta2HabPequenas,
+          planta2HabMedianas: formData.planta2HabMedianas,
+          planta2HabGrandes: formData.planta2HabGrandes,
+          planta3HabPequenas: formData.planta3HabPequenas,
+          planta3HabMedianas: formData.planta3HabMedianas,
+          planta3HabGrandes: formData.planta3HabGrandes,
           numHabitacionesTotal: formData.numHabitacionesTotal,
           numHabitacionesConBano: formData.numHabitacionesConBano,
           numBanosTotal: formData.numBanosTotal,
@@ -320,8 +347,18 @@ ${formData.message || "Sin mensaje adicional"}
         m2Planta1: "",
         m2Planta2: "",
         m2Planta3: "",
+        planta1HabPequenas: "",
+        planta1HabMedianas: "",
+        planta1HabGrandes: "",
+        planta2HabPequenas: "",
+        planta2HabMedianas: "",
+        planta2HabGrandes: "",
+        planta3HabPequenas: "",
+        planta3HabMedianas: "",
+        planta3HabGrandes: "",
         formaGeometrica: "",
         tipoTejado: "",
+        usoBajoCubierta: "",
         numHabitacionesTotal: "",
         numHabitacionesConBano: "",
         numBanosTotal: "",
@@ -512,6 +549,77 @@ ${formData.message || "Sin mensaje adicional"}
                   </Select>
                 </div>
               </div>
+
+              {/* Habitaciones por planta */}
+              {parseInt(formData.numPlantas) >= 1 && (
+                <div className="space-y-3 mt-4">
+                  <p className="text-sm font-medium text-foreground">Tipo y cantidad de habitaciones por planta</p>
+                  
+                  {[1, 2, 3].filter(n => parseInt(formData.numPlantas) >= n).map(planta => (
+                    <div key={planta} className="p-3 rounded-lg border bg-muted/30">
+                      <p className="text-sm font-medium text-foreground mb-2">Planta {planta}</p>
+                      <div className="grid grid-cols-3 gap-3">
+                        <div>
+                          <label className="text-xs text-muted-foreground">Pequeñas</label>
+                          <Input
+                            name={`planta${planta}HabPequenas`}
+                            value={(formData as any)[`planta${planta}HabPequenas`]}
+                            onChange={handleInputChange}
+                            className="mt-1 h-8 text-sm"
+                            placeholder="0"
+                            type="number"
+                            min="0"
+                            max="20"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-xs text-muted-foreground">Medianas</label>
+                          <Input
+                            name={`planta${planta}HabMedianas`}
+                            value={(formData as any)[`planta${planta}HabMedianas`]}
+                            onChange={handleInputChange}
+                            className="mt-1 h-8 text-sm"
+                            placeholder="0"
+                            type="number"
+                            min="0"
+                            max="20"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-xs text-muted-foreground">Grandes</label>
+                          <Input
+                            name={`planta${planta}HabGrandes`}
+                            value={(formData as any)[`planta${planta}HabGrandes`]}
+                            onChange={handleInputChange}
+                            className="mt-1 h-8 text-sm"
+                            placeholder="0"
+                            type="number"
+                            min="0"
+                            max="20"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Bajo cubierta - solo si tejado a 2 o 4 caídas */}
+              {(formData.tipoTejado === '2-caidas' || formData.tipoTejado === '4-caidas') && (
+                <div className="mt-4">
+                  <label className="text-sm font-medium text-foreground">¿Qué hacer con el espacio Bajo Cubierta?</label>
+                  <Select value={formData.usoBajoCubierta} onValueChange={(v) => handleSelectChange("usoBajoCubierta", v)}>
+                    <SelectTrigger className="mt-1">
+                      <SelectValue placeholder="Seleccionar..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="habitable">Habitable</SelectItem>
+                      <SelectItem value="almacenaje">Almacenaje</SelectItem>
+                      <SelectItem value="nada">Nada, no hay</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
             </div>
 
             {/* Distribución */}

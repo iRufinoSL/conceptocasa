@@ -47,6 +47,17 @@ interface ContactEmailRequest {
   m2Planta3?: string;
   formaGeometrica?: string;
   tipoTejado?: string;
+  usoBajoCubierta?: string;
+  // Per-floor room types
+  planta1HabPequenas?: string;
+  planta1HabMedianas?: string;
+  planta1HabGrandes?: string;
+  planta2HabPequenas?: string;
+  planta2HabMedianas?: string;
+  planta2HabGrandes?: string;
+  planta3HabPequenas?: string;
+  planta3HabMedianas?: string;
+  planta3HabGrandes?: string;
   numHabitacionesTotal?: string;
   numHabitacionesConBano?: string;
   numBanosTotal?: string;
@@ -322,6 +333,20 @@ const handler = async (req: Request): Promise<Response> => {
       if (requestData.m2Planta3) m2PorPlantaParts.push(`Planta 3: ${requestData.m2Planta3}`);
       const m2PorPlanta = m2PorPlantaParts.length > 0 ? m2PorPlantaParts.join(', ') : null;
       
+      // Build espacios_detalle JSONB with per-floor room types and bajo cubierta
+      const espaciosDetalle: Record<string, any> = {
+        usoBajoCubierta: requestData.usoBajoCubierta || null,
+        plantas: {} as Record<string, any>,
+      };
+      const numPlantasInt = parseInt(requestData.numPlantas || '0') || 0;
+      for (let i = 1; i <= Math.min(numPlantasInt, 3); i++) {
+        espaciosDetalle.plantas[`planta${i}`] = {
+          habPequenas: parseInt((requestData as any)[`planta${i}HabPequenas`] || '0') || 0,
+          habMedianas: parseInt((requestData as any)[`planta${i}HabMedianas`] || '0') || 0,
+          habGrandes: parseInt((requestData as any)[`planta${i}HabGrandes`] || '0') || 0,
+        };
+      }
+
       const { error: profileError } = await supabase
         .from('project_profiles')
         .insert({
@@ -354,7 +379,8 @@ const handler = async (req: Request): Promise<Response> => {
           presupuesto_global: requestData.presupuestoGlobal || null,
           estilo_constructivo: requestData.estiloConstructivo || [],
           mensaje_adicional: requestData.message || null,
-          fecha_ideal_finalizacion: requestData.fechaIdealFinalizacion || null
+          fecha_ideal_finalizacion: requestData.fechaIdealFinalizacion || null,
+          espacios_detalle: espaciosDetalle,
         });
       
       if (profileError) {

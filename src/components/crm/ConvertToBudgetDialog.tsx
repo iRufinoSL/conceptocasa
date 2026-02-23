@@ -236,64 +236,82 @@ ${profile.mensaje_adicional || 'Ninguno'}
 
     const numPlantas = parseInt(profile.num_plantas || '1') || 1;
     
-    // Parse floor areas to determine m² distribution
-    const floorM2: Record<number, string> = {};
-    if (profile.m2_por_planta) {
-      const matches = profile.m2_por_planta.matchAll(/Planta\s*(\d+):\s*([\d,.]+)/gi);
-      for (const match of matches) {
-        floorM2[parseInt(match[1])] = match[2];
+    // Parse espacios_detalle JSONB for room types per floor
+    const espaciosDetalle = (profile as any).espacios_detalle as {
+      usoBajoCubierta?: string;
+      plantas?: Record<string, { habPequenas: number; habMedianas: number; habGrandes: number }>;
+    } | null;
+
+    const getLevelName = (plantaNum: number): string => {
+      if (numPlantas === 1) return 'Nivel 1';
+      return `Nivel ${plantaNum}`;
+    };
+
+    // Create rooms from per-floor room type data
+    if (espaciosDetalle?.plantas) {
+      for (let p = 1; p <= numPlantas; p++) {
+        const plantaKey = `planta${p}`;
+        const plantaData = espaciosDetalle.plantas[plantaKey];
+        if (!plantaData) continue;
+        const level = getLevelName(p);
+        
+        // Small rooms
+        for (let i = 0; i < (plantaData.habPequenas || 0); i++) {
+          spaces.push({
+            budget_id: budgetId,
+            name: `Habitación pequeña ${i + 1}`,
+            space_type: 'Habitación',
+            level,
+            observations: 'Pequeña (~9 m²)',
+            opciones: ['A'],
+          });
+        }
+        // Medium rooms
+        for (let i = 0; i < (plantaData.habMedianas || 0); i++) {
+          spaces.push({
+            budget_id: budgetId,
+            name: `Habitación mediana ${i + 1}`,
+            space_type: 'Habitación',
+            level,
+            observations: 'Mediana (~12 m²)',
+            opciones: ['A'],
+          });
+        }
+        // Large rooms
+        for (let i = 0; i < (plantaData.habGrandes || 0); i++) {
+          spaces.push({
+            budget_id: budgetId,
+            name: `Habitación grande ${i + 1}`,
+            space_type: 'Habitación',
+            level,
+            observations: 'Grande (~20 m²)',
+            opciones: ['A'],
+          });
+        }
       }
-      // If no structured format, try comma-separated
-      if (Object.keys(floorM2).length === 0) {
-        const values = profile.m2_por_planta.split(',').map(v => v.trim().replace(/[^\d,.]/g, ''));
-        values.forEach((v, i) => {
-          if (v) floorM2[i + 1] = v;
+    } else {
+      // Fallback: use num_habitaciones_total
+      const numHabitaciones = parseInt(profile.num_habitaciones_total || '0') || 0;
+      for (let i = 0; i < numHabitaciones; i++) {
+        spaces.push({
+          budget_id: budgetId,
+          name: i === 0 ? 'Habitación principal' : `Habitación ${i + 1}`,
+          space_type: 'Habitación',
+          level: getLevelName(1),
+          observations: null,
+          opciones: ['A'],
         });
       }
     }
 
-    // Helper to determine which floor a space should be on
-    const getLevel = (index: number, total: number): string => {
-      if (numPlantas === 1) return 'Planta baja';
-      // Distribute rooms across floors (living areas on ground, bedrooms on upper)
-      return index < Math.ceil(total / 2) ? 'Planta 1' : 'Planta 2';
-    };
-
-    // Create bedrooms
-    const numHabitaciones = parseInt(profile.num_habitaciones_total || '0') || 0;
-    const numConBano = parseInt(profile.num_habitaciones_con_bano || '0') || 0;
-    const numConVestidor = parseInt(profile.num_habitaciones_con_vestidor || '0') || 0;
-
-    for (let i = 0; i < numHabitaciones; i++) {
-      const isPrincipal = i === 0;
-      const hasBano = i < numConBano;
-      const hasVestidor = i < numConVestidor;
-      
-      let observations = '';
-      if (hasBano && hasVestidor) observations = 'Con baño en suite y vestidor';
-      else if (hasBano) observations = 'Con baño en suite';
-      else if (hasVestidor) observations = 'Con vestidor';
-
-      spaces.push({
-        budget_id: budgetId,
-        name: isPrincipal ? 'Habitación principal' : `Habitación ${i + 1}`,
-        space_type: 'Habitación',
-        level: numPlantas > 1 ? 'Planta 1' : 'Planta baja',
-        observations: observations || null,
-        opciones: ['A'],
-      });
-    }
-
-    // Create bathrooms (excluding en-suite ones already counted)
+    // Create bathrooms
     const numBanosTotal = parseInt(profile.num_banos_total || '0') || 0;
-    const bañosAdicionales = Math.max(0, numBanosTotal - numConBano);
-    
-    for (let i = 0; i < bañosAdicionales; i++) {
+    for (let i = 0; i < numBanosTotal; i++) {
       spaces.push({
         budget_id: budgetId,
-        name: bañosAdicionales === 1 ? 'Baño' : `Baño ${i + 1}`,
+        name: numBanosTotal === 1 ? 'Baño' : `Baño ${i + 1}`,
         space_type: 'Baño',
-        level: i === 0 ? 'Planta baja' : (numPlantas > 1 ? 'Planta 1' : 'Planta baja'),
+        level: getLevelName(1),
         observations: null,
         opciones: ['A'],
       });
@@ -305,7 +323,7 @@ ${profile.mensaje_adicional || 'Ninguno'}
         budget_id: budgetId,
         name: 'Salón',
         space_type: 'Salón',
-        level: 'Planta baja',
+        level: getLevelName(1),
         observations: profile.tipo_salon !== 'Sí' ? profile.tipo_salon : null,
         opciones: ['A'],
       });
@@ -317,8 +335,20 @@ ${profile.mensaje_adicional || 'Ninguno'}
         budget_id: budgetId,
         name: 'Cocina',
         space_type: 'Cocina',
-        level: 'Planta baja',
+        level: getLevelName(1),
         observations: profile.tipo_cocina !== 'Sí' ? profile.tipo_cocina : null,
+        opciones: ['A'],
+      });
+    }
+
+    // Create pantry with size
+    if (profile.despensa && profile.despensa.toLowerCase() !== 'no') {
+      spaces.push({
+        budget_id: budgetId,
+        name: 'Despensa',
+        space_type: 'Despensa',
+        level: getLevelName(1),
+        observations: profile.despensa !== 'Sí' ? profile.despensa : null,
         opciones: ['A'],
       });
     }
@@ -329,20 +359,8 @@ ${profile.mensaje_adicional || 'Ninguno'}
         budget_id: budgetId,
         name: 'Lavandería',
         space_type: 'Lavandería',
-        level: 'Planta baja',
-        observations: profile.lavanderia !== 'Sí' ? profile.lavanderia : null,
-        opciones: ['A'],
-      });
-    }
-
-    // Create pantry
-    if (profile.despensa && profile.despensa.toLowerCase() !== 'no') {
-      spaces.push({
-        budget_id: budgetId,
-        name: 'Despensa',
-        space_type: 'Despensa',
-        level: 'Planta baja',
-        observations: profile.despensa !== 'Sí' ? profile.despensa : null,
+        level: getLevelName(1),
+        observations: null,
         opciones: ['A'],
       });
     }
@@ -353,19 +371,19 @@ ${profile.mensaje_adicional || 'Ninguno'}
         budget_id: budgetId,
         name: 'Porche cubierto',
         space_type: 'Exterior',
-        level: 'Planta baja',
+        level: getLevelName(1),
         observations: profile.porche_cubierto !== 'Sí' ? profile.porche_cubierto : null,
         opciones: ['A'],
       });
     }
 
-    // Create open patio
+    // Create open patio with size
     if (profile.patio_descubierto && profile.patio_descubierto.toLowerCase() !== 'no') {
       spaces.push({
         budget_id: budgetId,
-        name: 'Patio descubierto',
+        name: 'Patio',
         space_type: 'Exterior',
-        level: 'Planta baja',
+        level: getLevelName(1),
         observations: profile.patio_descubierto !== 'Sí' ? profile.patio_descubierto : null,
         opciones: ['A'],
       });
@@ -377,8 +395,8 @@ ${profile.mensaje_adicional || 'Ninguno'}
         budget_id: budgetId,
         name: 'Garaje',
         space_type: 'Garaje',
-        level: 'Planta baja',
-        observations: profile.garaje !== 'Sí' ? profile.garaje : null,
+        level: getLevelName(1),
+        observations: null,
         opciones: ['A'],
       });
     }
@@ -392,6 +410,75 @@ ${profile.mensaje_adicional || 'Ninguno'}
         console.log(`Created ${spaces.length} spaces from housing profile`);
       }
     }
+  };
+
+  const createFloorPlanFromProfile = async (budgetId: string) => {
+    if (!profile) return;
+
+    const numPlantas = parseInt(profile.num_plantas || '1') || 1;
+    
+    // Parse m2 for the first floor
+    let floorM2 = 70; // default
+    if (profile.m2_por_planta) {
+      const match = profile.m2_por_planta.match(/Planta\s*1:\s*([\d,.]+)/i);
+      if (match) floorM2 = parseFloat(match[1]) || 70;
+    }
+
+    // Determine roof type
+    let roofType = 'dos_aguas';
+    if (profile.tipo_tejado === 'plano') roofType = 'plana';
+    else if (profile.tipo_tejado === '4-caidas') roofType = 'cuatro_aguas';
+    else if (profile.tipo_tejado === '1-caida') roofType = 'una_agua';
+
+    // Calculate approximate dimensions from m2 and shape
+    let width = Math.round(Math.sqrt(floorM2) * 0.8);
+    let length = Math.round(floorM2 / width);
+    if (profile.forma_geometrica === 'cuadrada') {
+      width = Math.round(Math.sqrt(floorM2));
+      length = width;
+    }
+
+    // Create floor plan with block scale 600x250x300mm
+    const { data: planData, error: planError } = await supabase
+      .from('budget_floor_plans')
+      .insert({
+        budget_id: budgetId,
+        name: 'Plano principal',
+        width,
+        length,
+        default_height: 2.5,
+        external_wall_thickness: 0.3,
+        internal_wall_thickness: 0.1,
+        scale_mode: 'bloque',
+        block_length_mm: 600,
+        block_height_mm: 250,
+        block_width_mm: 300,
+        roof_type: roofType,
+        roof_slope_percent: 30,
+        roof_overhang: 0.4,
+      })
+      .select('id')
+      .single();
+
+    if (planError || !planData) {
+      console.error('Error creating floor plan:', planError);
+      return;
+    }
+
+    // Create floor levels
+    for (let i = 0; i < numPlantas; i++) {
+      const { error: floorError } = await supabase
+        .from('budget_floors')
+        .insert({
+          floor_plan_id: planData.id,
+          name: numPlantas === 1 ? 'Nivel 1' : `Nivel ${i + 1}`,
+          level: `nivel_${i}`,
+          order_index: i,
+        });
+      if (floorError) console.error('Error creating floor:', floorError);
+    }
+
+    console.log('Floor plan created with block scale 600x250x300mm');
   };
 
   const updateProjectStatus = async () => {
@@ -441,6 +528,7 @@ ${profile.mensaje_adicional || 'Ninguno'}
       if (profile && newBudget) {
         await createProfileAsPredesign(newBudget.id);
         await createSpacesFromProfile(newBudget.id);
+        await createFloorPlanFromProfile(newBudget.id);
       }
 
       // Update project status to "activo"

@@ -1,15 +1,54 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { supabase } from '@/integrations/supabase/client';
 import { UrbanProfileCard } from './UrbanProfileCard';
 import { PreliminaryUrbanReportsManager } from './PreliminaryUrbanReportsManager';
 import { LandSearchCard } from './LandSearchCard';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { MapPin, Search, Building2 } from 'lucide-react';
+import { MapPin, Search, Building2, Home } from 'lucide-react';
 
 interface BudgetUrbanismTabProps {
   budgetId: string;
   isAdmin: boolean;
   cadastralReference?: string;
+}
+
+function HousingProfileCard({ budgetId }: { budgetId: string }) {
+  const [profileContent, setProfileContent] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchProfile = async () => {
+      const { data } = await supabase
+        .from('budget_predesigns')
+        .select('description')
+        .eq('budget_id', budgetId)
+        .eq('content_type', 'Perfil inicial')
+        .maybeSingle();
+      if (data?.description) {
+        setProfileContent(data.description);
+      }
+    };
+    fetchProfile();
+  }, [budgetId]);
+
+  if (!profileContent) return null;
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base flex items-center gap-2">
+          <Home className="h-4 w-4 text-primary" />
+          Perfil básico de vivienda
+        </CardTitle>
+        <CardDescription>Datos del perfil recibido por email</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <pre className="text-xs whitespace-pre-wrap font-sans text-muted-foreground leading-relaxed">
+          {profileContent}
+        </pre>
+      </CardContent>
+    </Card>
+  );
 }
 
 export function BudgetUrbanismTab({ budgetId, isAdmin, cadastralReference }: BudgetUrbanismTabProps) {
@@ -21,6 +60,9 @@ export function BudgetUrbanismTab({ budgetId, isAdmin, cadastralReference }: Bud
   if (hasLand === null) {
     return (
       <div className="space-y-6">
+        {/* Always show housing profile if available */}
+        <HousingProfileCard budgetId={budgetId} />
+        
         <Card>
           <CardHeader className="text-center pb-4">
             <CardTitle className="text-xl flex items-center justify-center gap-2">
@@ -68,6 +110,9 @@ export function BudgetUrbanismTab({ budgetId, isAdmin, cadastralReference }: Bud
 
   return (
     <div className="space-y-6">
+      {/* Always show housing profile if available */}
+      <HousingProfileCard budgetId={budgetId} />
+
       {/* Toggle button to switch */}
       <div className="flex items-center gap-2">
         <Button
@@ -92,14 +137,11 @@ export function BudgetUrbanismTab({ budgetId, isAdmin, cadastralReference }: Bud
 
       {hasLand ? (
         <>
-          {/* Urban Profile Section - Analyze specific land by cadastral reference */}
           <UrbanProfileCard 
             budgetId={budgetId} 
             cadastralReference={cadastralReference}
             isAdmin={isAdmin} 
           />
-
-          {/* Preliminary Urban Reports */}
           <PreliminaryUrbanReportsManager 
             budgetId={budgetId}
             isAdmin={isAdmin}

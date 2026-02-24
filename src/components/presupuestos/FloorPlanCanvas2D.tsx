@@ -712,8 +712,11 @@ export function FloorPlanCanvas2D({
 
                           const wallLen = isHoriz ? room.width : room.length;
                           const opWidth = Math.max(op.width * SCALE, 4); // proportional, min 4px
-                          const leftEdgePos = (op.positionX * wallLen - op.width / 2) * SCALE;
-                          // Clamp to wall bounds
+                          // Clamp positionX to valid range (same formula as elevation view)
+                          const halfWFrac = wallLen > 0 ? (op.width / 2) / wallLen : 0;
+                          const clampedPosX = Math.max(halfWFrac, Math.min(1 - halfWFrac, op.positionX));
+                          const leftEdgePos = (clampedPosX * wallLen - op.width / 2) * SCALE;
+                          // Clamp to wall pixel bounds as safety
                           const clampedLeft = Math.max(0, Math.min(leftEdgePos, wallLen * SCALE - opWidth));
                           const isDoor = op.openingType === 'puerta' || op.openingType === 'puerta_externa' || op.openingType === 'hueco_paso';
 

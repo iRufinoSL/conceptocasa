@@ -889,9 +889,16 @@ export function FloorPlanGridView({
                 overflow: 'visible',
               }}>
                 {customOnly.map((cc, i) => {
-                  // Target: top-left first mm of the block
-                  const targetX = COL_HEADER_W + (cc.col - 1) * CS;
-                  const targetY = ROW_HEADER_H + (cc.row - 1) * CS;
+                  // Target depends on side:
+                  // top/left → first mm (top-left of block)
+                  // bottom → last mm vertically (bottom of block row)
+                  // right → last mm horizontally (right of block col)
+                  const targetX = cc.side === 'right'
+                    ? COL_HEADER_W + cc.col * CS   // last mm of block col
+                    : COL_HEADER_W + (cc.col - 1) * CS; // first mm
+                  const targetY = cc.side === 'bottom'
+                    ? ROW_HEADER_H + cc.row * CS   // last mm of block row
+                    : ROW_HEADER_H + (cc.row - 1) * CS; // first mm
                   // Marker center position
                   let markerX: number, markerY: number;
                   switch (cc.side) {
@@ -970,61 +977,90 @@ export function FloorPlanGridView({
             ].sort((a, b) => a.row - b.row);
 
             const dimLines: React.ReactNode[] = [];
-            const DIM_OFF_INNER = 10; // close to grid (top/left — between headers and grid)
-            const DIM_OFF_OUTER = 34; // outside grid (bottom/right)
+            const DIM_OFF_INNER = 10;
+            const DIM_OFF_OUTER = 34;
+            const LEVEL_STEP = 22; // vertical gap between dimension line levels
             const fmtDist = (blocks: number) => {
               const mm = blocks * blockLengthMm;
               return `${(mm / 1000).toFixed(3)}m`;
             };
 
-            // Horizontal dimension segments
-            const hDims = (pts: CP[], y: number, prefix: string) => {
-              for (let i = 0; i < pts.length - 1; i++) {
-                const x1 = COL_HEADER_W + (pts[i].col - 1) * CS;
-                const x2 = COL_HEADER_W + (pts[i + 1].col - 1) * CS;
-                const blocks = pts[i + 1].col - pts[i].col;
-                if (blocks <= 0) continue;
-                const lbl = fmtDist(blocks);
-                const mx = (x1 + x2) / 2;
-                const tw = Math.max(50, lbl.length * 6 + 10);
-                dimLines.push(
-                  <g key={`${prefix}-${i}`}>
-                    <line x1={x1} y1={y} x2={x2} y2={y} stroke="#2563eb" strokeWidth={1} />
-                    <line x1={x1} y1={y - 5} x2={x1} y2={y + 5} stroke="#2563eb" strokeWidth={1.5} />
-                    <line x1={x2} y1={y - 5} x2={x2} y2={y + 5} stroke="#2563eb" strokeWidth={1.5} />
-                    <rect x={mx - tw / 2} y={y - 8} width={tw} height={14} rx={3} fill="#2563eb" opacity={0.9} />
-                    <text x={mx} y={y + 2} textAnchor="middle" fontSize={8} fontWeight="bold" fill="white">{lbl}</text>
-                  </g>
-                );
+            // Draw a single horizontal dimension line
+            const hDimLine = (x1: number, x2: number, y: number, lbl: string, key: string) => {
+              const mx = (x1 + x2) / 2;
+              const tw = Math.max(50, lbl.length * 6 + 10);
+              dimLines.push(
+                <g key={key}>
+                  <line x1={x1} y1={y} x2={x2} y2={y} stroke="#2563eb" strokeWidth={1} />
+                  <line x1={x1} y1={y - 5} x2={x1} y2={y + 5} stroke="#2563eb" strokeWidth={1.5} />
+                  <line x1={x2} y1={y - 5} x2={x2} y2={y + 5} stroke="#2563eb" strokeWidth={1.5} />
+                  <rect x={mx - tw / 2} y={y - 8} width={tw} height={14} rx={3} fill="#2563eb" opacity={0.9} />
+                  <text x={mx} y={y + 2} textAnchor="middle" fontSize={8} fontWeight="bold" fill="white">{lbl}</text>
+                </g>
+              );
+            };
+
+            // Draw a single vertical dimension line
+            const vDimLine = (y1: number, y2: number, x: number, lbl: string, key: string) => {
+              const my = (y1 + y2) / 2;
+              const tw = Math.max(50, lbl.length * 6 + 10);
+              dimLines.push(
+                <g key={key}>
+                  <line x1={x} y1={y1} x2={x} y2={y2} stroke="#2563eb" strokeWidth={1} />
+                  <line x1={x - 5} y1={y1} x2={x + 5} y2={y1} stroke="#2563eb" strokeWidth={1.5} />
+                  <line x1={x - 5} y1={y2} x2={x + 5} y2={y2} stroke="#2563eb" strokeWidth={1.5} />
+                  <rect x={x - tw / 2} y={my - 7} width={tw} height={14} rx={3} fill="#2563eb" opacity={0.9} />
+                  <text x={x} y={my + 3} textAnchor="middle" fontSize={8} fontWeight="bold" fill="white">{lbl}</text>
+                </g>
+              );
+            };
+
+            // Multi-level horizontal dimensions
+            // direction: -1 = upward (top side), +1 = downward (bottom side)
+            const hDimsMulti = (pts: CP[], baseY: number, prefix: string, dir: number) => {
+              if (pts.length < 2) return;
+              const getX = (p: CP) => COL_HEADER_W + (p.col - 1) * CS;
+              if (pts.length >= 3) {
+                // Level 0 (furthest from grid): full span
+                const y0 = baseY + dir * LEVEL_STEP;
+                const first = pts[0], last = pts[pts.length - 1];
+                const blocks = last.col - first.col;
+                if (blocks > 0) hDimLine(getX(first), getX(last), y0, fmtDist(blocks), `${prefix}-full`);
+                // Level 1 (closer to grid): consecutive segments
+                for (let i = 0; i < pts.length - 1; i++) {
+                  const b = pts[i + 1].col - pts[i].col;
+                  if (b > 0) hDimLine(getX(pts[i]), getX(pts[i + 1]), baseY, fmtDist(b), `${prefix}-seg-${i}`);
+                }
+              } else {
+                // Only 2 points: single level
+                const blocks = pts[1].col - pts[0].col;
+                if (blocks > 0) hDimLine(getX(pts[0]), getX(pts[1]), baseY, fmtDist(blocks), `${prefix}-0`);
               }
             };
 
-            // Vertical dimension segments
-            const vDims = (pts: CP[], x: number, prefix: string) => {
-              for (let i = 0; i < pts.length - 1; i++) {
-                const y1 = ROW_HEADER_H + (pts[i].row - 1) * CS;
-                const y2 = ROW_HEADER_H + (pts[i + 1].row - 1) * CS;
-                const blocks = pts[i + 1].row - pts[i].row;
-                if (blocks <= 0) continue;
-                const lbl = fmtDist(blocks);
-                const my = (y1 + y2) / 2;
-                const tw = Math.max(50, lbl.length * 6 + 10);
-                dimLines.push(
-                  <g key={`${prefix}-${i}`}>
-                    <line x1={x} y1={y1} x2={x} y2={y2} stroke="#2563eb" strokeWidth={1} />
-                    <line x1={x - 5} y1={y1} x2={x + 5} y2={y1} stroke="#2563eb" strokeWidth={1.5} />
-                    <line x1={x - 5} y1={y2} x2={x + 5} y2={y2} stroke="#2563eb" strokeWidth={1.5} />
-                    <rect x={x - tw / 2} y={my - 7} width={tw} height={14} rx={3} fill="#2563eb" opacity={0.9} />
-                    <text x={x} y={my + 3} textAnchor="middle" fontSize={8} fontWeight="bold" fill="white">{lbl}</text>
-                  </g>
-                );
+            // Multi-level vertical dimensions
+            const vDimsMulti = (pts: CP[], baseX: number, prefix: string, dir: number) => {
+              if (pts.length < 2) return;
+              const getY = (p: CP) => ROW_HEADER_H + (p.row - 1) * CS;
+              if (pts.length >= 3) {
+                const x0 = baseX + dir * LEVEL_STEP;
+                const first = pts[0], last = pts[pts.length - 1];
+                const blocks = last.row - first.row;
+                if (blocks > 0) vDimLine(getY(first), getY(last), x0, fmtDist(blocks), `${prefix}-full`);
+                for (let i = 0; i < pts.length - 1; i++) {
+                  const b = pts[i + 1].row - pts[i].row;
+                  if (b > 0) vDimLine(getY(pts[i]), getY(pts[i + 1]), baseX, fmtDist(b), `${prefix}-seg-${i}`);
+                }
+              } else {
+                const blocks = pts[1].row - pts[0].row;
+                if (blocks > 0) vDimLine(getY(pts[0]), getY(pts[1]), baseX, fmtDist(blocks), `${prefix}-0`);
               }
             };
 
-            hDims(topAll, ROW_HEADER_H + (minRow - 1) * CS - DIM_OFF_INNER, 'dt');
-            hDims(bottomAll, ROW_HEADER_H + (maxRow - 1) * CS + CS + DIM_OFF_OUTER, 'db');
-            vDims(leftAll, COL_HEADER_W + (minCol - 1) * CS - DIM_OFF_INNER, 'dl');
-            vDims(rightAll, COL_HEADER_W + (maxCol - 1) * CS + CS + DIM_OFF_OUTER, 'dr');
+            hDimsMulti(topAll, ROW_HEADER_H + (minRow - 1) * CS - DIM_OFF_INNER, 'dt', -1);
+            hDimsMulti(bottomAll, ROW_HEADER_H + (maxRow - 1) * CS + CS + DIM_OFF_OUTER, 'db', 1);
+            vDimsMulti(leftAll, COL_HEADER_W + (minCol - 1) * CS - DIM_OFF_INNER, 'dl', -1);
+            vDimsMulti(rightAll, COL_HEADER_W + (maxCol - 1) * CS + CS + DIM_OFF_OUTER, 'dr', 1);
 
             return (
               <svg className="absolute inset-0 pointer-events-none" style={{

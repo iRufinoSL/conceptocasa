@@ -380,7 +380,17 @@ export function FloorPlanGridView({
       { label: `${lp}C`, col: boundingBox.maxCol, row: boundingBox.maxRow, side: 'bottom', isMain: true, mainPosition: 'BR', floorId: currentFloorId },
       { label: `${lp}D`, col: boundingBox.minCol, row: boundingBox.maxRow, side: 'bottom', isMain: true, mainPosition: 'BL', floorId: currentFloorId },
     ];
-    setCustomCorners([...customCorners, ...mainCorners]);
+    // Auto-generate eave (alero) markers for bajo cubierta floors: ±1 block outward on all 4 sides
+    const eaveCorners: CustomCorner[] = [];
+    if (isBajoCubierta) {
+      eaveCorners.push(
+        { label: `Al${lp}A`, col: boundingBox.minCol - 1, row: boundingBox.minRow - 1, side: 'top', isEave: true, floorId: currentFloorId },
+        { label: `Al${lp}B`, col: boundingBox.maxCol + 1, row: boundingBox.minRow - 1, side: 'top', isEave: true, floorId: currentFloorId },
+        { label: `Al${lp}C`, col: boundingBox.maxCol + 1, row: boundingBox.maxRow + 1, side: 'bottom', isEave: true, floorId: currentFloorId },
+        { label: `Al${lp}D`, col: boundingBox.minCol - 1, row: boundingBox.maxRow + 1, side: 'bottom', isEave: true, floorId: currentFloorId },
+      );
+    }
+    setCustomCorners([...customCorners, ...mainCorners, ...eaveCorners]);
     autoInitRef.current.add(currentFloorId);
   }, [boundingBox, currentFloorId]);
 

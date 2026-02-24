@@ -1186,6 +1186,7 @@ export function FloorPlanTab({ budgetId, budgetName = '', isAdmin }: FloorPlanTa
           onAddOpening={(wallId, type, w, h, sh) => addOpening(wallId, type, w, h, sh)}
           onDeleteOpening={deleteOpening}
           onUpdateWall={updateWall}
+          onUpdateWallSegmentType={updateWallSegmentType}
           onAddBlockGroup={addBlockGroup}
           onDeleteBlockGroup={deleteBlockGroup}
           onUpdateBlockGroup={updateBlockGroup}

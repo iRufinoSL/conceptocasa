@@ -946,33 +946,37 @@ export function FloorPlanGridView({
               return lp && !s.startsWith(lp) ? `${lp}${s}` : s;
             };
 
-            type CP = { label: string; col: number; row: number };
-            // Custom corners use their stored col/row directly (first mm of the block)
-            // Distance between consecutive markers = nextCol - currentCol blocks
-            const customByS = (side: string) =>
-              floorCorners.filter(c => !c.isMain && c.side === side).map(c => ({ label: c.label, col: c.col, row: c.row }));
+            type CP = { label: string; col: number; row: number; side?: string };
+            // Classify custom corners to building edges by POSITION, not by side property.
+            // side='right'/'bottom' on a marker means the arrow direction, NOT the edge it belongs to.
+            // A marker at row==minRow is on the TOP edge regardless of its arrow direction.
+            const nonMainCorners = floorCorners.filter(c => !c.isMain);
+            const customOnTop = nonMainCorners.filter(c => c.row === minRow).map(c => ({ label: c.label, col: c.col, row: c.row, side: c.side }));
+            const customOnBottom = nonMainCorners.filter(c => c.row === maxRow).map(c => ({ label: c.label, col: c.col, row: c.row, side: c.side }));
+            const customOnLeft = nonMainCorners.filter(c => c.col === minCol && c.row !== minRow && c.row !== maxRow).map(c => ({ label: c.label, col: c.col, row: c.row, side: c.side }));
+            const customOnRight = nonMainCorners.filter(c => c.col === maxCol && c.row !== minRow && c.row !== maxRow).map(c => ({ label: c.label, col: c.col, row: c.row, side: c.side }));
 
             const topAll: CP[] = [
               { label: getMainLbl('TL', 'A'), col: minCol, row: minRow },
-              ...customByS('top'),
+              ...customOnTop,
               { label: getMainLbl('TR', 'B'), col: maxCol, row: minRow },
             ].sort((a, b) => a.col - b.col);
 
             const bottomAll: CP[] = [
               { label: getMainLbl('BL', 'D'), col: minCol, row: maxRow },
-              ...customByS('bottom'),
+              ...customOnBottom,
               { label: getMainLbl('BR', 'C'), col: maxCol, row: maxRow },
             ].sort((a, b) => a.col - b.col);
 
             const leftAll: CP[] = [
               { label: getMainLbl('TL', 'A'), col: minCol, row: minRow },
-              ...customByS('left'),
+              ...customOnLeft,
               { label: getMainLbl('BL', 'D'), col: minCol, row: maxRow },
             ].sort((a, b) => a.row - b.row);
 
             const rightAll: CP[] = [
               { label: getMainLbl('TR', 'B'), col: maxCol, row: minRow },
-              ...customByS('right'),
+              ...customOnRight,
               { label: getMainLbl('BR', 'C'), col: maxCol, row: maxRow },
             ].sort((a, b) => a.row - b.row);
 
@@ -1019,41 +1023,54 @@ export function FloorPlanGridView({
             // direction: -1 = upward (top side), +1 = downward (bottom side)
             const hDimsMulti = (pts: CP[], baseY: number, prefix: string, dir: number) => {
               if (pts.length < 2) return;
-              const getX = (p: CP) => COL_HEADER_W + (p.col - 1) * CS;
+              // X position: if marker side is 'right', use col*CS (last mm); otherwise (col-1)*CS (first mm)
+              const getX = (p: CP) => {
+                const useLastMm = p.side === 'right' || p.side === 'bottom';
+                return COL_HEADER_W + (useLastMm ? p.col : (p.col - 1)) * CS;
+              };
               if (pts.length >= 3) {
                 // Level 0 (furthest from grid): full span
                 const y0 = baseY + dir * LEVEL_STEP;
                 const first = pts[0], last = pts[pts.length - 1];
-                const blocks = last.col - first.col;
-                if (blocks > 0) hDimLine(getX(first), getX(last), y0, fmtDist(blocks), `${prefix}-full`);
+                const x1 = getX(first), x2 = getX(last);
+                const blocks = Math.round(Math.abs(x2 - x1) / CS);
+                if (blocks > 0) hDimLine(Math.min(x1, x2), Math.max(x1, x2), y0, fmtDist(blocks), `${prefix}-full`);
                 // Level 1 (closer to grid): consecutive segments
                 for (let i = 0; i < pts.length - 1; i++) {
-                  const b = pts[i + 1].col - pts[i].col;
-                  if (b > 0) hDimLine(getX(pts[i]), getX(pts[i + 1]), baseY, fmtDist(b), `${prefix}-seg-${i}`);
+                  const xa = getX(pts[i]), xb = getX(pts[i + 1]);
+                  const b = Math.round(Math.abs(xb - xa) / CS);
+                  if (b > 0) hDimLine(Math.min(xa, xb), Math.max(xa, xb), baseY, fmtDist(b), `${prefix}-seg-${i}`);
                 }
               } else {
-                // Only 2 points: single level
-                const blocks = pts[1].col - pts[0].col;
-                if (blocks > 0) hDimLine(getX(pts[0]), getX(pts[1]), baseY, fmtDist(blocks), `${prefix}-0`);
+                const x1 = getX(pts[0]), x2 = getX(pts[1]);
+                const blocks = Math.round(Math.abs(x2 - x1) / CS);
+                if (blocks > 0) hDimLine(Math.min(x1, x2), Math.max(x1, x2), baseY, fmtDist(blocks), `${prefix}-0`);
               }
             };
 
             // Multi-level vertical dimensions
             const vDimsMulti = (pts: CP[], baseX: number, prefix: string, dir: number) => {
               if (pts.length < 2) return;
-              const getY = (p: CP) => ROW_HEADER_H + (p.row - 1) * CS;
+              // Y position: if marker side is 'bottom' or 'right', use row*CS (last mm); otherwise (row-1)*CS
+              const getY = (p: CP) => {
+                const useLastMm = p.side === 'bottom' || p.side === 'right';
+                return ROW_HEADER_H + (useLastMm ? p.row : (p.row - 1)) * CS;
+              };
               if (pts.length >= 3) {
                 const x0 = baseX + dir * LEVEL_STEP;
                 const first = pts[0], last = pts[pts.length - 1];
-                const blocks = last.row - first.row;
-                if (blocks > 0) vDimLine(getY(first), getY(last), x0, fmtDist(blocks), `${prefix}-full`);
+                const y1 = getY(first), y2 = getY(last);
+                const blocks = Math.round(Math.abs(y2 - y1) / CS);
+                if (blocks > 0) vDimLine(Math.min(y1, y2), Math.max(y1, y2), x0, fmtDist(blocks), `${prefix}-full`);
                 for (let i = 0; i < pts.length - 1; i++) {
-                  const b = pts[i + 1].row - pts[i].row;
-                  if (b > 0) vDimLine(getY(pts[i]), getY(pts[i + 1]), baseX, fmtDist(b), `${prefix}-seg-${i}`);
+                  const ya = getY(pts[i]), yb = getY(pts[i + 1]);
+                  const b = Math.round(Math.abs(yb - ya) / CS);
+                  if (b > 0) vDimLine(Math.min(ya, yb), Math.max(ya, yb), baseX, fmtDist(b), `${prefix}-seg-${i}`);
                 }
               } else {
-                const blocks = pts[1].row - pts[0].row;
-                if (blocks > 0) vDimLine(getY(pts[0]), getY(pts[1]), baseX, fmtDist(blocks), `${prefix}-0`);
+                const y1 = getY(pts[0]), y2 = getY(pts[1]);
+                const blocks = Math.round(Math.abs(y2 - y1) / CS);
+                if (blocks > 0) vDimLine(Math.min(y1, y2), Math.max(y1, y2), baseX, fmtDist(blocks), `${prefix}-0`);
               }
             };
 

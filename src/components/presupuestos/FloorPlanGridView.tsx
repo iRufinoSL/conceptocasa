@@ -940,10 +940,10 @@ export function FloorPlanGridView({
             };
 
             type CP = { label: string; col: number; row: number };
-            // Custom corners: +1 to col/row so they represent the RIGHT/BOTTOM edge of their cell
-            // This way block count = nextCol - currentCol matches real block count
+            // Custom corners use their stored col/row directly (first mm of the block)
+            // Distance between consecutive markers = nextCol - currentCol blocks
             const customByS = (side: string) =>
-              floorCorners.filter(c => !c.isMain && c.side === side).map(c => ({ label: c.label, col: c.col + 1, row: c.row + 1 }));
+              floorCorners.filter(c => !c.isMain && c.side === side).map(c => ({ label: c.label, col: c.col, row: c.row }));
 
             const topAll: CP[] = [
               { label: getMainLbl('TL', 'A'), col: minCol, row: minRow },

@@ -1496,7 +1496,7 @@ function ElevationCardView({ card, plan, onOpeningClick, onAddOpening, onCardDou
               )}
             </div>
           </div>
-          <div className="flex items-center gap-1 shrink-0">
+          <div className="flex items-center gap-1 shrink-0 flex-wrap justify-end max-w-[55%]">
             {blockCount && (
               <Badge variant="outline" className="text-[9px] h-4 bg-accent/30">
                 {blockCount.total} bloques ({blockCount.cols}×{blockCount.rows}) · {plan.blockLengthMm}×{plan.blockHeightMm}mm

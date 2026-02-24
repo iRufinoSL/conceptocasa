@@ -1814,15 +1814,22 @@ export function computeCompositeWallsFromCorners(
     return 'left';
   };
 
-  // Convert user custom corners to absolute coordinates based on their PHYSICAL edge
+  // Convert user custom corners to absolute coordinates based on their PHYSICAL edge.
+  // CRITICAL: Markers with side='right'/'bottom' point to the LAST mm of their cell
+  // (col*cellSizeM / row*cellSizeM), while 'top'/'left' point to the FIRST mm
+  // ((col-1)*cellSizeM / (row-1)*cellSizeM). Using the original side property ensures
+  // measurements match the grid's block-counting precision.
   const customAbsolute = userCorners.map(cc => {
     const edge = classifyEdge(cc);
+    const isLastMm = cc.side === 'right' || cc.side === 'bottom';
+    const xFromCol = isLastMm ? cc.col * cellSizeM : (cc.col - 1) * cellSizeM;
+    const yFromRow = isLastMm ? cc.row * cellSizeM : (cc.row - 1) * cellSizeM;
     let x: number, y: number;
     switch (edge) {
-      case 'top': x = (cc.col - 1) * cellSizeM; y = minY; break;
-      case 'bottom': x = (cc.col - 1) * cellSizeM; y = maxY; break;
-      case 'left': x = minX; y = (cc.row - 1) * cellSizeM; break;
-      case 'right': x = maxX; y = (cc.row - 1) * cellSizeM; break;
+      case 'top': x = xFromCol; y = minY; break;
+      case 'bottom': x = xFromCol; y = maxY; break;
+      case 'left': x = minX; y = yFromRow; break;
+      case 'right': x = maxX; y = yFromRow; break;
     }
     return { label: cc.label, x, y, side: edge };
   });
@@ -2054,7 +2061,8 @@ export function computeCompositeWallsFromCorners(
   });
 
   verticalPairs.forEach(({ top: tc, bottom: bc }) => {
-    const wallX = (tc.col - 1) * cellSizeM;
+    const isLastMmTc = tc.side === 'right' || tc.side === 'bottom';
+    const wallX = isLastMmTc ? tc.col * cellSizeM : (tc.col - 1) * cellSizeM;
     // Skip if on the perimeter boundary
     if (Math.abs(wallX - minX) < EPSILON || Math.abs(wallX - maxX) < EPSILON) return;
 
@@ -2201,7 +2209,8 @@ export function computeCompositeWallsFromCorners(
   });
 
   horizontalPairs.forEach(({ left: lc, right: rc }) => {
-    const wallY = (lc.row - 1) * cellSizeM;
+    const isLastMmLc = lc.side === 'right' || lc.side === 'bottom';
+    const wallY = isLastMmLc ? lc.row * cellSizeM : (lc.row - 1) * cellSizeM;
     if (Math.abs(wallY - minY) < EPSILON || Math.abs(wallY - maxY) < EPSILON) return;
 
     const edgeStartX = minX;

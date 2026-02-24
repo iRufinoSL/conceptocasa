@@ -1773,12 +1773,21 @@ export function computeCompositeWallsFromCorners(
 
   const ewt = plan.externalWallThickness;
 
-  // Main ABCD corners (interior room boundary coordinates)
+  // Derive level prefix from user corners (e.g. "1A1" → "1")
+  const levelPrefix = (() => {
+    for (const uc of userCorners) {
+      const m = uc.label.match(/^(\d+)[A-Z]/i);
+      if (m) return m[1];
+    }
+    return '';
+  })();
+
+  // Main ABCD corners (interior room boundary coordinates) — with full coordinate ID
   const mainCorners: Array<{ label: string; x: number; y: number; side: 'top' | 'right' | 'bottom' | 'left' }> = [
-    { label: 'A', x: minX, y: minY, side: 'top' },
-    { label: 'B', x: maxX, y: minY, side: 'right' },
-    { label: 'C', x: maxX, y: maxY, side: 'bottom' },
-    { label: 'D', x: minX, y: maxY, side: 'left' },
+    { label: `${levelPrefix}A`, x: minX, y: minY, side: 'top' },
+    { label: `${levelPrefix}B`, x: maxX, y: minY, side: 'right' },
+    { label: `${levelPrefix}C`, x: maxX, y: maxY, side: 'bottom' },
+    { label: `${levelPrefix}D`, x: minX, y: maxY, side: 'left' },
   ];
 
   // Compute grid bounding box (exclusive, matching FloorPlanGridView)
@@ -1862,8 +1871,8 @@ export function computeCompositeWallsFromCorners(
       if (interiorLength < EPSILON) continue;
       // Exterior edge length: add wall thickness at each end (perpendicular walls)
       // Only add thickness at corners that are main ABCD corners (not custom intermediate ones)
-      const isV1Main = ['A', 'B', 'C', 'D'].includes(v1.label);
-      const isV2Main = ['A', 'B', 'C', 'D'].includes(v2.label);
+      const isV1Main = /^(\d*)([A-D])$/i.test(v1.label);
+      const isV2Main = /^(\d*)([A-D])$/i.test(v2.label);
       let edgeLength = interiorLength + (isV1Main ? ewt : 0) + (isV2Main ? ewt : 0);
       // In block mode, snap to exact block count so measurements match the grid
       if (plan.scaleMode === 'bloque') {

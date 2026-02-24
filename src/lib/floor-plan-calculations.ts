@@ -2039,58 +2039,56 @@ export function computeCompositeWallsFromCorners(
     }
   });
 
-  // ── Cross-side composite walls: markers sharing the same original col or row ──
-  // Include ALL markers (main + custom) so main-to-custom pairs like A-B, A-D, D-C are generated.
-  // Build a unified list with col/row info for every marker.
-  const allMarkersWithGrid: Array<{ label: string; col: number; row: number; side: string; isMain: boolean }> = [];
-  // Add main ABCD with their grid positions
+  // ── Cross-side composite walls: markers sharing the same absolute X or Y ──
+  // Compute absolute metric position for each marker:
+  //   X: side='right' → col * cellSize (right edge), else (col-1) * cellSize (left edge)
+  //   Y: side='bottom' → row * cellSize (bottom edge), else (row-1) * cellSize (top edge)
+  const allMarkersAbs: Array<{ label: string; col: number; row: number; side: string; isMain: boolean; absX: number; absY: number }> = [];
   const mainGridPositions: Array<{ label: string; col: number; row: number; side: string }> = [
     { label: mainCorners[0].label, col: gridMinCol, row: gridMinRow, side: 'top' },    // A
     { label: mainCorners[1].label, col: gridMaxCol, row: gridMinRow, side: 'right' },   // B
     { label: mainCorners[2].label, col: gridMaxCol, row: gridMaxRow, side: 'bottom' },  // C
     { label: mainCorners[3].label, col: gridMinCol, row: gridMaxRow, side: 'left' },    // D
   ];
-  mainGridPositions.forEach(mg => allMarkersWithGrid.push({ ...mg, isMain: true }));
+  const markerAbsX = (col: number, side: string) => side === 'right' ? col * cellSizeM : (col - 1) * cellSizeM;
+  const markerAbsY = (row: number, side: string) => side === 'bottom' ? row * cellSizeM : (row - 1) * cellSizeM;
+  mainGridPositions.forEach(mg => allMarkersAbs.push({ ...mg, isMain: true, absX: markerAbsX(mg.col, mg.side), absY: markerAbsY(mg.row, mg.side) }));
   userCorners.forEach(c => {
-    if ((c as any).isMain) return; // skip main duplicates already added
-    allMarkersWithGrid.push({ label: c.label, col: c.col, row: c.row, side: c.side, isMain: false });
+    if ((c as any).isMain) return;
+    allMarkersAbs.push({ label: c.label, col: c.col, row: c.row, side: c.side, isMain: false, absX: markerAbsX(c.col, c.side), absY: markerAbsY(c.row, c.side) });
   });
 
   // Track perimeter edge labels to avoid duplicating them as cross-side
   const perimeterLabels = new Set<string>();
   composites.forEach(cw => perimeterLabels.add(cw.label));
 
-  // Vertical interior walls: pairs of markers sharing the same col
-  const colGroups = new Map<number, typeof allMarkersWithGrid>();
-  allMarkersWithGrid.forEach(c => {
-    const arr = colGroups.get(c.col) || [];
-    arr.push(c);
-    colGroups.set(c.col, arr);
-  });
-  const verticalPairs: Array<{ top: typeof allMarkersWithGrid[0]; bottom: typeof allMarkersWithGrid[0] }> = [];
-  colGroups.forEach(group => {
-    if (group.length < 2) return;
-    group.sort((a, b) => a.row - b.row);
-    for (let i = 0; i < group.length - 1; i++) {
-      verticalPairs.push({ top: group[i], bottom: group[i + 1] });
+  // Group markers by absolute X position (tolerance = half a block) for vertical pairs
+  const CROSS_TOL = cellSizeM * 0.5;
+  const verticalPairs: Array<{ top: typeof allMarkersAbs[0]; bottom: typeof allMarkersAbs[0] }> = [];
+  for (let i = 0; i < allMarkersAbs.length; i++) {
+    for (let j = i + 1; j < allMarkersAbs.length; j++) {
+      const a = allMarkersAbs[i], b = allMarkersAbs[j];
+      if (Math.abs(a.absX - b.absX) <= CROSS_TOL) {
+        // Same vertical line - pair them top-to-bottom (lower absY first)
+        if (Math.abs(a.absY - b.absY) < EPSILON) continue; // same point
+        const [top, bottom] = a.absY <= b.absY ? [a, b] : [b, a];
+        verticalPairs.push({ top, bottom });
+      }
     }
-  });
+  }
 
   verticalPairs.forEach(({ top: tc, bottom: bc }) => {
-    // Skip if already generated as perimeter elevation
+    // Enforce top-to-bottom label ordering (top marker first)
     const pairLabel = `${tc.label}-${bc.label}`;
     const pairLabelRev = `${bc.label}-${tc.label}`;
     if (perimeterLabels.has(pairLabel) || perimeterLabels.has(pairLabelRev)) return;
+    // Also skip if reverse was already added as cross-side
+    const existingLabels = new Set(composites.map(c => c.label));
+    if (existingLabels.has(pairLabel) || existingLabels.has(pairLabelRev)) return;
 
-    const isLastMmTc = tc.side === 'right' || tc.side === 'bottom';
-    const wallX = isLastMmTc ? tc.col * cellSizeM : (tc.col - 1) * cellSizeM;
-
-    // Compute Y span from the two markers (NOT the full building span)
-    const isLastMmBc = bc.side === 'right' || bc.side === 'bottom';
-    const tcY = isLastMmTc ? tc.row * cellSizeM : (tc.row - 1) * cellSizeM;
-    const bcY = isLastMmBc ? bc.row * cellSizeM : (bc.row - 1) * cellSizeM;
-    const edgeStartY = Math.min(tcY, bcY);
-    const edgeEndY = Math.max(tcY, bcY);
+    const wallX = (tc.absX + bc.absX) / 2; // average (they should be nearly identical)
+    const edgeStartY = tc.absY;
+    const edgeEndY = bc.absY;
     let edgeLength = edgeEndY - edgeStartY;
     if (edgeLength < EPSILON) return;
 
@@ -2216,37 +2214,31 @@ export function computeCompositeWallsFromCorners(
     });
   });
 
-  // Horizontal interior walls: pairs of markers sharing the same row
-  const rowGroups = new Map<number, typeof allMarkersWithGrid>();
-  allMarkersWithGrid.forEach(c => {
-    const arr = rowGroups.get(c.row) || [];
-    arr.push(c);
-    rowGroups.set(c.row, arr);
-  });
-  const horizontalPairs: Array<{ left: typeof allMarkersWithGrid[0]; right: typeof allMarkersWithGrid[0] }> = [];
-  rowGroups.forEach(group => {
-    if (group.length < 2) return;
-    group.sort((a, b) => a.col - b.col);
-    for (let i = 0; i < group.length - 1; i++) {
-      horizontalPairs.push({ left: group[i], right: group[i + 1] });
+  // Horizontal interior walls: pairs of markers sharing the same absolute Y
+  const horizontalPairs: Array<{ left: typeof allMarkersAbs[0]; right: typeof allMarkersAbs[0] }> = [];
+  for (let i = 0; i < allMarkersAbs.length; i++) {
+    for (let j = i + 1; j < allMarkersAbs.length; j++) {
+      const a = allMarkersAbs[i], b = allMarkersAbs[j];
+      if (Math.abs(a.absY - b.absY) <= CROSS_TOL) {
+        if (Math.abs(a.absX - b.absX) < EPSILON) continue; // same point
+        // Left-to-right ordering (lower absX first)
+        const [left, right] = a.absX <= b.absX ? [a, b] : [b, a];
+        horizontalPairs.push({ left, right });
+      }
     }
-  });
+  }
 
   horizontalPairs.forEach(({ left: lc, right: rc }) => {
-    // Skip if already generated as perimeter elevation
+    // Enforce left-to-right label ordering
     const pairLabel = `${lc.label}-${rc.label}`;
     const pairLabelRev = `${rc.label}-${lc.label}`;
     if (perimeterLabels.has(pairLabel) || perimeterLabels.has(pairLabelRev)) return;
+    const existingLabels = new Set(composites.map(c => c.label));
+    if (existingLabels.has(pairLabel) || existingLabels.has(pairLabelRev)) return;
 
-    const isLastMmLc = lc.side === 'right' || lc.side === 'bottom';
-    const wallY = isLastMmLc ? lc.row * cellSizeM : (lc.row - 1) * cellSizeM;
-
-    // Compute X span from the two markers (NOT the full building span)
-    const isLastMmRc = rc.side === 'right' || rc.side === 'bottom';
-    const lcX = isLastMmLc ? lc.col * cellSizeM : (lc.col - 1) * cellSizeM;
-    const rcX = isLastMmRc ? rc.col * cellSizeM : (rc.col - 1) * cellSizeM;
-    const edgeStartX = Math.min(lcX, rcX);
-    const edgeEndX = Math.max(lcX, rcX);
+    const wallY = (lc.absY + rc.absY) / 2;
+    const edgeStartX = lc.absX;
+    const edgeEndX = rc.absX;
     let edgeLength = edgeEndX - edgeStartX;
     if (edgeLength < EPSILON) return;
 

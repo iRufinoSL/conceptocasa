@@ -764,16 +764,17 @@ export function FloorPlanGridView({
             const customMarkers = floorCorners
               .filter(c => !c.isMain)
               .map(cc => {
-                const colCenter = COL_HEADER_W + (cc.col - 1) * CS + CS / 2;
-                const rowCenter = ROW_HEADER_H + (cc.row - 1) * CS + CS / 2;
+                // Arrow target: top-left first mm of the block at (col, row)
+                const targetX = COL_HEADER_W + (cc.col - 1) * CS;
+                const targetY = ROW_HEADER_H + (cc.row - 1) * CS;
                 let left: number, top: number;
                 switch (cc.side) {
-                  case 'top':    left = colCenter; top = ROW_HEADER_H + (cc.row - 1) * CS - 22; break;
-                  case 'bottom': left = colCenter; top = ROW_HEADER_H + cc.row * CS + 6; break;
-                  case 'left':   left = COL_HEADER_W + (cc.col - 1) * CS - 22; top = rowCenter; break;
-                  case 'right':  left = COL_HEADER_W + cc.col * CS + 6; top = rowCenter; break;
+                  case 'top':    left = targetX; top = ROW_HEADER_H + (cc.row - 1) * CS - 26; break;
+                  case 'bottom': left = targetX; top = ROW_HEADER_H + cc.row * CS + 6; break;
+                  case 'left':   left = COL_HEADER_W + (cc.col - 1) * CS - 26; top = targetY; break;
+                  case 'right':  left = COL_HEADER_W + cc.col * CS + 6; top = targetY; break;
                 }
-                return { label: cc.label, left, top, idx: customCorners.indexOf(cc), isMain: false };
+                return { label: cc.label, left, top, idx: customCorners.indexOf(cc), isMain: false, arrowTargetX: targetX, arrowTargetY: targetY };
               });
 
             const allCorners = [...mainCorners, ...customMarkers];
@@ -856,7 +857,7 @@ export function FloorPlanGridView({
                   ) : (
                     <div
                       className="flex items-center justify-center rounded-full bg-primary text-primary-foreground font-bold text-[10px] cursor-pointer hover:ring-2 hover:ring-primary/50 transition-all"
-                      style={{ width: 20, height: 16 }}
+                      style={{ width: 26, height: 20, minWidth: 26 }}
                       title={`Clic para editar ${c.label}`}
                       onClick={() => {
                         if (c.idx >= 0) {
@@ -876,7 +877,58 @@ export function FloorPlanGridView({
             });
           })()}
 
-          {/* Dimension lines between corner markers */}
+          {/* Arrow lines from custom markers to their exact target point (first mm, top-left of block) */}
+          {showCorners && placedRooms.length > 0 && (() => {
+            const customOnly = floorCorners.filter(c => !c.isMain);
+            if (customOnly.length === 0) return null;
+            return (
+              <svg className="absolute inset-0 pointer-events-none" style={{
+                width: COL_HEADER_W + totalCols * CS + 100,
+                height: ROW_HEADER_H + totalRows * CS + 100,
+                zIndex: 29,
+                overflow: 'visible',
+              }}>
+                {customOnly.map((cc, i) => {
+                  // Target: top-left first mm of the block
+                  const targetX = COL_HEADER_W + (cc.col - 1) * CS;
+                  const targetY = ROW_HEADER_H + (cc.row - 1) * CS;
+                  // Marker center position
+                  let markerX: number, markerY: number;
+                  switch (cc.side) {
+                    case 'top':    markerX = targetX; markerY = ROW_HEADER_H + (cc.row - 1) * CS - 16; break;
+                    case 'bottom': markerX = targetX; markerY = ROW_HEADER_H + cc.row * CS + 16; break;
+                    case 'left':   markerX = COL_HEADER_W + (cc.col - 1) * CS - 16; markerY = targetY; break;
+                    case 'right':  markerX = COL_HEADER_W + cc.col * CS + 16; markerY = targetY; break;
+                  }
+                  // Arrow head size
+                  const dx = targetX - markerX;
+                  const dy = targetY - markerY;
+                  const len = Math.sqrt(dx * dx + dy * dy);
+                  if (len < 2) return null;
+                  const ux = dx / len, uy = dy / len;
+                  const arrowSize = 4;
+                  const tipX = targetX;
+                  const tipY = targetY;
+                  const baseX = tipX - ux * arrowSize;
+                  const baseY = tipY - uy * arrowSize;
+                  const perpX = -uy * arrowSize * 0.5;
+                  const perpY = ux * arrowSize * 0.5;
+                  return (
+                    <g key={`arrow-${cc.label}-${i}`}>
+                      <line x1={markerX} y1={markerY} x2={targetX} y2={targetY}
+                        stroke="#2563eb" strokeWidth={1.2} />
+                      <polygon
+                        points={`${tipX},${tipY} ${baseX + perpX},${baseY + perpY} ${baseX - perpX},${baseY - perpY}`}
+                        fill="#2563eb"
+                      />
+                      <circle cx={targetX} cy={targetY} r={2.5} fill="#2563eb" />
+                    </g>
+                  );
+                })}
+              </svg>
+            );
+          })()}
+
           {showCorners && placedRooms.length > 0 && boundingBox && (() => {
             const { minCol, minRow, maxCol, maxRow } = boundingBox;
             const mainFromStorage = floorCorners.filter(c => c.isMain);

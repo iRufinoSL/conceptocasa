@@ -2479,13 +2479,22 @@ function CompositeWallCard({ compositeWall, plan, onOpeningClick, onAddBlockGrou
                 const liveRoom = liveRooms?.find(r => r.id === section.roomId);
                 const liveWall = liveRoom?.walls.find(w => w.id === section.wallId);
                 const liveOpenings = liveWall?.openings || section.openings;
-                return liveOpenings.map(op => {
-                  const isHoriz = section.wallIndex === 1 || section.wallIndex === 3;
-                  const fullWallLen = isHoriz
-                    ? (liveRoom?.width || section.length)
-                    : (liveRoom?.length || section.length);
-                  const opCenterFraction = op.positionX;
-                  const opCenterInSection = opCenterFraction * fullWallLen;
+                // Use overlapStart/fullWallLength for precise opening positioning
+                const isHoriz = section.wallIndex === 1 || section.wallIndex === 3;
+                const fullWallLen = section.fullWallLength ?? (isHoriz
+                  ? (liveRoom?.width || section.length)
+                  : (liveRoom?.length || section.length));
+                const sectionOverlapStart = section.overlapStart ?? 0;
+                return liveOpenings.filter(op => {
+                  // Filter: only show openings that actually fall within this section's overlap range
+                  const opAbsCenter = op.positionX * fullWallLen;
+                  const opHalfW = op.width / 2;
+                  return opAbsCenter + opHalfW > sectionOverlapStart - 0.01 &&
+                         opAbsCenter - opHalfW < sectionOverlapStart + section.length + 0.01;
+                }).map(op => {
+                  const opAbsCenter = op.positionX * fullWallLen;
+                  // Position relative to section start
+                  const opCenterInSection = opAbsCenter - sectionOverlapStart;
                   const opWidthPx = op.width * s;
                   const opHeightPx = op.height * s;
                   const sillH = op.sillHeight ?? 0;

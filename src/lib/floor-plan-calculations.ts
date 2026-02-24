@@ -1529,6 +1529,8 @@ export interface CompositeWallSection {
   openings: OpeningData[];
   startOffset: number; // meters from start of composite wall
   isGable?: boolean; // triangular gable wall (bajo cubierta)
+  overlapStart?: number; // absolute start position of this section along the room's wall axis
+  fullWallLength?: number; // full length of the room's wall (for opening position calculation)
 }
 
 export interface CompositeWall {
@@ -1897,7 +1899,7 @@ export function computeCompositeWallsFromCorners(
       const openingCounts: Record<string, number> = {};
 
       // Compute raw section lengths first
-      const rawSections: Array<{ room: RoomData; wall: WallData; sectionLen: number; wallH: number; sectionOpenings: OpeningData[]; isGableWall: boolean }> = [];
+      const rawSections: Array<{ room: RoomData; wall: WallData; sectionLen: number; wallH: number; sectionOpenings: OpeningData[]; isGableWall: boolean; overlapStart: number }> = [];
 
       matchingRooms.forEach(({ room, wall, overlapStart, overlapEnd }) => {
         const sectionLen = overlapEnd - overlapStart;
@@ -1923,7 +1925,7 @@ export function computeCompositeWallsFromCorners(
           return opAbsPos >= overlapStart - EPSILON && opAbsPos <= overlapEnd + EPSILON;
         });
 
-        rawSections.push({ room, wall, sectionLen, wallH, sectionOpenings, isGableWall });
+        rawSections.push({ room, wall, sectionLen, wallH, sectionOpenings, isGableWall, overlapStart });
       });
 
       if (rawSections.length === 0) continue;
@@ -1932,7 +1934,7 @@ export function computeCompositeWallsFromCorners(
       const rawTotal = rawSections.reduce((sum, s) => sum + s.sectionLen, 0);
       const scale = rawTotal > 0 ? edgeLength / rawTotal : 1;
 
-      rawSections.forEach(({ room, wall, sectionLen, wallH, sectionOpenings, isGableWall }) => {
+      rawSections.forEach(({ room, wall, sectionLen, wallH, sectionOpenings, isGableWall, overlapStart }) => {
         let adjustedLen = sectionLen * scale;
         // In block mode, snap individual section to whole blocks
         if (plan.scaleMode === 'bloque') {
@@ -1949,11 +1951,17 @@ export function computeCompositeWallsFromCorners(
           else totalWindows++;
         });
 
+        const isHorizSec = side === 'top' || side === 'bottom';
+        const roomWallStart = isHorizSec ? room.posX : room.posY;
+        const roomFullWallLen = isHorizSec ? room.width : room.length;
+
         sections.push({
           roomId: room.id, roomName: room.name, wallIndex,
           wallId: wall.id, length: adjustedLen, height: wallH,
           wall, openings: sectionOpenings, startOffset: offset,
           isGable: isGableWall,
+          overlapStart: overlapStart,
+          fullWallLength: roomFullWallLen,
         });
         offset += adjustedLen;
       });

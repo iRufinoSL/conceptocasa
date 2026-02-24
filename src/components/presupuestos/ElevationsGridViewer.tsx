@@ -2498,14 +2498,17 @@ function CompositeWallCard({ compositeWall, plan, onOpeningClick, onAddBlockGrou
                   ? (liveRoom?.width || section.length)
                   : (liveRoom?.length || section.length));
                 const sectionOverlapStart = section.overlapStart ?? 0;
+                // Room start position to convert relative positionX to absolute coordinates
+                const roomStart = isHoriz ? (liveRoom?.posX ?? 0) : (liveRoom?.posY ?? 0);
                 return liveOpenings.filter(op => {
                   // Filter: only show openings that actually fall within this section's overlap range
-                  const opAbsCenter = op.positionX * fullWallLen;
+                  // opAbsCenter must be in absolute coordinates (same space as sectionOverlapStart)
+                  const opAbsCenter = roomStart + op.positionX * fullWallLen;
                   const opHalfW = op.width / 2;
                   return opAbsCenter + opHalfW > sectionOverlapStart - 0.01 &&
                          opAbsCenter - opHalfW < sectionOverlapStart + section.length + 0.01;
                 }).map(op => {
-                  const opAbsCenter = op.positionX * fullWallLen;
+                  const opAbsCenter = roomStart + op.positionX * fullWallLen;
                   // Position relative to section start
                   const opCenterInSection = opAbsCenter - sectionOverlapStart;
                   const opWidthPx = op.width * s;
@@ -2698,7 +2701,9 @@ function CompositeWallCard({ compositeWall, plan, onOpeningClick, onAddBlockGrou
 
   // PDF export handler — landscape A4
   const handleExportPdf = useCallback(() => {
-    const svgEl = document.querySelector(`[data-composite-pdf="${cw.id}"]`) as SVGSVGElement | null;
+    // Use querySelectorAll and pick the LAST match to get the fullscreen SVG (not the small card behind the dialog)
+    const allSvgs = document.querySelectorAll(`[data-composite-pdf="${cw.id}"]`);
+    const svgEl = (allSvgs.length > 0 ? allSvgs[allSvgs.length - 1] : null) as SVGSVGElement | null;
     if (!svgEl) return;
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
     const pageW = doc.internal.pageSize.getWidth();

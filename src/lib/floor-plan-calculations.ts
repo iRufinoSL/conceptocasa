@@ -1781,26 +1781,43 @@ export function computeCompositeWallsFromCorners(
     { label: 'D', x: minX, y: maxY, side: 'left' },
   ];
 
-  // Convert user custom corners to absolute coordinates
-  // Custom corners are on the PERIMETER, so their position depends on the side
-  // Position uses the RIGHT/BOTTOM edge of the cell (col * cellSizeM) to match grid dimension lines
+  // Compute grid bounding box (exclusive, matching FloorPlanGridView)
+  const gridMinCol = Math.min(...rooms.map(r => Math.round(r.posX / cellSizeM) + 1));
+  const gridMinRow = Math.min(...rooms.map(r => Math.round(r.posY / cellSizeM) + 1));
+  const gridMaxCol = Math.max(...rooms.map(r => Math.round(r.posX / cellSizeM) + 1 + Math.max(1, Math.round(r.width / cellSizeM))));
+  const gridMaxRow = Math.max(...rooms.map(r => Math.round(r.posY / cellSizeM) + 1 + Math.max(1, Math.round(r.length / cellSizeM))));
+
+  // Classify custom corners by PHYSICAL position (not arrow side).
+  // Bounding box uses exclusive coords: maxCol/maxRow = last+1.
+  // User markers use inclusive coords, so right edge = col >= gridMaxCol-1, bottom = row >= gridMaxRow-1.
+  const classifyEdge = (cc: { col: number; row: number; side: string }): 'top' | 'right' | 'bottom' | 'left' => {
+    if (cc.row === gridMinRow) return 'top';
+    if (cc.row >= gridMaxRow - 1) return 'bottom';
+    if (cc.col === gridMinCol) return 'left';
+    if (cc.col >= gridMaxCol - 1) return 'right';
+    // Fallback: use declared side
+    return cc.side as any;
+  };
+
+  // Convert user custom corners to absolute coordinates based on their PHYSICAL edge
   const customAbsolute = userCorners.map(cc => {
+    const edge = classifyEdge(cc);
     let x: number, y: number;
-    switch (cc.side) {
-      case 'top': x = cc.col * cellSizeM; y = minY; break;
-      case 'bottom': x = cc.col * cellSizeM; y = maxY; break;
-      case 'left': x = minX; y = cc.row * cellSizeM; break;
-      case 'right': x = maxX; y = cc.row * cellSizeM; break;
+    switch (edge) {
+      case 'top': x = (cc.col - 1) * cellSizeM; y = minY; break;
+      case 'bottom': x = (cc.col - 1) * cellSizeM; y = maxY; break;
+      case 'left': x = minX; y = (cc.row - 1) * cellSizeM; break;
+      case 'right': x = maxX; y = (cc.row - 1) * cellSizeM; break;
     }
-    return { label: cc.label, x, y, side: cc.side };
+    return { label: cc.label, x, y, side: edge };
   });
 
-  // Group corners by side: top=AB, right=BC, bottom=CD, left=DA
+  // Group corners by physical edge
   const sideCorners: Record<string, Array<{ label: string; x: number; y: number }>> = {
     top: [], right: [], bottom: [], left: [],
   };
 
-  // Add custom corners to their sides
+  // Add custom corners to their physical edges
   // Skip corners marked as isMain — they duplicate the hardcoded ABCD corners
   customAbsolute.forEach((cc, idx) => {
     if ((userCorners[idx] as any).isMain) return;

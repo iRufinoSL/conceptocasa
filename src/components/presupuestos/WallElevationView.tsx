@@ -408,7 +408,7 @@ export function WallElevationView({
               const sillH = getOpeningSillHeight(op);
               const opX = wallX + opCenterInSegment * wallW - opWidthPx / 2;
               const opY = wallY + wallH - opHeightPx - sillH * SCALE;
-              const isDoor = op.openingType === 'puerta' || op.openingType === 'puerta_externa' || op.openingType === 'hueco_paso' || op.openingType === 'ventana_balconera';
+              const isDoor = op.openingType === 'puerta' || op.openingType === 'puerta_externa' || op.openingType === 'hueco_paso';
               const isSelected = selectedOpeningId === op.id;
 
               return (

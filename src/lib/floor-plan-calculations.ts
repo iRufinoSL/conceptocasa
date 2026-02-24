@@ -2098,6 +2098,11 @@ export function computeCompositeWallsFromCorners(
     }
 
     // Find rooms whose RIGHT or LEFT edge touches this vertical line
+    // Use a generous tolerance for matching room edges to the cut line.
+    // Room metric positions may not align exactly with grid-derived marker positions
+    // (e.g. Hab. mediana 2 bottom=6.75 vs marker at row 11 = 6.875, diff=0.125m).
+    const ROOM_EDGE_TOL = cellSizeM * 0.4;
+
     const matchRight: Array<{ room: RoomData; wall: WallData; overlapStart: number; overlapEnd: number }> = [];
     const matchLeft: Array<{ room: RoomData; wall: WallData; overlapStart: number; overlapEnd: number }> = [];
 
@@ -2107,7 +2112,7 @@ export function computeCompositeWallsFromCorners(
       const rStart = room.posY;
       const rEnd = room.posY + room.length;
 
-      if (Math.abs(rRight - wallX) <= EPSILON) {
+      if (Math.abs(rRight - wallX) <= ROOM_EDGE_TOL) {
         const oS = Math.max(edgeStartY, rStart);
         const oE = Math.min(edgeEndY, rEnd);
         if (oE - oS > EPSILON) {
@@ -2115,7 +2120,7 @@ export function computeCompositeWallsFromCorners(
           if (wall) matchRight.push({ room, wall, overlapStart: oS, overlapEnd: oE });
         }
       }
-      if (Math.abs(rLeft - wallX) <= EPSILON) {
+      if (Math.abs(rLeft - wallX) <= ROOM_EDGE_TOL) {
         const oS = Math.max(edgeStartY, rStart);
         const oE = Math.min(edgeEndY, rEnd);
         if (oE - oS > EPSILON) {
@@ -2250,13 +2255,15 @@ export function computeCompositeWallsFromCorners(
     const matchBottom: Array<{ room: RoomData; wall: WallData; overlapStart: number; overlapEnd: number }> = [];
     const matchTop: Array<{ room: RoomData; wall: WallData; overlapStart: number; overlapEnd: number }> = [];
 
+    const ROOM_EDGE_TOL_H = cellSizeM * 0.4;
+
     rooms.forEach(room => {
       const rBottom = room.posY + room.length;
       const rTop = room.posY;
       const rStart = room.posX;
       const rEnd = room.posX + room.width;
 
-      if (Math.abs(rBottom - wallY) <= EPSILON) {
+      if (Math.abs(rBottom - wallY) <= ROOM_EDGE_TOL_H) {
         const oS = Math.max(edgeStartX, rStart);
         const oE = Math.min(edgeEndX, rEnd);
         if (oE - oS > EPSILON) {
@@ -2264,7 +2271,7 @@ export function computeCompositeWallsFromCorners(
           if (wall) matchBottom.push({ room, wall, overlapStart: oS, overlapEnd: oE });
         }
       }
-      if (Math.abs(rTop - wallY) <= EPSILON) {
+      if (Math.abs(rTop - wallY) <= ROOM_EDGE_TOL_H) {
         const oS = Math.max(edgeStartX, rStart);
         const oE = Math.min(edgeEndX, rEnd);
         if (oE - oS > EPSILON) {

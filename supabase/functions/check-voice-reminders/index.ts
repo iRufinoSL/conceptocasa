@@ -11,6 +11,16 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
+    // Verify caller is the scheduler (must send anon key as Bearer token)
+    const authHeader = req.headers.get('Authorization');
+    const expectedKey = Deno.env.get('SUPABASE_ANON_KEY');
+    if (!authHeader || authHeader !== `Bearer ${expectedKey}`) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     // Use service role for scheduled tasks
     const adminClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',

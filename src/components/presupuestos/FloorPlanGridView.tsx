@@ -380,19 +380,29 @@ export function FloorPlanGridView({
       { label: `${lp}C`, col: boundingBox.maxCol, row: boundingBox.maxRow, side: 'bottom', isMain: true, mainPosition: 'BR', floorId: currentFloorId },
       { label: `${lp}D`, col: boundingBox.minCol, row: boundingBox.maxRow, side: 'bottom', isMain: true, mainPosition: 'BL', floorId: currentFloorId },
     ];
-    // Auto-generate eave (alero) markers for bajo cubierta floors: ±1 block outward on all 4 sides
-    const eaveCorners: CustomCorner[] = [];
-    if (isBajoCubierta) {
-      eaveCorners.push(
-        { label: `Al${lp}A`, col: boundingBox.minCol - 1, row: boundingBox.minRow - 1, side: 'top', isEave: true, floorId: currentFloorId },
-        { label: `Al${lp}B`, col: boundingBox.maxCol + 1, row: boundingBox.minRow - 1, side: 'top', isEave: true, floorId: currentFloorId },
-        { label: `Al${lp}C`, col: boundingBox.maxCol + 1, row: boundingBox.maxRow + 1, side: 'bottom', isEave: true, floorId: currentFloorId },
-        { label: `Al${lp}D`, col: boundingBox.minCol - 1, row: boundingBox.maxRow + 1, side: 'bottom', isEave: true, floorId: currentFloorId },
-      );
-    }
-    setCustomCorners([...customCorners, ...mainCorners, ...eaveCorners]);
+    setCustomCorners([...customCorners, ...mainCorners]);
     autoInitRef.current.add(currentFloorId);
   }, [boundingBox, currentFloorId]);
+
+  // Auto-generate eave (alero) markers for bajo cubierta floors if missing
+  const eaveInitRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!isBajoCubierta || !boundingBox || !onCustomCornersChange) return;
+    if (eaveInitRef.current.has(currentFloorId)) return;
+    const hasEaveForFloor = customCorners.some(c => c.isEave && c.floorId === currentFloorId);
+    if (hasEaveForFloor) { eaveInitRef.current.add(currentFloorId); return; }
+    const hasMainForFloor = customCorners.some(c => c.isMain && c.floorId === currentFloorId);
+    if (!hasMainForFloor) return;
+    const lp = cornerLevelPrefix;
+    const eaveCorners: CustomCorner[] = [
+      { label: `Al${lp}A`, col: boundingBox.minCol - 1, row: boundingBox.minRow - 1, side: 'top', isEave: true, floorId: currentFloorId },
+      { label: `Al${lp}B`, col: boundingBox.maxCol + 1, row: boundingBox.minRow - 1, side: 'top', isEave: true, floorId: currentFloorId },
+      { label: `Al${lp}C`, col: boundingBox.maxCol + 1, row: boundingBox.maxRow + 1, side: 'bottom', isEave: true, floorId: currentFloorId },
+      { label: `Al${lp}D`, col: boundingBox.minCol - 1, row: boundingBox.maxRow + 1, side: 'bottom', isEave: true, floorId: currentFloorId },
+    ];
+    setCustomCorners([...customCorners, ...eaveCorners]);
+    eaveInitRef.current.add(currentFloorId);
+  }, [boundingBox, currentFloorId, isBajoCubierta, customCorners]);
 
   const currentFloorGroups = useMemo(() => {
     const groups = new Map<string, { name: string; rooms: RoomData[] }>();

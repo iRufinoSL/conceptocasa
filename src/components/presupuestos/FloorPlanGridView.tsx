@@ -601,12 +601,11 @@ export function FloorPlanGridView({
             </div>
           ))}
 
-          {/* Grid cell backgrounds — alternating subtle checkerboard */}
+          {/* Grid cells — each one = 1 bloque (625×625mm), with borders and alternating shading */}
           {Array.from({ length: totalCols * totalRows }, (_, i) => {
             const col = (i % totalCols);
             const row = Math.floor(i / totalCols);
             const isOdd = (col + row) % 2 === 1;
-            if (!isOdd) return null;
             return (
               <div
                 key={`cbg-${col}-${row}`}
@@ -616,40 +615,12 @@ export function FloorPlanGridView({
                   top: ROW_HEADER_H + row * CS,
                   width: CS,
                   height: CS,
-                  backgroundColor: 'hsl(var(--muted-foreground) / 0.08)',
+                  border: '1px solid rgba(128,128,128,0.22)',
+                  backgroundColor: isOdd ? 'rgba(128,128,128,0.06)' : 'transparent',
                 }}
               />
             );
           })}
-          {/* Grid lines - subtle but visible gray */}
-          {/* Vertical lines */}
-          {Array.from({ length: totalCols + 1 }, (_, ci) => (
-            <div
-              key={`vl-${ci}`}
-              className="absolute"
-              style={{
-                left: COL_HEADER_W + ci * CS,
-                top: ROW_HEADER_H,
-                width: 1,
-                height: totalRows * CS,
-                backgroundColor: 'hsl(var(--muted-foreground) / 0.2)',
-              }}
-            />
-          ))}
-          {/* Horizontal lines */}
-          {Array.from({ length: totalRows + 1 }, (_, ri) => (
-            <div
-              key={`hl-${ri}`}
-              className="absolute"
-              style={{
-                left: COL_HEADER_W,
-                top: ROW_HEADER_H + ri * CS,
-                width: totalCols * CS,
-                height: 1,
-                backgroundColor: 'hsl(var(--muted-foreground) / 0.2)',
-              }}
-            />
-          ))}
 
           {/* Ghost underlay: faint outlines of the floor below */}
           {ghostRooms.map(room => {

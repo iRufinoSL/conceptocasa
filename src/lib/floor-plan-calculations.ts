@@ -1902,6 +1902,9 @@ export function computeCompositeWallsFromCorners(
       const rawSections: Array<{ room: RoomData; wall: WallData; sectionLen: number; wallH: number; sectionOpenings: OpeningData[]; isGableWall: boolean; overlapStart: number }> = [];
 
       matchingRooms.forEach(({ room, wall, overlapStart, overlapEnd }) => {
+        // Skip invisible walls — they should not appear in composite elevations
+        if (isInvisibleType(wall.wallType as string)) return;
+
         const sectionLen = overlapEnd - overlapStart;
         let wallH: number;
         const isBajoCub = room.height === 0 && plan.roofType === 'dos_aguas';
@@ -2055,7 +2058,7 @@ export function computeCompositeWallsFromCorners(
 
       matchingRooms.sort((a, b) => a.overlapStart - b.overlapStart);
 
-      const rawSections: Array<{ room: RoomData; wall: WallData; sectionLen: number; wallH: number; sectionOpenings: OpeningData[]; isGableWall: boolean }> = [];
+      const rawSections: Array<{ room: RoomData; wall: WallData; sectionLen: number; wallH: number; sectionOpenings: OpeningData[]; isGableWall: boolean; overlapStart: number; fullWallLen: number }> = [];
 
       matchingRooms.forEach(({ room, wall, overlapStart, overlapEnd }) => {
         const sectionLen = overlapEnd - overlapStart;
@@ -2071,7 +2074,7 @@ export function computeCompositeWallsFromCorners(
           return opAbsPos >= overlapStart - EPSILON && opAbsPos <= overlapEnd + EPSILON;
         });
 
-        rawSections.push({ room, wall, sectionLen, wallH, sectionOpenings, isGableWall: false });
+        rawSections.push({ room, wall, sectionLen, wallH, sectionOpenings, isGableWall: false, overlapStart, fullWallLen: fullWallLen });
       });
 
       if (rawSections.length === 0) return;
@@ -2084,7 +2087,7 @@ export function computeCompositeWallsFromCorners(
       let totalDoors = 0, totalWindows = 0;
       const openingCounts: Record<string, number> = {};
 
-      rawSections.forEach(({ room, wall, sectionLen, wallH, sectionOpenings }) => {
+      rawSections.forEach(({ room, wall, sectionLen, wallH, sectionOpenings, overlapStart, fullWallLen }) => {
         let adjustedLen = sectionLen * scale;
         if (plan.scaleMode === 'bloque') {
           const blockW = plan.blockLengthMm / 1000;
@@ -2103,6 +2106,8 @@ export function computeCompositeWallsFromCorners(
           wallId: wall.id, length: adjustedLen, height: wallH,
           wall, openings: sectionOpenings, startOffset: offset,
           isGable: false,
+          overlapStart: overlapStart,
+          fullWallLength: fullWallLen,
         });
         offset += adjustedLen;
       });
@@ -2189,7 +2194,7 @@ export function computeCompositeWallsFromCorners(
 
       matchingRooms.sort((a, b) => a.overlapStart - b.overlapStart);
 
-      const rawSections: Array<{ room: RoomData; wall: WallData; sectionLen: number; wallH: number; sectionOpenings: OpeningData[]; isGableWall: boolean }> = [];
+      const rawSections: Array<{ room: RoomData; wall: WallData; sectionLen: number; wallH: number; sectionOpenings: OpeningData[]; isGableWall: boolean; overlapStart: number; fullWallLen: number }> = [];
 
       matchingRooms.forEach(({ room, wall, overlapStart, overlapEnd }) => {
         const sectionLen = overlapEnd - overlapStart;
@@ -2205,7 +2210,7 @@ export function computeCompositeWallsFromCorners(
           return opAbsPos >= overlapStart - EPSILON && opAbsPos <= overlapEnd + EPSILON;
         });
 
-        rawSections.push({ room, wall, sectionLen, wallH, sectionOpenings, isGableWall: false });
+        rawSections.push({ room, wall, sectionLen, wallH, sectionOpenings, isGableWall: false, overlapStart, fullWallLen: fullWallLen });
       });
 
       if (rawSections.length === 0) return;
@@ -2218,7 +2223,7 @@ export function computeCompositeWallsFromCorners(
       let totalDoors = 0, totalWindows = 0;
       const openingCounts: Record<string, number> = {};
 
-      rawSections.forEach(({ room, wall, sectionLen, wallH, sectionOpenings }) => {
+      rawSections.forEach(({ room, wall, sectionLen, wallH, sectionOpenings, overlapStart, fullWallLen }) => {
         let adjustedLen = sectionLen * scale;
         if (plan.scaleMode === 'bloque') {
           const blockW = plan.blockLengthMm / 1000;
@@ -2237,6 +2242,8 @@ export function computeCompositeWallsFromCorners(
           wallId: wall.id, length: adjustedLen, height: wallH,
           wall, openings: sectionOpenings, startOffset: offset,
           isGable: false,
+          overlapStart: overlapStart,
+          fullWallLength: fullWallLen,
         });
         offset += adjustedLen;
       });

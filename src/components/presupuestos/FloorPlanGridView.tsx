@@ -601,17 +601,38 @@ export function FloorPlanGridView({
             </div>
           ))}
 
-          {/* Grid lines - very subtle */}
+          {/* Grid cell backgrounds — alternating subtle checkerboard */}
+          {Array.from({ length: totalCols * totalRows }, (_, i) => {
+            const col = (i % totalCols);
+            const row = Math.floor(i / totalCols);
+            const isOdd = (col + row) % 2 === 1;
+            if (!isOdd) return null;
+            return (
+              <div
+                key={`cbg-${col}-${row}`}
+                className="absolute pointer-events-none"
+                style={{
+                  left: COL_HEADER_W + col * CS,
+                  top: ROW_HEADER_H + row * CS,
+                  width: CS,
+                  height: CS,
+                  backgroundColor: 'hsl(var(--muted-foreground) / 0.045)',
+                }}
+              />
+            );
+          })}
+          {/* Grid lines - subtle but visible gray */}
           {/* Vertical lines */}
           {Array.from({ length: totalCols + 1 }, (_, ci) => (
             <div
               key={`vl-${ci}`}
-              className="absolute bg-muted-foreground/10"
+              className="absolute"
               style={{
                 left: COL_HEADER_W + ci * CS,
                 top: ROW_HEADER_H,
                 width: 1,
                 height: totalRows * CS,
+                backgroundColor: 'hsl(var(--muted-foreground) / 0.2)',
               }}
             />
           ))}
@@ -619,12 +640,13 @@ export function FloorPlanGridView({
           {Array.from({ length: totalRows + 1 }, (_, ri) => (
             <div
               key={`hl-${ri}`}
-              className="absolute bg-muted-foreground/10"
+              className="absolute"
               style={{
                 left: COL_HEADER_W,
                 top: ROW_HEADER_H + ri * CS,
                 width: totalCols * CS,
                 height: 1,
+                backgroundColor: 'hsl(var(--muted-foreground) / 0.2)',
               }}
             />
           ))}

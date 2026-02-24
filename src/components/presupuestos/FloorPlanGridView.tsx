@@ -344,18 +344,34 @@ export function FloorPlanGridView({
     return { minCol, minRow, maxCol, maxRow };
   }, [placedRooms, cellSizeM]);
 
-  // Filter corners for current floor only
-  const floorCorners = useMemo(() => customCorners.filter(c => !c.floorId || c.floorId === currentFloorId), [customCorners, currentFloorId]);
-  const nonFloorCorners = useMemo(() => customCorners.filter(c => c.floorId && c.floorId !== currentFloorId), [customCorners, currentFloorId]);
+  // Filter corners STRICTLY by floorId — never leak corners across levels
+  const floorCorners = useMemo(() => customCorners.filter(c => c.floorId === currentFloorId), [customCorners, currentFloorId]);
+  const nonFloorCorners = useMemo(() => customCorners.filter(c => c.floorId !== currentFloorId), [customCorners, currentFloorId]);
 
   // Level label prefix for corner marks (e.g. "1" for level 1)
   const cornerLevelPrefix = effectiveFloors.length > 1 ? String((currentFloorObj?.orderIndex ?? 0) + 1) : '';
+
+  // Migrate orphan corners (no floorId) — assign them to the first floor to prevent cross-level leaks
+  const migratedOrphansRef = useRef(false);
+  useEffect(() => {
+    if (migratedOrphansRef.current || !onCustomCornersChange) return;
+    const orphans = customCorners.filter(c => !c.floorId);
+    if (orphans.length > 0) {
+      // Assign orphan corners to the first available floor
+      const firstFloorId = effectiveFloors[0]?.id;
+      if (firstFloorId) {
+        const migrated = customCorners.map(c => c.floorId ? c : { ...c, floorId: firstFloorId });
+        onCustomCornersChange(migrated);
+      }
+    }
+    migratedOrphansRef.current = true;
+  }, [customCorners, effectiveFloors]);
 
   // Auto-init main corners per floor if none exist for this floor
   const autoInitRef = useRef<Set<string>>(new Set());
   useEffect(() => {
     if (autoInitRef.current.has(currentFloorId) || !boundingBox || !onCustomCornersChange) return;
-    const hasMainForFloor = customCorners.some(c => c.isMain && (!c.floorId || c.floorId === currentFloorId));
+    const hasMainForFloor = customCorners.some(c => c.isMain && c.floorId === currentFloorId);
     if (hasMainForFloor) { autoInitRef.current.add(currentFloorId); return; }
     const lp = cornerLevelPrefix;
     const mainCorners: CustomCorner[] = [

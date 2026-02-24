@@ -173,9 +173,9 @@ export function ElevationsGridViewer({
     return sortedFloors.map(floor => {
       const floorRooms = rooms.filter(r => r.floorId === floor.id);
       if (floorRooms.length === 0) return { floorId: floor.id, floorName: floor.name, composites: [] as CompositeWall[] };
-      // Filter custom corners to only those belonging to this floor (or without floorId for backwards compat)
+      // Filter custom corners STRICTLY by floorId — never leak between levels
       const floorCorners = hasUserCorners
-        ? customCorners!.filter(c => !c.floorId || c.floorId === floor.id)
+        ? customCorners!.filter(c => c.floorId === floor.id)
         : [];
       const hasFloorCorners = floorCorners.length > 0;
       const composites = hasFloorCorners

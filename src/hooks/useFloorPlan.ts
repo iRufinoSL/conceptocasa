@@ -374,13 +374,14 @@ export function useFloorPlan(budgetId: string) {
     if (!floorPlan) return;
     setSaving(true);
     try {
-      // Calculate position based on grid coordinate (1m grid: posX = col-1, posY = row-1)
+      // Calculate position based on grid coordinate
       let posX = -1;
       let posY = -1;
+      const cellSizeM = floorPlan.scale_mode === 'bloque' ? (floorPlan.block_length_mm || 625) / 1000 : 1;
 
       if (gridCol && gridRow && gridCol > 0 && gridRow > 0) {
-        posX = gridCol - 1;
-        posY = gridRow - 1;
+        posX = (gridCol - 1) * cellSizeM;
+        posY = (gridRow - 1) * cellSizeM;
       }
       // If no coordinate given, room stays "unplaced" (posX=-1) → appears in staging header
 

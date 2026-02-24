@@ -629,6 +629,7 @@ export function FloorPlanTab({ budgetId, budgetName = '', isAdmin }: FloorPlanTa
   const [newSpaceWidth, setNewSpaceWidth] = useState(4);
   const [newSpaceLength, setNewSpaceLength] = useState(3);
   const [newSpaceFloorId, setNewSpaceFloorId] = useState<string>('');
+  const [newSpaceCoord, setNewSpaceCoord] = useState('');
   const [showSettings, setShowSettings] = useState(false);
   const [showLevelManager, setShowLevelManager] = useState(false);
   const [newLevelName, setNewLevelName] = useState('');
@@ -1124,7 +1125,7 @@ export function FloorPlanTab({ budgetId, budgetName = '', isAdmin }: FloorPlanTa
                 {floors.length > 0 && (
                   <div>
                     <Label className="text-xs">Nivel</Label>
-                    <Select value={newSpaceFloorId || floors[0]?.id || ''} onValueChange={setNewSpaceFloorId}>
+                    <Select value={newSpaceFloorId || activeGridFloorId || floors[0]?.id || ''} onValueChange={setNewSpaceFloorId}>
                       <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         {floors.map(f => (
@@ -1134,6 +1135,18 @@ export function FloorPlanTab({ budgetId, budgetName = '', isAdmin }: FloorPlanTa
                     </Select>
                   </div>
                 )}
+                <div>
+                  <Label className="text-xs">Coordenada inicio (ej: 01/01, A1)</Label>
+                  <input
+                    type="text"
+                    value={newSpaceCoord}
+                    onChange={e => setNewSpaceCoord(e.target.value.toUpperCase())}
+                    placeholder="01/01"
+                    disabled={saving}
+                    className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm font-mono ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  />
+                  <span className="text-[10px] text-muted-foreground">Esquina superior-izquierda del espacio. Dejar vacío para crear sin colocar.</span>
+                </div>
                 <div className="grid grid-cols-2 gap-2">
                   <div>
                     <Label className="text-xs">{planData?.scaleMode === 'bloque' ? `Ancho (bloques ${planData.blockLengthMm}mm)` : 'Ancho (m)'}</Label>
@@ -1161,15 +1174,23 @@ export function FloorPlanTab({ budgetId, budgetName = '', isAdmin }: FloorPlanTa
                     const targetFloor = newSpaceFloorId || activeGridFloorId || floors[0]?.id;
                     const w = planData?.scaleMode === 'bloque' ? newSpaceWidth * (planData.blockLengthMm || 625) / 1000 : newSpaceWidth;
                     const l = planData?.scaleMode === 'bloque' ? newSpaceLength * (planData.blockLengthMm || 625) / 1000 : newSpaceLength;
-                    await addRoom(newSpaceName.trim(), w, l, targetFloor);
+                    const parsedC = newSpaceCoord.trim() ? parseCoord(newSpaceCoord.trim()) : null;
+                    const gridCol = parsedC?.col;
+                    const gridRow = parsedC?.row;
+                    await addRoom(newSpaceName.trim(), w, l, targetFloor, gridCol, gridRow);
                     setNewSpaceName('');
-                    toast.success('Espacio añadido a la cabecera');
+                    setNewSpaceCoord('');
+                    if (gridCol && gridRow) {
+                      toast.success(`Espacio "${newSpaceName.trim()}" creado en coordenada ${formatCoord(gridCol, gridRow)}`);
+                    } else {
+                      toast.success('Espacio añadido a la cabecera (sin colocar)');
+                    }
                   }}
                   disabled={saving || !newSpaceName.trim()}
                   size="sm"
                   className="w-full"
                 >
-                  <Plus className="h-4 w-4 mr-1" /> Crear en cabecera
+                  <Plus className="h-4 w-4 mr-1" /> {newSpaceCoord.trim() ? 'Crear y colocar' : 'Crear en cabecera'}
                 </Button>
               </CardContent>
             </Card>

@@ -595,7 +595,7 @@ export function ElevationsGridViewer({
         {allCompositeWalls.length > 0 && (
           <Button variant={viewMode === 'composite' ? 'default' : 'outline'} size="sm" className="text-xs h-7"
             onClick={() => setViewMode('composite')}>
-            <MapIcon className="h-3 w-3 mr-1" /> Paredes compuestas ({allCompositeWalls.length})
+            <MapIcon className="h-3 w-3 mr-1" /> Alzados de coordenadas ({allCompositeWalls.length})
           </Button>
         )}
         {viewMode === 'composite' && buildingOutline.length > 0 && (
@@ -2698,7 +2698,7 @@ function CompositeWallCard({ compositeWall, plan, onOpeningClick, onAddBlockGrou
     doc.text(budgetName || '', margin, margin + 5);
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
-    doc.text(`Pared compuesta: ${cw.label} — ${SIDE_LABELS[cw.side] || cw.side} — ${Math.round(cw.totalLength * 1000)} × ${Math.round(maxHeight * 1000)} mm`, margin, margin + 12);
+    doc.text(`Alzado de coordenadas: ${cw.label} — ${SIDE_LABELS[cw.side] || cw.side} — ${Math.round(cw.totalLength * 1000)} × ${Math.round(maxHeight * 1000)} mm`, margin, margin + 12);
 
     // Serialize SVG to image — use viewBox dimensions for proper aspect ratio
     const svgClone = svgEl.cloneNode(true) as SVGSVGElement;
@@ -2842,13 +2842,13 @@ function CompositeWallCard({ compositeWall, plan, onOpeningClick, onAddBlockGrou
                 <Button variant="ghost" size="sm" className="h-5 w-5 p-0 opacity-0 group-hover:opacity-100 transition-opacity text-destructive hover:text-destructive/80"
                   onClick={async (e) => {
                     e.stopPropagation();
-                    if (!confirm(`¿Eliminar el alzado compuesto "${cw.label}"? Se ocultará de la vista.`)) return;
+                    if (!confirm(`¿Eliminar el alzado de coordenadas "${cw.label}"? Se ocultará de la vista.`)) return;
                     for (const section of cw.sections) {
                       await onUpdateWall(section.wallId, { elevationGroup: '__hidden__' });
                     }
                   }}
                   disabled={saving}
-                  title="Eliminar alzado compuesto">
+                  title="Eliminar alzado de coordenadas">
                   <Trash2 className="h-3 w-3" />
                 </Button>
               )}
@@ -2919,7 +2919,7 @@ function CompositeWallCard({ compositeWall, plan, onOpeningClick, onAddBlockGrou
                 </Button>
               </div>
             </DialogTitle>
-            <DialogDescription className="sr-only">Vista a pantalla completa de pared compuesta</DialogDescription>
+            <DialogDescription className="sr-only">Vista a pantalla completa de alzado de coordenadas</DialogDescription>
           </DialogHeader>
 
           {/* Opening movement toolbar */}

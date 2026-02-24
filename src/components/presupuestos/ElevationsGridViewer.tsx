@@ -22,6 +22,7 @@ interface ElevationsGridViewerProps {
   onAddOpening: (wallId: string, type: string, width: number, height: number, sillHeight?: number, positionX?: number) => Promise<void>;
   onDeleteOpening: (openingId: string) => Promise<void>;
   onUpdateWall?: (wallId: string, data: { wallType?: WallType; thickness?: number; height?: number; elevationGroup?: string | null }) => Promise<void>;
+  onUpdateWallSegmentType?: (wallId: string, segmentIndex: number, segmentType: WallType) => Promise<void>;
   onAddBlockGroup?: (wallId: string, startCol: number, startRow: number, spanCols: number, spanRows: number, name?: string, color?: string) => Promise<void>;
   onDeleteBlockGroup?: (blockGroupId: string) => Promise<void>;
   onUpdateBlockGroup?: (blockGroupId: string, data: { name?: string; color?: string; spanCols?: number; spanRows?: number }) => Promise<void>;
@@ -101,7 +102,7 @@ function getGablePeakHeight(plan: FloorPlanData, rooms: RoomData[]): number {
 }
 
 export function ElevationsGridViewer({
-  plan, rooms, floors, onUpdateOpening, onAddOpening, onDeleteOpening, onUpdateWall,
+  plan, rooms, floors, onUpdateOpening, onAddOpening, onDeleteOpening, onUpdateWall, onUpdateWallSegmentType,
   onAddBlockGroup, onDeleteBlockGroup, onUpdateBlockGroup, saving, focusWallId, autoEditWallId, budgetName,
   customCorners,
 }: ElevationsGridViewerProps) {
@@ -628,6 +629,7 @@ export function ElevationsGridViewer({
                       onAddBlockGroup={onAddBlockGroup}
                       onDeleteBlockGroup={onDeleteBlockGroup}
                       onUpdateWall={onUpdateWall}
+                      onUpdateWallSegmentType={onUpdateWallSegmentType}
                       onUpdateOpening={onUpdateOpening}
                       onDeleteOpening={onDeleteOpening}
                       saving={saving}
@@ -716,6 +718,7 @@ export function ElevationsGridViewer({
                           onAddBlockGroup={onAddBlockGroup}
                           onDeleteBlockGroup={onDeleteBlockGroup}
                           onUpdateWall={onUpdateWall}
+                          onUpdateWallSegmentType={onUpdateWallSegmentType}
                           onUpdateOpening={onUpdateOpening}
                           onDeleteOpening={onDeleteOpening}
                           saving={saving}
@@ -816,6 +819,7 @@ export function ElevationsGridViewer({
                               onAddBlockGroup={onAddBlockGroup}
                               onDeleteBlockGroup={onDeleteBlockGroup}
                               onUpdateWall={onUpdateWall}
+                              onUpdateWallSegmentType={onUpdateWallSegmentType}
                               onUpdateOpening={onUpdateOpening}
                               onDeleteOpening={onDeleteOpening}
                               saving={saving}
@@ -849,17 +853,24 @@ export function ElevationsGridViewer({
 }
 
 // Inline wall type selector for elevation cards
-function InlineWallTypeSelect({ wallId, currentType, onUpdateWall, saving, displayOnly }: {
+function InlineWallTypeSelect({ wallId, currentType, onUpdateWall, onUpdateSegmentType, segmentIndex, saving, displayOnly }: {
   wallId: string;
   currentType: WallType;
   onUpdateWall?: (wallId: string, data: { wallType?: WallType }) => Promise<void>;
+  onUpdateSegmentType?: (wallId: string, segmentIndex: number, segmentType: WallType) => Promise<void>;
+  segmentIndex?: number;
   saving: boolean;
   displayOnly?: boolean;
 }) {
   const handleChange = async (v: string) => {
-    if (!onUpdateWall || displayOnly) return;
-    await onUpdateWall(wallId, { wallType: v as WallType });
+    if (displayOnly) return;
+    if (onUpdateSegmentType && segmentIndex !== undefined) {
+      await onUpdateSegmentType(wallId, segmentIndex, v as WallType);
+    } else if (onUpdateWall) {
+      await onUpdateWall(wallId, { wallType: v as WallType });
+    }
   };
+  const canEdit = !displayOnly && (onUpdateWall || (onUpdateSegmentType && segmentIndex !== undefined));
   const label = WALL_TYPE_OPTIONS.find(o => o.value === currentType)?.label || currentType;
   if (displayOnly) {
     return (
@@ -869,7 +880,7 @@ function InlineWallTypeSelect({ wallId, currentType, onUpdateWall, saving, displ
     );
   }
   return (
-    <Select value={currentType} onValueChange={handleChange} disabled={saving || !onUpdateWall}>
+    <Select value={currentType} onValueChange={handleChange} disabled={saving || !canEdit}>
       <SelectTrigger className="h-5 text-[9px] px-1.5 w-auto min-w-[90px] border-muted">
         <SelectValue />
       </SelectTrigger>
@@ -885,7 +896,7 @@ function InlineWallTypeSelect({ wallId, currentType, onUpdateWall, saving, displ
 }
 
 // Individual elevation card
-function ElevationCardView({ card, plan, onOpeningClick, onAddOpening, onCardDoubleClick, onAddBlockGroup, onDeleteBlockGroup, onUpdateWall, onUpdateOpening, onDeleteOpening, saving, budgetName }: {
+function ElevationCardView({ card, plan, onOpeningClick, onAddOpening, onCardDoubleClick, onAddBlockGroup, onDeleteBlockGroup, onUpdateWall, onUpdateWallSegmentType, onUpdateOpening, onDeleteOpening, saving, budgetName }: {
   card: ElevationCard;
   plan: FloorPlanData;
   onOpeningClick: (op: OpeningData) => void;
@@ -894,6 +905,7 @@ function ElevationCardView({ card, plan, onOpeningClick, onAddOpening, onCardDou
   onAddBlockGroup?: (wallId: string, startCol: number, startRow: number, spanCols: number, spanRows: number, name?: string, color?: string) => Promise<void>;
   onDeleteBlockGroup?: (blockGroupId: string) => Promise<void>;
   onUpdateWall?: (wallId: string, data: { wallType?: WallType }) => Promise<void>;
+  onUpdateWallSegmentType?: (wallId: string, segmentIndex: number, segmentType: WallType) => Promise<void>;
   onUpdateOpening?: (openingId: string, data: { width?: number; height?: number; sillHeight?: number; positionX?: number; openingType?: string }) => Promise<void>;
   onDeleteOpening?: (openingId: string) => Promise<void>;
   saving: boolean;
@@ -1481,7 +1493,8 @@ function ElevationCardView({ card, plan, onOpeningClick, onAddOpening, onCardDou
                     <InlineWallTypeSelect
                       wallId={card.wall.id}
                       currentType={(card.segment.segmentType as WallType)}
-                      displayOnly
+                      onUpdateSegmentType={onUpdateWallSegmentType}
+                      segmentIndex={card.segmentIndex}
                       saving={saving}
                     />
                   ) : (

@@ -559,7 +559,7 @@ export function FloorPlanGridView({
         <div
           className="relative"
           style={{
-            width: COL_HEADER_W + totalCols * CS + 160,
+            width: COL_HEADER_W + totalCols * CS + 200,
             height: ROW_HEADER_H + totalRows * CS + 120,
           }}
         >
@@ -616,7 +616,7 @@ export function FloorPlanGridView({
                   top: ROW_HEADER_H + row * CS,
                   width: CS,
                   height: CS,
-                  backgroundColor: 'hsl(var(--muted-foreground) / 0.045)',
+                  backgroundColor: 'hsl(var(--muted-foreground) / 0.08)',
                 }}
               />
             );
@@ -905,8 +905,8 @@ export function FloorPlanGridView({
             if (customOnly.length === 0) return null;
             return (
               <svg className="absolute inset-0 pointer-events-none" style={{
-                width: COL_HEADER_W + totalCols * CS + 100,
-                height: ROW_HEADER_H + totalRows * CS + 100,
+                width: COL_HEADER_W + totalCols * CS + 200,
+                height: ROW_HEADER_H + totalRows * CS + 120,
                 zIndex: 29,
                 overflow: 'visible',
               }}>
@@ -1133,8 +1133,8 @@ export function FloorPlanGridView({
 
             return (
               <svg className="absolute inset-0 pointer-events-none" style={{
-                width: COL_HEADER_W + totalCols * CS + 100,
-                height: ROW_HEADER_H + totalRows * CS + 100,
+                width: COL_HEADER_W + totalCols * CS + 200,
+                height: ROW_HEADER_H + totalRows * CS + 120,
                 zIndex: 28,
                 overflow: 'visible',
               }}>
@@ -1620,7 +1620,7 @@ export function FloorPlanGridView({
               {(() => {
                 const availW = window.innerWidth - 200;
                 const availH = window.innerHeight - 160;
-                const csW = Math.floor(availW / (totalCols + 6));
+                const csW = Math.floor(availW / (totalCols + 8));
                 const csH = Math.floor(availH / (totalRows + 6));
                 const bigCS = Math.max(CELL_SIZE, Math.min(csW, csH, 120));
                 return renderGrid(bigCS);

@@ -10,6 +10,7 @@ export interface CustomCorner {
   row: number;
   side: 'top' | 'right' | 'bottom' | 'left';
   isMain?: boolean;
+  isEave?: boolean;
   mainPosition?: 'TL' | 'TR' | 'BR' | 'BL';
   floorId?: string;
 }

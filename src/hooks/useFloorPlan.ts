@@ -370,6 +370,12 @@ export function useFloorPlan(budgetId: string) {
     }
   };
 
+  /** Snap a metric value to the nearest exact multiple of cellSizeM so walls always fall on grid boundaries */
+  const snapToGrid = (value: number, cellSizeM: number): number => {
+    if (cellSizeM <= 0) return value;
+    return Math.round(value / cellSizeM) * cellSizeM;
+  };
+
   const addRoom = async (name: string, width: number, length: number, floorId?: string, gridCol?: number, gridRow?: number) => {
     if (!floorPlan) return;
     setSaving(true);
@@ -383,7 +389,10 @@ export function useFloorPlan(budgetId: string) {
         posX = (gridCol - 1) * cellSizeM;
         posY = (gridRow - 1) * cellSizeM;
       }
-      // If no coordinate given, room stays "unplaced" (posX=-1) → appears in staging header
+
+      // Snap dimensions to exact grid multiples so walls align with cell boundaries
+      const snappedWidth = snapToGrid(width, cellSizeM);
+      const snappedLength = snapToGrid(length, cellSizeM);
 
       const { data: room, error } = await supabase
         .from('budget_floor_plan_rooms')
@@ -391,10 +400,10 @@ export function useFloorPlan(budgetId: string) {
           floor_plan_id: floorPlan.id,
           floor_id: floorId || null,
           name,
-          width,
-          length,
-          pos_x: Math.round(posX * 100) / 100,
-          pos_y: Math.round(posY * 100) / 100,
+          width: snappedWidth,
+          length: snappedLength,
+          pos_x: Math.round(posX * 1000) / 1000,
+          pos_y: Math.round(posY * 1000) / 1000,
           order_index: rooms.length,
         })
         .select()
@@ -429,13 +438,14 @@ export function useFloorPlan(budgetId: string) {
   const updateRoom = async (roomId: string, data: { name?: string; width?: number; length?: number; height?: number; posX?: number; posY?: number; hasFloor?: boolean; hasCeiling?: boolean; hasRoof?: boolean; floorId?: string | null }) => {
     setSaving(true);
     try {
+      const cellSizeM = floorPlan ? (floorPlan.scale_mode === 'bloque' ? (floorPlan.block_length_mm || 625) / 1000 : 1) : 1;
       const updates: any = {};
       if (data.name !== undefined) updates.name = data.name;
-      if (data.width !== undefined) updates.width = data.width;
-      if (data.length !== undefined) updates.length = data.length;
+      if (data.width !== undefined) updates.width = snapToGrid(data.width, cellSizeM);
+      if (data.length !== undefined) updates.length = snapToGrid(data.length, cellSizeM);
       if (data.height !== undefined) updates.height = data.height;
-      if (data.posX !== undefined) updates.pos_x = data.posX;
-      if (data.posY !== undefined) updates.pos_y = data.posY;
+      if (data.posX !== undefined) updates.pos_x = snapToGrid(data.posX, cellSizeM);
+      if (data.posY !== undefined) updates.pos_y = snapToGrid(data.posY, cellSizeM);
       if (data.hasFloor !== undefined) updates.has_floor = data.hasFloor;
       if (data.hasCeiling !== undefined) updates.has_ceiling = data.hasCeiling;
       if (data.hasRoof !== undefined) updates.has_roof = data.hasRoof;

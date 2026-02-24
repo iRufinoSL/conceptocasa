@@ -634,9 +634,10 @@ export function EmailInbox({ onComposeReply, onComposeForward }: EmailInboxProps
     
     return result;
   }, [emails, search, budgetFilter, contactFilter]);
-  // Separate inbound and outbound emails for the two mailboxes
+  // Separate inbound, outbound, and failed emails
   const inboundEmails = useMemo(() => filteredEmails.filter(e => e.direction === 'inbound'), [filteredEmails]);
-  const outboundEmails = useMemo(() => filteredEmails.filter(e => e.direction === 'outbound'), [filteredEmails]);
+  const outboundEmails = useMemo(() => filteredEmails.filter(e => e.direction === 'outbound' && e.status !== 'failed'), [filteredEmails]);
+  const failedEmails = useMemo(() => filteredEmails.filter(e => e.status === 'failed'), [filteredEmails]);
 
   // Group emails by mode - for inbound
   const groupedInboundEmails = useMemo(() => {
@@ -773,14 +774,17 @@ export function EmailInbox({ onComposeReply, onComposeForward }: EmailInboxProps
     return sortedEntries;
   }, [outboundEmails, groupMode]);
 
+  const [isFailedExpanded, setIsFailedExpanded] = useState(true);
+
   const stats = useMemo(() => {
     const total = emails.length;
     const inbox = emails.filter(e => e.direction === 'inbound').length;
-    const sent = emails.filter(e => e.direction === 'outbound').length;
+    const sent = emails.filter(e => e.direction === 'outbound' && e.status !== 'failed').length;
+    const failed = emails.filter(e => e.status === 'failed').length;
     const unread = emails.filter(e => !e.is_read && e.direction === 'inbound').length;
     const snoozed = emails.filter(e => e.snoozed_until && new Date(e.snoozed_until) > new Date()).length;
     
-    return { total, inbox, sent, unread, snoozed };
+    return { total, inbox, sent, failed, unread, snoozed };
   }, [emails]);
 
   const handleEmailClick = async (email: EmailMessage) => {
@@ -1089,7 +1093,7 @@ export function EmailInbox({ onComposeReply, onComposeForward }: EmailInboxProps
   return (
     <div className="space-y-4">
       {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
         <Card className="p-3">
           <div className="text-2xl font-bold text-primary">{stats.total}</div>
           <div className="text-xs text-muted-foreground">Total emails</div>
@@ -1102,6 +1106,12 @@ export function EmailInbox({ onComposeReply, onComposeForward }: EmailInboxProps
           <div className="text-2xl font-bold text-blue-600">{stats.sent}</div>
           <div className="text-xs text-muted-foreground">Enviados</div>
         </Card>
+        {stats.failed > 0 && (
+          <Card className="p-3 ring-2 ring-destructive/50">
+            <div className="text-2xl font-bold text-destructive">{stats.failed}</div>
+            <div className="text-xs text-muted-foreground">No enviados</div>
+          </Card>
+        )}
         <Card className={`p-3 ${stats.unread > 0 ? 'ring-2 ring-primary/50' : ''}`}>
           <div className="text-2xl font-bold text-primary">{stats.unread}</div>
           <div className="text-xs text-muted-foreground">Sin leer</div>
@@ -1371,6 +1381,80 @@ export function EmailInbox({ onComposeReply, onComposeForward }: EmailInboxProps
             </CollapsibleContent>
           </Collapsible>
         </Card>
+        {/* Failed - No enviados */}
+        {failedEmails.length > 0 && (
+          <Card className="border-destructive/30">
+            <Collapsible open={isFailedExpanded} onOpenChange={setIsFailedExpanded}>
+              <CardHeader className="pb-3">
+                <CollapsibleTrigger className="w-full">
+                  <CardTitle className="flex items-center gap-2 cursor-pointer hover:text-destructive transition-colors">
+                    {isFailedExpanded ? (
+                      <ChevronDown className="h-5 w-5" />
+                    ) : (
+                      <ChevronRight className="h-5 w-5" />
+                    )}
+                    <XCircle className="h-5 w-5 text-destructive" />
+                    No enviados
+                    <Badge variant="destructive" className="ml-2">
+                      {failedEmails.length}
+                    </Badge>
+                  </CardTitle>
+                </CollapsibleTrigger>
+              </CardHeader>
+              <CollapsibleContent>
+                <CardContent>
+                  <div className="divide-y">
+                    {failedEmails.map(email => (
+                      <div
+                        key={email.id}
+                        className="py-3 px-3 cursor-pointer transition-all rounded-lg -mx-2 border-l-4 border-l-destructive hover:bg-destructive/5"
+                        onClick={() => handleEmailClick(email)}
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className="flex-shrink-0 p-2 rounded-lg bg-destructive/10">
+                            <XCircle className="h-4 w-4 text-destructive" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-sm font-medium truncate">
+                                {email.to_emails?.[0]}
+                              </span>
+                              <Badge variant="destructive" className="text-xs">Fallido</Badge>
+                            </div>
+                            <p className="text-sm mt-0.5 truncate text-muted-foreground">
+                              {email.subject || '(Sin asunto)'}
+                            </p>
+                            {email.error_message && (
+                              <p className="text-xs mt-1 text-destructive line-clamp-1">
+                                Error: {email.error_message}
+                              </p>
+                            )}
+                            <div className="flex items-center gap-3 mt-1.5 text-xs text-muted-foreground">
+                              <span>
+                                {format(new Date(email.created_at), "d MMM, HH:mm", { locale: es })}
+                              </span>
+                            </div>
+                          </div>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="flex-shrink-0 gap-1"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              deleteEmailMutation.mutate(email.id);
+                            }}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </CollapsibleContent>
+            </Collapsible>
+          </Card>
+        )}
       </div>
 
       {/* Email Detail Dialog - Normal or Fullscreen */}

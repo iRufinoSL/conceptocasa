@@ -1341,7 +1341,7 @@ function ElevationCardView({ card, plan, onOpeningClick, onAddOpening, onCardDou
           const rawOpX = rx + opCenterInSegment * rw - opWidthPx / 2;
           const opX = Math.max(rx, Math.min(rawOpX, rx + rw - opWidthPx));
           const opY = ry + rh - opHeightPx - sillH * s;
-          const isDoor = op.openingType === 'puerta' || op.openingType === 'puerta_externa' || op.openingType === 'ventana_balconera';
+const isDoor = op.openingType === 'puerta' || op.openingType === 'puerta_externa';
           const isSelected = fsScale && fsSelectedOpeningId === op.id;
           return (
             <g key={op.id}
@@ -1931,7 +1931,7 @@ function FullscreenBlockGrid({ card, plan, blockCount, selectedBlocks, onToggleB
         const rawOpX = rx + opCenterInSegment * rw - opWidthPx / 2;
         const opX = Math.max(rx, Math.min(rawOpX, rx + rw - opWidthPx));
         const opY = ry + rh - opHeightPx - sillH * s;
-        const isDoor = op.openingType === 'puerta' || op.openingType === 'puerta_externa' || op.openingType === 'ventana_balconera';
+const isDoor = op.openingType === 'puerta' || op.openingType === 'puerta_externa';
         return (
           <g key={op.id} style={{ cursor: 'pointer' }}
             onClick={e => { e.stopPropagation(); onOpeningClick(op); }}>
@@ -2141,7 +2141,7 @@ function CompositeFullscreenBlockGrid({ compositeWall, plan, maxHeight, selected
               const sillH = op.sillHeight ?? 0;
               const opX = sx + (opCenterInSection / section.length) * sw2 - opWidthPx / 2;
               const opY = sy + sh2 - opHeightPx - sillH * s;
-              const isDoor = op.openingType === 'puerta' || op.openingType === 'puerta_externa' || op.openingType === 'ventana_balconera';
+const isDoor = op.openingType === 'puerta' || op.openingType === 'puerta_externa';
               const distLeft = opCenterInSection - op.width / 2;
               const distRight = section.length - (opCenterInSection + op.width / 2);
               const distBottom = sillH;
@@ -2516,7 +2516,7 @@ function CompositeWallCard({ compositeWall, plan, onOpeningClick, onAddBlockGrou
                   const sillH = op.sillHeight ?? 0;
                   const opX = sx + (opCenterInSection / section.length) * sw2 - opWidthPx / 2;
                   const opY = sy + sh2 - opHeightPx - sillH * s;
-                  const isDoor = op.openingType === 'puerta' || op.openingType === 'puerta_externa' || op.openingType === 'ventana_balconera';
+                  const isDoor = op.openingType === 'puerta' || op.openingType === 'puerta_externa';
                   const isSelected = fsScale && fsSelectedOpeningId === op.id;
 
                   return (

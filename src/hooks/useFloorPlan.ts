@@ -567,12 +567,31 @@ export function useFloorPlan(budgetId: string) {
   const updateOpening = async (openingId: string, data: { openingType?: string; width?: number; height?: number; sillHeight?: number; positionX?: number }) => {
     setSaving(true);
     try {
+      // Safety clamp: ensure positionX keeps the opening within wall bounds
+      let safePositionX = data.positionX;
+      if (safePositionX !== undefined) {
+        // Find the opening's wall to get the wall length
+        const ownerRoom = rooms.find(r => r.walls.some(w => w.openings.some(o => o.id === openingId)));
+        if (ownerRoom) {
+          const ownerWall = ownerRoom.walls.find(w => w.openings.some(o => o.id === openingId));
+          if (ownerWall) {
+            const isH = ownerWall.wallIndex === 1 || ownerWall.wallIndex === 3;
+            const wallLen = isH ? ownerRoom.width : ownerRoom.length;
+            const opWidth = data.width ?? ownerWall.openings.find(o => o.id === openingId)?.width ?? 0;
+            if (wallLen > 0 && opWidth > 0) {
+              const halfWFrac = (opWidth / 2) / wallLen;
+              safePositionX = Math.max(halfWFrac, Math.min(1 - halfWFrac, safePositionX));
+            }
+          }
+        }
+      }
+
       const updates: any = {};
       if (data.openingType !== undefined) updates.opening_type = data.openingType;
       if (data.width !== undefined) updates.width = data.width;
       if (data.height !== undefined) updates.height = data.height;
       if (data.sillHeight !== undefined) updates.sill_height = data.sillHeight;
-      if (data.positionX !== undefined) updates.position_x = data.positionX;
+      if (safePositionX !== undefined) updates.position_x = safePositionX;
 
       const { error } = await supabase
         .from('budget_floor_plan_openings')

@@ -947,16 +947,39 @@ export function FloorPlanGridView({
             };
 
             type CP = { label: string; col: number; row: number; side?: string };
-            // Classify custom corners to building edges by POSITION, not by side property.
-            // side='right'/'bottom' on a marker means the arrow direction, NOT the edge it belongs to.
-            // A marker at row==minRow is on the TOP edge regardless of its arrow direction.
+            // Classify custom corners to building edges using normalized distance.
+            // This handles markers not exactly on a boundary (e.g. B1 between B and C
+            // with col far from maxCol but row between minRow and maxRow).
             const nonMainCorners = floorCorners.filter(c => !c.isMain);
-            // Classify markers to edges. Bounding box uses exclusive coords (maxCol/maxRow = last+1),
-            // but user markers use inclusive block numbers, so use >= maxCol-1 for right/bottom edges.
-            const customOnTop = nonMainCorners.filter(c => c.row === minRow).map(c => ({ label: c.label, col: c.col, row: c.row, side: c.side }));
-            const customOnBottom = nonMainCorners.filter(c => c.row >= maxRow - 1 && c.row !== minRow).map(c => ({ label: c.label, col: c.col, row: c.row, side: c.side }));
-            const customOnLeft = nonMainCorners.filter(c => c.col === minCol && c.row !== minRow && !(c.row >= maxRow - 1)).map(c => ({ label: c.label, col: c.col, row: c.row, side: c.side }));
-            const customOnRight = nonMainCorners.filter(c => c.col >= maxCol - 1 && c.col !== minCol && c.row !== minRow && !(c.row >= maxRow - 1)).map(c => ({ label: c.label, col: c.col, row: c.row, side: c.side }));
+            const colSpan = Math.max(1, maxCol - minCol);
+            const rowSpan = Math.max(1, maxRow - minRow);
+            const classifyToEdge = (c: { col: number; row: number }): 'top' | 'right' | 'bottom' | 'left' => {
+              if (c.row === minRow) return 'top';
+              if (c.col === minCol && c.row !== minRow) return 'left';
+              const dTop = Math.abs(c.row - minRow) / rowSpan;
+              const dBottom = Math.abs(c.row - (maxRow - 1)) / rowSpan;
+              const dLeft = Math.abs(c.col - minCol) / colSpan;
+              const dRight = Math.abs(c.col - (maxCol - 1)) / colSpan;
+              const mn = Math.min(dTop, dBottom, dLeft, dRight);
+              if (mn === dTop) return 'top';
+              if (mn === dRight) return 'right';
+              if (mn === dBottom) return 'bottom';
+              return 'left';
+            };
+            const customOnTop: CP[] = [];
+            const customOnBottom: CP[] = [];
+            const customOnLeft: CP[] = [];
+            const customOnRight: CP[] = [];
+            nonMainCorners.forEach(c => {
+              const edge = classifyToEdge(c);
+              const cp = { label: c.label, col: c.col, row: c.row, side: c.side };
+              switch (edge) {
+                case 'top': customOnTop.push(cp); break;
+                case 'bottom': customOnBottom.push(cp); break;
+                case 'left': customOnLeft.push(cp); break;
+                case 'right': customOnRight.push(cp); break;
+              }
+            });
 
             const topAll: CP[] = [
               { label: getMainLbl('TL', 'A'), col: minCol, row: minRow },
@@ -1025,10 +1048,14 @@ export function FloorPlanGridView({
             // direction: -1 = upward (top side), +1 = downward (bottom side)
             const hDimsMulti = (pts: CP[], baseY: number, prefix: string, dir: number) => {
               if (pts.length < 2) return;
-              // X position: markers at exclusive boundary (maxCol) or with side 'right'/'bottom' → use last mm
+              // X position: match arrow rendering logic.
+              // Main corners at exclusive maxCol → right edge of last col = (maxCol-1)*CS
+              // side='right' → arrow targets right edge of block → col*CS
+              // others → arrow targets left edge of block → (col-1)*CS
               const getX = (p: CP) => {
-                const useLastMm = p.side === 'right' || p.side === 'bottom' || p.col === maxCol;
-                return COL_HEADER_W + (useLastMm ? p.col : (p.col - 1)) * CS;
+                if (p.col === maxCol) return COL_HEADER_W + (maxCol - 1) * CS;
+                if (p.side === 'right') return COL_HEADER_W + p.col * CS;
+                return COL_HEADER_W + (p.col - 1) * CS;
               };
               if (pts.length >= 3) {
                 // Level 0 (furthest from grid): full span
@@ -1053,10 +1080,11 @@ export function FloorPlanGridView({
             // Multi-level vertical dimensions
             const vDimsMulti = (pts: CP[], baseX: number, prefix: string, dir: number) => {
               if (pts.length < 2) return;
-              // Y position: markers at exclusive boundary (maxRow) or with side 'bottom'/'right' → use last mm
+              // Y position: match arrow rendering logic.
               const getY = (p: CP) => {
-                const useLastMm = p.side === 'bottom' || p.side === 'right' || p.row === maxRow;
-                return ROW_HEADER_H + (useLastMm ? p.row : (p.row - 1)) * CS;
+                if (p.row === maxRow) return ROW_HEADER_H + (maxRow - 1) * CS;
+                if (p.side === 'bottom') return ROW_HEADER_H + p.row * CS;
+                return ROW_HEADER_H + (p.row - 1) * CS;
               };
               if (pts.length >= 3) {
                 const x0 = baseX + dir * LEVEL_STEP;

@@ -1787,16 +1787,22 @@ export function computeCompositeWallsFromCorners(
   const gridMaxCol = Math.max(...rooms.map(r => Math.round(r.posX / cellSizeM) + 1 + Math.max(1, Math.round(r.width / cellSizeM))));
   const gridMaxRow = Math.max(...rooms.map(r => Math.round(r.posY / cellSizeM) + 1 + Math.max(1, Math.round(r.length / cellSizeM))));
 
-  // Classify custom corners by PHYSICAL position (not arrow side).
-  // Bounding box uses exclusive coords: maxCol/maxRow = last+1.
-  // User markers use inclusive coords, so right edge = col >= gridMaxCol-1, bottom = row >= gridMaxRow-1.
+  // Classify custom corners using normalized distance to each edge.
+  // This handles markers not exactly on a boundary (e.g. B1 at col=17 but meant for right edge).
+  const colSpan = Math.max(1, gridMaxCol - gridMinCol);
+  const rowSpan = Math.max(1, gridMaxRow - gridMinRow);
   const classifyEdge = (cc: { col: number; row: number; side: string }): 'top' | 'right' | 'bottom' | 'left' => {
     if (cc.row === gridMinRow) return 'top';
-    if (cc.row >= gridMaxRow - 1) return 'bottom';
-    if (cc.col === gridMinCol) return 'left';
-    if (cc.col >= gridMaxCol - 1) return 'right';
-    // Fallback: use declared side
-    return cc.side as any;
+    if (cc.col === gridMinCol && cc.row !== gridMinRow) return 'left';
+    const dTop = Math.abs(cc.row - gridMinRow) / rowSpan;
+    const dBottom = Math.abs(cc.row - (gridMaxRow - 1)) / rowSpan;
+    const dLeft = Math.abs(cc.col - gridMinCol) / colSpan;
+    const dRight = Math.abs(cc.col - (gridMaxCol - 1)) / colSpan;
+    const mn = Math.min(dTop, dBottom, dLeft, dRight);
+    if (mn === dTop) return 'top';
+    if (mn === dRight) return 'right';
+    if (mn === dBottom) return 'bottom';
+    return 'left';
   };
 
   // Convert user custom corners to absolute coordinates based on their PHYSICAL edge
@@ -2006,7 +2012,7 @@ export function computeCompositeWallsFromCorners(
 
       composites.push({
         id: `cw-${v1.label}-${v2.label}`,
-        label: `Pared ${v1.label}${v2.label}`,
+        label: `${v1.label}-${v2.label}`,
         startCorner: { x: v1.x, y: v1.y, label: v1.label },
         endCorner: { x: v2.x, y: v2.y, label: v2.label },
         side,
@@ -2018,281 +2024,299 @@ export function computeCompositeWallsFromCorners(
     }
   });
 
-  // ── Cross-side composite walls: markers on opposite sides at same col/row ──
-  // Only use non-main custom corners for cross-side detection
-  const nonMainAbsolute = customAbsolute.filter((_, idx) => !(userCorners[idx] as any).isMain);
-  // Vertical interior walls: top↔bottom markers sharing the same X (col)
-  const topCustom = nonMainAbsolute.filter(c => c.side === 'top');
-  const bottomCustom = nonMainAbsolute.filter(c => c.side === 'bottom');
+  // ── Cross-side composite walls: markers sharing the same original col or row ──
+  // Use original col/row from userCorners (not edge-projected x/y) for matching.
+  const nonMainOriginals = userCorners.filter(c => !(c as any).isMain);
+  // Vertical interior walls: pairs of non-main markers sharing the same col
+  const colGroups = new Map<number, typeof nonMainOriginals>();
+  nonMainOriginals.forEach(c => {
+    const arr = colGroups.get(c.col) || [];
+    arr.push(c);
+    colGroups.set(c.col, arr);
+  });
+  // Build pairs from col groups
+  const verticalPairs: Array<{ top: typeof nonMainOriginals[0]; bottom: typeof nonMainOriginals[0] }> = [];
+  colGroups.forEach(group => {
+    if (group.length < 2) return;
+    group.sort((a, b) => a.row - b.row);
+    for (let i = 0; i < group.length - 1; i++) {
+      verticalPairs.push({ top: group[i], bottom: group[i + 1] });
+    }
+  });
 
-  topCustom.forEach(tc => {
-    bottomCustom.forEach(bc => {
-      if (Math.abs(bc.x - tc.x) > EPSILON) return;
-      // Skip if this X is on the perimeter boundary (already handled above)
-      if (Math.abs(tc.x - minX) < EPSILON || Math.abs(tc.x - maxX) < EPSILON) return;
+  verticalPairs.forEach(({ top: tc, bottom: bc }) => {
+    const wallX = (tc.col - 1) * cellSizeM;
+    // Skip if on the perimeter boundary
+    if (Math.abs(wallX - minX) < EPSILON || Math.abs(wallX - maxX) < EPSILON) return;
 
-      const wallX = tc.x;
-      const edgeStartY = minY;
-      const edgeEndY = maxY;
-      let edgeLength = edgeEndY - edgeStartY;
+    const edgeStartY = minY;
+    const edgeEndY = maxY;
+    let edgeLength = edgeEndY - edgeStartY;
 
-      if (plan.scaleMode === 'bloque') {
-        const blockW = plan.blockLengthMm / 1000;
-        if (blockW > 0) edgeLength = Math.round(edgeLength / blockW) * blockW;
-      }
+    if (plan.scaleMode === 'bloque') {
+      const blockW = plan.blockLengthMm / 1000;
+      if (blockW > 0) edgeLength = Math.round(edgeLength / blockW) * blockW;
+    }
 
-      // Find rooms whose RIGHT edge (wallIndex 2) touches this vertical line
-      const matchRight: Array<{ room: RoomData; wall: WallData; overlapStart: number; overlapEnd: number }> = [];
-      const matchLeft: Array<{ room: RoomData; wall: WallData; overlapStart: number; overlapEnd: number }> = [];
+    // Find rooms whose RIGHT or LEFT edge touches this vertical line
+    const matchRight: Array<{ room: RoomData; wall: WallData; overlapStart: number; overlapEnd: number }> = [];
+    const matchLeft: Array<{ room: RoomData; wall: WallData; overlapStart: number; overlapEnd: number }> = [];
 
-      rooms.forEach(room => {
-        const rRight = room.posX + room.width;
-        const rLeft = room.posX;
-        const rStart = room.posY;
-        const rEnd = room.posY + room.length;
+    rooms.forEach(room => {
+      const rRight = room.posX + room.width;
+      const rLeft = room.posX;
+      const rStart = room.posY;
+      const rEnd = room.posY + room.length;
 
-        if (Math.abs(rRight - wallX) <= EPSILON) {
-          const oS = Math.max(edgeStartY, rStart);
-          const oE = Math.min(edgeEndY, rEnd);
-          if (oE - oS > EPSILON) {
-            const wall = room.walls.find(w => w.wallIndex === 2);
-            if (wall) matchRight.push({ room, wall, overlapStart: oS, overlapEnd: oE });
-          }
-        }
-        if (Math.abs(rLeft - wallX) <= EPSILON) {
-          const oS = Math.max(edgeStartY, rStart);
-          const oE = Math.min(edgeEndY, rEnd);
-          if (oE - oS > EPSILON) {
-            const wall = room.walls.find(w => w.wallIndex === 4);
-            if (wall) matchLeft.push({ room, wall, overlapStart: oS, overlapEnd: oE });
-          }
-        }
-      });
-
-      // Prefer the side with more room coverage; default to right-edge rooms
-      const matchingRooms = matchRight.length >= matchLeft.length ? matchRight : matchLeft;
-      if (matchingRooms.length === 0) return;
-
-      matchingRooms.sort((a, b) => a.overlapStart - b.overlapStart);
-
-      const rawSections: Array<{ room: RoomData; wall: WallData; sectionLen: number; wallH: number; sectionOpenings: OpeningData[]; isGableWall: boolean; overlapStart: number; fullWallLen: number }> = [];
-
-      matchingRooms.forEach(({ room, wall, overlapStart, overlapEnd }) => {
-        const sectionLen = overlapEnd - overlapStart;
-        let wallH: number;
-        if (wall.height && wall.height > 0) wallH = wall.height;
-        else if (room.height && room.height > 0) wallH = room.height;
-        else if (room.height === 0) return;
-        else wallH = plan.defaultHeight;
-
-        const fullWallLen = room.length;
-        const sectionOpenings = wall.openings.filter(op => {
-          const opAbsPos = room.posY + op.positionX * fullWallLen;
-          return opAbsPos >= overlapStart - EPSILON && opAbsPos <= overlapEnd + EPSILON;
-        });
-
-        rawSections.push({ room, wall, sectionLen, wallH, sectionOpenings, isGableWall: false, overlapStart, fullWallLen: fullWallLen });
-      });
-
-      if (rawSections.length === 0) return;
-
-      const rawTotal = rawSections.reduce((sum, s) => sum + s.sectionLen, 0);
-      const scale = rawTotal > 0 ? edgeLength / rawTotal : 1;
-
-      let offset = 0;
-      const sections: CompositeWallSection[] = [];
-      let totalDoors = 0, totalWindows = 0;
-      const openingCounts: Record<string, number> = {};
-
-      rawSections.forEach(({ room, wall, sectionLen, wallH, sectionOpenings, overlapStart, fullWallLen }) => {
-        let adjustedLen = sectionLen * scale;
-        if (plan.scaleMode === 'bloque') {
-          const blockW = plan.blockLengthMm / 1000;
-          if (blockW > 0) adjustedLen = Math.round(adjustedLen / blockW) * blockW;
-        }
-
-        sectionOpenings.forEach(op => {
-          const key = op.openingType;
-          openingCounts[key] = (openingCounts[key] || 0) + 1;
-          if (key === 'puerta' || key === 'puerta_externa' || key === 'hueco_paso') totalDoors++;
-          else totalWindows++;
-        });
-
-        sections.push({
-          roomId: room.id, roomName: room.name, wallIndex: wall.wallIndex,
-          wallId: wall.id, length: adjustedLen, height: wallH,
-          wall, openings: sectionOpenings, startOffset: offset,
-          isGable: false,
-          overlapStart: overlapStart,
-          fullWallLength: fullWallLen,
-        });
-        offset += adjustedLen;
-      });
-
-      if (sections.length === 0) return;
-
-      let totalBlocks: { cols: number; rows: number; total: number } | undefined;
-      if (plan.scaleMode === 'bloque') {
-        const blockW = plan.blockLengthMm / 1000;
-        const blockH = plan.blockHeightMm / 1000;
-        if (blockW > 0 && blockH > 0) {
-          const maxH = Math.max(...sections.map(s => s.height));
-          totalBlocks = { cols: Math.ceil(edgeLength / blockW), rows: Math.ceil(maxH / blockH), total: Math.ceil(edgeLength / blockW) * Math.ceil(maxH / blockH) };
+      if (Math.abs(rRight - wallX) <= EPSILON) {
+        const oS = Math.max(edgeStartY, rStart);
+        const oE = Math.min(edgeEndY, rEnd);
+        if (oE - oS > EPSILON) {
+          const wall = room.walls.find(w => w.wallIndex === 2);
+          if (wall) matchRight.push({ room, wall, overlapStart: oS, overlapEnd: oE });
         }
       }
+      if (Math.abs(rLeft - wallX) <= EPSILON) {
+        const oS = Math.max(edgeStartY, rStart);
+        const oE = Math.min(edgeEndY, rEnd);
+        if (oE - oS > EPSILON) {
+          const wall = room.walls.find(w => w.wallIndex === 4);
+          if (wall) matchLeft.push({ room, wall, overlapStart: oS, overlapEnd: oE });
+        }
+      }
+    });
 
-      const openingDetails = Object.entries(openingCounts).map(([type, count]) => ({
-        type, count,
-        label: OPENING_PRESETS[type as keyof typeof OPENING_PRESETS]?.label || type,
-      }));
+    const matchingRooms = matchRight.length >= matchLeft.length ? matchRight : matchLeft;
+    if (matchingRooms.length === 0) return;
 
-      composites.push({
-        id: `cw-${tc.label}-${bc.label}`,
-        label: `Pared ${tc.label}-${bc.label}`,
-        startCorner: { x: tc.x, y: edgeStartY, label: tc.label },
-        endCorner: { x: bc.x, y: edgeEndY, label: bc.label },
-        side: 'right',
-        totalLength: edgeLength,
-        sections,
-        isExterior: false,
-        objectSummary: { totalBlocks, doors: totalDoors, windows: totalWindows, openingDetails },
+    matchingRooms.sort((a, b) => a.overlapStart - b.overlapStart);
+
+    const rawSecs: Array<{ room: RoomData; wall: WallData; sectionLen: number; wallH: number; sectionOpenings: OpeningData[]; isGableWall: boolean; overlapStart: number; fullWallLen: number }> = [];
+
+    matchingRooms.forEach(({ room, wall, overlapStart, overlapEnd }) => {
+      const sectionLen = overlapEnd - overlapStart;
+      let wallH: number;
+      if (wall.height && wall.height > 0) wallH = wall.height;
+      else if (room.height && room.height > 0) wallH = room.height;
+      else if (room.height === 0) return;
+      else wallH = plan.defaultHeight;
+
+      const fullWallLen = room.length;
+      const sectionOpenings = wall.openings.filter(op => {
+        const opAbsPos = room.posY + op.positionX * fullWallLen;
+        return opAbsPos >= overlapStart - EPSILON && opAbsPos <= overlapEnd + EPSILON;
       });
+
+      rawSecs.push({ room, wall, sectionLen, wallH, sectionOpenings, isGableWall: false, overlapStart, fullWallLen });
+    });
+
+    if (rawSecs.length === 0) return;
+
+    const rawTotal = rawSecs.reduce((sum, s) => sum + s.sectionLen, 0);
+    const scale = rawTotal > 0 ? edgeLength / rawTotal : 1;
+
+    let offset = 0;
+    const sections: CompositeWallSection[] = [];
+    let totalDoors = 0, totalWindows = 0;
+    const openingCounts: Record<string, number> = {};
+
+    rawSecs.forEach(({ room, wall, sectionLen, wallH, sectionOpenings, overlapStart, fullWallLen }) => {
+      let adjustedLen = sectionLen * scale;
+      if (plan.scaleMode === 'bloque') {
+        const blockW = plan.blockLengthMm / 1000;
+        if (blockW > 0) adjustedLen = Math.round(adjustedLen / blockW) * blockW;
+      }
+
+      sectionOpenings.forEach(op => {
+        const key = op.openingType;
+        openingCounts[key] = (openingCounts[key] || 0) + 1;
+        if (key === 'puerta' || key === 'puerta_externa' || key === 'hueco_paso') totalDoors++;
+        else totalWindows++;
+      });
+
+      sections.push({
+        roomId: room.id, roomName: room.name, wallIndex: wall.wallIndex,
+        wallId: wall.id, length: adjustedLen, height: wallH,
+        wall, openings: sectionOpenings, startOffset: offset,
+        isGable: false,
+        overlapStart: overlapStart,
+        fullWallLength: fullWallLen,
+      });
+      offset += adjustedLen;
+    });
+
+    if (sections.length === 0) return;
+
+    let totalBlocks: { cols: number; rows: number; total: number } | undefined;
+    if (plan.scaleMode === 'bloque') {
+      const blockW = plan.blockLengthMm / 1000;
+      const blockH = plan.blockHeightMm / 1000;
+      if (blockW > 0 && blockH > 0) {
+        const maxH = Math.max(...sections.map(s => s.height));
+        totalBlocks = { cols: Math.ceil(edgeLength / blockW), rows: Math.ceil(maxH / blockH), total: Math.ceil(edgeLength / blockW) * Math.ceil(maxH / blockH) };
+      }
+    }
+
+    const openingDetails = Object.entries(openingCounts).map(([type, count]) => ({
+      type, count,
+      label: OPENING_PRESETS[type as keyof typeof OPENING_PRESETS]?.label || type,
+    }));
+
+    composites.push({
+      id: `cw-${tc.label}-${bc.label}`,
+      label: `${tc.label}-${bc.label}`,
+      startCorner: { x: wallX, y: edgeStartY, label: tc.label },
+      endCorner: { x: wallX, y: edgeEndY, label: bc.label },
+      side: 'right',
+      totalLength: edgeLength,
+      sections,
+      isExterior: false,
+      objectSummary: { totalBlocks, doors: totalDoors, windows: totalWindows, openingDetails },
     });
   });
 
-  // Horizontal interior walls: left↔right markers sharing the same Y (row)
-  const leftCustom = nonMainAbsolute.filter(c => c.side === 'left');
-  const rightCustom = nonMainAbsolute.filter(c => c.side === 'right');
+  // Horizontal interior walls: pairs of non-main markers sharing the same row
+  const rowGroups = new Map<number, typeof nonMainOriginals>();
+  nonMainOriginals.forEach(c => {
+    const arr = rowGroups.get(c.row) || [];
+    arr.push(c);
+    rowGroups.set(c.row, arr);
+  });
+  const horizontalPairs: Array<{ left: typeof nonMainOriginals[0]; right: typeof nonMainOriginals[0] }> = [];
+  rowGroups.forEach(group => {
+    if (group.length < 2) return;
+    group.sort((a, b) => a.col - b.col);
+    for (let i = 0; i < group.length - 1; i++) {
+      horizontalPairs.push({ left: group[i], right: group[i + 1] });
+    }
+  });
 
-  leftCustom.forEach(lc => {
-    rightCustom.forEach(rc => {
-      if (Math.abs(rc.y - lc.y) > EPSILON) return;
-      if (Math.abs(lc.y - minY) < EPSILON || Math.abs(lc.y - maxY) < EPSILON) return;
+  horizontalPairs.forEach(({ left: lc, right: rc }) => {
+    const wallY = (lc.row - 1) * cellSizeM;
+    if (Math.abs(wallY - minY) < EPSILON || Math.abs(wallY - maxY) < EPSILON) return;
 
-      const wallY = lc.y;
-      const edgeStartX = minX;
-      const edgeEndX = maxX;
-      let edgeLength = edgeEndX - edgeStartX;
+    const edgeStartX = minX;
+    const edgeEndX = maxX;
+    let edgeLength = edgeEndX - edgeStartX;
 
-      if (plan.scaleMode === 'bloque') {
-        const blockW = plan.blockLengthMm / 1000;
-        if (blockW > 0) edgeLength = Math.round(edgeLength / blockW) * blockW;
-      }
+    if (plan.scaleMode === 'bloque') {
+      const blockW = plan.blockLengthMm / 1000;
+      if (blockW > 0) edgeLength = Math.round(edgeLength / blockW) * blockW;
+    }
 
-      const matchBottom: Array<{ room: RoomData; wall: WallData; overlapStart: number; overlapEnd: number }> = [];
-      const matchTop: Array<{ room: RoomData; wall: WallData; overlapStart: number; overlapEnd: number }> = [];
+    const matchBottom: Array<{ room: RoomData; wall: WallData; overlapStart: number; overlapEnd: number }> = [];
+    const matchTop: Array<{ room: RoomData; wall: WallData; overlapStart: number; overlapEnd: number }> = [];
 
-      rooms.forEach(room => {
-        const rBottom = room.posY + room.length;
-        const rTop = room.posY;
-        const rStart = room.posX;
-        const rEnd = room.posX + room.width;
+    rooms.forEach(room => {
+      const rBottom = room.posY + room.length;
+      const rTop = room.posY;
+      const rStart = room.posX;
+      const rEnd = room.posX + room.width;
 
-        if (Math.abs(rBottom - wallY) <= EPSILON) {
-          const oS = Math.max(edgeStartX, rStart);
-          const oE = Math.min(edgeEndX, rEnd);
-          if (oE - oS > EPSILON) {
-            const wall = room.walls.find(w => w.wallIndex === 3);
-            if (wall) matchBottom.push({ room, wall, overlapStart: oS, overlapEnd: oE });
-          }
-        }
-        if (Math.abs(rTop - wallY) <= EPSILON) {
-          const oS = Math.max(edgeStartX, rStart);
-          const oE = Math.min(edgeEndX, rEnd);
-          if (oE - oS > EPSILON) {
-            const wall = room.walls.find(w => w.wallIndex === 1);
-            if (wall) matchTop.push({ room, wall, overlapStart: oS, overlapEnd: oE });
-          }
-        }
-      });
-
-      const matchingRooms = matchBottom.length >= matchTop.length ? matchBottom : matchTop;
-      if (matchingRooms.length === 0) return;
-
-      matchingRooms.sort((a, b) => a.overlapStart - b.overlapStart);
-
-      const rawSections: Array<{ room: RoomData; wall: WallData; sectionLen: number; wallH: number; sectionOpenings: OpeningData[]; isGableWall: boolean; overlapStart: number; fullWallLen: number }> = [];
-
-      matchingRooms.forEach(({ room, wall, overlapStart, overlapEnd }) => {
-        const sectionLen = overlapEnd - overlapStart;
-        let wallH: number;
-        if (wall.height && wall.height > 0) wallH = wall.height;
-        else if (room.height && room.height > 0) wallH = room.height;
-        else if (room.height === 0) return;
-        else wallH = plan.defaultHeight;
-
-        const fullWallLen = room.width;
-        const sectionOpenings = wall.openings.filter(op => {
-          const opAbsPos = room.posX + op.positionX * fullWallLen;
-          return opAbsPos >= overlapStart - EPSILON && opAbsPos <= overlapEnd + EPSILON;
-        });
-
-        rawSections.push({ room, wall, sectionLen, wallH, sectionOpenings, isGableWall: false, overlapStart, fullWallLen: fullWallLen });
-      });
-
-      if (rawSections.length === 0) return;
-
-      const rawTotal = rawSections.reduce((sum, s) => sum + s.sectionLen, 0);
-      const scale = rawTotal > 0 ? edgeLength / rawTotal : 1;
-
-      let offset = 0;
-      const sections: CompositeWallSection[] = [];
-      let totalDoors = 0, totalWindows = 0;
-      const openingCounts: Record<string, number> = {};
-
-      rawSections.forEach(({ room, wall, sectionLen, wallH, sectionOpenings, overlapStart, fullWallLen }) => {
-        let adjustedLen = sectionLen * scale;
-        if (plan.scaleMode === 'bloque') {
-          const blockW = plan.blockLengthMm / 1000;
-          if (blockW > 0) adjustedLen = Math.round(adjustedLen / blockW) * blockW;
-        }
-
-        sectionOpenings.forEach(op => {
-          const key = op.openingType;
-          openingCounts[key] = (openingCounts[key] || 0) + 1;
-          if (key === 'puerta' || key === 'puerta_externa' || key === 'hueco_paso') totalDoors++;
-          else totalWindows++;
-        });
-
-        sections.push({
-          roomId: room.id, roomName: room.name, wallIndex: wall.wallIndex,
-          wallId: wall.id, length: adjustedLen, height: wallH,
-          wall, openings: sectionOpenings, startOffset: offset,
-          isGable: false,
-          overlapStart: overlapStart,
-          fullWallLength: fullWallLen,
-        });
-        offset += adjustedLen;
-      });
-
-      if (sections.length === 0) return;
-
-      let totalBlocks: { cols: number; rows: number; total: number } | undefined;
-      if (plan.scaleMode === 'bloque') {
-        const blockW = plan.blockLengthMm / 1000;
-        const blockH = plan.blockHeightMm / 1000;
-        if (blockW > 0 && blockH > 0) {
-          const maxH = Math.max(...sections.map(s => s.height));
-          totalBlocks = { cols: Math.ceil(edgeLength / blockW), rows: Math.ceil(maxH / blockH), total: Math.ceil(edgeLength / blockW) * Math.ceil(maxH / blockH) };
+      if (Math.abs(rBottom - wallY) <= EPSILON) {
+        const oS = Math.max(edgeStartX, rStart);
+        const oE = Math.min(edgeEndX, rEnd);
+        if (oE - oS > EPSILON) {
+          const wall = room.walls.find(w => w.wallIndex === 3);
+          if (wall) matchBottom.push({ room, wall, overlapStart: oS, overlapEnd: oE });
         }
       }
+      if (Math.abs(rTop - wallY) <= EPSILON) {
+        const oS = Math.max(edgeStartX, rStart);
+        const oE = Math.min(edgeEndX, rEnd);
+        if (oE - oS > EPSILON) {
+          const wall = room.walls.find(w => w.wallIndex === 1);
+          if (wall) matchTop.push({ room, wall, overlapStart: oS, overlapEnd: oE });
+        }
+      }
+    });
 
-      const openingDetails = Object.entries(openingCounts).map(([type, count]) => ({
-        type, count,
-        label: OPENING_PRESETS[type as keyof typeof OPENING_PRESETS]?.label || type,
-      }));
+    const matchingRooms = matchBottom.length >= matchTop.length ? matchBottom : matchTop;
+    if (matchingRooms.length === 0) return;
 
-      composites.push({
-        id: `cw-${lc.label}-${rc.label}`,
-        label: `Pared ${lc.label}-${rc.label}`,
-        startCorner: { x: edgeStartX, y: lc.y, label: lc.label },
-        endCorner: { x: edgeEndX, y: rc.y, label: rc.label },
-        side: 'bottom',
-        totalLength: edgeLength,
-        sections,
-        isExterior: false,
-        objectSummary: { totalBlocks, doors: totalDoors, windows: totalWindows, openingDetails },
+    matchingRooms.sort((a, b) => a.overlapStart - b.overlapStart);
+
+    const rawSecs2: Array<{ room: RoomData; wall: WallData; sectionLen: number; wallH: number; sectionOpenings: OpeningData[]; isGableWall: boolean; overlapStart: number; fullWallLen: number }> = [];
+
+    matchingRooms.forEach(({ room, wall, overlapStart, overlapEnd }) => {
+      const sectionLen = overlapEnd - overlapStart;
+      let wallH: number;
+      if (wall.height && wall.height > 0) wallH = wall.height;
+      else if (room.height && room.height > 0) wallH = room.height;
+      else if (room.height === 0) return;
+      else wallH = plan.defaultHeight;
+
+      const fullWallLen = room.width;
+      const sectionOpenings = wall.openings.filter(op => {
+        const opAbsPos = room.posX + op.positionX * fullWallLen;
+        return opAbsPos >= overlapStart - EPSILON && opAbsPos <= overlapEnd + EPSILON;
       });
+
+      rawSecs2.push({ room, wall, sectionLen, wallH, sectionOpenings, isGableWall: false, overlapStart, fullWallLen });
+    });
+
+    if (rawSecs2.length === 0) return;
+
+    const rawTotal = rawSecs2.reduce((sum, s) => sum + s.sectionLen, 0);
+    const scale = rawTotal > 0 ? edgeLength / rawTotal : 1;
+
+    let offset = 0;
+    const sections: CompositeWallSection[] = [];
+    let totalDoors = 0, totalWindows = 0;
+    const openingCounts: Record<string, number> = {};
+
+    rawSecs2.forEach(({ room, wall, sectionLen, wallH, sectionOpenings, overlapStart, fullWallLen }) => {
+      let adjustedLen = sectionLen * scale;
+      if (plan.scaleMode === 'bloque') {
+        const blockW = plan.blockLengthMm / 1000;
+        if (blockW > 0) adjustedLen = Math.round(adjustedLen / blockW) * blockW;
+      }
+
+      sectionOpenings.forEach(op => {
+        const key = op.openingType;
+        openingCounts[key] = (openingCounts[key] || 0) + 1;
+        if (key === 'puerta' || key === 'puerta_externa' || key === 'hueco_paso') totalDoors++;
+        else totalWindows++;
+      });
+
+      sections.push({
+        roomId: room.id, roomName: room.name, wallIndex: wall.wallIndex,
+        wallId: wall.id, length: adjustedLen, height: wallH,
+        wall, openings: sectionOpenings, startOffset: offset,
+        isGable: false,
+        overlapStart: overlapStart,
+        fullWallLength: fullWallLen,
+      });
+      offset += adjustedLen;
+    });
+
+    if (sections.length === 0) return;
+
+    let totalBlocks: { cols: number; rows: number; total: number } | undefined;
+    if (plan.scaleMode === 'bloque') {
+      const blockW = plan.blockLengthMm / 1000;
+      const blockH = plan.blockHeightMm / 1000;
+      if (blockW > 0 && blockH > 0) {
+        const maxH = Math.max(...sections.map(s => s.height));
+        totalBlocks = { cols: Math.ceil(edgeLength / blockW), rows: Math.ceil(maxH / blockH), total: Math.ceil(edgeLength / blockW) * Math.ceil(maxH / blockH) };
+      }
+    }
+
+    const openingDetails = Object.entries(openingCounts).map(([type, count]) => ({
+      type, count,
+      label: OPENING_PRESETS[type as keyof typeof OPENING_PRESETS]?.label || type,
+    }));
+
+    composites.push({
+      id: `cw-${lc.label}-${rc.label}`,
+      label: `${lc.label}-${rc.label}`,
+      startCorner: { x: edgeStartX, y: wallY, label: lc.label },
+      endCorner: { x: edgeEndX, y: wallY, label: rc.label },
+      side: 'bottom',
+      totalLength: edgeLength,
+      sections,
+      isExterior: false,
+      objectSummary: { totalBlocks, doors: totalDoors, windows: totalWindows, openingDetails },
     });
   });
 

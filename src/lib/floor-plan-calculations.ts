@@ -1941,8 +1941,7 @@ export function computeCompositeWallsFromCorners(
       const rawSections: Array<{ room: RoomData; wall: WallData; sectionLen: number; wallH: number; sectionOpenings: OpeningData[]; isGableWall: boolean; overlapStart: number }> = [];
 
       matchingRooms.forEach(({ room, wall, overlapStart, overlapEnd }) => {
-        // Skip invisible walls — they should not appear in composite elevations
-        if (isInvisibleType(wall.wallType as string)) return;
+        // Include invisible walls as sections (with zero height visual) to preserve elevation integrity
 
         const sectionLen = overlapEnd - overlapStart;
         let wallH: number;
@@ -2041,17 +2040,34 @@ export function computeCompositeWallsFromCorners(
   });
 
   // ── Cross-side composite walls: markers sharing the same original col or row ──
-  // Use original col/row from userCorners (not edge-projected x/y) for matching.
-  const nonMainOriginals = userCorners.filter(c => !(c as any).isMain);
-  // Vertical interior walls: pairs of non-main markers sharing the same col
-  const colGroups = new Map<number, typeof nonMainOriginals>();
-  nonMainOriginals.forEach(c => {
+  // Include ALL markers (main + custom) so main-to-custom pairs like A-B, A-D, D-C are generated.
+  // Build a unified list with col/row info for every marker.
+  const allMarkersWithGrid: Array<{ label: string; col: number; row: number; side: string; isMain: boolean }> = [];
+  // Add main ABCD with their grid positions
+  const mainGridPositions: Array<{ label: string; col: number; row: number; side: string }> = [
+    { label: mainCorners[0].label, col: gridMinCol, row: gridMinRow, side: 'top' },    // A
+    { label: mainCorners[1].label, col: gridMaxCol, row: gridMinRow, side: 'right' },   // B
+    { label: mainCorners[2].label, col: gridMaxCol, row: gridMaxRow, side: 'bottom' },  // C
+    { label: mainCorners[3].label, col: gridMinCol, row: gridMaxRow, side: 'left' },    // D
+  ];
+  mainGridPositions.forEach(mg => allMarkersWithGrid.push({ ...mg, isMain: true }));
+  userCorners.forEach(c => {
+    if ((c as any).isMain) return; // skip main duplicates already added
+    allMarkersWithGrid.push({ label: c.label, col: c.col, row: c.row, side: c.side, isMain: false });
+  });
+
+  // Track perimeter edge labels to avoid duplicating them as cross-side
+  const perimeterLabels = new Set<string>();
+  composites.forEach(cw => perimeterLabels.add(cw.label));
+
+  // Vertical interior walls: pairs of markers sharing the same col
+  const colGroups = new Map<number, typeof allMarkersWithGrid>();
+  allMarkersWithGrid.forEach(c => {
     const arr = colGroups.get(c.col) || [];
     arr.push(c);
     colGroups.set(c.col, arr);
   });
-  // Build pairs from col groups
-  const verticalPairs: Array<{ top: typeof nonMainOriginals[0]; bottom: typeof nonMainOriginals[0] }> = [];
+  const verticalPairs: Array<{ top: typeof allMarkersWithGrid[0]; bottom: typeof allMarkersWithGrid[0] }> = [];
   colGroups.forEach(group => {
     if (group.length < 2) return;
     group.sort((a, b) => a.row - b.row);
@@ -2061,14 +2077,22 @@ export function computeCompositeWallsFromCorners(
   });
 
   verticalPairs.forEach(({ top: tc, bottom: bc }) => {
+    // Skip if already generated as perimeter elevation
+    const pairLabel = `${tc.label}-${bc.label}`;
+    const pairLabelRev = `${bc.label}-${tc.label}`;
+    if (perimeterLabels.has(pairLabel) || perimeterLabels.has(pairLabelRev)) return;
+
     const isLastMmTc = tc.side === 'right' || tc.side === 'bottom';
     const wallX = isLastMmTc ? tc.col * cellSizeM : (tc.col - 1) * cellSizeM;
-    // Skip if on the perimeter boundary
-    if (Math.abs(wallX - minX) < EPSILON || Math.abs(wallX - maxX) < EPSILON) return;
 
-    const edgeStartY = minY;
-    const edgeEndY = maxY;
+    // Compute Y span from the two markers (NOT the full building span)
+    const isLastMmBc = bc.side === 'right' || bc.side === 'bottom';
+    const tcY = isLastMmTc ? tc.row * cellSizeM : (tc.row - 1) * cellSizeM;
+    const bcY = isLastMmBc ? bc.row * cellSizeM : (bc.row - 1) * cellSizeM;
+    const edgeStartY = Math.min(tcY, bcY);
+    const edgeEndY = Math.max(tcY, bcY);
     let edgeLength = edgeEndY - edgeStartY;
+    if (edgeLength < EPSILON) return;
 
     if (plan.scaleMode === 'bloque') {
       const blockW = plan.blockLengthMm / 1000;
@@ -2192,14 +2216,14 @@ export function computeCompositeWallsFromCorners(
     });
   });
 
-  // Horizontal interior walls: pairs of non-main markers sharing the same row
-  const rowGroups = new Map<number, typeof nonMainOriginals>();
-  nonMainOriginals.forEach(c => {
+  // Horizontal interior walls: pairs of markers sharing the same row
+  const rowGroups = new Map<number, typeof allMarkersWithGrid>();
+  allMarkersWithGrid.forEach(c => {
     const arr = rowGroups.get(c.row) || [];
     arr.push(c);
     rowGroups.set(c.row, arr);
   });
-  const horizontalPairs: Array<{ left: typeof nonMainOriginals[0]; right: typeof nonMainOriginals[0] }> = [];
+  const horizontalPairs: Array<{ left: typeof allMarkersWithGrid[0]; right: typeof allMarkersWithGrid[0] }> = [];
   rowGroups.forEach(group => {
     if (group.length < 2) return;
     group.sort((a, b) => a.col - b.col);
@@ -2209,13 +2233,22 @@ export function computeCompositeWallsFromCorners(
   });
 
   horizontalPairs.forEach(({ left: lc, right: rc }) => {
+    // Skip if already generated as perimeter elevation
+    const pairLabel = `${lc.label}-${rc.label}`;
+    const pairLabelRev = `${rc.label}-${lc.label}`;
+    if (perimeterLabels.has(pairLabel) || perimeterLabels.has(pairLabelRev)) return;
+
     const isLastMmLc = lc.side === 'right' || lc.side === 'bottom';
     const wallY = isLastMmLc ? lc.row * cellSizeM : (lc.row - 1) * cellSizeM;
-    if (Math.abs(wallY - minY) < EPSILON || Math.abs(wallY - maxY) < EPSILON) return;
 
-    const edgeStartX = minX;
-    const edgeEndX = maxX;
+    // Compute X span from the two markers (NOT the full building span)
+    const isLastMmRc = rc.side === 'right' || rc.side === 'bottom';
+    const lcX = isLastMmLc ? lc.col * cellSizeM : (lc.col - 1) * cellSizeM;
+    const rcX = isLastMmRc ? rc.col * cellSizeM : (rc.col - 1) * cellSizeM;
+    const edgeStartX = Math.min(lcX, rcX);
+    const edgeEndX = Math.max(lcX, rcX);
     let edgeLength = edgeEndX - edgeStartX;
+    if (edgeLength < EPSILON) return;
 
     if (plan.scaleMode === 'bloque') {
       const blockW = plan.blockLengthMm / 1000;

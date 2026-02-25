@@ -418,8 +418,10 @@ export function calculateRoof(plan: FloorPlanData, rooms?: RoomData[]): number {
     }
   }
 
-  const baseWidth = planW + 2 * plan.roofOverhang;
-  const baseLength = planL + 2 * plan.roofOverhang;
+  // The roof sits on top of the external walls, so we must include the wall thickness
+  const ewt = plan.externalWallThickness || 0;
+  const baseWidth = planW + 2 * ewt + 2 * plan.roofOverhang;
+  const baseLength = planL + 2 * ewt + 2 * plan.roofOverhang;
   
   if (plan.roofType === 'plana') {
     return baseWidth * baseLength;

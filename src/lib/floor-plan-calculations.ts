@@ -2261,15 +2261,37 @@ export function computeCompositeWallsFromCorners(
 
     const rawSecs: Array<{ room: RoomData; wall: WallData; sectionLen: number; wallH: number; sectionOpenings: OpeningData[]; isGableWall: boolean; overlapStart: number; fullWallLen: number }> = [];
 
+    // Determine if this vertical cut is on the building perimeter (true gable)
+    const perimeterEPSILON = cellSizeM * 0.5;
+    const buildingMinX = Math.min(...rooms.map(r => r.posX));
+    const buildingMaxX = Math.max(...rooms.map(r => r.posX + r.width));
+    const isOnPerimeterGable = Math.abs(wallX - buildingMinX) <= perimeterEPSILON || Math.abs(wallX - buildingMaxX) <= perimeterEPSILON;
+
+    // For interior vertical cuts in bajo cubierta, compute a single uniform height
+    // based on the roof slope at this X position (the faldón is continuous)
+    const bajoCubiertaCutHeight = (() => {
+      const allBajoCub = rooms.length > 0 && rooms.every(r => r.height === 0) && plan.roofType === 'dos_aguas';
+      if (!allBajoCub || isOnPerimeterGable) return undefined;
+      // Height at wallX under the roof slope
+      const halfWidth = (buildingMaxX - buildingMinX) / 2 + plan.externalWallThickness;
+      const ridgeX = buildingMinX + (buildingMaxX - buildingMinX) / 2;
+      const slopeRatio = plan.roofSlopePercent / 100;
+      const riseM = halfWidth * slopeRatio;
+      return Math.max(0, riseM - Math.abs(wallX - ridgeX) * slopeRatio);
+    })();
+
     matchingRooms.forEach(({ room, wall, overlapStart, overlapEnd }) => {
       const sectionLen = overlapEnd - overlapStart;
       let wallH: number;
       const isBajoCub = room.height === 0 && plan.roofType === 'dos_aguas';
       // Vertical cross-side: wallIndex comes from matchRight (2) or matchLeft (4)
       const crossWallIndex = matchRight.includes(matchingRooms.find(m => m.room === room && m.wall === wall)!) ? 2 : 4;
-      const isGableWall = isBajoCub && (crossWallIndex === 2 || crossWallIndex === 4);
-      if (isGableWall) {
-        const totalW = (Math.max(...rooms.map(r => r.posX + r.width)) - Math.min(...rooms.map(r => r.posX))) + 2 * plan.externalWallThickness;
+      const isGableWall = isBajoCub && isOnPerimeterGable && (crossWallIndex === 2 || crossWallIndex === 4);
+      if (bajoCubiertaCutHeight !== undefined) {
+        // Interior cut: uniform height from roof slope at this X
+        wallH = bajoCubiertaCutHeight;
+      } else if (isGableWall) {
+        const totalW = (buildingMaxX - buildingMinX) + 2 * plan.externalWallThickness;
         wallH = (totalW / 2) * (plan.roofSlopePercent / 100);
       } else if (wall.height && wall.height > 0) wallH = wall.height;
       else if (room.height && room.height > 0) wallH = room.height;

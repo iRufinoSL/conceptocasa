@@ -250,17 +250,21 @@ export interface FloorPlanSummary {
 /**
  * Calculate auto wall height for bajo cubierta rooms under dos_aguas roof.
  * Ridge runs along Y axis. Height at X = riseM - slopeRatio * |X - ridgeX|.
+ * Room is bajo cubierta if height === 0 or height is undefined/null with appropriate roof type.
  */
 export function calcBajoCubiertaWallHeight(
   room: RoomData, wallIndex: number, plan: FloorPlanData, allRooms: RoomData[]
 ): number | undefined {
-  if (room.height !== 0 || plan.roofType !== 'dos_aguas') return undefined;
+  if (plan.roofType !== 'dos_aguas') return undefined;
+  // Accept rooms with height 0 or undefined (bajo cubierta)
+  if (room.height !== 0 && room.height !== undefined && room.height !== null) return undefined;
   let bbMinX = Infinity, bbMaxX = -Infinity;
   allRooms.forEach(r => { if (r.posX >= 0) { bbMinX = Math.min(bbMinX, r.posX); bbMaxX = Math.max(bbMaxX, r.posX + r.width); } });
   if (!isFinite(bbMinX)) return undefined;
   const buildingWidth = bbMaxX - bbMinX;
   const ridgeX = bbMinX + buildingWidth / 2;
-  const halfWidth = buildingWidth / 2 + plan.roofOverhang;
+  // Gable and wall heights are between walls (no eave overhang)
+  const halfWidth = buildingWidth / 2 + plan.externalWallThickness;
   const slopeRatio = plan.roofSlopePercent / 100;
   const riseM = halfWidth * slopeRatio;
   const getH = (x: number) => Math.max(0, riseM - Math.abs(x - ridgeX) * slopeRatio);

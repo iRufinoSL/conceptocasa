@@ -1007,7 +1007,8 @@ export function useFloorPlan(budgetId: string) {
       if (opts?.copyFromFloorId && newFloor) {
         const sourceRooms = rooms.filter(r => r.floorId === opts.copyFromFloorId && r.posX >= 0);
         for (const src of sourceRooms) {
-          const roomHeight = opts?.wallHeight || src.height || undefined;
+          // For bajo cubierta (wallHeight=0), set room height to 0 explicitly
+          const roomHeight = opts?.wallHeight === 0 ? 0 : (opts?.wallHeight || src.height || undefined);
           const { data: newRoom, error: roomErr } = await supabase
             .from('budget_floor_plan_rooms')
             .insert({
@@ -1016,7 +1017,7 @@ export function useFloorPlan(budgetId: string) {
               name: src.name,
               width: src.width,
               length: src.length,
-              height: roomHeight || null,
+              height: roomHeight !== undefined ? roomHeight : null,
               pos_x: src.posX,
               pos_y: src.posY,
               order_index: 0,
@@ -1035,7 +1036,7 @@ export function useFloorPlan(budgetId: string) {
               wall_index: w.wallIndex,
               wall_type: w.wallType,
               thickness: w.thickness || null,
-              height: opts?.wallHeight || w.height || null,
+              height: opts?.wallHeight === 0 ? null : (opts?.wallHeight || w.height || null),
             });
           }
         }

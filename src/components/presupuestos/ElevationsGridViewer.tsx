@@ -2483,23 +2483,8 @@ function CompositeFullscreenBlockGrid({ compositeWall, plan, maxHeight, selected
         }
 
         if (section.isGable) {
-          // For gable sections, just render non-interactive SVG
-          const baseY = rys + totalH;
-          const peakX = sx + sw2 / 2;
-          const peakY = rys + totalH - sh2;
-          const trianglePath = `M ${sx} ${baseY} L ${peakX} ${peakY} L ${sx + sw2} ${baseY} Z`;
-          return (
-            <g key={`section-${sIdx}`}>
-              <path d={trianglePath} fill={sectionFill} stroke="hsl(222, 47%, 30%)" strokeWidth={1.2} />
-              {sIdx > 0 && <line x1={sx} y1={rys} x2={sx} y2={rys + totalH}
-                stroke="hsl(222, 47%, 40%)" strokeWidth={0.8} strokeDasharray="3 2" />}
-              <text x={sx + sw2 / 2} y={baseY - sh2 * 0.3} textAnchor="middle"
-                fontSize={10} fill="hsl(222, 47%, 30%)" fontWeight={600} opacity={0.7} pointerEvents="none">
-                {section.roomName}
-              </text>
-              <circle cx={peakX} cy={peakY} r={3} fill="hsl(15, 70%, 45%)" />
-            </g>
-          );
+          // Gable sections are rendered collectively below (shared triangle), skip individual rendering
+          return null;
         }
 
         return (
@@ -2643,6 +2628,124 @@ const isDoor = op.openingType === 'puerta' || op.openingType === 'puerta_externa
           </g>
         );
       })}
+
+      {/* Shared gable triangle for all gable sections */}
+      {(() => {
+        const gableSections = cw.sections.filter(s => s.isGable);
+        if (gableSections.length === 0) return null;
+        const peakH = Math.max(...gableSections.map(s => s.gablePeakHeight ?? s.height));
+        const gableStartX = rxs + gableSections[0].startOffset * s;
+        const gableTotalW = gableSections.reduce((sum, gs) => sum + gs.length, 0) * s;
+        const baseY = rys + totalH;
+        const peakX = gableStartX + gableTotalW / 2;
+        const peakY = baseY - peakH * s;
+        const leftX = gableStartX;
+        const rightX = gableStartX + gableTotalW;
+        const trianglePath = `M ${leftX} ${baseY} L ${peakX} ${peakY} L ${rightX} ${baseY} Z`;
+        const clipId = `fs-gable-clip-${cw.id}`;
+
+        return (
+          <g>
+            <defs>
+              <clipPath id={clipId}>
+                <path d={trianglePath} />
+              </clipPath>
+            </defs>
+            {/* Triangle outline */}
+            <path d={trianglePath} fill="none" stroke="hsl(222, 47%, 30%)" strokeWidth={1.2} />
+
+            {/* Per-section rendering within the shared triangle */}
+            {gableSections.map((section, gi) => {
+              const sx = rxs + section.startOffset * s;
+              const sw2 = section.length * s;
+              const isInv = isSectionWallInvisible(section);
+
+              if (isInv) {
+                // Invisible section: white rect clipped to triangle
+                return (
+                  <g key={`gable-inv-${gi}`}>
+                    <rect x={sx} y={peakY - 5} width={sw2} height={baseY - peakY + 10}
+                      fill="hsl(var(--background))" clipPath={`url(#${clipId})`} />
+                    <rect x={sx} y={peakY} width={sw2} height={baseY - peakY}
+                      fill="none" stroke="hsl(0, 0%, 75%)" strokeWidth={0.5} strokeDasharray="3 3"
+                      clipPath={`url(#${clipId})`} />
+                    <text x={sx + sw2 / 2} y={baseY - (baseY - peakY) * 0.3} textAnchor="middle"
+                      fontSize={10} fill="hsl(222, 47%, 30%)" fontWeight={600} opacity={0.5} pointerEvents="none">
+                      {section.roomName}
+                    </text>
+                  </g>
+                );
+              }
+
+              // Visible section: fill + block pattern clipped to triangle
+              const sectionFill = gi % 2 === 0 ? 'hsl(30, 30%, 92%)' : 'hsl(30, 25%, 88%)';
+              return (
+                <g key={`gable-vis-${gi}`}>
+                  <rect x={sx} y={peakY - 5} width={sw2} height={baseY - peakY + 10}
+                    fill={sectionFill} clipPath={`url(#${clipId})`} />
+                  {/* Block pattern */}
+                  {plan.scaleMode === 'bloque' && (() => {
+                    const bDims = getBlockDimensions(plan, true);
+                    const bwP = (bDims.lengthMm / 1000) * s;
+                    const bhP = (bDims.heightMm / 1000) * s;
+                    if (bwP < 3 || bhP < 2) return null;
+                    const hPx = peakH * s;
+                    const rowCount = Math.ceil(hPx / bhP);
+                    const lines: React.ReactElement[] = [];
+                    for (let r = 1; r < rowCount; r++) {
+                      const y = baseY - r * bhP;
+                      if (y <= peakY) break;
+                      lines.push(
+                        <line key={`gbh-${gi}-${r}`} x1={sx} y1={y} x2={sx + sw2} y2={y}
+                          stroke="hsl(210, 50%, 35%)" strokeWidth={0.6} opacity={0.5} />
+                      );
+                    }
+                    for (let r = 0; r < rowCount; r++) {
+                      const yTop2 = Math.max(peakY, baseY - (r + 1) * bhP);
+                      const yBot2 = baseY - r * bhP;
+                      if (yTop2 >= yBot2) continue;
+                      const off = r % 2 === 0 ? 0 : bwP / 2;
+                      const startC = Math.floor((sx - rxs - off) / bwP);
+                      const endC = Math.ceil((sx + sw2 - rxs - off) / bwP);
+                      for (let c = startC; c <= endC; c++) {
+                        const x = rxs + off + c * bwP;
+                        if (x <= sx || x >= sx + sw2) continue;
+                        lines.push(
+                          <line key={`gbv-${gi}-${r}-${c}`} x1={x} y1={yTop2} x2={x} y2={yBot2}
+                            stroke="hsl(210, 50%, 35%)" strokeWidth={0.6} opacity={0.5} />
+                        );
+                      }
+                    }
+                    return <g clipPath={`url(#${clipId})`}>{lines}</g>;
+                  })()}
+                  <text x={sx + sw2 / 2} y={baseY - (baseY - peakY) * 0.3} textAnchor="middle"
+                    fontSize={10} fill="hsl(222, 47%, 30%)" fontWeight={600} opacity={0.7} pointerEvents="none">
+                    {section.roomName}
+                  </text>
+                </g>
+              );
+            })}
+
+            {/* Section separators within the gable */}
+            {gableSections.slice(1).map((section, gi) => {
+              const sx = rxs + section.startOffset * s;
+              const fracFromCenter = Math.abs(section.startOffset - (gableSections[0].startOffset + gableSections.reduce((sum, gs) => sum + gs.length, 0) / 2)) / (gableSections.reduce((sum, gs) => sum + gs.length, 0) / 2);
+              const sepH = peakH * (1 - fracFromCenter);
+              const sepTopY = baseY - sepH * s;
+              return (
+                <line key={`gable-sep-${gi}`}
+                  x1={sx} y1={baseY} x2={sx} y2={sepTopY}
+                  stroke="hsl(222, 47%, 40%)" strokeWidth={0.8} strokeDasharray="4 2" />
+              );
+            })}
+
+            {/* Cumbrera marker */}
+            <circle cx={peakX} cy={peakY} r={3} fill="hsl(15, 70%, 45%)" />
+            <text x={peakX} y={peakY - 6} textAnchor="middle"
+              fontSize={9} fill="hsl(15, 70%, 45%)" fontWeight={700}>CUMBRERA</text>
+          </g>
+        );
+      })()}
 
       {/* Individual section dimension lines */}
       {cw.sections.map((section, idx) => {
@@ -3413,78 +3516,9 @@ function CompositeWallCard({ compositeWall, plan, onOpeningClick, onAddBlockGrou
             : (idx % 2 === 0 ? 'hsl(30, 30%, 92%)' : 'hsl(30, 25%, 88%)');
           const isGableSection = section.isGable && section.height > 0;
 
-          // For gable sections, render a triangle instead of rectangle
+          // Gable sections are rendered collectively after the sections loop (shared triangle)
           if (isGableSection) {
-            const baseY = rys + totalH;
-            const peakX = sx + sw2 / 2;
-            const peakY = rys + totalH - sh2;
-            const trianglePath = `M ${sx} ${baseY} L ${peakX} ${peakY} L ${sx + sw2} ${baseY} Z`;
-            const clipId = `comp-gable-clip-${idx}`;
-
-            return (
-              <g key={`section-${idx}`}>
-                <path d={trianglePath} fill={sectionFill} stroke="hsl(222, 47%, 30%)" strokeWidth={1.2} />
-
-                {/* Block pattern inside triangle */}
-                {plan.scaleMode === 'bloque' && !isSectionInvisible && (() => {
-                  const bwPx = (plan.blockLengthMm / 1000) * s;
-                  const bhPx = (plan.blockHeightMm / 1000) * s;
-                  if (bwPx < 3 || bhPx < 2) return null;
-                  const rows = Math.ceil(sh2 / bhPx);
-                  const lines: React.ReactElement[] = [];
-                  for (let r = 1; r < rows; r++) {
-                    const y = baseY - r * bhPx;
-                    if (y <= peakY) break;
-                    lines.push(
-                      <line key={`bh-${idx}-${r}`} x1={sx} y1={y} x2={sx + sw2} y2={y}
-                        stroke="hsl(210, 50%, 35%)" strokeWidth={1.2} opacity={1} pointerEvents="none" />
-                    );
-                  }
-                  for (let r = 0; r < rows; r++) {
-                    const yTop = Math.max(peakY, baseY - (r + 1) * bhPx);
-                    const yBot = baseY - r * bhPx;
-                    const offset = r % 2 === 0 ? 0 : bwPx / 2;
-                    // Align vertical lines to composite wall origin
-                    const globalStartCol = Math.floor((sx - rxs - offset) / bwPx);
-                    const globalEndCol = Math.ceil((sx + sw2 - rxs - offset) / bwPx);
-                    for (let c = globalStartCol; c <= globalEndCol; c++) {
-                      const x = rxs + offset + c * bwPx;
-                      if (x <= sx || x >= sx + sw2) continue;
-                      lines.push(
-                        <line key={`bv-${idx}-${r}-${c}`} x1={x} y1={yTop} x2={x} y2={Math.min(yBot, baseY)}
-                          stroke="hsl(210, 50%, 35%)" strokeWidth={1.0} opacity={1} pointerEvents="none" />
-                      );
-                    }
-                  }
-                  return (
-                    <>
-                      <defs>
-                        <clipPath id={clipId}>
-                          <path d={trianglePath} />
-                        </clipPath>
-                      </defs>
-                      <g clipPath={`url(#${clipId})`}>{lines}</g>
-                    </>
-                  );
-                })()}
-
-                {/* Section separator */}
-                {idx > 0 && (
-                  <line x1={sx} y1={rys} x2={sx} y2={rys + totalH}
-                    stroke="hsl(222, 47%, 40%)" strokeWidth={0.8} strokeDasharray="3 2" />
-                )}
-
-                {/* Room label */}
-                <text x={sx + sw2 / 2} y={baseY - sh2 * 0.3} textAnchor="middle"
-                  fontSize={fsScale ? 10 : 7} fill="hsl(222, 47%, 30%)" fontWeight={600} opacity={0.7}
-                  pointerEvents="none">
-                  {section.roomName}
-                </text>
-
-                {/* Peak marker */}
-                <circle cx={peakX} cy={peakY} r={fsScale ? 3 : 2} fill="hsl(15, 70%, 45%)" />
-              </g>
-            );
+            return null;
           }
 
           return (
@@ -3650,6 +3684,122 @@ function CompositeWallCard({ compositeWall, plan, onOpeningClick, onAddBlockGrou
             </g>
           );
         })}
+
+        {/* Shared gable triangle for all gable sections (compact view) */}
+        {(() => {
+          const gableSections = cw.sections.filter(sec => sec.isGable);
+          if (gableSections.length === 0) return null;
+          const peakH = Math.max(...gableSections.map(sec => sec.gablePeakHeight ?? sec.height));
+          const gableStartX = rxs + gableSections[0].startOffset * s;
+          const gableTotalW = gableSections.reduce((sum, gs) => sum + gs.length, 0) * s;
+          const baseY = rys + totalH;
+          const peakX = gableStartX + gableTotalW / 2;
+          const peakY = baseY - peakH * s;
+          const leftX = gableStartX;
+          const rightX = gableStartX + gableTotalW;
+          const trianglePath = `M ${leftX} ${baseY} L ${peakX} ${peakY} L ${rightX} ${baseY} Z`;
+          const clipId = `comp-gable-shared-${cw.id}`;
+
+          return (
+            <g>
+              <defs>
+                <clipPath id={clipId}>
+                  <path d={trianglePath} />
+                </clipPath>
+              </defs>
+              {/* Triangle outline */}
+              <path d={trianglePath} fill="none" stroke="hsl(222, 47%, 30%)" strokeWidth={1.2} />
+
+              {/* Per-section rendering within the shared triangle */}
+              {gableSections.map((section, gi) => {
+                const sx = rxs + section.startOffset * s;
+                const sw2 = section.length * s;
+                const isInv = isSectionWallInvisible(section);
+
+                if (isInv) {
+                  return (
+                    <g key={`gable-inv-${gi}`}>
+                      <rect x={sx} y={peakY - 5} width={sw2} height={baseY - peakY + 10}
+                        fill="hsl(var(--background))" clipPath={`url(#${clipId})`} />
+                      <rect x={sx} y={peakY} width={sw2} height={baseY - peakY}
+                        fill="none" stroke="hsl(0, 0%, 75%)" strokeWidth={0.5} strokeDasharray="3 3"
+                        clipPath={`url(#${clipId})`} />
+                      <text x={sx + sw2 / 2} y={baseY - (baseY - peakY) * 0.3} textAnchor="middle"
+                        fontSize={fsScale ? 10 : 7} fill="hsl(222, 47%, 30%)" fontWeight={600} opacity={0.5} pointerEvents="none">
+                        {section.roomName}
+                      </text>
+                    </g>
+                  );
+                }
+
+                const sectionFill = gi % 2 === 0 ? 'hsl(30, 30%, 92%)' : 'hsl(30, 25%, 88%)';
+                return (
+                  <g key={`gable-vis-${gi}`}>
+                    <rect x={sx} y={peakY - 5} width={sw2} height={baseY - peakY + 10}
+                      fill={sectionFill} clipPath={`url(#${clipId})`} />
+                    {/* Block pattern */}
+                    {plan.scaleMode === 'bloque' && (() => {
+                      const bwPx = (plan.blockLengthMm / 1000) * s;
+                      const bhPx = (plan.blockHeightMm / 1000) * s;
+                      if (bwPx < 3 || bhPx < 2) return null;
+                      const hPx = peakH * s;
+                      const rowCount = Math.ceil(hPx / bhPx);
+                      const lines: React.ReactElement[] = [];
+                      for (let r = 1; r < rowCount; r++) {
+                        const y = baseY - r * bhPx;
+                        if (y <= peakY) break;
+                        lines.push(
+                          <line key={`gbh-${gi}-${r}`} x1={sx} y1={y} x2={sx + sw2} y2={y}
+                            stroke="hsl(210, 50%, 35%)" strokeWidth={0.6} opacity={0.5} />
+                        );
+                      }
+                      for (let r = 0; r < rowCount; r++) {
+                        const yTop2 = Math.max(peakY, baseY - (r + 1) * bhPx);
+                        const yBot2 = baseY - r * bhPx;
+                        if (yTop2 >= yBot2) continue;
+                        const off = r % 2 === 0 ? 0 : bwPx / 2;
+                        const startC = Math.floor((sx - rxs - off) / bwPx);
+                        const endC = Math.ceil((sx + sw2 - rxs - off) / bwPx);
+                        for (let c = startC; c <= endC; c++) {
+                          const x = rxs + off + c * bwPx;
+                          if (x <= sx || x >= sx + sw2) continue;
+                          lines.push(
+                            <line key={`gbv-${gi}-${r}-${c}`} x1={x} y1={yTop2} x2={x} y2={yBot2}
+                              stroke="hsl(210, 50%, 35%)" strokeWidth={0.6} opacity={0.5} />
+                          );
+                        }
+                      }
+                      return <g clipPath={`url(#${clipId})`}>{lines}</g>;
+                    })()}
+                    <text x={sx + sw2 / 2} y={baseY - (baseY - peakY) * 0.3} textAnchor="middle"
+                      fontSize={fsScale ? 10 : 7} fill="hsl(222, 47%, 30%)" fontWeight={600} opacity={0.7} pointerEvents="none">
+                      {section.roomName}
+                    </text>
+                  </g>
+                );
+              })}
+
+              {/* Section separators within the gable */}
+              {gableSections.slice(1).map((section, gi) => {
+                const sx = rxs + section.startOffset * s;
+                const gTotal = gableSections.reduce((sum, gs) => sum + gs.length, 0);
+                const fracFromCenter = Math.abs(section.startOffset - (gableSections[0].startOffset + gTotal / 2)) / (gTotal / 2);
+                const sepH = peakH * (1 - Math.min(fracFromCenter, 1));
+                const sepTopY = baseY - sepH * s;
+                return (
+                  <line key={`gable-sep-${gi}`}
+                    x1={sx} y1={baseY} x2={sx} y2={sepTopY}
+                    stroke="hsl(222, 47%, 40%)" strokeWidth={0.8} strokeDasharray="4 2" />
+                );
+              })}
+
+              {/* Cumbrera marker */}
+              <circle cx={peakX} cy={peakY} r={fsScale ? 3 : 2} fill="hsl(15, 70%, 45%)" />
+              {fsScale && <text x={peakX} y={peakY - 6} textAnchor="middle"
+                fontSize={9} fill="hsl(15, 70%, 45%)" fontWeight={700}>CUMBRERA</text>}
+            </g>
+          );
+        })()}
 
         {/* Individual section dimension lines */}
         {cw.sections.map((section, idx) => {

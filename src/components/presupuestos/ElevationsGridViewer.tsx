@@ -1572,6 +1572,10 @@ const isDoor = op.openingType === 'puerta' || op.openingType === 'puerta_externa
             </g>
           );
         })}
+        {/* CAD Ruler — fullscreen only */}
+        {fsScale && (
+          <CadRuler rx={rx} ry={ry} rw={rw} rh={rh} widthM={card.width} heightM={card.height} scale={s} />
+        )}
       </svg>
     );
   };

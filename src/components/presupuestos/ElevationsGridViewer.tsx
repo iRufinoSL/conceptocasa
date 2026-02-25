@@ -608,7 +608,12 @@ export function ElevationsGridViewer({
       const sortedFloorComps = [...perFloorComposites];
       sortedFloorComps.forEach(({ floorName, composites }) => {
         // Find main perimeter wall for this side (A-B, B-C, C-D, D-A pattern)
-        const sideComposites = composites.filter(cw => cw.side === side);
+        const sideComposites = composites.filter(cw => {
+          if (cw.side !== side) return false;
+          // Exclude interior cuts from total elevation (both corners have numeric suffix after letter)
+          const hasNumSuffix = (lbl: string) => /[A-D]\d/.test(lbl.replace(/^\d+/, ''));
+          return !(hasNumSuffix(cw.startCorner.label) && hasNumSuffix(cw.endCorner.label));
+        });
         if (sideComposites.length > 0) {
           // Check if any section is a gable
           const isGable = sideComposites.some(cw => cw.sections.some(s => s.isGable));
@@ -702,24 +707,80 @@ export function ElevationsGridViewer({
         <div className="space-y-4">
           {perFloorComposites.map(({ floorId, floorName, composites }) => {
             if (composites.length === 0) return null;
+
+            // Group composites by side, separating perimeter from interior cuts
+            const SIDE_ORDER: Array<'top' | 'right' | 'bottom' | 'left'> = ['top', 'right', 'bottom', 'left'];
+            const FACE_NAMES: Record<string, string> = { top: 'Cara Superior', right: 'Cara Derecha', bottom: 'Cara Inferior', left: 'Cara Izquierda' };
+            const isInteriorCut = (cw2: CompositeWall) => {
+              const hasNumSuffix = (lbl: string) => /[A-D]\d/.test(lbl.replace(/^\d+/, ''));
+              return hasNumSuffix(cw2.startCorner.label) && hasNumSuffix(cw2.endCorner.label);
+            };
+            const bySide = new Map<string, CompositeWall[]>();
+            const interiorWalls: CompositeWall[] = [];
+            composites.forEach(cw2 => {
+              if (isInteriorCut(cw2)) {
+                interiorWalls.push(cw2);
+              } else {
+                const s2 = cw2.side;
+                if (!bySide.has(s2)) bySide.set(s2, []);
+                bySide.get(s2)!.push(cw2);
+              }
+            });
+
             const content = (
-              <div className="space-y-3">
-                {composites.map(cw => (
-                  <CompositeWallCard
-                    key={cw.id}
-                    compositeWall={cw}
-                    plan={plan}
-                    onOpeningClick={handleOpeningClick}
-                    onAddBlockGroup={onAddBlockGroup}
-                    onDeleteBlockGroup={onDeleteBlockGroup}
-                    onDeleteOpening={onDeleteOpening}
-                    onUpdateOpening={onUpdateOpening}
-                    onUpdateWall={onUpdateWall}
-                    saving={saving}
-                    rooms={rooms}
-                    budgetName={budgetName}
-                  />
-                ))}
+              <div className="space-y-4">
+                {SIDE_ORDER.map(side2 => {
+                  const sideComps = bySide.get(side2);
+                  if (!sideComps || sideComps.length === 0) return null;
+                  return (
+                    <div key={side2} className="space-y-2">
+                      <div className="flex items-center gap-2 px-2 border-b border-border/30 pb-1">
+                        <h4 className="text-xs font-bold text-foreground">{FACE_NAMES[side2]}</h4>
+                        <Badge variant="outline" className="text-[9px] h-4">{sideComps.length} alzado{sideComps.length > 1 ? 's' : ''}</Badge>
+                      </div>
+                      {sideComps.map(cw2 => (
+                        <CompositeWallCard
+                          key={cw2.id}
+                          compositeWall={cw2}
+                          plan={plan}
+                          onOpeningClick={handleOpeningClick}
+                          onAddBlockGroup={onAddBlockGroup}
+                          onDeleteBlockGroup={onDeleteBlockGroup}
+                          onDeleteOpening={onDeleteOpening}
+                          onUpdateOpening={onUpdateOpening}
+                          onUpdateWall={onUpdateWall}
+                          saving={saving}
+                          rooms={rooms}
+                          budgetName={budgetName}
+                        />
+                      ))}
+                    </div>
+                  );
+                })}
+                {interiorWalls.length > 0 && (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 px-2 border-b border-border/30 pb-1">
+                      <h4 className="text-xs font-bold text-foreground">Cortes interiores</h4>
+                      <Badge variant="outline" className="text-[9px] h-4">{interiorWalls.length} alzado{interiorWalls.length > 1 ? 's' : ''}</Badge>
+                    </div>
+                    {interiorWalls.map(cw2 => (
+                      <CompositeWallCard
+                        key={cw2.id}
+                        compositeWall={cw2}
+                        plan={plan}
+                        onOpeningClick={handleOpeningClick}
+                        onAddBlockGroup={onAddBlockGroup}
+                        onDeleteBlockGroup={onDeleteBlockGroup}
+                        onDeleteOpening={onDeleteOpening}
+                        onUpdateOpening={onUpdateOpening}
+                        onUpdateWall={onUpdateWall}
+                        saving={saving}
+                        rooms={rooms}
+                        budgetName={budgetName}
+                      />
+                    ))}
+                  </div>
+                )}
               </div>
             );
             if (floorName) {
@@ -728,7 +789,7 @@ export function ElevationsGridViewer({
                   <CollapsibleTrigger className="flex items-center gap-2 w-full text-left group hover:bg-muted/50 rounded px-2 py-1.5 transition-colors border-b border-border/50 mb-2">
                     <ChevronRight className="h-4 w-4 text-foreground transition-transform group-data-[state=open]:rotate-90" />
                     <h3 className="text-sm font-bold text-foreground">{floorName}</h3>
-                    <Badge variant="secondary" className="text-[10px] h-4">{composites.length} paredes</Badge>
+                    <Badge variant="secondary" className="text-[10px] h-4">{composites.length} alzados</Badge>
                   </CollapsibleTrigger>
                   <CollapsibleContent className="ml-2">{content}</CollapsibleContent>
                 </Collapsible>
@@ -1567,7 +1628,7 @@ function ElevationCardView({ card, plan, onOpeningClick, onAddOpening, onCardDou
           stroke="hsl(25, 95%, 45%)" strokeWidth={0.6} />
         <line x1={rx - 16} y1={ry} x2={rx - 8} y2={ry} stroke="hsl(25, 95%, 45%)" strokeWidth={0.4} />
         <line x1={rx - 16} y1={ry + rh} x2={rx - 8} y2={ry + rh} stroke="hsl(25, 95%, 45%)" strokeWidth={0.4} />
-        <text x={rx - 18} y={ry + rh / 2} textAnchor="middle" fontSize={fsScale ? 10 : 8} fill="hsl(25, 95%, 45%)" fontWeight={600}
+        <text x={rx - 18} y={ry + rh / 2} textAnchor="middle" fontSize={fsScale ? 13 : 10} fill="hsl(25, 95%, 45%)" fontWeight={600}
           transform={`rotate(-90, ${rx - 18}, ${ry + rh / 2})`}>
           {Math.round(card.height * 1000)} mm
         </text>
@@ -2534,7 +2595,7 @@ const isDoor = op.openingType === 'puerta' || op.openingType === 'puerta_externa
         stroke="hsl(25, 95%, 45%)" strokeWidth={0.8} />
       <line x1={rxs - 20} y1={rys} x2={rxs - 10} y2={rys} stroke="hsl(25, 95%, 45%)" strokeWidth={0.5} />
       <line x1={rxs - 20} y1={rys + totalH} x2={rxs - 10} y2={rys + totalH} stroke="hsl(25, 95%, 45%)" strokeWidth={0.5} />
-      <text x={rxs - 22} y={rys + totalH / 2} textAnchor="middle" fontSize={12} fill="hsl(25, 95%, 45%)" fontWeight={600}
+      <text x={rxs - 22} y={rys + totalH / 2} textAnchor="middle" fontSize={14} fill="hsl(25, 95%, 45%)" fontWeight={600}
         transform={`rotate(-90, ${rxs - 22}, ${rys + totalH / 2})`}>
         {Math.round(maxHeight * 1000)} mm
       </text>
@@ -3039,7 +3100,7 @@ function TotalElevationCard({ side, label, layers, plan, rooms, budgetName }: {
                   <line x1={dimX - 3} y1={layerTopY} x2={dimX + 3} y2={layerTopY}
                     stroke="hsl(var(--primary))" strokeWidth={0.7} opacity={0.5} />
                   <text x={dimX + 2} y={(currentBaseY + layerTopY) / 2 + 3} textAnchor="start"
-                    fontSize={fsScale ? 8 : 6} fill="hsl(var(--primary))" fontWeight={600} opacity={0.6}
+                    fontSize={fsScale ? 12 : 9} fill="hsl(var(--primary))" fontWeight={600} opacity={0.6}
                     transform={`rotate(90, ${dimX + 2}, ${(currentBaseY + layerTopY) / 2})`}>
                     {Math.round(layer.maxHeight * 1000)} mm
                   </text>
@@ -3247,7 +3308,7 @@ function CompositeWallCard({ compositeWall, plan, onOpeningClick, onAddBlockGrou
 
           const isSectionInvisible = isInvisibleType(section.wall.wallType as string);
           const sectionFill = isSectionInvisible
-            ? 'hsl(260, 15%, 93%)'
+            ? 'none'
             : (idx % 2 === 0 ? 'hsl(30, 30%, 92%)' : 'hsl(30, 25%, 88%)');
           const isGableSection = section.isGable && section.height > 0;
 
@@ -3329,7 +3390,7 @@ function CompositeWallCard({ compositeWall, plan, onOpeningClick, onAddBlockGrou
             <g key={`section-${idx}`}>
               {/* Section rectangle */}
               <rect x={sx} y={sy} width={sw2} height={sh2}
-                fill={sectionFill} stroke="hsl(222, 47%, 30%)" strokeWidth={1.2} rx={1} />
+                fill={sectionFill} stroke={isSectionInvisible ? 'hsl(0, 0%, 75%)' : 'hsl(222, 47%, 30%)'} strokeWidth={isSectionInvisible ? 0.5 : 1.2} strokeDasharray={isSectionInvisible ? '3 3' : undefined} rx={1} />
 
               {/* Block pattern — only for non-invisible walls, aligned to composite wall origin */}
               {plan.scaleMode === 'bloque' && !isSectionInvisible && (() => {
@@ -3380,8 +3441,8 @@ function CompositeWallCard({ compositeWall, plan, onOpeningClick, onAddBlockGrou
                 {section.roomName}
               </text>
 
-              {/* Openings */}
-              {(() => {
+              {/* Openings — hidden for invisible sections */}
+              {!isSectionInvisible && (() => {
                 // Use live openings from liveRooms for accurate positions
                 const liveRoom = liveRooms?.find(r => r.id === section.roomId);
                 const liveWall = liveRoom?.walls.find(w => w.id === section.wallId);

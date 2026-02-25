@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Button } from '@/components/ui/button';
@@ -1080,22 +1081,26 @@ export function FloorPlanTab({ budgetId, budgetName = '', isAdmin }: FloorPlanTa
       </div>
 
       {/* Unified Niveles + Parámetros panel */}
-      {showLevelManager && planData && (
-        <LevelManagerPanel
-          floors={floors}
-          planData={planData}
-          rooms={rooms}
-          onAdd={addFloor}
-          onUpdate={updateFloor}
-          onDelete={deleteFloor}
-          onUpdatePlan={updateFloorPlan}
-          onUpdateRoom={updateRoom}
-          onUpdateWall={updateWall}
-          onClassifyWalls={classifyPerimeterWalls}
-          saving={saving}
-          onClose={() => setShowLevelManager(false)}
-          onFloorCreated={(floorId) => setForceActiveFloorId(floorId)}
-        />
+      {planData && (
+        <Collapsible open={showLevelManager} onOpenChange={setShowLevelManager}>
+          <CollapsibleContent>
+            <LevelManagerPanel
+              floors={floors}
+              planData={planData}
+              rooms={rooms}
+              onAdd={addFloor}
+              onUpdate={updateFloor}
+              onDelete={deleteFloor}
+              onUpdatePlan={updateFloorPlan}
+              onUpdateRoom={updateRoom}
+              onUpdateWall={updateWall}
+              onClassifyWalls={classifyPerimeterWalls}
+              saving={saving}
+              onClose={() => setShowLevelManager(false)}
+              onFloorCreated={(floorId) => setForceActiveFloorId(floorId)}
+            />
+          </CollapsibleContent>
+        </Collapsible>
       )}
 
       {/* Content */}

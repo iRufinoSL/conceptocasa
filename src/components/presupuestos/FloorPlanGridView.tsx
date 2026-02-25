@@ -647,8 +647,8 @@ export function FloorPlanGridView({
                   top: ROW_HEADER_H + row * CS,
                   width: CS,
                   height: CS,
-                  border: '1px solid rgba(34,139,34,0.3)',
-                  backgroundColor: isOdd ? 'rgba(34,139,34,0.05)' : 'transparent',
+                  border: '1px solid rgba(34,139,34,0.45)',
+                  backgroundColor: isOdd ? 'rgba(34,139,34,0.09)' : 'transparent',
                 }}
               />
             );

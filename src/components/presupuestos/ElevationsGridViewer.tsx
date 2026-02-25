@@ -413,8 +413,11 @@ export function ElevationsGridViewer({
           minY = Math.min(minY, r.posY);
           maxY = Math.max(maxY, r.posY + r.length);
         });
-        const totalWidth = (maxX - minX) + 2 * plan.externalWallThickness;
-        const totalLength = (maxY - minY) + 2 * plan.externalWallThickness;
+        const innerWidth = (maxX - minX) + 2 * plan.externalWallThickness;
+        const innerLength = (maxY - minY) + 2 * plan.externalWallThickness;
+        const overhang = plan.roofOverhang || 0;
+        const totalWidth = innerWidth + 2 * overhang;
+        const totalLength = innerLength + 2 * overhang;
         const halfWidth = totalWidth / 2;
         const rise = halfWidth * (plan.roofSlopePercent / 100);
         const slopeWidth = Math.sqrt(halfWidth * halfWidth + rise * rise);

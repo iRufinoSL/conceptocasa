@@ -1632,6 +1632,9 @@ export interface CompositeWallSection {
   isGable?: boolean; // triangular gable wall (bajo cubierta)
   overlapStart?: number; // absolute start position of this section along the room's wall axis
   fullWallLength?: number; // full length of the room's wall (for opening position calculation)
+  gablePeakHeight?: number; // peak height of the full gable for partial rendering
+  gableTotalLength?: number; // total length of the full gable span
+  gableSectionStart?: number; // where this section starts within the full gable
 }
 
 export interface CompositeWall {
@@ -1874,6 +1877,9 @@ export function computeCompositeWallsFromCorners(
 
   const ewt = plan.externalWallThickness;
 
+  // Detect bajo cubierta level: all rooms have height 0
+  const isBajoCubiertaLevel = rooms.length > 0 && rooms.every(r => r.height === 0);
+
   // Derive level prefix from user corners (e.g. "1A1" → "1")
   const levelPrefix = (() => {
     for (const uc of userCorners) {
@@ -1984,7 +1990,7 @@ export function computeCompositeWallsFromCorners(
       // Only add thickness at corners that are main ABCD corners (not custom intermediate ones)
       const isV1Main = /^(\d*)([A-D])$/i.test(v1.label);
       const isV2Main = /^(\d*)([A-D])$/i.test(v2.label);
-      let edgeLength = interiorLength + (isV1Main ? ewt : 0) + (isV2Main ? ewt : 0);
+      let edgeLength = interiorLength + (isV1Main && !isBajoCubiertaLevel ? ewt : 0) + (isV2Main && !isBajoCubiertaLevel ? ewt : 0);
       // In block mode, snap to exact block count so measurements match the grid
       if (plan.scaleMode === 'bloque') {
         const blockW = plan.blockLengthMm / 1000;
@@ -2078,11 +2084,22 @@ export function computeCompositeWallsFromCorners(
 
       if (rawSections.length === 0) continue;
 
+      // Merge multiple gable sections into one to avoid rendering multiple independent triangles
+      const allGable = rawSections.length > 1 && rawSections.every(s => s.isGableWall);
+      const effectiveSections = allGable
+        ? [{
+            ...rawSections[0],
+            sectionLen: rawSections.reduce((sum, s) => sum + s.sectionLen, 0),
+            wallH: Math.max(...rawSections.map(s => s.wallH)),
+            sectionOpenings: rawSections.flatMap(s => s.sectionOpenings),
+          }]
+        : rawSections;
+
       // Distribute edgeLength proportionally across sections so they sum to edgeLength
-      const rawTotal = rawSections.reduce((sum, s) => sum + s.sectionLen, 0);
+      const rawTotal = effectiveSections.reduce((sum, s) => sum + s.sectionLen, 0);
       const scale = rawTotal > 0 ? edgeLength / rawTotal : 1;
 
-      rawSections.forEach(({ room, wall, sectionLen, wallH, sectionOpenings, isGableWall, overlapStart }) => {
+      effectiveSections.forEach(({ room, wall, sectionLen, wallH, sectionOpenings, isGableWall, overlapStart }) => {
         let adjustedLen = sectionLen * scale;
         // In block mode, snap individual section to whole blocks
         if (plan.scaleMode === 'bloque') {
@@ -2272,7 +2289,19 @@ export function computeCompositeWallsFromCorners(
 
     if (rawSecs.length === 0) return;
 
-    const rawTotal = rawSecs.reduce((sum, s) => sum + s.sectionLen, 0);
+    // Merge multiple gable sections into one for cross-side vertical elevations
+    const allGableV = rawSecs.length > 1 && rawSecs.every(s => s.isGableWall);
+    const effectiveSecsV = allGableV
+      ? [{
+          ...rawSecs[0],
+          sectionLen: rawSecs.reduce((sum, s) => sum + s.sectionLen, 0),
+          wallH: Math.max(...rawSecs.map(s => s.wallH)),
+          sectionOpenings: rawSecs.flatMap(s => s.sectionOpenings),
+          isGableWall: true,
+        }]
+      : rawSecs;
+
+    const rawTotal = effectiveSecsV.reduce((sum, s) => sum + s.sectionLen, 0);
     const scale = rawTotal > 0 ? edgeLength / rawTotal : 1;
 
     let offset = 0;
@@ -2280,7 +2309,7 @@ export function computeCompositeWallsFromCorners(
     let totalDoors = 0, totalWindows = 0;
     const openingCounts: Record<string, number> = {};
 
-    rawSecs.forEach(({ room, wall, sectionLen, wallH, sectionOpenings, overlapStart, fullWallLen }) => {
+    effectiveSecsV.forEach(({ room, wall, sectionLen, wallH, sectionOpenings, isGableWall, overlapStart, fullWallLen }) => {
       let adjustedLen = sectionLen * scale;
       if (plan.scaleMode === 'bloque') {
         const blockW = plan.blockLengthMm / 1000;
@@ -2298,7 +2327,7 @@ export function computeCompositeWallsFromCorners(
         roomId: room.id, roomName: room.name, wallIndex: wall.wallIndex,
         wallId: wall.id, length: adjustedLen, height: wallH,
         wall, openings: sectionOpenings, startOffset: offset,
-        isGable: false,
+        isGable: isGableWall,
         overlapStart: overlapStart,
         fullWallLength: fullWallLen,
       });

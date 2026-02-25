@@ -2123,21 +2123,18 @@ export function computeCompositeWallsFromCorners(
 
       if (rawSections.length === 0) continue;
 
-      // Merge multiple gable sections into one to avoid rendering multiple independent triangles
-      const allGable = rawSections.length > 1 && rawSections.every(s => s.isGableWall);
-      const effectiveSections = allGable
-        ? [{
-            ...rawSections[0],
-            sectionLen: rawSections.reduce((sum, s) => sum + s.sectionLen, 0),
-            wallH: Math.max(...rawSections.map(s => s.wallH)),
-            sectionOpenings: rawSections.flatMap(s => s.sectionOpenings),
-          }]
-        : rawSections;
+      // Keep all gable sections separate so each preserves its own effectiveWallType (visibility).
+      // Add gable geometry info to each section so the renderer can draw a shared triangle.
+      const anyGable = rawSections.some(s => s.isGableWall);
+      const gablePeakH = anyGable ? Math.max(...rawSections.filter(s => s.isGableWall).map(s => s.wallH)) : 0;
+      const gableTotalLen = anyGable ? rawSections.reduce((sum, s) => sum + s.sectionLen, 0) : 0;
+      const effectiveSections = rawSections;
 
       // Distribute edgeLength proportionally across sections so they sum to edgeLength
       const rawTotal = effectiveSections.reduce((sum, s) => sum + s.sectionLen, 0);
       const scale = rawTotal > 0 ? edgeLength / rawTotal : 1;
 
+      let gableOffsetAccum = 0;
       effectiveSections.forEach(({ room, wall, sectionLen, wallH, sectionOpenings, isGableWall, overlapStart }) => {
         let adjustedLen = sectionLen * scale;
         // In block mode, snap individual section to whole blocks
@@ -2171,8 +2168,12 @@ export function computeCompositeWallsFromCorners(
           overlapStart: overlapStart,
           fullWallLength: roomFullWallLen,
           effectiveWallType: effType,
+          gablePeakHeight: isGableWall ? gablePeakH : undefined,
+          gableTotalLength: isGableWall ? edgeLength : undefined,
+          gableSectionStart: isGableWall ? gableOffsetAccum : undefined,
         });
         offset += adjustedLen;
+        if (isGableWall) gableOffsetAccum += adjustedLen;
       });
 
       // Skip composite walls where no sections remain (all were bajo cubierta non-gable)

@@ -1951,10 +1951,14 @@ export function computeCompositeWallsFromCorners(
 
   // Add custom corners to their physical edges
   // Skip corners marked as isMain — they duplicate the hardcoded ABCD corners
-  customAbsolute.forEach((cc, idx) => {
-    if ((filteredUserCorners[idx] as any).isMain) return;
-    sideCorners[cc.side].push(cc);
-  });
+  // For bajo cubierta levels, do NOT add intermediate markers to perimeter sides —
+  // perimeter composites should be full-face only (e.g. 2A-2B, not split by 2A1/2A2)
+  if (!isBajoCubiertaLevel) {
+    customAbsolute.forEach((cc, idx) => {
+      if ((filteredUserCorners[idx] as any).isMain) return;
+      sideCorners[cc.side].push(cc);
+    });
+  }
 
   // Build ordered corner lists per side (including start/end main corners)
   // Top: A → ... → B (sort by X ascending)
@@ -2188,6 +2192,11 @@ export function computeCompositeWallsFromCorners(
 
   // Group markers by absolute X position (tolerance = half a block) for vertical pairs
   const CROSS_TOL = cellSizeM * 0.5;
+  // For bajo cubierta, compute building span to filter out partial pairs
+  const buildingSpanX = maxX - minX;
+  const buildingSpanY = maxY - minY;
+  const MIN_SPAN_RATIO = 0.7; // pairs must span at least 70% of building dimension
+
   const verticalPairs: Array<{ top: typeof allMarkersAbs[0]; bottom: typeof allMarkersAbs[0] }> = [];
   for (let i = 0; i < allMarkersAbs.length; i++) {
     for (let j = i + 1; j < allMarkersAbs.length; j++) {
@@ -2197,6 +2206,11 @@ export function computeCompositeWallsFromCorners(
         // Cross-side pairs: only pair markers where BOTH are non-main (interior markers)
         // Main corners (A, B, C, D) are already connected by perimeter composites
         if (a.isMain || b.isMain) continue;
+        // For bajo cubierta, only keep pairs that span most of the building height
+        if (isBajoCubiertaLevel) {
+          const span = Math.abs(a.absY - b.absY);
+          if (span < buildingSpanY * MIN_SPAN_RATIO) continue;
+        }
         const [top, bottom] = a.absY <= b.absY ? [a, b] : [b, a];
         verticalPairs.push({ top, bottom });
       }
@@ -2401,6 +2415,11 @@ export function computeCompositeWallsFromCorners(
         if (Math.abs(a.absX - b.absX) < EPSILON) continue; // same point
         // Cross-side pairs: only pair markers where BOTH are non-main (interior markers)
         if (a.isMain || b.isMain) continue;
+        // For bajo cubierta, only keep pairs that span most of the building width
+        if (isBajoCubiertaLevel) {
+          const span = Math.abs(a.absX - b.absX);
+          if (span < buildingSpanX * MIN_SPAN_RATIO) continue;
+        }
         const [left, right] = a.absX <= b.absX ? [a, b] : [b, a];
         horizontalPairs.push({ left, right });
       }

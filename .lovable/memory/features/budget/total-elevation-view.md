@@ -15,4 +15,5 @@ Reglas clave:
 9. **Medidas verticales**: Font size aumentado para mejor legibilidad (10-14px según contexto).
 10. **Asignación de cara para cross-side**: Los alzados verticales interiores se asignan a 'left' o 'right' según si su posición X está más cerca del borde izquierdo o derecho del edificio. Análogamente, horizontales a 'top' o 'bottom'.
 11. **Línea de cumbrera**: Línea de trazos rojos tenue que marca la altura de la cumbrera en todos los niveles de los alzados de coordenadas, incluyendo fullscreen block grid.
-12. **Cross-side pairing**: Solo se generan pares cross-side entre marcadores NO principales (ambos deben ser interiores, no A/B/C/D). Esto evita alzados espurios como 2B-2B1 o 2In1-2C.
+12. **Bajo cubierta — perímetro**: Solo usa esquinas principales ABCD (sin intermedios) → alzados de cara completa (2A-2B, 2B-2C, 2C-2D, 2A-2D). No se añade ewt.
+13. **Bajo cubierta — interiores**: Solo pares cross-side que cubran ≥70% de la dimensión del edificio. Filtra pares parciales como 2A2-2In1. Resultado: 2A2-2C1 y 2D1-2B1.

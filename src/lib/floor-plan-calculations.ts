@@ -2373,12 +2373,16 @@ export function computeCompositeWallsFromCorners(
       label: OPENING_PRESETS[type as keyof typeof OPENING_PRESETS]?.label || type,
     }));
 
+    // Determine correct side: left or right based on position relative to building center
+    const buildingMidX = (buildingMinX + buildingMaxX) / 2;
+    const detectedVerticalSide: 'left' | 'right' = wallX <= buildingMidX ? 'left' : 'right';
+
     composites.push({
       id: `cw-${tc.label}-${bc.label}`,
       label: `${tc.label}-${bc.label}`,
       startCorner: { x: wallX, y: edgeStartY, label: tc.label },
       endCorner: { x: wallX, y: edgeEndY, label: bc.label },
-      side: 'right',
+      side: detectedVerticalSide,
       totalLength: edgeLength,
       sections,
       isExterior: false,
@@ -2529,12 +2533,18 @@ export function computeCompositeWallsFromCorners(
       label: OPENING_PRESETS[type as keyof typeof OPENING_PRESETS]?.label || type,
     }));
 
+    // Determine correct side: top or bottom based on position relative to building center
+    const buildingMinY2 = Math.min(...rooms.map(r => r.posY));
+    const buildingMaxY2 = Math.max(...rooms.map(r => r.posY + r.length));
+    const buildingMidY2 = (buildingMinY2 + buildingMaxY2) / 2;
+    const detectedHorizSide: 'top' | 'bottom' = wallY <= buildingMidY2 ? 'top' : 'bottom';
+
     composites.push({
       id: `cw-${lc.label}-${rc.label}`,
       label: `${lc.label}-${rc.label}`,
       startCorner: { x: edgeStartX, y: wallY, label: lc.label },
       endCorner: { x: edgeEndX, y: wallY, label: rc.label },
-      side: 'bottom',
+      side: detectedHorizSide,
       totalLength: edgeLength,
       sections,
       isExterior: false,

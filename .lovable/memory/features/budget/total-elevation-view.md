@@ -1,9 +1,12 @@
 # Memory: features/budget/total-elevation-view
 Updated: now
 
-Alzados Totales: Nueva vista "Nivel Total" en el visor de alzados que apila verticalmente los niveles por fachada del edificio. Para cubierta a dos aguas:
-1. Alzado Superior: Nivel 1 (1A-1B) abajo + Nivel 2 (2A-2B) arriba
-2. Alzado Derecha: Nivel 1 (1B-1C) + Nivel 2 (2B-2C) con punto de cumbrera (hastial)
-3. Alzado Inferior: Nivel 1 (1C-1D) + Nivel 2 (2C-2D)
-4. Alzado Izquierdo: Nivel 1 (1D-1A) + Nivel 2 (2D-2A) con punto de cumbrera
-El matching se hace por propiedad `side` de los CompositeWall de cada piso. Solo aparece el botón cuando hay ≥2 pisos con composites. Soporta vista compacta y pantalla completa. Incluye patrón de bloques, huecos, separadores de nivel, líneas de cota y etiquetas de esquinas.
+Alzados Totales: Vista "Nivel Total" que apila verticalmente los niveles por fachada del edificio.
+
+Reglas clave:
+1. **Hastiales (lados derecha/izquierda)**: Un ÚNICO triángulo que abarca todo el ancho del nivel bajo cubierta (de esquina a esquina), NO triángulos independientes por sección. Incluye patrón de bloques clippeado al triángulo, líneas de faldón gruesas, y marcador "CUMBRERA".
+2. **Secciones invisibles**: Se muestran vacías (sin relleno ni bloques), solo un contorno discontinuo tenue. En hastiales se "recortan" del triángulo con un rect blanco.
+3. **Bloques en todos los faldones**: Tanto en los niveles normales como en bajo cubierta, las secciones visibles muestran patrón de bloques según su tipo (exterior/interior).
+4. **Coordenadas intermedias**: Etiquetas de sección (ej. 1D1, 2D1) aparecen en las fronteras entre niveles.
+5. **Matching por `side`** de los CompositeWall de cada piso. Solo aparece el botón cuando hay ≥2 pisos con composites. Soporta vista compacta y pantalla completa.
+6. **Lados top/bottom (no hastiales)**: Las secciones de bajo cubierta se renderizan como rectángulos con su altura calculada por la pendiente; se dibuja una línea de pendiente conectando los techos.

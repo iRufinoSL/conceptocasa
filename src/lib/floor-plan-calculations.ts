@@ -185,6 +185,9 @@ export interface FloorSummary {
   totalWindows: number;
   gableExternalM2: number;
   gableInternalM2: number;
+  externalPerimeterMl: number; // Perímetro paredes externas (no invisibles) en metros
+  floorPerimeterMl: number;   // Perímetro total de planta en metros
+  roofPerimeterMl?: number;   // Perímetro de cubierta (con alero) para bajo cubierta
   rooms: RoomCalculation[];
 }
 
@@ -835,12 +838,55 @@ export function calculateFloorPlanSummary(plan: FloorPlanData, rooms: RoomData[]
   const internalWallFootprint = totalInternalWallBaseM * plan.internalWallThickness;
   const totalBuiltM2 = totalUsableM2 + externalWallFootprint + internalWallFootprint;
 
+  // Helper: calculate perimeters for a set of rooms on a floor
+  const calcFloorPerimeters = (floorRoomData: RoomData[], floorLevel: string) => {
+    if (floorRoomData.length === 0) return { externalPerimeterMl: 0, floorPerimeterMl: 0 };
+    const EPSILON = 0.05;
+    let bbMinX = Infinity, bbMinY = Infinity, bbMaxX = -Infinity, bbMaxY = -Infinity;
+    floorRoomData.forEach(r => {
+      bbMinX = Math.min(bbMinX, r.posX);
+      bbMinY = Math.min(bbMinY, r.posY);
+      bbMaxX = Math.max(bbMaxX, r.posX + r.width);
+      bbMaxY = Math.max(bbMaxY, r.posY + r.length);
+    });
+    const bbWidth = bbMaxX - bbMinX;
+    const bbLength = bbMaxY - bbMinY;
+    const floorPerimeterMl = 2 * (bbWidth + bbLength);
+
+    // For each bounding-box side, sum lengths of rooms with non-invisible exterior walls
+    const sides = [
+      { wallIndex: 1, edgeCheck: (r: RoomData) => Math.abs(r.posY - bbMinY) < EPSILON, measure: (r: RoomData) => r.width },
+      { wallIndex: 2, edgeCheck: (r: RoomData) => Math.abs(r.posX + r.width - bbMaxX) < EPSILON, measure: (r: RoomData) => r.length },
+      { wallIndex: 3, edgeCheck: (r: RoomData) => Math.abs(r.posY + r.length - bbMaxY) < EPSILON, measure: (r: RoomData) => r.width },
+      { wallIndex: 4, edgeCheck: (r: RoomData) => Math.abs(r.posX - bbMinX) < EPSILON, measure: (r: RoomData) => r.length },
+    ];
+    let externalPerimeterMl = 0;
+    sides.forEach(side => {
+      floorRoomData.filter(side.edgeCheck).forEach(r => {
+        const key = `${r.id}::${side.wallIndex}`;
+        const wt = wallClassification.get(key) || r.walls.find(w => w.wallIndex === side.wallIndex)?.wallType || 'exterior';
+        if (isExteriorType(wt) && !isInvisibleType(wt)) {
+          externalPerimeterMl += side.measure(r);
+        }
+      });
+    });
+
+    // Roof perimeter for bajo cubierta (bounding box + eave overhang on all sides)
+    let roofPerimeterMl: number | undefined;
+    if (floorLevel === 'bajo_cubierta' && plan.roofOverhang > 0) {
+      roofPerimeterMl = 2 * ((bbWidth + 2 * plan.roofOverhang) + (bbLength + 2 * plan.roofOverhang));
+    }
+    return { externalPerimeterMl, floorPerimeterMl, roofPerimeterMl };
+  };
+
   // Build per-floor summaries
   const floorSummaries: FloorSummary[] = [];
   if (floors && floors.length > 0) {
     const sortedFloors = [...floors].sort((a, b) => a.orderIndex - b.orderIndex);
     sortedFloors.forEach(floor => {
       const floorRooms = roomCalcs.filter(rc => rc.floorId === floor.id);
+      const floorRoomData = classifiedRooms.filter(r => r.floorId === floor.id);
+      const perimeters = calcFloorPerimeters(floorRoomData, floor.level);
       const fs: FloorSummary = {
         floorId: floor.id,
         floorName: floor.name,
@@ -855,15 +901,20 @@ export function calculateFloorPlanSummary(plan: FloorPlanData, rooms: RoomData[]
         totalWindows: floorRooms.reduce((s, r) => s + r.windowCount, 0),
         gableExternalM2: floorRooms.reduce((s, r) => s + r.gableExternalArea, 0),
         gableInternalM2: floorRooms.reduce((s, r) => s + r.gableInternalArea, 0),
+        externalPerimeterMl: perimeters.externalPerimeterMl,
+        floorPerimeterMl: perimeters.floorPerimeterMl,
+        roofPerimeterMl: perimeters.roofPerimeterMl,
         rooms: floorRooms,
       };
-      fs.totalBuiltM2 = fs.totalUsableM2; // only includes rooms with floor
+      fs.totalBuiltM2 = fs.totalUsableM2;
       floorSummaries.push(fs);
     });
 
     // Add unassigned rooms
     const unassigned = roomCalcs.filter(rc => !rc.floorId || !floors.some(f => f.id === rc.floorId));
     if (unassigned.length > 0) {
+      const unassignedRoomData = classifiedRooms.filter(r => !r.floorId || !floors.some(f => f.id === r.floorId));
+      const perimeters = calcFloorPerimeters(unassignedRoomData, 'unassigned');
       floorSummaries.push({
         floorId: 'unassigned',
         floorName: 'Sin nivel asignado',
@@ -878,6 +929,9 @@ export function calculateFloorPlanSummary(plan: FloorPlanData, rooms: RoomData[]
         totalWindows: unassigned.reduce((s, r) => s + r.windowCount, 0),
         gableExternalM2: unassigned.reduce((s, r) => s + r.gableExternalArea, 0),
         gableInternalM2: unassigned.reduce((s, r) => s + r.gableInternalArea, 0),
+        externalPerimeterMl: perimeters.externalPerimeterMl,
+        floorPerimeterMl: perimeters.floorPerimeterMl,
+        roofPerimeterMl: perimeters.roofPerimeterMl,
         rooms: unassigned,
       });
     }

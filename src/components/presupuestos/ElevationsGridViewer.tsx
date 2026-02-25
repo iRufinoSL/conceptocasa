@@ -2371,7 +2371,7 @@ const isDoor = op.openingType === 'puerta' || op.openingType === 'puerta_externa
 // Fullscreen interactive block grid for composite walls
 // ──────────────────────────────────────────────────────────────────
 
-function CompositeFullscreenBlockGrid({ compositeWall, plan, maxHeight, selectedBlocks, sectionBlockGroups, onToggleBlock, onOpeningClick, rulerLines, rulerDraw, totalLength }: {
+function CompositeFullscreenBlockGrid({ compositeWall, plan, maxHeight, selectedBlocks, sectionBlockGroups, onToggleBlock, onOpeningClick, rulerLines, rulerDraw, totalLength, liveRooms }: {
   compositeWall: CompositeWall;
   plan: FloorPlanData;
   maxHeight: number;
@@ -2382,8 +2382,10 @@ function CompositeFullscreenBlockGrid({ compositeWall, plan, maxHeight, selected
   rulerLines?: Array<{ x1: number; y1: number; x2: number; y2: number }>;
   rulerDraw?: { x1: number; y1: number } | null;
   totalLength?: number;
+  liveRooms?: RoomData[];
 }) {
   const cw = compositeWall;
+  const allRooms = liveRooms || [];
   const blockWm = plan.blockLengthMm / 1000;
   const blockHm = plan.blockHeightMm / 1000;
   const padding = 60;
@@ -2428,6 +2430,22 @@ function CompositeFullscreenBlockGrid({ compositeWall, plan, maxHeight, selected
       <line x1={rxs - 5} y1={rys + totalH} x2={rxs + cw.totalLength * s + 5} y2={rys + totalH}
         stroke="hsl(25, 60%, 40%)" strokeWidth={2} />
 
+      {/* Ridge line (cumbrera) — dashed red line */}
+      {plan.roofType === 'dos_aguas' && (() => {
+        const buildMinX = Math.min(...(allRooms.length > 0 ? allRooms.map(r => r.posX) : [0]));
+        const buildMaxX = Math.max(...(allRooms.length > 0 ? allRooms.map(r => r.posX + r.width) : [0]));
+        const totalBuildW = (buildMaxX - buildMinX) + 2 * plan.externalWallThickness;
+        const ridgeH = (totalBuildW / 2) * (plan.roofSlopePercent / 100);
+        if (ridgeH > 0 && ridgeH <= totalH / s * 1.2) {
+          const ridgeY = rys + totalH - ridgeH * s;
+          return (
+            <line x1={rxs - 5} y1={ridgeY} x2={rxs + cw.totalLength * s + 5} y2={ridgeY}
+              stroke="hsl(0, 70%, 55%)" strokeWidth={0.8} strokeDasharray="6 3" opacity={0.6} />
+          );
+        }
+        return null;
+      })()}
+
       {/* Sections with interactive blocks */}
       {cw.sections.map((section, sIdx) => {
         const sx = rxs + section.startOffset * s;
@@ -2436,7 +2454,7 @@ function CompositeFullscreenBlockGrid({ compositeWall, plan, maxHeight, selected
         const sy = rys + totalH - sh2;
           const isSectionInvisible = isInvisibleType(section.wall.wallType as string);
           const sectionFill = isSectionInvisible
-            ? 'hsl(260, 15%, 93%)'
+            ? 'none'
             : (sIdx % 2 === 0 ? 'hsl(30, 30%, 92%)' : 'hsl(30, 25%, 88%)');
         // Calculate global cols for this section (aligned to composite wall origin)
         const globalStartCol = Math.max(0, Math.floor((section.startOffset) / blockWm));
@@ -2445,6 +2463,22 @@ function CompositeFullscreenBlockGrid({ compositeWall, plan, maxHeight, selected
         const rows = Math.ceil(section.height / blockHm);
         const groupCellMap = groupCellMaps.get(sIdx) || new Map<string, BlockGroupData>();
         const blockGroups = sectionBlockGroups.get(sIdx) || [];
+
+        // Invisible sections: render as empty with dashed outline, no blocks
+        if (isSectionInvisible) {
+          return (
+            <g key={`section-${sIdx}`}>
+              <rect x={sx} y={sy} width={sw2} height={sh2}
+                fill="none" stroke="hsl(0, 0%, 75%)" strokeWidth={0.5} strokeDasharray="3 3" rx={1} />
+              {sIdx > 0 && <line x1={sx} y1={rys} x2={sx} y2={rys + totalH}
+                stroke="hsl(222, 47%, 40%)" strokeWidth={0.8} strokeDasharray="3 2" />}
+              <text x={sx + sw2 / 2} y={sy + 12} textAnchor="middle"
+                fontSize={10} fill="hsl(222, 47%, 30%)" fontWeight={600} opacity={0.5} pointerEvents="none">
+                {section.roomName}
+              </text>
+            </g>
+          );
+        }
 
         if (section.isGable) {
           // For gable sections, just render non-interactive SVG
@@ -2470,10 +2504,10 @@ function CompositeFullscreenBlockGrid({ compositeWall, plan, maxHeight, selected
           <g key={`section-${sIdx}`}>
             {/* Background */}
             <rect x={sx} y={sy} width={sw2} height={sh2}
-              fill={sectionFill} stroke="hsl(222, 47%, 30%)" strokeWidth={1.2} rx={1} />
+              fill={sectionFill} stroke={isSectionInvisible ? 'hsl(0, 0%, 75%)' : 'hsl(222, 47%, 30%)'} strokeWidth={isSectionInvisible ? 0.5 : 1.2} strokeDasharray={isSectionInvisible ? '3 3' : undefined} rx={1} />
 
-            {/* Interactive blocks */}
-            {Array.from({ length: rows }, (_, r) => {
+            {/* Interactive blocks — only for non-invisible sections */}
+            {!isSectionInvisible && Array.from({ length: rows }, (_, r) => {
               const yTop = sy + sh2 - (r + 1) * bhPx;
               const offset = r % 2 === 0 ? 0 : bwPx / 2;
               return Array.from({ length: cols }, (_, ci) => {
@@ -4090,6 +4124,7 @@ function CompositeWallCard({ compositeWall, plan, onOpeningClick, onAddBlockGrou
                 rulerLines={rulerLines}
                 rulerDraw={rulerDraw}
                 totalLength={cw.totalLength}
+                liveRooms={liveRooms}
               />
             ) : (
               renderCompositeSvg(Math.min(

@@ -89,6 +89,36 @@ export function FloorPlanSummaryView({ summary, onRecalculate, recalculating }: 
             </div>
           </div>
 
+          {/* Perímetros por nivel */}
+          {summary.floorSummaries.length > 0 && (
+            <div className="mt-3 pt-3 border-t border-border">
+              <span className="text-xs font-semibold text-muted-foreground mb-2 block">Perímetros (por plantas)</span>
+              <div className="space-y-2 text-sm">
+                {summary.floorSummaries.map(fs => (
+                  <div key={fs.floorId} className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                    <div className="col-span-full">
+                      <span className="text-xs font-semibold text-foreground">{fs.floorName}</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Perímetro paredes ext. ml.</span>
+                      <p className="font-semibold text-primary">{(fs.externalPerimeterMl * 1000).toFixed(0)} mm ({fmt(fs.externalPerimeterMl, 'ml')})</p>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Perímetro de planta ml.</span>
+                      <p className="font-semibold text-foreground">{(fs.floorPerimeterMl * 1000).toFixed(0)} mm ({fmt(fs.floorPerimeterMl, 'ml')})</p>
+                    </div>
+                    {fs.roofPerimeterMl != null && (
+                      <div>
+                        <span className="text-muted-foreground">Perímetro cubierta ml.</span>
+                        <p className="font-semibold text-foreground">{(fs.roofPerimeterMl * 1000).toFixed(0)} mm ({fmt(fs.roofPerimeterMl, 'ml')})</p>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Gable info */}
           {(summary.totalGableExternalM2 > 0 || summary.totalGableInternalM2 > 0) && (
             <div className="mt-3 pt-3 border-t border-border">
@@ -176,7 +206,7 @@ export function FloorPlanSummaryView({ summary, onRecalculate, recalculating }: 
               <CollapsibleContent>
                 <Card className="mt-1">
                   <CardContent className="pt-3">
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
                       <div>
                         <span className="text-muted-foreground">Superficie útil</span>
                         <p className="font-semibold text-primary">{fmt(fs.totalUsableM2)}</p>
@@ -201,6 +231,20 @@ export function FloorPlanSummaryView({ summary, onRecalculate, recalculating }: 
                         <span className="text-muted-foreground">Puertas / Ventanas</span>
                         <p className="font-semibold text-foreground">{fs.totalDoors}P / {fs.totalWindows}V</p>
                       </div>
+                      <div>
+                        <span className="text-muted-foreground">Perím. ext. ml.</span>
+                        <p className="font-semibold text-primary">{(fs.externalPerimeterMl * 1000).toFixed(0)} mm</p>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Perím. planta ml.</span>
+                        <p className="font-semibold text-foreground">{(fs.floorPerimeterMl * 1000).toFixed(0)} mm</p>
+                      </div>
+                      {fs.roofPerimeterMl != null && (
+                        <div>
+                          <span className="text-muted-foreground">Perím. cubierta ml.</span>
+                          <p className="font-semibold text-foreground">{(fs.roofPerimeterMl * 1000).toFixed(0)} mm</p>
+                        </div>
+                      )}
                       {(fs.gableExternalM2 > 0 || fs.gableInternalM2 > 0) && (
                         <div>
                           <span className="text-muted-foreground">Hastiales</span>

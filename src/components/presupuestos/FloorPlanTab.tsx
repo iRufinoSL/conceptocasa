@@ -312,6 +312,9 @@ function LevelManagerPanel({ floors, planData, rooms, onAdd, onUpdate, onDelete,
   const [blockLenMm, setBlockLenMm] = useState(String(planData.blockLengthMm || 625));
   const [blockHMm, setBlockHMm] = useState(String(planData.blockHeightMm || 250));
   const [blockWMm, setBlockWMm] = useState(String(planData.blockWidthMm || 300));
+  const [intBlockLenMm, setIntBlockLenMm] = useState(String(planData.intBlockLengthMm || 625));
+  const [intBlockHMm, setIntBlockHMm] = useState(String(planData.intBlockHeightMm || 500));
+  const [intBlockWMm, setIntBlockWMm] = useState(String(planData.intBlockWidthMm || 100));
 
   // Per-level heights
   const [levelHeights, setLevelHeights] = useState<Record<string, string>>(() => {
@@ -400,6 +403,9 @@ function LevelManagerPanel({ floors, planData, rooms, onAdd, onUpdate, onDelete,
       blockLengthMm: parseFloat(blockLenMm) || 625,
       blockHeightMm: parseFloat(blockHMm) || 250,
       blockWidthMm: parseFloat(blockWMm) || 300,
+      intBlockLengthMm: parseFloat(intBlockLenMm) || 625,
+      intBlockHeightMm: parseFloat(intBlockHMm) || 500,
+      intBlockWidthMm: parseFloat(intBlockWMm) || 100,
     };
     const extThickness = scaleMode === 'bloque' ? (parseFloat(blockWMm) || 300) / 1000 : (parseFloat(extThick) || planData.externalWallThickness);
 
@@ -510,18 +516,36 @@ function LevelManagerPanel({ floors, planData, rooms, onAdd, onUpdate, onDelete,
             <Button variant={scaleMode === 'bloque' ? 'default' : 'outline'} size="sm" className="flex-1 text-xs" onClick={() => setScaleMode('bloque')}>Bloque625</Button>
           </div>
           {scaleMode === 'bloque' && (
-            <div className="grid grid-cols-3 gap-2 p-2 border rounded-lg bg-muted/30">
-              <div>
-                <Label className="text-[10px]">Largo (mm)</Label>
-                <Input type="number" step="1" value={blockLenMm} onChange={e => setBlockLenMm(e.target.value)} disabled={saving} className="h-8 text-xs" />
+            <div className="space-y-2">
+              <p className="text-[10px] font-semibold text-muted-foreground">Bloque pared EXTERIOR</p>
+              <div className="grid grid-cols-3 gap-2 p-2 border rounded-lg bg-muted/30">
+                <div>
+                  <Label className="text-[10px]">Largo (mm)</Label>
+                  <Input type="number" step="1" value={blockLenMm} onChange={e => setBlockLenMm(e.target.value)} disabled={saving} className="h-8 text-xs" />
+                </div>
+                <div>
+                  <Label className="text-[10px]">Alto (mm)</Label>
+                  <Input type="number" step="1" value={blockHMm} onChange={e => setBlockHMm(e.target.value)} disabled={saving} className="h-8 text-xs" />
+                </div>
+                <div>
+                  <Label className="text-[10px]">Espesor (mm)</Label>
+                  <Input type="number" step="1" value={blockWMm} onChange={e => setBlockWMm(e.target.value)} disabled={saving} className="h-8 text-xs" />
+                </div>
               </div>
-              <div>
-                <Label className="text-[10px]">Alto (mm)</Label>
-                <Input type="number" step="1" value={blockHMm} onChange={e => setBlockHMm(e.target.value)} disabled={saving} className="h-8 text-xs" />
-              </div>
-              <div>
-                <Label className="text-[10px]">Ancho (mm)</Label>
-                <Input type="number" step="1" value={blockWMm} onChange={e => setBlockWMm(e.target.value)} disabled={saving} className="h-8 text-xs" />
+              <p className="text-[10px] font-semibold text-muted-foreground mt-2">Bloque pared INTERIOR</p>
+              <div className="grid grid-cols-3 gap-2 p-2 border rounded-lg bg-muted/30">
+                <div>
+                  <Label className="text-[10px]">Largo (mm)</Label>
+                  <Input type="number" step="1" value={intBlockLenMm} onChange={e => setIntBlockLenMm(e.target.value)} disabled={saving} className="h-8 text-xs" />
+                </div>
+                <div>
+                  <Label className="text-[10px]">Alto (mm)</Label>
+                  <Input type="number" step="1" value={intBlockHMm} onChange={e => setIntBlockHMm(e.target.value)} disabled={saving} className="h-8 text-xs" />
+                </div>
+                <div>
+                  <Label className="text-[10px]">Espesor (mm)</Label>
+                  <Input type="number" step="1" value={intBlockWMm} onChange={e => setIntBlockWMm(e.target.value)} disabled={saving} className="h-8 text-xs" />
+                </div>
               </div>
             </div>
           )}

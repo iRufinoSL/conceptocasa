@@ -12,10 +12,21 @@ export interface FloorPlanData {
   roofSlopePercent: number;
   roofType: 'dos_aguas' | 'cuatro_aguas' | 'plana';
   scaleMode: ScaleMode;
-  blockLengthMm: number; // largo del bloque en mm (default 625)
-  blockHeightMm: number; // alto del bloque en mm (default 250)
-  blockWidthMm: number;  // ancho/espesor del bloque en mm (default 300)
+  blockLengthMm: number; // largo del bloque exterior en mm (default 625)
+  blockHeightMm: number; // alto del bloque exterior en mm (default 250)
+  blockWidthMm: number;  // ancho/espesor del bloque exterior en mm (default 300)
+  intBlockLengthMm: number; // largo del bloque interior en mm (default 625)
+  intBlockHeightMm: number; // alto del bloque interior en mm (default 500)
+  intBlockWidthMm: number;  // ancho/espesor del bloque interior en mm (default 100)
   ridgeHeight?: number;  // altura libre base-cumbrera (metros), alternativa a roofSlopePercent
+}
+
+/** Get block dimensions based on wall type */
+export function getBlockDimensions(plan: FloorPlanData, isExternal: boolean): { lengthMm: number; heightMm: number; widthMm: number } {
+  if (isExternal) {
+    return { lengthMm: plan.blockLengthMm, heightMm: plan.blockHeightMm, widthMm: plan.blockWidthMm };
+  }
+  return { lengthMm: plan.intBlockLengthMm, heightMm: plan.intBlockHeightMm, widthMm: plan.intBlockWidthMm };
 }
 
 /** Convert slope percentage to degrees */
@@ -268,10 +279,20 @@ export function calcBajoCubiertaWallHeight(
   const slopeRatio = plan.roofSlopePercent / 100;
   const riseM = halfWidth * slopeRatio;
   const getH = (x: number) => Math.max(0, riseM - Math.abs(x - ridgeX) * slopeRatio);
+  const EPSILON = 0.05;
   switch (wallIndex) {
-    case 2: return getH(room.posX + room.width);
-    case 4: return getH(room.posX);
-    case 1: case 3: return (getH(room.posX) + getH(room.posX + room.width)) / 2;
+    case 2: return getH(room.posX + room.width); // right wall
+    case 4: return getH(room.posX); // left wall
+    case 1: { // top wall — check if it's at building edge (posY == bbMinY)
+      const bbMinY = Math.min(...allRooms.filter(r => r.posX >= 0).map(r => r.posY));
+      if (Math.abs(room.posY - bbMinY) < EPSILON) return 0; // At building edge: roof rests on lower level
+      return (getH(room.posX) + getH(room.posX + room.width)) / 2;
+    }
+    case 3: { // bottom wall — check if it's at building edge (posY + length == bbMaxY)
+      const bbMaxY = Math.max(...allRooms.filter(r => r.posX >= 0).map(r => r.posY + r.length));
+      if (Math.abs(room.posY + room.length - bbMaxY) < EPSILON) return 0; // At building edge
+      return (getH(room.posX) + getH(room.posX + room.width)) / 2;
+    }
     default: return undefined;
   }
 }

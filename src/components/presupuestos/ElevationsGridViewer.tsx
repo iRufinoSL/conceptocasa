@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Plus, Trash2, Box, Layers, ArrowUpDown, Maximize2, Merge, Unlink, Map as MapIcon, Printer, FileDown, Ruler } from 'lucide-react';
 import jsPDF from 'jspdf';
-import { OPENING_PRESETS, WALL_LABELS, WALL_SIDE_LETTERS, computeWallSegments, autoClassifyWalls, generateExternalWallNames, isExteriorType, isInvisibleType, computeBuildingOutline, computeCompositeWalls, computeCompositeWallsFromCorners, calcBajoCubiertaWallHeight } from '@/lib/floor-plan-calculations';
+import { OPENING_PRESETS, WALL_LABELS, WALL_SIDE_LETTERS, computeWallSegments, autoClassifyWalls, generateExternalWallNames, isExteriorType, isInvisibleType, computeBuildingOutline, computeCompositeWalls, computeCompositeWallsFromCorners, calcBajoCubiertaWallHeight, getBlockDimensions } from '@/lib/floor-plan-calculations';
 import type { RoomData, WallData, OpeningData, FloorPlanData, WallSegment, FloorLevel, WallType, BlockGroupData, OutlineVertex, CompositeWall } from '@/lib/floor-plan-calculations';
 import type { CustomCorner } from '@/hooks/useFloorPlan';
 
@@ -912,6 +912,89 @@ function InlineWallTypeSelect({ wallId, currentType, onUpdateWall, onUpdateSegme
   );
 }
 
+/** CAD ruler SVG element for fullscreen views */
+function CadRuler({ rx, ry, rw, rh, widthM, heightM, scale }: {
+  rx: number; ry: number; rw: number; rh: number;
+  widthM: number; heightM: number; scale: number;
+}) {
+  const rulerColor = 'hsl(0, 0%, 40%)';
+  const rulerFontSize = Math.max(7, Math.min(10, scale * 0.15));
+  
+  // Choose tick interval based on scale (in meters)
+  const getTickInterval = (totalM: number) => {
+    if (totalM <= 1) return 0.1;
+    if (totalM <= 3) return 0.25;
+    if (totalM <= 8) return 0.5;
+    return 1;
+  };
+  
+  const hInterval = getTickInterval(widthM);
+  const vInterval = getTickInterval(heightM);
+  
+  const hTicks: React.ReactElement[] = [];
+  const vTicks: React.ReactElement[] = [];
+  
+  // Horizontal ruler (top)
+  const rulerHY = ry - 20;
+  hTicks.push(
+    <line key="hr-base" x1={rx} y1={rulerHY} x2={rx + rw} y2={rulerHY}
+      stroke={rulerColor} strokeWidth={0.8} />
+  );
+  for (let m = 0; m <= widthM + 0.001; m += hInterval) {
+    const x = rx + (m / widthM) * rw;
+    if (x > rx + rw + 0.5) break;
+    const isMajor = Math.abs(m - Math.round(m)) < 0.01;
+    const tickH = isMajor ? 8 : 4;
+    hTicks.push(
+      <line key={`ht-${m}`} x1={x} y1={rulerHY - tickH} x2={x} y2={rulerHY}
+        stroke={rulerColor} strokeWidth={isMajor ? 0.8 : 0.4} />
+    );
+    if (isMajor || hInterval >= 0.25) {
+      hTicks.push(
+        <text key={`htl-${m}`} x={x} y={rulerHY - tickH - 2}
+          textAnchor="middle" fontSize={rulerFontSize} fill={rulerColor}>
+          {Math.round(m * 1000)}
+        </text>
+      );
+    }
+  }
+  
+  // Vertical ruler (right)
+  const rulerVX = rx + rw + 20;
+  vTicks.push(
+    <line key="vr-base" x1={rulerVX} y1={ry} x2={rulerVX} y2={ry + rh}
+      stroke={rulerColor} strokeWidth={0.8} />
+  );
+  for (let m = 0; m <= heightM + 0.001; m += vInterval) {
+    const y = ry + rh - (m / heightM) * rh;
+    if (y < ry - 0.5) break;
+    const isMajor = Math.abs(m - Math.round(m)) < 0.01;
+    const tickW = isMajor ? 8 : 4;
+    vTicks.push(
+      <line key={`vt-${m}`} x1={rulerVX} y1={y} x2={rulerVX + tickW} y2={y}
+        stroke={rulerColor} strokeWidth={isMajor ? 0.8 : 0.4} />
+    );
+    if (isMajor || vInterval >= 0.25) {
+      vTicks.push(
+        <text key={`vtl-${m}`} x={rulerVX + tickW + 3} y={y + 3}
+          textAnchor="start" fontSize={rulerFontSize} fill={rulerColor}>
+          {Math.round(m * 1000)}
+        </text>
+      );
+    }
+  }
+  
+  return (
+    <g className="cad-ruler" pointerEvents="none" opacity={0.7}>
+      {hTicks}
+      {vTicks}
+      <text x={rx + rw / 2} y={rulerHY - 14} textAnchor="middle" fontSize={rulerFontSize - 1} fill={rulerColor} fontStyle="italic">mm</text>
+      <text x={rulerVX + 16} y={ry + rh / 2} textAnchor="middle" fontSize={rulerFontSize - 1} fill={rulerColor} fontStyle="italic"
+        transform={`rotate(90, ${rulerVX + 16}, ${ry + rh / 2})`}>mm</text>
+    </g>
+  );
+}
+
 // Individual elevation card
 function ElevationCardView({ card, plan, onOpeningClick, onAddOpening, onCardDoubleClick, onAddBlockGroup, onDeleteBlockGroup, onUpdateWall, onUpdateWallSegmentType, onUpdateOpening, onDeleteOpening, saving, budgetName }: {
   card: ElevationCard;
@@ -1046,13 +1129,15 @@ function ElevationCardView({ card, plan, onOpeningClick, onAddOpening, onCardDou
   // Block count calculation
   const blockCount = useMemo(() => {
     if (!isWall || card.isInvisible || plan.scaleMode !== 'bloque') return null;
-    const blockW = plan.blockLengthMm / 1000;
-    const blockH = plan.blockHeightMm / 1000;
+    const wallIsExternal = card.wall ? isExteriorType(card.wall.wallType as string) : true;
+    const dims = getBlockDimensions(plan, wallIsExternal);
+    const blockW = dims.lengthMm / 1000;
+    const blockH = dims.heightMm / 1000;
     if (blockW <= 0 || blockH <= 0) return null;
     const cols = Math.ceil(card.width / blockW);
     const rows = Math.ceil(card.height / blockH);
-    return { cols, rows, total: cols * rows };
-  }, [isWall, card.isInvisible, card.width, card.height, plan.scaleMode, plan.blockLengthMm, plan.blockHeightMm]);
+    return { cols, rows, total: cols * rows, lengthMm: dims.lengthMm, heightMm: dims.heightMm };
+  }, [isWall, card.isInvisible, card.width, card.height, plan, card.wall]);
 
   // SVG render function shared between inline and fullscreen
   const renderSvg = (fsScale?: number) => {
@@ -1093,8 +1178,10 @@ function ElevationCardView({ card, plan, onOpeningClick, onAddOpening, onCardDou
 
           {/* Block pattern inside triangle (clipped) */}
           {plan.scaleMode === 'bloque' && (() => {
-            const blockWPx = (plan.blockLengthMm / 1000) * s;
-            const blockHPx = (plan.blockHeightMm / 1000) * s;
+            const wallIsExternal = card.wall ? isExteriorType(card.wall.wallType as string) : true;
+            const dims = getBlockDimensions(plan, wallIsExternal);
+            const blockWPx = (dims.lengthMm / 1000) * s;
+            const blockHPx = (dims.heightMm / 1000) * s;
             if (blockWPx < 3 || blockHPx < 2) return null;
             const clipId = `gable-clip-${card.id}`;
             const rows = Math.ceil(rh / blockHPx);
@@ -1263,8 +1350,10 @@ function ElevationCardView({ card, plan, onOpeningClick, onAddOpening, onCardDou
 
         {/* Block pattern */}
         {isWall && !card.isInvisible && plan.scaleMode === 'bloque' && (() => {
-          const blockWPx = (plan.blockLengthMm / 1000) * s;
-          const blockHPx = (plan.blockHeightMm / 1000) * s;
+          const wallIsExternal = card.wall ? isExteriorType(card.wall.wallType as string) : true;
+          const dims = getBlockDimensions(plan, wallIsExternal);
+          const blockWPx = (dims.lengthMm / 1000) * s;
+          const blockHPx = (dims.heightMm / 1000) * s;
           if (blockWPx < 3 || blockHPx < 2) return null;
           const rows = Math.ceil(rh / blockHPx);
           const cols = Math.ceil(rw / blockWPx) + 1;
@@ -1483,6 +1572,10 @@ const isDoor = op.openingType === 'puerta' || op.openingType === 'puerta_externa
             </g>
           );
         })}
+        {/* CAD Ruler — fullscreen only */}
+        {fsScale && (
+          <CadRuler rx={rx} ry={ry} rw={rw} rh={rh} widthM={card.width} heightM={card.height} scale={s} />
+        )}
       </svg>
     );
   };
@@ -1529,7 +1622,7 @@ const isDoor = op.openingType === 'puerta' || op.openingType === 'puerta_externa
           <div className="flex items-center gap-1 shrink-0 flex-wrap justify-end max-w-[55%]">
             {blockCount && (
               <Badge variant="outline" className="text-[9px] h-4 bg-accent/30">
-                {blockCount.total} bloques ({blockCount.cols}×{blockCount.rows}) · {plan.blockLengthMm}×{plan.blockHeightMm}mm
+                {blockCount.total} bloques ({blockCount.cols}×{blockCount.rows}) · {blockCount.lengthMm}×{blockCount.heightMm}mm
               </Badge>
             )}
             {card.badgeLabel && (
@@ -1620,7 +1713,7 @@ const isDoor = op.openingType === 'puerta' || op.openingType === 'puerta_externa
             {card.sublabel && <span className="text-muted-foreground font-normal">— {card.sublabel}</span>}
             {blockCount && (
               <Badge variant="outline" className="text-xs print:hidden">
-                {blockCount.total} bloques ({blockCount.cols}×{blockCount.rows}) · {plan.blockLengthMm}×{plan.blockHeightMm}mm
+                {blockCount.total} bloques ({blockCount.cols}×{blockCount.rows}) · {blockCount.lengthMm}×{blockCount.heightMm}mm
               </Badge>
             )}
             {!card.isInvisible && (
@@ -1683,9 +1776,11 @@ const isDoor = op.openingType === 'puerta' || op.openingType === 'puerta_externa
                   const maxRow = Math.max(...cells.map(c => c.row));
                   const spanCols = maxCol - minCol + 1;
                   const spanRows = maxRow - minRow + 1;
-                  const blockW = plan.blockLengthMm;
-                  const blockH = plan.blockHeightMm;
-                  const name = `${(spanCols * blockW).toFixed(0)}×${(spanRows * blockH).toFixed(0)}×${plan.blockWidthMm}mm`;
+                  const wallIsExt = card.wall ? isExteriorType(card.wall.wallType as string) : true;
+                  const bDims = getBlockDimensions(plan, wallIsExt);
+                  const blockW = bDims.lengthMm;
+                  const blockH = bDims.heightMm;
+                  const name = `${(spanCols * blockW).toFixed(0)}×${(spanRows * blockH).toFixed(0)}×${bDims.widthMm}mm`;
                   await onAddBlockGroup(card.wallId!, minCol, minRow, spanCols, spanRows, name);
                   setSelectedBlocks(new Set());
                 }}
@@ -1769,7 +1864,7 @@ const BLOCK_GROUP_COLORS = [
 function FullscreenBlockGrid({ card, plan, blockCount, selectedBlocks, onToggleBlock, onOpeningClick }: {
   card: ElevationCard;
   plan: FloorPlanData;
-  blockCount: { cols: number; rows: number; total: number };
+  blockCount: { cols: number; rows: number; total: number; lengthMm: number; heightMm: number };
   selectedBlocks: Set<string>;
   onToggleBlock: (key: string) => void;
   onOpeningClick: (op: OpeningData) => void;
@@ -1790,8 +1885,10 @@ function FullscreenBlockGrid({ card, plan, blockCount, selectedBlocks, onToggleB
   }, [blockGroups]);
 
   // Calculate scale to fit viewport
-  const blockWm = plan.blockLengthMm / 1000;
-  const blockHm = plan.blockHeightMm / 1000;
+  const wallIsExternal = card.wall ? isExteriorType(card.wall.wallType as string) : true;
+  const dims = getBlockDimensions(plan, wallIsExternal);
+  const blockWm = dims.lengthMm / 1000;
+  const blockHm = dims.heightMm / 1000;
   const wallWm = card.width;
   const wallHm = card.height;
   const padding = 60;
@@ -1890,7 +1987,7 @@ function FullscreenBlockGrid({ card, plan, blockCount, selectedBlocks, onToggleB
               style={{ cursor: 'pointer' }}
               onClick={(e) => { e.stopPropagation(); onToggleBlock(key); }}
             >
-              <title>Bloque [{c},{r}] — {plan.blockLengthMm}×{plan.blockHeightMm}×{plan.blockWidthMm}mm</title>
+              <title>Bloque [{c},{r}] — {dims.lengthMm}×{dims.heightMm}×{dims.widthMm}mm</title>
             </rect>
           );
         });
@@ -1967,6 +2064,9 @@ const isDoor = op.openingType === 'puerta' || op.openingType === 'puerta_externa
           </g>
         );
       })}
+
+      {/* CAD Ruler */}
+      <CadRuler rx={rx} ry={ry} rw={rw} rh={rh} widthM={wallWm} heightM={wallHm} scale={s} />
     </svg>
   );
 }

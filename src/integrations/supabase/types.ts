@@ -879,6 +879,9 @@ export type Database = {
           default_height: number
           external_wall_thickness: number
           id: string
+          int_block_height_mm: number
+          int_block_length_mm: number
+          int_block_width_mm: number
           internal_wall_thickness: number
           length: number
           name: string
@@ -900,6 +903,9 @@ export type Database = {
           default_height?: number
           external_wall_thickness?: number
           id?: string
+          int_block_height_mm?: number
+          int_block_length_mm?: number
+          int_block_width_mm?: number
           internal_wall_thickness?: number
           length?: number
           name?: string
@@ -921,6 +927,9 @@ export type Database = {
           default_height?: number
           external_wall_thickness?: number
           id?: string
+          int_block_height_mm?: number
+          int_block_length_mm?: number
+          int_block_width_mm?: number
           internal_wall_thickness?: number
           length?: number
           name?: string

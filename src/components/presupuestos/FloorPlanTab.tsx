@@ -17,7 +17,7 @@ import { ArrowLeft } from 'lucide-react';
 import { FloorPlanSummaryView } from './FloorPlanSummary';
 import { ElevationsGridViewer } from './ElevationsGridViewer';
 import { deriveGridPositions, computeGridRuler, formatCoord, parseCoord } from './FloorPlanGridView';
-import { calculateFloorPlanSummary } from '@/lib/floor-plan-calculations';
+import { calculateFloorPlanSummary, slopePercentToDegrees, degreesToSlopePercent, calcRidgeHeight, calcSlopeFromRidge } from '@/lib/floor-plan-calculations';
 import { FloorPlanPdfExport } from './FloorPlanPdfExport';
 import { SnapshotRestoreButton } from './SnapshotRestoreButton';
 import type { FloorPlanData, RoomData } from '@/lib/floor-plan-calculations';
@@ -118,7 +118,9 @@ function NewLevelWizardDialog({ open, onOpenChange, floors, onAdd, saving, onFlo
     opts.wallHeight = parseFloat(wallHeight) || 2.5;
     if (isRoof) {
       opts.roofSlopes = parseInt(roofSlopes) || 2;
-      opts.roofSlopePercent = parseFloat(roofSlopePercent) || 20;
+      // Convert degrees to percentage for storage
+      const deg = parseFloat(roofSlopePercent) || 20;
+      opts.roofSlopePercent = Math.round(degreesToSlopePercent(deg) * 10) / 10;
     }
     const newFloorId = await onAdd(levelName.trim(), level, opts);
     if (newFloorId) {
@@ -204,12 +206,53 @@ function NewLevelWizardDialog({ open, onOpenChange, floors, onAdd, saving, onFlo
 
           {step === 4 && isRoof && (
             <div className="space-y-3">
-              <Label>Pendiente del tejado (%)</Label>
-              <Input type="number" step="1" min="0" max="100" value={roofSlopePercent}
-                onChange={e => setRoofSlopePercent(e.target.value)} />
-              <p className="text-xs text-muted-foreground">
-                Ej: 20% = pendiente suave, 40% = pendiente pronunciada
-              </p>
+              <Label>Definir la cubierta por:</Label>
+              <div className="flex gap-2 mb-2">
+                <Button
+                  variant={roofSlopePercent !== '' ? 'default' : 'outline'}
+                  size="sm"
+                  className="flex-1 text-xs"
+                  onClick={() => setRoofSlopePercent('20')}
+                >
+                  Pendiente (º)
+                </Button>
+                <Button
+                  variant={roofSlopePercent === '' ? 'default' : 'outline'}
+                  size="sm"
+                  className="flex-1 text-xs"
+                  onClick={() => setRoofSlopePercent('')}
+                >
+                  Altura libre (m)
+                </Button>
+              </div>
+              {roofSlopePercent !== '' ? (
+                <>
+                  <Label>Pendiente del tejado (º)</Label>
+                  <Input type="number" step="0.5" min="0" max="89" value={roofSlopePercent}
+                    onChange={e => setRoofSlopePercent(e.target.value)} />
+                  <p className="text-xs text-muted-foreground">
+                    Ej: 15º = pendiente suave, 30º = pendiente pronunciada.
+                    = {(Math.round(degreesToSlopePercent(parseFloat(roofSlopePercent) || 0) * 10) / 10)}%
+                  </p>
+                </>
+              ) : (
+                <>
+                  <Label>Altura libre base→cumbre (m)</Label>
+                  <Input type="number" step="0.1" min="0.5"
+                    placeholder="Ej: 3.5"
+                    onChange={e => {
+                      // Will be converted to slope after creation
+                      const h = parseFloat(e.target.value);
+                      if (!isNaN(h) && h > 0) {
+                        // Approximate with plan width (will recalc after rooms placed)
+                        setRoofSlopePercent(String(Math.round(slopePercentToDegrees(h / 5 * 100) * 10) / 10));
+                      }
+                    }} />
+                  <p className="text-xs text-muted-foreground">
+                    La pendiente se calculará automáticamente según el ancho del edificio.
+                  </p>
+                </>
+              )}
             </div>
           )}
         </div>
@@ -336,21 +379,44 @@ function FloorPlanSettingsPanel({ planData, onUpdate, rooms, floors, onUpdateRoo
   const [roofType, setRoofType] = useState<string>(planData.roofType || 'dos_aguas');
   const [overhang, setOverhang] = useState(String(planData.roofOverhang));
   const [slope, setSlope] = useState(String(planData.roofSlopePercent));
+  const [slopeDeg, setSlopeDeg] = useState(String(Math.round(slopePercentToDegrees(planData.roofSlopePercent) * 10) / 10));
+  const [ridgeHeight, setRidgeHeight] = useState(String(planData.ridgeHeight || ''));
+  const [roofEditMode, setRoofEditMode] = useState<'degrees' | 'height'>(planData.ridgeHeight ? 'height' : 'degrees');
   const [scaleMode, setScaleMode] = useState<string>(planData.scaleMode || 'metros');
   const [blockLenMm, setBlockLenMm] = useState(String(planData.blockLengthMm || 625));
   const [blockHMm, setBlockHMm] = useState(String(planData.blockHeightMm || 250));
   const [blockWMm, setBlockWMm] = useState(String(planData.blockWidthMm || 300));
 
-  // Per-level height overrides
-  const [levelHeights, setLevelHeights] = useState<Record<string, string>>(() => {
-    const map: Record<string, string> = {};
-    floors.forEach(f => {
-      const floorRooms = rooms.filter(r => r.floorId === f.id);
-      const firstHeight = floorRooms[0]?.height;
-      map[f.id] = firstHeight !== undefined ? String(firstHeight) : '';
-    });
-    return map;
-  });
+  // Compute building half-width for ridge height calculations
+  const buildingHalfWidth = useMemo(() => {
+    const placedRooms = rooms.filter(r => r.posX >= 0 && r.posY >= 0);
+    if (placedRooms.length === 0) return planData.width / 2;
+    const minX = Math.min(...placedRooms.map(r => r.posX));
+    const maxX = Math.max(...placedRooms.map(r => r.posX + r.width));
+    return ((maxX - minX) + 2 * planData.externalWallThickness) / 2 + (parseFloat(overhang) || planData.roofOverhang);
+  }, [rooms, planData, overhang]);
+
+  // Auto-calc ridge height when slope changes
+  const handleSlopeDegreesChange = (val: string) => {
+    setSlopeDeg(val);
+    const deg = parseFloat(val);
+    if (!isNaN(deg) && deg >= 0) {
+      const pct = degreesToSlopePercent(deg);
+      setSlope(String(Math.round(pct * 10) / 10));
+      setRidgeHeight(String(Math.round(calcRidgeHeight(pct, buildingHalfWidth) * 1000) / 1000));
+    }
+  };
+
+  // Auto-calc slope when ridge height changes
+  const handleRidgeHeightChange = (val: string) => {
+    setRidgeHeight(val);
+    const rh = parseFloat(val);
+    if (!isNaN(rh) && rh > 0 && buildingHalfWidth > 0) {
+      const pct = calcSlopeFromRidge(rh, buildingHalfWidth);
+      setSlope(String(Math.round(pct * 10) / 10));
+      setSlopeDeg(String(Math.round(slopePercentToDegrees(pct) * 10) / 10));
+    }
+  };
 
   const hasChanges =
     parseFloat(height) !== planData.defaultHeight ||
@@ -362,7 +428,19 @@ function FloorPlanSettingsPanel({ planData, onUpdate, rooms, floors, onUpdateRoo
     scaleMode !== (planData.scaleMode || 'metros') ||
     parseFloat(blockLenMm) !== (planData.blockLengthMm || 625) ||
     parseFloat(blockHMm) !== (planData.blockHeightMm || 250) ||
-    parseFloat(blockWMm) !== (planData.blockWidthMm || 300);
+    parseFloat(blockWMm) !== (planData.blockWidthMm || 300) ||
+    (ridgeHeight !== '' && parseFloat(ridgeHeight) !== (planData.ridgeHeight || 0));
+
+  // Per-level height overrides
+  const [levelHeights, setLevelHeights] = useState<Record<string, string>>(() => {
+    const map: Record<string, string> = {};
+    floors.forEach(f => {
+      const floorRooms = rooms.filter(r => r.floorId === f.id);
+      const firstHeight = floorRooms[0]?.height;
+      map[f.id] = firstHeight !== undefined ? String(firstHeight) : '';
+    });
+    return map;
+  });
 
   const scaleUpdate = {
     scaleMode: scaleMode as any,
@@ -379,6 +457,7 @@ function FloorPlanSettingsPanel({ planData, onUpdate, rooms, floors, onUpdateRoo
       roofType: roofType as any,
       roofOverhang: parseFloat(overhang) || planData.roofOverhang,
       roofSlopePercent: parseFloat(slope) || planData.roofSlopePercent,
+      ridgeHeight: ridgeHeight ? parseFloat(ridgeHeight) : undefined,
       ...scaleUpdate,
     };
     // When in block mode, auto-set ext wall thickness from block width
@@ -404,6 +483,7 @@ function FloorPlanSettingsPanel({ planData, onUpdate, rooms, floors, onUpdateRoo
       roofType: roofType as any,
       roofOverhang: parseFloat(overhang) || planData.roofOverhang,
       roofSlopePercent: parseFloat(slope) || planData.roofSlopePercent,
+      ridgeHeight: ridgeHeight ? parseFloat(ridgeHeight) : undefined,
       ...scaleUpdate,
     });
 
@@ -494,11 +574,65 @@ function FloorPlanSettingsPanel({ planData, onUpdate, rooms, floors, onUpdateRoo
               <Label className="text-xs">Alero (m)</Label>
               <Input type="number" step="0.1" value={overhang} onChange={e => setOverhang(e.target.value)} disabled={saving} />
             </div>
-            <div>
-              <Label className="text-xs">Pendiente (%)</Label>
-              <Input type="number" step="1" value={slope} onChange={e => setSlope(e.target.value)} disabled={saving} />
-            </div>
           </div>
+
+          {/* Roof slope / ridge height dual editor */}
+          {roofType !== 'plana' && (
+            <div className="mt-3 p-3 border rounded-lg bg-muted/30 space-y-3">
+              <div className="flex items-center gap-2 mb-1">
+                <h5 className="text-xs font-semibold">Definir cubierta por:</h5>
+                <div className="flex gap-1">
+                  <Button
+                    variant={roofEditMode === 'degrees' ? 'default' : 'outline'}
+                    size="sm"
+                    className="h-6 text-[10px] px-2"
+                    onClick={() => setRoofEditMode('degrees')}
+                  >
+                    Pendiente (º)
+                  </Button>
+                  <Button
+                    variant={roofEditMode === 'height' ? 'default' : 'outline'}
+                    size="sm"
+                    className="h-6 text-[10px] px-2"
+                    onClick={() => setRoofEditMode('height')}
+                  >
+                    Altura libre (m)
+                  </Button>
+                </div>
+              </div>
+
+              {roofEditMode === 'degrees' ? (
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-xs">Pendiente (º)</Label>
+                    <Input type="number" step="0.5" min="0" max="89" value={slopeDeg}
+                      onChange={e => handleSlopeDegreesChange(e.target.value)} disabled={saving} />
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">= Pendiente (%)</Label>
+                    <Input type="number" value={slope} disabled className="bg-muted/50" />
+                  </div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-xs">Altura libre base→cumbre (m)</Label>
+                    <Input type="number" step="0.01" min="0" value={ridgeHeight}
+                      onChange={e => handleRidgeHeightChange(e.target.value)} disabled={saving}
+                      placeholder="Ej: 3.5" />
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">= Pendiente (º)</Label>
+                    <Input type="number" value={slopeDeg} disabled className="bg-muted/50" />
+                  </div>
+                </div>
+              )}
+
+              <p className="text-[10px] text-muted-foreground">
+                {ridgeHeight ? `Altura cumbre: ${ridgeHeight}m` : ''} · Pendiente: {slopeDeg}º ({slope}%) · Semi-ancho: {buildingHalfWidth.toFixed(3)}m
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Scale / Block configuration */}

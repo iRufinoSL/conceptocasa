@@ -15,6 +15,28 @@ export interface FloorPlanData {
   blockLengthMm: number; // largo del bloque en mm (default 625)
   blockHeightMm: number; // alto del bloque en mm (default 250)
   blockWidthMm: number;  // ancho/espesor del bloque en mm (default 300)
+  ridgeHeight?: number;  // altura libre base-cumbrera (metros), alternativa a roofSlopePercent
+}
+
+/** Convert slope percentage to degrees */
+export function slopePercentToDegrees(percent: number): number {
+  return Math.atan(percent / 100) * (180 / Math.PI);
+}
+
+/** Convert degrees to slope percentage */
+export function degreesToSlopePercent(degrees: number): number {
+  return Math.tan(degrees * Math.PI / 180) * 100;
+}
+
+/** Calculate ridge height from slope and building half-width */
+export function calcRidgeHeight(slopePercent: number, halfWidth: number): number {
+  return halfWidth * (slopePercent / 100);
+}
+
+/** Calculate slope percent from ridge height and building half-width */
+export function calcSlopeFromRidge(ridgeHeight: number, halfWidth: number): number {
+  if (halfWidth <= 0) return 0;
+  return (ridgeHeight / halfWidth) * 100;
 }
 
 /** Convert block count to meters */

@@ -2211,7 +2211,7 @@ export function computeCompositeWallsFromCorners(
   // Compute absolute metric position for each marker:
   //   X: side='right' → col * cellSize (right edge), else (col-1) * cellSize (left edge)
   //   Y: side='bottom' → row * cellSize (bottom edge), else (row-1) * cellSize (top edge)
-  const allMarkersAbs: Array<{ label: string; col: number; row: number; side: string; isMain: boolean; absX: number; absY: number }> = [];
+  const allMarkersAbs: Array<{ label: string; col: number; row: number; side: string; isMain: boolean; absX: number; absY: number; classifiedEdge: 'top' | 'right' | 'bottom' | 'left' }> = [];
   const mainGridPositions: Array<{ label: string; col: number; row: number; side: string }> = [
     { label: mainCorners[0].label, col: gridMinCol, row: gridMinRow, side: 'top' },    // A
     { label: mainCorners[1].label, col: gridMaxCol, row: gridMinRow, side: 'right' },   // B
@@ -2220,10 +2220,11 @@ export function computeCompositeWallsFromCorners(
   ];
   const markerAbsX = (col: number, side: string) => side === 'right' ? col * cellSizeM : (col - 1) * cellSizeM;
   const markerAbsY = (row: number, side: string) => side === 'bottom' ? row * cellSizeM : (row - 1) * cellSizeM;
-  mainGridPositions.forEach(mg => allMarkersAbs.push({ ...mg, isMain: true, absX: markerAbsX(mg.col, mg.side), absY: markerAbsY(mg.row, mg.side) }));
+  mainGridPositions.forEach(mg => allMarkersAbs.push({ ...mg, isMain: true, absX: markerAbsX(mg.col, mg.side), absY: markerAbsY(mg.row, mg.side), classifiedEdge: mg.side as any }));
   filteredUserCorners.forEach(c => {
     if ((c as any).isMain) return;
-    allMarkersAbs.push({ label: c.label, col: c.col, row: c.row, side: c.side, isMain: false, absX: markerAbsX(c.col, c.side), absY: markerAbsY(c.row, c.side) });
+    const edge = classifyEdge(c);
+    allMarkersAbs.push({ label: c.label, col: c.col, row: c.row, side: c.side, isMain: false, absX: markerAbsX(c.col, c.side), absY: markerAbsY(c.row, c.side), classifiedEdge: edge });
   });
 
   // Track perimeter edge labels to avoid duplicating them as cross-side
@@ -2246,10 +2247,13 @@ export function computeCompositeWallsFromCorners(
         // Cross-side pairs: only pair markers where BOTH are non-main (interior markers)
         // Main corners (A, B, C, D) are already connected by perimeter composites
         if (a.isMain || b.isMain) continue;
-        // For bajo cubierta, only keep pairs that span most of the building height
+        // For bajo cubierta, require markers on OPPOSITE edges (top↔bottom) and sufficient span
         if (isBajoCubiertaLevel) {
           const span = Math.abs(a.absY - b.absY);
           if (span < buildingSpanY * MIN_SPAN_RATIO) continue;
+          // Both markers must be on opposite horizontal edges
+          const edges = new Set([a.classifiedEdge, b.classifiedEdge]);
+          if (!(edges.has('top') && edges.has('bottom'))) continue;
         }
         const [top, bottom] = a.absY <= b.absY ? [a, b] : [b, a];
         verticalPairs.push({ top, bottom });
@@ -2460,10 +2464,13 @@ export function computeCompositeWallsFromCorners(
         if (Math.abs(a.absX - b.absX) < EPSILON) continue; // same point
         // Cross-side pairs: only pair markers where BOTH are non-main (interior markers)
         if (a.isMain || b.isMain) continue;
-        // For bajo cubierta, only keep pairs that span most of the building width
+        // For bajo cubierta, require markers on OPPOSITE edges (left↔right) and sufficient span
         if (isBajoCubiertaLevel) {
           const span = Math.abs(a.absX - b.absX);
           if (span < buildingSpanX * MIN_SPAN_RATIO) continue;
+          // Both markers must be on opposite vertical edges
+          const edges = new Set([a.classifiedEdge, b.classifiedEdge]);
+          if (!(edges.has('left') && edges.has('right'))) continue;
         }
         const [left, right] = a.absX <= b.absX ? [a, b] : [b, a];
         horizontalPairs.push({ left, right });
@@ -2526,13 +2533,34 @@ export function computeCompositeWallsFromCorners(
 
     const rawSecs2: Array<{ room: RoomData; wall: WallData; sectionLen: number; wallH: number; sectionOpenings: OpeningData[]; isGableWall: boolean; overlapStart: number; fullWallLen: number }> = [];
 
+    // For bajo cubierta horizontal interior cuts, compute a single uniform height
+    // based on the Y position of the cut under the roof slope.
+    // Horizontal walls (1/3) in bajo cubierta: height depends on distance from building edge along Y.
+    const bajoCubiertaHorizCutHeight = (() => {
+      const allBajoCub = rooms.length > 0 && rooms.every(r => r.height === 0) && plan.roofType === 'dos_aguas';
+      if (!allBajoCub) return undefined;
+      // For a horizontal cut at wallY, the roof height is determined by the
+      // distance from the nearest top/bottom edge of the building.
+      // But in a "dos aguas" roof with ridge along Y, horizontal walls have
+      // constant height equal to the ridge height (they run parallel to the ridge).
+      // So use the maximum auto-calculated height across all matching rooms.
+      const heights = matchingRooms.map(({ room, wall }) => {
+        const crossWallIndex = matchBottom.includes(matchingRooms.find(m => m.room === room && m.wall === wall)!) ? 3 : 1;
+        return calcBajoCubiertaWallHeight(room, crossWallIndex, plan, rooms) ?? 0;
+      }).filter(h => h > 0);
+      return heights.length > 0 ? Math.max(...heights) : undefined;
+    })();
+
     matchingRooms.forEach(({ room, wall, overlapStart, overlapEnd }) => {
       const sectionLen = overlapEnd - overlapStart;
       let wallH: number;
       const isBajoCub = room.height === 0 && plan.roofType === 'dos_aguas';
       // Horizontal cross-side: wallIndex comes from matchBottom (3) or matchTop (1)
       const crossWallIndex = matchBottom.includes(matchingRooms.find(m => m.room === room && m.wall === wall)!) ? 3 : 1;
-      if (wall.height && wall.height > 0) wallH = wall.height;
+      if (bajoCubiertaHorizCutHeight !== undefined && isBajoCub) {
+        // Use uniform height for all visible sections in this bajo cubierta cut
+        wallH = bajoCubiertaHorizCutHeight;
+      } else if (wall.height && wall.height > 0) wallH = wall.height;
       else if (room.height && room.height > 0) wallH = room.height;
       else if (room.height === 0) {
         const autoH = calcBajoCubiertaWallHeight(room, crossWallIndex, plan, rooms);

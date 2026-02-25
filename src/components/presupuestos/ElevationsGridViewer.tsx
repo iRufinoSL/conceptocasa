@@ -727,60 +727,108 @@ export function ElevationsGridViewer({
               }
             });
 
+            // Group interior walls into separate internal faces by shared intermediate marker
+            const interiorFaceGroups: Array<{ name: string; walls: CompositeWall[] }> = [];
+            if (interiorWalls.length > 0) {
+              // Find shared intermediate markers to group interior cuts
+              const markerToWalls = new Map<string, CompositeWall[]>();
+              interiorWalls.forEach(iw => {
+                // Extract intermediate markers (those with numeric suffix after letter, e.g. A1, In1, C1)
+                const markers = [iw.startCorner.label, iw.endCorner.label];
+                markers.forEach(m => {
+                  if (!markerToWalls.has(m)) markerToWalls.set(m, []);
+                  markerToWalls.get(m)!.push(iw);
+                });
+              });
+              // Group walls that share any intermediate marker using union-find
+              const wallToGroup = new Map<string, number>();
+              let groupCounter = 0;
+              interiorWalls.forEach(iw => {
+                const markers = [iw.startCorner.label, iw.endCorner.label];
+                let assignedGroup: number | null = null;
+                markers.forEach(m => {
+                  const related = markerToWalls.get(m) || [];
+                  related.forEach(rw => {
+                    const rg = wallToGroup.get(rw.id);
+                    if (rg !== undefined && assignedGroup === null) assignedGroup = rg;
+                  });
+                });
+                if (assignedGroup === null) assignedGroup = groupCounter++;
+                wallToGroup.set(iw.id, assignedGroup);
+                // Merge all related walls into same group
+                markers.forEach(m => {
+                  const related = markerToWalls.get(m) || [];
+                  related.forEach(rw => {
+                    const rg = wallToGroup.get(rw.id);
+                    if (rg !== undefined && rg !== assignedGroup) {
+                      // Reassign all walls in old group to new group
+                      wallToGroup.forEach((v, k) => { if (v === rg) wallToGroup.set(k, assignedGroup!); });
+                    }
+                    wallToGroup.set(rw.id, assignedGroup!);
+                  });
+                });
+              });
+              // Collect groups
+              const groupedWalls = new Map<number, CompositeWall[]>();
+              interiorWalls.forEach(iw => {
+                const g = wallToGroup.get(iw.id) ?? 0;
+                if (!groupedWalls.has(g)) groupedWalls.set(g, []);
+                groupedWalls.get(g)!.push(iw);
+              });
+              let faceIdx = 1;
+              groupedWalls.forEach(walls => {
+                interiorFaceGroups.push({ name: `Cara interna ${faceIdx}`, walls });
+                faceIdx++;
+              });
+            }
+
+            const renderCompositeCard = (cw2: CompositeWall) => (
+              <CompositeWallCard
+                key={cw2.id}
+                compositeWall={cw2}
+                plan={plan}
+                onOpeningClick={handleOpeningClick}
+                onAddBlockGroup={onAddBlockGroup}
+                onDeleteBlockGroup={onDeleteBlockGroup}
+                onDeleteOpening={onDeleteOpening}
+                onUpdateOpening={onUpdateOpening}
+                onUpdateWall={onUpdateWall}
+                saving={saving}
+                rooms={rooms}
+                budgetName={budgetName}
+              />
+            );
+
             const content = (
               <div className="space-y-4">
                 {SIDE_ORDER.map(side2 => {
                   const sideComps = bySide.get(side2);
                   if (!sideComps || sideComps.length === 0) return null;
                   return (
-                    <div key={side2} className="space-y-2">
-                      <div className="flex items-center gap-2 px-2 border-b border-border/30 pb-1">
+                    <Collapsible key={side2} defaultOpen>
+                      <CollapsibleTrigger className="flex items-center gap-2 w-full text-left group hover:bg-muted/50 rounded px-2 py-1 transition-colors border-b border-border/30 pb-1">
+                        <ChevronRight className="h-3.5 w-3.5 text-foreground transition-transform group-data-[state=open]:rotate-90" />
                         <h4 className="text-xs font-bold text-foreground">{FACE_NAMES[side2]}</h4>
                         <Badge variant="outline" className="text-[9px] h-4">{sideComps.length} alzado{sideComps.length > 1 ? 's' : ''}</Badge>
-                      </div>
-                      {sideComps.map(cw2 => (
-                        <CompositeWallCard
-                          key={cw2.id}
-                          compositeWall={cw2}
-                          plan={plan}
-                          onOpeningClick={handleOpeningClick}
-                          onAddBlockGroup={onAddBlockGroup}
-                          onDeleteBlockGroup={onDeleteBlockGroup}
-                          onDeleteOpening={onDeleteOpening}
-                          onUpdateOpening={onUpdateOpening}
-                          onUpdateWall={onUpdateWall}
-                          saving={saving}
-                          rooms={rooms}
-                          budgetName={budgetName}
-                        />
-                      ))}
-                    </div>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent className="space-y-2 mt-1 ml-2">
+                        {sideComps.map(renderCompositeCard)}
+                      </CollapsibleContent>
+                    </Collapsible>
                   );
                 })}
-                {interiorWalls.length > 0 && (
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2 px-2 border-b border-border/30 pb-1">
-                      <h4 className="text-xs font-bold text-foreground">Cortes interiores</h4>
-                      <Badge variant="outline" className="text-[9px] h-4">{interiorWalls.length} alzado{interiorWalls.length > 1 ? 's' : ''}</Badge>
-                    </div>
-                    {interiorWalls.map(cw2 => (
-                      <CompositeWallCard
-                        key={cw2.id}
-                        compositeWall={cw2}
-                        plan={plan}
-                        onOpeningClick={handleOpeningClick}
-                        onAddBlockGroup={onAddBlockGroup}
-                        onDeleteBlockGroup={onDeleteBlockGroup}
-                        onDeleteOpening={onDeleteOpening}
-                        onUpdateOpening={onUpdateOpening}
-                        onUpdateWall={onUpdateWall}
-                        saving={saving}
-                        rooms={rooms}
-                        budgetName={budgetName}
-                      />
-                    ))}
-                  </div>
-                )}
+                {interiorFaceGroups.map(fg => (
+                  <Collapsible key={fg.name} defaultOpen>
+                    <CollapsibleTrigger className="flex items-center gap-2 w-full text-left group hover:bg-muted/50 rounded px-2 py-1 transition-colors border-b border-border/30 pb-1">
+                      <ChevronRight className="h-3.5 w-3.5 text-foreground transition-transform group-data-[state=open]:rotate-90" />
+                      <h4 className="text-xs font-bold text-foreground">{fg.name}</h4>
+                      <Badge variant="outline" className="text-[9px] h-4">{fg.walls.length} alzado{fg.walls.length > 1 ? 's' : ''}</Badge>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent className="space-y-2 mt-1 ml-2">
+                      {fg.walls.map(renderCompositeCard)}
+                    </CollapsibleContent>
+                  </Collapsible>
+                ))}
               </div>
             );
             if (floorName) {
@@ -3298,6 +3346,23 @@ function CompositeWallCard({ compositeWall, plan, onOpeningClick, onAddBlockGrou
         {/* Ground line */}
         <line x1={rxs - 5} y1={rys + totalH} x2={rxs + cw.totalLength * s + 5} y2={rys + totalH}
           stroke="hsl(25, 60%, 40%)" strokeWidth={1.5} />
+
+        {/* Ridge line (cumbrera) — dashed red line */}
+        {plan.roofType === 'dos_aguas' && liveRooms && (() => {
+          const allRooms = liveRooms;
+          const buildMinX = Math.min(...allRooms.map(r => r.posX));
+          const buildMaxX = Math.max(...allRooms.map(r => r.posX + r.width));
+          const totalBuildW = (buildMaxX - buildMinX) + 2 * plan.externalWallThickness;
+          const ridgeH = (totalBuildW / 2) * (plan.roofSlopePercent / 100);
+          if (ridgeH > 0 && ridgeH <= totalH * 1.2) {
+            const ridgeY = rys + totalH - ridgeH * s;
+            return (
+              <line x1={rxs - 5} y1={ridgeY} x2={rxs + cw.totalLength * s + 5} y2={ridgeY}
+                stroke="hsl(0, 70%, 55%)" strokeWidth={0.8} strokeDasharray="6 3" opacity={0.6} />
+            );
+          }
+          return null;
+        })()}
 
         {/* Room sections */}
         {cw.sections.map((section, idx) => {

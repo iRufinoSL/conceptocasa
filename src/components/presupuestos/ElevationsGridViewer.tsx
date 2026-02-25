@@ -1776,9 +1776,11 @@ const isDoor = op.openingType === 'puerta' || op.openingType === 'puerta_externa
                   const maxRow = Math.max(...cells.map(c => c.row));
                   const spanCols = maxCol - minCol + 1;
                   const spanRows = maxRow - minRow + 1;
-                  const blockW = plan.blockLengthMm;
-                  const blockH = plan.blockHeightMm;
-                  const name = `${(spanCols * blockW).toFixed(0)}×${(spanRows * blockH).toFixed(0)}×${plan.blockWidthMm}mm`;
+                  const wallIsExt = card.wall ? isExteriorType(card.wall.wallType as string) : true;
+                  const bDims = getBlockDimensions(plan, wallIsExt);
+                  const blockW = bDims.lengthMm;
+                  const blockH = bDims.heightMm;
+                  const name = `${(spanCols * blockW).toFixed(0)}×${(spanRows * blockH).toFixed(0)}×${bDims.widthMm}mm`;
                   await onAddBlockGroup(card.wallId!, minCol, minRow, spanCols, spanRows, name);
                   setSelectedBlocks(new Set());
                 }}

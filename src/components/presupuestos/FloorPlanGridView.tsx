@@ -288,19 +288,15 @@ export function FloorPlanGridView({
     return currentFloorRooms.filter(r => r.width > 0 && r.length > 0 && r.posX >= 0 && r.posY >= 0);
   }, [currentFloorRooms]);
 
-  // Auto-expand grid to fit all placed rooms beyond the initial plan dimensions
+  // Grid size: when rooms are placed, use exact room extent (no extra cells from plan dimensions)
   const totalCols = useMemo(() => {
-    const baseCols = Math.max(1, Math.ceil(planWidth / cellSizeM));
-    if (placedRooms.length === 0) return baseCols;
-    const maxCol = Math.max(...placedRooms.map(r => Math.round(r.posX / cellSizeM) + Math.max(1, Math.round(r.width / cellSizeM))));
-    return Math.max(baseCols, maxCol);
+    if (placedRooms.length === 0) return Math.max(1, Math.ceil(planWidth / cellSizeM));
+    return Math.max(...placedRooms.map(r => Math.round(r.posX / cellSizeM) + Math.max(1, Math.round(r.width / cellSizeM))));
   }, [planWidth, placedRooms, cellSizeM]);
 
   const totalRows = useMemo(() => {
-    const baseRows = Math.max(1, Math.ceil(planLength / cellSizeM));
-    if (placedRooms.length === 0) return baseRows;
-    const maxRow = Math.max(...placedRooms.map(r => Math.round(r.posY / cellSizeM) + Math.max(1, Math.round(r.length / cellSizeM))));
-    return Math.max(baseRows, maxRow);
+    if (placedRooms.length === 0) return Math.max(1, Math.ceil(planLength / cellSizeM));
+    return Math.max(...placedRooms.map(r => Math.round(r.posY / cellSizeM) + Math.max(1, Math.round(r.length / cellSizeM))));
   }, [planLength, placedRooms, cellSizeM]);
 
   // Build a cell occupation map: key = "col,row" → roomId

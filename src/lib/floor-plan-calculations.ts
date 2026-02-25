@@ -1897,6 +1897,9 @@ export function computeCompositeWallsFromCorners(
   const gridMaxCol = Math.max(...rooms.map(r => Math.round(r.posX / cellSizeM) + 1 + Math.max(1, Math.round(r.width / cellSizeM))));
   const gridMaxRow = Math.max(...rooms.map(r => Math.round(r.posY / cellSizeM) + 1 + Math.max(1, Math.round(r.length / cellSizeM))));
 
+  // Filter out eave markers — they should NOT participate in perimeter or cross-side elevation generation
+  const filteredUserCorners = userCorners.filter(c => !(c as any).isEave);
+
   // Classify custom corners using normalized distance to each edge.
   // This handles markers not exactly on a boundary (e.g. B1 at col=17 but meant for right edge).
   const colSpan = Math.max(1, gridMaxCol - gridMinCol);
@@ -1920,7 +1923,7 @@ export function computeCompositeWallsFromCorners(
   // (col*cellSizeM / row*cellSizeM), while 'top'/'left' point to the FIRST mm
   // ((col-1)*cellSizeM / (row-1)*cellSizeM). Using the original side property ensures
   // measurements match the grid's block-counting precision.
-  const customAbsolute = userCorners.map(cc => {
+  const customAbsolute = filteredUserCorners.map(cc => {
     const edge = classifyEdge(cc);
     const isLastMm = cc.side === 'right' || cc.side === 'bottom';
     const xFromCol = isLastMm ? cc.col * cellSizeM : (cc.col - 1) * cellSizeM;
@@ -1943,7 +1946,7 @@ export function computeCompositeWallsFromCorners(
   // Add custom corners to their physical edges
   // Skip corners marked as isMain — they duplicate the hardcoded ABCD corners
   customAbsolute.forEach((cc, idx) => {
-    if ((userCorners[idx] as any).isMain) return;
+    if ((filteredUserCorners[idx] as any).isMain) return;
     sideCorners[cc.side].push(cc);
   });
 
@@ -2056,7 +2059,10 @@ export function computeCompositeWallsFromCorners(
         } else if (room.height && room.height > 0) {
           wallH = room.height;
         } else if (room.height === 0) {
-          return;
+          // Bajo cubierta non-gable wall: calculate height from roof slope
+          const autoH = calcBajoCubiertaWallHeight(room, wallIndex, plan, rooms);
+          wallH = autoH ?? 0;
+          // If height is 0 (wall at building edge), still include it for completeness
         } else {
           wallH = plan.defaultHeight;
         }
@@ -2154,7 +2160,7 @@ export function computeCompositeWallsFromCorners(
   const markerAbsX = (col: number, side: string) => side === 'right' ? col * cellSizeM : (col - 1) * cellSizeM;
   const markerAbsY = (row: number, side: string) => side === 'bottom' ? row * cellSizeM : (row - 1) * cellSizeM;
   mainGridPositions.forEach(mg => allMarkersAbs.push({ ...mg, isMain: true, absX: markerAbsX(mg.col, mg.side), absY: markerAbsY(mg.row, mg.side) }));
-  userCorners.forEach(c => {
+  filteredUserCorners.forEach(c => {
     if ((c as any).isMain) return;
     allMarkersAbs.push({ label: c.label, col: c.col, row: c.row, side: c.side, isMain: false, absX: markerAbsX(c.col, c.side), absY: markerAbsY(c.row, c.side) });
   });
@@ -2241,10 +2247,19 @@ export function computeCompositeWallsFromCorners(
     matchingRooms.forEach(({ room, wall, overlapStart, overlapEnd }) => {
       const sectionLen = overlapEnd - overlapStart;
       let wallH: number;
-      if (wall.height && wall.height > 0) wallH = wall.height;
+      const isBajoCub = room.height === 0 && plan.roofType === 'dos_aguas';
+      // Vertical cross-side: wallIndex comes from matchRight (2) or matchLeft (4)
+      const crossWallIndex = matchRight.includes(matchingRooms.find(m => m.room === room && m.wall === wall)!) ? 2 : 4;
+      const isGableWall = isBajoCub && (crossWallIndex === 2 || crossWallIndex === 4);
+      if (isGableWall) {
+        const totalW = (Math.max(...rooms.map(r => r.posX + r.width)) - Math.min(...rooms.map(r => r.posX))) + 2 * plan.externalWallThickness;
+        wallH = (totalW / 2) * (plan.roofSlopePercent / 100);
+      } else if (wall.height && wall.height > 0) wallH = wall.height;
       else if (room.height && room.height > 0) wallH = room.height;
-      else if (room.height === 0) return;
-      else wallH = plan.defaultHeight;
+      else if (room.height === 0) {
+        const autoH = calcBajoCubiertaWallHeight(room, crossWallIndex, plan, rooms);
+        wallH = autoH ?? 0;
+      } else wallH = plan.defaultHeight;
 
       const fullWallLen = room.length;
       const sectionOpenings = wall.openings.filter(op => {
@@ -2252,7 +2267,7 @@ export function computeCompositeWallsFromCorners(
         return opAbsPos >= overlapStart - EPSILON && opAbsPos <= overlapEnd + EPSILON;
       });
 
-      rawSecs.push({ room, wall, sectionLen, wallH, sectionOpenings, isGableWall: false, overlapStart, fullWallLen });
+      rawSecs.push({ room, wall, sectionLen, wallH, sectionOpenings, isGableWall, overlapStart, fullWallLen });
     });
 
     if (rawSecs.length === 0) return;
@@ -2392,10 +2407,15 @@ export function computeCompositeWallsFromCorners(
     matchingRooms.forEach(({ room, wall, overlapStart, overlapEnd }) => {
       const sectionLen = overlapEnd - overlapStart;
       let wallH: number;
+      const isBajoCub = room.height === 0 && plan.roofType === 'dos_aguas';
+      // Horizontal cross-side: wallIndex comes from matchBottom (3) or matchTop (1)
+      const crossWallIndex = matchBottom.includes(matchingRooms.find(m => m.room === room && m.wall === wall)!) ? 3 : 1;
       if (wall.height && wall.height > 0) wallH = wall.height;
       else if (room.height && room.height > 0) wallH = room.height;
-      else if (room.height === 0) return;
-      else wallH = plan.defaultHeight;
+      else if (room.height === 0) {
+        const autoH = calcBajoCubiertaWallHeight(room, crossWallIndex, plan, rooms);
+        wallH = autoH ?? 0;
+      } else wallH = plan.defaultHeight;
 
       const fullWallLen = room.width;
       const sectionOpenings = wall.openings.filter(op => {
@@ -2605,8 +2625,9 @@ export function computeCompositeWalls(
       } else if (room.height && room.height > 0) {
         wallH = room.height;
       } else if (room.height === 0) {
-        // Bajo cubierta non-gable wall: skip entirely
-        return;
+        // Bajo cubierta non-gable wall: calculate height from roof slope
+        const autoH = calcBajoCubiertaWallHeight(room, wallIndex, plan, rooms);
+        wallH = autoH ?? 0;
       } else {
         wallH = plan.defaultHeight;
       }

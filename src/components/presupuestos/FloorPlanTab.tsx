@@ -282,11 +282,17 @@ function NewLevelWizardDialog({ open, onOpenChange, floors, onAdd, saving, onFlo
   );
 }
 
-function LevelManagerPanel({ floors, onAdd, onUpdate, onDelete, saving, onClose, onFloorCreated }: {
+function LevelManagerPanel({ floors, planData, rooms, onAdd, onUpdate, onDelete, onUpdatePlan, onUpdateRoom, onUpdateWall, onClassifyWalls, saving, onClose, onFloorCreated }: {
   floors: Array<{ id: string; name: string; level: string; orderIndex: number }>;
+  planData: FloorPlanData;
+  rooms: RoomData[];
   onAdd: (name: string, level: string, opts?: any) => Promise<string | undefined>;
   onUpdate: (floorId: string, data: { name?: string }) => Promise<void>;
   onDelete: (floorId: string) => Promise<void>;
+  onUpdatePlan: (data: Partial<FloorPlanData>) => Promise<void>;
+  onUpdateRoom: (roomId: string, data: any) => Promise<void>;
+  onUpdateWall: (wallId: string, data: any) => Promise<void>;
+  onClassifyWalls: () => Promise<void>;
   saving: boolean;
   onClose: () => void;
   onFloorCreated?: (floorId: string) => void;
@@ -294,101 +300,59 @@ function LevelManagerPanel({ floors, onAdd, onUpdate, onDelete, saving, onClose,
   const [editId, setEditId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
   const [showWizard, setShowWizard] = useState(false);
+  const [expandedFloor, setExpandedFloor] = useState<string | null>(null);
 
-  const handleSaveEdit = async () => {
-    if (!editId || !editName.trim()) return;
-    await onUpdate(editId, { name: editName.trim() });
-    setEditId(null);
-    setEditName('');
-  };
-
-  return (
-    <Card>
-      <CardHeader className="py-3">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-sm flex items-center gap-2">
-            <Layers className="h-4 w-4" /> Gestionar Niveles
-          </CardTitle>
-          <Button variant="ghost" size="sm" onClick={onClose} className="h-7 px-2 text-xs">Cerrar</Button>
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        {/* Existing levels */}
-        {floors.map(f => (
-          <div key={f.id} className="flex items-center gap-2 p-2 border rounded-lg bg-muted/30">
-            {editId === f.id ? (
-              <>
-                <Input className="h-8 text-sm flex-1" value={editName}
-                  onChange={e => setEditName(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && handleSaveEdit()} />
-                <Button size="sm" className="h-8" onClick={handleSaveEdit} disabled={saving}>
-                  <Save className="h-3.5 w-3.5" />
-                </Button>
-                <Button variant="ghost" size="sm" className="h-8" onClick={() => setEditId(null)}>✕</Button>
-              </>
-            ) : (
-              <>
-                <Badge variant="secondary" className="text-xs">{f.orderIndex}</Badge>
-                <span className="text-sm font-medium flex-1">{f.name}</span>
-                <Button variant="ghost" size="sm" className="h-7 w-7 p-0"
-                  onClick={() => { setEditId(f.id); setEditName(f.name); }}>
-                  <Pencil className="h-3.5 w-3.5" />
-                </Button>
-                <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive hover:text-destructive"
-                  onClick={() => {
-                    if (confirm(`¿Eliminar el nivel "${f.name}"? Los espacios asignados quedarán sin nivel.`)) {
-                      onDelete(f.id);
-                    }
-                  }} disabled={saving}>
-                  <Trash2 className="h-3.5 w-3.5" />
-                </Button>
-              </>
-            )}
-          </div>
-        ))}
-        {/* Add new level button */}
-        <Button size="sm" className="w-full" onClick={() => setShowWizard(true)} disabled={saving}>
-          <Plus className="h-3.5 w-3.5 mr-1" /> Añadir nivel
-        </Button>
-        <NewLevelWizardDialog
-          open={showWizard}
-          onOpenChange={setShowWizard}
-          floors={floors}
-          onAdd={onAdd}
-          saving={saving}
-          onFloorCreated={onFloorCreated}
-        />
-      </CardContent>
-    </Card>
-  );
-}
-
-function FloorPlanSettingsPanel({ planData, onUpdate, rooms, floors, onUpdateRoom, onUpdateWall, onClassifyWalls, saving, onClose }: {
-  planData: FloorPlanData;
-  onUpdate: (data: Partial<FloorPlanData>) => Promise<void>;
-  rooms: RoomData[];
-  floors: Array<{ id: string; name: string; level: string; orderIndex: number }>;
-  onUpdateRoom: (roomId: string, data: any) => Promise<void>;
-  onUpdateWall: (wallId: string, data: any) => Promise<void>;
-  onClassifyWalls: () => Promise<void>;
-  saving: boolean;
-  onClose: () => void;
-}) {
-  const [height, setHeight] = useState(String(planData.defaultHeight));
+  // General plan parameters
   const [extThick, setExtThick] = useState(String(planData.externalWallThickness));
   const [intThick, setIntThick] = useState(String(planData.internalWallThickness));
   const [roofType, setRoofType] = useState<string>(planData.roofType || 'dos_aguas');
   const [overhang, setOverhang] = useState(String(planData.roofOverhang));
-  const [slope, setSlope] = useState(String(planData.roofSlopePercent));
-  const [slopeDeg, setSlopeDeg] = useState(String(Math.round(slopePercentToDegrees(planData.roofSlopePercent) * 10) / 10));
-  const [ridgeHeight, setRidgeHeight] = useState(String(planData.ridgeHeight || ''));
-  const [roofEditMode, setRoofEditMode] = useState<'degrees' | 'height'>(planData.ridgeHeight ? 'height' : 'degrees');
   const [scaleMode, setScaleMode] = useState<string>(planData.scaleMode || 'metros');
   const [blockLenMm, setBlockLenMm] = useState(String(planData.blockLengthMm || 625));
   const [blockHMm, setBlockHMm] = useState(String(planData.blockHeightMm || 250));
   const [blockWMm, setBlockWMm] = useState(String(planData.blockWidthMm || 300));
 
-  // Compute building half-width for ridge height calculations
+  // Per-level heights
+  const [levelHeights, setLevelHeights] = useState<Record<string, string>>(() => {
+    const map: Record<string, string> = {};
+    floors.forEach(f => {
+      const floorRooms = rooms.filter(r => r.floorId === f.id);
+      const firstHeight = floorRooms[0]?.height;
+      map[f.id] = firstHeight !== undefined ? String(firstHeight) : String(planData.defaultHeight);
+    });
+    return map;
+  });
+
+  // Per-level roof parameters (for bajo cubierta levels)
+  const [levelSlopeDeg, setLevelSlopeDeg] = useState<Record<string, string>>({});
+  const [levelRidgeHeight, setLevelRidgeHeight] = useState<Record<string, string>>({});
+  const [levelRoofEditMode, setLevelRoofEditMode] = useState<Record<string, 'degrees' | 'height'>>({});
+
+  // Initialize roof params
+  useEffect(() => {
+    const slopeDeg = String(Math.round(slopePercentToDegrees(planData.roofSlopePercent) * 10) / 10);
+    const rh = String(planData.ridgeHeight || '');
+    const mode = planData.ridgeHeight ? 'height' : 'degrees';
+    const degMap: Record<string, string> = {};
+    const rhMap: Record<string, string> = {};
+    const modeMap: Record<string, 'degrees' | 'height'> = {};
+    floors.forEach(f => {
+      if (isFloorBajoCubierta(f)) {
+        degMap[f.id] = slopeDeg;
+        rhMap[f.id] = rh;
+        modeMap[f.id] = mode;
+      }
+    });
+    setLevelSlopeDeg(degMap);
+    setLevelRidgeHeight(rhMap);
+    setLevelRoofEditMode(modeMap);
+  }, []);
+
+  const isFloorBajoCubierta = (f: { level: string; name: string }) => {
+    return f.level === 'bajo_cubierta' || f.name.toLowerCase().includes('bajo cubierta');
+  };
+
+  // Compute building half-width
   const buildingHalfWidth = useMemo(() => {
     const placedRooms = rooms.filter(r => r.posX >= 0 && r.posY >= 0);
     if (placedRooms.length === 0) return planData.width / 2;
@@ -397,98 +361,74 @@ function FloorPlanSettingsPanel({ planData, onUpdate, rooms, floors, onUpdateRoo
     return ((maxX - minX) + 2 * planData.externalWallThickness) / 2 + (parseFloat(overhang) || planData.roofOverhang);
   }, [rooms, planData, overhang]);
 
-  // Auto-calc ridge height when slope changes
-  const handleSlopeDegreesChange = (val: string) => {
-    setSlopeDeg(val);
+  const handleSlopeDegreesChange = (floorId: string, val: string) => {
+    setLevelSlopeDeg(prev => ({ ...prev, [floorId]: val }));
     const deg = parseFloat(val);
     if (!isNaN(deg) && deg >= 0) {
       const pct = degreesToSlopePercent(deg);
-      setSlope(String(Math.round(pct * 10) / 10));
-      setRidgeHeight(String(Math.round(calcRidgeHeight(pct, buildingHalfWidth) * 1000) / 1000));
+      setLevelRidgeHeight(prev => ({
+        ...prev,
+        [floorId]: String(Math.round(calcRidgeHeight(pct, buildingHalfWidth) * 1000) / 1000),
+      }));
     }
   };
 
-  // Auto-calc slope when ridge height changes
-  const handleRidgeHeightChange = (val: string) => {
-    setRidgeHeight(val);
+  const handleRidgeHeightChange = (floorId: string, val: string) => {
+    setLevelRidgeHeight(prev => ({ ...prev, [floorId]: val }));
     const rh = parseFloat(val);
     if (!isNaN(rh) && rh > 0 && buildingHalfWidth > 0) {
       const pct = calcSlopeFromRidge(rh, buildingHalfWidth);
-      setSlope(String(Math.round(pct * 10) / 10));
-      setSlopeDeg(String(Math.round(slopePercentToDegrees(pct) * 10) / 10));
+      setLevelSlopeDeg(prev => ({
+        ...prev,
+        [floorId]: String(Math.round(slopePercentToDegrees(pct) * 10) / 10),
+      }));
     }
   };
 
-  const hasChanges =
-    parseFloat(height) !== planData.defaultHeight ||
-    parseFloat(extThick) !== planData.externalWallThickness ||
-    parseFloat(intThick) !== planData.internalWallThickness ||
-    roofType !== (planData.roofType || 'dos_aguas') ||
-    parseFloat(overhang) !== planData.roofOverhang ||
-    parseFloat(slope) !== planData.roofSlopePercent ||
-    scaleMode !== (planData.scaleMode || 'metros') ||
-    parseFloat(blockLenMm) !== (planData.blockLengthMm || 625) ||
-    parseFloat(blockHMm) !== (planData.blockHeightMm || 250) ||
-    parseFloat(blockWMm) !== (planData.blockWidthMm || 300) ||
-    (ridgeHeight !== '' && parseFloat(ridgeHeight) !== (planData.ridgeHeight || 0));
-
-  // Per-level height overrides
-  const [levelHeights, setLevelHeights] = useState<Record<string, string>>(() => {
-    const map: Record<string, string> = {};
-    floors.forEach(f => {
-      const floorRooms = rooms.filter(r => r.floorId === f.id);
-      const firstHeight = floorRooms[0]?.height;
-      map[f.id] = firstHeight !== undefined ? String(firstHeight) : '';
-    });
-    return map;
-  });
-
-  const scaleUpdate = {
-    scaleMode: scaleMode as any,
-    blockLengthMm: parseFloat(blockLenMm) || 625,
-    blockHeightMm: parseFloat(blockHMm) || 250,
-    blockWidthMm: parseFloat(blockWMm) || 300,
+  const handleSaveEdit = async () => {
+    if (!editId || !editName.trim()) return;
+    await onUpdate(editId, { name: editName.trim() });
+    setEditId(null);
+    setEditName('');
   };
 
-  const handleSave = async () => {
-    const updates: Partial<FloorPlanData> = {
-      defaultHeight: parseFloat(height) || planData.defaultHeight,
-      externalWallThickness: parseFloat(extThick) || planData.externalWallThickness,
+  const handleSaveAll = async () => {
+    // Save general plan parameters
+    const scaleUpdate = {
+      scaleMode: scaleMode as any,
+      blockLengthMm: parseFloat(blockLenMm) || 625,
+      blockHeightMm: parseFloat(blockHMm) || 250,
+      blockWidthMm: parseFloat(blockWMm) || 300,
+    };
+    const extThickness = scaleMode === 'bloque' ? (parseFloat(blockWMm) || 300) / 1000 : (parseFloat(extThick) || planData.externalWallThickness);
+
+    // Find bajo cubierta floor for roof params
+    const bajoCubiertaFloor = floors.find(f => isFloorBajoCubierta(f));
+    let slopePct = planData.roofSlopePercent;
+    let ridgeH: number | undefined = planData.ridgeHeight || undefined;
+    if (bajoCubiertaFloor) {
+      const deg = parseFloat(levelSlopeDeg[bajoCubiertaFloor.id] || '0');
+      slopePct = degreesToSlopePercent(deg);
+      const rh = parseFloat(levelRidgeHeight[bajoCubiertaFloor.id] || '');
+      ridgeH = !isNaN(rh) && rh > 0 ? rh : undefined;
+    }
+
+    // Determine default height from first non-bajo-cubierta level
+    const normalFloor = floors.find(f => !isFloorBajoCubierta(f));
+    const defaultH = normalFloor ? (parseFloat(levelHeights[normalFloor.id] || '') || planData.defaultHeight) : planData.defaultHeight;
+
+    await onUpdatePlan({
+      defaultHeight: defaultH,
+      externalWallThickness: extThickness,
       internalWallThickness: parseFloat(intThick) || planData.internalWallThickness,
       roofType: roofType as any,
       roofOverhang: parseFloat(overhang) || planData.roofOverhang,
-      roofSlopePercent: parseFloat(slope) || planData.roofSlopePercent,
-      ridgeHeight: ridgeHeight ? parseFloat(ridgeHeight) : undefined,
-      ...scaleUpdate,
-    };
-    // When in block mode, auto-set ext wall thickness from block width
-    if (scaleMode === 'bloque') {
-      updates.externalWallThickness = (parseFloat(blockWMm) || 300) / 1000;
-    }
-    await onUpdate(updates);
-    toast.success('Parámetros actualizados');
-  };
-
-  // Apply defaults to ALL rooms: height, wall thickness, and re-classify walls
-  const handleApplyAll = async () => {
-    const newHeight = parseFloat(height) || planData.defaultHeight;
-    const newExtThick = parseFloat(extThick) || planData.externalWallThickness;
-    const newIntThick = parseFloat(intThick) || planData.internalWallThickness;
-
-    // Save plan-level defaults first
-    const extThickness = scaleMode === 'bloque' ? (parseFloat(blockWMm) || 300) / 1000 : newExtThick;
-    await onUpdate({
-      defaultHeight: newHeight,
-      externalWallThickness: extThickness,
-      internalWallThickness: newIntThick,
-      roofType: roofType as any,
-      roofOverhang: parseFloat(overhang) || planData.roofOverhang,
-      roofSlopePercent: parseFloat(slope) || planData.roofSlopePercent,
-      ridgeHeight: ridgeHeight ? parseFloat(ridgeHeight) : undefined,
+      roofSlopePercent: Math.round(slopePct * 10) / 10,
+      ridgeHeight: ridgeH,
       ...scaleUpdate,
     });
 
-    // Apply per-level heights
+    // Apply per-level heights to rooms
     for (const floor of floors) {
       const levelH = levelHeights[floor.id];
       const floorRooms = rooms.filter(r => r.floorId === floor.id);
@@ -499,17 +439,12 @@ function FloorPlanSettingsPanel({ planData, onUpdate, rooms, floors, onUpdateRoo
             await onUpdateRoom(room.id, { height: h });
           }
         }
-      } else {
-        // Clear per-room height overrides → use plan default
-        for (const room of floorRooms) {
-          if (room.height !== undefined) {
-            await onUpdateRoom(room.id, { height: null });
-          }
-        }
       }
     }
 
     // Update wall thicknesses
+    const newExtThick = parseFloat(extThick) || planData.externalWallThickness;
+    const newIntThick = parseFloat(intThick) || planData.internalWallThickness;
     for (const room of rooms) {
       for (const wall of room.walls) {
         if (wall.id.startsWith('temp-')) continue;
@@ -521,16 +456,8 @@ function FloorPlanSettingsPanel({ planData, onUpdate, rooms, floors, onUpdateRoo
       }
     }
 
-    // Re-classify walls (fixes bajo cubierta external walls issue)
     await onClassifyWalls();
-
-    toast.success('Todos los parámetros actualizados en todos los espacios');
-  };
-
-  // Check if level is bajo cubierta (height 0 or very small)
-  const isBajoCubierta = (floorId: string) => {
-    const h = levelHeights[floorId];
-    return h !== undefined && h !== '' && parseFloat(h) === 0;
+    toast.success('Niveles y parámetros actualizados');
   };
 
   return (
@@ -538,20 +465,16 @@ function FloorPlanSettingsPanel({ planData, onUpdate, rooms, floors, onUpdateRoo
       <CardHeader className="py-3">
         <div className="flex items-center justify-between">
           <CardTitle className="text-sm flex items-center gap-2">
-            <Settings2 className="h-4 w-4" /> Parámetros generales del plano
+            <Layers className="h-4 w-4" /> Niveles y Parámetros
           </CardTitle>
           <Button variant="ghost" size="sm" onClick={onClose} className="h-7 px-2 text-xs">Cerrar</Button>
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
-        {/* Plan-wide defaults */}
+        {/* General parameters */}
         <div>
-          <h4 className="text-xs font-semibold text-muted-foreground mb-2">Valores por defecto</h4>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            <div>
-              <Label className="text-xs">Altura espacios (m)</Label>
-              <Input type="number" step="0.1" value={height} onChange={e => setHeight(e.target.value)} disabled={saving} />
-            </div>
+          <h4 className="text-xs font-semibold text-muted-foreground mb-2">Parámetros generales</h4>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div>
               <Label className="text-xs">Espesor ext. (m)</Label>
               <Input type="number" step="0.01" value={extThick} onChange={e => setExtThick(e.target.value)} disabled={saving} />
@@ -576,172 +499,203 @@ function FloorPlanSettingsPanel({ planData, onUpdate, rooms, floors, onUpdateRoo
               <Input type="number" step="0.1" value={overhang} onChange={e => setOverhang(e.target.value)} disabled={saving} />
             </div>
           </div>
-
-          {/* Roof slope / ridge height dual editor */}
-          {roofType !== 'plana' && (
-            <div className="mt-3 p-3 border rounded-lg bg-muted/30 space-y-3">
-              <div className="flex items-center gap-2 mb-1">
-                <h5 className="text-xs font-semibold">Definir cubierta por:</h5>
-                <div className="flex gap-1">
-                  <Button
-                    variant={roofEditMode === 'degrees' ? 'default' : 'outline'}
-                    size="sm"
-                    className="h-6 text-[10px] px-2"
-                    onClick={() => setRoofEditMode('degrees')}
-                  >
-                    Pendiente (º)
-                  </Button>
-                  <Button
-                    variant={roofEditMode === 'height' ? 'default' : 'outline'}
-                    size="sm"
-                    className="h-6 text-[10px] px-2"
-                    onClick={() => setRoofEditMode('height')}
-                  >
-                    Altura libre (m)
-                  </Button>
-                </div>
-              </div>
-
-              {roofEditMode === 'degrees' ? (
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <Label className="text-xs">Pendiente (º)</Label>
-                    <Input type="number" step="0.5" min="0" max="89" value={slopeDeg}
-                      onChange={e => handleSlopeDegreesChange(e.target.value)} disabled={saving} />
-                  </div>
-                  <div>
-                    <Label className="text-xs text-muted-foreground">= Pendiente (%)</Label>
-                    <Input type="number" value={slope} disabled className="bg-muted/50" />
-                  </div>
-                </div>
-              ) : (
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <Label className="text-xs">Altura libre base→cumbre (m)</Label>
-                    <Input type="number" step="0.01" min="0" value={ridgeHeight}
-                      onChange={e => handleRidgeHeightChange(e.target.value)} disabled={saving}
-                      placeholder="Ej: 3.5" />
-                  </div>
-                  <div>
-                    <Label className="text-xs text-muted-foreground">= Pendiente (º)</Label>
-                    <Input type="number" value={slopeDeg} disabled className="bg-muted/50" />
-                  </div>
-                </div>
-              )}
-
-              <p className="text-[10px] text-muted-foreground">
-                {ridgeHeight ? `Altura cumbre: ${ridgeHeight}m` : ''} · Pendiente: {slopeDeg}º ({slope}%) · Semi-ancho: {buildingHalfWidth.toFixed(3)}m
-              </p>
-            </div>
-          )}
         </div>
 
-        {/* Scale / Block configuration */}
+        {/* Scale */}
         <div className="border-t pt-3">
           <h4 className="text-xs font-semibold text-muted-foreground mb-2">Escala de trabajo</h4>
-          <div className="flex gap-2 mb-3">
-            <Button
-              variant={scaleMode === 'metros' ? 'default' : 'outline'}
-              size="sm"
-              className="flex-1 text-xs"
-              onClick={() => setScaleMode('metros')}
-            >
-              Metros (1m)
-            </Button>
-            <Button
-              variant={scaleMode === 'bloque' ? 'default' : 'outline'}
-              size="sm"
-              className="flex-1 text-xs"
-              onClick={() => setScaleMode('bloque')}
-            >
-              Bloque625
-            </Button>
+          <div className="flex gap-2 mb-2">
+            <Button variant={scaleMode === 'metros' ? 'default' : 'outline'} size="sm" className="flex-1 text-xs" onClick={() => setScaleMode('metros')}>Metros (1m)</Button>
+            <Button variant={scaleMode === 'bloque' ? 'default' : 'outline'} size="sm" className="flex-1 text-xs" onClick={() => setScaleMode('bloque')}>Bloque625</Button>
           </div>
           {scaleMode === 'bloque' && (
-            <div className="space-y-2 p-2 border rounded-lg bg-muted/30">
-              <p className="text-[10px] text-muted-foreground mb-2">
-                Dimensiones del bloque. Largo×Alto×Ancho (espesor pared).
-              </p>
-              <div className="grid grid-cols-3 gap-2">
-                <div>
-                  <Label className="text-[10px]">Largo (mm)</Label>
-                  <Input type="number" step="1" value={blockLenMm} onChange={e => setBlockLenMm(e.target.value)} disabled={saving} className="h-8 text-xs" />
-                </div>
-                <div>
-                  <Label className="text-[10px]">Alto (mm)</Label>
-                  <Input type="number" step="1" value={blockHMm} onChange={e => setBlockHMm(e.target.value)} disabled={saving} className="h-8 text-xs" />
-                </div>
-                <div>
-                  <Label className="text-[10px]">Ancho (mm)</Label>
-                  <Input type="number" step="1" value={blockWMm} onChange={e => setBlockWMm(e.target.value)} disabled={saving} className="h-8 text-xs" />
-                </div>
+            <div className="grid grid-cols-3 gap-2 p-2 border rounded-lg bg-muted/30">
+              <div>
+                <Label className="text-[10px]">Largo (mm)</Label>
+                <Input type="number" step="1" value={blockLenMm} onChange={e => setBlockLenMm(e.target.value)} disabled={saving} className="h-8 text-xs" />
               </div>
-              <p className="text-[10px] text-muted-foreground">
-                Bloque {blockLenMm}×{blockHMm}×{blockWMm} mm → Espesor ext. = {blockWMm} mm ({(parseFloat(blockWMm) / 1000).toFixed(3)} m)
-              </p>
-              <p className="text-[10px] text-muted-foreground">
-                Ej: 6 bloques ancho = {((parseFloat(blockLenMm) || 625) * 6 / 1000).toFixed(3)} m · 10 bloques alto = {((parseFloat(blockHMm) || 250) * 10 / 1000).toFixed(3)} m
-              </p>
+              <div>
+                <Label className="text-[10px]">Alto (mm)</Label>
+                <Input type="number" step="1" value={blockHMm} onChange={e => setBlockHMm(e.target.value)} disabled={saving} className="h-8 text-xs" />
+              </div>
+              <div>
+                <Label className="text-[10px]">Ancho (mm)</Label>
+                <Input type="number" step="1" value={blockWMm} onChange={e => setBlockWMm(e.target.value)} disabled={saving} className="h-8 text-xs" />
+              </div>
             </div>
           )}
         </div>
 
-        {floors.length > 0 && (
-          <div className="border-t pt-3">
-            <h4 className="text-xs font-semibold text-muted-foreground mb-2">Altura por nivel</h4>
-            <div className="space-y-2">
-              {floors.map(f => {
-                const floorRooms = rooms.filter(r => r.floorId === f.id);
-                const roomCount = floorRooms.length;
-                const hasFloorRooms = floorRooms.some(r => r.hasFloor);
-                return (
-                  <div key={f.id} className="flex items-center gap-3 p-2 border rounded-lg bg-muted/30">
-                    <div className="flex-1">
-                      <span className="text-sm font-medium">{f.name}</span>
-                      <span className="text-[10px] text-muted-foreground ml-2">{roomCount} espacios</span>
-                      {isBajoCubierta(f.id) && (
-                        <Badge variant="outline" className="ml-2 text-[9px] h-4">Bajo cubierta</Badge>
+        {/* Per-level configuration */}
+        <div className="border-t pt-3">
+          <h4 className="text-xs font-semibold text-muted-foreground mb-2">Configuración por nivel</h4>
+          <div className="space-y-2">
+            {floors.map(f => {
+              const floorRooms = rooms.filter(r => r.floorId === f.id);
+              const isBajo = isFloorBajoCubierta(f);
+              const isExpanded = expandedFloor === f.id;
+
+              return (
+                <div key={f.id} className="border rounded-lg bg-muted/30 overflow-hidden">
+                  {/* Level header */}
+                  <div className="flex items-center gap-2 p-2 cursor-pointer" onClick={() => setExpandedFloor(isExpanded ? null : f.id)}>
+                    {editId === f.id ? (
+                      <>
+                        <Input className="h-8 text-sm flex-1" value={editName}
+                          onChange={e => setEditName(e.target.value)}
+                          onClick={e => e.stopPropagation()}
+                          onKeyDown={e => { if (e.key === 'Enter') handleSaveEdit(); }} />
+                        <Button size="sm" className="h-8" onClick={(e) => { e.stopPropagation(); handleSaveEdit(); }} disabled={saving}>
+                          <Save className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button variant="ghost" size="sm" className="h-8" onClick={(e) => { e.stopPropagation(); setEditId(null); }}>✕</Button>
+                      </>
+                    ) : (
+                      <>
+                        <Badge variant="secondary" className="text-xs">{f.orderIndex}</Badge>
+                        <span className="text-sm font-medium flex-1">{f.name}</span>
+                        {isBajo && <Badge variant="outline" className="text-[9px] h-4">Bajo cubierta</Badge>}
+                        <span className="text-[10px] text-muted-foreground">{floorRooms.length} espacios</span>
+                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0"
+                          onClick={(e) => { e.stopPropagation(); setEditId(f.id); setEditName(f.name); }}>
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive hover:text-destructive"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (confirm(`¿Eliminar el nivel "${f.name}"? Los espacios asignados quedarán sin nivel.`)) {
+                              onDelete(f.id);
+                            }
+                          }} disabled={saving}>
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                        <span className="text-muted-foreground text-xs">{isExpanded ? '▲' : '▼'}</span>
+                      </>
+                    )}
+                  </div>
+
+                  {/* Level details (expanded) */}
+                  {isExpanded && editId !== f.id && (
+                    <div className="px-3 pb-3 space-y-3 border-t">
+                      <div className="grid grid-cols-2 gap-3 pt-2">
+                        <div>
+                          <Label className="text-xs">Altura paredes (m)</Label>
+                          <Input
+                            type="number"
+                            step="0.1"
+                            min="0"
+                            value={levelHeights[f.id] || ''}
+                            placeholder="2.5"
+                            onChange={e => setLevelHeights(prev => ({ ...prev, [f.id]: e.target.value }))}
+                            disabled={saving}
+                          />
+                          {isBajo && (
+                            <p className="text-[10px] text-muted-foreground mt-1">0 = bajo cubierta (paredes siguen pendiente)</p>
+                          )}
+                        </div>
+                        <div className="flex items-end">
+                          <p className="text-[10px] text-muted-foreground pb-2">
+                            {floorRooms.length} espacios en este nivel
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Roof parameters for bajo cubierta levels */}
+                      {isBajo && roofType !== 'plana' && (
+                        <div className="p-3 border rounded-lg bg-background space-y-3">
+                          <div className="flex items-center gap-2 mb-1">
+                            <h5 className="text-xs font-semibold">Cubierta — definir por:</h5>
+                            <div className="flex gap-1">
+                              <Button
+                                variant={(levelRoofEditMode[f.id] || 'degrees') === 'degrees' ? 'default' : 'outline'}
+                                size="sm"
+                                className="h-6 text-[10px] px-2"
+                                onClick={() => setLevelRoofEditMode(prev => ({ ...prev, [f.id]: 'degrees' }))}
+                              >
+                                Pendiente (º)
+                              </Button>
+                              <Button
+                                variant={(levelRoofEditMode[f.id] || 'degrees') === 'height' ? 'default' : 'outline'}
+                                size="sm"
+                                className="h-6 text-[10px] px-2"
+                                onClick={() => setLevelRoofEditMode(prev => ({ ...prev, [f.id]: 'height' }))}
+                              >
+                                Altura cumbre (m)
+                              </Button>
+                            </div>
+                          </div>
+
+                          {(levelRoofEditMode[f.id] || 'degrees') === 'degrees' ? (
+                            <div className="grid grid-cols-2 gap-3">
+                              <div>
+                                <Label className="text-xs">Pendiente (º)</Label>
+                                <Input type="number" step="0.5" min="0" max="89"
+                                  value={levelSlopeDeg[f.id] || ''}
+                                  onChange={e => handleSlopeDegreesChange(f.id, e.target.value)} disabled={saving} />
+                              </div>
+                              <div>
+                                <Label className="text-xs text-muted-foreground">= Altura cumbre</Label>
+                                <Input type="number" value={levelRidgeHeight[f.id] || ''} disabled className="bg-muted/50" />
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="grid grid-cols-2 gap-3">
+                              <div>
+                                <Label className="text-xs">Altura base→cumbre (m)</Label>
+                                <Input type="number" step="0.01" min="0"
+                                  value={levelRidgeHeight[f.id] || ''}
+                                  onChange={e => handleRidgeHeightChange(f.id, e.target.value)} disabled={saving}
+                                  placeholder="Ej: 3.5" />
+                              </div>
+                              <div>
+                                <Label className="text-xs text-muted-foreground">= Pendiente (º)</Label>
+                                <Input type="number" value={levelSlopeDeg[f.id] || ''} disabled className="bg-muted/50" />
+                              </div>
+                            </div>
+                          )}
+
+                          <p className="text-[10px] text-muted-foreground">
+                            Semi-ancho edificio: {buildingHalfWidth.toFixed(3)}m
+                            {levelRidgeHeight[f.id] ? ` · Cumbre: ${levelRidgeHeight[f.id]}m` : ''}
+                            {levelSlopeDeg[f.id] ? ` · ${levelSlopeDeg[f.id]}º` : ''}
+                          </p>
+                        </div>
                       )}
                     </div>
-                    <div className="w-24">
-                      <Input
-                        type="number"
-                        step="0.1"
-                        min="0"
-                        value={levelHeights[f.id] || ''}
-                        placeholder={height || '2.5'}
-                        onChange={e => setLevelHeights(prev => ({ ...prev, [f.id]: e.target.value }))}
-                        disabled={saving}
-                        className="h-8 text-sm text-center"
-                      />
-                    </div>
-                    <span className="text-[10px] text-muted-foreground w-6">m</span>
-                  </div>
-                );
-              })}
-            </div>
-            <p className="text-[10px] text-muted-foreground mt-1">
-              Altura 0m = bajo cubierta (solo hastiales como paredes externas). Vacío = usa valor por defecto.
-            </p>
+                  )}
+                </div>
+              );
+            })}
           </div>
-        )}
-
-        {/* Action buttons */}
-        <div className="flex gap-2 pt-2">
-          <Button onClick={handleSave} disabled={saving || !hasChanges} className="flex-1" size="sm" variant="outline">
-            <Save className="h-4 w-4 mr-1" /> Guardar parámetros
-          </Button>
-          <Button onClick={handleApplyAll} disabled={saving} className="flex-1" size="sm">
-            <RefreshCw className="h-4 w-4 mr-1" /> Actualizar todo
-          </Button>
         </div>
+
+        {/* Add new level */}
+        <Button size="sm" className="w-full" onClick={() => setShowWizard(true)} disabled={saving}>
+          <Plus className="h-3.5 w-3.5 mr-1" /> Añadir nivel
+        </Button>
+
+        {/* Save all */}
+        <Button onClick={handleSaveAll} disabled={saving} className="w-full" size="sm">
+          <RefreshCw className="h-4 w-4 mr-1" /> Guardar y aplicar todo
+        </Button>
         <p className="text-[10px] text-muted-foreground">
-          «Guardar parámetros» guarda solo los valores por defecto. «Actualizar todo» aplica las alturas, espesores y reclasifica las paredes de todos los espacios.
+          Guarda parámetros generales, alturas por nivel, cubierta y reclasifica paredes.
         </p>
+
+        <NewLevelWizardDialog
+          open={showWizard}
+          onOpenChange={setShowWizard}
+          floors={floors}
+          onAdd={onAdd}
+          saving={saving}
+          onFloorCreated={onFloorCreated}
+        />
       </CardContent>
     </Card>
   );
 }
+
+// FloorPlanSettingsPanel removed — merged into LevelManagerPanel
 
 export function FloorPlanTab({ budgetId, budgetName = '', isAdmin }: FloorPlanTabProps) {
   const {
@@ -765,7 +719,7 @@ export function FloorPlanTab({ budgetId, budgetName = '', isAdmin }: FloorPlanTa
   const [newSpaceLength, setNewSpaceLength] = useState(3);
   const [newSpaceFloorId, setNewSpaceFloorId] = useState<string>('');
   const [newSpaceCoord, setNewSpaceCoord] = useState('');
-  const [showSettings, setShowSettings] = useState(false);
+  // showSettings removed - merged into LevelManagerPanel
   const [showLevelManager, setShowLevelManager] = useState(false);
   const [newLevelName, setNewLevelName] = useState('');
   const [editingFloorId, setEditingFloorId] = useState<string | null>(null);
@@ -1083,16 +1037,9 @@ export function FloorPlanTab({ budgetId, budgetName = '', isAdmin }: FloorPlanTa
           <Button
             variant={showLevelManager ? 'default' : 'outline'}
             size="sm"
-            onClick={() => { setShowLevelManager(!showLevelManager); if (showSettings) setShowSettings(false); }}
+            onClick={() => setShowLevelManager(!showLevelManager)}
           >
             <Layers className="h-4 w-4 mr-1" /> Niveles
-          </Button>
-          <Button
-            variant={showSettings ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => { setShowSettings(!showSettings); if (showLevelManager) setShowLevelManager(false); }}
-          >
-            <Settings2 className="h-4 w-4 mr-1" /> Parámetros
           </Button>
           <Button variant="outline" size="sm" onClick={classifyPerimeterWalls} disabled={saving || rooms.length === 0}
             title="Clasificar paredes del perímetro como externas">
@@ -1132,28 +1079,19 @@ export function FloorPlanTab({ budgetId, budgetName = '', isAdmin }: FloorPlanTa
         </div>
       </div>
 
-      {/* Settings panel */}
-      {showSettings && planData && (
-        <FloorPlanSettingsPanel
-          planData={planData}
-          onUpdate={updateFloorPlan}
-          rooms={rooms}
-          floors={floors}
-          onUpdateRoom={updateRoom}
-          onUpdateWall={updateWall}
-          onClassifyWalls={classifyPerimeterWalls}
-          saving={saving}
-          onClose={() => setShowSettings(false)}
-        />
-      )}
-
-      {/* Level manager panel */}
-      {showLevelManager && (
+      {/* Unified Niveles + Parámetros panel */}
+      {showLevelManager && planData && (
         <LevelManagerPanel
           floors={floors}
+          planData={planData}
+          rooms={rooms}
           onAdd={addFloor}
           onUpdate={updateFloor}
           onDelete={deleteFloor}
+          onUpdatePlan={updateFloorPlan}
+          onUpdateRoom={updateRoom}
+          onUpdateWall={updateWall}
+          onClassifyWalls={classifyPerimeterWalls}
           saving={saving}
           onClose={() => setShowLevelManager(false)}
           onFloorCreated={(floorId) => setForceActiveFloorId(floorId)}

@@ -1046,13 +1046,15 @@ function ElevationCardView({ card, plan, onOpeningClick, onAddOpening, onCardDou
   // Block count calculation
   const blockCount = useMemo(() => {
     if (!isWall || card.isInvisible || plan.scaleMode !== 'bloque') return null;
-    const blockW = plan.blockLengthMm / 1000;
-    const blockH = plan.blockHeightMm / 1000;
+    const wallIsExternal = card.wall ? isExteriorType(card.wall.wallType as string) : true;
+    const dims = getBlockDimensions(plan, wallIsExternal);
+    const blockW = dims.lengthMm / 1000;
+    const blockH = dims.heightMm / 1000;
     if (blockW <= 0 || blockH <= 0) return null;
     const cols = Math.ceil(card.width / blockW);
     const rows = Math.ceil(card.height / blockH);
-    return { cols, rows, total: cols * rows };
-  }, [isWall, card.isInvisible, card.width, card.height, plan.scaleMode, plan.blockLengthMm, plan.blockHeightMm]);
+    return { cols, rows, total: cols * rows, lengthMm: dims.lengthMm, heightMm: dims.heightMm };
+  }, [isWall, card.isInvisible, card.width, card.height, plan, card.wall]);
 
   // SVG render function shared between inline and fullscreen
   const renderSvg = (fsScale?: number) => {
@@ -1093,8 +1095,10 @@ function ElevationCardView({ card, plan, onOpeningClick, onAddOpening, onCardDou
 
           {/* Block pattern inside triangle (clipped) */}
           {plan.scaleMode === 'bloque' && (() => {
-            const blockWPx = (plan.blockLengthMm / 1000) * s;
-            const blockHPx = (plan.blockHeightMm / 1000) * s;
+            const wallIsExternal = card.wall ? isExteriorType(card.wall.wallType as string) : true;
+            const dims = getBlockDimensions(plan, wallIsExternal);
+            const blockWPx = (dims.lengthMm / 1000) * s;
+            const blockHPx = (dims.heightMm / 1000) * s;
             if (blockWPx < 3 || blockHPx < 2) return null;
             const clipId = `gable-clip-${card.id}`;
             const rows = Math.ceil(rh / blockHPx);
@@ -1263,8 +1267,10 @@ function ElevationCardView({ card, plan, onOpeningClick, onAddOpening, onCardDou
 
         {/* Block pattern */}
         {isWall && !card.isInvisible && plan.scaleMode === 'bloque' && (() => {
-          const blockWPx = (plan.blockLengthMm / 1000) * s;
-          const blockHPx = (plan.blockHeightMm / 1000) * s;
+          const wallIsExternal = card.wall ? isExteriorType(card.wall.wallType as string) : true;
+          const dims = getBlockDimensions(plan, wallIsExternal);
+          const blockWPx = (dims.lengthMm / 1000) * s;
+          const blockHPx = (dims.heightMm / 1000) * s;
           if (blockWPx < 3 || blockHPx < 2) return null;
           const rows = Math.ceil(rh / blockHPx);
           const cols = Math.ceil(rw / blockWPx) + 1;
@@ -1529,7 +1535,7 @@ const isDoor = op.openingType === 'puerta' || op.openingType === 'puerta_externa
           <div className="flex items-center gap-1 shrink-0 flex-wrap justify-end max-w-[55%]">
             {blockCount && (
               <Badge variant="outline" className="text-[9px] h-4 bg-accent/30">
-                {blockCount.total} bloques ({blockCount.cols}×{blockCount.rows}) · {plan.blockLengthMm}×{plan.blockHeightMm}mm
+                {blockCount.total} bloques ({blockCount.cols}×{blockCount.rows}) · {blockCount.lengthMm}×{blockCount.heightMm}mm
               </Badge>
             )}
             {card.badgeLabel && (

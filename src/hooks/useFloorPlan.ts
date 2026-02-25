@@ -354,6 +354,9 @@ export function useFloorPlan(budgetId: string) {
       if (data.blockLengthMm !== undefined) updates.block_length_mm = data.blockLengthMm;
       if (data.blockHeightMm !== undefined) updates.block_height_mm = data.blockHeightMm;
       if (data.blockWidthMm !== undefined) updates.block_width_mm = data.blockWidthMm;
+      if (data.intBlockLengthMm !== undefined) updates.int_block_length_mm = data.intBlockLengthMm;
+      if (data.intBlockHeightMm !== undefined) updates.int_block_height_mm = data.intBlockHeightMm;
+      if (data.intBlockWidthMm !== undefined) updates.int_block_width_mm = data.intBlockWidthMm;
       if ('ridgeHeight' in data) updates.ridge_height = data.ridgeHeight ?? null;
 
       const { error } = await supabase
@@ -639,6 +642,9 @@ export function useFloorPlan(budgetId: string) {
         blockLengthMm: Number(floorPlan.block_length_mm) || 625,
         blockHeightMm: Number(floorPlan.block_height_mm) || 250,
         blockWidthMm: Number(floorPlan.block_width_mm) || 300,
+        intBlockLengthMm: Number((floorPlan as any).int_block_length_mm) || 625,
+        intBlockHeightMm: Number((floorPlan as any).int_block_height_mm) || 500,
+        intBlockWidthMm: Number((floorPlan as any).int_block_width_mm) || 100,
       };
 
       const summary = calculateFloorPlanSummary(planData, rooms);
@@ -962,6 +968,9 @@ export function useFloorPlan(budgetId: string) {
       blockLengthMm: Number(floorPlan.block_length_mm) || 625,
       blockHeightMm: Number(floorPlan.block_height_mm) || 250,
       blockWidthMm: Number(floorPlan.block_width_mm) || 300,
+      intBlockLengthMm: Number((floorPlan as any).int_block_length_mm) || 625,
+      intBlockHeightMm: Number((floorPlan as any).int_block_height_mm) || 500,
+      intBlockWidthMm: Number((floorPlan as any).int_block_width_mm) || 100,
       ridgeHeight: (floorPlan as any).ridge_height != null ? Number((floorPlan as any).ridge_height) : undefined,
     };
   };

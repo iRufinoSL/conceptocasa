@@ -12,10 +12,21 @@ export interface FloorPlanData {
   roofSlopePercent: number;
   roofType: 'dos_aguas' | 'cuatro_aguas' | 'plana';
   scaleMode: ScaleMode;
-  blockLengthMm: number; // largo del bloque en mm (default 625)
-  blockHeightMm: number; // alto del bloque en mm (default 250)
-  blockWidthMm: number;  // ancho/espesor del bloque en mm (default 300)
+  blockLengthMm: number; // largo del bloque exterior en mm (default 625)
+  blockHeightMm: number; // alto del bloque exterior en mm (default 250)
+  blockWidthMm: number;  // ancho/espesor del bloque exterior en mm (default 300)
+  intBlockLengthMm: number; // largo del bloque interior en mm (default 625)
+  intBlockHeightMm: number; // alto del bloque interior en mm (default 500)
+  intBlockWidthMm: number;  // ancho/espesor del bloque interior en mm (default 100)
   ridgeHeight?: number;  // altura libre base-cumbrera (metros), alternativa a roofSlopePercent
+}
+
+/** Get block dimensions based on wall type */
+export function getBlockDimensions(plan: FloorPlanData, isExternal: boolean): { lengthMm: number; heightMm: number; widthMm: number } {
+  if (isExternal) {
+    return { lengthMm: plan.blockLengthMm, heightMm: plan.blockHeightMm, widthMm: plan.blockWidthMm };
+  }
+  return { lengthMm: plan.intBlockLengthMm, heightMm: plan.intBlockHeightMm, widthMm: plan.intBlockWidthMm };
 }
 
 /** Convert slope percentage to degrees */

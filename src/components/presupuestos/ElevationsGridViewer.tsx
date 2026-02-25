@@ -985,6 +985,92 @@ function injectCadRulerIntoSvg(svgClone: SVGSVGElement, rx: number, ry: number, 
   svgClone.appendChild(g);
 }
 
+/** CAD ruler React component for on-screen display */
+function CadRuler({ rx, ry, rw, rh, widthM, heightM, scale }: {
+  rx: number; ry: number; rw: number; rh: number;
+  widthM: number; heightM: number; scale: number;
+}) {
+  const rulerColor = 'hsl(0, 0%, 40%)';
+  const rulerFontSize = Math.max(7, Math.min(10, scale * 0.15));
+  const getTickInterval = (totalM: number) => {
+    if (totalM <= 1) return 0.1;
+    if (totalM <= 3) return 0.25;
+    if (totalM <= 8) return 0.5;
+    return 1;
+  };
+  const hInterval = getTickInterval(widthM);
+  const vInterval = getTickInterval(heightM);
+  const hTicks: React.ReactElement[] = [];
+  const vTicks: React.ReactElement[] = [];
+  const rulerHY = ry - 20;
+  hTicks.push(<line key="hr-base" x1={rx} y1={rulerHY} x2={rx + rw} y2={rulerHY} stroke={rulerColor} strokeWidth={0.8} />);
+  for (let m = 0; m <= widthM + 0.001; m += hInterval) {
+    const x = rx + (m / widthM) * rw;
+    if (x > rx + rw + 0.5) break;
+    const isMajor = Math.abs(m - Math.round(m)) < 0.01;
+    const tickH = isMajor ? 8 : 4;
+    hTicks.push(<line key={`ht-${m}`} x1={x} y1={rulerHY - tickH} x2={x} y2={rulerHY} stroke={rulerColor} strokeWidth={isMajor ? 0.8 : 0.4} />);
+    if (isMajor || hInterval >= 0.25) {
+      hTicks.push(<text key={`htl-${m}`} x={x} y={rulerHY - tickH - 2} textAnchor="middle" fontSize={rulerFontSize} fill={rulerColor}>{Math.round(m * 1000)}</text>);
+    }
+  }
+  const rulerVX = rx + rw + 20;
+  vTicks.push(<line key="vr-base" x1={rulerVX} y1={ry} x2={rulerVX} y2={ry + rh} stroke={rulerColor} strokeWidth={0.8} />);
+  for (let m = 0; m <= heightM + 0.001; m += vInterval) {
+    const y = ry + rh - (m / heightM) * rh;
+    if (y < ry - 0.5) break;
+    const isMajor = Math.abs(m - Math.round(m)) < 0.01;
+    const tickW = isMajor ? 8 : 4;
+    vTicks.push(<line key={`vt-${m}`} x1={rulerVX} y1={y} x2={rulerVX + tickW} y2={y} stroke={rulerColor} strokeWidth={isMajor ? 0.8 : 0.4} />);
+    if (isMajor || vInterval >= 0.25) {
+      vTicks.push(<text key={`vtl-${m}`} x={rulerVX + tickW + 3} y={y + 3} textAnchor="start" fontSize={rulerFontSize} fill={rulerColor}>{Math.round(m * 1000)}</text>);
+    }
+  }
+  return (
+    <g className="cad-ruler" pointerEvents="none" opacity={0.7}>
+      {hTicks}
+      {vTicks}
+      <text x={rx + rw / 2} y={rulerHY - 14} textAnchor="middle" fontSize={rulerFontSize - 1} fill={rulerColor} fontStyle="italic">mm</text>
+      <text x={rulerVX + 16} y={ry + rh / 2} textAnchor="middle" fontSize={rulerFontSize - 1} fill={rulerColor} fontStyle="italic"
+        transform={`rotate(90, ${rulerVX + 16}, ${ry + rh / 2})`}>mm</text>
+    </g>
+  );
+}
+
+/** Ruler measurement lines overlay */
+function RulerLinesOverlay({ lines, drawPoint, widthM, rw }: {
+  lines: Array<{ x1: number; y1: number; x2: number; y2: number }>;
+  drawPoint: { x1: number; y1: number } | null;
+  widthM: number; rw: number;
+}) {
+  return (
+    <g pointerEvents="none">
+      {lines.map((rl, i) => {
+        const dx = rl.x2 - rl.x1;
+        const dy = rl.y2 - rl.y1;
+        const distPx = Math.sqrt(dx * dx + dy * dy);
+        const distMm = Math.round(distPx / rw * widthM * 1000);
+        const mx = (rl.x1 + rl.x2) / 2;
+        const my = (rl.y1 + rl.y2) / 2;
+        return (
+          <g key={i}>
+            <line x1={rl.x1} y1={rl.y1} x2={rl.x2} y2={rl.y2} stroke="hsl(350, 80%, 50%)" strokeWidth={1.5} strokeDasharray="6,3" />
+            <circle cx={rl.x1} cy={rl.y1} r={3} fill="hsl(350, 80%, 50%)" />
+            <circle cx={rl.x2} cy={rl.y2} r={3} fill="hsl(350, 80%, 50%)" />
+            <rect x={mx - 28} y={my - 9} width={56} height={16} rx={3} fill="white" stroke="hsl(350, 80%, 50%)" strokeWidth={0.5} opacity={0.9} />
+            <text x={mx} y={my + 4} textAnchor="middle" fontSize={10} fontWeight={700} fill="hsl(350, 80%, 50%)">{distMm}mm</text>
+          </g>
+        );
+      })}
+      {drawPoint && (
+        <circle cx={drawPoint.x1} cy={drawPoint.y1} r={4} fill="hsl(350, 80%, 50%)" opacity={0.7}>
+          <animate attributeName="r" values="3;5;3" dur="1s" repeatCount="indefinite" />
+        </circle>
+      )}
+    </g>
+  );
+}
+
 // Individual elevation card
 function ElevationCardView({ card, plan, onOpeningClick, onAddOpening, onCardDoubleClick, onAddBlockGroup, onDeleteBlockGroup, onUpdateWall, onUpdateWallSegmentType, onUpdateOpening, onDeleteOpening, saving, budgetName }: {
   card: ElevationCard;
@@ -1007,6 +1093,10 @@ function ElevationCardView({ card, plan, onOpeningClick, onAddOpening, onCardDou
   const [fsDragState, setFsDragState] = useState<{
     openingId: string; startX: number; startPosX: number; wallLength: number; opWidth: number; scale: number;
   } | null>(null);
+  // Ruler tool state
+  const [cardRulerMode, setCardRulerMode] = useState(false);
+  const [cardRulerLines, setCardRulerLines] = useState<Array<{ x1: number; y1: number; x2: number; y2: number }>>([]);
+  const [cardRulerDraw, setCardRulerDraw] = useState<{ x1: number; y1: number } | null>(null);
 
   // Arrow key handler for pixel-by-pixel opening movement in fullscreen
   useEffect(() => {
@@ -1573,7 +1663,14 @@ const isDoor = op.openingType === 'puerta' || op.openingType === 'puerta_externa
             </g>
           );
         })}
-        {/* CAD Ruler — only rendered during PDF export (not on screen) */}
+        {/* CAD Ruler — shown in fullscreen */}
+        {fsScale && (
+          <CadRuler rx={rx} ry={ry} rw={rw} rh={rh} widthM={card.width} heightM={card.height} scale={s} />
+        )}
+        {/* Ruler measurement lines */}
+        {fsScale && (cardRulerLines.length > 0 || cardRulerDraw) && (
+          <RulerLinesOverlay lines={cardRulerLines} drawPoint={cardRulerDraw} widthM={card.width} rw={rw} />
+        )}
       </svg>
     );
   };
@@ -1818,7 +1915,46 @@ const isDoor = op.openingType === 'puerta' || op.openingType === 'puerta_externa
           </div>
         )}
 
-        <div className="flex-1 overflow-auto flex items-center justify-center min-h-0">
+        {/* Ruler toolbar */}
+        <div className="shrink-0 flex items-center gap-2 border-b border-border/50 pb-2 print:hidden">
+          <Button size="sm" variant={cardRulerMode ? 'default' : 'outline'} className="h-7 text-xs gap-1"
+            onClick={() => { setCardRulerMode(!cardRulerMode); setCardRulerDraw(null); }}>
+            <Ruler className="h-3 w-3" /> {cardRulerMode ? 'Regla activa' : 'Regla'}
+          </Button>
+          {cardRulerLines.length > 0 && (
+            <>
+              <span className="text-xs text-muted-foreground">{cardRulerLines.length} medida{cardRulerLines.length > 1 ? 's' : ''}</span>
+              <Button size="sm" variant="outline" className="h-7 text-xs"
+                onClick={() => { setCardRulerLines([]); setCardRulerDraw(null); }}>
+                Borrar medidas
+              </Button>
+            </>
+          )}
+          {cardRulerMode && (
+            <span className="text-xs text-muted-foreground ml-2">
+              Haz clic en dos puntos del alzado para medir la distancia
+            </span>
+          )}
+        </div>
+
+        <div className="flex-1 overflow-auto flex items-center justify-center min-h-0"
+          onMouseDown={cardRulerMode ? (e) => {
+            const svgEl = e.currentTarget.querySelector('svg') as SVGSVGElement;
+            if (!svgEl) return;
+            const rect = svgEl.getBoundingClientRect();
+            const vb = svgEl.getAttribute('viewBox')?.split(' ').map(Number) || [0, 0, 100, 100];
+            const scaleX = vb[2] / rect.width;
+            const scaleY = vb[3] / rect.height;
+            const svgX = (e.clientX - rect.left) * scaleX;
+            const svgY = (e.clientY - rect.top) * scaleY;
+            if (cardRulerDraw) {
+              setCardRulerLines(prev => [...prev, { x1: cardRulerDraw.x1, y1: cardRulerDraw.y1, x2: svgX, y2: svgY }]);
+              setCardRulerDraw(null);
+            } else {
+              setCardRulerDraw({ x1: svgX, y1: svgY });
+            }
+          } : undefined}
+        >
           {card.isInvisible ? (
             <p className="text-muted-foreground italic">Pared invisible</p>
           ) : isWall && plan.scaleMode === 'bloque' && blockCount && !card.isGable ? (
@@ -2063,7 +2199,8 @@ const isDoor = op.openingType === 'puerta' || op.openingType === 'puerta_externa
         );
       })}
 
-      {/* CAD Ruler — only rendered during PDF export (not on screen) */}
+      {/* CAD Ruler */}
+      <CadRuler rx={rx} ry={ry} rw={rw} rh={rh} widthM={wallWm} heightM={wallHm} scale={s} />
     </svg>
   );
 }
@@ -2387,6 +2524,8 @@ const isDoor = op.openingType === 'puerta' || op.openingType === 'puerta_externa
           <animate attributeName="r" values="3;5;3" dur="1s" repeatCount="indefinite" />
         </circle>
       )}
+      {/* CAD Ruler */}
+      <CadRuler rx={rxs} ry={rys} rw={cw.totalLength * s} rh={totalH} widthM={cw.totalLength} heightM={maxHeight} scale={s} />
     </svg>
   );
 }
@@ -2792,6 +2931,10 @@ function CompositeWallCard({ compositeWall, plan, onOpeningClick, onAddBlockGrou
           <circle cx={rulerDraw.x1} cy={rulerDraw.y1} r={4} fill="hsl(350, 80%, 50%)" opacity={0.7}>
             <animate attributeName="r" values="3;5;3" dur="1s" repeatCount="indefinite" />
           </circle>
+        )}
+        {/* CAD Ruler */}
+        {fsScale && (
+          <CadRuler rx={rxs} ry={rys} rw={cw.totalLength * s} rh={totalH} widthM={cw.totalLength} heightM={maxHeight} scale={s} />
         )}
       </svg>
     );

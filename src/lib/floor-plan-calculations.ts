@@ -1635,6 +1635,7 @@ export interface CompositeWallSection {
   gablePeakHeight?: number; // peak height of the full gable for partial rendering
   gableTotalLength?: number; // total length of the full gable span
   gableSectionStart?: number; // where this section starts within the full gable
+  effectiveWallType?: string; // resolved wall type considering segment overrides
 }
 
 export interface CompositeWall {
@@ -1655,6 +1656,37 @@ export interface CompositeWall {
 }
 
 function round4(n: number): number { return Math.round(n * 10000) / 10000; }
+
+/**
+ * Resolve the effective wall type for a portion of a wall, considering segment overrides.
+ * Returns the type of the dominant segment covering the overlap range.
+ */
+function resolveEffectiveWallType(
+  segments: WallSegment[] | undefined,
+  wall: WallData,
+  overlapStart: number,
+  overlapEnd: number,
+  roomStart: number,
+  fullWallLen: number,
+): string {
+  if (!segments || segments.length <= 1) return wall.wallType as string;
+  // Convert overlap (absolute) to wall-local meters
+  const localStart = overlapStart - roomStart;
+  const localEnd = overlapEnd - roomStart;
+  // Find the segment that covers the most of this overlap
+  let bestType = wall.wallType as string;
+  let bestOverlap = 0;
+  segments.forEach(seg => {
+    const oStart = Math.max(localStart, seg.startMeters);
+    const oEnd = Math.min(localEnd, seg.endMeters);
+    const overlap = oEnd - oStart;
+    if (overlap > bestOverlap) {
+      bestOverlap = overlap;
+      bestType = seg.segmentType;
+    }
+  });
+  return bestType;
+}
 
 /**
  * Compute the building outline polygon by tracing the boundary of the union of all rooms.
@@ -1879,6 +1911,9 @@ export function computeCompositeWallsFromCorners(
 
   // Detect bajo cubierta level: all rooms have height 0
   const isBajoCubiertaLevel = rooms.length > 0 && rooms.every(r => r.height === 0);
+
+  // Pre-compute wall segments to resolve effective wall types (considering segment_type_overrides)
+  const segmentsMap = computeWallSegments(rooms);
 
   // Derive level prefix from user corners (e.g. "1A1" → "1")
   const levelPrefix = (() => {
@@ -2124,6 +2159,10 @@ export function computeCompositeWallsFromCorners(
         const roomWallStart = isHorizSec ? room.posX : room.posY;
         const roomFullWallLen = isHorizSec ? room.width : room.length;
 
+        const wallKey = `${room.id}::${wallIndex}`;
+        const wallSegs = segmentsMap.get(wallKey);
+        const effType = resolveEffectiveWallType(wallSegs, wall, overlapStart, overlapStart + sectionLen, roomWallStart, roomFullWallLen);
+
         sections.push({
           roomId: room.id, roomName: room.name, wallIndex,
           wallId: wall.id, length: adjustedLen, height: wallH,
@@ -2131,6 +2170,7 @@ export function computeCompositeWallsFromCorners(
           isGable: isGableWall,
           overlapStart: overlapStart,
           fullWallLength: roomFullWallLen,
+          effectiveWallType: effType,
         });
         offset += adjustedLen;
       });
@@ -2361,6 +2401,10 @@ export function computeCompositeWallsFromCorners(
         else totalWindows++;
       });
 
+      const wallKeyV = `${room.id}::${wall.wallIndex}`;
+      const wallSegsV = segmentsMap.get(wallKeyV);
+      const effTypeV = resolveEffectiveWallType(wallSegsV, wall, overlapStart, overlapStart + sectionLen, room.posY, fullWallLen);
+
       sections.push({
         roomId: room.id, roomName: room.name, wallIndex: wall.wallIndex,
         wallId: wall.id, length: adjustedLen, height: wallH,
@@ -2368,6 +2412,7 @@ export function computeCompositeWallsFromCorners(
         isGable: isGableWall,
         overlapStart: overlapStart,
         fullWallLength: fullWallLen,
+        effectiveWallType: effTypeV,
       });
       offset += adjustedLen;
     });
@@ -2527,6 +2572,10 @@ export function computeCompositeWallsFromCorners(
         else totalWindows++;
       });
 
+      const wallKeyH = `${room.id}::${wall.wallIndex}`;
+      const wallSegsH = segmentsMap.get(wallKeyH);
+      const effTypeH = resolveEffectiveWallType(wallSegsH, wall, overlapStart, overlapStart + sectionLen, room.posX, fullWallLen);
+
       sections.push({
         roomId: room.id, roomName: room.name, wallIndex: wall.wallIndex,
         wallId: wall.id, length: adjustedLen, height: wallH,
@@ -2534,6 +2583,7 @@ export function computeCompositeWallsFromCorners(
         isGable: false,
         overlapStart: overlapStart,
         fullWallLength: fullWallLen,
+        effectiveWallType: effTypeH,
       });
       offset += adjustedLen;
     });

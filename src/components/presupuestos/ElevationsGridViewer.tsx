@@ -72,6 +72,11 @@ const CARD_SCALE = 60;
 const CARD_PADDING = 20;
 const MAX_CARD_WIDTH = 400;
 
+/** Check if a composite section is invisible, using effectiveWallType when available */
+function isSectionWallInvisible(section: { wall: WallData; effectiveWallType?: string }): boolean {
+  return isInvisibleType((section.effectiveWallType || section.wall.wallType) as string);
+}
+
 function getOpeningSillHeight(op: OpeningData): number {
   // Use the stored sillHeight (meters from floor)
   return op.sillHeight ?? 0;
@@ -711,10 +716,7 @@ export function ElevationsGridViewer({
             // Group composites by side, separating perimeter from interior cuts
             const SIDE_ORDER: Array<'top' | 'right' | 'bottom' | 'left'> = ['top', 'right', 'bottom', 'left'];
             const FACE_NAMES: Record<string, string> = { top: 'Cara Superior', right: 'Cara Derecha', bottom: 'Cara Inferior', left: 'Cara Izquierda' };
-            const isInteriorCut = (cw2: CompositeWall) => {
-              const hasNumSuffix = (lbl: string) => /[A-D]\d/.test(lbl.replace(/^\d+/, ''));
-              return hasNumSuffix(cw2.startCorner.label) && hasNumSuffix(cw2.endCorner.label);
-            };
+            const isInteriorCut = (cw2: CompositeWall) => !cw2.isExterior;
             const bySide = new Map<string, CompositeWall[]>();
             const interiorWalls: CompositeWall[] = [];
             composites.forEach(cw2 => {
@@ -2452,7 +2454,7 @@ function CompositeFullscreenBlockGrid({ compositeWall, plan, maxHeight, selected
         const sw2 = section.length * s;
         const sh2 = section.height * s;
         const sy = rys + totalH - sh2;
-          const isSectionInvisible = isInvisibleType(section.wall.wallType as string);
+          const isSectionInvisible = isSectionWallInvisible(section);
           const sectionFill = isSectionInvisible
             ? 'none'
             : (sIdx % 2 === 0 ? 'hsl(30, 30%, 92%)' : 'hsl(30, 25%, 88%)');
@@ -2914,7 +2916,7 @@ function TotalElevationCard({ side, label, layers, plan, rooms, budgetName }: {
 
                   {/* Invisible sections: render as empty (cut out) within the triangle */}
                   {layer.composites.flatMap(cw => cw.sections.map((section, secIdx) => {
-                    const isSectionInvisible = isInvisibleType(section.wall.wallType as string);
+                    const isSectionInvisible = isSectionWallInvisible(section);
                     if (!isSectionInvisible) return null;
                     const sx = rx + section.startOffset * scale;
                     const sw2 = section.length * scale;
@@ -2943,7 +2945,7 @@ function TotalElevationCard({ side, label, layers, plan, rooms, budgetName }: {
 
                   {/* Openings within the gable (rendered inside the triangle) */}
                   {layer.composites.flatMap(cw => cw.sections.flatMap((section, secIdx) => {
-                    const isSectionInvisible = isInvisibleType(section.wall.wallType as string);
+                    const isSectionInvisible = isSectionWallInvisible(section);
                     if (isSectionInvisible) return [];
                     return section.openings.map(op => {
                       const isHoriz = section.wallIndex === 1 || section.wallIndex === 3;
@@ -2991,7 +2993,7 @@ function TotalElevationCard({ side, label, layers, plan, rooms, budgetName }: {
                   const sw2 = section.length * scale;
                   const sh2 = section.height * scale;
                   const sy = currentBaseY - sh2;
-                  const isSectionInvisible = isInvisibleType(section.wall.wallType as string);
+                  const isSectionInvisible = isSectionWallInvisible(section);
 
                   if (isSectionInvisible) {
                     // Invisible sections: just show a thin dashed outline (empty area)
@@ -3405,7 +3407,7 @@ function CompositeWallCard({ compositeWall, plan, onOpeningClick, onAddBlockGrou
           const sh2 = section.height * s;
           const sy = rys + totalH - sh2;
 
-          const isSectionInvisible = isInvisibleType(section.wall.wallType as string);
+          const isSectionInvisible = isSectionWallInvisible(section);
           const sectionFill = isSectionInvisible
             ? 'none'
             : (idx % 2 === 0 ? 'hsl(30, 30%, 92%)' : 'hsl(30, 25%, 88%)');

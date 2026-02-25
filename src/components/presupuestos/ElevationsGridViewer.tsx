@@ -2114,9 +2114,9 @@ function FullscreenBlockGrid({ card, plan, blockCount, selectedBlocks, onToggleB
               width={clippedW - 1}
               height={clippedH - 1}
               fill={isSelected ? 'hsl(210, 80%, 60%, 0.4)' : 'transparent'}
-              stroke={isSelected ? 'hsl(210, 80%, 50%)' : 'hsl(210, 50%, 60%)'}
-              strokeWidth={isSelected ? 2 : 0.6}
-              opacity={isSelected ? 1 : 0.7}
+              stroke={isSelected ? 'hsl(210, 80%, 50%)' : 'hsl(210, 50%, 35%)'}
+              strokeWidth={isSelected ? 2 : 1.2}
+              opacity={1}
               rx={0.5}
               style={{ cursor: 'pointer' }}
               onClick={(e) => { e.stopPropagation(); onToggleBlock(key); }}
@@ -2362,9 +2362,9 @@ function CompositeFullscreenBlockGrid({ compositeWall, plan, maxHeight, selected
                     x={clippedX + 0.5} y={clippedY + 0.5}
                     width={clippedW - 1} height={clippedH - 1}
                     fill={isSelected ? 'hsl(210, 80%, 60%, 0.4)' : 'transparent'}
-                    stroke={isSelected ? 'hsl(210, 80%, 50%)' : 'hsl(210, 50%, 60%)'}
-                    strokeWidth={isSelected ? 2 : 0.6}
-                    opacity={isSelected ? 1 : 0.7}
+                    stroke={isSelected ? 'hsl(210, 80%, 50%)' : 'hsl(210, 50%, 35%)'}
+                    strokeWidth={isSelected ? 2 : 1.2}
+                    opacity={1}
                     rx={0.5} style={{ cursor: 'pointer' }}
                     onClick={(e) => { e.stopPropagation(); onToggleBlock(fullKey); }}>
                     <title>Bloque [{c},{r}] — {section.roomName}</title>

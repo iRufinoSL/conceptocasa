@@ -912,6 +912,89 @@ function InlineWallTypeSelect({ wallId, currentType, onUpdateWall, onUpdateSegme
   );
 }
 
+/** CAD ruler SVG element for fullscreen views */
+function CadRuler({ rx, ry, rw, rh, widthM, heightM, scale }: {
+  rx: number; ry: number; rw: number; rh: number;
+  widthM: number; heightM: number; scale: number;
+}) {
+  const rulerColor = 'hsl(0, 0%, 40%)';
+  const rulerFontSize = Math.max(7, Math.min(10, scale * 0.15));
+  
+  // Choose tick interval based on scale (in meters)
+  const getTickInterval = (totalM: number) => {
+    if (totalM <= 1) return 0.1;
+    if (totalM <= 3) return 0.25;
+    if (totalM <= 8) return 0.5;
+    return 1;
+  };
+  
+  const hInterval = getTickInterval(widthM);
+  const vInterval = getTickInterval(heightM);
+  
+  const hTicks: React.ReactElement[] = [];
+  const vTicks: React.ReactElement[] = [];
+  
+  // Horizontal ruler (top)
+  const rulerHY = ry - 20;
+  hTicks.push(
+    <line key="hr-base" x1={rx} y1={rulerHY} x2={rx + rw} y2={rulerHY}
+      stroke={rulerColor} strokeWidth={0.8} />
+  );
+  for (let m = 0; m <= widthM + 0.001; m += hInterval) {
+    const x = rx + (m / widthM) * rw;
+    if (x > rx + rw + 0.5) break;
+    const isMajor = Math.abs(m - Math.round(m)) < 0.01;
+    const tickH = isMajor ? 8 : 4;
+    hTicks.push(
+      <line key={`ht-${m}`} x1={x} y1={rulerHY - tickH} x2={x} y2={rulerHY}
+        stroke={rulerColor} strokeWidth={isMajor ? 0.8 : 0.4} />
+    );
+    if (isMajor || hInterval >= 0.25) {
+      hTicks.push(
+        <text key={`htl-${m}`} x={x} y={rulerHY - tickH - 2}
+          textAnchor="middle" fontSize={rulerFontSize} fill={rulerColor}>
+          {Math.round(m * 1000)}
+        </text>
+      );
+    }
+  }
+  
+  // Vertical ruler (right)
+  const rulerVX = rx + rw + 20;
+  vTicks.push(
+    <line key="vr-base" x1={rulerVX} y1={ry} x2={rulerVX} y2={ry + rh}
+      stroke={rulerColor} strokeWidth={0.8} />
+  );
+  for (let m = 0; m <= heightM + 0.001; m += vInterval) {
+    const y = ry + rh - (m / heightM) * rh;
+    if (y < ry - 0.5) break;
+    const isMajor = Math.abs(m - Math.round(m)) < 0.01;
+    const tickW = isMajor ? 8 : 4;
+    vTicks.push(
+      <line key={`vt-${m}`} x1={rulerVX} y1={y} x2={rulerVX + tickW} y2={y}
+        stroke={rulerColor} strokeWidth={isMajor ? 0.8 : 0.4} />
+    );
+    if (isMajor || vInterval >= 0.25) {
+      vTicks.push(
+        <text key={`vtl-${m}`} x={rulerVX + tickW + 3} y={y + 3}
+          textAnchor="start" fontSize={rulerFontSize} fill={rulerColor}>
+          {Math.round(m * 1000)}
+        </text>
+      );
+    }
+  }
+  
+  return (
+    <g className="cad-ruler" pointerEvents="none" opacity={0.7}>
+      {hTicks}
+      {vTicks}
+      <text x={rx + rw / 2} y={rulerHY - 14} textAnchor="middle" fontSize={rulerFontSize - 1} fill={rulerColor} fontStyle="italic">mm</text>
+      <text x={rulerVX + 16} y={ry + rh / 2} textAnchor="middle" fontSize={rulerFontSize - 1} fill={rulerColor} fontStyle="italic"
+        transform={`rotate(90, ${rulerVX + 16}, ${ry + rh / 2})`}>mm</text>
+    </g>
+  );
+}
+
 // Individual elevation card
 function ElevationCardView({ card, plan, onOpeningClick, onAddOpening, onCardDoubleClick, onAddBlockGroup, onDeleteBlockGroup, onUpdateWall, onUpdateWallSegmentType, onUpdateOpening, onDeleteOpening, saving, budgetName }: {
   card: ElevationCard;

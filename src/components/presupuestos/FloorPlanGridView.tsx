@@ -975,7 +975,7 @@ export function FloorPlanGridView({
             // Classify custom corners to building edges using normalized distance.
             // This handles markers not exactly on a boundary (e.g. B1 between B and C
             // with col far from maxCol but row between minRow and maxRow).
-            const nonMainCorners = floorCorners.filter(c => !c.isMain);
+            const nonMainCorners = floorCorners.filter(c => !c.isMain && !c.isEave);
             const colSpan = Math.max(1, maxCol - minCol);
             const rowSpan = Math.max(1, maxRow - minRow);
             const classifyToEdge = (c: { col: number; row: number }): 'top' | 'right' | 'bottom' | 'left' => {

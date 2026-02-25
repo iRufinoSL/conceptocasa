@@ -1626,7 +1626,7 @@ const isDoor = op.openingType === 'puerta' || op.openingType === 'puerta_externa
             {card.sublabel && <span className="text-muted-foreground font-normal">— {card.sublabel}</span>}
             {blockCount && (
               <Badge variant="outline" className="text-xs print:hidden">
-                {blockCount.total} bloques ({blockCount.cols}×{blockCount.rows}) · {plan.blockLengthMm}×{plan.blockHeightMm}mm
+                {blockCount.total} bloques ({blockCount.cols}×{blockCount.rows}) · {blockCount.lengthMm}×{blockCount.heightMm}mm
               </Badge>
             )}
             {!card.isInvisible && (
@@ -1775,7 +1775,7 @@ const BLOCK_GROUP_COLORS = [
 function FullscreenBlockGrid({ card, plan, blockCount, selectedBlocks, onToggleBlock, onOpeningClick }: {
   card: ElevationCard;
   plan: FloorPlanData;
-  blockCount: { cols: number; rows: number; total: number };
+  blockCount: { cols: number; rows: number; total: number; lengthMm: number; heightMm: number };
   selectedBlocks: Set<string>;
   onToggleBlock: (key: string) => void;
   onOpeningClick: (op: OpeningData) => void;
@@ -1796,8 +1796,10 @@ function FullscreenBlockGrid({ card, plan, blockCount, selectedBlocks, onToggleB
   }, [blockGroups]);
 
   // Calculate scale to fit viewport
-  const blockWm = plan.blockLengthMm / 1000;
-  const blockHm = plan.blockHeightMm / 1000;
+  const wallIsExternal = card.wall ? isExteriorType(card.wall.wallType as string) : true;
+  const dims = getBlockDimensions(plan, wallIsExternal);
+  const blockWm = dims.lengthMm / 1000;
+  const blockHm = dims.heightMm / 1000;
   const wallWm = card.width;
   const wallHm = card.height;
   const padding = 60;

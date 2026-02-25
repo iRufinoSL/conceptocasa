@@ -120,7 +120,7 @@ export function ElevationsGridViewer({
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editCard, setEditCard] = useState<ElevationCard | null>(null);
   const [editCardDialogOpen, setEditCardDialogOpen] = useState(false);
-  const [viewMode, setViewMode] = useState<'rooms' | 'groups' | 'composite'>('rooms');
+  const [viewMode, setViewMode] = useState<'rooms' | 'groups' | 'composite' | 'total'>('rooms');
 
   // Scroll to focused wall on mount
   useEffect(() => {
@@ -591,6 +591,37 @@ export function ElevationsGridViewer({
 
   const hasGroups = elevationGroups.length > 0;
 
+  // Compute Total Elevations: stack floors by building side
+  const totalElevations = useMemo(() => {
+    if (perFloorComposites.length < 2) return [];
+    const TOTAL_SIDE_LABELS: Record<string, string> = {
+      top: 'Alzado Superior', right: 'Alzado Derecha', bottom: 'Alzado Inferior', left: 'Alzado Izquierdo',
+    };
+    const sides: Array<'top' | 'right' | 'bottom' | 'left'> = ['top', 'right', 'bottom', 'left'];
+    const result: Array<{
+      side: 'top' | 'right' | 'bottom' | 'left';
+      label: string;
+      layers: Array<{ floorName: string; composites: CompositeWall[]; isGable: boolean }>;
+    }> = [];
+    sides.forEach(side => {
+      const layers: Array<{ floorName: string; composites: CompositeWall[]; isGable: boolean }> = [];
+      const sortedFloorComps = [...perFloorComposites];
+      sortedFloorComps.forEach(({ floorName, composites }) => {
+        // Find main perimeter wall for this side (A-B, B-C, C-D, D-A pattern)
+        const sideComposites = composites.filter(cw => cw.side === side);
+        if (sideComposites.length > 0) {
+          // Check if any section is a gable
+          const isGable = sideComposites.some(cw => cw.sections.some(s => s.isGable));
+          layers.push({ floorName, composites: sideComposites, isGable });
+        }
+      });
+      if (layers.length >= 2) {
+        result.push({ side, label: TOTAL_SIDE_LABELS[side], layers });
+      }
+    });
+    return result;
+  }, [perFloorComposites]);
+
   const [gridFullscreen, setGridFullscreen] = useState(false);
 
   return (
@@ -614,6 +645,12 @@ export function ElevationsGridViewer({
           <Button variant={viewMode === 'composite' ? 'default' : 'outline'} size="sm" className="text-xs h-7"
             onClick={() => setViewMode('composite')}>
             <MapIcon className="h-3 w-3 mr-1" /> Alzados de coordenadas ({allCompositeWalls.length})
+          </Button>
+        )}
+        {perFloorComposites.length >= 2 && (
+          <Button variant={viewMode === 'total' ? 'default' : 'outline'} size="sm" className="text-xs h-7"
+            onClick={() => setViewMode('total')}>
+            <ArrowUpDown className="h-3 w-3 mr-1" /> Nivel Total
           </Button>
         )}
         {viewMode === 'composite' && buildingOutline.length > 0 && (
@@ -702,6 +739,22 @@ export function ElevationsGridViewer({
         </div>
       )}
 
+      {/* Total Elevation view — stacked floors per building side */}
+      {viewMode === 'total' && totalElevations.length > 0 && (
+        <div className="space-y-4">
+          {totalElevations.map(te => (
+            <TotalElevationCard
+              key={te.side}
+              side={te.side}
+              label={te.label}
+              layers={te.layers}
+              plan={plan}
+              rooms={rooms}
+              budgetName={budgetName}
+            />
+          ))}
+        </div>
+      )}
 
 
       {/* Room-based view (default) */}
@@ -2527,6 +2580,350 @@ const isDoor = op.openingType === 'puerta' || op.openingType === 'puerta_externa
       {/* CAD Ruler */}
       <CadRuler rx={rxs} ry={rys} rw={cw.totalLength * s} rh={totalH} widthM={cw.totalLength} heightM={maxHeight} scale={s} />
     </svg>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────
+// Total Elevation Card — stacks multiple floors into one facade view
+// ──────────────────────────────────────────────────────────────────
+
+const TOTAL_SIDE_COLORS: Record<string, { fill: string; stroke: string }> = {
+  top: { fill: 'hsl(30, 30%, 92%)', stroke: 'hsl(222, 47%, 30%)' },
+  right: { fill: 'hsl(200, 25%, 92%)', stroke: 'hsl(222, 47%, 30%)' },
+  bottom: { fill: 'hsl(30, 25%, 90%)', stroke: 'hsl(222, 47%, 30%)' },
+  left: { fill: 'hsl(200, 20%, 90%)', stroke: 'hsl(222, 47%, 30%)' },
+};
+
+function TotalElevationCard({ side, label, layers, plan, rooms, budgetName }: {
+  side: 'top' | 'right' | 'bottom' | 'left';
+  label: string;
+  layers: Array<{ floorName: string; composites: CompositeWall[]; isGable: boolean }>;
+  plan: FloorPlanData;
+  rooms: RoomData[];
+  budgetName?: string;
+}) {
+  const [fullscreen, setFullscreen] = useState(false);
+
+  // Calculate total width (max across all layers) and total height (sum of all layer heights)
+  const layerDetails = useMemo(() => {
+    return layers.map(layer => {
+      // Use the widest composite for this layer
+      const maxLength = Math.max(...layer.composites.map(cw => cw.totalLength), 0);
+      const maxHeight = Math.max(
+        ...layer.composites.flatMap(cw => cw.sections.map(s => s.height)),
+        0
+      );
+      return { ...layer, maxLength, maxHeight };
+    });
+  }, [layers]);
+
+  const totalWidth = Math.max(...layerDetails.map(l => l.maxLength), 0);
+  const totalHeight = layerDetails.reduce((sum, l) => sum + l.maxHeight, 0);
+
+  // Build the corner labels
+  const cornerLabels = useMemo(() => {
+    if (layers.length === 0) return { bottomLeft: '', bottomRight: '', topLeft: '', topRight: '' };
+    const bottomLayer = layers[0]; // Level 1
+    const topLayer = layers[layers.length - 1]; // Level 2
+    const bottomComps = bottomLayer.composites;
+    const topComps = topLayer.composites;
+    return {
+      bottomLeft: bottomComps[0]?.startCorner.label || '',
+      bottomRight: bottomComps[bottomComps.length - 1]?.endCorner.label || '',
+      topLeft: topComps[0]?.startCorner.label || '',
+      topRight: topComps[topComps.length - 1]?.endCorner.label || '',
+    };
+  }, [layers]);
+
+  const renderTotalSvg = (fsScale?: number) => {
+    const padding = 50;
+    const maxW = fsScale ? window.innerWidth * 0.9 : 600;
+    const scale = fsScale || Math.min((maxW - padding * 2) / totalWidth, 80);
+    const svgW = totalWidth * scale + padding * 2;
+    const svgH = totalHeight * scale + padding * 2 + 40;
+    const rx = padding;
+    const baseY = padding / 2 + totalHeight * scale;
+
+    return (
+      <svg
+        width="100%"
+        viewBox={`0 0 ${svgW} ${svgH}`}
+        className="mx-auto"
+        style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', maxHeight: fsScale ? '85vh' : '260px' }}
+      >
+        {/* Ground line */}
+        <line x1={rx - 5} y1={baseY} x2={rx + totalWidth * scale + 5} y2={baseY}
+          stroke="hsl(25, 60%, 40%)" strokeWidth={1.5} />
+
+        {/* Render layers bottom to top */}
+        {(() => {
+          let currentBaseY = baseY;
+          const elements: React.ReactElement[] = [];
+
+          layerDetails.forEach((layer, layerIdx) => {
+            const layerTopY = currentBaseY - layer.maxHeight * scale;
+
+            // Render each composite in this layer
+            layer.composites.forEach(cw => {
+              cw.sections.forEach((section, secIdx) => {
+                const sx = rx + section.startOffset * scale;
+                const sw2 = section.length * scale;
+                const sh2 = section.height * scale;
+                const sy = currentBaseY - sh2;
+                const isSectionInvisible = isInvisibleType(section.wall.wallType as string);
+                const sectionFill = isSectionInvisible
+                  ? 'hsl(260, 15%, 93%)'
+                  : (secIdx % 2 === 0 ? TOTAL_SIDE_COLORS[side].fill : 'hsl(30, 25%, 88%)');
+                const isGableSection = section.isGable && section.height > 0;
+
+                if (isGableSection) {
+                  const peakX = sx + sw2 / 2;
+                  const peakY = currentBaseY - sh2;
+                  const trianglePath = `M ${sx} ${currentBaseY} L ${peakX} ${peakY} L ${sx + sw2} ${currentBaseY} Z`;
+                  const clipId = `total-gable-clip-${layerIdx}-${secIdx}`;
+
+                  elements.push(
+                    <g key={`total-${layerIdx}-${secIdx}`}>
+                      <path d={trianglePath} fill={sectionFill} stroke={TOTAL_SIDE_COLORS[side].stroke} strokeWidth={1.2} />
+                      {plan.scaleMode === 'bloque' && !isSectionInvisible && (() => {
+                        const bwPx = (plan.blockLengthMm / 1000) * scale;
+                        const bhPx = (plan.blockHeightMm / 1000) * scale;
+                        if (bwPx < 3 || bhPx < 2) return null;
+                        const rows = Math.ceil(sh2 / bhPx);
+                        const lines: React.ReactElement[] = [];
+                        for (let r = 1; r < rows; r++) {
+                          const y = currentBaseY - r * bhPx;
+                          if (y <= peakY) break;
+                          lines.push(
+                            <line key={`bh-${r}`} x1={sx} y1={y} x2={sx + sw2} y2={y}
+                              stroke="hsl(210, 50%, 35%)" strokeWidth={1} opacity={0.6} />
+                          );
+                        }
+                        return (
+                          <>
+                            <defs><clipPath id={clipId}><path d={trianglePath} /></clipPath></defs>
+                            <g clipPath={`url(#${clipId})`}>{lines}</g>
+                          </>
+                        );
+                      })()}
+                      {/* Ridge marker */}
+                      <circle cx={peakX} cy={peakY} r={fsScale ? 4 : 2.5} fill="hsl(15, 70%, 45%)" />
+                      <text x={peakX} y={peakY - (fsScale ? 8 : 5)} textAnchor="middle"
+                        fontSize={fsScale ? 10 : 7} fill="hsl(15, 70%, 45%)" fontWeight={700}>
+                        Cumbrera
+                      </text>
+                      {/* Room label */}
+                      <text x={sx + sw2 / 2} y={currentBaseY - sh2 * 0.25} textAnchor="middle"
+                        fontSize={fsScale ? 10 : 7} fill="hsl(222, 47%, 30%)" fontWeight={600} opacity={0.6}>
+                        {section.roomName}
+                      </text>
+                    </g>
+                  );
+                } else {
+                  elements.push(
+                    <g key={`total-${layerIdx}-${secIdx}`}>
+                      <rect x={sx} y={sy} width={sw2} height={sh2}
+                        fill={sectionFill} stroke={TOTAL_SIDE_COLORS[side].stroke} strokeWidth={1.2} rx={1} />
+                      {/* Block pattern */}
+                      {plan.scaleMode === 'bloque' && !isSectionInvisible && (() => {
+                        const bwPx = (plan.blockLengthMm / 1000) * scale;
+                        const bhPx = (plan.blockHeightMm / 1000) * scale;
+                        if (bwPx < 3 || bhPx < 2) return null;
+                        const rows = Math.ceil(sh2 / bhPx);
+                        const lines: React.ReactElement[] = [];
+                        for (let r = 1; r < rows; r++) {
+                          const y = sy + sh2 - r * bhPx;
+                          if (y <= sy) break;
+                          lines.push(
+                            <line key={`bh-${r}`} x1={sx} y1={y} x2={sx + sw2} y2={y}
+                              stroke="hsl(210, 50%, 35%)" strokeWidth={1} opacity={0.6} />
+                          );
+                        }
+                        for (let r = 0; r < rows; r++) {
+                          const yTop = Math.max(sy, sy + sh2 - (r + 1) * bhPx);
+                          const yBot = sy + sh2 - r * bhPx;
+                          const offset = r % 2 === 0 ? 0 : bwPx / 2;
+                          const globalStartCol = Math.floor((sx - rx - offset) / bwPx);
+                          const globalEndCol = Math.ceil((sx + sw2 - rx - offset) / bwPx);
+                          for (let c = globalStartCol; c <= globalEndCol; c++) {
+                            const x = rx + offset + c * bwPx;
+                            if (x <= sx || x >= sx + sw2) continue;
+                            lines.push(
+                              <line key={`bv-${r}-${c}`} x1={x} y1={yTop} x2={x} y2={Math.min(yBot, sy + sh2)}
+                                stroke="hsl(210, 50%, 35%)" strokeWidth={0.8} opacity={0.6} />
+                            );
+                          }
+                        }
+                        return <g>{lines}</g>;
+                      })()}
+                      {/* Section separator */}
+                      {secIdx > 0 && (
+                        <line x1={sx} y1={layerTopY} x2={sx} y2={currentBaseY}
+                          stroke="hsl(222, 47%, 40%)" strokeWidth={0.8} strokeDasharray="3 2" />
+                      )}
+                      {/* Room label */}
+                      <text x={sx + sw2 / 2} y={sy + 12} textAnchor="middle"
+                        fontSize={fsScale ? 10 : 7} fill="hsl(222, 47%, 30%)" fontWeight={600} opacity={0.6}>
+                        {section.roomName}
+                      </text>
+                      {/* Openings */}
+                      {section.openings.map(op => {
+                        const isHoriz = section.wallIndex === 1 || section.wallIndex === 3;
+                        const fullWallLen = section.fullWallLength ?? (isHoriz ? section.length : section.length);
+                        const roomStart = isHoriz ? 0 : 0;
+                        const opCenterInSection = (op.positionX * fullWallLen) - (section.overlapStart ?? 0);
+                        const opWidthPx = op.width * scale;
+                        const opHeightPx = op.height * scale;
+                        const sillH = op.sillHeight ?? 0;
+                        const opX = sx + (opCenterInSection / section.length) * sw2 - opWidthPx / 2;
+                        const opY = sy + sh2 - opHeightPx - sillH * scale;
+                        const isDoor = op.openingType === 'puerta' || op.openingType === 'puerta_externa';
+                        return (
+                          <g key={op.id}>
+                            <rect x={opX} y={opY} width={opWidthPx} height={opHeightPx}
+                              fill={isDoor ? 'hsl(30, 80%, 95%)' : 'hsl(210, 80%, 95%)'}
+                              stroke={isDoor ? 'hsl(30, 80%, 45%)' : 'hsl(210, 80%, 45%)'}
+                              strokeWidth={1} rx={1} />
+                            <text x={opX + opWidthPx / 2} y={opY + opHeightPx / 2 + 3} textAnchor="middle"
+                              fontSize={fsScale ? 9 : 6} fill="hsl(var(--foreground))" opacity={0.8}>
+                              {OPENING_PRESETS[op.openingType as keyof typeof OPENING_PRESETS]?.label || op.openingType}
+                            </text>
+                          </g>
+                        );
+                      })}
+                    </g>
+                  );
+                }
+              });
+            });
+
+            // Floor separator line & label
+            if (layerIdx > 0) {
+              elements.push(
+                <g key={`floor-sep-${layerIdx}`}>
+                  <line x1={rx - 10} y1={currentBaseY} x2={rx + totalWidth * scale + 10} y2={currentBaseY}
+                    stroke="hsl(var(--primary))" strokeWidth={1} strokeDasharray="6 3" opacity={0.5} />
+                  <text x={rx - 12} y={currentBaseY + 4} textAnchor="end"
+                    fontSize={fsScale ? 10 : 7} fill="hsl(var(--primary))" fontWeight={600} opacity={0.7}>
+                    {layer.floorName}
+                  </text>
+                </g>
+              );
+            } else {
+              elements.push(
+                <text key={`floor-label-${layerIdx}`} x={rx - 12} y={currentBaseY - layer.maxHeight * scale / 2 + 4}
+                  textAnchor="end" fontSize={fsScale ? 10 : 7} fill="hsl(var(--muted-foreground))" fontWeight={600} opacity={0.5}>
+                  {layer.floorName}
+                </text>
+              );
+            }
+
+            currentBaseY = layerTopY;
+          });
+
+          return elements;
+        })()}
+
+        {/* Total dimension line */}
+        <line x1={rx} y1={baseY + 15} x2={rx + totalWidth * scale} y2={baseY + 15}
+          stroke="hsl(var(--primary))" strokeWidth={1} />
+        <line x1={rx} y1={baseY + 10} x2={rx} y2={baseY + 20} stroke="hsl(var(--primary))" strokeWidth={1} />
+        <line x1={rx + totalWidth * scale} y1={baseY + 10} x2={rx + totalWidth * scale} y2={baseY + 20} stroke="hsl(var(--primary))" strokeWidth={1} />
+        <text x={rx + totalWidth * scale / 2} y={baseY + 28} textAnchor="middle"
+          fontSize={fsScale ? 11 : 8} fill="hsl(var(--primary))" fontWeight={700}>
+          {Math.round(totalWidth * 1000)} mm
+        </text>
+
+        {/* Height dimension line (right side) */}
+        <line x1={rx + totalWidth * scale + 15} y1={baseY} x2={rx + totalWidth * scale + 15} y2={baseY - totalHeight * scale}
+          stroke="hsl(var(--primary))" strokeWidth={1} />
+        <line x1={rx + totalWidth * scale + 10} y1={baseY} x2={rx + totalWidth * scale + 20} y2={baseY}
+          stroke="hsl(var(--primary))" strokeWidth={1} />
+        <line x1={rx + totalWidth * scale + 10} y1={baseY - totalHeight * scale} x2={rx + totalWidth * scale + 20} y2={baseY - totalHeight * scale}
+          stroke="hsl(var(--primary))" strokeWidth={1} />
+        <text x={rx + totalWidth * scale + 25} y={baseY - totalHeight * scale / 2 + 4} textAnchor="start"
+          fontSize={fsScale ? 11 : 8} fill="hsl(var(--primary))" fontWeight={700}
+          transform={`rotate(90, ${rx + totalWidth * scale + 25}, ${baseY - totalHeight * scale / 2})`}>
+          {Math.round(totalHeight * 1000)} mm
+        </text>
+
+        {/* Corner labels */}
+        <text x={rx - 3} y={baseY + 40} textAnchor="end"
+          fontSize={fsScale ? 13 : 9} fill="hsl(var(--primary))" fontWeight={800}>
+          {cornerLabels.bottomLeft}
+        </text>
+        <text x={rx + totalWidth * scale + 3} y={baseY + 40} textAnchor="start"
+          fontSize={fsScale ? 13 : 9} fill="hsl(var(--primary))" fontWeight={800}>
+          {cornerLabels.bottomRight}
+        </text>
+        <text x={rx - 3} y={baseY - totalHeight * scale - 5} textAnchor="end"
+          fontSize={fsScale ? 13 : 9} fill="hsl(var(--primary))" fontWeight={800}>
+          {cornerLabels.topLeft}
+        </text>
+        <text x={rx + totalWidth * scale + 3} y={baseY - totalHeight * scale - 5} textAnchor="start"
+          fontSize={fsScale ? 13 : 9} fill="hsl(var(--primary))" fontWeight={800}>
+          {cornerLabels.topRight}
+        </text>
+      </svg>
+    );
+  };
+
+  const TOTAL_SIDE_NAMES: Record<string, string> = {
+    top: 'Superior (Norte)', right: 'Derecha (Este)', bottom: 'Inferior (Sur)', left: 'Izquierda (Oeste)',
+  };
+
+  return (
+    <>
+      <Card className="overflow-hidden hover:shadow-md transition-shadow group">
+        <CardHeader className="py-2 px-3 border-b border-border/50">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 min-w-0 flex-wrap">
+              <CardTitle className="text-sm font-bold">{label}</CardTitle>
+              <Badge variant="default" className="text-[9px] h-4">{TOTAL_SIDE_NAMES[side]}</Badge>
+              <Badge variant="outline" className="text-[9px] h-4">{Math.round(totalWidth * 1000)} × {Math.round(totalHeight * 1000)} mm</Badge>
+              <Badge variant="secondary" className="text-[9px] h-4">{layers.length} niveles</Badge>
+              {cornerLabels.bottomLeft && (
+                <Badge variant="outline" className="text-[9px] h-4 max-w-[120px] truncate">
+                  {cornerLabels.bottomLeft} → {cornerLabels.topRight}
+                </Badge>
+              )}
+            </div>
+            <Button variant="ghost" size="sm" className="h-5 w-5 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+              onClick={() => setFullscreen(true)} title="Ampliar">
+              <Maximize2 className="h-3 w-3" />
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent className="p-2">
+          {renderTotalSvg()}
+        </CardContent>
+      </Card>
+
+      {/* Fullscreen dialog */}
+      <Dialog open={fullscreen} onOpenChange={setFullscreen}>
+        <DialogContent className="!max-w-none !w-screen !h-screen !m-0 !p-4 !rounded-none !translate-x-0 !translate-y-0 !top-0 !left-0 flex flex-col print:!p-2">
+          <DialogHeader className="shrink-0">
+            <DialogTitle className="text-sm flex items-center gap-2 flex-wrap">
+              {budgetName && <span className="font-bold print:text-lg">{budgetName} —</span>}
+              {label}
+              <Badge variant="default" className="text-xs print:hidden">{TOTAL_SIDE_NAMES[side]}</Badge>
+              <Badge variant="outline" className="text-xs print:hidden">{Math.round(totalWidth * 1000)} × {Math.round(totalHeight * 1000)} mm</Badge>
+              <Badge variant="secondary" className="text-xs print:hidden">{layers.length} niveles</Badge>
+              <Button variant="destructive" size="sm" className="h-7 text-xs ml-auto" onClick={() => setFullscreen(false)}>
+                ✕ Cerrar
+              </Button>
+            </DialogTitle>
+            <DialogDescription className="sr-only">Vista a pantalla completa del alzado total</DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 overflow-auto flex items-center justify-center min-h-0">
+            {renderTotalSvg(Math.min(
+              (window.innerHeight * 0.8) / totalHeight,
+              (window.innerWidth * 0.9) / totalWidth
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 

@@ -2193,8 +2193,10 @@ export function computeCompositeWallsFromCorners(
     for (let j = i + 1; j < allMarkersAbs.length; j++) {
       const a = allMarkersAbs[i], b = allMarkersAbs[j];
       if (Math.abs(a.absX - b.absX) <= CROSS_TOL) {
-        // Same vertical line - pair them top-to-bottom (lower absY first)
         if (Math.abs(a.absY - b.absY) < EPSILON) continue; // same point
+        // Cross-side pairs: only pair markers where BOTH are non-main (interior markers)
+        // Main corners (A, B, C, D) are already connected by perimeter composites
+        if (a.isMain || b.isMain) continue;
         const [top, bottom] = a.absY <= b.absY ? [a, b] : [b, a];
         verticalPairs.push({ top, bottom });
       }
@@ -2397,7 +2399,8 @@ export function computeCompositeWallsFromCorners(
       const a = allMarkersAbs[i], b = allMarkersAbs[j];
       if (Math.abs(a.absY - b.absY) <= CROSS_TOL) {
         if (Math.abs(a.absX - b.absX) < EPSILON) continue; // same point
-        // Left-to-right ordering (lower absX first)
+        // Cross-side pairs: only pair markers where BOTH are non-main (interior markers)
+        if (a.isMain || b.isMain) continue;
         const [left, right] = a.absX <= b.absX ? [a, b] : [b, a];
         horizontalPairs.push({ left, right });
       }

@@ -1985,7 +1985,7 @@ function FullscreenBlockGrid({ card, plan, blockCount, selectedBlocks, onToggleB
               style={{ cursor: 'pointer' }}
               onClick={(e) => { e.stopPropagation(); onToggleBlock(key); }}
             >
-              <title>Bloque [{c},{r}] — {plan.blockLengthMm}×{plan.blockHeightMm}×{plan.blockWidthMm}mm</title>
+              <title>Bloque [{c},{r}] — {dims.lengthMm}×{dims.heightMm}×{dims.widthMm}mm</title>
             </rect>
           );
         });

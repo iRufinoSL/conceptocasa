@@ -882,6 +882,7 @@ export type Database = {
           internal_wall_thickness: number
           length: number
           name: string
+          ridge_height: number | null
           roof_overhang: number | null
           roof_slope_percent: number | null
           roof_type: string | null
@@ -902,6 +903,7 @@ export type Database = {
           internal_wall_thickness?: number
           length?: number
           name?: string
+          ridge_height?: number | null
           roof_overhang?: number | null
           roof_slope_percent?: number | null
           roof_type?: string | null
@@ -922,6 +924,7 @@ export type Database = {
           internal_wall_thickness?: number
           length?: number
           name?: string
+          ridge_height?: number | null
           roof_overhang?: number | null
           roof_slope_percent?: number | null
           roof_type?: string | null

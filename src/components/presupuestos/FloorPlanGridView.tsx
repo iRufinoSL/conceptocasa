@@ -649,6 +649,7 @@ export function FloorPlanGridView({
                   height: CS,
                   border: '1.5px solid rgba(0,128,0,0.7)',
                   backgroundColor: isOdd ? 'rgba(0,128,0,0.18)' : 'rgba(0,128,0,0.04)',
+                  zIndex: 15,
                 }}
               />
             );

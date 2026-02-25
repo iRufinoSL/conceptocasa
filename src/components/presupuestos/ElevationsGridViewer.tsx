@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Plus, Trash2, Box, Layers, ArrowUpDown, Maximize2, Merge, Unlink, Map as MapIcon, Printer, FileDown, Ruler } from 'lucide-react';
 import jsPDF from 'jspdf';
-import { OPENING_PRESETS, WALL_LABELS, WALL_SIDE_LETTERS, computeWallSegments, autoClassifyWalls, generateExternalWallNames, isExteriorType, isInvisibleType, computeBuildingOutline, computeCompositeWalls, computeCompositeWallsFromCorners } from '@/lib/floor-plan-calculations';
+import { OPENING_PRESETS, WALL_LABELS, WALL_SIDE_LETTERS, computeWallSegments, autoClassifyWalls, generateExternalWallNames, isExteriorType, isInvisibleType, computeBuildingOutline, computeCompositeWalls, computeCompositeWallsFromCorners, calcBajoCubiertaWallHeight } from '@/lib/floor-plan-calculations';
 import type { RoomData, WallData, OpeningData, FloorPlanData, WallSegment, FloorLevel, WallType, BlockGroupData, OutlineVertex, CompositeWall } from '@/lib/floor-plan-calculations';
 import type { CustomCorner } from '@/hooks/useFloorPlan';
 
@@ -84,12 +84,20 @@ function getWallHeight(wall: WallData, room: RoomData, plan: FloorPlanData): num
   return plan.defaultHeight;
 }
 
-/** Check if a room is bajo cubierta (height=0 with dos_aguas roof) */
-function isBajoCubierta(room: RoomData, plan: FloorPlanData): boolean {
-  return room.height === 0 && plan.roofType === 'dos_aguas';
+/** Check if a room is bajo cubierta (height=0 or undefined with dos_aguas roof, or floor level is bajo_cubierta) */
+function isBajoCubierta(room: RoomData, plan: FloorPlanData, floors?: FloorLevel[]): boolean {
+  if (plan.roofType !== 'dos_aguas') return false;
+  // Check room height
+  if (room.height === 0) return true;
+  // Check floor level
+  if (room.floorId && floors) {
+    const floor = floors.find(f => f.id === room.floorId);
+    if (floor && (floor.level === 'bajo_cubierta' || floor.name.toLowerCase().includes('bajo cubierta'))) return true;
+  }
+  return false;
 }
 
-/** Calculate gable peak height for a bajo cubierta room */
+/** Calculate gable peak height for a bajo cubierta room (between walls, excluding eaves) */
 function getGablePeakHeight(plan: FloorPlanData, rooms: RoomData[]): number {
   let minX = Infinity, maxX = Infinity;
   rooms.forEach(r => {
@@ -97,6 +105,7 @@ function getGablePeakHeight(plan: FloorPlanData, rooms: RoomData[]): number {
     maxX = Math.max(maxX !== Infinity ? maxX : r.posX + r.width, r.posX + r.width);
   });
   if (minX === Infinity) return 0;
+  // Gable is strictly between wall perimeter, NO eave overhang
   const totalWidth = (maxX - minX) + 2 * plan.externalWallThickness;
   return (totalWidth / 2) * (plan.roofSlopePercent / 100);
 }
@@ -269,7 +278,7 @@ export function ElevationsGridViewer({
       });
 
       // Detect bajo cubierta gable
-      const roomIsBajoCubierta = isBajoCubierta(room, plan);
+      const roomIsBajoCubierta = isBajoCubierta(room, plan, floors);
       const roomGablePeakH = roomIsBajoCubierta ? gablePeakHeight : 0;
 
       // 4 Walls (always all 4, including invisible ones)
@@ -286,9 +295,12 @@ export function ElevationsGridViewer({
           wallHeight = roomGablePeakH; // triangle height = peak height
         }
 
-        // Non-gable walls of bajo cubierta rooms have height=0 → skip them entirely
-        if (roomIsBajoCubierta && !isGableWall && wallHeight === 0) {
-          return;
+        // Non-gable walls of bajo cubierta rooms: calculate height from roof slope
+        if (roomIsBajoCubierta && !isGableWall) {
+          const autoH = calcBajoCubiertaWallHeight(room, wall.wallIndex, plan, rooms);
+          wallHeight = autoH ?? 0;
+          // If calculated height is 0 (wall at building edge), still show it with label
+          if (wallHeight <= 0) wallHeight = 0;
         }
 
         if (segments.length === 0) {
@@ -297,18 +309,21 @@ export function ElevationsGridViewer({
           const wallName = externalWallNames.get(key);
           const canAdd = !wall.id.startsWith('temp-') && !invisible;
           const gableArea = isGableWall ? (fullWallLen * roomGablePeakH) / 2 : 0;
+          const bajoCubiertaLabel = roomIsBajoCubierta && !isGableWall
+            ? `${WALL_LABELS[wall.wallIndex]} (h=${Math.round(wallHeight * 1000)}mm)`
+            : isGableWall ? `${WALL_LABELS[wall.wallIndex]} (Hastial)` : `${WALL_LABELS[wall.wallIndex]} (${wall.wallIndex})`;
           cards.push({
             id: `wall-${room.id}-${wall.wallIndex}-noseg`,
-            label: isGableWall ? `${WALL_LABELS[wall.wallIndex]} (Hastial)` : `${WALL_LABELS[wall.wallIndex]} (${wall.wallIndex})`,
+            label: bajoCubiertaLabel,
             sublabel: room.name,
             category: 'pared',
             width: fullWallLen,
-            height: wallHeight,
+            height: Math.max(wallHeight, 0.01), // Minimum height for rendering
             room,
             wall,
             openings: wall.openings,
             wallId: wall.id,
-            canAddOpenings: canAdd,
+            canAddOpenings: canAdd && wallHeight > 0,
             isInvisible: invisible,
             fill: invisible ? 'hsl(0, 0%, 96%)' : isExternal ? 'hsl(30, 30%, 92%)' : 'hsl(25, 60%, 93%)',
             stroke: invisible ? 'hsl(0, 0%, 70%)' : isExternal ? 'hsl(222, 47%, 30%)' : 'hsl(25, 80%, 50%)',
@@ -335,9 +350,11 @@ export function ElevationsGridViewer({
           const visibleSegCount = segments.filter(s => !isInvisibleType(s.segmentType)).length;
           const wallLabel = isGableWall
             ? `${WALL_LABELS[wall.wallIndex]} (Hastial)`
-            : (segments.length > 1 ? `${WALL_LABELS[wall.wallIndex]} (${wall.wallIndex}${si + 1})` : `${WALL_LABELS[wall.wallIndex]} (${wall.wallIndex})`);
+            : roomIsBajoCubierta
+              ? `${WALL_LABELS[wall.wallIndex]} (h=${Math.round(wallHeight * 1000)}mm)`
+              : (segments.length > 1 ? `${WALL_LABELS[wall.wallIndex]} (${wall.wallIndex}${si + 1})` : `${WALL_LABELS[wall.wallIndex]} (${wall.wallIndex})`);
           const wallName = externalWallNames.get(key);
-          const canAdd = !wall.id.startsWith('temp-') && !invisible;
+          const canAdd = !wall.id.startsWith('temp-') && !invisible && wallHeight > 0;
 
           let badgeLabel: string;
           if (invisible) {
@@ -359,7 +376,7 @@ export function ElevationsGridViewer({
             sublabel: room.name,
             category: 'pared',
             width: segLen,
-            height: wallHeight,
+            height: Math.max(wallHeight, 0.01),
             room,
             wall,
             segment: seg,
@@ -383,7 +400,7 @@ export function ElevationsGridViewer({
       // Faldones (roof slope panels) for bajo cubierta rooms
       if (roomIsBajoCubierta && plan.roofType === 'dos_aguas') {
         // Calculate building dimensions for this floor
-        const floorRooms = rooms.filter(r => r.floorId === room.floorId && isBajoCubierta(r, plan));
+        const floorRooms = rooms.filter(r => r.floorId === room.floorId && isBajoCubierta(r, plan, floors));
         let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
         floorRooms.forEach(r => {
           minX = Math.min(minX, r.posX);
@@ -440,7 +457,7 @@ export function ElevationsGridViewer({
 
       return { room, cards };
     });
-  }, [rooms, plan, wallSegmentsMap, wallClassification, externalWallNames]);
+  }, [rooms, plan, floors, wallSegmentsMap, wallClassification, externalWallNames]);
 
   // Auto-open the WallEditDialog for a specific wall (from space form eye icon)
   useEffect(() => {

@@ -110,12 +110,13 @@ function NewLevelWizardDialog({ open, onOpenChange, floors, onAdd, saving, onFlo
   const sourceFloor = floors.length > 0 ? floors[floors.length - 1] : null;
 
   const handleCreate = async () => {
-    const level = `nivel_${floors.length}`;
+    const level = isRoof ? 'bajo_cubierta' : `nivel_${floors.length}`;
     const opts: any = {};
     if (sameFootprint && sourceFloor) {
       opts.copyFromFloorId = sourceFloor.id;
     }
-    opts.wallHeight = parseFloat(wallHeight) || 2.5;
+    // For bajo cubierta, wall height is 0 (walls follow slope)
+    opts.wallHeight = isRoof ? 0 : (parseFloat(wallHeight) || 2.5);
     if (isRoof) {
       opts.roofSlopes = parseInt(roofSlopes) || 2;
       // Convert degrees to percentage for storage

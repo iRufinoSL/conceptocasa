@@ -810,7 +810,7 @@ export function FloorPlanGridView({
               return (
                 <div
                   key={`corner-${c.label}-${renderIdx}`}
-                  className="absolute z-30"
+                  className={`absolute ${isEditing ? 'z-50' : 'z-30'}`}
                   style={{
                     left: c.left - (isEditing ? 40 : 10),
                     top: c.top - 4,

@@ -2062,6 +2062,9 @@ const isDoor = op.openingType === 'puerta' || op.openingType === 'puerta_externa
           </g>
         );
       })}
+
+      {/* CAD Ruler */}
+      <CadRuler rx={rx} ry={ry} rw={rw} rh={rh} widthM={wallWm} heightM={wallHm} scale={s} />
     </svg>
   );
 }

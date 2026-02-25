@@ -279,10 +279,20 @@ export function calcBajoCubiertaWallHeight(
   const slopeRatio = plan.roofSlopePercent / 100;
   const riseM = halfWidth * slopeRatio;
   const getH = (x: number) => Math.max(0, riseM - Math.abs(x - ridgeX) * slopeRatio);
+  const EPSILON = 0.05;
   switch (wallIndex) {
-    case 2: return getH(room.posX + room.width);
-    case 4: return getH(room.posX);
-    case 1: case 3: return (getH(room.posX) + getH(room.posX + room.width)) / 2;
+    case 2: return getH(room.posX + room.width); // right wall
+    case 4: return getH(room.posX); // left wall
+    case 1: { // top wall — check if it's at building edge (posY == bbMinY)
+      const bbMinY = Math.min(...allRooms.filter(r => r.posX >= 0).map(r => r.posY));
+      if (Math.abs(room.posY - bbMinY) < EPSILON) return 0; // At building edge: roof rests on lower level
+      return (getH(room.posX) + getH(room.posX + room.width)) / 2;
+    }
+    case 3: { // bottom wall — check if it's at building edge (posY + length == bbMaxY)
+      const bbMaxY = Math.max(...allRooms.filter(r => r.posX >= 0).map(r => r.posY + r.length));
+      if (Math.abs(room.posY + room.length - bbMaxY) < EPSILON) return 0; // At building edge
+      return (getH(room.posX) + getH(room.posX + room.width)) / 2;
+    }
     default: return undefined;
   }
 }

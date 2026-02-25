@@ -912,87 +912,77 @@ function InlineWallTypeSelect({ wallId, currentType, onUpdateWall, onUpdateSegme
   );
 }
 
-/** CAD ruler SVG element for fullscreen views */
-function CadRuler({ rx, ry, rw, rh, widthM, heightM, scale }: {
-  rx: number; ry: number; rw: number; rh: number;
-  widthM: number; heightM: number; scale: number;
-}) {
+/** Inject CAD ruler SVG elements into a cloned SVG for PDF export only */
+function injectCadRulerIntoSvg(svgClone: SVGSVGElement, rx: number, ry: number, rw: number, rh: number, widthM: number, heightM: number, scale: number) {
+  const ns = 'http://www.w3.org/2000/svg';
   const rulerColor = 'hsl(0, 0%, 40%)';
   const rulerFontSize = Math.max(7, Math.min(10, scale * 0.15));
-  
-  // Choose tick interval based on scale (in meters)
+
   const getTickInterval = (totalM: number) => {
     if (totalM <= 1) return 0.1;
     if (totalM <= 3) return 0.25;
     if (totalM <= 8) return 0.5;
     return 1;
   };
-  
+
   const hInterval = getTickInterval(widthM);
   const vInterval = getTickInterval(heightM);
-  
-  const hTicks: React.ReactElement[] = [];
-  const vTicks: React.ReactElement[] = [];
-  
+
+  const g = document.createElementNS(ns, 'g');
+  g.setAttribute('opacity', '0.7');
+
+  const makeLine = (x1: number, y1: number, x2: number, y2: number, sw: number) => {
+    const l = document.createElementNS(ns, 'line');
+    l.setAttribute('x1', String(x1)); l.setAttribute('y1', String(y1));
+    l.setAttribute('x2', String(x2)); l.setAttribute('y2', String(y2));
+    l.setAttribute('stroke', rulerColor); l.setAttribute('stroke-width', String(sw));
+    return l;
+  };
+  const makeText = (x: number, y: number, txt: string, anchor: string, fs: number, extra?: Record<string, string>) => {
+    const t = document.createElementNS(ns, 'text');
+    t.setAttribute('x', String(x)); t.setAttribute('y', String(y));
+    t.setAttribute('text-anchor', anchor); t.setAttribute('font-size', String(fs));
+    t.setAttribute('fill', rulerColor);
+    if (extra) Object.entries(extra).forEach(([k, v]) => t.setAttribute(k, v));
+    t.textContent = txt;
+    return t;
+  };
+
   // Horizontal ruler (top)
   const rulerHY = ry - 20;
-  hTicks.push(
-    <line key="hr-base" x1={rx} y1={rulerHY} x2={rx + rw} y2={rulerHY}
-      stroke={rulerColor} strokeWidth={0.8} />
-  );
+  g.appendChild(makeLine(rx, rulerHY, rx + rw, rulerHY, 0.8));
   for (let m = 0; m <= widthM + 0.001; m += hInterval) {
     const x = rx + (m / widthM) * rw;
     if (x > rx + rw + 0.5) break;
     const isMajor = Math.abs(m - Math.round(m)) < 0.01;
     const tickH = isMajor ? 8 : 4;
-    hTicks.push(
-      <line key={`ht-${m}`} x1={x} y1={rulerHY - tickH} x2={x} y2={rulerHY}
-        stroke={rulerColor} strokeWidth={isMajor ? 0.8 : 0.4} />
-    );
+    g.appendChild(makeLine(x, rulerHY - tickH, x, rulerHY, isMajor ? 0.8 : 0.4));
     if (isMajor || hInterval >= 0.25) {
-      hTicks.push(
-        <text key={`htl-${m}`} x={x} y={rulerHY - tickH - 2}
-          textAnchor="middle" fontSize={rulerFontSize} fill={rulerColor}>
-          {Math.round(m * 1000)}
-        </text>
-      );
+      g.appendChild(makeText(x, rulerHY - tickH - 2, String(Math.round(m * 1000)), 'middle', rulerFontSize));
     }
   }
-  
+
   // Vertical ruler (right)
   const rulerVX = rx + rw + 20;
-  vTicks.push(
-    <line key="vr-base" x1={rulerVX} y1={ry} x2={rulerVX} y2={ry + rh}
-      stroke={rulerColor} strokeWidth={0.8} />
-  );
+  g.appendChild(makeLine(rulerVX, ry, rulerVX, ry + rh, 0.8));
   for (let m = 0; m <= heightM + 0.001; m += vInterval) {
     const y = ry + rh - (m / heightM) * rh;
     if (y < ry - 0.5) break;
     const isMajor = Math.abs(m - Math.round(m)) < 0.01;
     const tickW = isMajor ? 8 : 4;
-    vTicks.push(
-      <line key={`vt-${m}`} x1={rulerVX} y1={y} x2={rulerVX + tickW} y2={y}
-        stroke={rulerColor} strokeWidth={isMajor ? 0.8 : 0.4} />
-    );
+    g.appendChild(makeLine(rulerVX, y, rulerVX + tickW, y, isMajor ? 0.8 : 0.4));
     if (isMajor || vInterval >= 0.25) {
-      vTicks.push(
-        <text key={`vtl-${m}`} x={rulerVX + tickW + 3} y={y + 3}
-          textAnchor="start" fontSize={rulerFontSize} fill={rulerColor}>
-          {Math.round(m * 1000)}
-        </text>
-      );
+      g.appendChild(makeText(rulerVX + tickW + 3, y + 3, String(Math.round(m * 1000)), 'start', rulerFontSize));
     }
   }
-  
-  return (
-    <g className="cad-ruler" pointerEvents="none" opacity={0.7}>
-      {hTicks}
-      {vTicks}
-      <text x={rx + rw / 2} y={rulerHY - 14} textAnchor="middle" fontSize={rulerFontSize - 1} fill={rulerColor} fontStyle="italic">mm</text>
-      <text x={rulerVX + 16} y={ry + rh / 2} textAnchor="middle" fontSize={rulerFontSize - 1} fill={rulerColor} fontStyle="italic"
-        transform={`rotate(90, ${rulerVX + 16}, ${ry + rh / 2})`}>mm</text>
-    </g>
-  );
+
+  g.appendChild(makeText(rx + rw / 2, rulerHY - 14, 'mm', 'middle', rulerFontSize - 1, { 'font-style': 'italic' }));
+  g.appendChild(makeText(rulerVX + 16, ry + rh / 2, 'mm', 'middle', rulerFontSize - 1, {
+    'font-style': 'italic',
+    'transform': `rotate(90, ${rulerVX + 16}, ${ry + rh / 2})`,
+  }));
+
+  svgClone.appendChild(g);
 }
 
 // Individual elevation card
@@ -1085,6 +1075,15 @@ function ElevationCardView({ card, plan, onOpeningClick, onAddOpening, onCardDou
     svgClone.setAttribute('width', String(renderW));
     svgClone.setAttribute('height', String(renderH));
     svgClone.removeAttribute('style');
+    // Inject CAD ruler for PDF
+    const rRx = parseFloat(svgEl.getAttribute('data-ruler-rx') || '0');
+    const rRy = parseFloat(svgEl.getAttribute('data-ruler-ry') || '0');
+    const rRw = parseFloat(svgEl.getAttribute('data-ruler-rw') || '0');
+    const rRh = parseFloat(svgEl.getAttribute('data-ruler-rh') || '0');
+    const rWm = parseFloat(svgEl.getAttribute('data-ruler-wm') || '0');
+    const rHm = parseFloat(svgEl.getAttribute('data-ruler-hm') || '0');
+    const rSc = parseFloat(svgEl.getAttribute('data-ruler-scale') || '0');
+    if (rRw > 0 && rRh > 0) injectCadRulerIntoSvg(svgClone, rRx, rRy, rRw, rRh, rWm, rHm, rSc);
     const svgData = new XMLSerializer().serializeToString(svgClone);
     const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
     const url = URL.createObjectURL(svgBlob);
@@ -1323,6 +1322,8 @@ function ElevationCardView({ card, plan, onOpeningClick, onAddOpening, onCardDou
     return (
       <svg
         data-card-pdf={fsScale ? card.id : undefined}
+        data-ruler-rx={rx} data-ruler-ry={ry} data-ruler-rw={rw} data-ruler-rh={rh}
+        data-ruler-wm={card.width} data-ruler-hm={card.height} data-ruler-scale={s}
         width="100%"
         viewBox={`0 0 ${sw} ${sh}`}
         className="mx-auto"
@@ -1572,10 +1573,7 @@ const isDoor = op.openingType === 'puerta' || op.openingType === 'puerta_externa
             </g>
           );
         })}
-        {/* CAD Ruler — fullscreen only */}
-        {fsScale && (
-          <CadRuler rx={rx} ry={ry} rw={rw} rh={rh} widthM={card.width} heightM={card.height} scale={s} />
-        )}
+        {/* CAD Ruler — only rendered during PDF export (not on screen) */}
       </svg>
     );
   };
@@ -2065,8 +2063,7 @@ const isDoor = op.openingType === 'puerta' || op.openingType === 'puerta_externa
         );
       })}
 
-      {/* CAD Ruler */}
-      <CadRuler rx={rx} ry={ry} rw={rw} rh={rh} widthM={wallWm} heightM={wallHm} scale={s} />
+      {/* CAD Ruler — only rendered during PDF export (not on screen) */}
     </svg>
   );
 }
@@ -2122,6 +2119,8 @@ function CompositeFullscreenBlockGrid({ compositeWall, plan, maxHeight, selected
   return (
     <svg
       data-composite-pdf={cw.id}
+      data-ruler-rx={rxs} data-ruler-ry={rys} data-ruler-rw={cw.totalLength * s} data-ruler-rh={totalH}
+      data-ruler-wm={cw.totalLength} data-ruler-hm={maxHeight} data-ruler-scale={s}
       width="100%"
       viewBox={`0 0 ${svgW} ${svgH}`}
       style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', maxHeight: '85vh' }}
@@ -2448,6 +2447,8 @@ function CompositeWallCard({ compositeWall, plan, onOpeningClick, onAddBlockGrou
     return (
       <svg
         data-composite-pdf={cw.id}
+        data-ruler-rx={rxs} data-ruler-ry={rys} data-ruler-rw={cw.totalLength * s} data-ruler-rh={totalH}
+        data-ruler-wm={cw.totalLength} data-ruler-hm={maxHeight} data-ruler-scale={s}
         width="100%"
         viewBox={`0 0 ${sw} ${sh}`}
         className="mx-auto"
@@ -2845,6 +2846,15 @@ function CompositeWallCard({ compositeWall, plan, onOpeningClick, onAddBlockGrou
     svgClone.setAttribute('width', String(renderW));
     svgClone.setAttribute('height', String(renderH));
     svgClone.removeAttribute('style');
+    // Inject CAD ruler for PDF
+    const rRx = parseFloat(svgEl.getAttribute('data-ruler-rx') || '0');
+    const rRy = parseFloat(svgEl.getAttribute('data-ruler-ry') || '0');
+    const rRw = parseFloat(svgEl.getAttribute('data-ruler-rw') || '0');
+    const rRh = parseFloat(svgEl.getAttribute('data-ruler-rh') || '0');
+    const rWm = parseFloat(svgEl.getAttribute('data-ruler-wm') || '0');
+    const rHm = parseFloat(svgEl.getAttribute('data-ruler-hm') || '0');
+    const rSc = parseFloat(svgEl.getAttribute('data-ruler-scale') || '0');
+    if (rRw > 0 && rRh > 0) injectCadRulerIntoSvg(svgClone, rRx, rRy, rRw, rRh, rWm, rHm, rSc);
     const svgData = new XMLSerializer().serializeToString(svgClone);
     const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
     const url = URL.createObjectURL(svgBlob);

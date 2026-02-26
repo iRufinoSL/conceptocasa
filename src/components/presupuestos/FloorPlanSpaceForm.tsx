@@ -18,7 +18,7 @@ interface FloorPlanSpaceFormProps {
   coordCol?: number;
   coordRow?: number;
   floorName?: string;
-  onUpdateRoom: (data: { name?: string; width?: number; length?: number; hasFloor?: boolean; hasCeiling?: boolean }) => void | Promise<void>;
+  onUpdateRoom: (data: { name?: string; width?: number; length?: number; height?: number; extWallThickness?: number | null; intWallThickness?: number | null; hasFloor?: boolean; hasCeiling?: boolean }) => void | Promise<void>;
   onUpdateWall: (wallId: string, data: { wallType?: WallType }) => void | Promise<void>;
   onUpdateWallSegmentType?: (wallId: string, segmentIndex: number, segmentType: WallType) => void | Promise<void>;
   onAddOpening?: (wallId: string, type: string, width: number, height: number, sillHeight?: number, positionX?: number) => Promise<void>;
@@ -53,6 +53,9 @@ export function FloorPlanSpaceForm({ room, allRooms, planData, coordCol, coordRo
   const [localName, setLocalName] = useState(room.name);
   const [localWidth, setLocalWidth] = useState(toDisplay(room.width));
   const [localLength, setLocalLength] = useState(toDisplay(room.length));
+  const [localHeight, setLocalHeight] = useState(room.height != null ? String(room.height) : '');
+  const [localExtWT, setLocalExtWT] = useState(room.extWallThickness != null ? String(room.extWallThickness) : '');
+  const [localIntWT, setLocalIntWT] = useState(room.intWallThickness != null ? String(room.intWallThickness) : '');
   const [localHasFloor, setLocalHasFloor] = useState(room.hasFloor !== false);
   const [localHasCeiling, setLocalHasCeiling] = useState(room.hasCeiling !== false);
   const [localCoord, setLocalCoord] = useState(coordCol && coordRow ? formatCoord(coordCol, coordRow) : '');
@@ -88,6 +91,9 @@ export function FloorPlanSpaceForm({ room, allRooms, planData, coordCol, coordRo
     setLocalName(room.name);
     setLocalWidth(toDisplay(room.width));
     setLocalLength(toDisplay(room.length));
+    setLocalHeight(room.height != null ? String(room.height) : '');
+    setLocalExtWT(room.extWallThickness != null ? String(room.extWallThickness) : '');
+    setLocalIntWT(room.intWallThickness != null ? String(room.intWallThickness) : '');
     setLocalHasFloor(room.hasFloor !== false);
     setLocalHasCeiling(room.hasCeiling !== false);
     setLocalCoord(coordCol && coordRow ? formatCoord(coordCol, coordRow) : '');
@@ -117,11 +123,18 @@ export function FloorPlanSpaceForm({ room, allRooms, planData, coordCol, coordRo
   const effectiveWidth = isBlockMode ? blocksToMeters(parsedWidth, blockL) : parsedWidth;
   const effectiveLength = isBlockMode ? blocksToMeters(parsedLength, blockL) : parsedLength;
 
+  const parsedHeight = localHeight ? parseFloat(localHeight) : undefined;
+  const parsedExtWT = localExtWT ? parseFloat(localExtWT) : undefined;
+  const parsedIntWT = localIntWT ? parseFloat(localIntWT) : undefined;
+
   // Detect if anything changed
   const roomChanged =
     localName !== room.name ||
     effectiveWidth !== room.width ||
     effectiveLength !== room.length ||
+    parsedHeight !== room.height ||
+    parsedExtWT !== room.extWallThickness ||
+    parsedIntWT !== room.intWallThickness ||
     localHasFloor !== (room.hasFloor !== false) ||
     localHasCeiling !== (room.hasCeiling !== false);
 
@@ -143,9 +156,12 @@ export function FloorPlanSpaceForm({ room, allRooms, planData, coordCol, coordRo
       if (localName !== room.name) updates.name = localName;
       if (effectiveWidth !== room.width) updates.width = effectiveWidth;
       if (effectiveLength !== room.length) updates.length = effectiveLength;
+      if (parsedHeight !== room.height) updates.height = parsedHeight;
+      if (parsedExtWT !== room.extWallThickness) updates.extWallThickness = parsedExtWT ?? null;
+      if (parsedIntWT !== room.intWallThickness) updates.intWallThickness = parsedIntWT ?? null;
       if (localHasFloor !== (room.hasFloor !== false)) updates.hasFloor = localHasFloor;
       if (localHasCeiling !== (room.hasCeiling !== false)) updates.hasCeiling = localHasCeiling;
-      await onUpdateRoom(updates as { name?: string; width?: number; length?: number; hasFloor?: boolean; hasCeiling?: boolean });
+      await onUpdateRoom(updates as any);
     }
 
     // Save wall changes
@@ -263,6 +279,52 @@ export function FloorPlanSpaceForm({ room, allRooms, planData, coordCol, coordRo
         <div className="text-xs text-muted-foreground font-medium">
           Superficie: {m2.toFixed(isBlockMode ? 3 : 1)} m²
           {isBlockMode && ` (${parsedWidth}×${parsedLength} bloques)`}
+        </div>
+
+        {/* Height & Wall Thickness overrides */}
+        <div className="border-t pt-3">
+          <Label className="text-xs font-semibold mb-2 block">Volumen — Propiedades individuales</Label>
+          <div className="grid grid-cols-3 gap-2">
+            <div>
+              <Label className="text-[10px]">Altura (m)</Label>
+              <Input
+                type="number" step="0.01" value={localHeight}
+                onChange={e => setLocalHeight(e.target.value)}
+                placeholder={String(planData.defaultHeight)}
+                disabled={saving}
+                className="h-8 text-xs"
+              />
+              <span className="text-[9px] text-muted-foreground">
+                {localHeight ? '' : `General: ${planData.defaultHeight}m`}
+              </span>
+            </div>
+            <div>
+              <Label className="text-[10px]">Esp. ext (m)</Label>
+              <Input
+                type="number" step="0.01" value={localExtWT}
+                onChange={e => setLocalExtWT(e.target.value)}
+                placeholder={String(planData.externalWallThickness)}
+                disabled={saving}
+                className="h-8 text-xs"
+              />
+              <span className="text-[9px] text-muted-foreground">
+                {localExtWT ? '' : `General: ${planData.externalWallThickness}m`}
+              </span>
+            </div>
+            <div>
+              <Label className="text-[10px]">Esp. int (m)</Label>
+              <Input
+                type="number" step="0.01" value={localIntWT}
+                onChange={e => setLocalIntWT(e.target.value)}
+                placeholder={String(planData.internalWallThickness)}
+                disabled={saving}
+                className="h-8 text-xs"
+              />
+              <span className="text-[9px] text-muted-foreground">
+                {localIntWT ? '' : `General: ${planData.internalWallThickness}m`}
+              </span>
+            </div>
+          </div>
         </div>
 
         {/* Floor & Ceiling */}

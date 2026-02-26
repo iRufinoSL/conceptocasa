@@ -1939,12 +1939,27 @@ export function computeCompositeWallsFromCorners(
     return '';
   })();
 
-  // Main ABCD corners (interior room boundary coordinates) — with full coordinate ID
+  // Main ABCD corners — use STORED user corners if they exist (user-editable perimeter),
+  // otherwise fall back to the computed bounding box of all rooms.
+  const storedMainCorners = userCorners.filter(c => (c as any).isMain);
+  const getStoredMain = (pos: string, defX: number, defY: number, defSide: 'top' | 'right' | 'bottom' | 'left') => {
+    const found = storedMainCorners.find(c => (c as any).mainPosition === pos);
+    if (found) {
+      const cx = (found.col - 1) * cellSizeM;
+      const cy = (found.row - 1) * cellSizeM;
+      return { x: cx, y: cy };
+    }
+    return { x: defX, y: defY };
+  };
+  const mainA = getStoredMain('TL', minX, minY, 'top');
+  const mainB = getStoredMain('TR', maxX, minY, 'right');
+  const mainC = getStoredMain('BR', maxX, maxY, 'bottom');
+  const mainD = getStoredMain('BL', minX, maxY, 'left');
   const mainCorners: Array<{ label: string; x: number; y: number; side: 'top' | 'right' | 'bottom' | 'left' }> = [
-    { label: `${levelPrefix}A`, x: minX, y: minY, side: 'top' },
-    { label: `${levelPrefix}B`, x: maxX, y: minY, side: 'right' },
-    { label: `${levelPrefix}C`, x: maxX, y: maxY, side: 'bottom' },
-    { label: `${levelPrefix}D`, x: minX, y: maxY, side: 'left' },
+    { label: `${levelPrefix}A`, x: mainA.x, y: mainA.y, side: 'top' },
+    { label: `${levelPrefix}B`, x: mainB.x, y: mainB.y, side: 'right' },
+    { label: `${levelPrefix}C`, x: mainC.x, y: mainC.y, side: 'bottom' },
+    { label: `${levelPrefix}D`, x: mainD.x, y: mainD.y, side: 'left' },
   ];
 
   // Compute grid bounding box (exclusive, matching FloorPlanGridView)

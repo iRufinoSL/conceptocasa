@@ -655,6 +655,29 @@ export function FloorPlanGridView({
             );
           })}
 
+          {/* Ridge line (viga cumbrera) — red dashed vertical line at midpoint of width for dos_aguas roofs */}
+          {roofType === 'dos_aguas' && (() => {
+            const ridgeCol = totalCols / 2;
+            const ridgeLeft = COL_HEADER_W + ridgeCol * CS;
+            return (
+              <div
+                className="absolute pointer-events-none"
+                style={{
+                  left: ridgeLeft - 0.6,
+                  top: ROW_HEADER_H,
+                  width: 0,
+                  height: totalRows * CS,
+                  borderLeft: '1.2px dashed rgba(220, 38, 38, 0.45)',
+                  zIndex: 20,
+                }}
+              >
+                <div className="absolute -top-4 left-1 text-[7px] font-semibold whitespace-nowrap" style={{ color: 'rgba(220, 38, 38, 0.6)' }}>
+                  Cumbrera
+                </div>
+              </div>
+            );
+          })()}
+
           {/* Ghost underlay: faint outlines of the floor below */}
           {ghostRooms.map(room => {
             const startCol = Math.round(room.posX / cellSizeM) + 1;

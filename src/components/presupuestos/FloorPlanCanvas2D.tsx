@@ -429,6 +429,25 @@ export function FloorPlanCanvas2D({
       <rect x={0} y={0} width={plan.width * SCALE} height={plan.length * SCALE}
         stroke="#d1d5db" strokeWidth={1} strokeDasharray="8 4" fill="none" />
 
+      {/* Ridge line (viga cumbrera) — red dashed line at midpoint of width for dos_aguas roofs */}
+      {plan.roofType === 'dos_aguas' && (() => {
+        const ridgeX = (plan.width / 2) * SCALE;
+        const extT = plan.externalWallThickness;
+        const overhang = plan.roofOverhang || 0;
+        const y1 = -(extT + overhang) * SCALE;
+        const y2 = (plan.length + extT + overhang) * SCALE;
+        return (
+          <g pointerEvents="none">
+            <line x1={ridgeX} y1={y1} x2={ridgeX} y2={y2}
+              stroke="#dc2626" strokeWidth={1.2} strokeDasharray="8 4" opacity={0.45} />
+            <text x={ridgeX + 6} y={y1 + 14}
+              fontSize={7} fill="#dc2626" opacity={0.6} fontWeight="600">
+              Cumbrera
+            </text>
+          </g>
+        );
+      })()}
+
       {/* External perimeter with corner-based labels */}
       {perimeterDims && (
         <>

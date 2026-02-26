@@ -602,15 +602,16 @@ export function FloorPlanGridView({
           {Array.from({ length: totalCols }, (_, ci) => (
             <div
               key={`ch-${ci}`}
-              className="absolute text-[8px] font-bold text-blue-600 dark:text-blue-400 text-center leading-none"
+              className="absolute text-[8px] font-bold text-blue-600 dark:text-blue-400 leading-none"
               style={{
                 left: COL_HEADER_W + ci * CS,
                 top: 2,
                 width: CS,
                 height: ROW_HEADER_H - 20,
                 display: 'flex',
-                alignItems: 'flex-start',
-                justifyContent: 'center',
+                alignItems: 'flex-end',
+                justifyContent: 'flex-start',
+                paddingLeft: 1,
               }}
             >
               {colToLabel(ci + 1, levelPrefix)}
@@ -625,11 +626,12 @@ export function FloorPlanGridView({
               style={{
                 left: 2,
                 top: ROW_HEADER_H + ri * CS,
-                width: COL_HEADER_W - 46,
+                width: COL_HEADER_W - 10,
                 height: CS,
                 display: 'flex',
-                alignItems: 'center',
+                alignItems: 'flex-start',
                 justifyContent: 'flex-end',
+                paddingTop: 1,
               }}
             >
               {rowToLabel(ri + 1, levelPrefix)}

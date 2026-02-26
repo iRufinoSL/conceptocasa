@@ -32,8 +32,8 @@ export function FloorPlanPdfExport({ budgetName, floorName, containerRef }: Floo
       // A4 dimensions in mm
       const A4_W = orientation === 'landscape' ? 297 : 210;
       const A4_H = orientation === 'landscape' ? 210 : 297;
-      const MARGIN = 10; // 1cm margins
-      const HEADER_H = 14; // header height in mm
+      const MARGIN = 5; // 5mm margins for maximum size
+      const HEADER_H = 10; // compact header
 
       const drawW = A4_W - 2 * MARGIN;
       const drawH = A4_H - 2 * MARGIN - HEADER_H;
@@ -81,12 +81,9 @@ export function FloorPlanPdfExport({ budgetName, floorName, containerRef }: Floo
       });
 
       // Header
-      doc.setFontSize(13);
+      doc.setFontSize(11);
       doc.setFont('helvetica', 'bold');
-      doc.text(`Presupuesto: ${budgetName}`, MARGIN, MARGIN + 6);
-      doc.setFontSize(10);
-      doc.setFont('helvetica', 'normal');
-      doc.text(`Nivel: ${floorName}`, MARGIN, MARGIN + 12);
+      doc.text(`${budgetName}  —  ${floorName}`, MARGIN, MARGIN + 6);
 
       // Separator line
       doc.setDrawColor(180, 180, 180);
@@ -137,7 +134,7 @@ export function FloorPlanPdfExport({ budgetName, floorName, containerRef }: Floo
                 </div>
               </RadioGroup>
             </div>
-            <p className="text-xs text-muted-foreground">Formato: DIN A4 · Márgenes: 1 cm por lado</p>
+            <p className="text-xs text-muted-foreground">Formato: DIN A4 · Márgenes: 5 mm · Tamaño máximo</p>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>

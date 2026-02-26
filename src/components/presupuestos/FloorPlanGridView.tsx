@@ -1240,6 +1240,52 @@ export function FloorPlanGridView({
             vDimsMulti(leftAll, leftBaseX, 'dl', -1);
             vDimsMulti(rightAll, COL_HEADER_W + (maxCol - 1) * CS + CS + DIM_OFF_OUTER, 'dr', 1);
 
+            // ─── Internal dimension lines: between any non-main corners sharing a row or column ───
+            const allCustom = nonMainCorners.filter(c => !c.isEave);
+            const INTERNAL_DIM_OFF = 8; // offset inside the grid to avoid overlapping room labels
+            // Horizontal internal dims: group by row
+            const byRow = new Map<number, typeof allCustom>();
+            allCustom.forEach(c => {
+              const arr = byRow.get(c.row) || [];
+              arr.push(c);
+              byRow.set(c.row, arr);
+            });
+            byRow.forEach((pts, row) => {
+              if (pts.length < 2) return;
+              const sorted = [...pts].sort((a, b) => a.col - b.col);
+              const y = ROW_HEADER_H + (row - 1) * CS + INTERNAL_DIM_OFF;
+              for (let i = 0; i < sorted.length - 1; i++) {
+                const x1 = COL_HEADER_W + (sorted[i].col - 1) * CS;
+                const x2 = COL_HEADER_W + (sorted[i + 1].col - 1) * CS;
+                const blocks = Math.round(Math.abs(x2 - x1) / CS);
+                if (blocks > 0) {
+                  const lbl = `${sorted[i].label}-${sorted[i + 1].label} ${fmtDist(blocks)}`;
+                  hDimLine(Math.min(x1, x2), Math.max(x1, x2), y, lbl, `di-h-${row}-${i}`);
+                }
+              }
+            });
+            // Vertical internal dims: group by col
+            const byCol = new Map<number, typeof allCustom>();
+            allCustom.forEach(c => {
+              const arr = byCol.get(c.col) || [];
+              arr.push(c);
+              byCol.set(c.col, arr);
+            });
+            byCol.forEach((pts, col) => {
+              if (pts.length < 2) return;
+              const sorted = [...pts].sort((a, b) => a.row - b.row);
+              const x = COL_HEADER_W + (col - 1) * CS + INTERNAL_DIM_OFF;
+              for (let i = 0; i < sorted.length - 1; i++) {
+                const y1 = ROW_HEADER_H + (sorted[i].row - 1) * CS;
+                const y2 = ROW_HEADER_H + (sorted[i + 1].row - 1) * CS;
+                const blocks = Math.round(Math.abs(y2 - y1) / CS);
+                if (blocks > 0) {
+                  const lbl = `${sorted[i].label}-${sorted[i + 1].label} ${fmtDist(blocks)}`;
+                  vDimLine(Math.min(y1, y2), Math.max(y1, y2), x, lbl, `di-v-${col}-${i}`);
+                }
+              }
+            });
+
             return (
               <svg className="absolute inset-0 pointer-events-none" style={{
                 width: COL_HEADER_W + totalCols * CS + 200,

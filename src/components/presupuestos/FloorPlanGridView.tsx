@@ -582,9 +582,9 @@ export function FloorPlanGridView({
           className="relative"
           style={{
             width: COL_HEADER_W + totalCols * CS + 200,
-            height: ROW_HEADER_H + totalRows * CS + 120,
-            marginLeft: COL_HEADER_W + 40,
-            marginTop: ROW_HEADER_H + 20,
+            height: ROW_HEADER_H + totalRows * CS + 160,
+            marginLeft: COL_HEADER_W + 80,
+            marginTop: ROW_HEADER_H + 60,
           }}
         >
           {/* Column headers — separated ~10px from grid edge for readability */}
@@ -997,7 +997,7 @@ export function FloorPlanGridView({
             return (
               <svg className="absolute inset-0 pointer-events-none" style={{
                 width: COL_HEADER_W + totalCols * CS + 200,
-                height: ROW_HEADER_H + totalRows * CS + 120,
+                height: ROW_HEADER_H + totalRows * CS + 160,
                 zIndex: 29,
                 overflow: 'visible',
               }}>
@@ -1134,7 +1134,7 @@ export function FloorPlanGridView({
             ].sort((a, b) => a.row - b.row);
 
             const dimLines: React.ReactNode[] = [];
-            const DIM_OFF_OUTER = 34;
+            const DIM_OFF_OUTER = 16;
             const LEVEL_STEP = 22; // vertical gap between dimension line levels
             const fmtDist = (blocks: number) => {
               const mm = blocks * blockLengthMm;
@@ -1298,7 +1298,7 @@ export function FloorPlanGridView({
             return (
               <svg className="absolute inset-0 pointer-events-none" style={{
                 width: COL_HEADER_W + totalCols * CS + 200,
-                height: ROW_HEADER_H + totalRows * CS + 120,
+                height: ROW_HEADER_H + totalRows * CS + 160,
                 zIndex: 28,
                 overflow: 'visible',
               }}>
@@ -1806,7 +1806,7 @@ export function FloorPlanGridView({
             </div>
           </div>
           <div className="flex-1 overflow-auto p-4">
-            <div ref={printGridRef} style={{ background: '#ffffff', display: 'inline-block', padding: '8px' }}>
+            <div ref={printGridRef} style={{ background: '#ffffff', display: 'inline-block', padding: '24px' }}>
               {(() => {
                 const availW = window.innerWidth - 200;
                 const availH = window.innerHeight - 160;

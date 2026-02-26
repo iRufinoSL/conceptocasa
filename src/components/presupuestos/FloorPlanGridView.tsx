@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Plus, Link, Unlink, Undo2, Expand, Shrink, MapPin, Printer, Ruler, Trash2, Check, RefreshCw, RotateCw } from 'lucide-react';
+import { Plus, Link, Unlink, Undo2, Expand, Shrink, MapPin, Printer, Ruler, Trash2, Check, RefreshCw, RotateCw, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Move } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
@@ -49,6 +49,8 @@ interface FloorPlanGridViewProps {
   defaultHeight?: number;
   /** Callback to recalculate wall segments */
   onRecalculateSegments?: () => Promise<void>;
+  /** Callback to manually shift the entire grid by N cols/rows */
+  onShiftGrid?: (deltaCol: number, deltaRow: number) => Promise<void>;
 }
 
 export interface PositionedRoom {
@@ -199,6 +201,7 @@ export function FloorPlanGridView({
   customCorners: externalCustomCorners, onCustomCornersChange,
   roofType, roofSlopePercent = 20, roofOverhang = 0.6, defaultHeight = 2.5,
   onRecalculateSegments,
+  onShiftGrid,
 }: FloorPlanGridViewProps) {
   // Cell size in meters: 1m for 'metros', blockLengthMm/1000 for 'bloque'
   const cellSizeM = scaleMode === 'bloque' ? blockLengthMm / 1000 : 1;
@@ -1308,6 +1311,23 @@ export function FloorPlanGridView({
               </Button>
             )}
           </div>
+          {onShiftGrid && (
+            <div className="flex items-center gap-0.5" title="Desplazar cuadrícula completa">
+              <Move className="h-3.5 w-3.5 text-muted-foreground" />
+              <Button variant="outline" size="sm" className="h-7 w-7 p-0" onClick={() => onShiftGrid(0, -1)} disabled={saving} title="Desplazar arriba">
+                <ArrowUp className="h-3 w-3" />
+              </Button>
+              <Button variant="outline" size="sm" className="h-7 w-7 p-0" onClick={() => onShiftGrid(0, 1)} disabled={saving} title="Desplazar abajo">
+                <ArrowDown className="h-3 w-3" />
+              </Button>
+              <Button variant="outline" size="sm" className="h-7 w-7 p-0" onClick={() => onShiftGrid(-1, 0)} disabled={saving} title="Desplazar izquierda">
+                <ArrowLeft className="h-3 w-3" />
+              </Button>
+              <Button variant="outline" size="sm" className="h-7 w-7 p-0" onClick={() => onShiftGrid(1, 0)} disabled={saving} title="Desplazar derecha">
+                <ArrowRight className="h-3 w-3" />
+              </Button>
+            </div>
+          )}
           <Button
             variant="outline"
             size="sm"

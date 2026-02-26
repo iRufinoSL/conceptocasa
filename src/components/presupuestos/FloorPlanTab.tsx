@@ -731,7 +731,7 @@ export function FloorPlanTab({ budgetId, budgetName = '', isAdmin }: FloorPlanTa
     generateFromTemplate, deleteFloorPlan, groupRooms, ungroupRooms,
     undoLastChange, undoCount,
     addFloor, updateFloor, deleteFloor,
-    addBlockGroup, deleteBlockGroup, updateBlockGroup,
+    addBlockGroup, deleteBlockGroup, updateBlockGroup, shiftGrid,
   } = useFloorPlan(budgetId);
 
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
@@ -1162,6 +1162,7 @@ export function FloorPlanTab({ budgetId, budgetName = '', isAdmin }: FloorPlanTa
                 await refetch();
                 toast.success('Segmentos recalculados');
               }}
+              onShiftGrid={shiftGrid}
             />
           </div>
           <div className="space-y-4">

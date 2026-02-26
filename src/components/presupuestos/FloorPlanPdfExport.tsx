@@ -38,51 +38,58 @@ export function FloorPlanPdfExport({ budgetName, floorName, containerRef }: Floo
       const drawW = A4_W - 2 * MARGIN;
       const drawH = A4_H - 2 * MARGIN - HEADER_H;
 
-      // Temporarily set overflow visible and expand container to full scroll size
-      const scrollEl = container.querySelector('.overflow-auto') as HTMLElement | null;
-      const origOverflow = scrollEl ? scrollEl.style.overflow : '';
-      const origWidth = scrollEl ? scrollEl.style.width : '';
-      const origHeight = scrollEl ? scrollEl.style.height : '';
-      const origMaxHeight = scrollEl ? scrollEl.style.maxHeight : '';
-      if (scrollEl) {
-        scrollEl.style.overflow = 'visible';
-        scrollEl.style.width = scrollEl.scrollWidth + 'px';
-        scrollEl.style.height = scrollEl.scrollHeight + 'px';
-        scrollEl.style.maxHeight = 'none';
-      }
+      // The containerRef IS the .overflow-auto element itself.
+      // Find the inner content div (the relative-positioned child with the actual grid).
+      const innerContent = container.querySelector(':scope > div') as HTMLElement | null;
 
-      // Also expand the outer container if it constrains size
+      // Save original styles
       const origContainerOverflow = container.style.overflow;
       const origContainerWidth = container.style.width;
       const origContainerHeight = container.style.height;
       const origContainerMaxHeight = container.style.maxHeight;
+      const origContainerPosition = container.style.position;
+
+      // Get the full content dimensions BEFORE modifying styles
+      const fullW = container.scrollWidth;
+      const fullH = container.scrollHeight;
+
+      // Expand container to full content size so html2canvas can see everything
       container.style.overflow = 'visible';
-      container.style.width = 'auto';
-      container.style.height = 'auto';
+      container.style.width = fullW + 'px';
+      container.style.height = fullH + 'px';
       container.style.maxHeight = 'none';
+      container.style.position = 'relative';
+
+      // Also walk up parents and temporarily remove overflow:hidden/auto constraints
+      const parentOverrides: { el: HTMLElement; orig: string }[] = [];
+      let parent = container.parentElement;
+      for (let i = 0; i < 5 && parent; i++) {
+        const ov = getComputedStyle(parent).overflow;
+        if (ov === 'hidden' || ov === 'auto' || ov === 'scroll') {
+          parentOverrides.push({ el: parent, orig: parent.style.overflow });
+          parent.style.overflow = 'visible';
+        }
+        parent = parent.parentElement;
+      }
 
       const canvas = await html2canvas(container, {
         scale: 3,
         useCORS: true,
         backgroundColor: '#ffffff',
         logging: false,
-        width: scrollEl ? scrollEl.scrollWidth : container.scrollWidth,
-        height: scrollEl ? scrollEl.scrollHeight : container.scrollHeight,
-        windowWidth: (scrollEl?.scrollWidth || container.scrollWidth) + 100,
-        windowHeight: (scrollEl?.scrollHeight || container.scrollHeight) + 100,
+        width: fullW,
+        height: fullH,
+        windowWidth: fullW + 200,
+        windowHeight: fullH + 200,
       });
 
-      // Restore
-      if (scrollEl) {
-        scrollEl.style.overflow = origOverflow;
-        scrollEl.style.width = origWidth;
-        scrollEl.style.height = origHeight;
-        scrollEl.style.maxHeight = origMaxHeight;
-      }
+      // Restore all styles
       container.style.overflow = origContainerOverflow;
       container.style.width = origContainerWidth;
       container.style.height = origContainerHeight;
       container.style.maxHeight = origContainerMaxHeight;
+      container.style.position = origContainerPosition;
+      parentOverrides.forEach(({ el, orig }) => { el.style.overflow = orig; });
 
       // Auto-crop whitespace: scan canvas pixels to find the bounding box of actual content
       const ctx = canvas.getContext('2d');

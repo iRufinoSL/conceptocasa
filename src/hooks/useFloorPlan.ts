@@ -380,6 +380,57 @@ export function useFloorPlan(budgetId: string) {
     return Math.round(value / cellSizeM) * cellSizeM;
   };
 
+  /**
+   * Global grid shift: when any room ends up with negative pos_x or pos_y,
+   * shift ALL rooms and custom_corners so every coordinate stays ≥ 0.
+   * This avoids negative coordinate notation entirely.
+   */
+  const shiftAllRoomsIfNeeded = async (allCurrentRooms: Array<{ id: string; posX: number; posY: number }>, pendingPosX?: number, pendingPosY?: number) => {
+    // Collect all positions including any pending new position
+    let minX = Math.min(...allCurrentRooms.map(r => r.posX));
+    let minY = Math.min(...allCurrentRooms.map(r => r.posY));
+    if (pendingPosX !== undefined) minX = Math.min(minX, pendingPosX);
+    if (pendingPosY !== undefined) minY = Math.min(minY, pendingPosY);
+
+    const shiftX = minX < 0 ? Math.abs(minX) : 0;
+    const shiftY = minY < 0 ? Math.abs(minY) : 0;
+
+    if (shiftX === 0 && shiftY === 0) return { shiftX: 0, shiftY: 0 };
+
+    // Shift all existing rooms in DB
+    for (const room of allCurrentRooms) {
+      if (room.posX < 0 || room.posY < 0 || shiftX > 0 || shiftY > 0) {
+        const newX = Math.round((room.posX + shiftX) * 1000) / 1000;
+        const newY = Math.round((room.posY + shiftY) * 1000) / 1000;
+        await supabase
+          .from('budget_floor_plan_rooms')
+          .update({ pos_x: newX, pos_y: newY } as any)
+          .eq('id', room.id);
+      }
+    }
+
+    // Shift custom corners
+    if (customCorners.length > 0) {
+      const cellSizeM = floorPlan ? (floorPlan.scale_mode === 'bloque' ? (floorPlan.block_length_mm || 625) / 1000 : 1) : 1;
+      const colShift = cellSizeM > 0 ? Math.round(shiftX / cellSizeM) : 0;
+      const rowShift = cellSizeM > 0 ? Math.round(shiftY / cellSizeM) : 0;
+      if (colShift > 0 || rowShift > 0) {
+        const shiftedCorners = customCorners.map(c => ({
+          ...c,
+          col: c.col + colShift,
+          row: c.row + rowShift,
+        }));
+        await supabase
+          .from('budget_floor_plans')
+          .update({ custom_corners: shiftedCorners } as any)
+          .eq('id', floorPlan!.id);
+      }
+    }
+
+    console.log(`[SHIFT] Global grid shifted by +${shiftX}m X, +${shiftY}m Y`);
+    return { shiftX, shiftY };
+  };
+
   const addRoom = async (name: string, width: number, length: number, floorId?: string, gridCol?: number, gridRow?: number) => {
     if (!floorPlan) return;
     setSaving(true);
@@ -397,6 +448,14 @@ export function useFloorPlan(budgetId: string) {
       // Snap dimensions to exact grid multiples so walls align with cell boundaries
       const snappedWidth = snapToGrid(width, cellSizeM);
       const snappedLength = snapToGrid(length, cellSizeM);
+
+      // If the new position would be negative, shift everything first
+      if (posX < 0 && posX !== -1 || posY < 0 && posY !== -1) {
+        const currentRoomPositions = rooms.map(r => ({ id: r.id, posX: r.posX, posY: r.posY }));
+        const { shiftX, shiftY } = await shiftAllRoomsIfNeeded(currentRoomPositions, posX, posY);
+        posX += shiftX;
+        posY += shiftY;
+      }
 
       const { data: room, error } = await supabase
         .from('budget_floor_plan_rooms')
@@ -443,13 +502,28 @@ export function useFloorPlan(budgetId: string) {
     setSaving(true);
     try {
       const cellSizeM = floorPlan ? (floorPlan.scale_mode === 'bloque' ? (floorPlan.block_length_mm || 625) / 1000 : 1) : 1;
+      let finalPosX = data.posX !== undefined ? snapToGrid(data.posX, cellSizeM) : undefined;
+      let finalPosY = data.posY !== undefined ? snapToGrid(data.posY, cellSizeM) : undefined;
+
+      // Check if the new position would result in negative coords and shift globally if so
+      if ((finalPosX !== undefined && finalPosX < 0) || (finalPosY !== undefined && finalPosY < 0)) {
+        const otherRooms = rooms.filter(r => r.id !== roomId).map(r => ({ id: r.id, posX: r.posX, posY: r.posY }));
+        const currentRoom = rooms.find(r => r.id === roomId);
+        const pendingX = finalPosX ?? currentRoom?.posX ?? 0;
+        const pendingY = finalPosY ?? currentRoom?.posY ?? 0;
+        const allPositions = [...otherRooms, { id: roomId, posX: pendingX, posY: pendingY }];
+        const { shiftX, shiftY } = await shiftAllRoomsIfNeeded(otherRooms, pendingX, pendingY);
+        if (finalPosX !== undefined) finalPosX += shiftX;
+        if (finalPosY !== undefined) finalPosY += shiftY;
+      }
+
       const updates: any = {};
       if (data.name !== undefined) updates.name = data.name;
       if (data.width !== undefined) updates.width = snapToGrid(data.width, cellSizeM);
       if (data.length !== undefined) updates.length = snapToGrid(data.length, cellSizeM);
       if (data.height !== undefined) updates.height = data.height;
-      if (data.posX !== undefined) updates.pos_x = snapToGrid(data.posX, cellSizeM);
-      if (data.posY !== undefined) updates.pos_y = snapToGrid(data.posY, cellSizeM);
+      if (finalPosX !== undefined) updates.pos_x = finalPosX;
+      if (finalPosY !== undefined) updates.pos_y = finalPosY;
       if (data.hasFloor !== undefined) updates.has_floor = data.hasFloor;
       if (data.hasCeiling !== undefined) updates.has_ceiling = data.hasCeiling;
       if (data.hasRoof !== undefined) updates.has_roof = data.hasRoof;

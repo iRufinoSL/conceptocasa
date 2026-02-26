@@ -1240,20 +1240,24 @@ export function FloorPlanGridView({
             vDimsMulti(leftAll, leftBaseX, 'dl', -1);
             vDimsMulti(rightAll, COL_HEADER_W + (maxCol - 1) * CS + CS + DIM_OFF_OUTER, 'dr', 1);
 
-            // ─── Internal dimension lines: between any non-main corners sharing a row or column ───
+            // ─── Internal coordinate dimensions: rendered OUTSIDE the grid as additional levels ───
+            // Group internal coords by shared row (horizontal) or shared col (vertical)
             const allCustom = nonMainCorners.filter(c => !c.isEave);
-            const INTERNAL_DIM_OFF = 8; // offset inside the grid to avoid overlapping room labels
-            // Horizontal internal dims: group by row
+            const INTERNAL_LEVEL_BASE = 2; // start at level 2 (after perimeter levels 0-1)
+
+            // Horizontal internal dims (shared row) → render on bottom edge as extra levels
             const byRow = new Map<number, typeof allCustom>();
             allCustom.forEach(c => {
               const arr = byRow.get(c.row) || [];
               arr.push(c);
               byRow.set(c.row, arr);
             });
+            let hInternalLevel = 0;
             byRow.forEach((pts, row) => {
               if (pts.length < 2) return;
               const sorted = [...pts].sort((a, b) => a.col - b.col);
-              const y = ROW_HEADER_H + (row - 1) * CS + INTERNAL_DIM_OFF;
+              const baseYBottom = ROW_HEADER_H + (maxRow - 1) * CS + CS + DIM_OFF_OUTER;
+              const y = baseYBottom + (INTERNAL_LEVEL_BASE + hInternalLevel) * LEVEL_STEP;
               for (let i = 0; i < sorted.length - 1; i++) {
                 const x1 = COL_HEADER_W + (sorted[i].col - 1) * CS;
                 const x2 = COL_HEADER_W + (sorted[i + 1].col - 1) * CS;
@@ -1263,18 +1267,22 @@ export function FloorPlanGridView({
                   hDimLine(Math.min(x1, x2), Math.max(x1, x2), y, lbl, `di-h-${row}-${i}`);
                 }
               }
+              hInternalLevel++;
             });
-            // Vertical internal dims: group by col
+
+            // Vertical internal dims (shared col) → render on right edge as extra levels
             const byCol = new Map<number, typeof allCustom>();
             allCustom.forEach(c => {
               const arr = byCol.get(c.col) || [];
               arr.push(c);
               byCol.set(c.col, arr);
             });
+            let vInternalLevel = 0;
             byCol.forEach((pts, col) => {
               if (pts.length < 2) return;
               const sorted = [...pts].sort((a, b) => a.row - b.row);
-              const x = COL_HEADER_W + (col - 1) * CS + INTERNAL_DIM_OFF;
+              const baseXRight = COL_HEADER_W + (maxCol - 1) * CS + CS + DIM_OFF_OUTER;
+              const x = baseXRight + (INTERNAL_LEVEL_BASE + vInternalLevel) * LEVEL_STEP;
               for (let i = 0; i < sorted.length - 1; i++) {
                 const y1 = ROW_HEADER_H + (sorted[i].row - 1) * CS;
                 const y2 = ROW_HEADER_H + (sorted[i + 1].row - 1) * CS;
@@ -1284,6 +1292,7 @@ export function FloorPlanGridView({
                   vDimLine(Math.min(y1, y2), Math.max(y1, y2), x, lbl, `di-v-${col}-${i}`);
                 }
               }
+              vInternalLevel++;
             });
 
             return (

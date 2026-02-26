@@ -1249,9 +1249,9 @@ export function FloorPlanGridView({
               }
             };
 
-            hDimsMulti(topAll, ROW_HEADER_H + (minRow - 1) * CS - DIM_OFF_INNER, 'dt', -1);
+            hDimsMulti(topAll, ROW_HEADER_H + (minRow - 1) * CS - DIM_OFF_OUTER, 'dt', -1);
             hDimsMulti(bottomAll, ROW_HEADER_H + (maxRow - 1) * CS + CS + DIM_OFF_OUTER, 'db', 1);
-            vDimsMulti(leftAll, COL_HEADER_W + (minCol - 1) * CS - DIM_OFF_INNER, 'dl', -1);
+            vDimsMulti(leftAll, COL_HEADER_W + (minCol - 1) * CS - DIM_OFF_OUTER, 'dl', -1);
             vDimsMulti(rightAll, COL_HEADER_W + (maxCol - 1) * CS + CS + DIM_OFF_OUTER, 'dr', 1);
 
             return (

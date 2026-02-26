@@ -1263,7 +1263,7 @@ export function FloorPlanGridView({
                 const x2 = COL_HEADER_W + (sorted[i + 1].col - 1) * CS;
                 const blocks = Math.round(Math.abs(x2 - x1) / CS);
                 if (blocks > 0) {
-                  const lbl = `${sorted[i].label}-${sorted[i + 1].label} ${fmtDist(blocks)}`;
+                  const lbl = `${sorted[i].label}-${sorted[i + 1].label} / ${fmtDist(blocks)}`;
                   hDimLine(Math.min(x1, x2), Math.max(x1, x2), y, lbl, `di-h-${row}-${i}`);
                 }
               }
@@ -1288,7 +1288,7 @@ export function FloorPlanGridView({
                 const y2 = ROW_HEADER_H + (sorted[i + 1].row - 1) * CS;
                 const blocks = Math.round(Math.abs(y2 - y1) / CS);
                 if (blocks > 0) {
-                  const lbl = `${sorted[i].label}-${sorted[i + 1].label} ${fmtDist(blocks)}`;
+                  const lbl = `${sorted[i].label}-${sorted[i + 1].label} / ${fmtDist(blocks)}`;
                   vDimLine(Math.min(y1, y2), Math.max(y1, y2), x, lbl, `di-v-${col}-${i}`);
                 }
               }

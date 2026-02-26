@@ -1,0 +1,4 @@
+# Memory: features/budget/floor-plan-coordinate-system
+Updated: now
+
+La notación de coordenadas utiliza el formato 'Nivel:ColumnaFila' (ej. '2:0101'), reemplazando el guion por dos puntos. En lugar de coordenadas negativas, el sistema usa **desplazamiento global**: cuando un espacio nuevo (ej. faldón con alero) se posiciona fuera del grid actual (posX o posY < 0), **todas** las habitaciones y custom_corners del floor plan se desplazan automáticamente para que todas las coordenadas queden ≥ 0. Esto se implementa en `shiftAllRoomsIfNeeded()` dentro de `useFloorPlan.ts`, que se invoca tanto desde `addRoom` como `updateRoom`. Lados 'top'/'left' apuntan al inicio de la celda (mm 1) y 'bottom'/'right' al final. Los formularios de edición siempre aparecen con z-index superior para no ser tapados.

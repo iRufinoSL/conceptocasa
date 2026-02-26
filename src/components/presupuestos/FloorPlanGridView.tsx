@@ -1233,17 +1233,30 @@ export function FloorPlanGridView({
 
             // Top/Left: offset past scale headers so dims don't overlap labels
             // Bottom/Right: simple offset (no headers to clear)
+            const DIM_OFF_RIGHT = DIM_OFF_OUTER + 10; // extra separation for right side to avoid overlap with outer line
             const topBaseY = (minRow - 1) * CS - DIM_OFF_OUTER;
             const leftBaseX = (minCol - 1) * CS - DIM_OFF_OUTER;
             hDimsMulti(topAll, topBaseY, 'dt', -1);
             hDimsMulti(bottomAll, ROW_HEADER_H + (maxRow - 1) * CS + CS + DIM_OFF_OUTER, 'db', 1);
             vDimsMulti(leftAll, leftBaseX, 'dl', -1);
-            vDimsMulti(rightAll, COL_HEADER_W + (maxCol - 1) * CS + CS + DIM_OFF_OUTER, 'dr', 1);
+            vDimsMulti(rightAll, COL_HEADER_W + (maxCol - 1) * CS + CS + DIM_OFF_RIGHT, 'dr', 1);
 
             // ─── Internal coordinate dimensions: rendered OUTSIDE the grid as additional levels ───
             // Group internal coords by shared row (horizontal) or shared col (vertical)
             const allCustom = nonMainCorners.filter(c => !c.isEave);
             const INTERNAL_LEVEL_BASE = 2; // start at level 2 (after perimeter levels 0-1)
+
+            // Reuse same getX/getY as perimeter dims for consistent endpoint alignment
+            const getXInternal = (p: { col: number; side?: string }) => {
+              if (p.col === mColB || p.col === mColC) return COL_HEADER_W + (p.col - 1) * CS;
+              if (p.side === 'right') return COL_HEADER_W + p.col * CS;
+              return COL_HEADER_W + (p.col - 1) * CS;
+            };
+            const getYInternal = (p: { row: number; side?: string }) => {
+              if (p.row === mRowD || p.row === mRowC) return ROW_HEADER_H + (p.row - 1) * CS;
+              if (p.side === 'bottom') return ROW_HEADER_H + p.row * CS;
+              return ROW_HEADER_H + (p.row - 1) * CS;
+            };
 
             // Horizontal internal dims (shared row) → render on bottom edge as extra levels
             const byRow = new Map<number, typeof allCustom>();
@@ -1259,8 +1272,8 @@ export function FloorPlanGridView({
               const baseYBottom = ROW_HEADER_H + (maxRow - 1) * CS + CS + DIM_OFF_OUTER;
               const y = baseYBottom + (INTERNAL_LEVEL_BASE + hInternalLevel) * LEVEL_STEP;
               for (let i = 0; i < sorted.length - 1; i++) {
-                const x1 = COL_HEADER_W + (sorted[i].col - 1) * CS;
-                const x2 = COL_HEADER_W + (sorted[i + 1].col - 1) * CS;
+                const x1 = getXInternal(sorted[i]);
+                const x2 = getXInternal(sorted[i + 1]);
                 const blocks = Math.round(Math.abs(x2 - x1) / CS);
                 if (blocks > 0) {
                   const lbl = `${sorted[i].label}-${sorted[i + 1].label} / ${fmtDist(blocks)}`;
@@ -1281,11 +1294,11 @@ export function FloorPlanGridView({
             byCol.forEach((pts, col) => {
               if (pts.length < 2) return;
               const sorted = [...pts].sort((a, b) => a.row - b.row);
-              const baseXRight = COL_HEADER_W + (maxCol - 1) * CS + CS + DIM_OFF_OUTER;
+              const baseXRight = COL_HEADER_W + (maxCol - 1) * CS + CS + DIM_OFF_RIGHT;
               const x = baseXRight + (INTERNAL_LEVEL_BASE + vInternalLevel) * LEVEL_STEP;
               for (let i = 0; i < sorted.length - 1; i++) {
-                const y1 = ROW_HEADER_H + (sorted[i].row - 1) * CS;
-                const y2 = ROW_HEADER_H + (sorted[i + 1].row - 1) * CS;
+                const y1 = getYInternal(sorted[i]);
+                const y2 = getYInternal(sorted[i + 1]);
                 const blocks = Math.round(Math.abs(y2 - y1) / CS);
                 if (blocks > 0) {
                   const lbl = `${sorted[i].label}-${sorted[i + 1].label} / ${fmtDist(blocks)}`;
@@ -1295,11 +1308,17 @@ export function FloorPlanGridView({
               vInternalLevel++;
             });
 
-            // Expand SVG to include negative-coordinate top/left dims so html2canvas captures them
-            const dimExtraTop = DIM_OFF_OUTER + LEVEL_STEP * 2 + 20;
-            const dimExtraLeft = DIM_OFF_OUTER + LEVEL_STEP * 2 + 20;
-            const dimTotalW = COL_HEADER_W + totalCols * CS + 200 + dimExtraLeft;
-            const dimTotalH = ROW_HEADER_H + totalRows * CS + 160 + dimExtraTop;
+            // Expand SVG generously to include ALL dim levels (perimeter + internal)
+            const maxTopLevels = topAll.length >= 3 ? 2 : 1;
+            const maxLeftLevels = leftAll.length >= 3 ? 2 : 1;
+            const maxRightLevels = Math.max(1, vInternalLevel + INTERNAL_LEVEL_BASE + 1);
+            const maxBottomLevels = Math.max(1, hInternalLevel + INTERNAL_LEVEL_BASE + 1);
+            const dimExtraTop = DIM_OFF_OUTER + LEVEL_STEP * (maxTopLevels + 1) + 40;
+            const dimExtraLeft = DIM_OFF_OUTER + LEVEL_STEP * (maxLeftLevels + 1) + 40;
+            const dimExtraRight = DIM_OFF_RIGHT + LEVEL_STEP * (maxRightLevels + 1) + 60;
+            const dimExtraBottom = DIM_OFF_OUTER + LEVEL_STEP * (maxBottomLevels + 1) + 40;
+            const dimTotalW = COL_HEADER_W + totalCols * CS + dimExtraRight + dimExtraLeft;
+            const dimTotalH = ROW_HEADER_H + totalRows * CS + dimExtraBottom + dimExtraTop;
             return (
               <svg className="absolute pointer-events-none" style={{
                 top: -dimExtraTop,

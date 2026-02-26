@@ -42,8 +42,60 @@ Deno.serve(async (req) => {
       });
     }
 
-    const body: SnapshotRequest = await req.json();
-    const { action, budget_id, module } = body;
+    const body = await req.json();
+    
+    // Validate action
+    const validActions = ['create', 'restore', 'list', 'cleanup'];
+    if (!body.action || !validActions.includes(body.action)) {
+      return new Response(JSON.stringify({ error: 'Acción no válida' }), {
+        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Validate budget_id is UUID format
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!body.budget_id || !uuidRegex.test(body.budget_id)) {
+      return new Response(JSON.stringify({ error: 'budget_id inválido' }), {
+        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Validate module
+    const validModules = ['plano', 'actividades', 'recursos'];
+    if (!body.module || !validModules.includes(body.module)) {
+      return new Response(JSON.stringify({ error: 'Módulo no válido' }), {
+        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Validate snapshot_id if provided
+    if (body.snapshot_id && !uuidRegex.test(body.snapshot_id)) {
+      return new Response(JSON.stringify({ error: 'snapshot_id inválido' }), {
+        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Validate label length
+    if (body.label && (typeof body.label !== 'string' || body.label.length > 200)) {
+      return new Response(JSON.stringify({ error: 'Label demasiado largo (máx 200 caracteres)' }), {
+        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Verify user has budget access
+    const { data: budgetAccess } = await userClient
+      .from('presupuestos')
+      .select('id')
+      .eq('id', body.budget_id)
+      .maybeSingle();
+
+    if (!budgetAccess) {
+      return new Response(JSON.stringify({ error: 'Sin acceso al presupuesto' }), {
+        status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    const { action, budget_id, module } = body as SnapshotRequest;
 
     if (action === 'list') {
       const { data, error } = await supabase

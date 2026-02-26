@@ -34,10 +34,19 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    const { text } = await req.json();
+    const body = await req.json();
+    const text = typeof body?.text === 'string' ? body.text.trim() : '';
 
     if (!text) {
       return new Response(JSON.stringify({ error: 'Missing text parameter' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Limit text length to prevent abuse (500 chars max for TTS)
+    if (text.length > 500) {
+      return new Response(JSON.stringify({ error: 'Text too long (max 500 characters)' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });

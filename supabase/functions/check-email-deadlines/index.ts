@@ -33,10 +33,14 @@ const handler = async (req: Request): Promise<Response> => {
   }
 
   try {
-    // Verify caller is the scheduler (must send anon key as Bearer token)
+    // Verify caller is the scheduler
     const authHeader = req.headers.get('Authorization');
+    const schedulerSecret = Deno.env.get('SCHEDULER_SECRET');
     const expectedKey = Deno.env.get('SUPABASE_ANON_KEY');
-    if (!authHeader || authHeader !== `Bearer ${expectedKey}`) {
+    const token = authHeader?.replace('Bearer ', '');
+    const isScheduler = schedulerSecret && token === schedulerSecret;
+    const isAnonKey = expectedKey && token === expectedKey;
+    if (!authHeader || (!isScheduler && !isAnonKey)) {
       return new Response(
         JSON.stringify({ error: 'Unauthorized' }),
         { status: 401, headers: { "Content-Type": "application/json", ...corsHeaders } }

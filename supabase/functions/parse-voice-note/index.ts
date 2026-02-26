@@ -34,7 +34,34 @@ Deno.serve(async (req: Request) => {
     }
 
     const body = await req.json();
-    const { action, text, options } = body;
+    const { action, options } = body;
+    const text = typeof body?.text === 'string' ? body.text.trim().substring(0, 2000) : '';
+
+    // Validate action
+    const validActions = ['parse_date', 'match_contact', 'match_budget', 'pick_from_list'];
+    if (!action || !validActions.includes(action)) {
+      return new Response(JSON.stringify({ error: 'Invalid action. Use: parse_date, match_contact, match_budget, pick_from_list' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    if (!text) {
+      return new Response(JSON.stringify({ error: 'Missing or empty text parameter' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Validate options array if provided
+    if (options !== undefined && options !== null) {
+      if (!Array.isArray(options) || options.length > 50) {
+        return new Response(JSON.stringify({ error: 'Options must be an array with max 50 items' }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+    }
 
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     if (!LOVABLE_API_KEY) {

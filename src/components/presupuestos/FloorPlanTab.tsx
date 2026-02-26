@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Plus, Trash2, Layout, BarChart3, RefreshCw, Save, Wand2, Settings2, Layers, Pencil, Printer, ChevronUp, ChevronDown } from 'lucide-react';
+import { Loader2, Plus, Trash2, Layout, BarChart3, RefreshCw, Save, Wand2, Settings2, Layers, Pencil, Printer, ChevronUp, ChevronDown, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { useFloorPlan } from '@/hooks/useFloorPlan';
 import { FloorPlanGridView } from './FloorPlanGridView';
@@ -1262,6 +1262,11 @@ export function FloorPlanTab({ budgetId, budgetName = '', isAdmin }: FloorPlanTa
           </div>
           {selectedRoom && planData ? (
             <div className="space-y-4">
+              <div className="flex justify-end">
+                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setSelectedRoomId(null)}>
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
               {(() => {
                 const cellSizeM = planData.scaleMode === 'bloque' ? planData.blockLengthMm / 1000 : 1;
                 const isUnplaced = selectedRoom.posX < 0 || selectedRoom.posY < 0;

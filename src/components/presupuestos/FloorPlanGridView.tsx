@@ -655,23 +655,23 @@ export function FloorPlanGridView({
             );
           })}
 
-          {/* Ridge line (viga cumbrera) — red vertical line at midpoint of width for dos_aguas roofs */}
+          {/* Ridge line (viga cumbrera) — horizontal red line at midpoint of rows (from gable to gable) for dos_aguas roofs */}
           {roofType === 'dos_aguas' && (() => {
-            const ridgeCol = totalCols / 2;
-            const ridgeLeft = COL_HEADER_W + ridgeCol * CS;
+            const ridgeRow = totalRows / 2;
+            const ridgeTop = ROW_HEADER_H + ridgeRow * CS;
             return (
               <div
                 className="absolute pointer-events-none"
                 style={{
-                  left: ridgeLeft - 1.25,
-                  top: ROW_HEADER_H - 10,
-                  width: 0,
-                  height: totalRows * CS + 20,
-                  borderLeft: '2.5px dashed #dc2626',
+                  left: COL_HEADER_W - 10,
+                  top: ridgeTop - 1.25,
+                  width: totalCols * CS + 20,
+                  height: 0,
+                  borderTop: '2.5px dashed #dc2626',
                   zIndex: 25,
                 }}
               >
-                <div className="absolute -top-5 left-2 text-[9px] font-bold whitespace-nowrap" style={{ color: '#dc2626' }}>
+                <div className="absolute -top-5 right-1 text-[9px] font-bold whitespace-nowrap" style={{ color: '#dc2626' }}>
                   ▲ Cumbrera
                 </div>
               </div>

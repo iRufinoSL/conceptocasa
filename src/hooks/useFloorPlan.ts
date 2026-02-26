@@ -431,6 +431,31 @@ export function useFloorPlan(budgetId: string) {
     return { shiftX, shiftY };
   };
 
+  const shiftGrid = async (deltaCol: number, deltaRow: number) => {
+    if (!floorPlan || (deltaCol === 0 && deltaRow === 0)) return;
+    setSaving(true);
+    try {
+      const cellSizeM = floorPlan.scale_mode === 'bloque' ? (floorPlan.block_length_mm || 625) / 1000 : 1;
+      const shiftXm = deltaCol * cellSizeM;
+      const shiftYm = deltaRow * cellSizeM;
+      for (const room of rooms) {
+        const newX = Math.round((room.posX + shiftXm) * 1000) / 1000;
+        const newY = Math.round((room.posY + shiftYm) * 1000) / 1000;
+        await supabase.from('budget_floor_plan_rooms').update({ pos_x: newX, pos_y: newY } as any).eq('id', room.id);
+      }
+      if (customCorners.length > 0) {
+        const shiftedCorners = customCorners.map(c => ({ ...c, col: c.col + deltaCol, row: c.row + deltaRow }));
+        await supabase.from('budget_floor_plans').update({ custom_corners: shiftedCorners } as any).eq('id', floorPlan.id);
+      }
+      console.log(`[SHIFT-MANUAL] Grid shifted by ${deltaCol} cols, ${deltaRow} rows`);
+      await fetchAll();
+    } catch (err) {
+      console.error('Error shifting grid:', err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const addRoom = async (name: string, width: number, length: number, floorId?: string, gridCol?: number, gridRow?: number) => {
     if (!floorPlan) return;
     setSaving(true);
@@ -1501,6 +1526,7 @@ export function useFloorPlan(budgetId: string) {
     addBlockGroup,
     deleteBlockGroup,
     updateBlockGroup,
+    shiftGrid,
     refetch: fetchAll,
   };
 }

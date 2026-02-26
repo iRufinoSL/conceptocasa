@@ -436,11 +436,16 @@ export function useFloorPlan(budgetId: string) {
     setSaving(true);
     try {
       const cellSizeM = floorPlan.scale_mode === 'bloque' ? (floorPlan.block_length_mm || 625) / 1000 : 1;
-      const shiftXm = deltaCol * cellSizeM;
-      const shiftYm = deltaRow * cellSizeM;
+      // Use integer grid math to avoid floating-point drift:
+      // Snap each room's current position to the nearest grid cell, apply delta, then convert back to meters
       for (const room of rooms) {
-        const newX = Math.round((room.posX + shiftXm) * 1000) / 1000;
-        const newY = Math.round((room.posY + shiftYm) * 1000) / 1000;
+        const currentCol = Math.round(room.posX / cellSizeM);
+        const currentRow = Math.round(room.posY / cellSizeM);
+        const newCol = currentCol + deltaCol;
+        const newRow = currentRow + deltaRow;
+        // Convert back to exact metric position (integer * cellSizeM avoids accumulation errors)
+        const newX = Math.round(newCol * cellSizeM * 1000) / 1000;
+        const newY = Math.round(newRow * cellSizeM * 1000) / 1000;
         await supabase.from('budget_floor_plan_rooms').update({ pos_x: newX, pos_y: newY } as any).eq('id', room.id);
       }
       if (customCorners.length > 0) {

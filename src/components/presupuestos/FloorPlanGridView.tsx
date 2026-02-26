@@ -368,13 +368,15 @@ export function FloorPlanGridView({
 
   // Auto-sync main corners with bounding box — update on every bounding box change
   const autoInitRef = useRef<Set<string>>(new Set());
-  const prevBBoxRef = useRef<string>('');
   useEffect(() => {
     if (!boundingBox || !onCustomCornersChange) return;
-    const bboxKey = `${currentFloorId}:${boundingBox.minCol},${boundingBox.minRow},${boundingBox.maxCol},${boundingBox.maxRow}`;
-    // Skip if unchanged
-    if (prevBBoxRef.current === bboxKey) return;
-    prevBBoxRef.current = bboxKey;
+    // Only auto-create main corners if NONE exist for this floor yet
+    const hasMainForFloor = customCorners.some(c => c.isMain && c.floorId === currentFloorId);
+    if (hasMainForFloor) {
+      autoInitRef.current.add(currentFloorId);
+      return;
+    }
+    if (autoInitRef.current.has(currentFloorId)) return;
 
     const lp = cornerLevelPrefix;
     const newMainCorners: CustomCorner[] = [
@@ -383,7 +385,6 @@ export function FloorPlanGridView({
       { label: `${lp}C`, col: boundingBox.maxCol, row: boundingBox.maxRow, side: 'bottom', isMain: true, mainPosition: 'BR', floorId: currentFloorId },
       { label: `${lp}D`, col: boundingBox.minCol, row: boundingBox.maxRow, side: 'bottom', isMain: true, mainPosition: 'BL', floorId: currentFloorId },
     ];
-    // Replace existing main corners for this floor, keep everything else
     const otherCorners = customCorners.filter(c => !(c.isMain && c.floorId === currentFloorId));
     setCustomCorners([...otherCorners, ...newMainCorners]);
     autoInitRef.current.add(currentFloorId);
@@ -1041,28 +1042,41 @@ export function FloorPlanGridView({
               }
             });
 
+            // Use STORED main corner positions (user-editable) instead of bounding box
+            const storedMain = mainFromStorage.length > 0 ? mainFromStorage : [];
+            const getStoredCol = (pos: string, fallback: number) => storedMain.find(c => c.mainPosition === pos)?.col ?? fallback;
+            const getStoredRow = (pos: string, fallback: number) => storedMain.find(c => c.mainPosition === pos)?.row ?? fallback;
+            const mColA = getStoredCol('TL', minCol);
+            const mRowA = getStoredRow('TL', minRow);
+            const mColB = getStoredCol('TR', maxCol);
+            const mRowB = getStoredRow('TR', minRow);
+            const mColC = getStoredCol('BR', maxCol);
+            const mRowC = getStoredRow('BR', maxRow);
+            const mColD = getStoredCol('BL', minCol);
+            const mRowD = getStoredRow('BL', maxRow);
+
             const topAll: CP[] = [
-              { label: getMainLbl('TL', 'A'), col: minCol, row: minRow },
+              { label: getMainLbl('TL', 'A'), col: mColA, row: mRowA },
               ...customOnTop,
-              { label: getMainLbl('TR', 'B'), col: maxCol, row: minRow },
+              { label: getMainLbl('TR', 'B'), col: mColB, row: mRowB },
             ].sort((a, b) => a.col - b.col);
 
             const bottomAll: CP[] = [
-              { label: getMainLbl('BL', 'D'), col: minCol, row: maxRow },
+              { label: getMainLbl('BL', 'D'), col: mColD, row: mRowD },
               ...customOnBottom,
-              { label: getMainLbl('BR', 'C'), col: maxCol, row: maxRow },
+              { label: getMainLbl('BR', 'C'), col: mColC, row: mRowC },
             ].sort((a, b) => a.col - b.col);
 
             const leftAll: CP[] = [
-              { label: getMainLbl('TL', 'A'), col: minCol, row: minRow },
+              { label: getMainLbl('TL', 'A'), col: mColA, row: mRowA },
               ...customOnLeft,
-              { label: getMainLbl('BL', 'D'), col: minCol, row: maxRow },
+              { label: getMainLbl('BL', 'D'), col: mColD, row: mRowD },
             ].sort((a, b) => a.row - b.row);
 
             const rightAll: CP[] = [
-              { label: getMainLbl('TR', 'B'), col: maxCol, row: minRow },
+              { label: getMainLbl('TR', 'B'), col: mColB, row: mRowB },
               ...customOnRight,
-              { label: getMainLbl('BR', 'C'), col: maxCol, row: maxRow },
+              { label: getMainLbl('BR', 'C'), col: mColC, row: mRowC },
             ].sort((a, b) => a.row - b.row);
 
             const dimLines: React.ReactNode[] = [];
@@ -1113,7 +1127,7 @@ export function FloorPlanGridView({
               // side='right' → arrow targets right edge of block → col*CS
               // others → arrow targets left edge of block → (col-1)*CS
               const getX = (p: CP) => {
-                if (p.col === maxCol) return COL_HEADER_W + (maxCol - 1) * CS;
+                if (p.col === mColB || p.col === mColC) return COL_HEADER_W + (p.col - 1) * CS;
                 if (p.side === 'right') return COL_HEADER_W + p.col * CS;
                 return COL_HEADER_W + (p.col - 1) * CS;
               };
@@ -1142,7 +1156,7 @@ export function FloorPlanGridView({
               if (pts.length < 2) return;
               // Y position: match arrow rendering logic.
               const getY = (p: CP) => {
-                if (p.row === maxRow) return ROW_HEADER_H + (maxRow - 1) * CS;
+                if (p.row === mRowD || p.row === mRowC) return ROW_HEADER_H + (p.row - 1) * CS;
                 if (p.side === 'bottom') return ROW_HEADER_H + p.row * CS;
                 return ROW_HEADER_H + (p.row - 1) * CS;
               };

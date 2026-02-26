@@ -22,4 +22,4 @@ Each wall face can have multiple layers stored in `budget_floor_plan_wall_layers
 The total wall thickness = sum of all layer thicknesses. Coordinates always reference the **core (block) layer** outer face.
 
 ### A-D Perimeter Corners
-Main corners (A, B, C, D) always auto-sync with the building's bounding box perimeter. They update automatically when rooms move or the grid shifts. The perimeter is measured at the exterior face of the block (core layer).
+Main corners (A, B, C, D) are **user-editable** and represent the building's physical perimeter. They are auto-initialized from the bounding box only when first created (no main corners exist for the floor). After that, they are NOT overwritten by bounding box changes — the user can manually reposition them to exclude non-building elements (e.g., sidewalks, aceras). The dimension lines (AB, AD, etc.) use the **stored** corner positions, not the computed bounding box, ensuring distances reflect the actual building perimeter.

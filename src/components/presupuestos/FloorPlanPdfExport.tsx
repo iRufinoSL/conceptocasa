@@ -38,13 +38,19 @@ export function FloorPlanPdfExport({ budgetName, floorName, containerRef }: Floo
       const drawW = A4_W - 2 * MARGIN;
       const drawH = A4_H - 2 * MARGIN - HEADER_H;
 
-      // Capture the grid as canvas using html2canvas
+      // Temporarily set overflow visible so html2canvas captures top/left dims
+      const scrollEl = container.querySelector('.overflow-auto');
+      const origOverflow = scrollEl ? (scrollEl as HTMLElement).style.overflow : '';
+      if (scrollEl) (scrollEl as HTMLElement).style.overflow = 'visible';
+
       const canvas = await html2canvas(container, {
         scale: 2,
         useCORS: true,
         backgroundColor: '#ffffff',
         logging: false,
       });
+
+      if (scrollEl) (scrollEl as HTMLElement).style.overflow = origOverflow;
 
       const imgData = canvas.toDataURL('image/png');
 

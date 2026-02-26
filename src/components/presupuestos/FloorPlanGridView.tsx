@@ -1295,13 +1295,21 @@ export function FloorPlanGridView({
               vInternalLevel++;
             });
 
+            // Expand SVG to include negative-coordinate top/left dims so html2canvas captures them
+            const dimExtraTop = DIM_OFF_OUTER + LEVEL_STEP * 2 + 20;
+            const dimExtraLeft = DIM_OFF_OUTER + LEVEL_STEP * 2 + 20;
+            const dimTotalW = COL_HEADER_W + totalCols * CS + 200 + dimExtraLeft;
+            const dimTotalH = ROW_HEADER_H + totalRows * CS + 160 + dimExtraTop;
             return (
-              <svg className="absolute inset-0 pointer-events-none" style={{
-                width: COL_HEADER_W + totalCols * CS + 200,
-                height: ROW_HEADER_H + totalRows * CS + 160,
+              <svg className="absolute pointer-events-none" style={{
+                top: -dimExtraTop,
+                left: -dimExtraLeft,
+                width: dimTotalW,
+                height: dimTotalH,
                 zIndex: 28,
-                overflow: 'visible',
-              }}>
+              }}
+              viewBox={`${-dimExtraLeft} ${-dimExtraTop} ${dimTotalW} ${dimTotalH}`}
+              >
                 {dimLines}
               </svg>
             );
@@ -1764,12 +1772,17 @@ export function FloorPlanGridView({
                   if (!printGridRef.current) return;
                   setIsPrinting(true);
                   try {
+                    // Temporarily set overflow visible so html2canvas captures top/left dims
+                    const scrollEl = printGridRef.current.querySelector('.overflow-auto');
+                    const origOverflow = scrollEl ? (scrollEl as HTMLElement).style.overflow : '';
+                    if (scrollEl) (scrollEl as HTMLElement).style.overflow = 'visible';
                     const canvas = await html2canvas(printGridRef.current, {
                       scale: 2,
                       useCORS: true,
                       logging: false,
                       backgroundColor: '#ffffff',
                     });
+                    if (scrollEl) (scrollEl as HTMLElement).style.overflow = origOverflow;
                     const isLandscape = printOrientation === 'landscape';
                     const pdf = new jsPDF(isLandscape ? 'l' : 'p', 'mm', 'a4');
                     const pageW = pdf.internal.pageSize.getWidth() - 20; // 10mm margins

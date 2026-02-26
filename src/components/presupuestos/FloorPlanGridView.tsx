@@ -815,11 +815,20 @@ export function FloorPlanGridView({
               return found ? customCorners.indexOf(found) : -1;
             };
 
+            // Use STORED main corner col/row for visual positioning (not bounding box)
+            // This ensures markers stay correct after grid shifts
+            const getStoredCol = (pos: string, fallback: number) => mainFromStorage.find(c => c.mainPosition === pos)?.col ?? fallback;
+            const getStoredRow = (pos: string, fallback: number) => mainFromStorage.find(c => c.mainPosition === pos)?.row ?? fallback;
+            const sTL_col = getStoredCol('TL', minCol), sTL_row = getStoredRow('TL', minRow);
+            const sTR_col = getStoredCol('TR', maxCol), sTR_row = getStoredRow('TR', minRow);
+            const sBR_col = getStoredCol('BR', maxCol), sBR_row = getStoredRow('BR', maxRow);
+            const sBL_col = getStoredCol('BL', minCol), sBL_row = getStoredRow('BL', maxRow);
+
             const mainCorners = [
-              { label: getMainLabel('TL', 'A'), left: COL_HEADER_W + (minCol - 1) * CS - 12, top: ROW_HEADER_H + (minRow - 1) * CS - 22, idx: getMainIdx('TL'), isMain: true },
-              { label: getMainLabel('TR', 'B'), left: COL_HEADER_W + maxCol * CS + 4, top: ROW_HEADER_H + (minRow - 1) * CS - 22, idx: getMainIdx('TR'), isMain: true },
-              { label: getMainLabel('BR', 'C'), left: COL_HEADER_W + maxCol * CS + 4, top: ROW_HEADER_H + maxRow * CS + 6, idx: getMainIdx('BR'), isMain: true },
-              { label: getMainLabel('BL', 'D'), left: COL_HEADER_W + (minCol - 1) * CS - 12, top: ROW_HEADER_H + maxRow * CS + 6, idx: getMainIdx('BL'), isMain: true },
+              { label: getMainLabel('TL', 'A'), left: COL_HEADER_W + (sTL_col - 1) * CS - 12, top: ROW_HEADER_H + (sTL_row - 1) * CS - 22, idx: getMainIdx('TL'), isMain: true },
+              { label: getMainLabel('TR', 'B'), left: COL_HEADER_W + (sTR_col - 1) * CS + CS + 4, top: ROW_HEADER_H + (sTR_row - 1) * CS - 22, idx: getMainIdx('TR'), isMain: true },
+              { label: getMainLabel('BR', 'C'), left: COL_HEADER_W + (sBR_col - 1) * CS + CS + 4, top: ROW_HEADER_H + (sBR_row - 1) * CS + CS + 6, idx: getMainIdx('BR'), isMain: true },
+              { label: getMainLabel('BL', 'D'), left: COL_HEADER_W + (sBL_col - 1) * CS - 12, top: ROW_HEADER_H + (sBL_row - 1) * CS + CS + 6, idx: getMainIdx('BL'), isMain: true },
             ];
 
             const customMarkers = floorCorners

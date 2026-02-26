@@ -1109,39 +1109,52 @@ export function FloorPlanGridView({
             const mColD = getStoredCol('BL', minCol);
             const mRowD = getStoredRow('BL', maxRow);
 
+            // Unified target position — EXACTLY matches arrow rendering logic
+            const cornerTargetX = (col: number, side?: string) => {
+              if (col === mColB || col === mColC) return COL_HEADER_W + (col - 1) * CS;
+              if (side === 'right') return COL_HEADER_W + col * CS;
+              return COL_HEADER_W + (col - 1) * CS;
+            };
+            const cornerTargetY = (row: number, side?: string) => {
+              if (row === mRowD || row === mRowC) return ROW_HEADER_H + (row - 1) * CS;
+              if (side === 'bottom') return ROW_HEADER_H + row * CS;
+              return ROW_HEADER_H + (row - 1) * CS;
+            };
+
             const topAll: CP[] = [
-              { label: getMainLbl('TL', 'A'), col: mColA, row: mRowA },
+              { label: getMainLbl('TL', 'A'), col: mColA, row: mRowA, side: 'top' },
               ...customOnTop,
-              { label: getMainLbl('TR', 'B'), col: mColB, row: mRowB },
-            ].sort((a, b) => a.col - b.col);
+              { label: getMainLbl('TR', 'B'), col: mColB, row: mRowB, side: 'top' },
+            ].sort((a, b) => cornerTargetX(a.col, a.side) - cornerTargetX(b.col, b.side));
 
             const bottomAll: CP[] = [
-              { label: getMainLbl('BL', 'D'), col: mColD, row: mRowD },
+              { label: getMainLbl('BL', 'D'), col: mColD, row: mRowD, side: 'bottom' },
               ...customOnBottom,
-              { label: getMainLbl('BR', 'C'), col: mColC, row: mRowC },
-            ].sort((a, b) => a.col - b.col);
+              { label: getMainLbl('BR', 'C'), col: mColC, row: mRowC, side: 'bottom' },
+            ].sort((a, b) => cornerTargetX(a.col, a.side) - cornerTargetX(b.col, b.side));
 
             const leftAll: CP[] = [
-              { label: getMainLbl('TL', 'A'), col: mColA, row: mRowA },
+              { label: getMainLbl('TL', 'A'), col: mColA, row: mRowA, side: 'left' },
               ...customOnLeft,
-              { label: getMainLbl('BL', 'D'), col: mColD, row: mRowD },
-            ].sort((a, b) => a.row - b.row);
+              { label: getMainLbl('BL', 'D'), col: mColD, row: mRowD, side: 'left' },
+            ].sort((a, b) => cornerTargetY(a.row, a.side) - cornerTargetY(b.row, b.side));
 
             const rightAll: CP[] = [
-              { label: getMainLbl('TR', 'B'), col: mColB, row: mRowB },
+              { label: getMainLbl('TR', 'B'), col: mColB, row: mRowB, side: 'right' },
               ...customOnRight,
-              { label: getMainLbl('BR', 'C'), col: mColC, row: mRowC },
-            ].sort((a, b) => a.row - b.row);
+              { label: getMainLbl('BR', 'C'), col: mColC, row: mRowC, side: 'right' },
+            ].sort((a, b) => cornerTargetY(a.row, a.side) - cornerTargetY(b.row, b.side));
 
             const dimLines: React.ReactNode[] = [];
             const DIM_OFF_OUTER = 16;
-            const LEVEL_STEP = 22; // vertical gap between dimension line levels
+            const DIM_OFF_BOTTOM = DIM_OFF_OUTER + 14;
+            const DIM_OFF_RIGHT = DIM_OFF_OUTER + 10;
+            const LEVEL_STEP = 22;
             const fmtDist = (blocks: number) => {
               const mm = blocks * blockLengthMm;
               return `${(mm / 1000).toFixed(3)}m`;
             };
 
-            // Draw a single horizontal dimension line
             const hDimLine = (x1: number, x2: number, y: number, lbl: string, key: string) => {
               const mx = (x1 + x2) / 2;
               const tw = Math.max(50, lbl.length * 6 + 10);
@@ -1156,7 +1169,6 @@ export function FloorPlanGridView({
               );
             };
 
-            // Draw a single vertical dimension line
             const vDimLine = (y1: number, y2: number, x: number, lbl: string, key: string) => {
               const my = (y1 + y2) / 2;
               const tw = Math.max(50, lbl.length * 6 + 10);
@@ -1171,27 +1183,15 @@ export function FloorPlanGridView({
               );
             };
 
-            // Multi-level horizontal dimensions
-            // direction: -1 = upward (top side), +1 = downward (bottom side)
             const hDimsMulti = (pts: CP[], baseY: number, prefix: string, dir: number) => {
               if (pts.length < 2) return;
-              // X position: match arrow rendering logic.
-              // Main corners at exclusive maxCol → right edge of last col = (maxCol-1)*CS
-              // side='right' → arrow targets right edge of block → col*CS
-              // others → arrow targets left edge of block → (col-1)*CS
-              const getX = (p: CP) => {
-                if (p.col === mColB || p.col === mColC) return COL_HEADER_W + (p.col - 1) * CS;
-                if (p.side === 'right') return COL_HEADER_W + p.col * CS;
-                return COL_HEADER_W + (p.col - 1) * CS;
-              };
+              const getX = (p: CP) => cornerTargetX(p.col, p.side);
               if (pts.length >= 3) {
-                // Level 0 (furthest from grid): full span
                 const y0 = baseY + dir * LEVEL_STEP;
                 const first = pts[0], last = pts[pts.length - 1];
                 const x1 = getX(first), x2 = getX(last);
                 const blocks = Math.round(Math.abs(x2 - x1) / CS);
                 if (blocks > 0) hDimLine(Math.min(x1, x2), Math.max(x1, x2), y0, fmtDist(blocks), `${prefix}-full`);
-                // Level 1 (closer to grid): consecutive segments
                 for (let i = 0; i < pts.length - 1; i++) {
                   const xa = getX(pts[i]), xb = getX(pts[i + 1]);
                   const b = Math.round(Math.abs(xb - xa) / CS);
@@ -1204,15 +1204,9 @@ export function FloorPlanGridView({
               }
             };
 
-            // Multi-level vertical dimensions
             const vDimsMulti = (pts: CP[], baseX: number, prefix: string, dir: number) => {
               if (pts.length < 2) return;
-              // Y position: match arrow rendering logic.
-              const getY = (p: CP) => {
-                if (p.row === mRowD || p.row === mRowC) return ROW_HEADER_H + (p.row - 1) * CS;
-                if (p.side === 'bottom') return ROW_HEADER_H + p.row * CS;
-                return ROW_HEADER_H + (p.row - 1) * CS;
-              };
+              const getY = (p: CP) => cornerTargetY(p.row, p.side);
               if (pts.length >= 3) {
                 const x0 = baseX + dir * LEVEL_STEP;
                 const first = pts[0], last = pts[pts.length - 1];
@@ -1231,13 +1225,10 @@ export function FloorPlanGridView({
               }
             };
 
-            // Top/Left: offset past scale headers so dims don't overlap labels
-            // Bottom/Right: simple offset (no headers to clear)
-            const DIM_OFF_RIGHT = DIM_OFF_OUTER + 10; // extra separation for right side to avoid overlap with outer line
             const topBaseY = (minRow - 1) * CS - DIM_OFF_OUTER;
             const leftBaseX = (minCol - 1) * CS - DIM_OFF_OUTER;
             hDimsMulti(topAll, topBaseY, 'dt', -1);
-            hDimsMulti(bottomAll, ROW_HEADER_H + (maxRow - 1) * CS + CS + DIM_OFF_OUTER, 'db', 1);
+            hDimsMulti(bottomAll, ROW_HEADER_H + (maxRow - 1) * CS + CS + DIM_OFF_BOTTOM, 'db', 1);
             vDimsMulti(leftAll, leftBaseX, 'dl', -1);
             vDimsMulti(rightAll, COL_HEADER_W + (maxCol - 1) * CS + CS + DIM_OFF_RIGHT, 'dr', 1);
 
@@ -1246,17 +1237,9 @@ export function FloorPlanGridView({
             const allCustom = nonMainCorners.filter(c => !c.isEave);
             const INTERNAL_LEVEL_BASE = 2; // start at level 2 (after perimeter levels 0-1)
 
-            // Reuse same getX/getY as perimeter dims for consistent endpoint alignment
-            const getXInternal = (p: { col: number; side?: string }) => {
-              if (p.col === mColB || p.col === mColC) return COL_HEADER_W + (p.col - 1) * CS;
-              if (p.side === 'right') return COL_HEADER_W + p.col * CS;
-              return COL_HEADER_W + (p.col - 1) * CS;
-            };
-            const getYInternal = (p: { row: number; side?: string }) => {
-              if (p.row === mRowD || p.row === mRowC) return ROW_HEADER_H + (p.row - 1) * CS;
-              if (p.side === 'bottom') return ROW_HEADER_H + p.row * CS;
-              return ROW_HEADER_H + (p.row - 1) * CS;
-            };
+            // Reuse unified cornerTargetX/Y for internal dims too
+            const getXInternal = (p: { col: number; side?: string }) => cornerTargetX(p.col, p.side);
+            const getYInternal = (p: { row: number; side?: string }) => cornerTargetY(p.row, p.side);
 
             // Horizontal internal dims (shared row) → render on bottom edge as extra levels
             const byRow = new Map<number, typeof allCustom>();
@@ -1269,7 +1252,7 @@ export function FloorPlanGridView({
             byRow.forEach((pts, row) => {
               if (pts.length < 2) return;
               const sorted = [...pts].sort((a, b) => a.col - b.col);
-              const baseYBottom = ROW_HEADER_H + (maxRow - 1) * CS + CS + DIM_OFF_OUTER;
+              const baseYBottom = ROW_HEADER_H + (maxRow - 1) * CS + CS + DIM_OFF_BOTTOM;
               const y = baseYBottom + (INTERNAL_LEVEL_BASE + hInternalLevel) * LEVEL_STEP;
               for (let i = 0; i < sorted.length - 1; i++) {
                 const x1 = getXInternal(sorted[i]);
@@ -1316,7 +1299,7 @@ export function FloorPlanGridView({
             const dimExtraTop = DIM_OFF_OUTER + LEVEL_STEP * (maxTopLevels + 1) + 40;
             const dimExtraLeft = DIM_OFF_OUTER + LEVEL_STEP * (maxLeftLevels + 1) + 40;
             const dimExtraRight = DIM_OFF_RIGHT + LEVEL_STEP * (maxRightLevels + 1) + 60;
-            const dimExtraBottom = DIM_OFF_OUTER + LEVEL_STEP * (maxBottomLevels + 1) + 40;
+            const dimExtraBottom = DIM_OFF_BOTTOM + LEVEL_STEP * (maxBottomLevels + 1) + 40;
             const dimTotalW = COL_HEADER_W + totalCols * CS + dimExtraRight + dimExtraLeft;
             const dimTotalH = ROW_HEADER_H + totalRows * CS + dimExtraBottom + dimExtraTop;
             return (

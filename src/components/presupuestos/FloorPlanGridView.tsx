@@ -292,16 +292,20 @@ export function FloorPlanGridView({
     return currentFloorRooms.filter(r => r.width > 0 && r.length > 0 && r.posX >= 0 && r.posY >= 0);
   }, [currentFloorRooms]);
 
-  // Grid size: when rooms are placed, use exact room extent (no extra cells from plan dimensions)
+  // Grid size: GLOBAL across ALL floors so coordinates align between levels
+  const allPlacedRooms = useMemo(() => {
+    return rooms.filter(r => r.width > 0 && r.length > 0 && r.posX >= 0 && r.posY >= 0);
+  }, [rooms]);
+
   const totalCols = useMemo(() => {
-    if (placedRooms.length === 0) return Math.max(1, Math.ceil(planWidth / cellSizeM));
-    return Math.max(...placedRooms.map(r => Math.round(r.posX / cellSizeM) + Math.max(1, Math.round(r.width / cellSizeM))));
-  }, [planWidth, placedRooms, cellSizeM]);
+    if (allPlacedRooms.length === 0) return Math.max(1, Math.ceil(planWidth / cellSizeM));
+    return Math.max(...allPlacedRooms.map(r => Math.round(r.posX / cellSizeM) + Math.max(1, Math.round(r.width / cellSizeM))));
+  }, [planWidth, allPlacedRooms, cellSizeM]);
 
   const totalRows = useMemo(() => {
-    if (placedRooms.length === 0) return Math.max(1, Math.ceil(planLength / cellSizeM));
-    return Math.max(...placedRooms.map(r => Math.round(r.posY / cellSizeM) + Math.max(1, Math.round(r.length / cellSizeM))));
-  }, [planLength, placedRooms, cellSizeM]);
+    if (allPlacedRooms.length === 0) return Math.max(1, Math.ceil(planLength / cellSizeM));
+    return Math.max(...allPlacedRooms.map(r => Math.round(r.posY / cellSizeM) + Math.max(1, Math.round(r.length / cellSizeM))));
+  }, [planLength, allPlacedRooms, cellSizeM]);
 
   // Build a cell occupation map: key = "col,row" → roomId
   const cellMap = useMemo(() => {

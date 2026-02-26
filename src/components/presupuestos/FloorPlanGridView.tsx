@@ -367,29 +367,8 @@ export function FloorPlanGridView({
     migratedOrphansRef.current = true;
   }, [customCorners, effectiveFloors]);
 
-  // Auto-sync main corners with bounding box — update on every bounding box change
+  // Auto-init of main corners A,B,C,D disabled — user places them manually via Coord mode
   const autoInitRef = useRef<Set<string>>(new Set());
-  useEffect(() => {
-    if (!boundingBox || !onCustomCornersChange) return;
-    // Only auto-create main corners if NONE exist for this floor yet
-    const hasMainForFloor = customCorners.some(c => c.isMain && c.floorId === currentFloorId);
-    if (hasMainForFloor) {
-      autoInitRef.current.add(currentFloorId);
-      return;
-    }
-    if (autoInitRef.current.has(currentFloorId)) return;
-
-    const lp = cornerLevelPrefix;
-    const newMainCorners: CustomCorner[] = [
-      { label: `${lp}A`, col: boundingBox.minCol, row: boundingBox.minRow, side: 'top', isMain: true, mainPosition: 'TL', floorId: currentFloorId },
-      { label: `${lp}B`, col: boundingBox.maxCol, row: boundingBox.minRow, side: 'top', isMain: true, mainPosition: 'TR', floorId: currentFloorId },
-      { label: `${lp}C`, col: boundingBox.maxCol, row: boundingBox.maxRow, side: 'bottom', isMain: true, mainPosition: 'BR', floorId: currentFloorId },
-      { label: `${lp}D`, col: boundingBox.minCol, row: boundingBox.maxRow, side: 'bottom', isMain: true, mainPosition: 'BL', floorId: currentFloorId },
-    ];
-    const otherCorners = customCorners.filter(c => !(c.isMain && c.floorId === currentFloorId));
-    setCustomCorners([...otherCorners, ...newMainCorners]);
-    autoInitRef.current.add(currentFloorId);
-  }, [boundingBox, currentFloorId, cornerLevelPrefix]);
 
   // Auto-generate eave (alero) markers for bajo cubierta floors if missing
   const eaveInitRef = useRef<Set<string>>(new Set());
@@ -604,6 +583,8 @@ export function FloorPlanGridView({
           style={{
             width: COL_HEADER_W + totalCols * CS + 200,
             height: ROW_HEADER_H + totalRows * CS + 120,
+            marginLeft: COL_HEADER_W + 40,
+            marginTop: ROW_HEADER_H + 20,
           }}
         >
           {/* Column headers — separated ~10px from grid edge for readability */}
@@ -1085,7 +1066,9 @@ export function FloorPlanGridView({
             const nonMainCorners = floorCorners.filter(c => !c.isMain && !c.isEave);
             const colSpan = Math.max(1, maxCol - minCol);
             const rowSpan = Math.max(1, maxRow - minRow);
-            const classifyToEdge = (c: { col: number; row: number }): 'top' | 'right' | 'bottom' | 'left' => {
+            const classifyToEdge = (c: { col: number; row: number; side?: string }): 'top' | 'right' | 'bottom' | 'left' => {
+              // Respect explicitly stored side from user placement
+              if (c.side && ['top', 'right', 'bottom', 'left'].includes(c.side)) return c.side as any;
               if (c.row === minRow) return 'top';
               if (c.col === minCol && c.row !== minRow) return 'left';
               const dTop = Math.abs(c.row - minRow) / rowSpan;
@@ -1248,9 +1231,13 @@ export function FloorPlanGridView({
               }
             };
 
-            hDimsMulti(topAll, ROW_HEADER_H + (minRow - 1) * CS - DIM_OFF_OUTER, 'dt', -1);
+            // Top/Left: offset past scale headers so dims don't overlap labels
+            // Bottom/Right: simple offset (no headers to clear)
+            const topBaseY = (minRow - 1) * CS - DIM_OFF_OUTER;
+            const leftBaseX = (minCol - 1) * CS - DIM_OFF_OUTER;
+            hDimsMulti(topAll, topBaseY, 'dt', -1);
             hDimsMulti(bottomAll, ROW_HEADER_H + (maxRow - 1) * CS + CS + DIM_OFF_OUTER, 'db', 1);
-            vDimsMulti(leftAll, COL_HEADER_W + (minCol - 1) * CS - DIM_OFF_OUTER, 'dl', -1);
+            vDimsMulti(leftAll, leftBaseX, 'dl', -1);
             vDimsMulti(rightAll, COL_HEADER_W + (maxCol - 1) * CS + CS + DIM_OFF_OUTER, 'dr', 1);
 
             return (

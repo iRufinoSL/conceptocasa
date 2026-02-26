@@ -1169,9 +1169,9 @@ export function FloorPlanGridView({
                 <div key={`${key}-t1`} className="absolute pointer-events-none" style={{ left: x1 - 1, top: y - 5, width: 1.5, height: 11, backgroundColor: '#2563eb', zIndex: 28 }} />,
                 <div key={`${key}-t2`} className="absolute pointer-events-none" style={{ left: x2 - 1, top: y - 5, width: 1.5, height: 11, backgroundColor: '#2563eb', zIndex: 28 }} />,
                 <div key={`${key}-lb`} className="absolute pointer-events-none flex items-center justify-center" style={{
-                  left: mx - tw / 2, top: y - 8, width: tw, height: 14,
+                  left: mx - tw / 2, top: y - 10, width: tw, height: 18,
                   backgroundColor: 'rgba(37, 99, 235, 0.9)', borderRadius: 3,
-                  color: 'white', fontSize: 8, fontWeight: 'bold', zIndex: 29, lineHeight: '1',
+                  color: 'white', fontSize: 9, fontWeight: 'bold', zIndex: 29, lineHeight: '1',
                 }}>{lbl}</div>,
               );
             };
@@ -1186,9 +1186,9 @@ export function FloorPlanGridView({
                 <div key={`${key}-t1`} className="absolute pointer-events-none" style={{ left: x - 5, top: y1 - 1, width: 11, height: 1.5, backgroundColor: '#2563eb', zIndex: 28 }} />,
                 <div key={`${key}-t2`} className="absolute pointer-events-none" style={{ left: x - 5, top: y2 - 1, width: 11, height: 1.5, backgroundColor: '#2563eb', zIndex: 28 }} />,
                 <div key={`${key}-lb`} className="absolute pointer-events-none flex items-center justify-center" style={{
-                  left: x - tw / 2, top: my - 7, width: tw, height: 14,
+                  left: x - tw / 2, top: my - 9, width: tw, height: 18,
                   backgroundColor: 'rgba(37, 99, 235, 0.9)', borderRadius: 3,
-                  color: 'white', fontSize: 8, fontWeight: 'bold', zIndex: 29, lineHeight: '1',
+                  color: 'white', fontSize: 9, fontWeight: 'bold', zIndex: 29, lineHeight: '1',
                 }}>{lbl}</div>,
               );
             };

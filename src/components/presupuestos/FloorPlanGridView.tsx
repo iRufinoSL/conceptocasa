@@ -227,6 +227,7 @@ export function FloorPlanGridView({
   // Ruler tool
   const [rulerMode, setRulerMode] = useState(false);
   const [rulerPoints, setRulerPoints] = useState<{col: number; row: number}[]>([]);
+  const [cornerClickMode, setCornerClickMode] = useState(false);
   const printGridRef = useRef<HTMLDivElement>(null);
   const [isPrinting, setIsPrinting] = useState(false);
   // Corner edit
@@ -772,6 +773,67 @@ export function FloorPlanGridView({
             );
           })}
 
+          {/* Corner click mode: intersection targets */}
+          {cornerClickMode && (() => {
+            // Auto-generate name for a new corner based on edge and existing corners
+            const autoCornerName = (col: number, row: number): { label: string; side: 'top' | 'right' | 'bottom' | 'left' } => {
+              const lp = cornerLevelPrefix || '';
+              // Determine closest edge
+              const dTop = row - 1;
+              const dBottom = totalRows - row + 1;
+              const dLeft = col - 1;
+              const dRight = totalCols - col + 1;
+              const minD = Math.min(dTop, dBottom, dLeft, dRight);
+              let edge: 'top' | 'right' | 'bottom' | 'left';
+              if (minD === dTop) edge = 'top';
+              else if (minD === dRight) edge = 'right';
+              else if (minD === dBottom) edge = 'bottom';
+              else edge = 'left';
+              // Base letter by edge
+              const baseLetter = edge === 'top' ? 'A' : edge === 'right' ? 'B' : edge === 'bottom' ? 'C' : 'D';
+              // Count existing custom corners on this edge for this floor
+              const existingOnEdge = floorCorners.filter(c => !c.isMain && !c.isEave && c.label.includes(baseLetter)).length;
+              const seq = existingOnEdge + 1;
+              return { label: `${lp}${baseLetter}${seq}`, side: edge };
+            };
+            // Check if a corner already exists at this intersection
+            const hasCornerAt = (col: number, row: number) => floorCorners.some(c => c.col === col && c.row === row);
+            
+            // Render intersection points (corners of cells)
+            const intersections: React.ReactNode[] = [];
+            for (let ci = 0; ci <= totalCols; ci++) {
+              for (let ri = 0; ri <= totalRows; ri++) {
+                const col = ci + 1;
+                const row = ri + 1;
+                const exists = hasCornerAt(col, row);
+                const px = COL_HEADER_W + ci * CS;
+                const py = ROW_HEADER_H + ri * CS;
+                const hitSize = Math.max(12, CS * 0.4);
+                intersections.push(
+                  <div
+                    key={`int-${ci}-${ri}`}
+                    className={`absolute cursor-crosshair z-[35] flex items-center justify-center group`}
+                    style={{
+                      left: px - hitSize / 2,
+                      top: py - hitSize / 2,
+                      width: hitSize,
+                      height: hitSize,
+                    }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (exists) return; // Don't create duplicate
+                      const { label, side } = autoCornerName(col, row);
+                      setCustomCorners(prev => [...prev, { label, col, row, side, floorId: currentFloorId }]);
+                    }}
+                  >
+                    <div className={`rounded-full transition-all ${exists ? 'w-2.5 h-2.5 bg-primary' : 'w-1.5 h-1.5 bg-muted-foreground/30 group-hover:w-3 group-hover:h-3 group-hover:bg-primary/60'}`} />
+                  </div>
+                );
+              }
+            }
+            return intersections;
+          })()}
+
           {/* Ruler line */}
           {rulerMode && rulerPoints.length === 2 && (() => {
             const [p1, p2] = rulerPoints;
@@ -1267,11 +1329,20 @@ export function FloorPlanGridView({
           <Button
             variant={rulerMode ? 'default' : 'outline'}
             size="sm"
-            onClick={() => { setRulerMode(!rulerMode); setRulerPoints([]); }}
+            onClick={() => { setRulerMode(!rulerMode); setRulerPoints([]); if (!rulerMode) setCornerClickMode(false); }}
             title="Herramienta regla: medir distancia entre dos puntos"
           >
             <Ruler className="h-4 w-4 mr-1" />
             Regla
+          </Button>
+          <Button
+            variant={cornerClickMode ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => { setCornerClickMode(!cornerClickMode); if (!cornerClickMode) setRulerMode(false); }}
+            title="Click en intersecciones de la cuadrícula para crear coordenadas automáticas"
+          >
+            <Plus className="h-4 w-4 mr-1" />
+            Coord
           </Button>
           {onRecalculateSegments && (
             <Button

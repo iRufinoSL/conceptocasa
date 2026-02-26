@@ -1151,7 +1151,6 @@ export function FloorPlanGridView({
             ].sort((a, b) => a.row - b.row);
 
             const dimLines: React.ReactNode[] = [];
-            const DIM_OFF_INNER = 10;
             const DIM_OFF_OUTER = 34;
             const LEVEL_STEP = 22; // vertical gap between dimension line levels
             const fmtDist = (blocks: number) => {

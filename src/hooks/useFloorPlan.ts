@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import type { FloorPlanData, RoomData, WallData, OpeningData, WallType, FloorLevel, ScaleMode, BlockGroupData } from '@/lib/floor-plan-calculations';
+import type { FloorPlanData, RoomData, WallData, OpeningData, WallType, FloorLevel, ScaleMode, BlockGroupData, WallLayerData } from '@/lib/floor-plan-calculations';
 import { migrateLegacyWallType, autoClassifyWalls, isExteriorType } from '@/lib/floor-plan-calculations';
 
 export interface CustomCorner {
@@ -253,6 +253,8 @@ export function useFloorPlan(budgetId: string) {
           width: Number(r.width),
           length: Number(r.length),
           height: r.height != null ? Number(r.height) : undefined,
+          extWallThickness: (r as any).ext_wall_thickness != null ? Number((r as any).ext_wall_thickness) : undefined,
+          intWallThickness: (r as any).int_wall_thickness != null ? Number((r as any).int_wall_thickness) : undefined,
           hasFloor: r.has_floor !== false,
           hasCeiling: r.has_ceiling !== false,
           hasRoof: r.has_roof !== false,
@@ -528,7 +530,7 @@ export function useFloorPlan(budgetId: string) {
     }
   };
 
-  const updateRoom = async (roomId: string, data: { name?: string; width?: number; length?: number; height?: number; posX?: number; posY?: number; hasFloor?: boolean; hasCeiling?: boolean; hasRoof?: boolean; floorId?: string | null }) => {
+  const updateRoom = async (roomId: string, data: { name?: string; width?: number; length?: number; height?: number; extWallThickness?: number | null; intWallThickness?: number | null; posX?: number; posY?: number; hasFloor?: boolean; hasCeiling?: boolean; hasRoof?: boolean; floorId?: string | null }) => {
     setSaving(true);
     try {
       const cellSizeM = floorPlan ? (floorPlan.scale_mode === 'bloque' ? (floorPlan.block_length_mm || 625) / 1000 : 1) : 1;
@@ -552,6 +554,8 @@ export function useFloorPlan(budgetId: string) {
       if (data.width !== undefined) updates.width = snapToGrid(data.width, cellSizeM);
       if (data.length !== undefined) updates.length = snapToGrid(data.length, cellSizeM);
       if (data.height !== undefined) updates.height = data.height;
+      if (data.extWallThickness !== undefined) updates.ext_wall_thickness = data.extWallThickness;
+      if (data.intWallThickness !== undefined) updates.int_wall_thickness = data.intWallThickness;
       if (finalPosX !== undefined) updates.pos_x = finalPosX;
       if (finalPosY !== undefined) updates.pos_y = finalPosY;
       if (data.hasFloor !== undefined) updates.has_floor = data.hasFloor;

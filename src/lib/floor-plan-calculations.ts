@@ -80,6 +80,8 @@ export interface RoomData {
   width: number;
   length: number;
   height?: number;
+  extWallThickness?: number; // override per-room external wall thickness (m)
+  intWallThickness?: number; // override per-room internal wall thickness (m)
   hasFloor: boolean;
   hasCeiling: boolean;
   hasRoof: boolean;
@@ -87,6 +89,17 @@ export interface RoomData {
   groupId?: string;
   groupName?: string;
   walls: WallData[];
+}
+
+export interface WallLayerData {
+  id: string;
+  wallId: string;
+  layerType: string; // bloque, revoco, aislamiento, placa_yeso, etc.
+  layerOrder: number;
+  thicknessMm: number;
+  material?: string;
+  isCore: boolean;
+  name?: string;
 }
 
 // 6 wall types: exterior/interior × normal/compartida/invisible

@@ -752,6 +752,7 @@ export type Database = {
       budget_floor_plan_rooms: {
         Row: {
           created_at: string | null
+          ext_wall_thickness: number | null
           floor_id: string | null
           floor_plan_id: string
           group_id: string | null
@@ -761,6 +762,7 @@ export type Database = {
           has_roof: boolean
           height: number | null
           id: string
+          int_wall_thickness: number | null
           length: number
           name: string
           order_index: number | null
@@ -771,6 +773,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string | null
+          ext_wall_thickness?: number | null
           floor_id?: string | null
           floor_plan_id: string
           group_id?: string | null
@@ -780,6 +783,7 @@ export type Database = {
           has_roof?: boolean
           height?: number | null
           id?: string
+          int_wall_thickness?: number | null
           length?: number
           name: string
           order_index?: number | null
@@ -790,6 +794,7 @@ export type Database = {
         }
         Update: {
           created_at?: string | null
+          ext_wall_thickness?: number | null
           floor_id?: string | null
           floor_plan_id?: string
           group_id?: string | null
@@ -799,6 +804,7 @@ export type Database = {
           has_roof?: boolean
           height?: number | null
           id?: string
+          int_wall_thickness?: number | null
           length?: number
           name?: string
           order_index?: number | null
@@ -820,6 +826,50 @@ export type Database = {
             columns: ["floor_plan_id"]
             isOneToOne: false
             referencedRelation: "budget_floor_plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      budget_floor_plan_wall_layers: {
+        Row: {
+          created_at: string | null
+          id: string
+          is_core: boolean
+          layer_order: number
+          layer_type: string
+          material: string | null
+          name: string | null
+          thickness_mm: number
+          wall_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          is_core?: boolean
+          layer_order?: number
+          layer_type?: string
+          material?: string | null
+          name?: string | null
+          thickness_mm?: number
+          wall_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          is_core?: boolean
+          layer_order?: number
+          layer_type?: string
+          material?: string | null
+          name?: string | null
+          thickness_mm?: number
+          wall_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "budget_floor_plan_wall_layers_wall_id_fkey"
+            columns: ["wall_id"]
+            isOneToOne: false
+            referencedRelation: "budget_floor_plan_walls"
             referencedColumns: ["id"]
           },
         ]

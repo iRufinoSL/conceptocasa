@@ -366,22 +366,28 @@ export function FloorPlanGridView({
     migratedOrphansRef.current = true;
   }, [customCorners, effectiveFloors]);
 
-  // Auto-init main corners per floor if none exist for this floor
+  // Auto-sync main corners with bounding box — update on every bounding box change
   const autoInitRef = useRef<Set<string>>(new Set());
+  const prevBBoxRef = useRef<string>('');
   useEffect(() => {
-    if (autoInitRef.current.has(currentFloorId) || !boundingBox || !onCustomCornersChange) return;
-    const hasMainForFloor = customCorners.some(c => c.isMain && c.floorId === currentFloorId);
-    if (hasMainForFloor) { autoInitRef.current.add(currentFloorId); return; }
+    if (!boundingBox || !onCustomCornersChange) return;
+    const bboxKey = `${currentFloorId}:${boundingBox.minCol},${boundingBox.minRow},${boundingBox.maxCol},${boundingBox.maxRow}`;
+    // Skip if unchanged
+    if (prevBBoxRef.current === bboxKey) return;
+    prevBBoxRef.current = bboxKey;
+
     const lp = cornerLevelPrefix;
-    const mainCorners: CustomCorner[] = [
+    const newMainCorners: CustomCorner[] = [
       { label: `${lp}A`, col: boundingBox.minCol, row: boundingBox.minRow, side: 'top', isMain: true, mainPosition: 'TL', floorId: currentFloorId },
       { label: `${lp}B`, col: boundingBox.maxCol, row: boundingBox.minRow, side: 'top', isMain: true, mainPosition: 'TR', floorId: currentFloorId },
       { label: `${lp}C`, col: boundingBox.maxCol, row: boundingBox.maxRow, side: 'bottom', isMain: true, mainPosition: 'BR', floorId: currentFloorId },
       { label: `${lp}D`, col: boundingBox.minCol, row: boundingBox.maxRow, side: 'bottom', isMain: true, mainPosition: 'BL', floorId: currentFloorId },
     ];
-    setCustomCorners([...customCorners, ...mainCorners]);
+    // Replace existing main corners for this floor, keep everything else
+    const otherCorners = customCorners.filter(c => !(c.isMain && c.floorId === currentFloorId));
+    setCustomCorners([...otherCorners, ...newMainCorners]);
     autoInitRef.current.add(currentFloorId);
-  }, [boundingBox, currentFloorId]);
+  }, [boundingBox, currentFloorId, cornerLevelPrefix]);
 
   // Auto-generate eave (alero) markers for bajo cubierta floors if missing
   const eaveInitRef = useRef<Set<string>>(new Set());

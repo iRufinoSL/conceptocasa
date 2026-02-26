@@ -581,10 +581,10 @@ export function FloorPlanGridView({
         <div
           className="relative"
           style={{
-            width: COL_HEADER_W + totalCols * CS + 200,
-            height: ROW_HEADER_H + totalRows * CS + 160,
-            marginLeft: COL_HEADER_W + 80,
-            marginTop: ROW_HEADER_H + 60,
+            width: COL_HEADER_W + totalCols * CS + 400,
+            height: ROW_HEADER_H + totalRows * CS + 300,
+            marginLeft: COL_HEADER_W + 120,
+            marginTop: ROW_HEADER_H + 100,
           }}
         >
           {/* Column headers — separated ~10px from grid edge for readability */}
@@ -1145,10 +1145,10 @@ export function FloorPlanGridView({
               { label: getMainLbl('BR', 'C'), col: mColC, row: mRowC, side: 'right' },
             ].sort((a, b) => cornerTargetY(a.row, a.side) - cornerTargetY(b.row, b.side));
 
-            const dimLines: React.ReactNode[] = [];
+            const dimElements: React.ReactNode[] = [];
             const DIM_OFF_OUTER = 16;
-            const DIM_OFF_BOTTOM = DIM_OFF_OUTER + 14;
-            const DIM_OFF_RIGHT = DIM_OFF_OUTER + 10;
+            const DIM_OFF_BOTTOM = DIM_OFF_OUTER + 20;
+            const DIM_OFF_RIGHT = DIM_OFF_OUTER + 16;
             const LEVEL_STEP = 22;
             const fmtDist = (blocks: number) => {
               const mm = blocks * blockLengthMm;
@@ -1156,30 +1156,36 @@ export function FloorPlanGridView({
             };
 
             const hDimLine = (x1: number, x2: number, y: number, lbl: string, key: string) => {
-              const mx = (x1 + x2) / 2;
+              const minX = Math.min(x1, x2);
+              const maxX = Math.max(x1, x2);
+              const mx = (minX + maxX) / 2;
               const tw = Math.max(50, lbl.length * 6 + 10);
-              dimLines.push(
-                <g key={key}>
-                  <line x1={x1} y1={y} x2={x2} y2={y} stroke="#2563eb" strokeWidth={1} />
-                  <line x1={x1} y1={y - 5} x2={x1} y2={y + 5} stroke="#2563eb" strokeWidth={1.5} />
-                  <line x1={x2} y1={y - 5} x2={x2} y2={y + 5} stroke="#2563eb" strokeWidth={1.5} />
-                  <rect x={mx - tw / 2} y={y - 8} width={tw} height={14} rx={3} fill="#2563eb" opacity={0.9} />
-                  <text x={mx} y={y + 2} textAnchor="middle" fontSize={8} fontWeight="bold" fill="white">{lbl}</text>
-                </g>
+              dimElements.push(
+                <div key={`${key}-l`} className="absolute pointer-events-none" style={{ left: minX, top: y, width: maxX - minX, height: 1, backgroundColor: '#2563eb', zIndex: 28 }} />,
+                <div key={`${key}-t1`} className="absolute pointer-events-none" style={{ left: x1 - 1, top: y - 5, width: 1.5, height: 11, backgroundColor: '#2563eb', zIndex: 28 }} />,
+                <div key={`${key}-t2`} className="absolute pointer-events-none" style={{ left: x2 - 1, top: y - 5, width: 1.5, height: 11, backgroundColor: '#2563eb', zIndex: 28 }} />,
+                <div key={`${key}-lb`} className="absolute pointer-events-none flex items-center justify-center" style={{
+                  left: mx - tw / 2, top: y - 8, width: tw, height: 14,
+                  backgroundColor: 'rgba(37, 99, 235, 0.9)', borderRadius: 3,
+                  color: 'white', fontSize: 8, fontWeight: 'bold', zIndex: 29, lineHeight: '1',
+                }}>{lbl}</div>,
               );
             };
 
             const vDimLine = (y1: number, y2: number, x: number, lbl: string, key: string) => {
-              const my = (y1 + y2) / 2;
+              const minY = Math.min(y1, y2);
+              const maxY = Math.max(y1, y2);
+              const my = (minY + maxY) / 2;
               const tw = Math.max(50, lbl.length * 6 + 10);
-              dimLines.push(
-                <g key={key}>
-                  <line x1={x} y1={y1} x2={x} y2={y2} stroke="#2563eb" strokeWidth={1} />
-                  <line x1={x - 5} y1={y1} x2={x + 5} y2={y1} stroke="#2563eb" strokeWidth={1.5} />
-                  <line x1={x - 5} y1={y2} x2={x + 5} y2={y2} stroke="#2563eb" strokeWidth={1.5} />
-                  <rect x={x - tw / 2} y={my - 7} width={tw} height={14} rx={3} fill="#2563eb" opacity={0.9} />
-                  <text x={x} y={my + 3} textAnchor="middle" fontSize={8} fontWeight="bold" fill="white">{lbl}</text>
-                </g>
+              dimElements.push(
+                <div key={`${key}-l`} className="absolute pointer-events-none" style={{ left: x, top: minY, width: 1, height: maxY - minY, backgroundColor: '#2563eb', zIndex: 28 }} />,
+                <div key={`${key}-t1`} className="absolute pointer-events-none" style={{ left: x - 5, top: y1 - 1, width: 11, height: 1.5, backgroundColor: '#2563eb', zIndex: 28 }} />,
+                <div key={`${key}-t2`} className="absolute pointer-events-none" style={{ left: x - 5, top: y2 - 1, width: 11, height: 1.5, backgroundColor: '#2563eb', zIndex: 28 }} />,
+                <div key={`${key}-lb`} className="absolute pointer-events-none flex items-center justify-center" style={{
+                  left: x - tw / 2, top: my - 7, width: tw, height: 14,
+                  backgroundColor: 'rgba(37, 99, 235, 0.9)', borderRadius: 3,
+                  color: 'white', fontSize: 8, fontWeight: 'bold', zIndex: 29, lineHeight: '1',
+                }}>{lbl}</div>,
               );
             };
 
@@ -1291,30 +1297,7 @@ export function FloorPlanGridView({
               vInternalLevel++;
             });
 
-            // Expand SVG generously to include ALL dim levels (perimeter + internal)
-            const maxTopLevels = topAll.length >= 3 ? 2 : 1;
-            const maxLeftLevels = leftAll.length >= 3 ? 2 : 1;
-            const maxRightLevels = Math.max(1, vInternalLevel + INTERNAL_LEVEL_BASE + 1);
-            const maxBottomLevels = Math.max(1, hInternalLevel + INTERNAL_LEVEL_BASE + 1);
-            const dimExtraTop = DIM_OFF_OUTER + LEVEL_STEP * (maxTopLevels + 1) + 40;
-            const dimExtraLeft = DIM_OFF_OUTER + LEVEL_STEP * (maxLeftLevels + 1) + 40;
-            const dimExtraRight = DIM_OFF_RIGHT + LEVEL_STEP * (maxRightLevels + 1) + 60;
-            const dimExtraBottom = DIM_OFF_BOTTOM + LEVEL_STEP * (maxBottomLevels + 1) + 40;
-            const dimTotalW = COL_HEADER_W + totalCols * CS + dimExtraRight + dimExtraLeft;
-            const dimTotalH = ROW_HEADER_H + totalRows * CS + dimExtraBottom + dimExtraTop;
-            return (
-              <svg className="absolute pointer-events-none" style={{
-                top: -dimExtraTop,
-                left: -dimExtraLeft,
-                width: dimTotalW,
-                height: dimTotalH,
-                zIndex: 28,
-              }}
-              viewBox={`${-dimExtraLeft} ${-dimExtraTop} ${dimTotalW} ${dimTotalH}`}
-              >
-                {dimLines}
-              </svg>
-            );
+            return dimElements;
           })()}
         </div>
       </div>

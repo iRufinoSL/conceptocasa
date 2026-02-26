@@ -68,8 +68,8 @@ export function FloorPlanPdfExport({ budgetName, floorName, containerRef }: Floo
         logging: false,
         width: scrollEl ? scrollEl.scrollWidth : container.scrollWidth,
         height: scrollEl ? scrollEl.scrollHeight : container.scrollHeight,
-        windowWidth: scrollEl ? scrollEl.scrollWidth + 100 : container.scrollWidth + 100,
-        windowHeight: scrollEl ? scrollEl.scrollHeight + 100 : container.scrollHeight + 100,
+        windowWidth: (scrollEl?.scrollWidth || container.scrollWidth) + 100,
+        windowHeight: (scrollEl?.scrollHeight || container.scrollHeight) + 100,
       });
 
       // Restore
@@ -84,26 +84,78 @@ export function FloorPlanPdfExport({ budgetName, floorName, containerRef }: Floo
       container.style.height = origContainerHeight;
       container.style.maxHeight = origContainerMaxHeight;
 
-      const imgData = canvas.toDataURL('image/png');
+      // Auto-crop whitespace: scan canvas pixels to find the bounding box of actual content
+      const ctx = canvas.getContext('2d');
+      let cropTop = 0, cropLeft = 0, cropRight = canvas.width, cropBottom = canvas.height;
+      if (ctx) {
+        const imgDataRaw = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const pixels = imgDataRaw.data;
+        const w = canvas.width, h = canvas.height;
+        // Find top
+        topScan: for (let y = 0; y < h; y++) {
+          for (let x = 0; x < w; x++) {
+            const i = (y * w + x) * 4;
+            if (pixels[i] < 250 || pixels[i + 1] < 250 || pixels[i + 2] < 250) { cropTop = y; break topScan; }
+          }
+        }
+        // Find bottom
+        bottomScan: for (let y = h - 1; y >= cropTop; y--) {
+          for (let x = 0; x < w; x++) {
+            const i = (y * w + x) * 4;
+            if (pixels[i] < 250 || pixels[i + 1] < 250 || pixels[i + 2] < 250) { cropBottom = y + 1; break bottomScan; }
+          }
+        }
+        // Find left
+        leftScan: for (let x = 0; x < w; x++) {
+          for (let y = cropTop; y < cropBottom; y++) {
+            const i = (y * w + x) * 4;
+            if (pixels[i] < 250 || pixels[i + 1] < 250 || pixels[i + 2] < 250) { cropLeft = x; break leftScan; }
+          }
+        }
+        // Find right
+        rightScan: for (let x = w - 1; x >= cropLeft; x--) {
+          for (let y = cropTop; y < cropBottom; y++) {
+            const i = (y * w + x) * 4;
+            if (pixels[i] < 250 || pixels[i + 1] < 250 || pixels[i + 2] < 250) { cropRight = x + 1; break rightScan; }
+          }
+        }
+      }
+
+      // Add a small padding around the crop (in canvas pixels)
+      const cropPad = 15;
+      cropTop = Math.max(0, cropTop - cropPad);
+      cropLeft = Math.max(0, cropLeft - cropPad);
+      cropRight = Math.min(canvas.width, cropRight + cropPad);
+      cropBottom = Math.min(canvas.height, cropBottom + cropPad);
+
+      const cropW = cropRight - cropLeft;
+      const cropH = cropBottom - cropTop;
+
+      // Create cropped canvas
+      const croppedCanvas = document.createElement('canvas');
+      croppedCanvas.width = cropW;
+      croppedCanvas.height = cropH;
+      const croppedCtx = croppedCanvas.getContext('2d')!;
+      croppedCtx.drawImage(canvas, cropLeft, cropTop, cropW, cropH, 0, 0, cropW, cropH);
+
+      const imgData = croppedCanvas.toDataURL('image/png');
 
       // Calculate aspect ratio to fit within the drawable area
-      const imgAspect = canvas.width / canvas.height;
+      const imgAspect = cropW / cropH;
       const drawAspect = drawW / drawH;
 
       let finalW: number, finalH: number;
       if (imgAspect > drawAspect) {
-        // Image is wider - fit to width
         finalW = drawW;
         finalH = drawW / imgAspect;
       } else {
-        // Image is taller - fit to height
         finalH = drawH;
         finalW = drawH * imgAspect;
       }
 
-      // Center horizontally
+      // Center horizontally and vertically
       const offsetX = MARGIN + (drawW - finalW) / 2;
-      const offsetY = MARGIN + HEADER_H + 1;
+      const offsetY = MARGIN + HEADER_H + 1 + (drawH - finalH) / 2;
 
       // Create PDF
       const doc = new jsPDF({

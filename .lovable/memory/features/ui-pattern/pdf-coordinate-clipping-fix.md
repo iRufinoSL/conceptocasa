@@ -1,0 +1,4 @@
+# Memory: features/ui-pattern/pdf-coordinate-clipping-fix
+Updated: now
+
+Para evitar el recorte de líneas de cota negativas (Superior/Izquierda) en exportaciones PDF, el SVG de dimensiones calcula dinámicamente el espacio extra necesario en las 4 caras basándose en el número real de niveles de cotas (perimetrales + internas). Se usa dimExtraTop/Left/Right/Bottom calculados con maxTopLevels, maxLeftLevels, maxRightLevels, maxBottomLevels. Durante la captura con html2canvas, el contenedor de scroll se fuerza temporalmente a 'overflow: visible'. Las cotas internas usan las mismas funciones getXInternal/getYInternal que replican la lógica de getX/getY del perímetro, asegurando alineación exacta de los extremos con las esquinas de la cuadrícula. La cara derecha usa DIM_OFF_RIGHT = DIM_OFF_OUTER + 10 para evitar solapamiento con la línea exterior.

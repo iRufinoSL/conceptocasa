@@ -59,26 +59,26 @@ export interface PositionedRoom {
 
 const THRESHOLD = 0.15;
 
-/** Column label: 2-digit padded with level prefix. col=1, level="1" → "1-01" */
+/** Column label: 2-digit padded with level prefix. col=1, level="1" → "1:01" */
 export function colToLabel(col: number, levelPrefix?: string): string {
   const num = String(col).padStart(2, '0');
-  return levelPrefix ? `${levelPrefix}-${num}` : num;
+  return levelPrefix ? `${levelPrefix}:${num}` : num;
 }
 
-/** Row label: 2-digit padded with level prefix. row=4, level="1" → "1-04" */
+/** Row label: 2-digit padded with level prefix. row=4, level="1" → "1:04" */
 export function rowToLabel(row: number, levelPrefix?: string): string {
   const num = String(row).padStart(2, '0');
-  return levelPrefix ? `${levelPrefix}-${num}` : num;
+  return levelPrefix ? `${levelPrefix}:${num}` : num;
 }
 
 /** Parse coordinate in multiple formats:
- * - Compact: "1-1710" → level 1, col 17, row 10
- * - Slash:   "1-05/04" or "05/04" → col 5, row 4
+ * - Compact: "1:1710" or "1-1710" → level 1, col 17, row 10
+ * - Slash:   "1:05/04" or "1-05/04" or "05/04" → col 5, row 4
  * - Legacy letter: "A1" → col 1, row 1
  */
 export function parseCoord(coord: string): { col: number; row: number } | null {
-  // Strip level prefix and keep it for compact format detection
-  const levelMatch = coord.match(/^(\d+)-(.+)$/);
+  // Strip level prefix (supports both ":" and "-" separators for backward compat)
+  const levelMatch = coord.match(/^(\d+)[:|-](.+)$/);
   const body = levelMatch ? levelMatch[2] : coord;
 
   // Slash format: "05/04"
@@ -107,10 +107,10 @@ export function parseCoord(coord: string): { col: number; row: number } | null {
   return null;
 }
 
-/** Format coordinate: col=5, row=4, level="1" → "1-05/04" */
+/** Format coordinate: col=5, row=4, level="1" → "1:05/04" */
 export function formatCoord(col: number, row: number, levelPrefix?: string): string {
   const base = `${String(col).padStart(2, '0')}/${String(row).padStart(2, '0')}`;
-  return levelPrefix ? `${levelPrefix}-${base}` : base;
+  return levelPrefix ? `${levelPrefix}:${base}` : base;
 }
 
 // Derive grid positions from room posX/posY based on cell size in meters

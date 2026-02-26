@@ -126,6 +126,7 @@ export function ElevationsGridViewer({
   const [editCard, setEditCard] = useState<ElevationCard | null>(null);
   const [editCardDialogOpen, setEditCardDialogOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'rooms' | 'groups' | 'composite' | 'total'>('rooms');
+  const [showFaldonesWithAleros, setShowFaldonesWithAleros] = useState(true);
 
   // Scroll to focused wall on mount
   useEffect(() => {
@@ -402,7 +403,7 @@ export function ElevationsGridViewer({
         });
       });
 
-      // Faldones (roof slope panels) for bajo cubierta rooms
+      // Faldones (roof slope panels) — "Tejado" section for bajo cubierta rooms
       if (roomIsBajoCubierta && plan.roofType === 'dos_aguas') {
         // Calculate building dimensions for this floor
         const floorRooms = rooms.filter(r => r.floorId === room.floorId && isBajoCubierta(r, plan, floors));
@@ -415,7 +416,7 @@ export function ElevationsGridViewer({
         });
         const innerWidth = (maxX - minX) + 2 * plan.externalWallThickness;
         const innerLength = (maxY - minY) + 2 * plan.externalWallThickness;
-        const overhang = plan.roofOverhang || 0;
+        const overhang = showFaldonesWithAleros ? (plan.roofOverhang || 0) : 0;
         const totalWidth = innerWidth + 2 * overhang;
         const totalLength = innerLength + 2 * overhang;
         const halfWidth = totalWidth / 2;
@@ -425,11 +426,11 @@ export function ElevationsGridViewer({
         // Only add faldones once per floor (check if this is the first bajo cubierta room)
         const isFirstBajoCubierta = floorRooms.length === 0 || floorRooms[0].id === room.id;
         if (isFirstBajoCubierta) {
-          // Faldón superior (AB side) - width=AB, length=BC direction
+          // Faldón superior (AB side)
           cards.push({
             id: `faldon-sup-${room.floorId || room.id}`,
-            label: 'Faldón Superior (AB)',
-            sublabel: `${Math.round(totalWidth * 1000)} mm × ${Math.round(totalLength * 1000)} mm`,
+            label: 'Faldón Superior (CuA→CuB)',
+            sublabel: `Tejado ${showFaldonesWithAleros ? 'con aleros' : 'sin aleros'} · ${Math.round(totalWidth * 1000)}×${Math.round(totalLength * 1000)} mm`,
             category: 'faldon',
             width: totalWidth,
             height: totalLength,
@@ -446,8 +447,8 @@ export function ElevationsGridViewer({
           // Faldón inferior (CD side)
           cards.push({
             id: `faldon-inf-${room.floorId || room.id}`,
-            label: 'Faldón Inferior (CD)',
-            sublabel: `${Math.round(totalWidth * 1000)} mm × ${Math.round(totalLength * 1000)} mm`,
+            label: 'Faldón Inferior (CuA→CuB)',
+            sublabel: `Tejado ${showFaldonesWithAleros ? 'con aleros' : 'sin aleros'} · ${Math.round(totalWidth * 1000)}×${Math.round(totalLength * 1000)} mm`,
             category: 'faldon',
             width: totalWidth,
             height: totalLength,
@@ -465,7 +466,7 @@ export function ElevationsGridViewer({
 
       return { room, cards };
     });
-  }, [rooms, plan, floors, wallSegmentsMap, wallClassification, externalWallNames]);
+  }, [rooms, plan, floors, wallSegmentsMap, wallClassification, externalWallNames, showFaldonesWithAleros]);
 
   // Auto-open the WallEditDialog for a specific wall (from space form eye icon)
   useEffect(() => {
@@ -670,6 +671,17 @@ export function ElevationsGridViewer({
           <span className="text-[10px] text-muted-foreground ml-2">
             Esquinas: {buildingOutline.map(v => v.label).join(' → ')} → {buildingOutline[0]?.label}
           </span>
+        )}
+        {/* Toggle faldones with/without aleros */}
+        {viewMode === 'rooms' && (
+          <Button
+            variant={showFaldonesWithAleros ? 'default' : 'outline'}
+            size="sm"
+            className="text-xs h-7 ml-2"
+            onClick={() => setShowFaldonesWithAleros(v => !v)}
+          >
+            {showFaldonesWithAleros ? 'Con aleros' : 'Sin aleros'}
+          </Button>
         )}
       </div>
 
@@ -1477,24 +1489,19 @@ function ElevationCardView({ card, plan, onOpeningClick, onAddOpening, onCardDou
             );
           })()}
 
-          {/* Corner labels */}
+          {/* Corner labels: CuA (left peak) and CuB (right peak) */}
           {card.wall && isExteriorType(card.wall.wallType as string) && (() => {
-            const wi = card.wall.wallIndex;
-            const interiorCornerMap: Record<number, [string, string]> = {
-              1: ['A', 'B'], 2: ['B', 'C'], 3: ['C', 'D'], 4: ['D', 'A'],
-            };
-            const [leftCorner, rightCorner] = interiorCornerMap[wi] || ['?', '?'];
             const arrowY = ry - 8;
             const fs = fsScale ? 9 : 7;
             return (
               <g>
-                <text x={rx} y={arrowY} textAnchor="start" fontSize={fs} fontWeight={700} fill="hsl(222, 47%, 40%)">← {leftCorner}</text>
-                <text x={rx + rw} y={arrowY} textAnchor="end" fontSize={fs} fontWeight={700} fill="hsl(222, 47%, 40%)">{rightCorner} →</text>
+                <text x={rx} y={arrowY} textAnchor="start" fontSize={fs} fontWeight={700} fill="hsl(222, 47%, 40%)">← CuA</text>
+                <text x={rx + rw} y={arrowY} textAnchor="end" fontSize={fs} fontWeight={700} fill="hsl(222, 47%, 40%)">CuB →</text>
               </g>
             );
           })()}
 
-          {/* Dimensions - base */}
+          {/* Dimensions - base (1 of 4) */}
           <line x1={rx} y1={baseY + 12} x2={rx + rw} y2={baseY + 12}
             stroke="hsl(25, 95%, 45%)" strokeWidth={0.6} />
           <line x1={rx} y1={baseY + 8} x2={rx} y2={baseY + 16} stroke="hsl(25, 95%, 45%)" strokeWidth={0.4} />
@@ -1502,7 +1509,7 @@ function ElevationCardView({ card, plan, onOpeningClick, onAddOpening, onCardDou
           <text x={rx + rw / 2} y={baseY + 24} textAnchor="middle" fontSize={fsScale ? 10 : 8} fill="hsl(25, 95%, 45%)" fontWeight={600}>
             {Math.round(card.width * 1000)} mm (base)
           </text>
-          {/* Dimensions - height */}
+          {/* Dimensions - height / cumbrera (2 of 4) */}
           <line x1={rx - 12} y1={ry} x2={rx - 12} y2={baseY}
             stroke="hsl(25, 95%, 45%)" strokeWidth={0.6} />
           <line x1={rx - 16} y1={ry} x2={rx - 8} y2={ry} stroke="hsl(25, 95%, 45%)" strokeWidth={0.4} />
@@ -1511,13 +1518,24 @@ function ElevationCardView({ card, plan, onOpeningClick, onAddOpening, onCardDou
             transform={`rotate(-90, ${rx - 18}, ${ry + rh / 2})`}>
             {Math.round(card.gablePeakH! * 1000)} mm (cumbrera)
           </text>
-          {/* Slope line dimension */}
+          {/* Left hypotenuse (3 of 4) */}
           {(() => {
             const slopeLen = Math.sqrt((card.width / 2) ** 2 + card.gablePeakH! ** 2);
             return (
-              <text x={rx + rw * 0.25} y={ry + rh * 0.4} textAnchor="middle"
+              <text x={rx + rw * 0.22} y={ry + rh * 0.4} textAnchor="middle"
                 fontSize={fsScale ? 9 : 7} fill="hsl(15, 70%, 45%)" fontWeight={600}
-                transform={`rotate(${Math.atan2(card.gablePeakH!, card.width / 2) * -180 / Math.PI}, ${rx + rw * 0.25}, ${ry + rh * 0.4})`}>
+                transform={`rotate(${Math.atan2(card.gablePeakH!, card.width / 2) * -180 / Math.PI}, ${rx + rw * 0.22}, ${ry + rh * 0.4})`}>
+                {Math.round(slopeLen * 1000)} mm
+              </text>
+            );
+          })()}
+          {/* Right hypotenuse (4 of 4) */}
+          {(() => {
+            const slopeLen = Math.sqrt((card.width / 2) ** 2 + card.gablePeakH! ** 2);
+            return (
+              <text x={rx + rw * 0.78} y={ry + rh * 0.4} textAnchor="middle"
+                fontSize={fsScale ? 9 : 7} fill="hsl(15, 70%, 45%)" fontWeight={600}
+                transform={`rotate(${Math.atan2(card.gablePeakH!, card.width / 2) * 180 / Math.PI}, ${rx + rw * 0.78}, ${ry + rh * 0.4})`}>
                 {Math.round(slopeLen * 1000)} mm
               </text>
             );

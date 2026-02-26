@@ -38,19 +38,51 @@ export function FloorPlanPdfExport({ budgetName, floorName, containerRef }: Floo
       const drawW = A4_W - 2 * MARGIN;
       const drawH = A4_H - 2 * MARGIN - HEADER_H;
 
-      // Temporarily set overflow visible so html2canvas captures top/left dims
-      const scrollEl = container.querySelector('.overflow-auto');
-      const origOverflow = scrollEl ? (scrollEl as HTMLElement).style.overflow : '';
-      if (scrollEl) (scrollEl as HTMLElement).style.overflow = 'visible';
+      // Temporarily set overflow visible and expand container to full scroll size
+      const scrollEl = container.querySelector('.overflow-auto') as HTMLElement | null;
+      const origOverflow = scrollEl ? scrollEl.style.overflow : '';
+      const origWidth = scrollEl ? scrollEl.style.width : '';
+      const origHeight = scrollEl ? scrollEl.style.height : '';
+      const origMaxHeight = scrollEl ? scrollEl.style.maxHeight : '';
+      if (scrollEl) {
+        scrollEl.style.overflow = 'visible';
+        scrollEl.style.width = scrollEl.scrollWidth + 'px';
+        scrollEl.style.height = scrollEl.scrollHeight + 'px';
+        scrollEl.style.maxHeight = 'none';
+      }
+
+      // Also expand the outer container if it constrains size
+      const origContainerOverflow = container.style.overflow;
+      const origContainerWidth = container.style.width;
+      const origContainerHeight = container.style.height;
+      const origContainerMaxHeight = container.style.maxHeight;
+      container.style.overflow = 'visible';
+      container.style.width = 'auto';
+      container.style.height = 'auto';
+      container.style.maxHeight = 'none';
 
       const canvas = await html2canvas(container, {
-        scale: 2,
+        scale: 3,
         useCORS: true,
         backgroundColor: '#ffffff',
         logging: false,
+        width: scrollEl ? scrollEl.scrollWidth : container.scrollWidth,
+        height: scrollEl ? scrollEl.scrollHeight : container.scrollHeight,
+        windowWidth: scrollEl ? scrollEl.scrollWidth + 100 : container.scrollWidth + 100,
+        windowHeight: scrollEl ? scrollEl.scrollHeight + 100 : container.scrollHeight + 100,
       });
 
-      if (scrollEl) (scrollEl as HTMLElement).style.overflow = origOverflow;
+      // Restore
+      if (scrollEl) {
+        scrollEl.style.overflow = origOverflow;
+        scrollEl.style.width = origWidth;
+        scrollEl.style.height = origHeight;
+        scrollEl.style.maxHeight = origMaxHeight;
+      }
+      container.style.overflow = origContainerOverflow;
+      container.style.width = origContainerWidth;
+      container.style.height = origContainerHeight;
+      container.style.maxHeight = origContainerMaxHeight;
 
       const imgData = canvas.toDataURL('image/png');
 

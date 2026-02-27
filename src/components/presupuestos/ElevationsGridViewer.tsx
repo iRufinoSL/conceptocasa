@@ -171,9 +171,110 @@ export function ElevationsGridViewer({
   // Building outline & composite walls — use user-defined corners when available
   const cellSizeM = plan.scaleMode === 'bloque' ? plan.blockLengthMm / 1000 : 1;
 
+  const ensureMainPerimeterComposites = useCallback((composites: CompositeWall[], floorCorners: CustomCorner[] = []) => {
+    if (composites.length === 0) return composites;
+
+    const mains = floorCorners.filter(c => c.isMain);
+    if (mains.length < 4) return composites;
+
+    const byPos = new Map(mains.map(c => [c.mainPosition, c] as const));
+    const tl = byPos.get('TL');
+    const tr = byPos.get('TR');
+    const br = byPos.get('BR');
+    const bl = byPos.get('BL');
+    if (!tl || !tr || !br || !bl) return composites;
+
+    const defs: Array<{
+      side: 'top' | 'right' | 'bottom' | 'left';
+      start: CustomCorner;
+      end: CustomCorner;
+    }> = [
+      { side: 'top', start: tl, end: tr },
+      { side: 'right', start: tr, end: br },
+      { side: 'bottom', start: br, end: bl },
+      { side: 'left', start: bl, end: tl },
+    ];
+
+    const additions: CompositeWall[] = [];
+
+    defs.forEach(({ side, start, end }) => {
+      const fullLabel = `${start.label}-${end.label}`;
+      const alreadyExists = composites.some(cw => cw.isExterior && cw.label === fullLabel);
+      if (alreadyExists) return;
+
+      const split = composites.filter(cw => cw.isExterior && cw.side === side);
+      if (split.length === 0) return;
+
+      const ordered = [...split].sort((a, b) => {
+        const aPos = side === 'top' || side === 'bottom' ? a.startCorner.x : a.startCorner.y;
+        const bPos = side === 'top' || side === 'bottom' ? b.startCorner.x : b.startCorner.y;
+        return side === 'bottom' || side === 'left' ? bPos - aPos : aPos - bPos;
+      });
+
+      const mergedSections = [] as CompositeWall['sections'];
+      let totalLength = 0;
+      let doors = 0;
+      let windows = 0;
+      const openingCounts: Record<string, number> = {};
+
+      ordered.forEach(cw => {
+        cw.sections.forEach(s => {
+          mergedSections.push({ ...s, startOffset: totalLength + s.startOffset });
+        });
+        totalLength += cw.totalLength;
+        doors += cw.objectSummary.doors;
+        windows += cw.objectSummary.windows;
+        cw.objectSummary.openingDetails.forEach(od => {
+          openingCounts[od.type] = (openingCounts[od.type] || 0) + od.count;
+        });
+      });
+
+      let runningOffset = 0;
+      const sections = mergedSections.map(s => {
+        const next = { ...s, startOffset: runningOffset };
+        runningOffset += s.length;
+        return next;
+      });
+
+      const openingDetails = Object.entries(openingCounts).map(([type, count]) => ({
+        type,
+        count,
+        label: OPENING_PRESETS[type as keyof typeof OPENING_PRESETS]?.label || type,
+      }));
+
+      let totalBlocks: { cols: number; rows: number; total: number } | undefined;
+      if (plan.scaleMode === 'bloque') {
+        const bw = plan.blockLengthMm / 1000;
+        const bh = plan.blockHeightMm / 1000;
+        if (bw > 0 && bh > 0 && sections.length > 0) {
+          const maxH = Math.max(...sections.map(s => s.height));
+          totalBlocks = {
+            cols: Math.ceil(totalLength / bw),
+            rows: Math.ceil(maxH / bh),
+            total: Math.ceil(totalLength / bw) * Math.ceil(maxH / bh),
+          };
+        }
+      }
+
+      additions.push({
+        id: `cw-ui-full-${start.label}-${end.label}`,
+        label: fullLabel,
+        startCorner: { x: (start.col - 1) * cellSizeM, y: (start.row - 1) * cellSizeM, label: start.label },
+        endCorner: { x: (end.col - 1) * cellSizeM, y: (end.row - 1) * cellSizeM, label: end.label },
+        side,
+        totalLength,
+        sections,
+        isExterior: true,
+        objectSummary: { totalBlocks, doors, windows, openingDetails },
+      });
+    });
+
+    return additions.length > 0 ? [...composites, ...additions] : composites;
+  }, [cellSizeM, plan.blockHeightMm, plan.blockLengthMm, plan.scaleMode]);
+
   const perFloorComposites = useMemo(() => {
     const hasUserCorners = customCorners && customCorners.length > 0;
-    
+
     const filterHidden = (composites: CompositeWall[]) =>
       composites.filter(cw => !cw.sections.every(s => s.wall.elevationGroup === '__hidden__'));
 
@@ -182,7 +283,8 @@ export function ElevationsGridViewer({
       const composites = hasUserCorners
         ? computeCompositeWallsFromCorners(rooms, plan, customCorners!, cellSizeM)
         : (() => { const outline = computeBuildingOutline(rooms); return computeCompositeWalls(rooms, outline, plan); })();
-      return [{ floorId: 'all', floorName: '', composites: filterHidden(composites) }];
+      const visible = filterHidden(composites);
+      return [{ floorId: 'all', floorName: '', composites: ensureMainPerimeterComposites(visible, customCorners || []) }];
     }
     const sortedFloors = [...floors].sort((a, b) => a.orderIndex - b.orderIndex);
     return sortedFloors.map(floor => {
@@ -196,9 +298,10 @@ export function ElevationsGridViewer({
       const composites = hasFloorCorners
         ? computeCompositeWallsFromCorners(floorRooms, plan, floorCorners, cellSizeM)
         : (() => { const outline = computeBuildingOutline(floorRooms); return computeCompositeWalls(floorRooms, outline, plan); })();
-      return { floorId: floor.id, floorName: floor.name, composites: filterHidden(composites) };
+      const visible = filterHidden(composites);
+      return { floorId: floor.id, floorName: floor.name, composites: ensureMainPerimeterComposites(visible, floorCorners) };
     }).filter(f => f.composites.length > 0);
-  }, [rooms, floors, plan, customCorners, cellSizeM]);
+  }, [rooms, floors, plan, customCorners, cellSizeM, ensureMainPerimeterComposites]);
 
   // Flat list of all composite walls (for counting)
   const allCompositeWalls = useMemo(() => perFloorComposites.flatMap(f => f.composites), [perFloorComposites]);

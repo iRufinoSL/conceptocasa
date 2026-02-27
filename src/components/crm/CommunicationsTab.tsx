@@ -13,7 +13,7 @@ import { es } from 'date-fns/locale';
 import { 
   Mail, Phone, MessageSquare, Calendar, Search, Filter, 
   ArrowUpRight, ArrowDownLeft, CheckCircle, XCircle, Clock, Eye,
-  List, Users, ChevronRight, Inbox, Ticket, Send, History
+  List, Users, ChevronRight, Inbox, Ticket, Send, History, BarChart3
 } from 'lucide-react';
 import type { Tables } from '@/integrations/supabase/types';
 import { TicketsList } from './TicketsList';
@@ -21,6 +21,7 @@ import { ComposeEmail } from './ComposeEmail';
 import { CRMWhatsAppCompose } from './CRMWhatsAppCompose';
 import { UnifiedCommunicationsList } from '@/components/communications/UnifiedCommunicationsList';
 import { CRMSMSCompose } from './CRMSMSCompose';
+import { EmailTrackingTab } from './EmailTrackingTab';
 
 type Communication = Tables<'crm_communications'> & {
   crm_contacts?: { name: string; surname: string | null; email: string | null } | null;
@@ -90,7 +91,7 @@ export function CommunicationsTab() {
     <div className="space-y-4">
       {/* Sub-tabs navigation */}
       <Tabs value={activeSubTab} onValueChange={setActiveSubTab}>
-        <TabsList className="grid w-full max-w-3xl grid-cols-5">
+        <TabsList className="grid w-full max-w-4xl grid-cols-6">
           <TabsTrigger value="communications" className="gap-2">
             <Inbox className="h-4 w-4" />
             <span className="hidden sm:inline">Comunicaciones</span>
@@ -106,6 +107,10 @@ export function CommunicationsTab() {
           <TabsTrigger value="whatsapp" className="gap-2">
             <MessageSquare className="h-4 w-4" />
             <span className="hidden sm:inline">WhatsApp</span>
+          </TabsTrigger>
+          <TabsTrigger value="tracking" className="gap-2">
+            <BarChart3 className="h-4 w-4" />
+            <span className="hidden sm:inline">Seguimiento</span>
           </TabsTrigger>
           <TabsTrigger value="sms" className="gap-2">
             <Phone className="h-4 w-4" />
@@ -145,6 +150,11 @@ export function CommunicationsTab() {
         {/* WhatsApp Compose Tab */}
         <TabsContent value="whatsapp" className="mt-4">
           <CRMWhatsAppCompose />
+        </TabsContent>
+
+        {/* Email Tracking / Seguimiento Tab */}
+        <TabsContent value="tracking" className="mt-4">
+          <EmailTrackingTab />
         </TabsContent>
 
         {/* SMS Compose Tab */}

@@ -308,6 +308,7 @@ function LevelManagerPanel({ floors, planData, rooms, onAdd, onUpdate, onDelete,
   const [intThick, setIntThick] = useState(String(planData.internalWallThickness));
   const [roofType, setRoofType] = useState<string>(planData.roofType || 'dos_aguas');
   const [overhang, setOverhang] = useState(String(planData.roofOverhang));
+  const [eaveExcluded, setEaveExcluded] = useState<string[]>(planData.eaveExcludedSides || []);
   const [scaleMode, setScaleMode] = useState<string>(planData.scaleMode || 'metros');
   const [blockLenMm, setBlockLenMm] = useState(String(planData.blockLengthMm || 625));
   const [blockHMm, setBlockHMm] = useState(String(planData.blockHeightMm || 250));
@@ -432,6 +433,7 @@ function LevelManagerPanel({ floors, planData, rooms, onAdd, onUpdate, onDelete,
       roofOverhang: parseFloat(overhang) || planData.roofOverhang,
       roofSlopePercent: Math.round(slopePct * 10) / 10,
       ridgeHeight: ridgeH,
+      eaveExcludedSides: eaveExcluded as any,
       ...scaleUpdate,
     });
 
@@ -504,6 +506,28 @@ function LevelManagerPanel({ floors, planData, rooms, onAdd, onUpdate, onDelete,
             <div>
               <Label className="text-xs">Alero (m)</Label>
               <Input type="number" step="0.1" value={overhang} onChange={e => setOverhang(e.target.value)} disabled={saving} />
+            </div>
+            <div className="col-span-full">
+              <Label className="text-xs mb-1 block">Excluir alero en lados</Label>
+              <div className="flex flex-wrap gap-3">
+                {(['superior', 'inferior', 'izquierda', 'derecha'] as const).map(side => {
+                  const labels: Record<string, string> = { superior: 'Superior', inferior: 'Inferior', izquierda: 'Izquierda', derecha: 'Derecha' };
+                  return (
+                    <label key={side} className="flex items-center gap-1.5 text-xs">
+                      <Checkbox
+                        checked={eaveExcluded.includes(side)}
+                        onCheckedChange={(checked) => {
+                          setEaveExcluded(prev => checked
+                            ? [...prev, side]
+                            : prev.filter(s => s !== side));
+                        }}
+                        disabled={saving}
+                      />
+                      {labels[side]}
+                    </label>
+                  );
+                })}
+              </div>
             </div>
           </div>
         </div>
@@ -766,6 +790,7 @@ export function FloorPlanTab({ budgetId, budgetName = '', isAdmin }: FloorPlanTa
     roofOverhang: 0.6,
     roofSlopePercent: 20,
     roofType: 'dos_aguas',
+    eaveExcludedSides: [] as string[],
   });
   const [floorDefs, setFloorDefs] = useState<FloorDef[]>([
     createDefaultFloor('Nivel 1', 'nivel_1', 100),
@@ -910,6 +935,29 @@ export function FloorPlanTab({ budgetId, budgetName = '', isAdmin }: FloorPlanTa
                   <Label className="text-xs">Alero (m)</Label>
                   <Input type="number" step="0.1" value={planConfig.roofOverhang}
                     onChange={e => setPlanConfig({ ...planConfig, roofOverhang: Number(e.target.value) })} />
+                </div>
+                <div className="col-span-full">
+                  <Label className="text-xs mb-1 block">Excluir alero en lados</Label>
+                  <div className="flex flex-wrap gap-3">
+                    {(['superior', 'inferior', 'izquierda', 'derecha'] as const).map(side => {
+                      const labels: Record<string, string> = { superior: 'Superior', inferior: 'Inferior', izquierda: 'Izquierda', derecha: 'Derecha' };
+                      const excluded = planConfig.eaveExcludedSides || [];
+                      return (
+                        <label key={side} className="flex items-center gap-1.5 text-xs">
+                          <Checkbox
+                            checked={excluded.includes(side)}
+                            onCheckedChange={(checked) => {
+                              const newExcl = checked
+                                ? [...excluded, side]
+                                : excluded.filter((s: string) => s !== side);
+                              setPlanConfig({ ...planConfig, eaveExcludedSides: newExcl });
+                            }}
+                          />
+                          {labels[side]}
+                        </label>
+                      );
+                    })}
+                  </div>
                 </div>
                 <div>
                   <Label className="text-xs">Pendiente (%)</Label>

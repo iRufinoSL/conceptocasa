@@ -927,6 +927,7 @@ export type Database = {
           created_at: string | null
           custom_corners: Json | null
           default_height: number
+          eave_excluded_sides: string[] | null
           external_wall_thickness: number
           id: string
           int_block_height_mm: number
@@ -951,6 +952,7 @@ export type Database = {
           created_at?: string | null
           custom_corners?: Json | null
           default_height?: number
+          eave_excluded_sides?: string[] | null
           external_wall_thickness?: number
           id?: string
           int_block_height_mm?: number
@@ -975,6 +977,7 @@ export type Database = {
           created_at?: string | null
           custom_corners?: Json | null
           default_height?: number
+          eave_excluded_sides?: string[] | null
           external_wall_thickness?: number
           id?: string
           int_block_height_mm?: number

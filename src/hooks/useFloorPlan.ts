@@ -857,10 +857,9 @@ export function useFloorPlan(budgetId: string) {
       const classification = autoClassifyWalls(rooms);
       // Only update walls that haven't been manually set by the user.
       // Walls with temp- IDs are new (not yet in DB) — always classify them.
-      // Walls whose stored type matches a "default" pattern (exterior/interior without
-      // _compartida/_invisible) are considered auto-classified and safe to overwrite.
-      // Walls with _compartida or _invisible suffixes were set by the user or a previous
-      // auto-classify run — we respect those unless they conflict with geometry.
+      // Walls whose stored type matches a "default" pattern (exterior/interior)
+      // are considered auto-classified and safe to overwrite.
+      // Any non-default type (_compartida/_invisible) is treated as manual and preserved.
       const DEFAULT_TYPES = new Set(['exterior', 'interior']);
       let updated = 0;
       for (const room of rooms) {
@@ -870,11 +869,8 @@ export function useFloorPlan(budgetId: string) {
           const autoType = classification.get(key);
           if (!autoType) continue;
           if (wall.wallType === autoType) continue; // already correct
-          // Skip if user has manually set a non-default type and auto wants to change it
-          // UNLESS the auto type is invisible (geometry demands it, e.g. shared wall non-owner)
           const isManuallySet = !DEFAULT_TYPES.has(wall.wallType);
-          const autoIsInvisible = autoType.endsWith('_invisible');
-          if (isManuallySet && !autoIsInvisible) continue;
+          if (isManuallySet) continue;
           const { error } = await supabase
             .from('budget_floor_plan_walls')
             .update({ wall_type: autoType })

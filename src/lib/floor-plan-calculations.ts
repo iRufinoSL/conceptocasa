@@ -2433,6 +2433,52 @@ export function computeCompositeWallsFromCorners(
   const buildingSpanY = maxY - minY;
   const MIN_SPAN_RATIO = 0.7; // pairs must span at least 70% of building dimension
 
+  type CrossCutMatch = { room: RoomData; wall: WallData; overlapStart: number; overlapEnd: number };
+  const choosePreferredMatches = (
+    primary: CrossCutMatch[],
+    secondary: CrossCutMatch[],
+    axis: 'x' | 'y',
+  ): CrossCutMatch[] => {
+    if (primary.length === 0) return secondary;
+    if (secondary.length === 0) return primary;
+
+    const score = (matches: CrossCutMatch[]) => {
+      let visibleLen = 0;
+      let totalLen = 0;
+      let visibleOpenings = 0;
+
+      matches.forEach(({ room, wall, overlapStart, overlapEnd }) => {
+        const sectionLen = Math.max(0, overlapEnd - overlapStart);
+        totalLen += sectionLen;
+
+        const roomStart = axis === 'x' ? room.posX : room.posY;
+        const fullWallLen = axis === 'x' ? room.width : room.length;
+        const wallSegs = segmentsMap.get(`${room.id}::${wall.wallIndex}`);
+        const effType = resolveEffectiveWallType(wallSegs, wall, overlapStart, overlapEnd, roomStart, fullWallLen);
+
+        if (!isInvisibleType(effType)) {
+          visibleLen += sectionLen;
+          const sectionOpenings = wall.openings.filter(op => {
+            const absPos = roomStart + op.positionX * fullWallLen;
+            return absPos >= overlapStart - EPSILON && absPos <= overlapEnd + EPSILON;
+          });
+          visibleOpenings += sectionOpenings.length;
+        }
+      });
+
+      return { visibleLen, totalLen, visibleOpenings, count: matches.length };
+    };
+
+    const a = score(primary);
+    const b = score(secondary);
+
+    if (Math.abs(a.visibleLen - b.visibleLen) > EPSILON) return a.visibleLen > b.visibleLen ? primary : secondary;
+    if (a.visibleOpenings !== b.visibleOpenings) return a.visibleOpenings > b.visibleOpenings ? primary : secondary;
+    if (Math.abs(a.totalLen - b.totalLen) > EPSILON) return a.totalLen > b.totalLen ? primary : secondary;
+    if (a.count !== b.count) return a.count > b.count ? primary : secondary;
+    return primary;
+  };
+
   const verticalPairs: Array<{ top: typeof allMarkersAbs[0]; bottom: typeof allMarkersAbs[0] }> = [];
   for (let i = 0; i < allMarkersAbs.length; i++) {
     for (let j = i + 1; j < allMarkersAbs.length; j++) {
@@ -2509,7 +2555,7 @@ export function computeCompositeWallsFromCorners(
       }
     });
 
-    const matchingRooms = matchRight.length >= matchLeft.length ? matchRight : matchLeft;
+    const matchingRooms = choosePreferredMatches(matchRight, matchLeft, 'y');
     if (matchingRooms.length === 0) return;
 
     matchingRooms.sort((a, b) => a.overlapStart - b.overlapStart);
@@ -2721,7 +2767,7 @@ export function computeCompositeWallsFromCorners(
       }
     });
 
-    const matchingRooms = matchBottom.length >= matchTop.length ? matchBottom : matchTop;
+    const matchingRooms = choosePreferredMatches(matchBottom, matchTop, 'x');
     if (matchingRooms.length === 0) return;
 
     matchingRooms.sort((a, b) => a.overlapStart - b.overlapStart);

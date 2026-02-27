@@ -253,6 +253,9 @@ const Landing = () => {
               <button onClick={() => scrollToSection('proyectos')} className="text-sm text-muted-foreground hover:text-foreground transition-colors">
                 Proyectos
               </button>
+              <Link to="/soluciones" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+                Soluciones
+              </Link>
               <button onClick={() => scrollToSection('contacto')} className="text-sm text-muted-foreground hover:text-foreground transition-colors">
                 Contacto
               </button>
@@ -288,6 +291,7 @@ const Landing = () => {
                 <button onClick={() => scrollToSection('servicios')} className="text-left text-sm text-muted-foreground hover:text-foreground">Servicios</button>
                 <button onClick={() => scrollToSection('sistemas')} className="text-left text-sm text-muted-foreground hover:text-foreground">Sistemas Constructivos</button>
                 <button onClick={() => scrollToSection('proyectos')} className="text-left text-sm text-muted-foreground hover:text-foreground">Proyectos</button>
+                <Link to="/soluciones" className="text-left text-sm text-muted-foreground hover:text-foreground">Soluciones</Link>
                 <button onClick={() => scrollToSection('contacto')} className="text-left text-sm text-muted-foreground hover:text-foreground">Contacto</button>
                 <a href="mailto:organiza@concepto.casa" className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Mail className="w-4 h-4" />

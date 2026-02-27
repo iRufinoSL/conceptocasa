@@ -126,7 +126,7 @@ export function ElevationsGridViewer({
   const [editCard, setEditCard] = useState<ElevationCard | null>(null);
   const [editCardDialogOpen, setEditCardDialogOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'rooms' | 'groups' | 'composite' | 'total'>('rooms');
-  const [showFaldonesWithAleros, setShowFaldonesWithAleros] = useState(true);
+  // showFaldonesWithAleros removed — faldones are now in Volúmenes tab
 
   // Scroll to focused wall on mount
   useEffect(() => {
@@ -403,70 +403,11 @@ export function ElevationsGridViewer({
         });
       });
 
-      // Faldones (roof slope panels) — "Tejado" section for bajo cubierta rooms
-      if (roomIsBajoCubierta && plan.roofType === 'dos_aguas') {
-        // Calculate building dimensions for this floor
-        const floorRooms = rooms.filter(r => r.floorId === room.floorId && isBajoCubierta(r, plan, floors));
-        let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-        floorRooms.forEach(r => {
-          minX = Math.min(minX, r.posX);
-          maxX = Math.max(maxX, r.posX + r.width);
-          minY = Math.min(minY, r.posY);
-          maxY = Math.max(maxY, r.posY + r.length);
-        });
-        const innerWidth = (maxX - minX) + 2 * plan.externalWallThickness;
-        const innerLength = (maxY - minY) + 2 * plan.externalWallThickness;
-        const overhang = showFaldonesWithAleros ? (plan.roofOverhang || 0) : 0;
-        const totalWidth = innerWidth + 2 * overhang;
-        const totalLength = innerLength + 2 * overhang;
-        const halfWidth = totalWidth / 2;
-        const rise = halfWidth * (plan.roofSlopePercent / 100);
-        const slopeWidth = Math.sqrt(halfWidth * halfWidth + rise * rise);
-
-        // Only add faldones once per floor (check if this is the first bajo cubierta room)
-        const isFirstBajoCubierta = floorRooms.length === 0 || floorRooms[0].id === room.id;
-        if (isFirstBajoCubierta) {
-          // Faldón superior (AB side)
-          cards.push({
-            id: `faldon-sup-${room.floorId || room.id}`,
-            label: 'Faldón Superior (CuA→CuB)',
-            sublabel: `Tejado ${showFaldonesWithAleros ? 'con aleros' : 'sin aleros'} · ${Math.round(totalWidth * 1000)}×${Math.round(totalLength * 1000)} mm`,
-            category: 'faldon',
-            width: totalWidth,
-            height: totalLength,
-            room,
-            openings: [],
-            canAddOpenings: false,
-            fill: 'hsl(15, 60%, 92%)',
-            stroke: 'hsl(15, 70%, 45%)',
-            badgeLabel: `Pendiente ${plan.roofSlopePercent}% · Faldón ${Math.round(slopeWidth * 1000)} mm`,
-            badgeVariant: 'default',
-            surfaceArea: slopeWidth * totalLength,
-          });
-
-          // Faldón inferior (CD side)
-          cards.push({
-            id: `faldon-inf-${room.floorId || room.id}`,
-            label: 'Faldón Inferior (CuA→CuB)',
-            sublabel: `Tejado ${showFaldonesWithAleros ? 'con aleros' : 'sin aleros'} · ${Math.round(totalWidth * 1000)}×${Math.round(totalLength * 1000)} mm`,
-            category: 'faldon',
-            width: totalWidth,
-            height: totalLength,
-            room,
-            openings: [],
-            canAddOpenings: false,
-            fill: 'hsl(15, 50%, 90%)',
-            stroke: 'hsl(15, 60%, 40%)',
-            badgeLabel: `Pendiente ${plan.roofSlopePercent}% · Faldón ${Math.round(slopeWidth * 1000)} mm`,
-            badgeVariant: 'default',
-            surfaceArea: slopeWidth * totalLength,
-          });
-        }
-      }
+      // Faldones moved to Volúmenes tab — no longer shown in Alzados
 
       return { room, cards };
     });
-  }, [rooms, plan, floors, wallSegmentsMap, wallClassification, externalWallNames, showFaldonesWithAleros]);
+  }, [rooms, plan, floors, wallSegmentsMap, wallClassification, externalWallNames]);
 
   // Auto-open the WallEditDialog for a specific wall (from space form eye icon)
   useEffect(() => {
@@ -672,17 +613,7 @@ export function ElevationsGridViewer({
             Esquinas: {buildingOutline.map(v => v.label).join(' → ')} → {buildingOutline[0]?.label}
           </span>
         )}
-        {/* Toggle faldones with/without aleros */}
-        {viewMode === 'rooms' && (
-          <Button
-            variant={showFaldonesWithAleros ? 'default' : 'outline'}
-            size="sm"
-            className="text-xs h-7 ml-2"
-            onClick={() => setShowFaldonesWithAleros(v => !v)}
-          >
-            {showFaldonesWithAleros ? 'Con aleros' : 'Sin aleros'}
-          </Button>
-        )}
+        {/* Faldones toggle removed — now in Volúmenes tab */}
       </div>
 
       {/* Grouped view */}

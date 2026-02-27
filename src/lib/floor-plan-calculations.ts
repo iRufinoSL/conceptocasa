@@ -2116,14 +2116,12 @@ export function computeCompositeWallsFromCorners(
 
   // Add custom corners to their physical edges
   // Skip corners marked as isMain — they duplicate the hardcoded ABCD corners
-  // For bajo cubierta levels, do NOT add intermediate markers to perimeter sides —
-  // perimeter composites should be full-face only (e.g. 2A-2B, not split by 2A1/2A2)
-  if (!isBajoCubiertaLevel) {
-    customAbsolute.forEach((cc, idx) => {
-      if ((filteredUserCorners[idx] as any).isMain) return;
-      sideCorners[cc.side].push(cc);
-    });
-  }
+  // Intermediate markers are now enabled on ALL levels (including bajo cubierta)
+  // so that every coordinate generates its own measurement in the elevations.
+  customAbsolute.forEach((cc, idx) => {
+    if ((filteredUserCorners[idx] as any).isMain) return;
+    sideCorners[cc.side].push(cc);
+  });
 
   // Build ordered corner lists per side (including start/end main corners)
   // Top: A → ... → B (sort by X ascending)
@@ -2336,6 +2334,69 @@ export function computeCompositeWallsFromCorners(
         objectSummary: { totalBlocks, doors: totalDoors, windows: totalWindows, openingDetails },
       });
     }
+  });
+
+  // ── Full-side composites: when intermediates split a side, also add the full A-B, B-C, etc. ──
+  // This ensures the main corner-to-corner measurement always appears in elevations.
+  sides.forEach(({ side, wallIndex, startCorner, endCorner }) => {
+    const intermediates = sideCorners[side];
+    if (intermediates.length === 0) return; // no split → the single composite already covers the full side
+
+    const fullLabel = `${startCorner.label}-${endCorner.label}`;
+    // Collect all split composites for this side and merge their sections
+    const splitComposites = composites.filter(cw => cw.side === side);
+    if (splitComposites.length <= 1) return; // already a single composite
+
+    const allSections: CompositeWallSection[] = [];
+    let totalLen = 0;
+    let totalDoors = 0, totalWindows = 0;
+    const openingCounts: Record<string, number> = {};
+    splitComposites.forEach(cw => {
+      cw.sections.forEach(s => {
+        allSections.push({ ...s, startOffset: totalLen + s.startOffset });
+      });
+      totalLen += cw.totalLength;
+      totalDoors += cw.objectSummary.doors;
+      totalWindows += cw.objectSummary.windows;
+      cw.objectSummary.openingDetails.forEach(od => {
+        openingCounts[od.type] = (openingCounts[od.type] || 0) + od.count;
+      });
+    });
+
+    // Re-compute start offsets sequentially
+    let offset = 0;
+    const reoffsetSections = allSections.map(s => {
+      const newS = { ...s, startOffset: offset };
+      offset += s.length;
+      return newS;
+    });
+
+    let totalBlocks: { cols: number; rows: number; total: number } | undefined;
+    if (plan.scaleMode === 'bloque') {
+      const blockW = plan.blockLengthMm / 1000;
+      const blockH = plan.blockHeightMm / 1000;
+      if (blockW > 0 && blockH > 0) {
+        const maxH = Math.max(...reoffsetSections.map(s => s.height));
+        totalBlocks = { cols: Math.ceil(totalLen / blockW), rows: Math.ceil(maxH / blockH), total: Math.ceil(totalLen / blockW) * Math.ceil(maxH / blockH) };
+      }
+    }
+
+    const openingDetails = Object.entries(openingCounts).map(([type, count]) => ({
+      type, count,
+      label: OPENING_PRESETS[type as keyof typeof OPENING_PRESETS]?.label || type,
+    }));
+
+    composites.push({
+      id: `cw-full-${startCorner.label}-${endCorner.label}`,
+      label: fullLabel,
+      startCorner: { x: startCorner.x, y: startCorner.y, label: startCorner.label },
+      endCorner: { x: endCorner.x, y: endCorner.y, label: endCorner.label },
+      side,
+      totalLength: totalLen,
+      sections: reoffsetSections,
+      isExterior: true,
+      objectSummary: { totalBlocks, doors: totalDoors, windows: totalWindows, openingDetails },
+    });
   });
 
   // ── Cross-side composite walls: markers sharing the same absolute X or Y ──

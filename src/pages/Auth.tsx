@@ -241,7 +241,7 @@ export default function Auth() {
             </div>
           </div>
           <CardTitle className="text-2xl font-bold">
-            {mode === 'login' && 'Gestión Concepto.Casa'}
+            {mode === 'login' && 'TO.LO.SA.systems 2.0'}
             {mode === 'forgot-password' && 'Recuperar Contraseña'}
             {mode === 'reset-password' && 'Nueva Contraseña'}
           </CardTitle>

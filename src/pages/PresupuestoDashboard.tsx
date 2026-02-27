@@ -85,7 +85,7 @@ export default function PresupuestoDashboard() {
   const [selectedActivityId, setSelectedActivityId] = useState<string | null>(null);
   const [activityReturnTab, setActivityReturnTab] = useState<string | null>(null);
   const portadaInputRef = useRef<HTMLInputElement>(null);
-  const [budgetMode, setBudgetMode] = useState<'gestconcepto' | 'tolosa'>('gestconcepto');
+  const [budgetMode, setBudgetMode] = useState<'gestconcepto' | 'tolosa'>('tolosa');
   const isAdmin = roles.includes('administrador');
   const { isTabVisible } = useTabVisibility();
 
@@ -380,7 +380,7 @@ export default function PresupuestoDashboard() {
             className="gap-2"
           >
             <Brain className="h-4 w-4" />
-            TO.LO.SA.system 2.0
+            TO.LO.SA.systems 2.0
           </Button>
           <Button
             variant={budgetMode === 'gestconcepto' ? 'default' : 'outline'}

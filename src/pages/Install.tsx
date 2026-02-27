@@ -67,12 +67,12 @@ export default function Install() {
             </div>
             <CardTitle className="text-2xl">¡App Instalada!</CardTitle>
             <CardDescription>
-              GestConcepto ya está instalado en tu dispositivo
+              TO.LO.SA.systems 2.0 ya está instalado en tu dispositivo
             </CardDescription>
           </CardHeader>
           <CardContent>
             <Button onClick={() => navigate('/auth')} className="w-full">
-              Ir a GestConcepto
+              Ir a TO.LO.SA.systems
             </Button>
           </CardContent>
         </Card>
@@ -94,9 +94,9 @@ export default function Install() {
 
         <div className="text-center mb-8">
           <div className="mx-auto mb-4 w-24 h-24 rounded-2xl overflow-hidden shadow-lg">
-            <img src="/icon-512.png" alt="GestConcepto" className="w-full h-full object-cover" />
+            <img src="/icon-512.png" alt="TO.LO.SA.systems" className="w-full h-full object-cover" />
           </div>
-          <h1 className="text-3xl font-bold text-foreground mb-2">GestConcepto</h1>
+          <h1 className="text-3xl font-bold text-foreground mb-2">TO.LO.SA.systems 2.0</h1>
           <p className="text-muted-foreground">Gestión de Construcción</p>
         </div>
 
@@ -123,7 +123,7 @@ export default function Install() {
             {isIOS && !deferredPrompt && (
               <div className="space-y-4">
                 <p className="text-sm text-muted-foreground mb-4">
-                  Sigue estos pasos para instalar GestConcepto en tu iPhone:
+                  Sigue estos pasos para instalar TO.LO.SA.systems en tu iPhone:
                 </p>
                 
                 <div className="space-y-3">

@@ -1842,7 +1842,7 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
             <Brain className="h-6 w-6 text-primary" />
           </div>
           <div>
-            <h2 className="text-xl font-bold text-foreground">TO.LO.SA.system 2.0</h2>
+            <h2 className="text-xl font-bold text-foreground">TO.LO.SA.systems 2.0</h2>
             <p className="text-sm text-muted-foreground">Brainstorming — ¿QUÉ hay que hacer?</p>
           </div>
         </div>

@@ -2559,13 +2559,13 @@ export function computeCompositeWallsFromCorners(
         // Cross-side pairs: only pair markers where BOTH are non-main (interior markers)
         // Main corners (A, B, C, D) are already connected by perimeter composites
         if (a.isMain || b.isMain) continue;
-        // For bajo cubierta, require markers on OPPOSITE edges (top↔bottom) and sufficient span
+        // For bajo cubierta, require sufficient span along the Y axis.
+        // The edge classification may not always be 'top'/'bottom' for intermediate
+        // markers (classifyEdge uses proximity which can misclassify), so we only
+        // check span length — same absX already guarantees a valid vertical cut.
         if (isBajoCubiertaLevel) {
           const span = Math.abs(a.absY - b.absY);
           if (span < buildingSpanY * MIN_SPAN_RATIO) continue;
-          // Both markers must be on opposite horizontal edges
-          const edges = new Set([a.classifiedEdge, b.classifiedEdge]);
-          if (!(edges.has('top') && edges.has('bottom'))) continue;
         }
         const [top, bottom] = a.absY <= b.absY ? [a, b] : [b, a];
         verticalPairs.push({ top, bottom });

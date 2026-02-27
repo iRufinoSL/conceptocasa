@@ -2729,7 +2729,7 @@ const isDoor = op.openingType === 'puerta' || op.openingType === 'puerta_externa
                 return (
                   <g key={`gable-inv-${gi}`}>
                     <rect x={sx} y={peakY - 5} width={sw2} height={baseY - peakY + 10}
-                      fill="hsl(var(--background))" clipPath={`url(#${clipId})`} />
+                      fill="#ffffff" clipPath={`url(#${clipId})`} />
                     <rect x={sx} y={peakY} width={sw2} height={baseY - peakY}
                       fill="none" stroke="hsl(0, 0%, 75%)" strokeWidth={0.5} strokeDasharray="3 3"
                       clipPath={`url(#${clipId})`} />
@@ -3091,7 +3091,7 @@ function TotalElevationCard({ side, label, layers, plan, rooms, budgetName }: {
                     return (
                       <rect key={`inv-${layerIdx}-${secIdx}`}
                         x={sx} y={peakY - 5} width={sw2} height={currentBaseY - peakY + 10}
-                        fill="hsl(var(--background))" clipPath={`url(#${clipId})`} />
+                        fill="#ffffff" clipPath={`url(#${clipId})`} />
                     );
                   }))}
 
@@ -3783,8 +3783,9 @@ function CompositeWallCard({ compositeWall, plan, onOpeningClick, onAddBlockGrou
                 if (isInv) {
                   return (
                     <g key={`gable-inv-${gi}`}>
+                      {/* Use explicit white (#ffffff) instead of CSS variable for PDF serialization compatibility */}
                       <rect x={sx} y={peakY - 5} width={sw2} height={baseY - peakY + 10}
-                        fill="hsl(var(--background))" clipPath={`url(#${clipId})`} />
+                        fill="#ffffff" clipPath={`url(#${clipId})`} />
                       <rect x={sx} y={peakY} width={sw2} height={baseY - peakY}
                         fill="none" stroke="hsl(0, 0%, 75%)" strokeWidth={0.5} strokeDasharray="3 3"
                         clipPath={`url(#${clipId})`} />
@@ -3861,6 +3862,43 @@ function CompositeWallCard({ compositeWall, plan, onOpeningClick, onAddBlockGrou
               <circle cx={peakX} cy={peakY} r={fsScale ? 3 : 2} fill="hsl(15, 70%, 45%)" />
               {fsScale && <text x={peakX} y={peakY - 6} textAnchor="middle"
                 fontSize={9} fill="hsl(15, 70%, 45%)" fontWeight={700}>CUMBRERA</text>}
+
+              {/* Hypotenuse dimension lines (base corner → peak) */}
+              {(() => {
+                const gableTotalLen = gableSections.reduce((sum, gs) => sum + gs.length, 0);
+                const hypLeft = Math.sqrt(Math.pow(gableTotalW / 2, 2) + Math.pow(peakH * s, 2));
+                const hypLenM = Math.sqrt(Math.pow(gableTotalLen / 2, 2) + Math.pow(peakH, 2));
+                const fz = fsScale ? 9 : 6.5;
+                const hColor = 'hsl(280, 60%, 45%)';
+
+                // Left hypotenuse: leftX,baseY → peakX,peakY
+                const lMidX = (leftX + peakX) / 2;
+                const lMidY = (baseY + peakY) / 2;
+                // Right hypotenuse: peakX,peakY → rightX,baseY
+                const rMidX = (peakX + rightX) / 2;
+                const rMidY = (peakY + baseY) / 2;
+
+                return (
+                  <>
+                    {/* Left hypotenuse */}
+                    <line x1={leftX} y1={baseY} x2={peakX} y2={peakY}
+                      stroke={hColor} strokeWidth={0.6} strokeDasharray="4 2" opacity={0.7} />
+                    <text x={lMidX - 8} y={lMidY - 4} textAnchor="end"
+                      fontSize={fz} fill={hColor} fontWeight={700}
+                      transform={`rotate(${Math.atan2(-(peakH * s), gableTotalW / 2) * 180 / Math.PI}, ${lMidX - 8}, ${lMidY - 4})`}>
+                      {Math.round(hypLenM * 1000)} mm
+                    </text>
+                    {/* Right hypotenuse */}
+                    <line x1={peakX} y1={peakY} x2={rightX} y2={baseY}
+                      stroke={hColor} strokeWidth={0.6} strokeDasharray="4 2" opacity={0.7} />
+                    <text x={rMidX + 8} y={rMidY - 4} textAnchor="start"
+                      fontSize={fz} fill={hColor} fontWeight={700}
+                      transform={`rotate(${Math.atan2(peakH * s, gableTotalW / 2) * 180 / Math.PI}, ${rMidX + 8}, ${rMidY - 4})`}>
+                      {Math.round(hypLenM * 1000)} mm
+                    </text>
+                  </>
+                );
+              })()}
             </g>
           );
         })()}

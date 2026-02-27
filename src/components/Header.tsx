@@ -12,7 +12,7 @@ export function Header() {
               <HardHat className="h-6 w-6 text-accent-foreground" />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-foreground">BuildManager</h1>
+              <h1 className="text-xl font-bold text-foreground">TO.LO.SA.systems 2.0</h1>
               <p className="text-sm text-muted-foreground">Gestión de Proyectos de Construcción</p>
             </div>
           </div>

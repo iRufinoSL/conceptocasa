@@ -35,7 +35,7 @@ interface AppCard {
 const apps: AppCard[] = [
   {
     id: 'tolosa',
-    title: 'TO.LO.SA.system 2.0',
+    title: 'TO.LO.SA.systems 2.0',
     description: 'Brainstorming y planificación inteligente',
     icon: Brain,
     route: '/presupuestos',
@@ -206,7 +206,7 @@ export default function Dashboard() {
               <Building2 className="h-6 w-6 text-primary" />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-foreground">Gestión Concepto.Casa</h1>
+              <h1 className="text-xl font-bold text-foreground">TO.LO.SA.systems 2.0</h1>
               <p className="text-sm text-muted-foreground">
                 {user?.email} {isAdmin() && <span className="text-primary font-medium">• Administrador</span>}
               </p>

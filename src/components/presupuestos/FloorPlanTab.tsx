@@ -1060,14 +1060,6 @@ export function FloorPlanTab({ budgetId, budgetName = '', isAdmin }: FloorPlanTa
 
         <div className="flex items-center gap-2 flex-wrap">
           <Button
-            variant={showAddSpace ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setShowAddSpace(!showAddSpace)}
-          >
-            <Plus className="h-4 w-4 mr-1" /> Añadir espacio
-            {showAddSpace ? <ChevronUp className="h-3.5 w-3.5 ml-1" /> : <ChevronDown className="h-3.5 w-3.5 ml-1" />}
-          </Button>
-          <Button
             variant={showLevelManager ? 'default' : 'outline'}
             size="sm"
             onClick={() => setShowLevelManager(!showLevelManager)}
@@ -1136,92 +1128,6 @@ export function FloorPlanTab({ budgetId, budgetName = '', isAdmin }: FloorPlanTa
         </Collapsible>
       )}
 
-      {/* Add space collapsible in header */}
-      {viewTab === 'cuadricula' && (
-        <Collapsible open={showAddSpace} onOpenChange={setShowAddSpace}>
-          <CollapsibleContent>
-            <Card className="mb-4">
-              <CardContent className="py-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3 items-end">
-                  <div>
-                    <Label className="text-xs">Nombre</Label>
-                    <Input
-                      value={newSpaceName}
-                      onChange={e => setNewSpaceName(e.target.value)}
-                      placeholder="Ej: Habitación 3"
-                      disabled={saving}
-                    />
-                  </div>
-                  {floors.length > 0 && (
-                    <div>
-                      <Label className="text-xs">Nivel</Label>
-                      <Select value={newSpaceFloorId || activeGridFloorId || floors[0]?.id || ''} onValueChange={setNewSpaceFloorId}>
-                        <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          {floors.map(f => (
-                            <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  )}
-                  <div>
-                    <Label className="text-xs">Coordenada (ej: 01/01)</Label>
-                    <input
-                      type="text"
-                      value={newSpaceCoord}
-                      onChange={e => setNewSpaceCoord(e.target.value.toUpperCase())}
-                      placeholder="01/01"
-                      disabled={saving}
-                      className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm font-mono ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-xs">{planData?.scaleMode === 'bloque' ? `Ancho (bloques)` : 'Ancho (m)'}</Label>
-                    <Input type="number" step={planData?.scaleMode === 'bloque' ? '1' : '0.1'} value={newSpaceWidth}
-                      onChange={e => setNewSpaceWidth(Number(e.target.value))} disabled={saving} />
-                  </div>
-                  <div>
-                    <Label className="text-xs">{planData?.scaleMode === 'bloque' ? `Largo (bloques)` : 'Largo (m)'}</Label>
-                    <Input type="number" step={planData?.scaleMode === 'bloque' ? '1' : '0.1'} value={newSpaceLength}
-                      onChange={e => setNewSpaceLength(Number(e.target.value))} disabled={saving} />
-                  </div>
-                  <div>
-                    <Button
-                      onClick={async () => {
-                        if (!newSpaceName.trim()) { toast.error('Indica un nombre'); return; }
-                        const targetFloor = newSpaceFloorId || activeGridFloorId || floors[0]?.id;
-                        const w = planData?.scaleMode === 'bloque' ? newSpaceWidth * (planData.blockLengthMm || 625) / 1000 : newSpaceWidth;
-                        const l = planData?.scaleMode === 'bloque' ? newSpaceLength * (planData.blockLengthMm || 625) / 1000 : newSpaceLength;
-                        const parsedC = newSpaceCoord.trim() ? parseCoord(newSpaceCoord.trim()) : null;
-                        const gridCol = parsedC?.col;
-                        const gridRow = parsedC?.row;
-                        await addRoom(newSpaceName.trim(), w, l, targetFloor, gridCol, gridRow);
-                        setNewSpaceName('');
-                        setNewSpaceCoord('');
-                        setShowAddSpace(false);
-                        if (gridCol && gridRow) {
-                          toast.success(`Espacio "${newSpaceName.trim()}" creado en ${formatCoord(gridCol, gridRow)}`);
-                        } else {
-                          toast.success('Espacio añadido a la cabecera (sin colocar)');
-                        }
-                      }}
-                      disabled={saving || !newSpaceName.trim()}
-                      size="sm"
-                      className="w-full"
-                    >
-                      <Plus className="h-4 w-4 mr-1" /> {newSpaceCoord.trim() ? 'Crear y colocar' : 'Crear en cabecera'}
-                    </Button>
-                  </div>
-                </div>
-                <p className="text-[10px] text-muted-foreground mt-2">
-                  Presets: Hab.peq 3×3 · Hab.med 4×3 · Hab.gra 5×4 · Baño.peq 2×2 · Cocina 4×2 · Salón 6×5
-                </p>
-              </CardContent>
-            </Card>
-          </CollapsibleContent>
-        </Collapsible>
-      )}
 
       {/* Content */}
       {viewTab === 'cuadricula' && (

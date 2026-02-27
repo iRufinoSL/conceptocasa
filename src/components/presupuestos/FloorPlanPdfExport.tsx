@@ -182,6 +182,10 @@ export function FloorPlanPdfExport({ budgetName, floorName, containerRef }: Floo
       doc.setFontSize(11);
       doc.setFont('helvetica', 'bold');
       doc.text(`${budgetName}  —  ${floorName}`, MARGIN, MARGIN + 6);
+      // Scale indicator on the right
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`Escala: ${scalePct}%`, A4_W - MARGIN, MARGIN + 6, { align: 'right' });
 
       // Separator line
       doc.setDrawColor(180, 180, 180);

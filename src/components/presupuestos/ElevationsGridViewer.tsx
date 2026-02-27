@@ -405,20 +405,27 @@ export function ElevationsGridViewer({
         }
 
         // Non-gable walls of bajo cubierta rooms: calculate height from roof slope
+        // If the calculated height is 0 the wall sits at the building edge where the
+        // roof simply rests on the lower level — there is NO wall to render.
+        let bajoCubiertaZeroHeight = false;
         if (roomIsBajoCubierta && !isGableWall) {
           const autoH = calcBajoCubiertaWallHeight(room, wall.wallIndex, plan, rooms);
           wallHeight = autoH ?? 0;
-          // If calculated height is 0 (wall at building edge), still show it with label
-          if (wallHeight <= 0) wallHeight = 0;
+          if (wallHeight <= 0) {
+            wallHeight = 0;
+            bajoCubiertaZeroHeight = true;
+          }
         }
 
         if (segments.length === 0) {
-          const invisible = isInvisibleType(wall.wallType as string);
+          const invisible = isInvisibleType(wall.wallType as string) || bajoCubiertaZeroHeight;
           const isExternal = isExteriorType(wall.wallType as string);
           const wallName = externalWallNames.get(key);
           const canAdd = !wall.id.startsWith('temp-') && !invisible;
           const gableArea = isGableWall ? (fullWallLen * roomGablePeakH) / 2 : 0;
-          const bajoCubiertaLabel = roomIsBajoCubierta && !isGableWall
+          const bajoCubiertaLabel = bajoCubiertaZeroHeight
+            ? `${WALL_LABELS[wall.wallIndex]} (Sin pared — faldón)`
+            : roomIsBajoCubierta && !isGableWall
             ? `${WALL_LABELS[wall.wallIndex]} (h=${Math.round(wallHeight * 1000)}mm)`
             : isGableWall ? `${WALL_LABELS[wall.wallIndex]} (Hastial)` : `${WALL_LABELS[wall.wallIndex]} (${wall.wallIndex})`;
           cards.push({
@@ -427,16 +434,16 @@ export function ElevationsGridViewer({
             sublabel: room.name,
             category: 'pared',
             width: fullWallLen,
-            height: Math.max(wallHeight, 0.01), // Minimum height for rendering
+            height: Math.max(wallHeight, 0.01),
             room,
             wall,
-            openings: wall.openings,
+            openings: bajoCubiertaZeroHeight ? [] : wall.openings,
             wallId: wall.id,
             canAddOpenings: canAdd && wallHeight > 0,
             isInvisible: invisible,
             fill: invisible ? 'hsl(0, 0%, 96%)' : isExternal ? 'hsl(30, 30%, 92%)' : 'hsl(25, 60%, 93%)',
             stroke: invisible ? 'hsl(0, 0%, 70%)' : isExternal ? 'hsl(222, 47%, 30%)' : 'hsl(25, 80%, 50%)',
-            badgeLabel: invisible ? 'Invisible' : isExternal ? (wallName ? `Ext. ${wallName}` : 'Externa') : 'Interna',
+            badgeLabel: bajoCubiertaZeroHeight ? 'Sin pared (faldón)' : invisible ? 'Invisible' : isExternal ? (wallName ? `Ext. ${wallName}` : 'Externa') : 'Interna',
             badgeVariant: invisible ? 'outline' : isExternal ? 'default' : 'outline',
             surfaceArea: isGableWall ? gableArea : (invisible ? 0 : fullWallLen * wallHeight),
             elevationGroup: wall.elevationGroup,
@@ -450,14 +457,16 @@ export function ElevationsGridViewer({
           const segLen = seg.endMeters - seg.startMeters;
           // Use the segment's computed type, NOT the wall's stored type
           const displayType = segments.length > 1 ? seg.segmentType : (wall.wallType as string);
-          const invisible = isInvisibleType(displayType);
+          const invisible = isInvisibleType(displayType) || bajoCubiertaZeroHeight;
           const ownOpenings = wall.openings.filter(op => {
             return op.positionX >= seg.startFraction - 0.05 && op.positionX <= seg.endFraction + 0.05;
           });
 
           const isExternal = isExteriorType(displayType);
           const visibleSegCount = segments.filter(s => !isInvisibleType(s.segmentType)).length;
-          const wallLabel = isGableWall
+          const wallLabel = bajoCubiertaZeroHeight
+            ? `${WALL_LABELS[wall.wallIndex]} (Sin pared — faldón)`
+            : isGableWall
             ? `${WALL_LABELS[wall.wallIndex]} (Hastial)`
             : roomIsBajoCubierta
               ? `${WALL_LABELS[wall.wallIndex]} (h=${Math.round(wallHeight * 1000)}mm)`

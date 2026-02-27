@@ -3,7 +3,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { ChevronRight, RefreshCw } from 'lucide-react';
-import type { FloorPlanSummary as Summary, WallCalculation } from '@/lib/floor-plan-calculations';
+import type { FloorPlanSummary as Summary, WallCalculation, RoofSlopeDetail } from '@/lib/floor-plan-calculations';
 import { OPENING_PRESETS, isInvisibleType } from '@/lib/floor-plan-calculations';
 
 interface FloorPlanSummaryProps {
@@ -68,9 +68,22 @@ export function FloorPlanSummaryView({ summary, onRecalculate, recalculating }: 
               <p className="font-semibold text-foreground">{fmt(summary.totalBuiltM2)}</p>
             </div>
             <div>
-              <span className="text-muted-foreground">Tejado</span>
+              <span className="text-muted-foreground">Tejado (total)</span>
               <p className="font-semibold text-foreground">{fmt(summary.roofM2)}</p>
             </div>
+            {summary.roofSlopes && summary.roofSlopes.length > 0 && summary.roofSlopes.map((slope, i) => (
+              <div key={i}>
+                <span className="text-muted-foreground">{slope.name} ({slope.side})</span>
+                <p className="font-semibold text-foreground">{fmt(slope.slopeArea)}</p>
+                <p className="text-[10px] text-muted-foreground">
+                  {(slope.baseLength * 1000).toFixed(0)}×{(slope.hypotenuse * 1000).toFixed(0)} mm
+                  {slope.includesEaves && ' (con aleros)'}
+                </p>
+                <p className="text-[10px] text-muted-foreground">
+                  Proy: {(slope.projectedWidth * 1000).toFixed(0)} mm · Hip: {(slope.hypotenuse * 1000).toFixed(0)} mm · h: {(slope.ridgeHeight * 1000).toFixed(0)} mm
+                </p>
+              </div>
+            ))}
             <div>
               <span className="text-muted-foreground">Suelos útiles</span>
               <p className="font-semibold text-foreground">{fmt(summary.totalFloorM2)}</p>

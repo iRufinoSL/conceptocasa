@@ -14,7 +14,7 @@ import {
 } from '@/components/ui/dialog';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { Search, CheckCircle, Clock, XCircle, Eye, Send, Mail, Forward, FileText, RefreshCw } from 'lucide-react';
+import { Search, CheckCircle, Clock, XCircle, Eye, Send, Mail, Forward, FileText, RefreshCw, CloudDownload } from 'lucide-react';
 import DOMPurify from 'dompurify';
 import { useEmailService } from '@/hooks/useEmailService';
 import { toast } from 'sonner';
@@ -52,7 +52,33 @@ export function EmailTrackingTab() {
   const [search, setSearch] = useState('');
   const [selectedEmailId, setSelectedEmailId] = useState<string | null>(null);
   const [resending, setResending] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const { sendEmail } = useEmailService();
+
+  const handleSyncStatus = async () => {
+    setSyncing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('check-email-status');
+      if (error) {
+        toast.error('Error al sincronizar estados');
+        console.error('Sync error:', error);
+      } else {
+        const updated = data?.updated || 0;
+        const checked = data?.checked || 0;
+        if (updated > 0) {
+          toast.success(`${updated} email(s) actualizado(s) de ${checked} consultados`);
+          refetch();
+        } else {
+          toast.info(`${checked} email(s) consultados, ningún cambio de estado`);
+        }
+      }
+    } catch (err) {
+      toast.error('Error al sincronizar estados');
+      console.error('Sync error:', err);
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   const { data: sentEmails = [], isLoading, refetch, isFetching } = useQuery({
     queryKey: ['email-tracking-sent'],
@@ -127,6 +153,17 @@ export function EmailTrackingTab() {
           <div className="flex items-center justify-between gap-4 flex-wrap">
           <CardTitle className="text-lg">Seguimiento de Emails Enviados</CardTitle>
           <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleSyncStatus}
+              disabled={syncing}
+              className="gap-1.5"
+              title="Consulta el estado real de entrega y apertura directamente con el servidor de email"
+            >
+              <CloudDownload className={`h-4 w-4 ${syncing ? 'animate-pulse' : ''}`} />
+              {syncing ? 'Consultando...' : 'Consultar estado'}
+            </Button>
             <Button
               variant="outline"
               size="sm"

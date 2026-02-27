@@ -287,6 +287,61 @@ export interface FloorPlanSummary {
   
   rooms: RoomCalculation[];
 }
+function normalizeRoomName(name?: string): string {
+  return (name || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim();
+}
+
+function isRoofEaveRoom(room: RoomData): boolean {
+  const normalized = normalizeRoomName(room.name);
+  return normalized.includes('alero') || normalized.includes('eave');
+}
+
+/**
+ * Returns room IDs that must be ignored in roof-elevation calculations:
+ * - eave helper spaces (e.g. "Alero")
+ * - legacy envelope helper space that wraps all other bajo-cubierta spaces
+ */
+function getIgnoredRoofElevationRoomIds(rooms: RoomData[]): Set<string> {
+  const ignored = new Set<string>();
+  const EPS = 0.05;
+
+  rooms.forEach(room => {
+    if (isRoofEaveRoom(room)) ignored.add(room.id);
+  });
+
+  const candidates = rooms.filter(room =>
+    !ignored.has(room.id) &&
+    room.height === 0 &&
+    room.hasFloor === false &&
+    room.hasCeiling === false &&
+    room.hasRoof === true,
+  );
+
+  candidates.forEach(candidate => {
+    const others = rooms.filter(r => !ignored.has(r.id) && r.id !== candidate.id);
+    if (others.length < 2) return;
+
+    const minOX = Math.min(...others.map(r => r.posX));
+    const minOY = Math.min(...others.map(r => r.posY));
+    const maxOX = Math.max(...others.map(r => r.posX + r.width));
+    const maxOY = Math.max(...others.map(r => r.posY + r.length));
+
+    const wrapsOthers =
+      candidate.posX <= minOX + EPS &&
+      candidate.posY <= minOY + EPS &&
+      candidate.posX + candidate.width >= maxOX - EPS &&
+      candidate.posY + candidate.length >= maxOY - EPS;
+
+    if (wrapsOthers) ignored.add(candidate.id);
+  });
+
+  return ignored;
+}
+
 /**
  * Calculate auto wall height for bajo cubierta rooms under dos_aguas roof.
  * Ridge runs along Y axis. Height at X = riseM - slopeRatio * |X - ridgeX|.
@@ -296,30 +351,40 @@ export function calcBajoCubiertaWallHeight(
   room: RoomData, wallIndex: number, plan: FloorPlanData, allRooms: RoomData[]
 ): number | undefined {
   if (plan.roofType !== 'dos_aguas') return undefined;
-  // Accept rooms with height 0 or undefined (bajo cubierta)
   if (room.height !== 0 && room.height !== undefined && room.height !== null) return undefined;
+
+  const ignoredIds = getIgnoredRoofElevationRoomIds(allRooms);
+  if (ignoredIds.has(room.id)) return 0;
+
+  const calcRooms = allRooms.filter(r => r.posX >= 0 && !ignoredIds.has(r.id));
+  if (calcRooms.length === 0) return undefined;
+
   let bbMinX = Infinity, bbMaxX = -Infinity;
-  allRooms.forEach(r => { if (r.posX >= 0) { bbMinX = Math.min(bbMinX, r.posX); bbMaxX = Math.max(bbMaxX, r.posX + r.width); } });
+  calcRooms.forEach(r => {
+    bbMinX = Math.min(bbMinX, r.posX);
+    bbMaxX = Math.max(bbMaxX, r.posX + r.width);
+  });
   if (!isFinite(bbMinX)) return undefined;
+
   const buildingWidth = bbMaxX - bbMinX;
   const ridgeX = bbMinX + buildingWidth / 2;
-  // Gable and wall heights are between walls (no eave overhang)
   const halfWidth = buildingWidth / 2 + plan.externalWallThickness;
   const slopeRatio = plan.roofSlopePercent / 100;
   const riseM = halfWidth * slopeRatio;
   const getH = (x: number) => Math.max(0, riseM - Math.abs(x - ridgeX) * slopeRatio);
   const EPSILON = 0.05;
+
   switch (wallIndex) {
-    case 2: return getH(room.posX + room.width); // right wall
-    case 4: return getH(room.posX); // left wall
-    case 1: { // top wall — check if it's at building edge (posY == bbMinY)
-      const bbMinY = Math.min(...allRooms.filter(r => r.posX >= 0).map(r => r.posY));
-      if (Math.abs(room.posY - bbMinY) < EPSILON) return 0; // At building edge: roof rests on lower level
+    case 2: return getH(room.posX + room.width);
+    case 4: return getH(room.posX);
+    case 1: {
+      const bbMinY = Math.min(...calcRooms.map(r => r.posY));
+      if (Math.abs(room.posY - bbMinY) < EPSILON) return 0;
       return (getH(room.posX) + getH(room.posX + room.width)) / 2;
     }
-    case 3: { // bottom wall — check if it's at building edge (posY + length == bbMaxY)
-      const bbMaxY = Math.max(...allRooms.filter(r => r.posX >= 0).map(r => r.posY + r.length));
-      if (Math.abs(room.posY + room.length - bbMaxY) < EPSILON) return 0; // At building edge
+    case 3: {
+      const bbMaxY = Math.max(...calcRooms.map(r => r.posY + r.length));
+      if (Math.abs(room.posY + room.length - bbMaxY) < EPSILON) return 0;
       return (getH(room.posX) + getH(room.posX + room.width)) / 2;
     }
     default: return undefined;
@@ -2013,9 +2078,13 @@ export function computeCompositeWallsFromCorners(
 
   const EPSILON = 0.05;
 
+  const ignoredElevationRoomIds = getIgnoredRoofElevationRoomIds(rooms);
+  const roomsForCalc = rooms.filter(r => !ignoredElevationRoomIds.has(r.id));
+  if (roomsForCalc.length === 0) return [];
+
   // Compute bounding box
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-  rooms.forEach(r => {
+  roomsForCalc.forEach(r => {
     minX = Math.min(minX, r.posX);
     minY = Math.min(minY, r.posY);
     maxX = Math.max(maxX, r.posX + r.width);
@@ -2024,11 +2093,13 @@ export function computeCompositeWallsFromCorners(
 
   const ewt = plan.externalWallThickness;
 
-  // Detect bajo cubierta level: all rooms have height 0
-  const isBajoCubiertaLevel = rooms.length > 0 && rooms.every(r => r.height === 0);
+  // Detect bajo cubierta level (allow 0 and null/undefined heights in roof helper contexts)
+  const isBajoCubiertaLevel = roomsForCalc.length > 0
+    && roomsForCalc.every(r => r.height === 0 || r.height === undefined || r.height === null)
+    && roomsForCalc.some(r => r.height === 0);
 
   // Pre-compute wall segments to resolve effective wall types (considering segment_type_overrides)
-  const segmentsMap = computeWallSegments(rooms);
+  const segmentsMap = computeWallSegments(roomsForCalc);
 
   // Derive level prefix from user corners (e.g. "1A1" → "1")
   const levelPrefix = (() => {
@@ -2063,10 +2134,10 @@ export function computeCompositeWallsFromCorners(
   ];
 
   // Compute grid bounding box (exclusive, matching FloorPlanGridView)
-  const gridMinCol = Math.min(...rooms.map(r => Math.round(r.posX / cellSizeM) + 1));
-  const gridMinRow = Math.min(...rooms.map(r => Math.round(r.posY / cellSizeM) + 1));
-  const gridMaxCol = Math.max(...rooms.map(r => Math.round(r.posX / cellSizeM) + 1 + Math.max(1, Math.round(r.width / cellSizeM))));
-  const gridMaxRow = Math.max(...rooms.map(r => Math.round(r.posY / cellSizeM) + 1 + Math.max(1, Math.round(r.length / cellSizeM))));
+  const gridMinCol = Math.min(...roomsForCalc.map(r => Math.round(r.posX / cellSizeM) + 1));
+  const gridMinRow = Math.min(...roomsForCalc.map(r => Math.round(r.posY / cellSizeM) + 1));
+  const gridMaxCol = Math.max(...roomsForCalc.map(r => Math.round(r.posX / cellSizeM) + 1 + Math.max(1, Math.round(r.width / cellSizeM))));
+  const gridMaxRow = Math.max(...roomsForCalc.map(r => Math.round(r.posY / cellSizeM) + 1 + Math.max(1, Math.round(r.length / cellSizeM))));
 
   // Filter out eave markers — they should NOT participate in perimeter or cross-side elevation generation
   const filteredUserCorners = userCorners.filter(c => !(c as any).isEave);
@@ -2182,7 +2253,7 @@ export function computeCompositeWallsFromCorners(
         overlapEnd: number;
       }> = [];
 
-      rooms.forEach(room => {
+      roomsForCalc.forEach(room => {
         let roomEdge: number, roomStart: number, roomEnd: number;
         switch (wallIndex) {
           case 1: roomEdge = room.posY; roomStart = room.posX; roomEnd = room.posX + room.width; break;
@@ -2531,7 +2602,7 @@ export function computeCompositeWallsFromCorners(
     const matchRight: Array<{ room: RoomData; wall: WallData; overlapStart: number; overlapEnd: number }> = [];
     const matchLeft: Array<{ room: RoomData; wall: WallData; overlapStart: number; overlapEnd: number }> = [];
 
-    rooms.forEach(room => {
+    roomsForCalc.forEach(room => {
       const rRight = room.posX + room.width;
       const rLeft = room.posX;
       const rStart = room.posY;
@@ -2564,14 +2635,14 @@ export function computeCompositeWallsFromCorners(
 
     // Determine if this vertical cut is on the building perimeter (true gable)
     const perimeterEPSILON = cellSizeM * 0.5;
-    const buildingMinX = Math.min(...rooms.map(r => r.posX));
-    const buildingMaxX = Math.max(...rooms.map(r => r.posX + r.width));
+    const buildingMinX = Math.min(...roomsForCalc.map(r => r.posX));
+    const buildingMaxX = Math.max(...roomsForCalc.map(r => r.posX + r.width));
     const isOnPerimeterGable = Math.abs(wallX - buildingMinX) <= perimeterEPSILON || Math.abs(wallX - buildingMaxX) <= perimeterEPSILON;
 
     // For interior vertical cuts in bajo cubierta, compute a single uniform height
     // based on the roof slope at this X position (the faldón is continuous)
     const bajoCubiertaCutHeight = (() => {
-      const allBajoCub = rooms.length > 0 && rooms.every(r => r.height === 0) && plan.roofType === 'dos_aguas';
+      const allBajoCub = roomsForCalc.length > 0 && roomsForCalc.every(r => r.height === 0 || r.height === undefined || r.height === null) && roomsForCalc.some(r => r.height === 0) && plan.roofType === 'dos_aguas';
       if (!allBajoCub || isOnPerimeterGable) return undefined;
       // Height at wallX under the roof slope
       const halfWidth = (buildingMaxX - buildingMinX) / 2 + plan.externalWallThickness;
@@ -2743,7 +2814,7 @@ export function computeCompositeWallsFromCorners(
 
     const ROOM_EDGE_TOL_H = cellSizeM * 0.4;
 
-    rooms.forEach(room => {
+    roomsForCalc.forEach(room => {
       const rBottom = room.posY + room.length;
       const rTop = room.posY;
       const rStart = room.posX;
@@ -2778,7 +2849,7 @@ export function computeCompositeWallsFromCorners(
     // based on the Y position of the cut under the roof slope.
     // Horizontal walls (1/3) in bajo cubierta: height depends on distance from building edge along Y.
     const bajoCubiertaHorizCutHeight = (() => {
-      const allBajoCub = rooms.length > 0 && rooms.every(r => r.height === 0) && plan.roofType === 'dos_aguas';
+      const allBajoCub = roomsForCalc.length > 0 && roomsForCalc.every(r => r.height === 0 || r.height === undefined || r.height === null) && roomsForCalc.some(r => r.height === 0) && plan.roofType === 'dos_aguas';
       if (!allBajoCub) return undefined;
       // For a horizontal cut at wallY, the roof height is determined by the
       // distance from the nearest top/bottom edge of the building.
@@ -2875,8 +2946,8 @@ export function computeCompositeWallsFromCorners(
     }));
 
     // Determine correct side: top or bottom based on position relative to building center
-    const buildingMinY2 = Math.min(...rooms.map(r => r.posY));
-    const buildingMaxY2 = Math.max(...rooms.map(r => r.posY + r.length));
+    const buildingMinY2 = Math.min(...roomsForCalc.map(r => r.posY));
+    const buildingMaxY2 = Math.max(...roomsForCalc.map(r => r.posY + r.length));
     const buildingMidY2 = (buildingMinY2 + buildingMaxY2) / 2;
     const detectedHorizSide: 'top' | 'bottom' = wallY <= buildingMidY2 ? 'top' : 'bottom';
 

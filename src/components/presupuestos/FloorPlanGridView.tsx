@@ -230,6 +230,7 @@ export function FloorPlanGridView({
   const [cornerClickMode, setCornerClickMode] = useState(false);
   const printGridRef = useRef<HTMLDivElement>(null);
   const [isPrinting, setIsPrinting] = useState(false);
+  const [fullscreenScalePct, setFullscreenScalePct] = useState(100);
   // Corner edit
   const [editingCornerIdx, setEditingCornerIdx] = useState<number | null>(null);
   const [editingCornerLabel, setEditingCornerLabel] = useState('');
@@ -1753,6 +1754,29 @@ export function FloorPlanGridView({
                 <RotateCw className="h-4 w-4 mr-1" />
                 {printOrientation === 'landscape' ? 'Horizontal' : 'Vertical'}
               </Button>
+              {/* Print scale selector */}
+              <div className="flex items-center gap-1">
+                {[100, 150, 200].map(v => (
+                  <Button
+                    key={v}
+                    type="button"
+                    size="sm"
+                    variant={fullscreenScalePct === v ? 'default' : 'outline'}
+                    className="text-xs px-2 py-1 h-8"
+                    onClick={() => setFullscreenScalePct(v)}
+                  >
+                    {v}%
+                  </Button>
+                ))}
+                <Input
+                  type="number"
+                  min={50}
+                  max={300}
+                  value={fullscreenScalePct}
+                  onChange={(e) => setFullscreenScalePct(Math.max(50, Math.min(300, Number(e.target.value) || 100)))}
+                  className="w-16 h-8 text-xs text-center"
+                />
+              </div>
               <Button
                 variant="outline"
                 size="sm"
@@ -1761,7 +1785,6 @@ export function FloorPlanGridView({
                   if (!printGridRef.current) return;
                   setIsPrinting(true);
                   try {
-                    // Temporarily set overflow visible so html2canvas captures top/left dims
                     const scrollEl = printGridRef.current.querySelector('.overflow-auto');
                     const origOverflow = scrollEl ? (scrollEl as HTMLElement).style.overflow : '';
                     if (scrollEl) (scrollEl as HTMLElement).style.overflow = 'visible';
@@ -1774,24 +1797,28 @@ export function FloorPlanGridView({
                     if (scrollEl) (scrollEl as HTMLElement).style.overflow = origOverflow;
                     const isLandscape = printOrientation === 'landscape';
                     const pdf = new jsPDF(isLandscape ? 'l' : 'p', 'mm', 'a4');
-                    const pageW = pdf.internal.pageSize.getWidth() - 20; // 10mm margins
+                    const pageW = pdf.internal.pageSize.getWidth() - 20;
                     const pageH = pdf.internal.pageSize.getHeight() - 20;
-                    // Header
-                    pdf.setFontSize(14);
+                    // Header with budget name, level, and scale
+                    pdf.setFontSize(11);
                     pdf.setFont('helvetica', 'bold');
                     pdf.text(`${budgetName || 'Plano'} — ${currentFloorName}`, 10, 12);
                     pdf.setFontSize(8);
                     pdf.setFont('helvetica', 'normal');
-                    pdf.text(`Escala: ${cellLabel}`, pdf.internal.pageSize.getWidth() - 10, 12, { align: 'right' });
-                    // Image
-                    const headerOffset = 18; // mm below header
+                    pdf.text(`Escala: ${fullscreenScalePct}% · ${cellLabel}`, pdf.internal.pageSize.getWidth() - 10, 12, { align: 'right' });
+                    pdf.setDrawColor(180, 180, 180);
+                    pdf.line(10, 14, pdf.internal.pageSize.getWidth() - 10, 14);
+                    // Image with user scale applied
+                    const headerOffset = 18;
                     const availH = pageH - headerOffset + 10;
                     const imgData = canvas.toDataURL('image/png');
-                    const ratio = Math.min(pageW / canvas.width, availH / canvas.height);
-                    const imgW = canvas.width * ratio;
-                    const imgH = canvas.height * ratio;
+                    const baseRatio = Math.min(pageW / canvas.width, availH / canvas.height);
+                    const userScale = fullscreenScalePct / 100;
+                    const imgW = canvas.width * baseRatio * userScale;
+                    const imgH = canvas.height * baseRatio * userScale;
                     const xPos = 10 + (pageW - imgW) / 2;
-                    pdf.addImage(imgData, 'PNG', xPos, headerOffset, imgW, imgH);
+                    const yPos = headerOffset + (availH - imgH) / 2;
+                    pdf.addImage(imgData, 'PNG', xPos, Math.max(headerOffset, yPos), imgW, imgH);
                     pdf.save(`Plano_${(budgetName || 'plano').replace(/\s+/g, '_')}_${currentFloorName.replace(/\s+/g, '_')}.pdf`);
                   } catch (err) {
                     console.error('Error generating PDF:', err);

@@ -1013,7 +1013,7 @@ export function ElevationsGridViewer({
 
       {/* Grid fullscreen dialog */}
       <Dialog open={gridFullscreen} onOpenChange={setGridFullscreen}>
-        <DialogContent className="max-w-[98vw] w-[98vw] max-h-[96vh] h-[96vh] flex flex-col overflow-hidden print:!max-w-none print:!w-full print:!h-auto">
+        <DialogContent className="max-w-[98vw] w-[98vw] max-h-[96vh] h-[96vh] flex flex-col overflow-hidden print:!max-w-none print:!w-full print:!h-auto" onInteractOutside={e => e.preventDefault()} onPointerDownOutside={e => e.preventDefault()}>
           <DialogHeader className="shrink-0">
             <DialogTitle className="text-sm flex items-center gap-2">
               {budgetName && <span className="font-bold print:text-lg">{budgetName} —</span>}
@@ -2019,7 +2019,7 @@ const isDoor = op.openingType === 'puerta' || op.openingType === 'puerta_externa
 
     {/* Fullscreen dialog with interactive block editing */}
     <Dialog open={fullscreen} onOpenChange={(open) => { setFullscreen(open); if (!open) setSelectedBlocks(new Set()); }}>
-      <DialogContent className="!max-w-none !w-screen !h-screen !m-0 !p-4 !rounded-none !translate-x-0 !translate-y-0 !top-0 !left-0 flex flex-col print:!p-2">
+      <DialogContent className="!max-w-none !w-screen !h-screen !m-0 !p-4 !rounded-none !translate-x-0 !translate-y-0 !top-0 !left-0 flex flex-col print:!p-2" onInteractOutside={e => e.preventDefault()} onPointerDownOutside={e => e.preventDefault()}>
         <DialogHeader className="shrink-0">
           <DialogTitle className="text-sm flex items-center gap-2 flex-wrap">
             {budgetName && <span className="font-bold print:text-lg">{budgetName} —</span>}
@@ -3444,7 +3444,7 @@ function TotalElevationCard({ side, label, layers, plan, rooms, budgetName }: {
 
       {/* Fullscreen dialog */}
       <Dialog open={fullscreen} onOpenChange={setFullscreen}>
-        <DialogContent className="!max-w-none !w-screen !h-screen !m-0 !p-4 !rounded-none !translate-x-0 !translate-y-0 !top-0 !left-0 flex flex-col print:!p-2">
+        <DialogContent className="!max-w-none !w-screen !h-screen !m-0 !p-4 !rounded-none !translate-x-0 !translate-y-0 !top-0 !left-0 flex flex-col print:!p-2" onInteractOutside={e => e.preventDefault()} onPointerDownOutside={e => e.preventDefault()}>
           <DialogHeader className="shrink-0">
             <DialogTitle className="text-sm flex items-center gap-2 flex-wrap">
               {budgetName && <span className="font-bold print:text-lg">{budgetName} —</span>}
@@ -4184,7 +4184,7 @@ function CompositeWallCard({ compositeWall, plan, onOpeningClick, onAddBlockGrou
 
       {/* Fullscreen dialog with block editing */}
       <Dialog open={fullscreen} onOpenChange={(open) => { setFullscreen(open); if (!open) { setSelectedBlocks(new Set()); setFsSelectedOpeningId(null); setFsDragState(null); } }}>
-        <DialogContent className="!max-w-none !w-screen !h-screen !m-0 !p-4 !rounded-none !translate-x-0 !translate-y-0 !top-0 !left-0 flex flex-col print:!p-2">
+        <DialogContent className="!max-w-none !w-screen !h-screen !m-0 !p-4 !rounded-none !translate-x-0 !translate-y-0 !top-0 !left-0 flex flex-col print:!p-2" onInteractOutside={e => e.preventDefault()} onPointerDownOutside={e => e.preventDefault()}>
           <DialogHeader className="shrink-0">
             <DialogTitle className="text-sm flex items-center gap-2 flex-wrap">
               {budgetName && <span className="font-bold print:text-lg">{budgetName} —</span>}

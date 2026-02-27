@@ -2094,6 +2094,9 @@ export function computeCompositeWallsFromCorners(
   // (col*cellSizeM / row*cellSizeM), while 'top'/'left' point to the FIRST mm
   // ((col-1)*cellSizeM / (row-1)*cellSizeM). Using the original side property ensures
   // measurements match the grid's block-counting precision.
+  // IMPORTANT: Use the MAIN corner coordinates (not bounding-box min/max) for the fixed
+  // axis so that intermediate markers align with the perimeter edge even when non-constructive
+  // rooms (e.g. Aceras) push the bounding box beyond the real perimeter.
   const customAbsolute = filteredUserCorners.map(cc => {
     const edge = classifyEdge(cc);
     const isLastMm = cc.side === 'right' || cc.side === 'bottom';
@@ -2101,10 +2104,10 @@ export function computeCompositeWallsFromCorners(
     const yFromRow = isLastMm ? cc.row * cellSizeM : (cc.row - 1) * cellSizeM;
     let x: number, y: number;
     switch (edge) {
-      case 'top': x = xFromCol; y = minY; break;
-      case 'bottom': x = xFromCol; y = maxY; break;
-      case 'left': x = minX; y = yFromRow; break;
-      case 'right': x = maxX; y = yFromRow; break;
+      case 'top': x = xFromCol; y = mainA.y; break;
+      case 'bottom': x = xFromCol; y = mainC.y; break;
+      case 'left': x = mainD.x; y = yFromRow; break;
+      case 'right': x = mainB.x; y = yFromRow; break;
     }
     return { label: cc.label, x, y, side: edge };
   });

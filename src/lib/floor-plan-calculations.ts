@@ -2155,9 +2155,9 @@ export function computeCompositeWallsFromCorners(
       if (interiorLength < EPSILON) continue;
       // Exterior edge length: add wall thickness at each end (perpendicular walls)
       // Only add thickness at corners that are main ABCD corners (not custom intermediate ones)
-      const isV1Main = /^(\d*)([A-D])$/i.test(v1.label);
-      const isV2Main = /^(\d*)([A-D])$/i.test(v2.label);
-      let edgeLength = interiorLength + (isV1Main && !isBajoCubiertaLevel ? ewt : 0) + (isV2Main && !isBajoCubiertaLevel ? ewt : 0);
+      // Edge length = exact coordinate-to-coordinate distance (no wall thickness inflation).
+      // The user-defined corners already represent the exact physical positions to measure.
+      let edgeLength = interiorLength;
       // In block mode, snap to exact block count so measurements match the grid
       if (plan.scaleMode === 'bloque') {
         const blockW = plan.blockLengthMm / 1000;

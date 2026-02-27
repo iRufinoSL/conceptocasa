@@ -9,6 +9,7 @@ export interface FloorPlanData {
   externalWallThickness: number;
   internalWallThickness: number;
   roofOverhang: number;
+  eaveExcludedSides?: ('superior' | 'inferior' | 'izquierda' | 'derecha')[];
   roofSlopePercent: number;
   roofType: 'dos_aguas' | 'cuatro_aguas' | 'plana';
   scaleMode: ScaleMode;
@@ -449,6 +450,8 @@ export function calculateRoofSlopes(plan: FloorPlanData, rooms?: RoomData[]): Ro
   const ewt = plan.externalWallThickness || 0;
   const overhang = plan.roofOverhang || 0;
 
+  const excluded = plan.eaveExcludedSides || [];
+
   // Ridge runs along Y (length). Width is perpendicular to ridge.
   const buildingWidthAtWall = planW + 2 * ewt; // width from outer face of ext walls
   const ridgeX = buildingWidthAtWall / 2; // centered ridge
@@ -459,37 +462,45 @@ export function calculateRoofSlopes(plan: FloorPlanData, rooms?: RoomData[]): Ro
     ? plan.ridgeHeight
     : ridgeX * slopeRatio; // halfWidth * slope
 
-  // Faldón 1 (superior / top side): from ridge to top edge (with eave)
-  const proj1 = ridgeX + overhang;
-  const hyp1 = Math.sqrt(proj1 * proj1 + riseM * riseM);
-  const baseLen = planL + 2 * ewt + 2 * overhang; // length along ridge (includes eaves on gable ends)
+  // Eave overhang per side (0 if excluded)
+  const eaveSuperior = excluded.includes('superior') ? 0 : overhang;
+  const eaveInferior = excluded.includes('inferior') ? 0 : overhang;
+  const eaveIzquierda = excluded.includes('izquierda') ? 0 : overhang;
+  const eaveDerecha = excluded.includes('derecha') ? 0 : overhang;
 
-  // Faldón 2 (inferior / bottom side): from ridge to bottom edge (with eave)
-  const proj2 = (buildingWidthAtWall - ridgeX) + overhang;
+  // Faldón 1 (superior / top side): from ridge to top edge (with eave if not excluded)
+  const proj1 = ridgeX + eaveSuperior;
+  const hyp1 = Math.sqrt(proj1 * proj1 + riseM * riseM);
+  const baseLen1 = planL + 2 * ewt + eaveIzquierda + eaveDerecha; // length along ridge
+
+  // Faldón 2 (inferior / bottom side): from ridge to bottom edge (with eave if not excluded)
+  const proj2 = (buildingWidthAtWall - ridgeX) + eaveInferior;
   const hyp2 = Math.sqrt(proj2 * proj2 + riseM * riseM);
+
+  const baseLen2 = planL + 2 * ewt + eaveIzquierda + eaveDerecha; // same for both slopes
 
   return [
     {
       name: 'Tejado 1',
-      side: 'superior',
-      baseLength: baseLen,
+      side: 'superior' as const,
+      baseLength: baseLen1,
       projectedWidth: proj1,
       ridgeHeight: riseM,
       hypotenuse: hyp1,
-      projectedArea: baseLen * proj1,
-      slopeArea: baseLen * hyp1,
-      includesEaves: overhang > 0,
+      projectedArea: baseLen1 * proj1,
+      slopeArea: baseLen1 * hyp1,
+      includesEaves: eaveSuperior > 0 || eaveIzquierda > 0 || eaveDerecha > 0,
     },
     {
       name: 'Tejado 2',
-      side: 'inferior',
-      baseLength: baseLen,
+      side: 'inferior' as const,
+      baseLength: baseLen2,
       projectedWidth: proj2,
       ridgeHeight: riseM,
       hypotenuse: hyp2,
-      projectedArea: baseLen * proj2,
-      slopeArea: baseLen * hyp2,
-      includesEaves: overhang > 0,
+      projectedArea: baseLen2 * proj2,
+      slopeArea: baseLen2 * hyp2,
+      includesEaves: eaveInferior > 0 || eaveIzquierda > 0 || eaveDerecha > 0,
     },
   ];
 }

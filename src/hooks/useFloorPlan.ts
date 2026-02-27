@@ -360,6 +360,7 @@ export function useFloorPlan(budgetId: string) {
       if (data.intBlockHeightMm !== undefined) updates.int_block_height_mm = data.intBlockHeightMm;
       if (data.intBlockWidthMm !== undefined) updates.int_block_width_mm = data.intBlockWidthMm;
       if ('ridgeHeight' in data) updates.ridge_height = data.ridgeHeight ?? null;
+      if (data.eaveExcludedSides !== undefined) updates.eave_excluded_sides = data.eaveExcludedSides || [];
 
       const { error } = await supabase
         .from('budget_floor_plans')
@@ -753,6 +754,7 @@ export function useFloorPlan(budgetId: string) {
         intBlockLengthMm: Number((floorPlan as any).int_block_length_mm) || 625,
         intBlockHeightMm: Number((floorPlan as any).int_block_height_mm) || 500,
         intBlockWidthMm: Number((floorPlan as any).int_block_width_mm) || 100,
+        eaveExcludedSides: ((floorPlan as any).eave_excluded_sides || []) as FloorPlanData['eaveExcludedSides'],
       };
 
       const summary = calculateFloorPlanSummary(planData, rooms);
@@ -1080,6 +1082,7 @@ export function useFloorPlan(budgetId: string) {
       intBlockHeightMm: Number((floorPlan as any).int_block_height_mm) || 500,
       intBlockWidthMm: Number((floorPlan as any).int_block_width_mm) || 100,
       ridgeHeight: (floorPlan as any).ridge_height != null ? Number((floorPlan as any).ridge_height) : undefined,
+      eaveExcludedSides: ((floorPlan as any).eave_excluded_sides || []) as FloorPlanData['eaveExcludedSides'],
     };
   };
 

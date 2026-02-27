@@ -237,10 +237,25 @@ export interface FloorSummary {
   rooms: RoomCalculation[];
 }
 
+export interface RoofSlopeDetail {
+  name: string; // "Tejado 1" (superior), "Tejado 2" (inferior)
+  side: 'superior' | 'inferior'; // which side of the ridge
+  baseLength: number; // largo del faldón (along ridge, meters)
+  projectedWidth: number; // ancho proyectado en planta (meters)
+  ridgeHeight: number; // altura de cumbrera sobre arranque del faldón (meters)
+  hypotenuse: number; // longitud real del faldón inclinado (meters)
+  projectedArea: number; // baseLength × projectedWidth (m²)
+  slopeArea: number; // baseLength × hypotenuse (m²) — superficie real
+  includesEaves: boolean;
+}
+
 export interface FloorPlanSummary {
   // Global
   plantaTotalM2: number; // width * length
   roofM2: number;
+  
+  // Roof slope details
+  roofSlopes: RoofSlopeDetail[];
   
   // Aggregated from rooms
   totalUsableM2: number; // sum of room floor areas
@@ -413,6 +428,72 @@ export function calculateRoom(room: RoomData, plan: FloorPlanData): RoomCalculat
   };
 }
 
+export function calculateRoofSlopes(plan: FloorPlanData, rooms?: RoomData[]): RoofSlopeDetail[] {
+  if (plan.roofType === 'plana') return [];
+  if (plan.roofType !== 'dos_aguas') return []; // TODO: cuatro_aguas
+
+  // Bounding box from rooms
+  let planW = plan.width;
+  let planL = plan.length;
+  if (rooms && rooms.length > 0) {
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    rooms.forEach(r => {
+      minX = Math.min(minX, r.posX);
+      minY = Math.min(minY, r.posY);
+      maxX = Math.max(maxX, r.posX + r.width);
+      maxY = Math.max(maxY, r.posY + r.length);
+    });
+    if (isFinite(minX)) { planW = maxX - minX; planL = maxY - minY; }
+  }
+
+  const ewt = plan.externalWallThickness || 0;
+  const overhang = plan.roofOverhang || 0;
+
+  // Ridge runs along Y (length). Width is perpendicular to ridge.
+  const buildingWidthAtWall = planW + 2 * ewt; // width from outer face of ext walls
+  const ridgeX = buildingWidthAtWall / 2; // centered ridge
+
+  // Ridge height (from top of wall to peak)
+  const slopeRatio = plan.roofSlopePercent / 100;
+  const riseM = plan.ridgeHeight != null && plan.ridgeHeight > 0
+    ? plan.ridgeHeight
+    : ridgeX * slopeRatio; // halfWidth * slope
+
+  // Faldón 1 (superior / top side): from ridge to top edge (with eave)
+  const proj1 = ridgeX + overhang;
+  const hyp1 = Math.sqrt(proj1 * proj1 + riseM * riseM);
+  const baseLen = planL + 2 * ewt + 2 * overhang; // length along ridge (includes eaves on gable ends)
+
+  // Faldón 2 (inferior / bottom side): from ridge to bottom edge (with eave)
+  const proj2 = (buildingWidthAtWall - ridgeX) + overhang;
+  const hyp2 = Math.sqrt(proj2 * proj2 + riseM * riseM);
+
+  return [
+    {
+      name: 'Tejado 1',
+      side: 'superior',
+      baseLength: baseLen,
+      projectedWidth: proj1,
+      ridgeHeight: riseM,
+      hypotenuse: hyp1,
+      projectedArea: baseLen * proj1,
+      slopeArea: baseLen * hyp1,
+      includesEaves: overhang > 0,
+    },
+    {
+      name: 'Tejado 2',
+      side: 'inferior',
+      baseLength: baseLen,
+      projectedWidth: proj2,
+      ridgeHeight: riseM,
+      hypotenuse: hyp2,
+      projectedArea: baseLen * proj2,
+      slopeArea: baseLen * hyp2,
+      includesEaves: overhang > 0,
+    },
+  ];
+}
+
 export function calculateRoof(plan: FloorPlanData, rooms?: RoomData[]): number {
   // Use actual rooms bounding box if available, otherwise plan dimensions
   let planW = plan.width;
@@ -440,9 +521,14 @@ export function calculateRoof(plan: FloorPlanData, rooms?: RoomData[]): number {
     return baseWidth * baseLength;
   }
   
-  const slopeRatio = plan.roofSlopePercent / 100;
-  
+  // For dos_aguas, use the slope detail calculation for accuracy
   if (plan.roofType === 'dos_aguas') {
+    const slopes = calculateRoofSlopes(plan, rooms);
+    if (slopes.length === 2) {
+      return slopes[0].slopeArea + slopes[1].slopeArea;
+    }
+    // Fallback
+    const slopeRatio = plan.roofSlopePercent / 100;
     const halfWidth = baseWidth / 2;
     const rise = halfWidth * slopeRatio;
     const slopeLength = Math.sqrt(halfWidth * halfWidth + rise * rise);
@@ -450,6 +536,7 @@ export function calculateRoof(plan: FloorPlanData, rooms?: RoomData[]): number {
   }
   
   // cuatro_aguas (hip roof)
+  const slopeRatio = plan.roofSlopePercent / 100;
   const halfWidth = baseWidth / 2;
   const halfLength = baseLength / 2;
   const riseW = halfWidth * slopeRatio;
@@ -810,6 +897,7 @@ export function calculateFloorPlanSummary(plan: FloorPlanData, rooms: RoomData[]
   });
 
   const roofM2 = calculateRoof(plan, rooms);
+  const roofSlopes = calculateRoofSlopes(plan, rooms);
   
   // Calculate gables
   const gables = calculateGables(plan, classifiedRooms, wallClassification);
@@ -1002,6 +1090,7 @@ export function calculateFloorPlanSummary(plan: FloorPlanData, rooms: RoomData[]
   return {
     plantaTotalM2: plan.width * plan.length,
     roofM2,
+    roofSlopes,
     totalUsableM2,
     totalBuiltM2,
     totalExternalWallM2,

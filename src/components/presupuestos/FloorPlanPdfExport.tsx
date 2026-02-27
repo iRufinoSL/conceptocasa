@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Printer, Loader2 } from 'lucide-react';
 import jsPDF from 'jspdf';
@@ -18,6 +19,7 @@ interface FloorPlanPdfExportProps {
 export function FloorPlanPdfExport({ budgetName, floorName, containerRef }: FloorPlanPdfExportProps) {
   const [open, setOpen] = useState(false);
   const [orientation, setOrientation] = useState<'landscape' | 'portrait'>('landscape');
+  const [scalePct, setScalePct] = useState(100);
   const [exporting, setExporting] = useState(false);
 
   const handleExport = async () => {
@@ -160,6 +162,11 @@ export function FloorPlanPdfExport({ budgetName, floorName, containerRef }: Floo
         finalW = drawH * imgAspect;
       }
 
+      // Apply user scale
+      const userScale = scalePct / 100;
+      finalW *= userScale;
+      finalH *= userScale;
+
       // Center horizontally and vertically
       const offsetX = MARGIN + (drawW - finalW) / 2;
       const offsetY = MARGIN + HEADER_H + 1 + (drawH - finalH) / 2;
@@ -225,7 +232,33 @@ export function FloorPlanPdfExport({ budgetName, floorName, containerRef }: Floo
                 </div>
               </RadioGroup>
             </div>
-            <p className="text-xs text-muted-foreground">Formato: DIN A4 · Márgenes: 5 mm · Tamaño máximo</p>
+            <div>
+              <Label className="text-sm font-medium">Escala de impresión</Label>
+              <div className="flex items-center gap-3 mt-2">
+                {[100, 125, 150, 175, 200].map((v) => (
+                  <Button
+                    key={v}
+                    type="button"
+                    size="sm"
+                    variant={scalePct === v ? 'default' : 'outline'}
+                    className="text-xs px-2 py-1"
+                    onClick={() => setScalePct(v)}
+                  >
+                    {v}%
+                  </Button>
+                ))}
+                <Input
+                  type="number"
+                  min={50}
+                  max={300}
+                  value={scalePct}
+                  onChange={(e) => setScalePct(Math.max(50, Math.min(300, Number(e.target.value) || 100)))}
+                  className="w-20 h-8 text-sm text-center"
+                />
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">Valores &gt;100% amplían el plano (puede recortarse en los bordes)</p>
+            </div>
+            <p className="text-xs text-muted-foreground">Formato: DIN A4 · Márgenes: 5 mm</p>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>

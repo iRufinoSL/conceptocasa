@@ -2410,10 +2410,11 @@ export function computeCompositeWallsFromCorners(
           const halfLenY2 = (buildingMaxY2 - buildingMinY2) / 2;
           const gHAtY = (y: number) => halfLenY2 > 0 ? Math.max(0, gablePeakH * (1 - Math.abs(y - centerY2) / halfLenY2)) : 0;
           // For left/right sides, the composite spans along Y
-          const startY = Math.min(v1.y, v2.y);
-          const endY = Math.max(v1.y, v2.y);
-          gableStartBaseH = gHAtY(startY);
-          gableEndBaseH = gHAtY(endY);
+          // Use v1.y and v2.y directly (not min/max) so that gableStartBaseH
+          // corresponds to the START corner (v1) and gableEndBaseH to the END corner (v2).
+          // Using min/max would swap them when v1.y > v2.y (e.g. 2D1-2A on left side).
+          gableStartBaseH = gHAtY(v1.y);
+          gableEndBaseH = gHAtY(v2.y);
           if (gableStartBaseH < 0.001) gableStartBaseH = 0;
           if (gableEndBaseH < 0.001) gableEndBaseH = 0;
         }

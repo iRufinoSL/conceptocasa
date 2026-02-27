@@ -2811,6 +2811,81 @@ const isDoor = op.openingType === 'puerta' || op.openingType === 'puerta_externa
             <circle cx={peakX} cy={peakY} r={3} fill="hsl(15, 70%, 45%)" />
             <text x={peakX} y={peakY - 6} textAnchor="middle"
               fontSize={9} fill="hsl(15, 70%, 45%)" fontWeight={700}>CUMBRERA</text>
+
+            {/* Hypotenuse dimension lines (base corner → peak) */}
+            {(() => {
+              const gableTotalLen = gableSections.reduce((sum, gs) => sum + gs.length, 0);
+              const leftBH = cw.gableStartBaseH ?? 0;
+              const rightBH = cw.gableEndBaseH ?? 0;
+              const hypLeftM = Math.sqrt(Math.pow(gableTotalLen / 2, 2) + Math.pow(peakH - leftBH, 2));
+              const hypRightM = Math.sqrt(Math.pow(gableTotalLen / 2, 2) + Math.pow(peakH - rightBH, 2));
+              const fz = 9;
+              const hColor = 'hsl(280, 60%, 45%)';
+              const lMidX = (leftX + peakX) / 2;
+              const lMidY = (leftBaseY + peakY) / 2;
+              const rMidX = (peakX + rightX) / 2;
+              const rMidY = (peakY + rightBaseY) / 2;
+              return (
+                <>
+                  <line x1={leftX} y1={leftBaseY} x2={peakX} y2={peakY}
+                    stroke={hColor} strokeWidth={0.6} strokeDasharray="4 2" opacity={0.7} />
+                  <text x={lMidX - 8} y={lMidY - 4} textAnchor="end"
+                    fontSize={fz} fill={hColor} fontWeight={700}
+                    transform={`rotate(${Math.atan2(-(peakH - leftBH) * s, gableTotalW / 2) * 180 / Math.PI}, ${lMidX - 8}, ${lMidY - 4})`}>
+                    {Math.round(hypLeftM * 1000)} mm
+                  </text>
+                  <line x1={peakX} y1={peakY} x2={rightX} y2={rightBaseY}
+                    stroke={hColor} strokeWidth={0.6} strokeDasharray="4 2" opacity={0.7} />
+                  <text x={rMidX + 8} y={rMidY - 4} textAnchor="start"
+                    fontSize={fz} fill={hColor} fontWeight={700}
+                    transform={`rotate(${Math.atan2((peakH - rightBH) * s, gableTotalW / 2) * 180 / Math.PI}, ${rMidX + 8}, ${rMidY - 4})`}>
+                    {Math.round(hypRightM * 1000)} mm
+                  </text>
+                </>
+              );
+            })()}
+
+            {/* Base height dimensions for partial gables */}
+            {(() => {
+              const leftBH = cw.gableStartBaseH ?? 0;
+              const rightBH = cw.gableEndBaseH ?? 0;
+              const hColor = 'hsl(160, 60%, 35%)';
+              const fz = 8;
+              const elements: React.ReactElement[] = [];
+              if (leftBH > 0.01) {
+                elements.push(
+                  <g key="left-base-h">
+                    <line x1={leftX - 8} y1={baseY} x2={leftX - 8} y2={leftBaseY}
+                      stroke={hColor} strokeWidth={0.7} />
+                    <line x1={leftX - 12} y1={baseY} x2={leftX - 4} y2={baseY}
+                      stroke={hColor} strokeWidth={0.5} />
+                    <line x1={leftX - 12} y1={leftBaseY} x2={leftX - 4} y2={leftBaseY}
+                      stroke={hColor} strokeWidth={0.5} />
+                    <text x={leftX - 14} y={(baseY + leftBaseY) / 2 + 3} textAnchor="end"
+                      fontSize={fz} fill={hColor} fontWeight={700}>
+                      {Math.round(leftBH * 1000)} mm
+                    </text>
+                  </g>
+                );
+              }
+              if (rightBH > 0.01) {
+                elements.push(
+                  <g key="right-base-h">
+                    <line x1={rightX + 8} y1={baseY} x2={rightX + 8} y2={rightBaseY}
+                      stroke={hColor} strokeWidth={0.7} />
+                    <line x1={rightX + 4} y1={baseY} x2={rightX + 12} y2={baseY}
+                      stroke={hColor} strokeWidth={0.5} />
+                    <line x1={rightX + 4} y1={rightBaseY} x2={rightX + 12} y2={rightBaseY}
+                      stroke={hColor} strokeWidth={0.5} />
+                    <text x={rightX + 14} y={(baseY + rightBaseY) / 2 + 3} textAnchor="start"
+                      fontSize={fz} fill={hColor} fontWeight={700}>
+                      {Math.round(rightBH * 1000)} mm
+                    </text>
+                  </g>
+                );
+              }
+              return elements;
+            })()}
           </g>
         );
       })()}
@@ -3904,6 +3979,47 @@ function CompositeWallCard({ compositeWall, plan, onOpeningClick, onAddBlockGrou
                     </text>
                   </>
                 );
+              })()}
+              {/* Base height dimensions for partial gables */}
+              {(() => {
+                const leftBH = cw.gableStartBaseH ?? 0;
+                const rightBH = cw.gableEndBaseH ?? 0;
+                const hColor2 = 'hsl(160, 60%, 35%)';
+                const fz2 = fsScale ? 8 : 5.5;
+                const elements: React.ReactElement[] = [];
+                if (leftBH > 0.01) {
+                  elements.push(
+                    <g key="left-base-h">
+                      <line x1={leftX - 6} y1={baseY} x2={leftX - 6} y2={leftBaseY}
+                        stroke={hColor2} strokeWidth={0.6} />
+                      <line x1={leftX - 9} y1={baseY} x2={leftX - 3} y2={baseY}
+                        stroke={hColor2} strokeWidth={0.4} />
+                      <line x1={leftX - 9} y1={leftBaseY} x2={leftX - 3} y2={leftBaseY}
+                        stroke={hColor2} strokeWidth={0.4} />
+                      <text x={leftX - 11} y={(baseY + leftBaseY) / 2 + 3} textAnchor="end"
+                        fontSize={fz2} fill={hColor2} fontWeight={700}>
+                        {Math.round(leftBH * 1000)} mm
+                      </text>
+                    </g>
+                  );
+                }
+                if (rightBH > 0.01) {
+                  elements.push(
+                    <g key="right-base-h">
+                      <line x1={rightX + 6} y1={baseY} x2={rightX + 6} y2={rightBaseY}
+                        stroke={hColor2} strokeWidth={0.6} />
+                      <line x1={rightX + 3} y1={baseY} x2={rightX + 9} y2={baseY}
+                        stroke={hColor2} strokeWidth={0.4} />
+                      <line x1={rightX + 3} y1={rightBaseY} x2={rightX + 9} y2={rightBaseY}
+                        stroke={hColor2} strokeWidth={0.4} />
+                      <text x={rightX + 11} y={(baseY + rightBaseY) / 2 + 3} textAnchor="start"
+                        fontSize={fz2} fill={hColor2} fontWeight={700}>
+                        {Math.round(rightBH * 1000)} mm
+                      </text>
+                    </g>
+                  );
+                }
+                return elements;
               })()}
             </g>
           );

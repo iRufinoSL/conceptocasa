@@ -1827,6 +1827,8 @@ export interface CompositeWall {
   totalLength: number;
   sections: CompositeWallSection[];
   isExterior: boolean;
+  gableStartBaseH?: number; // height at start end of gable (non-zero if not at building edge)
+  gableEndBaseH?: number;   // height at end end of gable (non-zero if not at building edge)
   objectSummary: {
     totalBlocks?: { cols: number; rows: number; total: number };
     doors: number;
@@ -2396,6 +2398,27 @@ export function computeCompositeWallsFromCorners(
         label: OPENING_PRESETS[type as keyof typeof OPENING_PRESETS]?.label || type,
       }));
 
+      // Calculate gable base heights for perimeter composites with partial spans
+      let gableStartBaseH: number | undefined;
+      let gableEndBaseH: number | undefined;
+      if (anyGable && gablePeakH > 0) {
+        const isHorizGable = side === 'left' || side === 'right';
+        if (isHorizGable) {
+          const buildingMinY2 = Math.min(...roomsForCalc.map(r => r.posY));
+          const buildingMaxY2 = Math.max(...roomsForCalc.map(r => r.posY + r.length));
+          const centerY2 = (buildingMinY2 + buildingMaxY2) / 2;
+          const halfLenY2 = (buildingMaxY2 - buildingMinY2) / 2;
+          const gHAtY = (y: number) => halfLenY2 > 0 ? Math.max(0, gablePeakH * (1 - Math.abs(y - centerY2) / halfLenY2)) : 0;
+          // For left/right sides, the composite spans along Y
+          const startY = Math.min(v1.y, v2.y);
+          const endY = Math.max(v1.y, v2.y);
+          gableStartBaseH = gHAtY(startY);
+          gableEndBaseH = gHAtY(endY);
+          if (gableStartBaseH < 0.001) gableStartBaseH = 0;
+          if (gableEndBaseH < 0.001) gableEndBaseH = 0;
+        }
+      }
+
       composites.push({
         id: `cw-${v1.label}-${v2.label}`,
         label: `${v1.label}-${v2.label}`,
@@ -2405,6 +2428,8 @@ export function computeCompositeWallsFromCorners(
         totalLength: edgeLength,
         sections,
         isExterior: true,
+        gableStartBaseH,
+        gableEndBaseH,
         objectSummary: { totalBlocks, doors: totalDoors, windows: totalWindows, openingDetails },
       });
     }
@@ -2770,6 +2795,25 @@ export function computeCompositeWallsFromCorners(
     const buildingMidX = (buildingMinX + buildingMaxX) / 2;
     const detectedVerticalSide: 'left' | 'right' = wallX <= buildingMidX ? 'left' : 'right';
 
+    // Calculate gable base heights for partial spans
+    let gableStartBaseH: number | undefined;
+    let gableEndBaseH: number | undefined;
+    if (anyGableV && gablePeakHV > 0) {
+      const buildingMinY = Math.min(...roomsForCalc.map(r => r.posY));
+      const buildingMaxY = Math.max(...roomsForCalc.map(r => r.posY + r.length));
+      const buildingCenterY = (buildingMinY + buildingMaxY) / 2;
+      const buildingHalfLenY = (buildingMaxY - buildingMinY) / 2;
+      const gableHAtY = (y: number) => {
+        if (buildingHalfLenY <= 0) return 0;
+        return Math.max(0, gablePeakHV * (1 - Math.abs(y - buildingCenterY) / buildingHalfLenY));
+      };
+      gableStartBaseH = gableHAtY(edgeStartY);
+      gableEndBaseH = gableHAtY(edgeEndY);
+      // Zero out negligible values (at building edge)
+      if (gableStartBaseH < 0.001) gableStartBaseH = 0;
+      if (gableEndBaseH < 0.001) gableEndBaseH = 0;
+    }
+
     composites.push({
       id: `cw-${tc.label}-${bc.label}`,
       label: `${tc.label}-${bc.label}`,
@@ -2779,6 +2823,8 @@ export function computeCompositeWallsFromCorners(
       totalLength: edgeLength,
       sections,
       isExterior: false,
+      gableStartBaseH,
+      gableEndBaseH,
       objectSummary: { totalBlocks, doors: totalDoors, windows: totalWindows, openingDetails },
     });
   });

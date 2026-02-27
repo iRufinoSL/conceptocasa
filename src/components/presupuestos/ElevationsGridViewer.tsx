@@ -2705,7 +2705,11 @@ const isDoor = op.openingType === 'puerta' || op.openingType === 'puerta_externa
         const peakY = baseY - peakH * s;
         const leftX = gableStartX;
         const rightX = gableStartX + gableTotalW;
-        const trianglePath = `M ${leftX} ${baseY} L ${peakX} ${peakY} L ${rightX} ${baseY} Z`;
+        const leftBaseH = (cw.gableStartBaseH ?? 0) * s;
+        const rightBaseH = (cw.gableEndBaseH ?? 0) * s;
+        const leftBaseY = baseY - leftBaseH;
+        const rightBaseY = baseY - rightBaseH;
+        const trianglePath = `M ${leftX} ${leftBaseY} L ${peakX} ${peakY} L ${rightX} ${rightBaseY} L ${rightX} ${baseY} L ${leftX} ${baseY} Z`;
         const clipId = `fs-gable-clip-${cw.id}`;
 
         return (
@@ -3761,7 +3765,11 @@ function CompositeWallCard({ compositeWall, plan, onOpeningClick, onAddBlockGrou
           const peakY = baseY - peakH * s;
           const leftX = gableStartX;
           const rightX = gableStartX + gableTotalW;
-          const trianglePath = `M ${leftX} ${baseY} L ${peakX} ${peakY} L ${rightX} ${baseY} Z`;
+          const leftBaseH = (cw.gableStartBaseH ?? 0) * s;
+          const rightBaseH = (cw.gableEndBaseH ?? 0) * s;
+          const leftBaseY = baseY - leftBaseH;
+          const rightBaseY = baseY - rightBaseH;
+          const trianglePath = `M ${leftX} ${leftBaseY} L ${peakX} ${peakY} L ${rightX} ${rightBaseY} L ${rightX} ${baseY} L ${leftX} ${baseY} Z`;
           const clipId = `comp-gable-shared-${cw.id}`;
 
           return (
@@ -3866,35 +3874,33 @@ function CompositeWallCard({ compositeWall, plan, onOpeningClick, onAddBlockGrou
               {/* Hypotenuse dimension lines (base corner → peak) */}
               {(() => {
                 const gableTotalLen = gableSections.reduce((sum, gs) => sum + gs.length, 0);
-                const hypLeft = Math.sqrt(Math.pow(gableTotalW / 2, 2) + Math.pow(peakH * s, 2));
-                const hypLenM = Math.sqrt(Math.pow(gableTotalLen / 2, 2) + Math.pow(peakH, 2));
+                const leftBH = cw.gableStartBaseH ?? 0;
+                const rightBH = cw.gableEndBaseH ?? 0;
+                const hypLeftM = Math.sqrt(Math.pow(gableTotalLen / 2, 2) + Math.pow(peakH - leftBH, 2));
+                const hypRightM = Math.sqrt(Math.pow(gableTotalLen / 2, 2) + Math.pow(peakH - rightBH, 2));
                 const fz = fsScale ? 9 : 6.5;
                 const hColor = 'hsl(280, 60%, 45%)';
 
-                // Left hypotenuse: leftX,baseY → peakX,peakY
                 const lMidX = (leftX + peakX) / 2;
-                const lMidY = (baseY + peakY) / 2;
-                // Right hypotenuse: peakX,peakY → rightX,baseY
+                const lMidY = (leftBaseY + peakY) / 2;
                 const rMidX = (peakX + rightX) / 2;
-                const rMidY = (peakY + baseY) / 2;
+                const rMidY = (peakY + rightBaseY) / 2;
 
                 return (
                   <>
-                    {/* Left hypotenuse */}
-                    <line x1={leftX} y1={baseY} x2={peakX} y2={peakY}
+                    <line x1={leftX} y1={leftBaseY} x2={peakX} y2={peakY}
                       stroke={hColor} strokeWidth={0.6} strokeDasharray="4 2" opacity={0.7} />
                     <text x={lMidX - 8} y={lMidY - 4} textAnchor="end"
                       fontSize={fz} fill={hColor} fontWeight={700}
-                      transform={`rotate(${Math.atan2(-(peakH * s), gableTotalW / 2) * 180 / Math.PI}, ${lMidX - 8}, ${lMidY - 4})`}>
-                      {Math.round(hypLenM * 1000)} mm
+                      transform={`rotate(${Math.atan2(-(peakH - leftBH) * s, gableTotalW / 2) * 180 / Math.PI}, ${lMidX - 8}, ${lMidY - 4})`}>
+                      {Math.round(hypLeftM * 1000)} mm
                     </text>
-                    {/* Right hypotenuse */}
-                    <line x1={peakX} y1={peakY} x2={rightX} y2={baseY}
+                    <line x1={peakX} y1={peakY} x2={rightX} y2={rightBaseY}
                       stroke={hColor} strokeWidth={0.6} strokeDasharray="4 2" opacity={0.7} />
                     <text x={rMidX + 8} y={rMidY - 4} textAnchor="start"
                       fontSize={fz} fill={hColor} fontWeight={700}
-                      transform={`rotate(${Math.atan2(peakH * s, gableTotalW / 2) * 180 / Math.PI}, ${rMidX + 8}, ${rMidY - 4})`}>
-                      {Math.round(hypLenM * 1000)} mm
+                      transform={`rotate(${Math.atan2((peakH - rightBH) * s, gableTotalW / 2) * 180 / Math.PI}, ${rMidX + 8}, ${rMidY - 4})`}>
+                      {Math.round(hypRightM * 1000)} mm
                     </text>
                   </>
                 );

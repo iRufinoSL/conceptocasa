@@ -14,7 +14,7 @@ import {
 } from '@/components/ui/dialog';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { Search, CheckCircle, Clock, XCircle, Eye, Send, Mail, Forward, FileText } from 'lucide-react';
+import { Search, CheckCircle, Clock, XCircle, Eye, Send, Mail, Forward, FileText, RefreshCw } from 'lucide-react';
 import DOMPurify from 'dompurify';
 import { useEmailService } from '@/hooks/useEmailService';
 import { toast } from 'sonner';
@@ -54,7 +54,7 @@ export function EmailTrackingTab() {
   const [resending, setResending] = useState(false);
   const { sendEmail } = useEmailService();
 
-  const { data: sentEmails = [], isLoading } = useQuery({
+  const { data: sentEmails = [], isLoading, refetch, isFetching } = useQuery({
     queryKey: ['email-tracking-sent'],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -125,7 +125,18 @@ export function EmailTrackingTab() {
       <Card>
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between gap-4 flex-wrap">
-            <CardTitle className="text-lg">Seguimiento de Emails Enviados</CardTitle>
+          <CardTitle className="text-lg">Seguimiento de Emails Enviados</CardTitle>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => refetch()}
+              disabled={isFetching}
+              className="gap-1.5"
+            >
+              <RefreshCw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
+              Actualizar
+            </Button>
             <div className="relative w-full max-w-xs">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
@@ -134,6 +145,7 @@ export function EmailTrackingTab() {
                 onChange={(e) => setSearch(e.target.value)}
                 className="pl-9"
               />
+            </div>
             </div>
           </div>
         </CardHeader>

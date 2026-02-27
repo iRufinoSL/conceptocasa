@@ -5,13 +5,15 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Plus, Link, Unlink, Undo2, Expand, Shrink, MapPin, Printer, Ruler, Trash2, Check, RefreshCw, RotateCw, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Move } from 'lucide-react';
+import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible';
+import { Plus, Link, Unlink, Undo2, Expand, Shrink, MapPin, Printer, Ruler, Trash2, Check, RefreshCw, RotateCw, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Move, ChevronUp, ChevronDown } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 import type { RoomData, FloorLevel, WallType, ScaleMode } from '@/lib/floor-plan-calculations';
 import { autoClassifyWalls, isExteriorType, isInvisibleType, isCompartidaType } from '@/lib/floor-plan-calculations';
 import type { CustomCorner } from '@/hooks/useFloorPlan';
+import { toast } from 'sonner';
 
 interface FloorPlanGridViewProps {
   rooms: RoomData[];
@@ -236,6 +238,12 @@ export function FloorPlanGridView({
   const [editingCornerLabel, setEditingCornerLabel] = useState('');
   const [editingCornerCoord, setEditingCornerCoord] = useState('');
   const [editingCornerSide, setEditingCornerSide] = useState<'top' | 'right' | 'bottom' | 'left'>('top');
+  // Inline add-space
+  const [showInlineAddSpace, setShowInlineAddSpace] = useState(false);
+  const [inlineSpaceName, setInlineSpaceName] = useState('');
+  const [inlineSpaceWidth, setInlineSpaceWidth] = useState(4);
+  const [inlineSpaceLength, setInlineSpaceLength] = useState(3);
+  const [inlineSpaceCoord, setInlineSpaceCoord] = useState('');
 
   // Force switch to a specific floor tab when requested (e.g. after creating a new floor)
   useEffect(() => {
@@ -1335,6 +1343,17 @@ export function FloorPlanGridView({
           </Tabs>
         )}
         <div className="flex items-center gap-1.5 flex-wrap">
+          {onAddRoom && (
+            <Button
+              variant={showInlineAddSpace ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setShowInlineAddSpace(!showInlineAddSpace)}
+              disabled={saving}
+            >
+              <Plus className="h-4 w-4 mr-1" /> Añadir espacio
+              {showInlineAddSpace ? <ChevronUp className="h-3.5 w-3.5 ml-1" /> : <ChevronDown className="h-3.5 w-3.5 ml-1" />}
+            </Button>
+          )}
           {onGroupRooms && (
             <Button
               variant={multiSelectMode ? 'default' : 'outline'}
@@ -1480,6 +1499,79 @@ export function FloorPlanGridView({
           </Button>
         </div>
       </div>
+
+      {/* Inline add-space form */}
+      {onAddRoom && (
+        <Collapsible open={showInlineAddSpace} onOpenChange={setShowInlineAddSpace}>
+          <CollapsibleContent>
+            <Card className="mb-2">
+              <CardContent className="py-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 items-end">
+                  <div>
+                    <Label className="text-xs">Nombre</Label>
+                    <Input
+                      value={inlineSpaceName}
+                      onChange={e => setInlineSpaceName(e.target.value)}
+                      placeholder="Ej: Habitación 3"
+                      disabled={saving}
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Coordenada (ej: 01/01)</Label>
+                    <input
+                      type="text"
+                      value={inlineSpaceCoord}
+                      onChange={e => setInlineSpaceCoord(e.target.value.toUpperCase())}
+                      placeholder="01/01"
+                      disabled={saving}
+                      className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm font-mono ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs">{scaleMode === 'bloque' ? 'Ancho (bloques)' : 'Ancho (m)'}</Label>
+                    <Input type="number" step={scaleMode === 'bloque' ? '1' : '0.1'} value={inlineSpaceWidth}
+                      onChange={e => setInlineSpaceWidth(Number(e.target.value))} disabled={saving} />
+                  </div>
+                  <div>
+                    <Label className="text-xs">{scaleMode === 'bloque' ? 'Largo (bloques)' : 'Largo (m)'}</Label>
+                    <Input type="number" step={scaleMode === 'bloque' ? '1' : '0.1'} value={inlineSpaceLength}
+                      onChange={e => setInlineSpaceLength(Number(e.target.value))} disabled={saving} />
+                  </div>
+                  <div>
+                    <Button
+                      onClick={async () => {
+                        if (!inlineSpaceName.trim()) { toast.error('Indica un nombre'); return; }
+                        const w = scaleMode === 'bloque' ? inlineSpaceWidth * (blockLengthMm || 625) / 1000 : inlineSpaceWidth;
+                        const l = scaleMode === 'bloque' ? inlineSpaceLength * (blockLengthMm || 625) / 1000 : inlineSpaceLength;
+                        const parsedC = inlineSpaceCoord.trim() ? parseCoord(inlineSpaceCoord.trim()) : null;
+                        const gridCol = parsedC?.col;
+                        const gridRow = parsedC?.row;
+                        await onAddRoom(inlineSpaceName.trim(), w, l, currentFloorId !== '_none_' ? currentFloorId : undefined, gridCol, gridRow);
+                        setInlineSpaceName('');
+                        setInlineSpaceCoord('');
+                        setShowInlineAddSpace(false);
+                        if (gridCol && gridRow) {
+                          toast.success(`Espacio "${inlineSpaceName.trim()}" creado en ${formatCoord(gridCol, gridRow)}`);
+                        } else {
+                          toast.success('Espacio añadido a la cabecera (sin colocar)');
+                        }
+                      }}
+                      disabled={saving || !inlineSpaceName.trim()}
+                      size="sm"
+                      className="w-full"
+                    >
+                      <Plus className="h-4 w-4 mr-1" /> {inlineSpaceCoord.trim() ? 'Crear y colocar' : 'Crear en cabecera'}
+                    </Button>
+                  </div>
+                </div>
+                <p className="text-[10px] text-muted-foreground mt-2">
+                  Nivel activo: <strong>{effectiveFloors.find(f => f.id === currentFloorId)?.name || 'Sin nivel'}</strong> · Presets: Hab.peq 3×3 · Hab.med 4×3 · Salón 6×5
+                </p>
+              </CardContent>
+            </Card>
+          </CollapsibleContent>
+        </Collapsible>
+      )}
 
       {/* Multi-select grouping UI */}
       {multiSelectMode && (

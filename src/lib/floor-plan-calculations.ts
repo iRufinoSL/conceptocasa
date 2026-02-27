@@ -2639,9 +2639,18 @@ export function computeCompositeWallsFromCorners(
     const buildingMaxX = Math.max(...roomsForCalc.map(r => r.posX + r.width));
     const isOnPerimeterGable = Math.abs(wallX - buildingMinX) <= perimeterEPSILON || Math.abs(wallX - buildingMaxX) <= perimeterEPSILON;
 
-    // For interior vertical cuts in bajo cubierta, compute a single uniform height
-    // based on the roof slope at this X position (the faldón is continuous)
+    // In bajo cubierta, ANY vertical cut through walls 2/4 is a gable (hastial),
+    // because walls 2/4 always show the triangular gable profile regardless of
+    // whether the cut is at the absolute perimeter or at an interior division.
+    // Porches with invisible walls may extend the bounding box beyond the "real"
+    // gable position, so we detect gable per-section rather than per-composite.
+    const allRoomsBajoCub = matchingRooms.length > 0 && matchingRooms.every(({ room }) => (room.height === 0 || room.height === undefined || room.height === null)) && matchingRooms.some(({ room }) => room.height === 0) && plan.roofType === 'dos_aguas';
+
+    // For interior vertical cuts in bajo cubierta that are NOT gable,
+    // compute a single uniform height based on the roof slope at this X position
     const bajoCubiertaCutHeight = (() => {
+      // If all rooms are bajo cubierta and walls are 2/4, this is a gable — skip uniform height
+      if (allRoomsBajoCub) return undefined;
       const allBajoCub = roomsForCalc.length > 0 && roomsForCalc.every(r => r.height === 0 || r.height === undefined || r.height === null) && roomsForCalc.some(r => r.height === 0) && plan.roofType === 'dos_aguas';
       if (!allBajoCub || isOnPerimeterGable) return undefined;
       // Height at wallX under the roof slope
@@ -2652,19 +2661,27 @@ export function computeCompositeWallsFromCorners(
       return Math.max(0, riseM - Math.abs(wallX - ridgeX) * slopeRatio);
     })();
 
+    // Gable peak height for vertical bajo cubierta cuts
+    const verticalGablePeakH = (() => {
+      if (!allRoomsBajoCub) return 0;
+      const totalW = (buildingMaxX - buildingMinX) + 2 * plan.externalWallThickness;
+      return (totalW / 2) * (plan.roofSlopePercent / 100);
+    })();
+
     matchingRooms.forEach(({ room, wall, overlapStart, overlapEnd }) => {
       const sectionLen = overlapEnd - overlapStart;
       let wallH: number;
       const isBajoCub = room.height === 0 && plan.roofType === 'dos_aguas';
       // Vertical cross-side: wallIndex comes from matchRight (2) or matchLeft (4)
       const crossWallIndex = matchRight.includes(matchingRooms.find(m => m.room === room && m.wall === wall)!) ? 2 : 4;
-      const isGableWall = isBajoCub && isOnPerimeterGable && (crossWallIndex === 2 || crossWallIndex === 4);
-      if (bajoCubiertaCutHeight !== undefined) {
+      // In bajo cubierta, walls 2/4 are ALWAYS gable walls (same as individual room view)
+      const isGableWall = isBajoCub && (crossWallIndex === 2 || crossWallIndex === 4);
+      if (isGableWall) {
+        // Gable wall: use the full peak height — renderer draws triangle shape
+        wallH = verticalGablePeakH;
+      } else if (bajoCubiertaCutHeight !== undefined) {
         // Interior cut: uniform height from roof slope at this X
         wallH = bajoCubiertaCutHeight;
-      } else if (isGableWall) {
-        const totalW = (buildingMaxX - buildingMinX) + 2 * plan.externalWallThickness;
-        wallH = (totalW / 2) * (plan.roofSlopePercent / 100);
       } else if (wall.height && wall.height > 0) wallH = wall.height;
       else if (room.height && room.height > 0) wallH = room.height;
       else if (room.height === 0) {
@@ -2683,17 +2700,11 @@ export function computeCompositeWallsFromCorners(
 
     if (rawSecs.length === 0) return;
 
-    // Merge multiple gable sections into one for cross-side vertical elevations
-    const allGableV = rawSecs.length > 1 && rawSecs.every(s => s.isGableWall);
-    const effectiveSecsV = allGableV
-      ? [{
-          ...rawSecs[0],
-          sectionLen: rawSecs.reduce((sum, s) => sum + s.sectionLen, 0),
-          wallH: Math.max(...rawSecs.map(s => s.wallH)),
-          sectionOpenings: rawSecs.flatMap(s => s.sectionOpenings),
-          isGableWall: true,
-        }]
-      : rawSecs;
+    // Keep all gable sections separate so each preserves its own effectiveWallType (visibility).
+    // Add gable geometry info to each section so the renderer can draw a shared triangle.
+    const anyGableV = rawSecs.some(s => s.isGableWall);
+    const gablePeakHV = anyGableV ? Math.max(...rawSecs.filter(s => s.isGableWall).map(s => s.wallH)) : 0;
+    const effectiveSecsV = rawSecs;
 
     const rawTotal = effectiveSecsV.reduce((sum, s) => sum + s.sectionLen, 0);
     const scale = rawTotal > 0 ? edgeLength / rawTotal : 1;
@@ -2703,6 +2714,7 @@ export function computeCompositeWallsFromCorners(
     let totalDoors = 0, totalWindows = 0;
     const openingCounts: Record<string, number> = {};
 
+    let gableOffsetAccumV = 0;
     effectiveSecsV.forEach(({ room, wall, sectionLen, wallH, sectionOpenings, isGableWall, overlapStart, fullWallLen }) => {
       let adjustedLen = sectionLen * scale;
       if (plan.scaleMode === 'bloque') {
@@ -2729,8 +2741,12 @@ export function computeCompositeWallsFromCorners(
         overlapStart: overlapStart,
         fullWallLength: fullWallLen,
         effectiveWallType: effTypeV,
+        gablePeakHeight: isGableWall ? gablePeakHV : undefined,
+        gableTotalLength: isGableWall ? edgeLength : undefined,
+        gableSectionStart: isGableWall ? gableOffsetAccumV : undefined,
       });
       offset += adjustedLen;
+      if (isGableWall) gableOffsetAccumV += adjustedLen;
     });
 
     if (sections.length === 0) return;

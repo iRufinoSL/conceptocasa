@@ -9,13 +9,14 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Plus, Trash2, Layout, BarChart3, RefreshCw, Save, Wand2, Settings2, Layers, Pencil, Printer, ChevronUp, ChevronDown, X } from 'lucide-react';
+import { Loader2, Plus, Trash2, Layout, BarChart3, RefreshCw, Save, Wand2, Settings2, Layers, Pencil, Printer, ChevronUp, ChevronDown, X, Box } from 'lucide-react';
 import { toast } from 'sonner';
 import { useFloorPlan } from '@/hooks/useFloorPlan';
 import { FloorPlanGridView } from './FloorPlanGridView';
 import { FloorPlanSpaceForm } from './FloorPlanSpaceForm';
 import { ArrowLeft } from 'lucide-react';
 import { FloorPlanSummaryView } from './FloorPlanSummary';
+import { FloorPlanVolumesView } from './FloorPlanVolumesView';
 import { ElevationsGridViewer } from './ElevationsGridViewer';
 import { deriveGridPositions, computeGridRuler, formatCoord, parseCoord } from './FloorPlanGridView';
 import { calculateFloorPlanSummary, slopePercentToDegrees, degreesToSlopePercent, calcRidgeHeight, calcSlopeFromRidge } from '@/lib/floor-plan-calculations';
@@ -1094,6 +1095,9 @@ export function FloorPlanTab({ budgetId, budgetName = '', isAdmin }: FloorPlanTa
               <TabsTrigger value="alzados" className="text-xs h-7 px-3">
                 <Layers className="h-3.5 w-3.5 mr-1" /> Alzados
               </TabsTrigger>
+              <TabsTrigger value="volumenes" className="text-xs h-7 px-3">
+                <Box className="h-3.5 w-3.5 mr-1" /> Volúmenes
+              </TabsTrigger>
               <TabsTrigger value="resumen" className="text-xs h-7 px-3">
                 <BarChart3 className="h-3.5 w-3.5 mr-1" /> Resumen m²
               </TabsTrigger>
@@ -1286,6 +1290,14 @@ export function FloorPlanTab({ budgetId, budgetName = '', isAdmin }: FloorPlanTa
           focusWallId={elevationReturnContext?.wallId}
           budgetName={budgetName}
           customCorners={customCorners}
+        />
+      )}
+
+      {viewTab === 'volumenes' && planData && (
+        <FloorPlanVolumesView
+          plan={planData}
+          rooms={rooms}
+          floors={floors}
         />
       )}
 

@@ -1166,8 +1166,23 @@ export function FloorPlanVolumesView({ plan, rooms, floors, floorPlanId }: Floor
     return items;
   }, [levelVolumes, floors, rooms, plan, slopes]);
 
-  // Unified items: group by normalized name + unit
-  const [unifiedNames, setUnifiedNames] = useState<Set<string>>(new Set());
+  // Unified items: group by normalized name + unit — persisted in localStorage
+  const unifiedStorageKey = `volumes-unified-${floorPlanId}`;
+  const [unifiedNames, setUnifiedNames] = useState<Set<string>>(() => {
+    try {
+      const stored = localStorage.getItem(unifiedStorageKey);
+      if (stored) return new Set(JSON.parse(stored) as string[]);
+    } catch { /* ignore */ }
+    return new Set<string>();
+  });
+
+  // Persist unification state to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem(unifiedStorageKey, JSON.stringify(Array.from(unifiedNames)));
+    } catch { /* ignore */ }
+  }, [unifiedNames, unifiedStorageKey]);
+
   const toggleUnify = (normalizedName: string) => {
     setUnifiedNames(prev => {
       const next = new Set(prev);
@@ -1570,7 +1585,7 @@ export function FloorPlanVolumesView({ plan, rooms, floors, floorPlanId }: Floor
                                 <span>{item.name}</span>
                                 <div className="flex items-center gap-2">
                                   <span className="font-mono font-medium">{fmt(item.value)} {item.unit}</span>
-                                  <Button variant="ghost" size="sm" className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => setEditingLayer(item.layerRef)} title="Editar objeto">
+                                  <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => setEditingLayer(item.layerRef)} title="Editar objeto">
                                     <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
                                   </Button>
                                 </div>

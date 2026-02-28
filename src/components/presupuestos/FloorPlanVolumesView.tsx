@@ -8,7 +8,8 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { FloorPlanData, RoomData, calculateRoofSlopes, RoofSlopeDetail, isExteriorType, isVisibleWall } from '@/lib/floor-plan-calculations';
-import { Box, ChevronDown, ChevronRight, Plus, Trash2, Layers, ArrowDown, ArrowUp, ArrowRight as ArrowRightIcon, Save, Loader2, CornerDownRight, Copy } from 'lucide-react';
+import { Box, ChevronDown, ChevronRight, Plus, Trash2, Layers, ArrowDown, ArrowUp, ArrowRight as ArrowRightIcon, Save, Loader2, CornerDownRight, Copy, Ruler, Settings2, Link2, Unlink } from 'lucide-react';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
@@ -1127,6 +1128,104 @@ export function FloorPlanVolumesView({ plan, rooms, floors, floorPlanId }: Floor
   const totalW = allMaxX - allMinX;
   const totalL = allMaxY - allMinY;
   const totalPlantArea = totalW * totalL;
+  // grandTotalVolume is declared inside the render section below
+
+  // ── Collect all measurement items for the Mediciones section ──
+  type MeasurementItem = { name: string; value: number; unit: 'm²' | 'ml'; surfaceLabel: string; floorName: string };
+  const allMeasurementItems = useMemo(() => {
+    const items: MeasurementItem[] = [];
+    for (const floor of floors) {
+      const floorRooms = rooms.filter(r => r.floorId === floor.id);
+      const isBajoCubierta = floor.level === 'bajo_cubierta' || floor.name.toLowerCase().includes('cubierta');
+      const floorLayers = levelVolumes[floor.id];
+      if (!floorLayers) continue;
+      const surfaceTypes: SurfaceType[] = ['suelo', 'cara_superior', 'cara_derecha', 'cara_inferior', 'cara_izquierda', 'techo',
+        ...(isBajoCubierta ? ['cubierta_superior', 'cubierta_inferior'] as SurfaceType[] : [])];
+      for (const st of surfaceTypes) {
+        const layers = floorLayers[st] || [];
+        // Only leaf layers
+        const childParentIds = new Set(layers.filter(l => l.parentLayerId).map(l => l.parentLayerId!));
+        const leafLayers = layers.filter(l => !childParentIds.has(l.id));
+        for (const l of leafLayers) {
+          if (!l.name || l.name.trim() === '') continue;
+          const dims = calcSurfaceArea(st, plan, rooms, floorRooms, slopes, l.includeNonStructural);
+          if (l.measurementType === 'linear') {
+            const lm = calcLinearMetrics(l, { largo: dims.largo, ancho: dims.ancho });
+            if (lm) items.push({ name: l.name, value: lm.totalMl, unit: 'ml', surfaceLabel: SURFACE_LABELS[st], floorName: floor.name });
+          } else {
+            items.push({ name: l.name, value: dims.area, unit: 'm²', surfaceLabel: SURFACE_LABELS[st], floorName: floor.name });
+          }
+        }
+      }
+    }
+    return items;
+  }, [levelVolumes, floors, rooms, plan, slopes]);
+
+  // Unified items: group by normalized name + unit
+  const [unifiedNames, setUnifiedNames] = useState<Set<string>>(new Set());
+  const toggleUnify = (normalizedName: string) => {
+    setUnifiedNames(prev => {
+      const next = new Set(prev);
+      if (next.has(normalizedName)) next.delete(normalizedName);
+      else next.add(normalizedName);
+      return next;
+    });
+  };
+
+  const normalizeForGroup = (name: string) => name.replace(/\s*\(copia\)\s*$/i, '').trim();
+
+  const alphabeticalItems = useMemo(() => {
+    const grouped = new Map<string, { items: MeasurementItem[]; unit: 'ml' | 'm²'; canUnify: boolean }>();
+    for (const item of allMeasurementItems) {
+      const norm = normalizeForGroup(item.name);
+      const key = `${norm}__${item.unit}`;
+      if (!grouped.has(key)) grouped.set(key, { items: [], unit: item.unit, canUnify: false });
+      grouped.get(key)!.items.push(item);
+    }
+    // Mark groups with >1 items with same normalized name as unifiable
+    grouped.forEach((g, key) => {
+      if (g.items.length > 1) {
+        const uniqueNames = new Set(g.items.map(i => i.name));
+        if (uniqueNames.size > 1) g.canUnify = true;
+      }
+    });
+    // Build display list
+    const result: { name: string; value: number; unit: string; canUnify: boolean; isUnified: boolean; subItems?: MeasurementItem[] }[] = [];
+    const processedKeys = new Set<string>();
+    const sortedItems = [...allMeasurementItems].sort((a, b) => a.name.localeCompare(b.name, 'es'));
+    for (const item of sortedItems) {
+      const norm = normalizeForGroup(item.name);
+      const key = `${norm}__${item.unit}`;
+      if (unifiedNames.has(key)) {
+        if (!processedKeys.has(key)) {
+          processedKeys.add(key);
+          const group = grouped.get(key)!;
+          const total = group.items.reduce((s, i) => s + i.value, 0);
+          result.push({ name: norm, value: total, unit: item.unit, canUnify: true, isUnified: true, subItems: group.items });
+        }
+      } else {
+        const group = grouped.get(key)!;
+        result.push({ name: item.name, value: item.value, unit: item.unit, canUnify: group.canUnify, isUnified: false });
+      }
+    }
+    return result;
+  }, [allMeasurementItems, unifiedNames]);
+
+  // By-layer grouping
+  const byLayerItems = useMemo(() => {
+    const grouped = new Map<string, MeasurementItem[]>();
+    for (const item of allMeasurementItems) {
+      const key = `${item.floorName} > ${item.surfaceLabel}`;
+      if (!grouped.has(key)) grouped.set(key, []);
+      grouped.get(key)!.push(item);
+    }
+    return grouped;
+  }, [allMeasurementItems]);
+
+  // Section collapse states
+  const [sectionGeneralOpen, setSectionGeneralOpen] = useState(true);
+  const [sectionNivelesOpen, setSectionNivelesOpen] = useState(true);
+  const [sectionMedicionesOpen, setSectionMedicionesOpen] = useState(false);
 
   let grandTotalVolume = 0;
 
@@ -1139,220 +1238,326 @@ export function FloorPlanVolumesView({ plan, rooms, floors, floorPlanId }: Floor
         </Button>
       </div>
 
-      {/* General info */}
-      <Card>
-        <CardHeader className="py-3 px-4">
-          <CardTitle className="text-base flex items-center gap-2">
-            <Box className="h-4 w-4" />
-            Volúmenes — Valores generales
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="px-4 pb-3 pt-0">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-1 text-sm">
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Largo total:</span>
-              <span className="font-mono font-medium">{fmt(totalW, 3)} m</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Ancho total:</span>
-              <span className="font-mono font-medium">{fmt(totalL, 3)} m</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Superficie planta:</span>
-              <span className="font-mono font-medium">{fmt(totalPlantArea)} m²</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Niveles:</span>
-              <span className="font-mono font-medium">{floors.length}</span>
-            </div>
-          </div>
-          {slopes.length > 0 && (
-            <div className="mt-2 pt-2 border-t border-border">
-              <p className="text-xs font-semibold text-muted-foreground mb-1">Faldones (cubierta dos aguas)</p>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                {slopes.map((s, i) => (
-                  <div key={i} className="text-xs space-y-0.5 bg-muted/30 rounded p-2">
-                    <div className="font-medium">{s.name} ({s.side})</div>
-                    <div className="flex justify-between"><span>Base (largo) estructural:</span> <span className="font-mono">{fmt(s.structBaseLength, 3)} m</span></div>
-                    <div className="flex justify-between"><span>Hipotenusa estructural:</span> <span className="font-mono">{fmt(s.structHypotenuse, 3)} m</span></div>
-                    <div className="flex justify-between font-semibold"><span>Superficie sin aleros:</span> <span className="font-mono">{fmt(s.structSlopeArea)} m²</span></div>
-                    {s.includesEaves && (
-                      <>
-                        <Separator className="my-1" />
-                        <div className="flex justify-between"><span>Base c/aleros:</span> <span className="font-mono">{fmt(s.baseLength, 3)} m</span></div>
-                        <div className="flex justify-between"><span>Hipotenusa c/aleros:</span> <span className="font-mono">{fmt(s.hypotenuse, 3)} m</span></div>
-                        <div className="flex justify-between font-semibold"><span>Superficie c/aleros:</span> <span className="font-mono">{fmt(s.slopeArea)} m²</span></div>
-                      </>
-                    )}
-                    <div className="flex justify-between text-muted-foreground"><span>Altura cumbrera:</span> <span className="font-mono">{fmt(s.ridgeHeight, 3)} m</span></div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Per-level volumes */}
-      {floors.map(floor => {
-        const floorRooms = rooms.filter(r => r.floorId === floor.id);
-        const isBajoCubierta = floor.level === 'bajo_cubierta' || floor.name.toLowerCase().includes('cubierta');
-        const isExpanded = expandedLevels.has(floor.id);
-        const floorLayers = levelVolumes[floor.id] || {
-          suelo: [], cara_superior: [], cara_derecha: [], cara_inferior: [], cara_izquierda: [], techo: [],
-          cubierta_superior: [], cubierta_inferior: [],
-        };
-
-        // cubierta_superior/inferior are sub-levels of techo, rendered nested
-        const mainSurfaceTypes: SurfaceType[] = ['suelo', 'cara_superior', 'cara_derecha', 'cara_inferior', 'cara_izquierda', 'techo'];
-        const roofSubSurfaces: SurfaceType[] = isBajoCubierta ? ['cubierta_superior', 'cubierta_inferior'] : [];
-        const surfaceTypes: SurfaceType[] = [...mainSurfaceTypes, ...roofSubSurfaces];
-
-        let levelTotalVolume = 0;
-        const surfaceData = surfaceTypes.map(st => {
-          const result = calcSurfaceArea(st, plan, rooms, floorRooms, slopes, false);
-          const layers = floorLayers[st] || [];
-          // Only count leaf layers for volume (those without children)
-          const childParentIds = new Set(layers.filter(l => l.parentLayerId).map(l => l.parentLayerId!));
-          const leafLayers = layers.filter(l => !childParentIds.has(l.id));
-          const vol = leafLayers.reduce((sum, l) => {
-            if (l.measurementType === 'linear') return sum;
-            const lArea = calcSurfaceArea(st, plan, rooms, floorRooms, slopes, l.includeNonStructural).area;
-            return sum + (lArea * l.thicknessMm / 1000);
-          }, 0);
-          levelTotalVolume += vol;
-          return { surfaceType: st, area: result.area, description: result.description, largo: result.largo, ancho: result.ancho, layers, volume: vol };
-        });
-        grandTotalVolume += levelTotalVolume;
-
-        return (
-          <Card key={floor.id}>
-            <CardHeader className="py-2 px-4 cursor-pointer" onClick={() => toggleLevel(floor.id)}>
-              <CardTitle className="text-sm flex items-center gap-2">
-                {isExpanded
-                  ? <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                  : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
-                <Layers className="h-4 w-4" />
-                <span className="flex-1">{floor.name}</span>
-                {levelTotalVolume > 0 && (
-                  <Badge variant="secondary" className="text-xs font-mono">
-                    Total: {fmt(levelTotalVolume)} m³
-                  </Badge>
-                )}
+      {/* ── SECTION 1: Valores generales ── */}
+      <Collapsible open={sectionGeneralOpen} onOpenChange={setSectionGeneralOpen}>
+        <Card>
+          <CollapsibleTrigger asChild>
+            <CardHeader className="py-3 px-4 cursor-pointer hover:bg-muted/30 transition-colors">
+              <CardTitle className="text-base flex items-center gap-2">
+                {sectionGeneralOpen ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+                <Settings2 className="h-4 w-4" />
+                Valores generales
               </CardTitle>
             </CardHeader>
-            {isExpanded && (
-              <CardContent className="px-4 pb-4 pt-0 space-y-1">
-                {surfaceData
-                  .filter(sd => !roofSubSurfaces.includes(sd.surfaceType))
-                  .map(sd => {
-                    const isTecho = sd.surfaceType === 'techo';
-                    const roofSubData = isTecho
-                      ? surfaceData.filter(s => roofSubSurfaces.includes(s.surfaceType))
-                      : [];
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <CardContent className="px-4 pb-3 pt-0">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-1 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Largo total:</span>
+                  <span className="font-mono font-medium">{fmt(totalW, 3)} m</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Ancho total:</span>
+                  <span className="font-mono font-medium">{fmt(totalL, 3)} m</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Superficie planta:</span>
+                  <span className="font-mono font-medium">{fmt(totalPlantArea)} m²</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Niveles:</span>
+                  <span className="font-mono font-medium">{floors.length}</span>
+                </div>
+              </div>
+              {slopes.length > 0 && (
+                <div className="mt-2 pt-2 border-t border-border">
+                  <p className="text-xs font-semibold text-muted-foreground mb-1">Faldones (cubierta dos aguas)</p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    {slopes.map((s, i) => (
+                      <div key={i} className="text-xs space-y-0.5 bg-muted/30 rounded p-2">
+                        <div className="font-medium">{s.name} ({s.side})</div>
+                        <div className="flex justify-between"><span>Base (largo) estructural:</span> <span className="font-mono">{fmt(s.structBaseLength, 3)} m</span></div>
+                        <div className="flex justify-between"><span>Hipotenusa estructural:</span> <span className="font-mono">{fmt(s.structHypotenuse, 3)} m</span></div>
+                        <div className="flex justify-between font-semibold"><span>Superficie sin aleros:</span> <span className="font-mono">{fmt(s.structSlopeArea)} m²</span></div>
+                        {s.includesEaves && (
+                          <>
+                            <Separator className="my-1" />
+                            <div className="flex justify-between"><span>Base c/aleros:</span> <span className="font-mono">{fmt(s.baseLength, 3)} m</span></div>
+                            <div className="flex justify-between"><span>Hipotenusa c/aleros:</span> <span className="font-mono">{fmt(s.hypotenuse, 3)} m</span></div>
+                            <div className="flex justify-between font-semibold"><span>Superficie c/aleros:</span> <span className="font-mono">{fmt(s.slopeArea)} m²</span></div>
+                          </>
+                        )}
+                        <div className="flex justify-between text-muted-foreground"><span>Altura cumbrera:</span> <span className="font-mono">{fmt(s.ridgeHeight, 3)} m</span></div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </CollapsibleContent>
+        </Card>
+      </Collapsible>
 
-                    return (
-                      <div key={sd.surfaceType}>
-                        <SurfaceSection
-                          surfaceType={sd.surfaceType}
-                          layers={sd.layers}
-                          surfaceAreaDefault={sd.area}
-                          description={sd.description}
-                          onAddLayer={() => addLayer(floor.id, sd.surfaceType)}
-                          onAddChildLayer={(parentId) => addChildLayer(floor.id, sd.surfaceType, parentId)}
-                          onRemoveLayer={(id) => removeLayer(floor.id, sd.surfaceType, id)}
-                          onDuplicateLayer={(id) => duplicateLayer(floor.id, sd.surfaceType, id)}
-                          onUpdateLayer={(id, data) => updateLayer(floor.id, sd.surfaceType, id, data)}
-                          calcAreaForLayer={(includeNS) => calcSurfaceArea(sd.surfaceType, plan, rooms, floorRooms, slopes, includeNS).area}
-                          calcDimsForLayer={(includeNS) => {
-                            const r = calcSurfaceArea(sd.surfaceType, plan, rooms, floorRooms, slopes, includeNS);
-                            return { largo: r.largo, ancho: r.ancho };
-                          }}
-                        />
-                        {/* Render roof sub-surfaces nested under Techo */}
-                        {roofSubData.length > 0 && (
-                          <div className="ml-6 border-l-2 border-muted pl-2 space-y-1">
-                            {roofSubData.map(rsd => (
-                              <SurfaceSection
-                                key={rsd.surfaceType}
-                                surfaceType={rsd.surfaceType}
-                                layers={rsd.layers}
-                                surfaceAreaDefault={rsd.area}
-                                description={rsd.description}
-                                onAddLayer={() => addLayer(floor.id, rsd.surfaceType)}
-                                onAddChildLayer={(parentId) => addChildLayer(floor.id, rsd.surfaceType, parentId)}
-                                onRemoveLayer={(id) => removeLayer(floor.id, rsd.surfaceType, id)}
-                                onDuplicateLayer={(id) => duplicateLayer(floor.id, rsd.surfaceType, id)}
-                                onUpdateLayer={(id, data) => updateLayer(floor.id, rsd.surfaceType, id, data)}
-                                calcAreaForLayer={(includeNS) => calcSurfaceArea(rsd.surfaceType, plan, rooms, floorRooms, slopes, includeNS).area}
-                                calcDimsForLayer={(includeNS) => {
-                                  const r = calcSurfaceArea(rsd.surfaceType, plan, rooms, floorRooms, slopes, includeNS);
-                                  return { largo: r.largo, ancho: r.ancho };
+      {/* ── SECTION 2: Niveles ── */}
+      <Collapsible open={sectionNivelesOpen} onOpenChange={setSectionNivelesOpen}>
+        <Card>
+          <CollapsibleTrigger asChild>
+            <CardHeader className="py-3 px-4 cursor-pointer hover:bg-muted/30 transition-colors">
+              <CardTitle className="text-base flex items-center gap-2">
+                {sectionNivelesOpen ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+                <Layers className="h-4 w-4" />
+                Niveles
+                <Badge variant="outline" className="text-xs font-mono ml-auto">{floors.length} nivel{floors.length !== 1 ? 'es' : ''}</Badge>
+              </CardTitle>
+            </CardHeader>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <CardContent className="px-4 pb-4 pt-0 space-y-3">
+              {floors.map(floor => {
+                const floorRooms = rooms.filter(r => r.floorId === floor.id);
+                const isBajoCubierta = floor.level === 'bajo_cubierta' || floor.name.toLowerCase().includes('cubierta');
+                const isExpanded = expandedLevels.has(floor.id);
+                const floorLayers = levelVolumes[floor.id] || {
+                  suelo: [], cara_superior: [], cara_derecha: [], cara_inferior: [], cara_izquierda: [], techo: [],
+                  cubierta_superior: [], cubierta_inferior: [],
+                };
+
+                const mainSurfaceTypes: SurfaceType[] = ['suelo', 'cara_superior', 'cara_derecha', 'cara_inferior', 'cara_izquierda', 'techo'];
+                const roofSubSurfaces: SurfaceType[] = isBajoCubierta ? ['cubierta_superior', 'cubierta_inferior'] : [];
+                const surfaceTypes: SurfaceType[] = [...mainSurfaceTypes, ...roofSubSurfaces];
+
+                let levelTotalVolume = 0;
+                const surfaceData = surfaceTypes.map(st => {
+                  const result = calcSurfaceArea(st, plan, rooms, floorRooms, slopes, false);
+                  const layers = floorLayers[st] || [];
+                  const childParentIds = new Set(layers.filter(l => l.parentLayerId).map(l => l.parentLayerId!));
+                  const leafLayers = layers.filter(l => !childParentIds.has(l.id));
+                  const vol = leafLayers.reduce((sum, l) => {
+                    if (l.measurementType === 'linear') return sum;
+                    const lArea = calcSurfaceArea(st, plan, rooms, floorRooms, slopes, l.includeNonStructural).area;
+                    return sum + (lArea * l.thicknessMm / 1000);
+                  }, 0);
+                  levelTotalVolume += vol;
+                  return { surfaceType: st, area: result.area, description: result.description, largo: result.largo, ancho: result.ancho, layers, volume: vol };
+                });
+                grandTotalVolume += levelTotalVolume;
+
+                return (
+                  <div key={floor.id} className="border rounded-lg">
+                    <div className="py-2 px-4 cursor-pointer flex items-center gap-2 hover:bg-muted/30 transition-colors" onClick={() => toggleLevel(floor.id)}>
+                      {isExpanded
+                        ? <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                        : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+                      <Layers className="h-4 w-4" />
+                      <span className="text-sm font-medium flex-1">{floor.name}</span>
+                      {levelTotalVolume > 0 && (
+                        <Badge variant="secondary" className="text-xs font-mono">
+                          Total: {fmt(levelTotalVolume)} m³
+                        </Badge>
+                      )}
+                    </div>
+                    {isExpanded && (
+                      <div className="px-4 pb-4 pt-0 space-y-1">
+                        {surfaceData
+                          .filter(sd => !roofSubSurfaces.includes(sd.surfaceType))
+                          .map(sd => {
+                            const isTecho = sd.surfaceType === 'techo';
+                            const roofSubData = isTecho
+                              ? surfaceData.filter(s => roofSubSurfaces.includes(s.surfaceType))
+                              : [];
+
+                            return (
+                              <div key={sd.surfaceType}>
+                                <SurfaceSection
+                                  surfaceType={sd.surfaceType}
+                                  layers={sd.layers}
+                                  surfaceAreaDefault={sd.area}
+                                  description={sd.description}
+                                  onAddLayer={() => addLayer(floor.id, sd.surfaceType)}
+                                  onAddChildLayer={(parentId) => addChildLayer(floor.id, sd.surfaceType, parentId)}
+                                  onRemoveLayer={(id) => removeLayer(floor.id, sd.surfaceType, id)}
+                                  onDuplicateLayer={(id) => duplicateLayer(floor.id, sd.surfaceType, id)}
+                                  onUpdateLayer={(id, data) => updateLayer(floor.id, sd.surfaceType, id, data)}
+                                  calcAreaForLayer={(includeNS) => calcSurfaceArea(sd.surfaceType, plan, rooms, floorRooms, slopes, includeNS).area}
+                                  calcDimsForLayer={(includeNS) => {
+                                    const r = calcSurfaceArea(sd.surfaceType, plan, rooms, floorRooms, slopes, includeNS);
+                                    return { largo: r.largo, ancho: r.ancho };
+                                  }}
+                                />
+                                {roofSubData.length > 0 && (
+                                  <div className="ml-6 border-l-2 border-muted pl-2 space-y-1">
+                                    {roofSubData.map(rsd => (
+                                      <SurfaceSection
+                                        key={rsd.surfaceType}
+                                        surfaceType={rsd.surfaceType}
+                                        layers={rsd.layers}
+                                        surfaceAreaDefault={rsd.area}
+                                        description={rsd.description}
+                                        onAddLayer={() => addLayer(floor.id, rsd.surfaceType)}
+                                        onAddChildLayer={(parentId) => addChildLayer(floor.id, rsd.surfaceType, parentId)}
+                                        onRemoveLayer={(id) => removeLayer(floor.id, rsd.surfaceType, id)}
+                                        onDuplicateLayer={(id) => duplicateLayer(floor.id, rsd.surfaceType, id)}
+                                        onUpdateLayer={(id, data) => updateLayer(floor.id, rsd.surfaceType, id, data)}
+                                        calcAreaForLayer={(includeNS) => calcSurfaceArea(rsd.surfaceType, plan, rooms, floorRooms, slopes, includeNS).area}
+                                        calcDimsForLayer={(includeNS) => {
+                                          const r = calcSurfaceArea(rsd.surfaceType, plan, rooms, floorRooms, slopes, includeNS);
+                                          return { largo: r.largo, ancho: r.ancho };
+                                        }}
+                                        onRemoveAllLayers={() => {
+                                          const layers = floorLayers[rsd.surfaceType] || [];
+                                          layers.forEach(l => {
+                                            if (l.dbId) {
+                                              supabase.from('budget_volume_layers').delete().eq('id', l.dbId).then(({ error }) => {
+                                                if (error) toast.error('Error eliminando capa');
+                                              });
+                                            }
+                                          });
+                                          supabase.from('budget_volume_layers')
+                                            .delete()
+                                            .eq('floor_plan_id', floorPlanId)
+                                            .eq('floor_id', floor.id)
+                                            .eq('surface_type', rsd.surfaceType)
+                                            .then(({ error }) => {
+                                              if (error) console.error('Error limpiando capas huérfanas:', error);
+                                            });
+                                          setLevelVolumes(prev => {
+                                            const fl = { ...prev[floor.id] };
+                                            fl[rsd.surfaceType] = [];
+                                            return { ...prev, [floor.id]: fl };
+                                          });
+                                          toast.success(`Capas de ${SURFACE_LABELS[rsd.surfaceType]} eliminadas`);
+                                        }}
+                                        onDuplicateAllLayers={() => {
+                                          const sourceLayers = floorLayers[rsd.surfaceType] || [];
+                                          if (sourceLayers.length === 0) return;
+                                          setLevelVolumes(prev => {
+                                            const fl = { ...prev[floor.id] };
+                                            const existing = [...(fl[rsd.surfaceType] || [])];
+                                            const idRemap = new Map<string, string>();
+                                            const roots = sourceLayers.filter(l => !l.parentLayerId);
+                                            roots.forEach(l => {
+                                              const nid = newLayerId();
+                                              idRemap.set(l.id, nid);
+                                              existing.push({ ...l, id: nid, dbId: undefined, name: l.name ? `${l.name} (copia)` : '(copia)', dirty: true, parentLayerId: null });
+                                            });
+                                            const children = sourceLayers.filter(l => l.parentLayerId);
+                                            children.forEach(l => {
+                                              const newParent = idRemap.get(l.parentLayerId!) || l.parentLayerId;
+                                              existing.push({ ...l, id: newLayerId(), dbId: undefined, name: l.name ? `${l.name} (copia)` : '(copia)', dirty: true, parentLayerId: newParent });
+                                            });
+                                            fl[rsd.surfaceType] = existing;
+                                            return { ...prev, [floor.id]: fl };
+                                          });
+                                          toast.success(`Capas duplicadas en ${SURFACE_LABELS[rsd.surfaceType]}`);
+                                        }}
+                                      />
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </CardContent>
+          </CollapsibleContent>
+        </Card>
+      </Collapsible>
+
+      {/* ── SECTION 3: Mediciones ── */}
+      <Collapsible open={sectionMedicionesOpen} onOpenChange={setSectionMedicionesOpen}>
+        <Card>
+          <CollapsibleTrigger asChild>
+            <CardHeader className="py-3 px-4 cursor-pointer hover:bg-muted/30 transition-colors">
+              <CardTitle className="text-base flex items-center gap-2">
+                {sectionMedicionesOpen ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+                <Ruler className="h-4 w-4" />
+                Mediciones
+                <Badge variant="outline" className="text-xs font-mono ml-auto">{allMeasurementItems.length} objeto{allMeasurementItems.length !== 1 ? 's' : ''}</Badge>
+              </CardTitle>
+            </CardHeader>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <CardContent className="px-4 pb-4 pt-0">
+              {allMeasurementItems.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-4 text-center">No hay objetos/capas con nombre definido. Añade capas en la sección Niveles.</p>
+              ) : (
+                <Tabs defaultValue="alphabetical" className="w-full">
+                  <TabsList className="mb-3">
+                    <TabsTrigger value="alphabetical">Orden alfabético</TabsTrigger>
+                    <TabsTrigger value="by-layer">Por capa</TabsTrigger>
+                  </TabsList>
+
+                  <TabsContent value="alphabetical">
+                    <div className="space-y-1">
+                      <div className="grid grid-cols-[24px_1fr_120px_40px] gap-2 text-[10px] font-semibold text-muted-foreground px-1 pb-1 border-b border-border">
+                        <span className="text-center">#</span>
+                        <span>Nombre</span>
+                        <span className="text-right">Cantidad</span>
+                        <span className="text-center" title="Unificar objetos del mismo tipo">⊕</span>
+                      </div>
+                      {alphabeticalItems.map((item, idx) => (
+                        <div key={`${item.name}-${idx}`} className={`grid grid-cols-[24px_1fr_120px_40px] gap-2 items-center text-sm px-1 py-1 rounded ${item.isUnified ? 'bg-primary/5 border border-primary/20' : 'hover:bg-muted/30'}`}>
+                          <span className="text-xs text-muted-foreground text-center font-mono">{idx + 1}</span>
+                          <div className="flex items-center gap-1.5">
+                            <span className={item.isUnified ? 'font-medium text-primary' : ''}>{item.name}</span>
+                            {item.isUnified && item.subItems && (
+                              <Badge variant="secondary" className="text-[9px]">{item.subItems.length} unificados</Badge>
+                            )}
+                          </div>
+                          <span className="text-right font-mono font-medium">
+                            {fmt(item.value)} {item.unit}
+                          </span>
+                          <div className="flex justify-center">
+                            {item.canUnify && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-6 w-6 p-0"
+                                onClick={() => {
+                                  const norm = normalizeForGroup(item.name);
+                                  toggleUnify(`${norm}__${item.unit}`);
                                 }}
-                                onRemoveAllLayers={() => {
-                                  // Remove all layers of this roof sub-surface (local + orphaned DB)
-                                  const layers = floorLayers[rsd.surfaceType] || [];
-                                  layers.forEach(l => {
-                                    if (l.dbId) {
-                                      supabase.from('budget_volume_layers').delete().eq('id', l.dbId).then(({ error }) => {
-                                        if (error) toast.error('Error eliminando capa');
-                                      });
-                                    }
-                                  });
-                                  // Also clean any orphaned DB rows for this surface type + floor
-                                  supabase.from('budget_volume_layers')
-                                    .delete()
-                                    .eq('floor_plan_id', floorPlanId)
-                                    .eq('floor_id', floor.id)
-                                    .eq('surface_type', rsd.surfaceType)
-                                    .then(({ error }) => {
-                                      if (error) console.error('Error limpiando capas huérfanas:', error);
-                                    });
-                                  setLevelVolumes(prev => {
-                                    const fl = { ...prev[floor.id] };
-                                    fl[rsd.surfaceType] = [];
-                                    return { ...prev, [floor.id]: fl };
-                                  });
-                                  toast.success(`Capas de ${SURFACE_LABELS[rsd.surfaceType]} eliminadas`);
-                                }}
-                                onDuplicateAllLayers={() => {
-                                  // Duplicate all layers within the SAME surface type
-                                  const sourceLayers = floorLayers[rsd.surfaceType] || [];
-                                  if (sourceLayers.length === 0) return;
-                                  setLevelVolumes(prev => {
-                                    const fl = { ...prev[floor.id] };
-                                    const existing = [...(fl[rsd.surfaceType] || [])];
-                                    const idRemap = new Map<string, string>();
-                                    // First pass: duplicate root layers
-                                    const roots = sourceLayers.filter(l => !l.parentLayerId);
-                                    roots.forEach(l => {
-                                      const nid = newLayerId();
-                                      idRemap.set(l.id, nid);
-                                      existing.push({ ...l, id: nid, dbId: undefined, name: l.name ? `${l.name} (copia)` : '(copia)', dirty: true, parentLayerId: null });
-                                    });
-                                    // Second pass: children
-                                    const children = sourceLayers.filter(l => l.parentLayerId);
-                                    children.forEach(l => {
-                                      const newParent = idRemap.get(l.parentLayerId!) || l.parentLayerId;
-                                      existing.push({ ...l, id: newLayerId(), dbId: undefined, name: l.name ? `${l.name} (copia)` : '(copia)', dirty: true, parentLayerId: newParent });
-                                    });
-                                    fl[rsd.surfaceType] = existing;
-                                    return { ...prev, [floor.id]: fl };
-                                  });
-                                  toast.success(`Capas duplicadas en ${SURFACE_LABELS[rsd.surfaceType]}`);
-                                }}
-                              />
+                                title={item.isUnified ? 'Separar objetos' : 'Unificar objetos del mismo tipo'}
+                              >
+                                {item.isUnified
+                                  ? <Unlink className="h-3.5 w-3.5 text-primary" />
+                                  : <Link2 className="h-3.5 w-3.5 text-muted-foreground" />}
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </TabsContent>
+
+                  <TabsContent value="by-layer">
+                    <div className="space-y-3">
+                      {Array.from(byLayerItems.entries()).map(([groupKey, items]) => (
+                        <div key={groupKey}>
+                          <p className="text-xs font-semibold text-muted-foreground mb-1">{groupKey}</p>
+                          <div className="space-y-0.5 pl-2 border-l-2 border-muted">
+                            {items.sort((a, b) => a.name.localeCompare(b.name, 'es')).map((item, idx) => (
+                              <div key={idx} className="flex items-center justify-between text-sm px-2 py-0.5 hover:bg-muted/30 rounded">
+                                <span>{item.name}</span>
+                                <span className="font-mono font-medium">{fmt(item.value)} {item.unit}</span>
+                              </div>
                             ))}
                           </div>
-                        )}
-                      </div>
-                    );
-                  })}
-              </CardContent>
-            )}
-          </Card>
-        );
-      })}
+                        </div>
+                      ))}
+                    </div>
+                  </TabsContent>
+                </Tabs>
+              )}
+            </CardContent>
+          </CollapsibleContent>
+        </Card>
+      </Collapsible>
 
       {grandTotalVolume > 0 && (
         <Card>

@@ -8,7 +8,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { FloorPlanData, RoomData, calculateRoofSlopes, RoofSlopeDetail, isExteriorType, isVisibleWall } from '@/lib/floor-plan-calculations';
-import { Box, ChevronDown, ChevronRight, Plus, Trash2, Layers, ArrowDown, ArrowUp, ArrowRight as ArrowRightIcon, Save, Loader2 } from 'lucide-react';
+import { Box, ChevronDown, ChevronRight, Plus, Trash2, Layers, ArrowDown, ArrowUp, ArrowRight as ArrowRightIcon, Save, Loader2, CornerDownRight } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
@@ -38,6 +38,7 @@ interface VolumeLayer {
   orientation: 'parallel_ridge' | 'crossed_ridge' | null;
   spacingMm: number | null;
   groupTag: string;
+  parentLayerId: string | null; // null = root layer, string = child of parent
   dirty?: boolean;
 }
 
@@ -192,7 +193,6 @@ function getEffectiveThickness(layer: VolumeLayer, allLayers: VolumeLayer[]): nu
   if (!layer.groupTag) return layer.thicknessMm;
   const grouped = allLayers.filter(l => l.groupTag === layer.groupTag && l.groupTag !== '');
   if (grouped.length <= 1) return layer.thicknessMm;
-  // Shared thickness = max of the group; each layer does NOT add, they occupy the same space
   return Math.max(...grouped.map(l => l.thicknessMm));
 }
 
@@ -204,18 +204,227 @@ function calcLinearMetrics(
   if (layer.measurementType !== 'linear' || !layer.spacingMm || layer.spacingMm <= 0) return null;
 
   const spacingM = layer.spacingMm / 1000;
-  // orientation determines which dimension gives piece length and which gives count
   if (layer.orientation === 'parallel_ridge' || layer.orientation === null) {
-    // Pieces run along the largo (base), spaced along the ancho
     const pieceLength = surfaceData.largo;
     const pieceCount = Math.floor(surfaceData.ancho / spacingM) + 1;
     return { pieceLength, pieceCount, totalMl: pieceLength * pieceCount };
   } else {
-    // crossed_ridge: pieces run along the ancho (hypotenuse), spaced along the largo
     const pieceLength = surfaceData.ancho;
     const pieceCount = Math.floor(surfaceData.largo / spacingM) + 1;
     return { pieceLength, pieceCount, totalMl: pieceLength * pieceCount };
   }
+}
+
+/** Single layer row component */
+function LayerRow({
+  layer,
+  allLayers,
+  calcDimsForLayer,
+  calcAreaForLayer,
+  onUpdateLayer,
+  onRemoveLayer,
+  onAddChild,
+  defaultExtraLabel,
+  depth = 0,
+  childCount = 0,
+}: {
+  layer: VolumeLayer;
+  allLayers: VolumeLayer[];
+  calcDimsForLayer: (includeNonStructural: boolean) => { largo: number; ancho: number };
+  calcAreaForLayer: (includeNonStructural: boolean) => number;
+  onUpdateLayer: (id: string, data: Partial<VolumeLayer>) => void;
+  onRemoveLayer: (id: string) => void;
+  onAddChild: (parentId: string) => void;
+  defaultExtraLabel: string;
+  depth?: number;
+  childCount?: number;
+}) {
+  const dims = calcDimsForLayer(layer.includeNonStructural);
+  const layerArea = calcAreaForLayer(layer.includeNonStructural);
+  const linearMetrics = calcLinearMetrics(layer, dims);
+  const vol = layer.measurementType === 'area' ? layerArea * layer.thicknessMm / 1000 : 0;
+  const isGrouped = layer.groupTag && layer.groupTag !== '';
+  const groupColor = isGrouped ? 'bg-accent/20 border-l-2 border-accent' : '';
+  const isParent = childCount > 0;
+
+  return (
+    <div className="space-y-1">
+      <div className={`grid grid-cols-[50px_1fr_70px_80px_80px_90px_90px_70px_50px_32px] gap-1 items-center ${groupColor} rounded px-1`}
+        style={{ paddingLeft: depth > 0 ? `${depth * 20 + 4}px` : undefined }}
+      >
+        <Input
+          type="number"
+          className="h-7 text-xs text-center font-mono p-1"
+          value={layer.orderIndex}
+          onChange={e => onUpdateLayer(layer.id, { orderIndex: parseInt(e.target.value) || 0 })}
+        />
+        <div className="flex items-center gap-1">
+          {depth > 0 && <CornerDownRight className="h-3 w-3 text-muted-foreground shrink-0" />}
+          <Input
+            className="h-7 text-xs flex-1"
+            value={layer.name}
+            onChange={e => onUpdateLayer(layer.id, { name: e.target.value })}
+            placeholder={depth > 0 ? "Sub-capa" : "Nombre"}
+          />
+          {!isParent && depth === 0 && (
+            <Button variant="ghost" size="sm" className="h-6 w-6 p-0 shrink-0" title="Añadir sub-capa" onClick={() => onAddChild(layer.id)}>
+              <Plus className="h-3 w-3 text-muted-foreground" />
+            </Button>
+          )}
+        </div>
+        <Select
+          value={layer.measurementType}
+          onValueChange={(v) => onUpdateLayer(layer.id, { measurementType: v as MeasurementType })}
+        >
+          <SelectTrigger className="h-7 text-[10px] px-1">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="area">m²</SelectItem>
+            <SelectItem value="linear">ml</SelectItem>
+          </SelectContent>
+        </Select>
+        {isParent ? (
+          <>
+            <span className="text-[10px] text-muted-foreground text-center col-span-2">
+              {childCount} sub-capa{childCount !== 1 ? 's' : ''}
+            </span>
+            <span></span>
+            <span></span>
+            <span></span>
+          </>
+        ) : (
+          <>
+            <span className="text-xs font-mono text-right text-muted-foreground">{fmt(dims.largo, 3)}</span>
+            <span className="text-xs font-mono text-right text-muted-foreground">{fmt(dims.ancho, 3)}</span>
+            <Input
+              type="number"
+              className="h-7 text-xs text-right font-mono p-1"
+              value={layer.thicknessMm}
+              min={1}
+              onChange={e => onUpdateLayer(layer.id, { thicknessMm: Math.max(1, parseInt(e.target.value) || 1) })}
+            />
+            <span className="text-xs font-mono text-right font-medium">
+              {layer.measurementType === 'area'
+                ? `${fmt(layerArea)} m²`
+                : linearMetrics
+                  ? `${fmt(linearMetrics.totalMl)} ml`
+                  : '—'
+              }
+            </span>
+            <span className="text-xs font-mono text-right font-medium">
+              {layer.measurementType === 'area' ? fmt(vol) : '—'}
+            </span>
+          </>
+        )}
+        <div className="flex justify-center">
+          {!isParent && (
+            <Checkbox
+              checked={layer.includeNonStructural}
+              onCheckedChange={(checked) => onUpdateLayer(layer.id, { includeNonStructural: !!checked })}
+            />
+          )}
+        </div>
+        <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => onRemoveLayer(layer.id)}>
+          <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
+        </Button>
+      </div>
+
+      {/* Linear layer details */}
+      {!isParent && layer.measurementType === 'linear' && (
+        <div className="grid grid-cols-[1fr_1fr_1fr_1fr_1fr] gap-2 text-[10px] bg-muted/30 rounded p-2"
+          style={{ marginLeft: `${(depth > 0 ? depth * 20 : 0) + 52}px` }}
+        >
+          <div>
+            <label className="text-muted-foreground block mb-0.5">Sección ancho (mm)</label>
+            <Input
+              type="number"
+              className="h-6 text-[10px] font-mono p-1"
+              value={layer.sectionWidthMm ?? ''}
+              placeholder="100"
+              onChange={e => onUpdateLayer(layer.id, { sectionWidthMm: parseInt(e.target.value) || null })}
+            />
+          </div>
+          <div>
+            <label className="text-muted-foreground block mb-0.5">Sección alto (mm)</label>
+            <Input
+              type="number"
+              className="h-6 text-[10px] font-mono p-1"
+              value={layer.sectionHeightMm ?? ''}
+              placeholder="150"
+              onChange={e => onUpdateLayer(layer.id, { sectionHeightMm: parseInt(e.target.value) || null })}
+            />
+          </div>
+          <div>
+            <label className="text-muted-foreground block mb-0.5">Orientación</label>
+            <Select
+              value={layer.orientation || 'parallel_ridge'}
+              onValueChange={(v) => onUpdateLayer(layer.id, { orientation: v as 'parallel_ridge' | 'crossed_ridge' })}
+            >
+              <SelectTrigger className="h-6 text-[10px] px-1">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="parallel_ridge">∥ Paralelo a cumbrera</SelectItem>
+                <SelectItem value="crossed_ridge">⊥ Cruzado a cumbrera</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <label className="text-muted-foreground block mb-0.5">Separación (mm)</label>
+            <Input
+              type="number"
+              className="h-6 text-[10px] font-mono p-1"
+              value={layer.spacingMm ?? ''}
+              placeholder="600"
+              onChange={e => onUpdateLayer(layer.id, { spacingMm: parseInt(e.target.value) || null })}
+            />
+          </div>
+          <div>
+            <label className="text-muted-foreground block mb-0.5">Grupo (compartir espesor)</label>
+            <Input
+              className="h-6 text-[10px] p-1"
+              value={layer.groupTag}
+              placeholder="ej: viguetas_aislamiento"
+              onChange={e => onUpdateLayer(layer.id, { groupTag: e.target.value })}
+            />
+          </div>
+          {linearMetrics && (
+            <div className="col-span-5 flex gap-4 text-xs mt-1 pt-1 border-t border-border">
+              <span>Longitud pieza: <strong className="font-mono">{fmt(linearMetrics.pieceLength, 3)} m</strong></span>
+              <span>Nº piezas: <strong className="font-mono">{linearMetrics.pieceCount}</strong></span>
+              <span>Total ml: <strong className="font-mono">{fmt(linearMetrics.totalMl)} ml</strong></span>
+              {layer.sectionWidthMm && layer.sectionHeightMm && (
+                <span>Sección: <strong className="font-mono">{layer.sectionWidthMm}×{layer.sectionHeightMm} mm</strong></span>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Group tag for area layers */}
+      {!isParent && layer.measurementType === 'area' && (
+        <div className="flex gap-2 items-center"
+          style={{ marginLeft: `${(depth > 0 ? depth * 20 : 0) + 52}px` }}
+        >
+          <label className="text-[10px] text-muted-foreground">Grupo:</label>
+          <Input
+            className="h-6 text-[10px] w-40 p-1"
+            value={layer.groupTag}
+            placeholder="Compartir espesor"
+            onChange={e => onUpdateLayer(layer.id, { groupTag: e.target.value })}
+          />
+          <label className="text-[10px] text-muted-foreground ml-2">Etiqueta +:</label>
+          <Input
+            className="h-6 text-[10px] w-28 p-1"
+            value={layer.extraSurfaceName}
+            placeholder={defaultExtraLabel}
+            onChange={e => onUpdateLayer(layer.id, { extraSurfaceName: e.target.value })}
+          />
+        </div>
+      )}
+    </div>
+  );
 }
 
 function SurfaceSection({
@@ -224,6 +433,7 @@ function SurfaceSection({
   surfaceAreaDefault,
   description,
   onAddLayer,
+  onAddChildLayer,
   onRemoveLayer,
   onUpdateLayer,
   calcAreaForLayer,
@@ -234,15 +444,31 @@ function SurfaceSection({
   surfaceAreaDefault: number;
   description: string;
   onAddLayer: () => void;
+  onAddChildLayer: (parentId: string) => void;
   onRemoveLayer: (id: string) => void;
   onUpdateLayer: (id: string, data: Partial<VolumeLayer>) => void;
   calcAreaForLayer: (includeNonStructural: boolean) => number;
   calcDimsForLayer: (includeNonStructural: boolean) => { largo: number; ancho: number };
 }) {
   const [open, setOpen] = useState(layers.length > 0);
+  const [collapsedParents, setCollapsedParents] = useState<Set<string>>(new Set());
 
-  // Sort layers by orderIndex descending (highest first = physically bottom listed first for roofs)
-  const sortedLayers = [...layers].sort((a, b) => b.orderIndex - a.orderIndex);
+  // Separate root layers and children
+  const rootLayers = layers.filter(l => !l.parentLayerId);
+  const childrenByParent = useMemo(() => {
+    const map = new Map<string, VolumeLayer[]>();
+    layers.forEach(l => {
+      if (l.parentLayerId) {
+        const arr = map.get(l.parentLayerId) || [];
+        arr.push(l);
+        map.set(l.parentLayerId, arr);
+      }
+    });
+    return map;
+  }, [layers]);
+
+  // Sort root layers by orderIndex descending
+  const sortedRoots = [...rootLayers].sort((a, b) => b.orderIndex - a.orderIndex);
 
   // Calculate grouped thickness map
   const groupedThicknessMap = new Map<string, number>();
@@ -253,10 +479,14 @@ function SurfaceSection({
     }
   });
 
-  // Total thickness: for grouped layers, count max of each group only once
+  // Total thickness (only leaf layers contribute)
+  const leafLayers = layers.filter(l => {
+    const children = childrenByParent.get(l.dbId || l.id);
+    return !children || children.length === 0;
+  });
   const processedGroups = new Set<string>();
   let totalThicknessMm = 0;
-  sortedLayers.forEach(l => {
+  leafLayers.forEach(l => {
     if (l.groupTag && l.groupTag !== '') {
       if (!processedGroups.has(l.groupTag)) {
         totalThicknessMm += groupedThicknessMap.get(l.groupTag) || l.thicknessMm;
@@ -267,16 +497,29 @@ function SurfaceSection({
     }
   });
 
-  const totalVolume = sortedLayers.reduce((sum, l) => {
-    if (l.measurementType === 'linear') return sum; // linear layers don't contribute to volume sum
+  const totalVolume = leafLayers.reduce((sum, l) => {
+    if (l.measurementType === 'linear') return sum;
     const area = calcAreaForLayer(l.includeNonStructural);
-    const effThickness = getEffectiveThickness(l, layers);
-    // For grouped layers, only count volume once per group
     return sum + (area * l.thicknessMm / 1000);
   }, 0);
 
-  // Default extra surface label based on surface type
   const defaultExtraLabel = surfaceType.startsWith('cubierta') ? 'Aleros' : 'Ext.';
+
+  const toggleParentCollapse = (parentId: string) => {
+    setCollapsedParents(prev => {
+      const next = new Set(prev);
+      if (next.has(parentId)) next.delete(parentId);
+      else next.add(parentId);
+      return next;
+    });
+  };
+
+  // Get children for a layer (match by dbId or local id)
+  const getChildren = (layer: VolumeLayer) => {
+    const byDbId = layer.dbId ? childrenByParent.get(layer.dbId) : undefined;
+    const byLocalId = childrenByParent.get(layer.id);
+    return [...(byDbId || []), ...(byLocalId || [])].sort((a, b) => b.orderIndex - a.orderIndex);
+  };
 
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
@@ -288,9 +531,9 @@ function SurfaceSection({
           <Badge variant="outline" className="text-xs font-mono">
             {fmt(surfaceAreaDefault)} m²
           </Badge>
-          {sortedLayers.length > 0 && (
+          {layers.length > 0 && (
             <Badge variant="secondary" className="text-xs font-mono">
-              {sortedLayers.length} capa{sortedLayers.length !== 1 ? 's' : ''} · {fmt(totalVolume)} m³
+              {layers.length} capa{layers.length !== 1 ? 's' : ''} · {fmt(totalVolume)} m³
             </Badge>
           )}
         </button>
@@ -303,7 +546,7 @@ function SurfaceSection({
             <span>{description}</span>
           </p>
 
-          {sortedLayers.length > 0 && (
+          {sortedRoots.length > 0 && (
             <div className="space-y-1.5">
               {/* Header */}
               <div className="grid grid-cols-[50px_1fr_70px_80px_80px_90px_90px_70px_50px_32px] gap-1 text-[10px] font-semibold text-muted-foreground px-1">
@@ -319,160 +562,77 @@ function SurfaceSection({
                 <span></span>
               </div>
 
-              {sortedLayers.map((layer) => {
-                const dims = calcDimsForLayer(layer.includeNonStructural);
-                const layerArea = calcAreaForLayer(layer.includeNonStructural);
-                const linearMetrics = calcLinearMetrics(layer, dims);
-                const vol = layer.measurementType === 'area' ? layerArea * layer.thicknessMm / 1000 : 0;
-
-                const isGrouped = layer.groupTag && layer.groupTag !== '';
-                const groupColor = isGrouped ? 'bg-accent/20 border-l-2 border-accent' : '';
+              {sortedRoots.map((rootLayer) => {
+                const children = getChildren(rootLayer);
+                const hasChildren = children.length > 0;
+                const isCollapsed = collapsedParents.has(rootLayer.id);
 
                 return (
-                  <div key={layer.id} className="space-y-1">
-                    <div className={`grid grid-cols-[50px_1fr_70px_80px_80px_90px_90px_70px_50px_32px] gap-1 items-center ${groupColor} rounded px-1`}>
-                      <Input
-                        type="number"
-                        className="h-7 text-xs text-center font-mono p-1"
-                        value={layer.orderIndex}
-                        onChange={e => onUpdateLayer(layer.id, { orderIndex: parseInt(e.target.value) || 0 })}
-                      />
-                      <Input
-                        className="h-7 text-xs"
-                        value={layer.name}
-                        onChange={e => onUpdateLayer(layer.id, { name: e.target.value })}
-                        placeholder="Nombre"
-                      />
-                      <Select
-                        value={layer.measurementType}
-                        onValueChange={(v) => onUpdateLayer(layer.id, { measurementType: v as MeasurementType })}
+                  <div key={rootLayer.id} className="space-y-0.5">
+                    {/* Parent row - clickable to collapse if has children */}
+                    {hasChildren && (
+                      <button
+                        className="w-full flex items-center gap-1 px-1 py-0.5 text-left hover:bg-muted/30 rounded transition-colors"
+                        onClick={() => toggleParentCollapse(rootLayer.id)}
                       >
-                        <SelectTrigger className="h-7 text-[10px] px-1">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="area">m²</SelectItem>
-                          <SelectItem value="linear">ml</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <span className="text-xs font-mono text-right text-muted-foreground">{fmt(dims.largo, 3)}</span>
-                      <span className="text-xs font-mono text-right text-muted-foreground">{fmt(dims.ancho, 3)}</span>
-                      <Input
-                        type="number"
-                        className="h-7 text-xs text-right font-mono p-1"
-                        value={layer.thicknessMm}
-                        min={1}
-                        onChange={e => onUpdateLayer(layer.id, { thicknessMm: Math.max(1, parseInt(e.target.value) || 1) })}
-                      />
-                      <span className="text-xs font-mono text-right font-medium">
-                        {layer.measurementType === 'area'
-                          ? `${fmt(layerArea)} m²`
-                          : linearMetrics
-                            ? `${fmt(linearMetrics.totalMl)} ml`
-                            : '—'
-                        }
-                      </span>
-                      <span className="text-xs font-mono text-right font-medium">
-                        {layer.measurementType === 'area' ? fmt(vol) : '—'}
-                      </span>
-                      <div className="flex justify-center">
-                        <Checkbox
-                          checked={layer.includeNonStructural}
-                          onCheckedChange={(checked) => onUpdateLayer(layer.id, { includeNonStructural: !!checked })}
-                        />
-                      </div>
-                      <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => onRemoveLayer(layer.id)}>
-                        <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
-                      </Button>
-                    </div>
-
-                    {/* Linear layer details */}
-                    {layer.measurementType === 'linear' && (
-                      <div className="ml-[52px] grid grid-cols-[1fr_1fr_1fr_1fr_1fr] gap-2 text-[10px] bg-muted/30 rounded p-2">
-                        <div>
-                          <label className="text-muted-foreground block mb-0.5">Sección ancho (mm)</label>
-                          <Input
-                            type="number"
-                            className="h-6 text-[10px] font-mono p-1"
-                            value={layer.sectionWidthMm ?? ''}
-                            placeholder="100"
-                            onChange={e => onUpdateLayer(layer.id, { sectionWidthMm: parseInt(e.target.value) || null })}
-                          />
-                        </div>
-                        <div>
-                          <label className="text-muted-foreground block mb-0.5">Sección alto (mm)</label>
-                          <Input
-                            type="number"
-                            className="h-6 text-[10px] font-mono p-1"
-                            value={layer.sectionHeightMm ?? ''}
-                            placeholder="150"
-                            onChange={e => onUpdateLayer(layer.id, { sectionHeightMm: parseInt(e.target.value) || null })}
-                          />
-                        </div>
-                        <div>
-                          <label className="text-muted-foreground block mb-0.5">Orientación</label>
-                          <Select
-                            value={layer.orientation || 'parallel_ridge'}
-                            onValueChange={(v) => onUpdateLayer(layer.id, { orientation: v as 'parallel_ridge' | 'crossed_ridge' })}
-                          >
-                            <SelectTrigger className="h-6 text-[10px] px-1">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="parallel_ridge">∥ Paralelo a cumbrera</SelectItem>
-                              <SelectItem value="crossed_ridge">⊥ Cruzado a cumbrera</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div>
-                          <label className="text-muted-foreground block mb-0.5">Separación (mm)</label>
-                          <Input
-                            type="number"
-                            className="h-6 text-[10px] font-mono p-1"
-                            value={layer.spacingMm ?? ''}
-                            placeholder="600"
-                            onChange={e => onUpdateLayer(layer.id, { spacingMm: parseInt(e.target.value) || null })}
-                          />
-                        </div>
-                        <div>
-                          <label className="text-muted-foreground block mb-0.5">Grupo (compartir espesor)</label>
-                          <Input
-                            className="h-6 text-[10px] p-1"
-                            value={layer.groupTag}
-                            placeholder="ej: viguetas_aislamiento"
-                            onChange={e => onUpdateLayer(layer.id, { groupTag: e.target.value })}
-                          />
-                        </div>
-                        {linearMetrics && (
-                          <div className="col-span-5 flex gap-4 text-xs mt-1 pt-1 border-t border-border">
-                            <span>Longitud pieza: <strong className="font-mono">{fmt(linearMetrics.pieceLength, 3)} m</strong></span>
-                            <span>Nº piezas: <strong className="font-mono">{linearMetrics.pieceCount}</strong></span>
-                            <span>Total ml: <strong className="font-mono">{fmt(linearMetrics.totalMl)} ml</strong></span>
-                            {layer.sectionWidthMm && layer.sectionHeightMm && (
-                              <span>Sección: <strong className="font-mono">{layer.sectionWidthMm}×{layer.sectionHeightMm} mm</strong></span>
-                            )}
-                          </div>
-                        )}
-                      </div>
+                        {isCollapsed
+                          ? <ChevronRight className="h-3 w-3 text-muted-foreground" />
+                          : <ChevronDown className="h-3 w-3 text-muted-foreground" />}
+                        <span className="text-xs font-medium">{rootLayer.name || 'Sin nombre'}</span>
+                        <Badge variant="outline" className="text-[9px] ml-1">
+                          {children.length} sub-capa{children.length !== 1 ? 's' : ''}
+                        </Badge>
+                        <Button
+                          variant="ghost" size="sm" className="h-5 w-5 p-0 ml-auto shrink-0"
+                          onClick={(e) => { e.stopPropagation(); onAddChildLayer(rootLayer.id); }}
+                          title="Añadir sub-capa"
+                        >
+                          <Plus className="h-3 w-3 text-muted-foreground" />
+                        </Button>
+                        <Button
+                          variant="ghost" size="sm" className="h-5 w-5 p-0 shrink-0"
+                          onClick={(e) => { e.stopPropagation(); onRemoveLayer(rootLayer.id); }}
+                          title="Eliminar capa padre y sus sub-capas"
+                        >
+                          <Trash2 className="h-3 w-3 text-muted-foreground" />
+                        </Button>
+                      </button>
                     )}
 
-                    {/* Group tag for area layers */}
-                    {layer.measurementType === 'area' && (
-                      <div className="ml-[52px] flex gap-2 items-center">
-                        <label className="text-[10px] text-muted-foreground">Grupo:</label>
-                        <Input
-                          className="h-6 text-[10px] w-40 p-1"
-                          value={layer.groupTag}
-                          placeholder="Compartir espesor"
-                          onChange={e => onUpdateLayer(layer.id, { groupTag: e.target.value })}
-                        />
-                        <label className="text-[10px] text-muted-foreground ml-2">Etiqueta +:</label>
-                        <Input
-                          className="h-6 text-[10px] w-28 p-1"
-                          value={layer.extraSurfaceName}
-                          placeholder={defaultExtraLabel}
-                          onChange={e => onUpdateLayer(layer.id, { extraSurfaceName: e.target.value })}
-                        />
+                    {/* Render the root layer row if it has NO children (leaf root) */}
+                    {!hasChildren && (
+                      <LayerRow
+                        layer={rootLayer}
+                        allLayers={layers}
+                        calcDimsForLayer={calcDimsForLayer}
+                        calcAreaForLayer={calcAreaForLayer}
+                        onUpdateLayer={onUpdateLayer}
+                        onRemoveLayer={onRemoveLayer}
+                        onAddChild={onAddChildLayer}
+                        defaultExtraLabel={defaultExtraLabel}
+                        depth={0}
+                        childCount={0}
+                      />
+                    )}
+
+                    {/* Render children if not collapsed */}
+                    {hasChildren && !isCollapsed && (
+                      <div className="space-y-0.5 border-l-2 border-muted ml-2 pl-1">
+                        {children.map(child => (
+                          <LayerRow
+                            key={child.id}
+                            layer={child}
+                            allLayers={layers}
+                            calcDimsForLayer={calcDimsForLayer}
+                            calcAreaForLayer={calcAreaForLayer}
+                            onUpdateLayer={onUpdateLayer}
+                            onRemoveLayer={onRemoveLayer}
+                            onAddChild={onAddChildLayer}
+                            defaultExtraLabel={defaultExtraLabel}
+                            depth={1}
+                            childCount={0}
+                          />
+                        ))}
                       </div>
                     )}
                   </div>
@@ -518,7 +678,10 @@ export function FloorPlanVolumesView({ plan, rooms, floors, floorPlanId }: Floor
   const floorsRef = useRef(floors);
   floorsRef.current = floors;
 
-  // Load from DB — only when floorPlanId or floor IDs actually change
+  // Map dbId -> localId for parent references after load
+  const dbIdToLocalId = useRef(new Map<string, string>());
+
+  // Load from DB
   useEffect(() => {
     if (!floorPlanId) return;
     const currentFloors = floorsRef.current;
@@ -542,14 +705,20 @@ export function FloorPlanVolumesView({ plan, rooms, floors, floorPlanId }: Floor
         };
       }
 
+      const idMap = new Map<string, string>();
+
       if (data) {
+        // First pass: create all layers and map dbId -> localId
+        const layersByDbId = new Map<string, VolumeLayer>();
         for (const row of data) {
           const floorId = row.floor_id || currentFloors[0]?.id;
           if (!floorId || !init[floorId]) continue;
           const st = row.surface_type as SurfaceType;
           if (!init[floorId][st]) init[floorId][st] = [];
-          init[floorId][st].push({
-            id: newLayerId(),
+          const localId = newLayerId();
+          idMap.set(row.id, localId);
+          const layer: VolumeLayer = {
+            id: localId,
             dbId: row.id,
             name: row.name || '',
             thicknessMm: row.thickness_mm || 20,
@@ -563,10 +732,26 @@ export function FloorPlanVolumesView({ plan, rooms, floors, floorPlanId }: Floor
             orientation: (row.orientation as 'parallel_ridge' | 'crossed_ridge' | null) || null,
             spacingMm: row.spacing_mm || null,
             groupTag: row.group_tag || '',
-          });
+            parentLayerId: (row as any).parent_layer_id || null,
+          };
+          layersByDbId.set(row.id, layer);
+          init[floorId][st].push(layer);
+        }
+
+        // Second pass: resolve parent references from dbId to localId
+        for (const floorId of Object.keys(init)) {
+          for (const st of Object.keys(init[floorId]) as SurfaceType[]) {
+            init[floorId][st] = init[floorId][st].map(l => {
+              if (l.parentLayerId && idMap.has(l.parentLayerId)) {
+                return { ...l, parentLayerId: idMap.get(l.parentLayerId)! };
+              }
+              return l;
+            });
+          }
         }
       }
 
+      dbIdToLocalId.current = idMap;
       setLevelVolumes(init);
       setLoaded(true);
     };
@@ -616,6 +801,36 @@ export function FloorPlanVolumesView({ plan, rooms, floors, floorPlanId }: Floor
         orientation: null,
         spacingMm: null,
         groupTag: '',
+        parentLayerId: null,
+        dirty: true,
+      });
+      floorLayers[surfaceType] = current;
+      return { ...prev, [floorId]: floorLayers };
+    });
+  };
+
+  const addChildLayer = (floorId: string, surfaceType: SurfaceType, parentId: string) => {
+    setLevelVolumes(prev => {
+      const floorLayers = { ...prev[floorId] };
+      const current = [...(floorLayers[surfaceType] || [])];
+      // Get children of this parent to compute order
+      const siblings = current.filter(l => l.parentLayerId === parentId);
+      const maxOrder = siblings.length > 0 ? Math.max(...siblings.map(l => l.orderIndex)) : 0;
+      current.push({
+        id: newLayerId(),
+        name: '',
+        thicknessMm: surfaceType === 'suelo' ? 20 : surfaceType === 'techo' ? 15 : 120,
+        surfaceType,
+        includeNonStructural: false,
+        extraSurfaceName: '',
+        orderIndex: maxOrder + 1,
+        measurementType: 'area',
+        sectionWidthMm: null,
+        sectionHeightMm: null,
+        orientation: null,
+        spacingMm: null,
+        groupTag: '',
+        parentLayerId: parentId,
         dirty: true,
       });
       floorLayers[surfaceType] = current;
@@ -624,15 +839,28 @@ export function FloorPlanVolumesView({ plan, rooms, floors, floorPlanId }: Floor
   };
 
   const removeLayer = (floorId: string, surfaceType: SurfaceType, layerId: string) => {
-    const layer = levelVolumes[floorId]?.[surfaceType]?.find(l => l.id === layerId);
-    if (layer?.dbId) {
-      supabase.from('budget_volume_layers').delete().eq('id', layer.dbId).then(({ error }) => {
-        if (error) toast.error('Error eliminando capa');
-      });
-    }
+    const allSurfaceLayers = levelVolumes[floorId]?.[surfaceType] || [];
+    // Find the layer and all its children
+    const layersToRemove = new Set<string>();
+    layersToRemove.add(layerId);
+    // Also remove children
+    allSurfaceLayers.forEach(l => {
+      if (l.parentLayerId === layerId) layersToRemove.add(l.id);
+    });
+
+    // Delete from DB
+    layersToRemove.forEach(lid => {
+      const layer = allSurfaceLayers.find(l => l.id === lid);
+      if (layer?.dbId) {
+        supabase.from('budget_volume_layers').delete().eq('id', layer.dbId).then(({ error }) => {
+          if (error) toast.error('Error eliminando capa');
+        });
+      }
+    });
+
     setLevelVolumes(prev => {
       const floorLayers = { ...prev[floorId] };
-      floorLayers[surfaceType] = (floorLayers[surfaceType] || []).filter(l => l.id !== layerId);
+      floorLayers[surfaceType] = (floorLayers[surfaceType] || []).filter(l => !layersToRemove.has(l.id));
       return { ...prev, [floorId]: floorLayers };
     });
   };
@@ -647,43 +875,93 @@ export function FloorPlanVolumesView({ plan, rooms, floors, floorPlanId }: Floor
     });
   };
 
-  // Save all to DB
+  // Save all to DB — with two-pass insert for parent_layer_id references
   const saveAll = useCallback(async () => {
     if (!floorPlanId) return;
     setSaving(true);
     try {
       await supabase.from('budget_volume_layers').delete().eq('floor_plan_id', floorPlanId);
 
-      const rows: any[] = [];
+      // Collect all layers with their local parent references
+      const allLayers: Array<{ floorId: string; st: SurfaceType; layer: VolumeLayer }> = [];
       for (const floorId of Object.keys(levelVolumes)) {
         const surfaces = levelVolumes[floorId];
         if (!surfaces) continue;
         for (const st of Object.keys(surfaces) as SurfaceType[]) {
-          const layers = surfaces[st];
-          if (!layers) continue;
-          layers.forEach((layer) => {
-            rows.push({
-              floor_plan_id: floorPlanId,
-              floor_id: floorId,
-              surface_type: st,
-              layer_order: layer.orderIndex,
-              name: layer.name,
-              thickness_mm: layer.thicknessMm,
-              include_non_structural: layer.includeNonStructural,
-              measurement_type: layer.measurementType,
-              section_width_mm: layer.sectionWidthMm,
-              section_height_mm: layer.sectionHeightMm,
-              orientation: layer.orientation,
-              spacing_mm: layer.spacingMm,
-              group_tag: layer.groupTag || null,
-              extra_surface_name: layer.extraSurfaceName || null,
-            });
+          (surfaces[st] || []).forEach(layer => {
+            allLayers.push({ floorId, st, layer });
           });
         }
       }
 
-      if (rows.length > 0) {
-        const { error } = await supabase.from('budget_volume_layers').insert(rows);
+      if (allLayers.length === 0) {
+        setSaving(false);
+        return;
+      }
+
+      // First pass: insert root layers (no parent)
+      const rootEntries = allLayers.filter(e => !e.layer.parentLayerId);
+      const childEntries = allLayers.filter(e => !!e.layer.parentLayerId);
+
+      const localIdToDbId = new Map<string, string>();
+
+      if (rootEntries.length > 0) {
+        const rootRows = rootEntries.map(e => ({
+          floor_plan_id: floorPlanId,
+          floor_id: e.floorId,
+          surface_type: e.st,
+          layer_order: e.layer.orderIndex,
+          name: e.layer.name,
+          thickness_mm: e.layer.thicknessMm,
+          include_non_structural: e.layer.includeNonStructural,
+          measurement_type: e.layer.measurementType,
+          section_width_mm: e.layer.sectionWidthMm,
+          section_height_mm: e.layer.sectionHeightMm,
+          orientation: e.layer.orientation,
+          spacing_mm: e.layer.spacingMm,
+          group_tag: e.layer.groupTag || null,
+          extra_surface_name: e.layer.extraSurfaceName || null,
+          parent_layer_id: null,
+        }));
+
+        const { data: insertedRoots, error } = await supabase
+          .from('budget_volume_layers')
+          .insert(rootRows)
+          .select('id');
+
+        if (error) throw error;
+
+        // Map localId -> new dbId by order
+        if (insertedRoots) {
+          rootEntries.forEach((e, i) => {
+            if (insertedRoots[i]) {
+              localIdToDbId.set(e.layer.id, insertedRoots[i].id);
+            }
+          });
+        }
+      }
+
+      // Second pass: insert child layers with resolved parent_layer_id
+      if (childEntries.length > 0) {
+        const childRows = childEntries.map(e => ({
+          floor_plan_id: floorPlanId,
+          floor_id: e.floorId,
+          surface_type: e.st,
+          layer_order: e.layer.orderIndex,
+          name: e.layer.name,
+          thickness_mm: e.layer.thicknessMm,
+          include_non_structural: e.layer.includeNonStructural,
+          measurement_type: e.layer.measurementType,
+          section_width_mm: e.layer.sectionWidthMm,
+          section_height_mm: e.layer.sectionHeightMm,
+          orientation: e.layer.orientation,
+          spacing_mm: e.layer.spacingMm,
+          group_tag: e.layer.groupTag || null,
+          extra_surface_name: e.layer.extraSurfaceName || null,
+          parent_layer_id: localIdToDbId.get(e.layer.parentLayerId!) || null,
+        }));
+
+        const { error } = await supabase.from('budget_volume_layers').insert(childRows);
         if (error) throw error;
       }
 
@@ -709,6 +987,11 @@ export function FloorPlanVolumesView({ plan, rooms, floors, floorPlanId }: Floor
 
   // Auto-save with debounce when layers change
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const hasDirty = Object.values(levelVolumes).some(surfaces =>
+    Object.values(surfaces).some(layers => layers.some(l => l.dirty))
+  );
+
   useEffect(() => {
     if (!loaded || !hasDirty) return;
     if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
@@ -718,10 +1001,6 @@ export function FloorPlanVolumesView({ plan, rooms, floors, floorPlanId }: Floor
     return () => { if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [levelVolumes, loaded]);
-
-  const hasDirty = Object.values(levelVolumes).some(surfaces =>
-    Object.values(surfaces).some(layers => layers.some(l => l.dirty))
-  );
 
   // Compute general values
   const structRooms = rooms.filter(r => !isNonStructural(r.name));
@@ -816,7 +1095,10 @@ export function FloorPlanVolumesView({ plan, rooms, floors, floorPlanId }: Floor
         const surfaceData = surfaceTypes.map(st => {
           const result = calcSurfaceArea(st, plan, rooms, floorRooms, slopes, false);
           const layers = floorLayers[st] || [];
-          const vol = layers.reduce((sum, l) => {
+          // Only count leaf layers for volume (those without children)
+          const childParentIds = new Set(layers.filter(l => l.parentLayerId).map(l => l.parentLayerId!));
+          const leafLayers = layers.filter(l => !childParentIds.has(l.id));
+          const vol = leafLayers.reduce((sum, l) => {
             if (l.measurementType === 'linear') return sum;
             const lArea = calcSurfaceArea(st, plan, rooms, floorRooms, slopes, l.includeNonStructural).area;
             return sum + (lArea * l.thicknessMm / 1000);
@@ -852,6 +1134,7 @@ export function FloorPlanVolumesView({ plan, rooms, floors, floorPlanId }: Floor
                     surfaceAreaDefault={sd.area}
                     description={sd.description}
                     onAddLayer={() => addLayer(floor.id, sd.surfaceType)}
+                    onAddChildLayer={(parentId) => addChildLayer(floor.id, sd.surfaceType, parentId)}
                     onRemoveLayer={(id) => removeLayer(floor.id, sd.surfaceType, id)}
                     onUpdateLayer={(id, data) => updateLayer(floor.id, sd.surfaceType, id, data)}
                     calcAreaForLayer={(includeNS) => calcSurfaceArea(sd.surfaceType, plan, rooms, floorRooms, slopes, includeNS).area}

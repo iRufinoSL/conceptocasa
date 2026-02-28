@@ -2744,13 +2744,11 @@ const isDoor = op.openingType === 'puerta' || op.openingType === 'puerta_externa
         const leftBaseY = baseY - leftBaseH;
         const rightBaseY = baseY - rightBaseH;
 
-        const buildingMinY = Math.min(...(allRooms.length > 0 ? allRooms.map(r => r.posY) : [cw.startCorner.y, cw.endCorner.y]));
-        const buildingMaxY = Math.max(...(allRooms.length > 0 ? allRooms.map(r => r.posY + r.length) : [cw.startCorner.y, cw.endCorner.y]));
-        const centerY = (buildingMinY + buildingMaxY) / 2;
+        // Ridge is always centered (ridgeRatio=0.5) until ridge offset is implemented
+        const ridgeRatio = 0.5;
         const y1 = cw.startCorner.y;
         const y2 = cw.endCorner.y;
-        const crossesRidge = Math.abs(y2 - y1) > 1e-6 && (y1 - centerY) * (y2 - centerY) <= 0;
-        const ridgeRatio = crossesRidge ? Math.max(0, Math.min(1, (centerY - y1) / (y2 - y1))) : 0.5;
+        const crossesRidge = Math.abs(y2 - y1) > 1e-6;
         const peakX = crossesRidge
           ? leftX + gableTotalW * ridgeRatio
           : (leftBaseY <= rightBaseY ? leftX : rightX);
@@ -3930,13 +3928,11 @@ function CompositeWallCard({ compositeWall, plan, onOpeningClick, onAddBlockGrou
           const leftBaseY = baseY - leftBaseH;
           const rightBaseY = baseY - rightBaseH;
 
-          const buildingMinY = Math.min(...((liveRooms?.length || 0) > 0 ? liveRooms!.map(r => r.posY) : [cw.startCorner.y, cw.endCorner.y]));
-          const buildingMaxY = Math.max(...((liveRooms?.length || 0) > 0 ? liveRooms!.map(r => r.posY + r.length) : [cw.startCorner.y, cw.endCorner.y]));
-          const centerY = (buildingMinY + buildingMaxY) / 2;
+          // Ridge is always centered (ridgeRatio=0.5) until ridge offset is implemented
+          const ridgeRatio = 0.5;
           const y1 = cw.startCorner.y;
           const y2 = cw.endCorner.y;
-          const crossesRidge = Math.abs(y2 - y1) > 1e-6 && (y1 - centerY) * (y2 - centerY) <= 0;
-          const ridgeRatio = crossesRidge ? Math.max(0, Math.min(1, (centerY - y1) / (y2 - y1))) : 0.5;
+          const crossesRidge = Math.abs(y2 - y1) > 1e-6;
           const peakX = crossesRidge
             ? leftX + gableTotalW * ridgeRatio
             : (leftBaseY <= rightBaseY ? leftX : rightX);

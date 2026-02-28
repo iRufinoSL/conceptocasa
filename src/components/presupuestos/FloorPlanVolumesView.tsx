@@ -8,7 +8,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { FloorPlanData, RoomData, calculateRoofSlopes, RoofSlopeDetail, isExteriorType, isVisibleWall } from '@/lib/floor-plan-calculations';
-import { Box, ChevronDown, ChevronRight, Plus, Trash2, Layers, ArrowDown, ArrowUp, ArrowRight as ArrowRightIcon, Save, Loader2, CornerDownRight } from 'lucide-react';
+import { Box, ChevronDown, ChevronRight, Plus, Trash2, Layers, ArrowDown, ArrowUp, ArrowRight as ArrowRightIcon, Save, Loader2, CornerDownRight, Copy } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
@@ -269,6 +269,7 @@ function LayerRow({
   calcAreaForLayer,
   onUpdateLayer,
   onRemoveLayer,
+  onDuplicateLayer,
   onAddChild,
   defaultExtraLabel,
   depth = 0,
@@ -280,6 +281,7 @@ function LayerRow({
   calcAreaForLayer: (includeNonStructural: boolean) => number;
   onUpdateLayer: (id: string, data: Partial<VolumeLayer>) => void;
   onRemoveLayer: (id: string) => void;
+  onDuplicateLayer: (id: string) => void;
   onAddChild: (parentId: string) => void;
   defaultExtraLabel: string;
   depth?: number;
@@ -295,7 +297,7 @@ function LayerRow({
 
   return (
     <div className="space-y-1">
-      <div className={`grid grid-cols-[50px_1fr_70px_80px_80px_90px_90px_70px_50px_32px] gap-1 items-center ${groupColor} rounded px-1`}
+      <div className={`grid grid-cols-[50px_1fr_70px_80px_80px_90px_90px_70px_50px_32px_32px] gap-1 items-center ${groupColor} rounded px-1`}
         style={{ paddingLeft: depth > 0 ? `${depth * 20 + 4}px` : undefined }}
       >
         <Input
@@ -371,7 +373,10 @@ function LayerRow({
             />
           )}
         </div>
-        <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => onRemoveLayer(layer.id)}>
+        <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => onDuplicateLayer(layer.id)} title="Duplicar capa">
+          <Copy className="h-3.5 w-3.5 text-muted-foreground" />
+        </Button>
+        <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => onRemoveLayer(layer.id)} title="Eliminar capa">
           <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
         </Button>
       </div>
@@ -482,6 +487,7 @@ function SurfaceSection({
   onAddLayer,
   onAddChildLayer,
   onRemoveLayer,
+  onDuplicateLayer,
   onUpdateLayer,
   calcAreaForLayer,
   calcDimsForLayer,
@@ -493,6 +499,7 @@ function SurfaceSection({
   onAddLayer: () => void;
   onAddChildLayer: (parentId: string) => void;
   onRemoveLayer: (id: string) => void;
+  onDuplicateLayer: (id: string) => void;
   onUpdateLayer: (id: string, data: Partial<VolumeLayer>) => void;
   calcAreaForLayer: (includeNonStructural: boolean) => number;
   calcDimsForLayer: (includeNonStructural: boolean) => { largo: number; ancho: number };
@@ -596,7 +603,7 @@ function SurfaceSection({
           {sortedRoots.length > 0 && (
             <div className="space-y-1.5">
               {/* Header */}
-              <div className="grid grid-cols-[50px_1fr_70px_80px_80px_90px_90px_70px_50px_32px] gap-1 text-[10px] font-semibold text-muted-foreground px-1">
+              <div className="grid grid-cols-[50px_1fr_70px_80px_80px_90px_90px_70px_50px_32px_32px] gap-1 text-[10px] font-semibold text-muted-foreground px-1">
                 <span className="text-center">Orden</span>
                 <span>Nombre</span>
                 <span className="text-center">Tipo</span>
@@ -606,6 +613,7 @@ function SurfaceSection({
                 <span className="text-right">Sup m² / ml</span>
                 <span className="text-right">Vol m³</span>
                 <span className="text-center text-[9px]">+{defaultExtraLabel}</span>
+                <span></span>
                 <span></span>
               </div>
 
@@ -638,6 +646,13 @@ function SurfaceSection({
                         </Button>
                         <Button
                           variant="ghost" size="sm" className="h-5 w-5 p-0 shrink-0"
+                          onClick={(e) => { e.stopPropagation(); onDuplicateLayer(rootLayer.id); }}
+                          title="Duplicar capa"
+                        >
+                          <Copy className="h-3 w-3 text-muted-foreground" />
+                        </Button>
+                        <Button
+                          variant="ghost" size="sm" className="h-5 w-5 p-0 shrink-0"
                           onClick={(e) => { e.stopPropagation(); onRemoveLayer(rootLayer.id); }}
                           title="Eliminar capa padre y sus sub-capas"
                         >
@@ -655,6 +670,7 @@ function SurfaceSection({
                         calcAreaForLayer={calcAreaForLayer}
                         onUpdateLayer={onUpdateLayer}
                         onRemoveLayer={onRemoveLayer}
+                        onDuplicateLayer={onDuplicateLayer}
                         onAddChild={onAddChildLayer}
                         defaultExtraLabel={defaultExtraLabel}
                         depth={0}
@@ -674,6 +690,7 @@ function SurfaceSection({
                             calcAreaForLayer={calcAreaForLayer}
                             onUpdateLayer={onUpdateLayer}
                             onRemoveLayer={onRemoveLayer}
+                            onDuplicateLayer={onDuplicateLayer}
                             onAddChild={onAddChildLayer}
                             defaultExtraLabel={defaultExtraLabel}
                             depth={1}
@@ -688,7 +705,7 @@ function SurfaceSection({
 
               {/* Totals */}
               <Separator className="my-1" />
-              <div className="grid grid-cols-[50px_1fr_70px_80px_80px_90px_90px_70px_50px_32px] gap-1 items-center text-xs font-semibold px-1">
+              <div className="grid grid-cols-[50px_1fr_70px_80px_80px_90px_90px_70px_50px_32px_32px] gap-1 items-center text-xs font-semibold px-1">
                 <span></span>
                 <span>Total</span>
                 <span></span>
@@ -918,6 +935,42 @@ export function FloorPlanVolumesView({ plan, rooms, floors, floorPlanId }: Floor
       floorLayers[surfaceType] = (floorLayers[surfaceType] || []).map(l =>
         l.id === layerId ? { ...l, ...data, dirty: true } : l
       );
+      return { ...prev, [floorId]: floorLayers };
+    });
+  };
+
+  const duplicateLayer = (floorId: string, surfaceType: SurfaceType, layerId: string) => {
+    setLevelVolumes(prev => {
+      const floorLayers = { ...prev[floorId] };
+      const current = [...(floorLayers[surfaceType] || [])];
+      const source = current.find(l => l.id === layerId);
+      if (!source) return prev;
+
+      // Duplicate the layer itself
+      const newId = newLayerId();
+      const duplicate: VolumeLayer = {
+        ...source,
+        id: newId,
+        dbId: undefined,
+        name: source.name ? `${source.name} (copia)` : '(copia)',
+        dirty: true,
+      };
+      current.push(duplicate);
+
+      // If the source has children, duplicate them too
+      const children = current.filter(l => l.parentLayerId === layerId || (source.dbId && l.parentLayerId === source.dbId));
+      children.forEach(child => {
+        current.push({
+          ...child,
+          id: newLayerId(),
+          dbId: undefined,
+          name: child.name ? `${child.name} (copia)` : '(copia)',
+          parentLayerId: newId,
+          dirty: true,
+        });
+      });
+
+      floorLayers[surfaceType] = current;
       return { ...prev, [floorId]: floorLayers };
     });
   };
@@ -1192,6 +1245,7 @@ export function FloorPlanVolumesView({ plan, rooms, floors, floorPlanId }: Floor
                           onAddLayer={() => addLayer(floor.id, sd.surfaceType)}
                           onAddChildLayer={(parentId) => addChildLayer(floor.id, sd.surfaceType, parentId)}
                           onRemoveLayer={(id) => removeLayer(floor.id, sd.surfaceType, id)}
+                          onDuplicateLayer={(id) => duplicateLayer(floor.id, sd.surfaceType, id)}
                           onUpdateLayer={(id, data) => updateLayer(floor.id, sd.surfaceType, id, data)}
                           calcAreaForLayer={(includeNS) => calcSurfaceArea(sd.surfaceType, plan, rooms, floorRooms, slopes, includeNS).area}
                           calcDimsForLayer={(includeNS) => {
@@ -1212,6 +1266,7 @@ export function FloorPlanVolumesView({ plan, rooms, floors, floorPlanId }: Floor
                                 onAddLayer={() => addLayer(floor.id, rsd.surfaceType)}
                                 onAddChildLayer={(parentId) => addChildLayer(floor.id, rsd.surfaceType, parentId)}
                                 onRemoveLayer={(id) => removeLayer(floor.id, rsd.surfaceType, id)}
+                                onDuplicateLayer={(id) => duplicateLayer(floor.id, rsd.surfaceType, id)}
                                 onUpdateLayer={(id, data) => updateLayer(floor.id, rsd.surfaceType, id, data)}
                                 calcAreaForLayer={(includeNS) => calcSurfaceArea(rsd.surfaceType, plan, rooms, floorRooms, slopes, includeNS).area}
                                 calcDimsForLayer={(includeNS) => {

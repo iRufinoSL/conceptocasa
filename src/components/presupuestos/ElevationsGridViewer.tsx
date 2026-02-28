@@ -2744,15 +2744,18 @@ const isDoor = op.openingType === 'puerta' || op.openingType === 'puerta_externa
         const leftBaseY = baseY - leftBaseH;
         const rightBaseY = baseY - rightBaseH;
 
-        // Ridge is always centered (ridgeRatio=0.5) until ridge offset is implemented
-        const ridgeRatio = 0.5;
+        // Use REAL ridge position along the cut (global roof center projected to this segment)
         const y1 = cw.startCorner.y;
         const y2 = cw.endCorner.y;
-        const crossesRidge = Math.abs(y2 - y1) > 1e-6;
-        const peakX = crossesRidge
-          ? leftX + gableTotalW * ridgeRatio
-          : (leftBaseY <= rightBaseY ? leftX : rightX);
-        const peakY = crossesRidge ? baseY - peakH * s : Math.min(leftBaseY, rightBaseY);
+        const spanY = y2 - y1;
+        const buildingMinY = Math.min(...allRooms.map(r => r.posY));
+        const buildingMaxY = Math.max(...allRooms.map(r => r.posY + r.length));
+        const buildingCenterY = (buildingMinY + buildingMaxY) / 2;
+        const rawRidgeRatio = Math.abs(spanY) > 1e-6 ? (buildingCenterY - y1) / spanY : 0.5;
+        const ridgeRatio = Math.max(0, Math.min(1, rawRidgeRatio));
+        const crossesRidge = ridgeRatio > 1e-6 && ridgeRatio < (1 - 1e-6);
+        const peakX = leftX + gableTotalW * ridgeRatio;
+        const peakY = crossesRidge ? baseY - peakH * s : (ridgeRatio <= 0 ? leftBaseY : rightBaseY);
         const clipTopY = Math.min(leftBaseY, rightBaseY, peakY);
         const trianglePath = crossesRidge
           ? `M ${leftX} ${leftBaseY} L ${peakX} ${peakY} L ${rightX} ${rightBaseY} L ${rightX} ${baseY} L ${leftX} ${baseY} Z`
@@ -3928,15 +3931,18 @@ function CompositeWallCard({ compositeWall, plan, onOpeningClick, onAddBlockGrou
           const leftBaseY = baseY - leftBaseH;
           const rightBaseY = baseY - rightBaseH;
 
-          // Ridge is always centered (ridgeRatio=0.5) until ridge offset is implemented
-          const ridgeRatio = 0.5;
+          // Use REAL ridge position along the cut (global roof center projected to this segment)
           const y1 = cw.startCorner.y;
           const y2 = cw.endCorner.y;
-          const crossesRidge = Math.abs(y2 - y1) > 1e-6;
-          const peakX = crossesRidge
-            ? leftX + gableTotalW * ridgeRatio
-            : (leftBaseY <= rightBaseY ? leftX : rightX);
-          const peakY = crossesRidge ? baseY - peakH * s : Math.min(leftBaseY, rightBaseY);
+          const spanY = y2 - y1;
+          const buildingMinY = Math.min(...liveRooms.map(r => r.posY));
+          const buildingMaxY = Math.max(...liveRooms.map(r => r.posY + r.length));
+          const buildingCenterY = (buildingMinY + buildingMaxY) / 2;
+          const rawRidgeRatio = Math.abs(spanY) > 1e-6 ? (buildingCenterY - y1) / spanY : 0.5;
+          const ridgeRatio = Math.max(0, Math.min(1, rawRidgeRatio));
+          const crossesRidge = ridgeRatio > 1e-6 && ridgeRatio < (1 - 1e-6);
+          const peakX = leftX + gableTotalW * ridgeRatio;
+          const peakY = crossesRidge ? baseY - peakH * s : (ridgeRatio <= 0 ? leftBaseY : rightBaseY);
           const clipTopY = Math.min(leftBaseY, rightBaseY, peakY);
           const trianglePath = crossesRidge
             ? `M ${leftX} ${leftBaseY} L ${peakX} ${peakY} L ${rightX} ${rightBaseY} L ${rightX} ${baseY} L ${leftX} ${baseY} Z`

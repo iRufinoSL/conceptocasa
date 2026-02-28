@@ -2862,13 +2862,12 @@ export function computeCompositeWallsFromCorners(
         if (Math.abs(a.absX - b.absX) < EPSILON) continue; // same point
         // Cross-side pairs: only pair markers where BOTH are non-main (interior markers)
         if (a.isMain || b.isMain) continue;
-        // For bajo cubierta, require markers on OPPOSITE edges (left↔right) and sufficient span
+        // For bajo cubierta, require sufficient horizontal span only.
+        // Do not force specific classified edges (e.g. left↔right), because
+        // user-defined markers may intentionally combine different side tags.
         if (isBajoCubiertaLevel) {
           const span = Math.abs(a.absX - b.absX);
           if (span < buildingSpanX * MIN_SPAN_RATIO) continue;
-          // Both markers must be on opposite vertical edges
-          const edges = new Set([a.classifiedEdge, b.classifiedEdge]);
-          if (!(edges.has('left') && edges.has('right'))) continue;
         }
         const [left, right] = a.absX <= b.absX ? [a, b] : [b, a];
         horizontalPairs.push({ left, right });

@@ -100,7 +100,7 @@ function calcSurfaceArea(
     ? floorRooms
     : floorRooms.filter(r => !isNonStructural(r.name));
 
-  if (surfaceType === 'suelo' || surfaceType === 'techo') {
+  if (surfaceType === 'suelo') {
     if (filterRooms.length === 0) return { area: 0, description: 'Sin espacios', largo: 0, ancho: 0 };
     const minX = Math.min(...filterRooms.map(r => r.posX));
     const maxX = Math.max(...filterRooms.map(r => r.posX + r.width));
@@ -114,6 +114,23 @@ function calcSurfaceArea(
       description: `${fmt(totalW, 3)}m × ${fmt(totalL, 3)}m`,
       largo: totalW,
       ancho: totalL,
+    };
+  }
+
+  if (surfaceType === 'techo') {
+    // Only sum rooms that actually have a ceiling (hasCeiling: true)
+    const ceilingRooms = filterRooms.filter(r => r.hasCeiling);
+    if (ceilingRooms.length === 0) return { area: 0, description: 'Sin techos', largo: 0, ancho: 0 };
+    let totalArea = 0;
+    for (const room of ceilingRooms) {
+      const calc = calculateRoom(room, plan);
+      totalArea += calc.ceilingArea;
+    }
+    return {
+      area: totalArea,
+      description: `Suma de ${ceilingRooms.length} espacios con techo`,
+      largo: 0,
+      ancho: 0,
     };
   }
 

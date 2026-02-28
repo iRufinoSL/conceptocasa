@@ -1847,21 +1847,25 @@ const isDoor = op.openingType === 'puerta' || op.openingType === 'puerta_externa
                 {OPENING_PRESETS[op.openingType as keyof typeof OPENING_PRESETS]?.label || op.openingType}
               </text>
 
-              {/* Reference measurements — fullscreen only */}
-              {fsScale && (
-                <g pointerEvents="none" opacity={0.85}>
+              {/* Reference measurements — subtle in compact, stronger in fullscreen */}
+              {(() => {
+                const dimOpacity = fsScale ? 0.85 : 0.45;
+                const fz = fsScale ? 7 : 5.5;
+                const dDash = '2,1';
+                return (
+                <g pointerEvents="none" opacity={dimOpacity}>
                   {/* Sill height — bottom of opening to floor */}
                   {sillH > 0.001 && (
                     <>
                       <line x1={opX + opWidthPx + 5} y1={opY + opHeightPx} x2={opX + opWidthPx + 5} y2={ry + rh}
-                        stroke="hsl(150, 60%, 40%)" strokeWidth={0.6} strokeDasharray="2,1" />
+                        stroke="hsl(150, 60%, 40%)" strokeWidth={0.5} strokeDasharray={dDash} />
                       <line x1={opX + opWidthPx + 2} y1={opY + opHeightPx} x2={opX + opWidthPx + 8} y2={opY + opHeightPx}
-                        stroke="hsl(150, 60%, 40%)" strokeWidth={0.4} />
+                        stroke="hsl(150, 60%, 40%)" strokeWidth={0.3} />
                       <line x1={opX + opWidthPx + 2} y1={ry + rh} x2={opX + opWidthPx + 8} y2={ry + rh}
-                        stroke="hsl(150, 60%, 40%)" strokeWidth={0.4} />
+                        stroke="hsl(150, 60%, 40%)" strokeWidth={0.3} />
                       <text x={opX + opWidthPx + 10} y={opY + opHeightPx + (ry + rh - opY - opHeightPx) / 2 + 3}
-                        fontSize={7} fill="hsl(150, 60%, 40%)" fontWeight={600}>
-                        {Math.round(sillH * 1000)} mm
+                        fontSize={fz} fill="hsl(150, 60%, 40%)" fontWeight={600}>
+                        {Math.round(sillH * 1000)}
                       </text>
                     </>
                   )}
@@ -1872,14 +1876,14 @@ const isDoor = op.openingType === 'puerta' || op.openingType === 'puerta_externa
                     return (
                       <>
                         <line x1={opX + opWidthPx + 5} y1={ry} x2={opX + opWidthPx + 5} y2={opY}
-                          stroke="hsl(200, 60%, 40%)" strokeWidth={0.6} strokeDasharray="2,1" />
+                          stroke="hsl(200, 60%, 40%)" strokeWidth={0.5} strokeDasharray={dDash} />
                         <line x1={opX + opWidthPx + 2} y1={ry} x2={opX + opWidthPx + 8} y2={ry}
-                          stroke="hsl(200, 60%, 40%)" strokeWidth={0.4} />
+                          stroke="hsl(200, 60%, 40%)" strokeWidth={0.3} />
                         <line x1={opX + opWidthPx + 2} y1={opY} x2={opX + opWidthPx + 8} y2={opY}
-                          stroke="hsl(200, 60%, 40%)" strokeWidth={0.4} />
+                          stroke="hsl(200, 60%, 40%)" strokeWidth={0.3} />
                         <text x={opX + opWidthPx + 10} y={ry + (opY - ry) / 2 + 3}
-                          fontSize={7} fill="hsl(200, 60%, 40%)" fontWeight={600}>
-                          {Math.round(topGap * 1000)} mm
+                          fontSize={fz} fill="hsl(200, 60%, 40%)" fontWeight={600}>
+                          {Math.round(topGap * 1000)}
                         </text>
                       </>
                     );
@@ -1891,14 +1895,14 @@ const isDoor = op.openingType === 'puerta' || op.openingType === 'puerta_externa
                     return (
                       <>
                         <line x1={rx} y1={opY + opHeightPx + 5} x2={opX} y2={opY + opHeightPx + 5}
-                          stroke="hsl(30, 60%, 45%)" strokeWidth={0.6} strokeDasharray="2,1" />
+                          stroke="hsl(30, 60%, 45%)" strokeWidth={0.5} strokeDasharray={dDash} />
                         <line x1={rx} y1={opY + opHeightPx + 2} x2={rx} y2={opY + opHeightPx + 8}
-                          stroke="hsl(30, 60%, 45%)" strokeWidth={0.4} />
+                          stroke="hsl(30, 60%, 45%)" strokeWidth={0.3} />
                         <line x1={opX} y1={opY + opHeightPx + 2} x2={opX} y2={opY + opHeightPx + 8}
-                          stroke="hsl(30, 60%, 45%)" strokeWidth={0.4} />
+                          stroke="hsl(30, 60%, 45%)" strokeWidth={0.3} />
                         <text x={rx + (opX - rx) / 2} y={opY + opHeightPx + 14}
-                          textAnchor="middle" fontSize={7} fill="hsl(30, 60%, 45%)" fontWeight={600}>
-                          {Math.round(leftDist * 1000)} mm
+                          textAnchor="middle" fontSize={fz} fill="hsl(30, 60%, 45%)" fontWeight={600}>
+                          {Math.round(leftDist * 1000)}
                         </text>
                       </>
                     );
@@ -1910,20 +1914,21 @@ const isDoor = op.openingType === 'puerta' || op.openingType === 'puerta_externa
                     return (
                       <>
                         <line x1={opX + opWidthPx} y1={opY + opHeightPx + 5} x2={rx + rw} y2={opY + opHeightPx + 5}
-                          stroke="hsl(30, 60%, 45%)" strokeWidth={0.6} strokeDasharray="2,1" />
+                          stroke="hsl(30, 60%, 45%)" strokeWidth={0.5} strokeDasharray={dDash} />
                         <line x1={opX + opWidthPx} y1={opY + opHeightPx + 2} x2={opX + opWidthPx} y2={opY + opHeightPx + 8}
-                          stroke="hsl(30, 60%, 45%)" strokeWidth={0.4} />
+                          stroke="hsl(30, 60%, 45%)" strokeWidth={0.3} />
                         <line x1={rx + rw} y1={opY + opHeightPx + 2} x2={rx + rw} y2={opY + opHeightPx + 8}
-                          stroke="hsl(30, 60%, 45%)" strokeWidth={0.4} />
+                          stroke="hsl(30, 60%, 45%)" strokeWidth={0.3} />
                         <text x={opX + opWidthPx + (rx + rw - opX - opWidthPx) / 2} y={opY + opHeightPx + 14}
-                          textAnchor="middle" fontSize={7} fill="hsl(30, 60%, 45%)" fontWeight={600}>
-                          {Math.round(rightDist * 1000)} mm
+                          textAnchor="middle" fontSize={fz} fill="hsl(30, 60%, 45%)" fontWeight={600}>
+                          {Math.round(rightDist * 1000)}
                         </text>
                       </>
                     );
                   })()}
                 </g>
-              )}
+                );
+              })()}
             </g>
           );
         })}
@@ -2459,6 +2464,48 @@ const isDoor = op.openingType === 'puerta' || op.openingType === 'puerta_externa
               fontSize={8} fill="hsl(var(--muted-foreground))" pointerEvents="none">
               {Math.round(op.width * 1000)}×{Math.round(op.height * 1000)}mm
             </text>
+            {/* 4-edge reference measurements */}
+            {(() => {
+              const distLeft = (opX - rx) / s;
+              const distRight = (rx + rw - opX - opWidthPx) / s;
+              const distBottom = sillH;
+              const distTop = card.height - sillH - op.height;
+              const dColor = 'hsl(200, 70%, 40%)';
+              const dStroke = 'hsl(200, 70%, 55%)';
+              const dDash = '2 1.5';
+              const opLeft = opX;
+              const opRight = opX + opWidthPx;
+              const opTop = opY;
+              const opBottom = opY + opHeightPx;
+              return (
+                <g pointerEvents="none" opacity={0.5}>
+                  {distLeft > 0.001 && (
+                    <><line x1={rx} y1={opTop + opHeightPx / 2} x2={opLeft} y2={opTop + opHeightPx / 2}
+                      stroke={dStroke} strokeWidth={0.5} strokeDasharray={dDash} />
+                    <text x={(rx + opLeft) / 2} y={opTop + opHeightPx / 2 - 2} textAnchor="middle"
+                      fontSize={7} fill={dColor} fontWeight={600}>{Math.round(distLeft * 1000)}</text></>
+                  )}
+                  {distRight > 0.001 && (
+                    <><line x1={opRight} y1={opTop + opHeightPx / 2} x2={rx + rw} y2={opTop + opHeightPx / 2}
+                      stroke={dStroke} strokeWidth={0.5} strokeDasharray={dDash} />
+                    <text x={(opRight + rx + rw) / 2} y={opTop + opHeightPx / 2 - 2} textAnchor="middle"
+                      fontSize={7} fill={dColor} fontWeight={600}>{Math.round(distRight * 1000)}</text></>
+                  )}
+                  {distBottom > 0.001 && (
+                    <><line x1={opLeft + opWidthPx / 2} y1={opBottom} x2={opLeft + opWidthPx / 2} y2={ry + rh}
+                      stroke={dStroke} strokeWidth={0.5} strokeDasharray={dDash} />
+                    <text x={opLeft + opWidthPx / 2 + 3} y={(opBottom + ry + rh) / 2 + 3} textAnchor="start"
+                      fontSize={7} fill={dColor} fontWeight={600}>{Math.round(distBottom * 1000)}</text></>
+                  )}
+                  {distTop > 0.001 && (
+                    <><line x1={opLeft + opWidthPx / 2} y1={ry} x2={opLeft + opWidthPx / 2} y2={opTop}
+                      stroke={dStroke} strokeWidth={0.5} strokeDasharray={dDash} />
+                    <text x={opLeft + opWidthPx / 2 + 3} y={(ry + opTop) / 2 + 3} textAnchor="start"
+                      fontSize={7} fill={dColor} fontWeight={600}>{Math.round(distTop * 1000)}</text></>
+                  )}
+                </g>
+              );
+            })()}
           </g>
         );
       })}
@@ -2985,24 +3032,51 @@ const isDoor = op.openingType === 'puerta' || op.openingType === 'puerta_externa
         );
       })()}
 
-      {/* Individual section dimension lines */}
-      {cw.sections.map((section, idx) => {
-        const sx = rxs + section.startOffset * s;
-        const sw2 = section.length * s;
-        const dimY = rys + totalH + 12;
-        const secColor = 'hsl(210, 60%, 45%)';
-        return (
-          <g key={`sec-dim-${idx}`}>
-            <line x1={sx} y1={dimY} x2={sx + sw2} y2={dimY} stroke={secColor} strokeWidth={0.8} />
-            <line x1={sx} y1={dimY - 5} x2={sx} y2={dimY + 5} stroke={secColor} strokeWidth={0.6} />
-            <line x1={sx + sw2} y1={dimY - 5} x2={sx + sw2} y2={dimY + 5} stroke={secColor} strokeWidth={0.6} />
-            <text x={sx + sw2 / 2} y={dimY - 5} textAnchor="middle"
-              fontSize={10} fill={secColor} fontWeight={700}>
-              {Math.round(section.length * 1000)} mm
-            </text>
-          </g>
-        );
-      })}
+        {/* Individual section dimension lines */}
+        {cw.sections.map((section, idx) => {
+          const sx = rxs + section.startOffset * s;
+          const sw2 = section.length * s;
+          const dimY = rys + totalH + 12;
+          const secColor = 'hsl(210, 60%, 45%)';
+          return (
+            <g key={`sec-dim-${idx}`}>
+              <line x1={sx} y1={dimY} x2={sx + sw2} y2={dimY} stroke={secColor} strokeWidth={0.8} />
+              <line x1={sx} y1={dimY - 5} x2={sx} y2={dimY + 5} stroke={secColor} strokeWidth={0.6} />
+              <line x1={sx + sw2} y1={dimY - 5} x2={sx + sw2} y2={dimY + 5} stroke={secColor} strokeWidth={0.6} />
+              <text x={sx + sw2 / 2} y={dimY - 5} textAnchor="middle"
+                fontSize={10} fill={secColor} fontWeight={700}>
+                {Math.round(section.length * 1000)} mm
+              </text>
+            </g>
+          );
+        })}
+
+        {/* Section height annotations — subtle vertical lines at each section boundary */}
+        {cw.sections.map((section, idx) => {
+          if (section.isGable || isSectionWallInvisible(section)) return null;
+          const sx = rxs + section.startOffset * s;
+          const sw2 = section.length * s;
+          const sh2 = section.height * s;
+          const sy = rys + totalH - sh2;
+          const hColor = 'hsl(200, 50%, 55%)';
+          const fz = 8;
+          // Show height line at right edge of section (or left for first)
+          const lineX = idx === 0 ? sx + 3 : sx + sw2 - 3;
+          return (
+            <g key={`sec-h-${idx}`} pointerEvents="none" opacity={0.4}>
+              <line x1={lineX} y1={sy} x2={lineX} y2={rys + totalH}
+                stroke={hColor} strokeWidth={0.5} strokeDasharray="2 2" />
+              <line x1={lineX - 3} y1={sy} x2={lineX + 3} y2={sy}
+                stroke={hColor} strokeWidth={0.4} />
+              <line x1={lineX - 3} y1={rys + totalH} x2={lineX + 3} y2={rys + totalH}
+                stroke={hColor} strokeWidth={0.4} />
+              <text x={lineX + 5} y={sy + sh2 / 2 + 3} textAnchor="start"
+                fontSize={fz} fill={hColor} fontWeight={600}>
+                {Math.round(section.height * 1000)}
+              </text>
+            </g>
+          );
+        })}
 
       {/* Total dimension line */}
       <line x1={rxs} y1={rys + totalH + 30} x2={rxs + cw.totalLength * s} y2={rys + totalH + 30}
@@ -4198,7 +4272,32 @@ function CompositeWallCard({ compositeWall, plan, onOpeningClick, onAddBlockGrou
           );
         })}
 
-        {/* Total dimension line */}
+        {/* Section height annotations — subtle vertical lines showing height at each section */}
+        {cw.sections.map((section, idx) => {
+          if (section.isGable || isSectionWallInvisible(section)) return null;
+          const sx = rxs + section.startOffset * s;
+          const sw2 = section.length * s;
+          const sh2 = section.height * s;
+          const sy = rys + totalH - sh2;
+          const hColor = 'hsl(200, 50%, 55%)';
+          const fz = fsScale ? 8 : 5.5;
+          const lineX = idx === 0 ? sx + 3 : sx + sw2 - 3;
+          return (
+            <g key={`sec-h-${idx}`} pointerEvents="none" opacity={0.4}>
+              <line x1={lineX} y1={sy} x2={lineX} y2={rys + totalH}
+                stroke={hColor} strokeWidth={0.4} strokeDasharray="2 2" />
+              <line x1={lineX - 2} y1={sy} x2={lineX + 2} y2={sy}
+                stroke={hColor} strokeWidth={0.3} />
+              <line x1={lineX - 2} y1={rys + totalH} x2={lineX + 2} y2={rys + totalH}
+                stroke={hColor} strokeWidth={0.3} />
+              <text x={lineX + 4} y={sy + sh2 / 2 + 3} textAnchor="start"
+                fontSize={fz} fill={hColor} fontWeight={600}>
+                {Math.round(section.height * 1000)}
+              </text>
+            </g>
+          );
+        })}
+
         <line x1={rxs} y1={rys + totalH + 26} x2={rxs + cw.totalLength * s} y2={rys + totalH + 26}
           stroke="hsl(25, 95%, 45%)" strokeWidth={0.8} />
         <line x1={rxs} y1={rys + totalH + 20} x2={rxs} y2={rys + totalH + 32} stroke="hsl(25, 95%, 45%)" strokeWidth={0.5} />

@@ -51,6 +51,26 @@ export function calcSlopeFromRidge(ridgeHeight: number, halfWidth: number): numb
   return (ridgeHeight / halfWidth) * 100;
 }
 
+/**
+ * Get effective ridge height: prioritizes explicit ridgeHeight over roofSlopePercent calculation.
+ * This ensures that when the user sets a specific ridge height (e.g. 2.2m), ALL calculations
+ * use that exact value instead of a potentially rounded slope-derived value.
+ */
+export function getEffectiveRidgeHeight(plan: FloorPlanData, halfWidth: number): number {
+  if (plan.ridgeHeight != null && plan.ridgeHeight > 0) return plan.ridgeHeight;
+  return halfWidth * (plan.roofSlopePercent / 100);
+}
+
+/**
+ * Get effective slope ratio: derives from ridgeHeight when available, else uses roofSlopePercent.
+ */
+export function getEffectiveSlopeRatio(plan: FloorPlanData, halfWidth: number): number {
+  if (plan.ridgeHeight != null && plan.ridgeHeight > 0 && halfWidth > 0) {
+    return plan.ridgeHeight / halfWidth;
+  }
+  return plan.roofSlopePercent / 100;
+}
+
 /** Convert block count to meters */
 export function blocksToMeters(blocks: number, blockSizeMm: number): number {
   return blocks * blockSizeMm / 1000;
@@ -369,8 +389,8 @@ export function calcBajoCubiertaWallHeight(
   const buildingWidth = bbMaxX - bbMinX;
   const ridgeX = bbMinX + buildingWidth / 2;
   const halfWidth = buildingWidth / 2 + plan.externalWallThickness;
-  const slopeRatio = plan.roofSlopePercent / 100;
-  const riseM = halfWidth * slopeRatio;
+  const slopeRatio = getEffectiveSlopeRatio(plan, halfWidth);
+  const riseM = getEffectiveRidgeHeight(plan, halfWidth);
   const getH = (x: number) => Math.max(0, riseM - Math.abs(x - ridgeX) * slopeRatio);
   const EPSILON = 0.05;
 
@@ -522,10 +542,8 @@ export function calculateRoofSlopes(plan: FloorPlanData, rooms?: RoomData[]): Ro
   const ridgeX = buildingWidthAtWall / 2; // centered ridge
 
   // Ridge height (from top of wall to peak)
-  const slopeRatio = plan.roofSlopePercent / 100;
-  const riseM = plan.ridgeHeight != null && plan.ridgeHeight > 0
-    ? plan.ridgeHeight
-    : ridgeX * slopeRatio; // halfWidth * slope
+  const slopeRatio = getEffectiveSlopeRatio(plan, ridgeX);
+  const riseM = getEffectiveRidgeHeight(plan, ridgeX);
 
   // Eave overhang per side (0 if excluded)
   const eaveSuperior = excluded.includes('superior') ? 0 : overhang;
@@ -604,17 +622,16 @@ export function calculateRoof(plan: FloorPlanData, rooms?: RoomData[]): number {
       return slopes[0].slopeArea + slopes[1].slopeArea;
     }
     // Fallback
-    const slopeRatio = plan.roofSlopePercent / 100;
     const halfWidth = baseWidth / 2;
-    const rise = halfWidth * slopeRatio;
+    const rise = getEffectiveRidgeHeight(plan, halfWidth);
     const slopeLength = Math.sqrt(halfWidth * halfWidth + rise * rise);
     return 2 * slopeLength * baseLength;
   }
   
   // cuatro_aguas (hip roof)
-  const slopeRatio = plan.roofSlopePercent / 100;
   const halfWidth = baseWidth / 2;
   const halfLength = baseLength / 2;
+  const slopeRatio = getEffectiveSlopeRatio(plan, halfWidth);
   const riseW = halfWidth * slopeRatio;
   const riseL = halfLength * slopeRatio;
   const slopeLengthW = Math.sqrt(halfWidth * halfWidth + riseW * riseW);
@@ -794,9 +811,9 @@ export function calculateGables(plan: FloorPlanData, rooms: RoomData[], wallClas
 
   const extT = plan.externalWallThickness;
   const totalWidth = (maxX - minX) + 2 * extT;
-  const slope = plan.roofSlopePercent / 100;
   const halfWidth = totalWidth / 2;
-  const peakHeight = halfWidth * slope;
+  const slope = getEffectiveSlopeRatio(plan, halfWidth);
+  const peakHeight = getEffectiveRidgeHeight(plan, halfWidth);
   const gableBaseWidth = totalWidth;
   const triangleArea = (gableBaseWidth * peakHeight) / 2;
 
@@ -857,7 +874,8 @@ export function calculateInternalGableExtension(
   if (plan.roofType === 'plana' || plan.roofSlopePercent === 0) return 0;
   if (room.hasCeiling !== false) return 0; // has ceiling, walls stop at ceiling
 
-  const slope = plan.roofSlopePercent / 100;
+  const rooms_bbox_approx_halfW = (plan.width + 2 * plan.externalWallThickness) / 2;
+  const slope = getEffectiveSlopeRatio(plan, rooms_bbox_approx_halfW);
   const isHoriz = wallIndex === 1 || wallIndex === 3;
   const wallLen = isHoriz ? room.width : room.length;
 
@@ -2307,7 +2325,7 @@ export function computeCompositeWallsFromCorners(
         const isGableWall = isBajoCub && (wallIndex === 2 || wallIndex === 4);
         if (isGableWall) {
           const totalW = (maxX - minX) + 2 * plan.externalWallThickness;
-          wallH = (totalW / 2) * (plan.roofSlopePercent / 100);
+          wallH = getEffectiveRidgeHeight(plan, totalW / 2);
         } else if (wall.height && wall.height > 0) {
           wallH = wall.height;
         } else if (room.height && room.height > 0) {
@@ -2687,8 +2705,8 @@ export function computeCompositeWallsFromCorners(
       // Height at wallX under the roof slope
       const halfWidth = (buildingMaxX - buildingMinX) / 2 + plan.externalWallThickness;
       const ridgeX = buildingMinX + (buildingMaxX - buildingMinX) / 2;
-      const slopeRatio = plan.roofSlopePercent / 100;
-      const riseM = halfWidth * slopeRatio;
+      const slopeRatio = getEffectiveSlopeRatio(plan, halfWidth);
+      const riseM = getEffectiveRidgeHeight(plan, halfWidth);
       return Math.max(0, riseM - Math.abs(wallX - ridgeX) * slopeRatio);
     })();
 
@@ -2696,7 +2714,7 @@ export function computeCompositeWallsFromCorners(
     const verticalGablePeakH = (() => {
       if (!allRoomsBajoCub) return 0;
       const totalW = (buildingMaxX - buildingMinX) + 2 * plan.externalWallThickness;
-      return (totalW / 2) * (plan.roofSlopePercent / 100);
+      return getEffectiveRidgeHeight(plan, totalW / 2);
     })();
 
     matchingRooms.forEach(({ room, wall, overlapStart, overlapEnd }) => {
@@ -2932,7 +2950,7 @@ export function computeCompositeWallsFromCorners(
       if (halfLenY <= EPSILON) return 0;
 
       const totalW = (buildingMaxX - buildingMinX) + 2 * plan.externalWallThickness;
-      const peakH = (totalW / 2) * (plan.roofSlopePercent / 100);
+      const peakH = getEffectiveRidgeHeight(plan, totalW / 2);
       return Math.max(0, peakH * (1 - Math.abs(wallY - centerY) / halfLenY));
     })();
 
@@ -3165,7 +3183,7 @@ export function computeCompositeWalls(
       const isGableWall = isBajoCub && (wallIndex === 2 || wallIndex === 4);
       if (isGableWall) {
         const totalW = (rooms.reduce((mx, r) => Math.max(mx, r.posX + r.width), -Infinity) - rooms.reduce((mn, r) => Math.min(mn, r.posX), Infinity)) + 2 * plan.externalWallThickness;
-        wallH = (totalW / 2) * (plan.roofSlopePercent / 100);
+        wallH = getEffectiveRidgeHeight(plan, totalW / 2);
       } else if (wall.height && wall.height > 0) {
         wallH = wall.height;
       } else if (room.height && room.height > 0) {

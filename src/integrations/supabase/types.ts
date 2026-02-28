@@ -1785,6 +1785,60 @@ export type Database = {
           },
         ]
       }
+      budget_volume_layers: {
+        Row: {
+          created_at: string
+          floor_id: string | null
+          floor_plan_id: string
+          id: string
+          include_non_structural: boolean
+          layer_order: number
+          name: string
+          surface_type: string
+          thickness_mm: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          floor_id?: string | null
+          floor_plan_id: string
+          id?: string
+          include_non_structural?: boolean
+          layer_order?: number
+          name?: string
+          surface_type: string
+          thickness_mm?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          floor_id?: string | null
+          floor_plan_id?: string
+          id?: string
+          include_non_structural?: boolean
+          layer_order?: number
+          name?: string
+          surface_type?: string
+          thickness_mm?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "budget_volume_layers_floor_id_fkey"
+            columns: ["floor_id"]
+            isOneToOne: false
+            referencedRelation: "budget_floors"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budget_volume_layers_floor_plan_id_fkey"
+            columns: ["floor_plan_id"]
+            isOneToOne: false
+            referencedRelation: "budget_floor_plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       budget_work_area_activities: {
         Row: {
           activity_id: string

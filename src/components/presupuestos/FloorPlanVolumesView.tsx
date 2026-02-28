@@ -1,51 +1,47 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { FloorPlanData, RoomData, calculateRoofSlopes, RoofSlopeDetail, isExteriorType, isVisibleWall } from '@/lib/floor-plan-calculations';
-import { Box, ChevronDown, ChevronRight, Plus, Trash2, Layers, ArrowDown, ArrowUp, ArrowRight as ArrowRightIcon, GripVertical } from 'lucide-react';
+import { Box, ChevronDown, ChevronRight, Plus, Trash2, Layers, ArrowDown, ArrowUp, ArrowRight as ArrowRightIcon, Save, Loader2 } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 interface FloorPlanVolumesViewProps {
   plan: FloorPlanData;
   rooms: RoomData[];
   floors: { id: string; name: string; level: string; orderIndex: number }[];
+  floorPlanId: string;
 }
 
-// Surface types that can have layers
-type SurfaceType = 'suelo' | 'pared_exterior' | 'pared_interior' | 'techo' | 'cubierta';
+// Surface types - cubierta split per slope
+type SurfaceType = 'suelo' | 'pared_exterior' | 'pared_interior' | 'techo' | 'cubierta_superior' | 'cubierta_inferior';
 
 interface VolumeLayer {
   id: string;
+  dbId?: string; // DB UUID if persisted
   name: string;
-  thicknessMm: number; // height/depth in mm
+  thicknessMm: number;
   surfaceType: SurfaceType;
-}
-
-interface LevelVolumes {
-  floorId: string;
-  surfaces: Record<SurfaceType, VolumeLayer[]>;
+  includeNonStructural: boolean;
+  dirty?: boolean;
 }
 
 function fmt(n: number, decimals = 2): string {
   return n.toFixed(decimals);
 }
 
-function fmtM3(n: number): string {
-  return n.toFixed(2);
-}
-
-/** Direction label for layer stacking */
 const SURFACE_DIRECTION: Record<SurfaceType, string> = {
   suelo: '↓ De arriba a abajo',
   pared_exterior: '← Del exterior al interior',
   pared_interior: '→ Desde punto medio al interior',
   techo: '↑ De abajo a arriba',
-  cubierta: '↑ De abajo a arriba',
+  cubierta_superior: '↑ Faldón superior (de abajo a arriba)',
+  cubierta_inferior: '↑ Faldón inferior (de abajo a arriba)',
 };
 
 const SURFACE_LABELS: Record<SurfaceType, string> = {
@@ -53,7 +49,8 @@ const SURFACE_LABELS: Record<SurfaceType, string> = {
   pared_exterior: 'Paredes exteriores',
   pared_interior: 'Paredes interiores',
   techo: 'Techo',
-  cubierta: 'Cubierta (faldones)',
+  cubierta_superior: 'Faldón superior (Tejado 1)',
+  cubierta_inferior: 'Faldón inferior (Tejado 2)',
 };
 
 const SURFACE_ICONS: Record<SurfaceType, React.ReactNode> = {
@@ -61,28 +58,34 @@ const SURFACE_ICONS: Record<SurfaceType, React.ReactNode> = {
   pared_exterior: <ArrowRightIcon className="h-3.5 w-3.5 rotate-180" />,
   pared_interior: <ArrowRightIcon className="h-3.5 w-3.5" />,
   techo: <ArrowUp className="h-3.5 w-3.5" />,
-  cubierta: <ArrowUp className="h-3.5 w-3.5" />,
+  cubierta_superior: <ArrowUp className="h-3.5 w-3.5" />,
+  cubierta_inferior: <ArrowUp className="h-3.5 w-3.5" />,
 };
 
-/** Calculate 2D surface area for a given surface type within a level */
+function isNonStructural(name: string): boolean {
+  const n = (name || '').toLowerCase();
+  return n.includes('acera') || n.includes('alero') || n.includes('eave');
+}
+
+/** Calculate 2D surface area for a given surface type */
 function calcSurfaceArea(
   surfaceType: SurfaceType,
   plan: FloorPlanData,
   rooms: RoomData[],
   floorRooms: RoomData[],
   slopes: RoofSlopeDetail[],
+  includeNonStructural: boolean,
 ): { area: number; description: string } {
+  const filterRooms = includeNonStructural
+    ? floorRooms
+    : floorRooms.filter(r => !isNonStructural(r.name));
+
   if (surfaceType === 'suelo' || surfaceType === 'techo') {
-    // Full plant footprint including walls
-    const structRooms = floorRooms.filter(r => {
-      const n = (r.name || '').toLowerCase();
-      return !n.includes('acera') && !n.includes('alero') && !n.includes('eave');
-    });
-    if (structRooms.length === 0) return { area: 0, description: 'Sin espacios' };
-    const minX = Math.min(...structRooms.map(r => r.posX));
-    const maxX = Math.max(...structRooms.map(r => r.posX + r.width));
-    const minY = Math.min(...structRooms.map(r => r.posY));
-    const maxY = Math.max(...structRooms.map(r => r.posY + r.length));
+    if (filterRooms.length === 0) return { area: 0, description: 'Sin espacios' };
+    const minX = Math.min(...filterRooms.map(r => r.posX));
+    const maxX = Math.max(...filterRooms.map(r => r.posX + r.width));
+    const minY = Math.min(...filterRooms.map(r => r.posY));
+    const maxY = Math.max(...filterRooms.map(r => r.posY + r.length));
     const totalW = (maxX - minX) + 2 * plan.externalWallThickness;
     const totalL = (maxY - minY) + 2 * plan.externalWallThickness;
     const area = totalW * totalL;
@@ -93,10 +96,8 @@ function calcSurfaceArea(
   }
 
   if (surfaceType === 'pared_exterior') {
-    // Sum of all exterior wall surfaces (perimeter × height)
     let totalArea = 0;
-    const descriptions: string[] = [];
-    for (const room of floorRooms) {
+    for (const room of filterRooms) {
       const h = room.height ?? plan.defaultHeight;
       for (const wall of room.walls) {
         if (!isExteriorType(wall.wallType) || !isVisibleWall(wall.wallType)) continue;
@@ -109,7 +110,7 @@ function calcSurfaceArea(
 
   if (surfaceType === 'pared_interior') {
     let totalArea = 0;
-    for (const room of floorRooms) {
+    for (const room of filterRooms) {
       const h = room.height ?? plan.defaultHeight;
       for (const wall of room.walls) {
         if (isExteriorType(wall.wallType)) continue;
@@ -121,9 +122,22 @@ function calcSurfaceArea(
     return { area: totalArea, description: `Paredes interiores × altura` };
   }
 
-  if (surfaceType === 'cubierta') {
-    const totalRoofArea = slopes.reduce((sum, s) => sum + s.slopeArea, 0);
-    return { area: totalRoofArea, description: `${slopes.length} faldón(es)` };
+  if (surfaceType === 'cubierta_superior') {
+    const slope = slopes.find(s => s.side === 'superior');
+    if (!slope) return { area: 0, description: 'Sin faldón' };
+    return {
+      area: slope.slopeArea,
+      description: `${fmt(slope.baseLength, 3)}m (largo) × ${fmt(slope.hypotenuse, 3)}m (hipotenusa)`,
+    };
+  }
+
+  if (surfaceType === 'cubierta_inferior') {
+    const slope = slopes.find(s => s.side === 'inferior');
+    if (!slope) return { area: 0, description: 'Sin faldón' };
+    return {
+      area: slope.slopeArea,
+      description: `${fmt(slope.baseLength, 3)}m (largo) × ${fmt(slope.hypotenuse, 3)}m (hipotenusa)`,
+    };
   }
 
   return { area: 0, description: '' };
@@ -131,30 +145,35 @@ function calcSurfaceArea(
 
 let layerCounter = 0;
 function newLayerId() {
-  return `layer-${Date.now()}-${++layerCounter}`;
+  return `local-${Date.now()}-${++layerCounter}`;
 }
 
 function SurfaceSection({
   surfaceType,
   layers,
-  surfaceArea,
+  surfaceAreaDefault,
   description,
   onAddLayer,
   onRemoveLayer,
   onUpdateLayer,
+  calcAreaForLayer,
 }: {
   surfaceType: SurfaceType;
   layers: VolumeLayer[];
-  surfaceArea: number;
+  surfaceAreaDefault: number;
   description: string;
   onAddLayer: () => void;
   onRemoveLayer: (id: string) => void;
   onUpdateLayer: (id: string, data: Partial<VolumeLayer>) => void;
+  calcAreaForLayer: (includeNonStructural: boolean) => number;
 }) {
   const [open, setOpen] = useState(layers.length > 0);
 
   const totalThicknessMm = layers.reduce((sum, l) => sum + l.thicknessMm, 0);
-  const totalVolume = layers.reduce((sum, l) => sum + (surfaceArea * l.thicknessMm / 1000), 0);
+  const totalVolume = layers.reduce((sum, l) => {
+    const area = calcAreaForLayer(l.includeNonStructural);
+    return sum + (area * l.thicknessMm / 1000);
+  }, 0);
 
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
@@ -164,7 +183,7 @@ function SurfaceSection({
           {SURFACE_ICONS[surfaceType]}
           <span className="font-medium text-sm flex-1">{SURFACE_LABELS[surfaceType]}</span>
           <Badge variant="outline" className="text-xs font-mono">
-            {fmt(surfaceArea)} m²
+            {fmt(surfaceAreaDefault)} m²
           </Badge>
           {layers.length > 0 && (
             <Badge variant="secondary" className="text-xs font-mono">
@@ -184,19 +203,21 @@ function SurfaceSection({
           {layers.length > 0 && (
             <div className="space-y-1.5">
               {/* Header */}
-              <div className="grid grid-cols-[auto_1fr_100px_120px_100px_32px] gap-2 text-xs font-semibold text-muted-foreground px-1">
+              <div className="grid grid-cols-[auto_1fr_100px_120px_100px_80px_32px] gap-2 text-xs font-semibold text-muted-foreground px-1">
                 <span className="w-5">Nº</span>
                 <span>Nombre capa</span>
                 <span className="text-right">Espesor (mm)</span>
                 <span className="text-right">Superficie (m²)</span>
                 <span className="text-right">Volumen (m³)</span>
+                <span className="text-center text-[10px]">+Aleros</span>
                 <span></span>
               </div>
 
               {layers.map((layer, idx) => {
-                const vol = surfaceArea * layer.thicknessMm / 1000;
+                const layerArea = calcAreaForLayer(layer.includeNonStructural);
+                const vol = layerArea * layer.thicknessMm / 1000;
                 return (
-                  <div key={layer.id} className="grid grid-cols-[auto_1fr_100px_120px_100px_32px] gap-2 items-center">
+                  <div key={layer.id} className="grid grid-cols-[auto_1fr_100px_120px_100px_80px_32px] gap-2 items-center">
                     <span className="w-5 text-xs text-muted-foreground text-center">{idx + 1}</span>
                     <Input
                       className="h-8 text-sm"
@@ -211,8 +232,14 @@ function SurfaceSection({
                       min={1}
                       onChange={e => onUpdateLayer(layer.id, { thicknessMm: Math.max(1, parseInt(e.target.value) || 1) })}
                     />
-                    <span className="text-xs font-mono text-right text-muted-foreground">{fmt(surfaceArea)}</span>
-                    <span className="text-xs font-mono text-right font-medium">{fmtM3(vol)}</span>
+                    <span className="text-xs font-mono text-right text-muted-foreground">{fmt(layerArea)}</span>
+                    <span className="text-xs font-mono text-right font-medium">{fmt(vol)}</span>
+                    <div className="flex justify-center">
+                      <Checkbox
+                        checked={layer.includeNonStructural}
+                        onCheckedChange={(checked) => onUpdateLayer(layer.id, { includeNonStructural: !!checked })}
+                      />
+                    </div>
                     <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => onRemoveLayer(layer.id)}>
                       <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
                     </Button>
@@ -222,12 +249,13 @@ function SurfaceSection({
 
               {/* Totals */}
               <Separator className="my-1" />
-              <div className="grid grid-cols-[auto_1fr_100px_120px_100px_32px] gap-2 items-center text-xs font-semibold">
+              <div className="grid grid-cols-[auto_1fr_100px_120px_100px_80px_32px] gap-2 items-center text-xs font-semibold">
                 <span className="w-5"></span>
                 <span>Total</span>
                 <span className="text-right font-mono">{totalThicknessMm} mm</span>
                 <span></span>
-                <span className="text-right font-mono text-primary">{fmtM3(totalVolume)} m³</span>
+                <span className="text-right font-mono text-primary">{fmt(totalVolume)} m³</span>
+                <span></span>
                 <span></span>
               </div>
             </div>
@@ -242,26 +270,74 @@ function SurfaceSection({
   );
 }
 
-export function FloorPlanVolumesView({ plan, rooms, floors }: FloorPlanVolumesViewProps) {
+export function FloorPlanVolumesView({ plan, rooms, floors, floorPlanId }: FloorPlanVolumesViewProps) {
   const slopes = calculateRoofSlopes(plan, rooms);
+  const [saving, setSaving] = useState(false);
+  const [loaded, setLoaded] = useState(false);
 
   // State: layers per floor per surface type
-  const [levelVolumes, setLevelVolumes] = useState<Record<string, Record<SurfaceType, VolumeLayer[]>>>(() => {
+  const [levelVolumes, setLevelVolumes] = useState<Record<string, Record<SurfaceType, VolumeLayer[]>>>({});
+  const [expandedLevels, setExpandedLevels] = useState<Set<string>>(new Set(floors.map(f => f.id)));
+
+  // Load from DB
+  useEffect(() => {
+    if (!floorPlanId) return;
+    const load = async () => {
+      const { data, error } = await supabase
+        .from('budget_volume_layers')
+        .select('*')
+        .eq('floor_plan_id', floorPlanId)
+        .order('layer_order');
+
+      if (error) {
+        console.error('Error loading volume layers:', error);
+        return;
+      }
+
+      const init: Record<string, Record<SurfaceType, VolumeLayer[]>> = {};
+      for (const floor of floors) {
+        init[floor.id] = {
+          suelo: [], pared_exterior: [], pared_interior: [], techo: [],
+          cubierta_superior: [], cubierta_inferior: [],
+        };
+      }
+
+      // Also init for layers without a floor (global)
+      if (data) {
+        for (const row of data) {
+          const floorId = row.floor_id || floors[0]?.id;
+          if (!floorId || !init[floorId]) continue;
+          const st = row.surface_type as SurfaceType;
+          if (!init[floorId][st]) init[floorId][st] = [];
+          init[floorId][st].push({
+            id: newLayerId(),
+            dbId: row.id,
+            name: row.name || '',
+            thicknessMm: row.thickness_mm || 20,
+            surfaceType: st,
+            includeNonStructural: row.include_non_structural || false,
+          });
+        }
+      }
+
+      setLevelVolumes(init);
+      setLoaded(true);
+    };
+    load();
+  }, [floorPlanId, floors]);
+
+  // Init empty state if no DB data
+  useEffect(() => {
+    if (loaded) return;
     const init: Record<string, Record<SurfaceType, VolumeLayer[]>> = {};
     for (const floor of floors) {
-      const isBajoCubierta = floor.level === 'bajo_cubierta' || floor.name.toLowerCase().includes('cubierta');
       init[floor.id] = {
-        suelo: [],
-        pared_exterior: [],
-        pared_interior: [],
-        techo: isBajoCubierta ? [] : [],
-        cubierta: isBajoCubierta ? [] : [],
+        suelo: [], pared_exterior: [], pared_interior: [], techo: [],
+        cubierta_superior: [], cubierta_inferior: [],
       };
     }
-    return init;
-  });
-
-  const [expandedLevels, setExpandedLevels] = useState<Set<string>>(new Set(floors.map(f => f.id)));
+    setLevelVolumes(init);
+  }, [floors, loaded]);
 
   const toggleLevel = (floorId: string) => {
     setExpandedLevels(prev => {
@@ -281,6 +357,8 @@ export function FloorPlanVolumesView({ plan, rooms, floors }: FloorPlanVolumesVi
         name: '',
         thicknessMm: surfaceType === 'suelo' ? 20 : surfaceType === 'techo' ? 15 : 120,
         surfaceType,
+        includeNonStructural: false,
+        dirty: true,
       });
       floorLayers[surfaceType] = current;
       return { ...prev, [floorId]: floorLayers };
@@ -288,6 +366,13 @@ export function FloorPlanVolumesView({ plan, rooms, floors }: FloorPlanVolumesVi
   };
 
   const removeLayer = (floorId: string, surfaceType: SurfaceType, layerId: string) => {
+    const layer = levelVolumes[floorId]?.[surfaceType]?.find(l => l.id === layerId);
+    if (layer?.dbId) {
+      // Delete from DB
+      supabase.from('budget_volume_layers').delete().eq('id', layer.dbId).then(({ error }) => {
+        if (error) toast.error('Error eliminando capa');
+      });
+    }
     setLevelVolumes(prev => {
       const floorLayers = { ...prev[floorId] };
       floorLayers[surfaceType] = (floorLayers[surfaceType] || []).filter(l => l.id !== layerId);
@@ -299,17 +384,74 @@ export function FloorPlanVolumesView({ plan, rooms, floors }: FloorPlanVolumesVi
     setLevelVolumes(prev => {
       const floorLayers = { ...prev[floorId] };
       floorLayers[surfaceType] = (floorLayers[surfaceType] || []).map(l =>
-        l.id === layerId ? { ...l, ...data } : l
+        l.id === layerId ? { ...l, ...data, dirty: true } : l
       );
       return { ...prev, [floorId]: floorLayers };
     });
   };
 
+  // Save all to DB
+  const saveAll = useCallback(async () => {
+    if (!floorPlanId) return;
+    setSaving(true);
+    try {
+      // Delete all existing and re-insert
+      await supabase.from('budget_volume_layers').delete().eq('floor_plan_id', floorPlanId);
+
+      const rows: any[] = [];
+      for (const floorId of Object.keys(levelVolumes)) {
+        const surfaces = levelVolumes[floorId];
+        if (!surfaces) continue;
+        for (const st of Object.keys(surfaces) as SurfaceType[]) {
+          const layers = surfaces[st];
+          if (!layers) continue;
+          layers.forEach((layer, idx) => {
+            rows.push({
+              floor_plan_id: floorPlanId,
+              floor_id: floorId,
+              surface_type: st,
+              layer_order: idx,
+              name: layer.name,
+              thickness_mm: layer.thicknessMm,
+              include_non_structural: layer.includeNonStructural,
+            });
+          });
+        }
+      }
+
+      if (rows.length > 0) {
+        const { error } = await supabase.from('budget_volume_layers').insert(rows);
+        if (error) throw error;
+      }
+
+      // Mark all as clean
+      setLevelVolumes(prev => {
+        const next = { ...prev };
+        for (const fid of Object.keys(next)) {
+          const surfaces = { ...next[fid] };
+          for (const st of Object.keys(surfaces) as SurfaceType[]) {
+            surfaces[st] = surfaces[st].map(l => ({ ...l, dirty: false }));
+          }
+          next[fid] = surfaces;
+        }
+        return next;
+      });
+
+      toast.success('Capas de volumen guardadas');
+    } catch (err: any) {
+      toast.error('Error guardando: ' + (err.message || ''));
+    } finally {
+      setSaving(false);
+    }
+  }, [floorPlanId, levelVolumes]);
+
+  // Check if any dirty
+  const hasDirty = Object.values(levelVolumes).some(surfaces =>
+    Object.values(surfaces).some(layers => layers.some(l => l.dirty))
+  );
+
   // Compute general values
-  const structRooms = rooms.filter(r => {
-    const n = (r.name || '').toLowerCase();
-    return !n.includes('acera') && !n.includes('alero') && !n.includes('eave');
-  });
+  const structRooms = rooms.filter(r => !isNonStructural(r.name));
   const allMinX = structRooms.length > 0 ? Math.min(...structRooms.map(r => r.posX)) : 0;
   const allMaxX = structRooms.length > 0 ? Math.max(...structRooms.map(r => r.posX + r.width)) : plan.width;
   const allMinY = structRooms.length > 0 ? Math.min(...structRooms.map(r => r.posY)) : 0;
@@ -323,6 +465,14 @@ export function FloorPlanVolumesView({ plan, rooms, floors }: FloorPlanVolumesVi
 
   return (
     <div className="space-y-4">
+      {/* Save button */}
+      <div className="flex justify-end">
+        <Button onClick={saveAll} disabled={saving || !hasDirty} size="sm" variant={hasDirty ? 'default' : 'outline'}>
+          {saving ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Save className="h-4 w-4 mr-1" />}
+          Guardar capas
+        </Button>
+      </div>
+
       {/* General info */}
       <Card>
         <CardHeader className="py-3 px-4">
@@ -350,6 +500,24 @@ export function FloorPlanVolumesView({ plan, rooms, floors }: FloorPlanVolumesVi
               <span className="font-mono font-medium">{floors.length}</span>
             </div>
           </div>
+          {/* Roof slopes summary */}
+          {slopes.length > 0 && (
+            <div className="mt-2 pt-2 border-t border-border">
+              <p className="text-xs font-semibold text-muted-foreground mb-1">Faldones (cubierta dos aguas)</p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                {slopes.map((s, i) => (
+                  <div key={i} className="text-xs space-y-0.5 bg-muted/30 rounded p-2">
+                    <div className="font-medium">{s.name} ({s.side})</div>
+                    <div className="flex justify-between"><span>Base (largo):</span> <span className="font-mono">{fmt(s.baseLength, 3)} m</span></div>
+                    <div className="flex justify-between"><span>Proyección (ancho):</span> <span className="font-mono">{fmt(s.projectedWidth, 3)} m</span></div>
+                    <div className="flex justify-between"><span>Hipotenusa:</span> <span className="font-mono">{fmt(s.hypotenuse, 3)} m</span></div>
+                    <div className="flex justify-between"><span>Altura cumbrera:</span> <span className="font-mono">{fmt(s.ridgeHeight, 3)} m</span></div>
+                    <div className="flex justify-between font-semibold"><span>Superficie real:</span> <span className="font-mono">{fmt(s.slopeArea)} m²</span></div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -358,19 +526,24 @@ export function FloorPlanVolumesView({ plan, rooms, floors }: FloorPlanVolumesVi
         const floorRooms = rooms.filter(r => r.floorId === floor.id);
         const isBajoCubierta = floor.level === 'bajo_cubierta' || floor.name.toLowerCase().includes('cubierta');
         const isExpanded = expandedLevels.has(floor.id);
-        const floorLayers = levelVolumes[floor.id] || { suelo: [], pared_exterior: [], pared_interior: [], techo: [], cubierta: [] };
+        const floorLayers = levelVolumes[floor.id] || {
+          suelo: [], pared_exterior: [], pared_interior: [], techo: [],
+          cubierta_superior: [], cubierta_inferior: [],
+        };
 
-        // Determine which surface types are relevant for this level
+        // Surface types relevant for this level
         const surfaceTypes: SurfaceType[] = isBajoCubierta
-          ? ['cubierta', 'pared_exterior', 'pared_interior']
+          ? ['cubierta_superior', 'cubierta_inferior', 'pared_exterior', 'pared_interior']
           : ['suelo', 'pared_exterior', 'pared_interior', 'techo'];
 
-        // Compute totals for this level
         let levelTotalVolume = 0;
         const surfaceData = surfaceTypes.map(st => {
-          const { area, description } = calcSurfaceArea(st, plan, rooms, floorRooms, slopes);
+          const { area, description } = calcSurfaceArea(st, plan, rooms, floorRooms, slopes, false);
           const layers = floorLayers[st] || [];
-          const vol = layers.reduce((sum, l) => sum + (area * l.thicknessMm / 1000), 0);
+          const vol = layers.reduce((sum, l) => {
+            const lArea = calcSurfaceArea(st, plan, rooms, floorRooms, slopes, l.includeNonStructural).area;
+            return sum + (lArea * l.thicknessMm / 1000);
+          }, 0);
           levelTotalVolume += vol;
           return { surfaceType: st, area, description, layers, volume: vol };
         });
@@ -387,7 +560,7 @@ export function FloorPlanVolumesView({ plan, rooms, floors }: FloorPlanVolumesVi
                 <span className="flex-1">{floor.name}</span>
                 {levelTotalVolume > 0 && (
                   <Badge variant="secondary" className="text-xs font-mono">
-                    Total: {fmtM3(levelTotalVolume)} m³
+                    Total: {fmt(levelTotalVolume)} m³
                   </Badge>
                 )}
               </CardTitle>
@@ -399,11 +572,12 @@ export function FloorPlanVolumesView({ plan, rooms, floors }: FloorPlanVolumesVi
                     key={sd.surfaceType}
                     surfaceType={sd.surfaceType}
                     layers={sd.layers}
-                    surfaceArea={sd.area}
+                    surfaceAreaDefault={sd.area}
                     description={sd.description}
                     onAddLayer={() => addLayer(floor.id, sd.surfaceType)}
                     onRemoveLayer={(id) => removeLayer(floor.id, sd.surfaceType, id)}
                     onUpdateLayer={(id, data) => updateLayer(floor.id, sd.surfaceType, id, data)}
+                    calcAreaForLayer={(includeNS) => calcSurfaceArea(sd.surfaceType, plan, rooms, floorRooms, slopes, includeNS).area}
                   />
                 ))}
               </CardContent>
@@ -418,7 +592,7 @@ export function FloorPlanVolumesView({ plan, rooms, floors }: FloorPlanVolumesVi
           <CardContent className="py-3 px-4">
             <div className="flex items-center justify-between text-sm font-medium">
               <span>Total volúmenes (todas las capas):</span>
-              <span className="font-mono text-lg font-bold text-primary">{fmtM3(grandTotalVolume)} m³</span>
+              <span className="font-mono text-lg font-bold text-primary">{fmt(grandTotalVolume)} m³</span>
             </div>
           </CardContent>
         </Card>

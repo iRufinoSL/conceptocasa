@@ -437,7 +437,22 @@ function getWallThickness(wall: WallData, plan: FloorPlanData): number {
 
 export function calculateRoom(room: RoomData, plan: FloorPlanData): RoomCalculation {
   const floorArea = room.width * room.length;
-  const ceilingArea = floorArea;
+
+  // Ceiling area includes wall thickness footprints (the ceiling extends over the walls)
+  const wallThickForCeiling = (wall: WallData): number => {
+    if (isInvisibleType(wall.wallType)) return 0;
+    if (wall.thickness) return wall.thickness;
+    return isExteriorType(wall.wallType) ? plan.externalWallThickness : plan.internalWallThickness;
+  };
+  const topWall = room.walls.find(w => w.wallIndex === 1);
+  const rightWall = room.walls.find(w => w.wallIndex === 2);
+  const bottomWall = room.walls.find(w => w.wallIndex === 3);
+  const leftWall = room.walls.find(w => w.wallIndex === 4);
+  const thTop = topWall ? wallThickForCeiling(topWall) : 0;
+  const thRight = rightWall ? wallThickForCeiling(rightWall) : 0;
+  const thBottom = bottomWall ? wallThickForCeiling(bottomWall) : 0;
+  const thLeft = leftWall ? wallThickForCeiling(leftWall) : 0;
+  const ceilingArea = (room.width + thLeft + thRight) * (room.length + thTop + thBottom);
   
   let totalExternalWallArea = 0;
   let totalInternalWallArea = 0;

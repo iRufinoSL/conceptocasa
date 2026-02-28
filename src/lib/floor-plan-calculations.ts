@@ -518,12 +518,17 @@ export function calculateRoofSlopes(plan: FloorPlanData, rooms?: RoomData[]): Ro
   if (plan.roofType === 'plana') return [];
   if (plan.roofType !== 'dos_aguas') return []; // TODO: cuatro_aguas
 
-  // Bounding box from rooms
+  // Bounding box from STRUCTURAL rooms only (exclude acera, alero, eave)
   let planW = plan.width;
   let planL = plan.length;
   if (rooms && rooms.length > 0) {
+    const structRooms = rooms.filter(r => {
+      const n = (r.name || '').toLowerCase();
+      return !n.includes('acera') && !n.includes('alero') && !n.includes('eave');
+    });
+    const calcRooms = structRooms.length > 0 ? structRooms : rooms;
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-    rooms.forEach(r => {
+    calcRooms.forEach(r => {
       minX = Math.min(minX, r.posX);
       minY = Math.min(minY, r.posY);
       maxX = Math.max(maxX, r.posX + r.width);

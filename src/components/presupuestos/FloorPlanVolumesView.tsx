@@ -602,7 +602,7 @@ function SurfaceSection({
             <Copy className="h-3.5 w-3.5 text-muted-foreground" />
           </Button>
         )}
-        {onRemoveAllLayers && layers.length > 0 && (
+        {onRemoveAllLayers && (
           <Button variant="ghost" size="sm" className="h-7 w-7 p-0 shrink-0" onClick={onRemoveAllLayers} title="Eliminar todas las capas de este faldón">
             <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
           </Button>
@@ -1290,7 +1290,7 @@ export function FloorPlanVolumesView({ plan, rooms, floors, floorPlanId }: Floor
                                   return { largo: r.largo, ancho: r.ancho };
                                 }}
                                 onRemoveAllLayers={() => {
-                                  // Remove all layers of this roof sub-surface
+                                  // Remove all layers of this roof sub-surface (local + orphaned DB)
                                   const layers = floorLayers[rsd.surfaceType] || [];
                                   layers.forEach(l => {
                                     if (l.dbId) {
@@ -1299,39 +1299,47 @@ export function FloorPlanVolumesView({ plan, rooms, floors, floorPlanId }: Floor
                                       });
                                     }
                                   });
+                                  // Also clean any orphaned DB rows for this surface type + floor
+                                  supabase.from('budget_volume_layers')
+                                    .delete()
+                                    .eq('floor_plan_id', floorPlanId)
+                                    .eq('floor_id', floor.id)
+                                    .eq('surface_type', rsd.surfaceType)
+                                    .then(({ error }) => {
+                                      if (error) console.error('Error limpiando capas huérfanas:', error);
+                                    });
                                   setLevelVolumes(prev => {
                                     const fl = { ...prev[floor.id] };
                                     fl[rsd.surfaceType] = [];
                                     return { ...prev, [floor.id]: fl };
                                   });
+                                  toast.success(`Capas de ${SURFACE_LABELS[rsd.surfaceType]} eliminadas`);
                                 }}
                                 onDuplicateAllLayers={() => {
-                                  // Duplicate all layers from this surface to the other roof sub-surface
-                                  const sourceSt = rsd.surfaceType;
-                                  const targetSt: SurfaceType = sourceSt === 'cubierta_superior' ? 'cubierta_inferior' : 'cubierta_superior';
-                                  const sourceLayers = floorLayers[sourceSt] || [];
+                                  // Duplicate all layers within the SAME surface type
+                                  const sourceLayers = floorLayers[rsd.surfaceType] || [];
                                   if (sourceLayers.length === 0) return;
                                   setLevelVolumes(prev => {
                                     const fl = { ...prev[floor.id] };
-                                    const existing = [...(fl[targetSt] || [])];
+                                    const existing = [...(fl[rsd.surfaceType] || [])];
                                     const idRemap = new Map<string, string>();
                                     // First pass: duplicate root layers
                                     const roots = sourceLayers.filter(l => !l.parentLayerId);
                                     roots.forEach(l => {
                                       const nid = newLayerId();
                                       idRemap.set(l.id, nid);
-                                      existing.push({ ...l, id: nid, dbId: undefined, surfaceType: targetSt, name: l.name ? `${l.name} (copia)` : '(copia)', dirty: true, parentLayerId: null });
+                                      existing.push({ ...l, id: nid, dbId: undefined, name: l.name ? `${l.name} (copia)` : '(copia)', dirty: true, parentLayerId: null });
                                     });
                                     // Second pass: children
                                     const children = sourceLayers.filter(l => l.parentLayerId);
                                     children.forEach(l => {
                                       const newParent = idRemap.get(l.parentLayerId!) || l.parentLayerId;
-                                      existing.push({ ...l, id: newLayerId(), dbId: undefined, surfaceType: targetSt, name: l.name ? `${l.name} (copia)` : '(copia)', dirty: true, parentLayerId: newParent });
+                                      existing.push({ ...l, id: newLayerId(), dbId: undefined, name: l.name ? `${l.name} (copia)` : '(copia)', dirty: true, parentLayerId: newParent });
                                     });
-                                    fl[targetSt] = existing;
+                                    fl[rsd.surfaceType] = existing;
                                     return { ...prev, [floor.id]: fl };
                                   });
-                                  toast.success(`Capas duplicadas a ${SURFACE_LABELS[targetSt]}`);
+                                  toast.success(`Capas duplicadas en ${SURFACE_LABELS[rsd.surfaceType]}`);
                                 }}
                               />
                             ))}

@@ -11,18 +11,14 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    // Verify caller is the scheduler - only accept SCHEDULER_SECRET
+    // Verify caller is the scheduler
     const authHeader = req.headers.get('Authorization');
     const schedulerSecret = Deno.env.get('SCHEDULER_SECRET');
-    if (!schedulerSecret) {
-      console.error('[CheckReminders] SCHEDULER_SECRET not configured');
-      return new Response(JSON.stringify({ error: 'Server misconfiguration' }), {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
+    const expectedKey = Deno.env.get('SUPABASE_ANON_KEY');
     const token = authHeader?.replace('Bearer ', '');
-    if (!authHeader || token !== schedulerSecret) {
+    const isScheduler = schedulerSecret && token === schedulerSecret;
+    const isAnonKey = expectedKey && token === expectedKey;
+    if (!authHeader || (!isScheduler && !isAnonKey)) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
         status: 401,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

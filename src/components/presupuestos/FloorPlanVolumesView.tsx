@@ -92,8 +92,8 @@ function calcSurfaceArea(
     const maxX = Math.max(...filterRooms.map(r => r.posX + r.width));
     const minY = Math.min(...filterRooms.map(r => r.posY));
     const maxY = Math.max(...filterRooms.map(r => r.posY + r.length));
-    const totalW = (maxX - minX) + 2 * plan.externalWallThickness;
-    const totalL = (maxY - minY) + 2 * plan.externalWallThickness;
+    const totalW = maxX - minX;
+    const totalL = maxY - minY;
     const area = totalW * totalL;
     return {
       area,
@@ -471,8 +471,8 @@ export function FloorPlanVolumesView({ plan, rooms, floors, floorPlanId }: Floor
   const allMaxX = structRooms.length > 0 ? Math.max(...structRooms.map(r => r.posX + r.width)) : plan.width;
   const allMinY = structRooms.length > 0 ? Math.min(...structRooms.map(r => r.posY)) : 0;
   const allMaxY = structRooms.length > 0 ? Math.max(...structRooms.map(r => r.posY + r.length)) : plan.length;
-  const totalW = (allMaxX - allMinX) + 2 * plan.externalWallThickness;
-  const totalL = (allMaxY - allMinY) + 2 * plan.externalWallThickness;
+  const totalW = allMaxX - allMinX;
+  const totalL = allMaxY - allMinY;
   const totalPlantArea = totalW * totalL;
 
   // Grand total volumes

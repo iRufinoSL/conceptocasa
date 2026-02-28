@@ -18,8 +18,8 @@ interface FloorPlanVolumesViewProps {
   floorPlanId: string;
 }
 
-// Surface types - cubierta split per slope
-type SurfaceType = 'suelo' | 'pared_exterior' | 'pared_interior' | 'techo' | 'cubierta_superior' | 'cubierta_inferior';
+// 6 faces of a level volume + roof slopes
+type SurfaceType = 'suelo' | 'cara_superior' | 'cara_derecha' | 'cara_inferior' | 'cara_izquierda' | 'techo' | 'cubierta_superior' | 'cubierta_inferior';
 
 interface VolumeLayer {
   id: string;
@@ -37,8 +37,10 @@ function fmt(n: number, decimals = 2): string {
 
 const SURFACE_DIRECTION: Record<SurfaceType, string> = {
   suelo: '↓ De arriba a abajo',
-  pared_exterior: '← Del exterior al interior',
-  pared_interior: '→ Desde punto medio al interior',
+  cara_superior: '← Del exterior al interior',
+  cara_derecha: '← Del exterior al interior',
+  cara_inferior: '← Del exterior al interior',
+  cara_izquierda: '← Del exterior al interior',
   techo: '↑ De abajo a arriba',
   cubierta_superior: '↑ Faldón superior (de abajo a arriba)',
   cubierta_inferior: '↑ Faldón inferior (de abajo a arriba)',
@@ -46,8 +48,10 @@ const SURFACE_DIRECTION: Record<SurfaceType, string> = {
 
 const SURFACE_LABELS: Record<SurfaceType, string> = {
   suelo: 'Suelo',
-  pared_exterior: 'Paredes exteriores',
-  pared_interior: 'Paredes interiores',
+  cara_superior: 'Cara superior',
+  cara_derecha: 'Cara derecha',
+  cara_inferior: 'Cara inferior',
+  cara_izquierda: 'Cara izquierda',
   techo: 'Techo',
   cubierta_superior: 'Faldón superior (Tejado 1)',
   cubierta_inferior: 'Faldón inferior (Tejado 2)',
@@ -55,8 +59,10 @@ const SURFACE_LABELS: Record<SurfaceType, string> = {
 
 const SURFACE_ICONS: Record<SurfaceType, React.ReactNode> = {
   suelo: <ArrowDown className="h-3.5 w-3.5" />,
-  pared_exterior: <ArrowRightIcon className="h-3.5 w-3.5 rotate-180" />,
-  pared_interior: <ArrowRightIcon className="h-3.5 w-3.5" />,
+  cara_superior: <ArrowUp className="h-3.5 w-3.5" />,
+  cara_derecha: <ArrowRightIcon className="h-3.5 w-3.5" />,
+  cara_inferior: <ArrowDown className="h-3.5 w-3.5" />,
+  cara_izquierda: <ArrowRightIcon className="h-3.5 w-3.5 rotate-180" />,
   techo: <ArrowUp className="h-3.5 w-3.5" />,
   cubierta_superior: <ArrowUp className="h-3.5 w-3.5" />,
   cubierta_inferior: <ArrowUp className="h-3.5 w-3.5" />,
@@ -95,31 +101,28 @@ function calcSurfaceArea(
     };
   }
 
-  if (surfaceType === 'pared_exterior') {
+  // 4 wall faces: cara_superior (wall 1, top/Y-min), cara_derecha (wall 2, right/X-max),
+  // cara_inferior (wall 3, bottom/Y-max), cara_izquierda (wall 4, left/X-min)
+  const caraWallMap: Record<string, number> = {
+    cara_superior: 1,
+    cara_derecha: 2,
+    cara_inferior: 3,
+    cara_izquierda: 4,
+  };
+  if (surfaceType in caraWallMap) {
+    const targetWallIdx = caraWallMap[surfaceType];
     let totalArea = 0;
+    const descriptions: string[] = [];
     for (const room of filterRooms) {
       const h = room.height ?? plan.defaultHeight;
       for (const wall of room.walls) {
-        if (!isExteriorType(wall.wallType) || !isVisibleWall(wall.wallType)) continue;
-        const wallLen = wall.wallIndex === 1 || wall.wallIndex === 3 ? room.width : room.length;
-        totalArea += wallLen * h;
-      }
-    }
-    return { area: totalArea, description: `Perímetro × altura` };
-  }
-
-  if (surfaceType === 'pared_interior') {
-    let totalArea = 0;
-    for (const room of filterRooms) {
-      const h = room.height ?? plan.defaultHeight;
-      for (const wall of room.walls) {
-        if (isExteriorType(wall.wallType)) continue;
+        if (wall.wallIndex !== targetWallIdx) continue;
         if (!isVisibleWall(wall.wallType)) continue;
         const wallLen = wall.wallIndex === 1 || wall.wallIndex === 3 ? room.width : room.length;
         totalArea += wallLen * h;
       }
     }
-    return { area: totalArea, description: `Paredes interiores × altura` };
+    return { area: totalArea, description: `Cara ${surfaceType.replace('cara_', '')} × altura` };
   }
 
   if (surfaceType === 'cubierta_superior') {
@@ -297,7 +300,7 @@ export function FloorPlanVolumesView({ plan, rooms, floors, floorPlanId }: Floor
       const init: Record<string, Record<SurfaceType, VolumeLayer[]>> = {};
       for (const floor of floors) {
         init[floor.id] = {
-          suelo: [], pared_exterior: [], pared_interior: [], techo: [],
+          suelo: [], cara_superior: [], cara_derecha: [], cara_inferior: [], cara_izquierda: [], techo: [],
           cubierta_superior: [], cubierta_inferior: [],
         };
       }
@@ -332,7 +335,7 @@ export function FloorPlanVolumesView({ plan, rooms, floors, floorPlanId }: Floor
     const init: Record<string, Record<SurfaceType, VolumeLayer[]>> = {};
     for (const floor of floors) {
       init[floor.id] = {
-        suelo: [], pared_exterior: [], pared_interior: [], techo: [],
+        suelo: [], cara_superior: [], cara_derecha: [], cara_inferior: [], cara_izquierda: [], techo: [],
         cubierta_superior: [], cubierta_inferior: [],
       };
     }
@@ -527,14 +530,14 @@ export function FloorPlanVolumesView({ plan, rooms, floors, floorPlanId }: Floor
         const isBajoCubierta = floor.level === 'bajo_cubierta' || floor.name.toLowerCase().includes('cubierta');
         const isExpanded = expandedLevels.has(floor.id);
         const floorLayers = levelVolumes[floor.id] || {
-          suelo: [], pared_exterior: [], pared_interior: [], techo: [],
+          suelo: [], cara_superior: [], cara_derecha: [], cara_inferior: [], cara_izquierda: [], techo: [],
           cubierta_superior: [], cubierta_inferior: [],
         };
 
-        // Surface types relevant for this level
+        // All levels have 6 faces; bajo cubierta adds faldones under techo
         const surfaceTypes: SurfaceType[] = isBajoCubierta
-          ? ['cubierta_superior', 'cubierta_inferior', 'pared_exterior', 'pared_interior']
-          : ['suelo', 'pared_exterior', 'pared_interior', 'techo'];
+          ? ['suelo', 'cara_superior', 'cara_derecha', 'cara_inferior', 'cara_izquierda', 'techo', 'cubierta_superior', 'cubierta_inferior']
+          : ['suelo', 'cara_superior', 'cara_derecha', 'cara_inferior', 'cara_izquierda', 'techo'];
 
         let levelTotalVolume = 0;
         const surfaceData = surfaceTypes.map(st => {

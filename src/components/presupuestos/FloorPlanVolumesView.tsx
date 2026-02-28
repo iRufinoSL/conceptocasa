@@ -38,7 +38,7 @@ interface VolumeLayer {
   measurementType: MeasurementType;
   sectionWidthMm: number | null;
   sectionHeightMm: number | null;
-  orientation: 'parallel_ridge' | 'crossed_ridge' | null;
+  orientation: 'parallel_ridge' | 'crossed_ridge' | 'left_right' | 'top_bottom' | null;
   spacingMm: number | null;
   groupTag: string;
   parentLayerId: string | null; // null = root layer, string = child of parent
@@ -126,11 +126,18 @@ function calcSurfaceArea(
       const calc = calculateRoom(room, plan);
       totalArea += calc.ceilingArea;
     }
+    // Calculate bounding box of ceiling rooms for linear layer calculations
+    const minX = Math.min(...ceilingRooms.map(r => r.posX));
+    const maxX = Math.max(...ceilingRooms.map(r => r.posX + r.width));
+    const minY = Math.min(...ceilingRooms.map(r => r.posY));
+    const maxY = Math.max(...ceilingRooms.map(r => r.posY + r.length));
+    const techoW = maxX - minX;
+    const techoL = maxY - minY;
     return {
       area: totalArea,
-      description: `Suma de ${ceilingRooms.length} espacios con techo`,
-      largo: 0,
-      ancho: 0,
+      description: `Suma de ${ceilingRooms.length} espacios con techo (${fmt(techoW, 3)}m × ${fmt(techoL, 3)}m)`,
+      largo: techoW,
+      ancho: techoL,
     };
   }
 
@@ -222,9 +229,13 @@ function calcLinearMetrics(
   surfaceData: { largo: number; ancho: number },
 ): { pieceLength: number; pieceCount: number; totalMl: number } | null {
   if (layer.measurementType !== 'linear' || !layer.spacingMm || layer.spacingMm <= 0) return null;
+  if (surfaceData.largo <= 0 || surfaceData.ancho <= 0) return null;
 
   const spacingM = layer.spacingMm / 1000;
-  if (layer.orientation === 'parallel_ridge' || layer.orientation === null) {
+  const orient = layer.orientation || 'parallel_ridge';
+  // parallel_ridge / left_right: pieces run along "largo", spaced across "ancho"
+  // crossed_ridge / top_bottom: pieces run along "ancho", spaced across "largo"
+  if (orient === 'parallel_ridge' || orient === 'left_right') {
     const pieceLength = surfaceData.largo;
     const pieceCount = Math.floor(surfaceData.ancho / spacingM) + 1;
     return { pieceLength, pieceCount, totalMl: pieceLength * pieceCount };
@@ -430,7 +441,7 @@ function LayerRow({
             <label className="text-muted-foreground block mb-0.5">Orientación</label>
             <Select
               value={layer.orientation || 'parallel_ridge'}
-              onValueChange={(v) => onUpdateLayer(layer.id, { orientation: v as 'parallel_ridge' | 'crossed_ridge' })}
+              onValueChange={(v) => onUpdateLayer(layer.id, { orientation: v as VolumeLayer['orientation'] })}
             >
               <SelectTrigger className="h-6 text-[10px] px-1">
                 <SelectValue />
@@ -438,6 +449,8 @@ function LayerRow({
               <SelectContent>
                 <SelectItem value="parallel_ridge">∥ Paralelo a cumbrera</SelectItem>
                 <SelectItem value="crossed_ridge">⊥ Cruzado a cumbrera</SelectItem>
+                <SelectItem value="left_right">↔ Izquierda / Derecha</SelectItem>
+                <SelectItem value="top_bottom">↕ Arriba / Abajo</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -829,7 +842,7 @@ export function FloorPlanVolumesView({ plan, rooms, floors, floorPlanId }: Floor
             measurementType: (row.measurement_type || 'area') as MeasurementType,
             sectionWidthMm: row.section_width_mm || null,
             sectionHeightMm: row.section_height_mm || null,
-            orientation: (row.orientation as 'parallel_ridge' | 'crossed_ridge' | null) || null,
+            orientation: (row.orientation as VolumeLayer['orientation']) || null,
             spacingMm: row.spacing_mm || null,
             groupTag: row.group_tag || '',
             parentLayerId: (row as any).parent_layer_id || null,
@@ -1823,11 +1836,13 @@ export function FloorPlanVolumesView({ plan, rooms, floors, floorPlanId }: Floor
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label>Orientación</Label>
-                        <Select value={layer.orientation || 'parallel_ridge'} onValueChange={v => onUpdate({ orientation: v as 'parallel_ridge' | 'crossed_ridge' })}>
+                        <Select value={layer.orientation || 'parallel_ridge'} onValueChange={v => onUpdate({ orientation: v as VolumeLayer['orientation'] })}>
                           <SelectTrigger><SelectValue /></SelectTrigger>
                           <SelectContent>
                             <SelectItem value="parallel_ridge">∥ Paralelo cumbrera</SelectItem>
                             <SelectItem value="crossed_ridge">⊥ Cruzado cumbrera</SelectItem>
+                            <SelectItem value="left_right">↔ Izquierda / Derecha</SelectItem>
+                            <SelectItem value="top_bottom">↕ Arriba / Abajo</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>

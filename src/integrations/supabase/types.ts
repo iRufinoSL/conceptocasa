@@ -1788,36 +1788,57 @@ export type Database = {
       budget_volume_layers: {
         Row: {
           created_at: string
+          extra_surface_name: string | null
           floor_id: string | null
           floor_plan_id: string
+          group_tag: string | null
           id: string
           include_non_structural: boolean
           layer_order: number
+          measurement_type: string
           name: string
+          orientation: string | null
+          section_height_mm: number | null
+          section_width_mm: number | null
+          spacing_mm: number | null
           surface_type: string
           thickness_mm: number
           updated_at: string
         }
         Insert: {
           created_at?: string
+          extra_surface_name?: string | null
           floor_id?: string | null
           floor_plan_id: string
+          group_tag?: string | null
           id?: string
           include_non_structural?: boolean
           layer_order?: number
+          measurement_type?: string
           name?: string
+          orientation?: string | null
+          section_height_mm?: number | null
+          section_width_mm?: number | null
+          spacing_mm?: number | null
           surface_type: string
           thickness_mm?: number
           updated_at?: string
         }
         Update: {
           created_at?: string
+          extra_surface_name?: string | null
           floor_id?: string | null
           floor_plan_id?: string
+          group_tag?: string | null
           id?: string
           include_non_structural?: boolean
           layer_order?: number
+          measurement_type?: string
           name?: string
+          orientation?: string | null
+          section_height_mm?: number | null
+          section_width_mm?: number | null
+          spacing_mm?: number | null
           surface_type?: string
           thickness_mm?: number
           updated_at?: string

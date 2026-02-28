@@ -491,6 +491,8 @@ function SurfaceSection({
   onUpdateLayer,
   calcAreaForLayer,
   calcDimsForLayer,
+  onRemoveAllLayers,
+  onDuplicateAllLayers,
 }: {
   surfaceType: SurfaceType;
   layers: VolumeLayer[];
@@ -503,6 +505,8 @@ function SurfaceSection({
   onUpdateLayer: (id: string, data: Partial<VolumeLayer>) => void;
   calcAreaForLayer: (includeNonStructural: boolean) => number;
   calcDimsForLayer: (includeNonStructural: boolean) => { largo: number; ancho: number };
+  onRemoveAllLayers?: () => void;
+  onDuplicateAllLayers?: () => void;
 }) {
   const [open, setOpen] = useState(layers.length > 0);
   const [collapsedParents, setCollapsedParents] = useState<Set<string>>(new Set());
@@ -577,21 +581,33 @@ function SurfaceSection({
 
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
-      <CollapsibleTrigger asChild>
-        <button className="w-full flex items-center gap-2 py-2 px-3 rounded-md hover:bg-muted/50 transition-colors text-left">
-          {open ? <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" /> : <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />}
-          {SURFACE_ICONS[surfaceType]}
-          <span className="font-medium text-sm flex-1">{SURFACE_LABELS[surfaceType]}</span>
-          <Badge variant="outline" className="text-xs font-mono">
-            {fmt(surfaceAreaDefault)} m²
-          </Badge>
-          {layers.length > 0 && (
-            <Badge variant="secondary" className="text-xs font-mono">
-              {layers.length} capa{layers.length !== 1 ? 's' : ''} · {fmt(totalVolume)} m³
+      <div className="flex items-center gap-1">
+        <CollapsibleTrigger asChild>
+          <button className="flex-1 flex items-center gap-2 py-2 px-3 rounded-md hover:bg-muted/50 transition-colors text-left">
+            {open ? <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" /> : <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />}
+            {SURFACE_ICONS[surfaceType]}
+            <span className="font-medium text-sm flex-1">{SURFACE_LABELS[surfaceType]}</span>
+            <Badge variant="outline" className="text-xs font-mono">
+              {fmt(surfaceAreaDefault)} m²
             </Badge>
-          )}
-        </button>
-      </CollapsibleTrigger>
+            {layers.length > 0 && (
+              <Badge variant="secondary" className="text-xs font-mono">
+                {layers.length} capa{layers.length !== 1 ? 's' : ''} · {fmt(totalVolume)} m³
+              </Badge>
+            )}
+          </button>
+        </CollapsibleTrigger>
+        {onDuplicateAllLayers && layers.length > 0 && (
+          <Button variant="ghost" size="sm" className="h-7 w-7 p-0 shrink-0" onClick={onDuplicateAllLayers} title="Duplicar todas las capas de este faldón">
+            <Copy className="h-3.5 w-3.5 text-muted-foreground" />
+          </Button>
+        )}
+        {onRemoveAllLayers && layers.length > 0 && (
+          <Button variant="ghost" size="sm" className="h-7 w-7 p-0 shrink-0" onClick={onRemoveAllLayers} title="Eliminar todas las capas de este faldón">
+            <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
+          </Button>
+        )}
+      </div>
       <CollapsibleContent>
         <div className="pl-8 pr-3 pb-3 space-y-2">
           <p className="text-xs text-muted-foreground flex items-center gap-2">
@@ -1272,6 +1288,50 @@ export function FloorPlanVolumesView({ plan, rooms, floors, floorPlanId }: Floor
                                 calcDimsForLayer={(includeNS) => {
                                   const r = calcSurfaceArea(rsd.surfaceType, plan, rooms, floorRooms, slopes, includeNS);
                                   return { largo: r.largo, ancho: r.ancho };
+                                }}
+                                onRemoveAllLayers={() => {
+                                  // Remove all layers of this roof sub-surface
+                                  const layers = floorLayers[rsd.surfaceType] || [];
+                                  layers.forEach(l => {
+                                    if (l.dbId) {
+                                      supabase.from('budget_volume_layers').delete().eq('id', l.dbId).then(({ error }) => {
+                                        if (error) toast.error('Error eliminando capa');
+                                      });
+                                    }
+                                  });
+                                  setLevelVolumes(prev => {
+                                    const fl = { ...prev[floor.id] };
+                                    fl[rsd.surfaceType] = [];
+                                    return { ...prev, [floor.id]: fl };
+                                  });
+                                }}
+                                onDuplicateAllLayers={() => {
+                                  // Duplicate all layers from this surface to the other roof sub-surface
+                                  const sourceSt = rsd.surfaceType;
+                                  const targetSt: SurfaceType = sourceSt === 'cubierta_superior' ? 'cubierta_inferior' : 'cubierta_superior';
+                                  const sourceLayers = floorLayers[sourceSt] || [];
+                                  if (sourceLayers.length === 0) return;
+                                  setLevelVolumes(prev => {
+                                    const fl = { ...prev[floor.id] };
+                                    const existing = [...(fl[targetSt] || [])];
+                                    const idRemap = new Map<string, string>();
+                                    // First pass: duplicate root layers
+                                    const roots = sourceLayers.filter(l => !l.parentLayerId);
+                                    roots.forEach(l => {
+                                      const nid = newLayerId();
+                                      idRemap.set(l.id, nid);
+                                      existing.push({ ...l, id: nid, dbId: undefined, surfaceType: targetSt, name: l.name ? `${l.name} (copia)` : '(copia)', dirty: true, parentLayerId: null });
+                                    });
+                                    // Second pass: children
+                                    const children = sourceLayers.filter(l => l.parentLayerId);
+                                    children.forEach(l => {
+                                      const newParent = idRemap.get(l.parentLayerId!) || l.parentLayerId;
+                                      existing.push({ ...l, id: newLayerId(), dbId: undefined, surfaceType: targetSt, name: l.name ? `${l.name} (copia)` : '(copia)', dirty: true, parentLayerId: newParent });
+                                    });
+                                    fl[targetSt] = existing;
+                                    return { ...prev, [floor.id]: fl };
+                                  });
+                                  toast.success(`Capas duplicadas a ${SURFACE_LABELS[targetSt]}`);
                                 }}
                               />
                             ))}

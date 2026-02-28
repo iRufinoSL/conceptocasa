@@ -523,54 +523,83 @@ export function calculateRoofSlopes(plan: FloorPlanData, rooms?: RoomData[]): Ro
   if (plan.roofType === 'plana') return [];
   if (plan.roofType !== 'dos_aguas') return []; // TODO: cuatro_aguas
 
-  // Structural bounding box (exclude non-structural helper spaces)
-  let spanX = plan.width;  // largo en planta (eje de cumbrera)
-  let spanY = plan.length; // ancho en planta (perpendicular a cumbrera)
+  const allRooms = rooms || [];
 
-  if (rooms && rooms.length > 0) {
-    const structRooms = rooms.filter(r => {
+  // Structural bounding box (exclude non-structural helper spaces)
+  let structMinX = 0;
+  let structMaxX = plan.width;
+  let structMinY = 0;
+  let structMaxY = plan.length;
+
+  if (allRooms.length > 0) {
+    const ignoredIds = getIgnoredRoofElevationRoomIds(allRooms);
+    const structuralRooms = allRooms.filter(r => {
+      if (ignoredIds.has(r.id)) return false;
       const n = normalizeRoomName(r.name);
       return !n.includes('acera') && !n.includes('alero') && !n.includes('eave');
     });
 
-    const calcRooms = structRooms.length > 0 ? structRooms : rooms;
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-    calcRooms.forEach(r => {
-      minX = Math.min(minX, r.posX);
-      minY = Math.min(minY, r.posY);
-      maxX = Math.max(maxX, r.posX + r.width);
-      maxY = Math.max(maxY, r.posY + r.length);
-    });
+    const calcRooms = structuralRooms.length > 0
+      ? structuralRooms
+      : allRooms.filter(r => !ignoredIds.has(r.id));
 
-    if (isFinite(minX)) {
-      spanX = maxX - minX;
-      spanY = maxY - minY;
+    if (calcRooms.length > 0) {
+      structMinX = Math.min(...calcRooms.map(r => r.posX));
+      structMinY = Math.min(...calcRooms.map(r => r.posY));
+      structMaxX = Math.max(...calcRooms.map(r => r.posX + r.width));
+      structMaxY = Math.max(...calcRooms.map(r => r.posY + r.length));
     }
   }
 
-  const overhang = plan.roofOverhang || 0;
-  const excluded = plan.eaveExcludedSides || [];
-
-  // Eave overhang per side (0 if excluded)
-  const eaveSuperior = excluded.includes('superior') ? 0 : overhang;
-  const eaveInferior = excluded.includes('inferior') ? 0 : overhang;
-  const eaveIzquierda = excluded.includes('izquierda') ? 0 : overhang;
-  const eaveDerecha = excluded.includes('derecha') ? 0 : overhang;
+  const spanX = Math.max(structMaxX - structMinX, 0); // largo en planta (eje de cumbrera)
+  const spanY = Math.max(structMaxY - structMinY, 0); // ancho en planta (perpendicular a cumbrera)
 
   // Structural values (without eaves)
-  const structBaseLen = Math.max(spanX, 0);
+  const structBaseLen = spanX;
   const structProjectedHalf = Math.max(spanY / 2, 0);
   const riseM = getEffectiveRidgeHeight(plan, structProjectedHalf);
   const structHyp = Math.sqrt(structProjectedHalf * structProjectedHalf + riseM * riseM);
 
-  // Faldón 1 (superior): ridge -> superior side
-  const proj1 = structProjectedHalf + eaveSuperior;
-  const hyp1 = Math.sqrt(proj1 * proj1 + riseM * riseM);
+  const overhangFallback = Math.max(plan.roofOverhang || 0, 0);
+  const excluded = plan.eaveExcludedSides || [];
+
+  // Default overhang from plan config. If explicit eave rooms exist, derive per-side real offsets from geometry.
+  let rawSuperior = overhangFallback;
+  let rawInferior = overhangFallback;
+  let rawIzquierda = overhangFallback;
+  let rawDerecha = overhangFallback;
+
+  const eaveRooms = allRooms.filter(isRoofEaveRoom);
+  if (eaveRooms.length > 0) {
+    const eMinX = Math.min(...eaveRooms.map(r => r.posX));
+    const eMinY = Math.min(...eaveRooms.map(r => r.posY));
+    const eMaxX = Math.max(...eaveRooms.map(r => r.posX + r.width));
+    const eMaxY = Math.max(...eaveRooms.map(r => r.posY + r.length));
+
+    rawSuperior = Math.max(0, structMinY - eMinY);
+    rawInferior = Math.max(0, eMaxY - structMaxY);
+    rawIzquierda = Math.max(0, structMinX - eMinX);
+    rawDerecha = Math.max(0, eMaxX - structMaxX);
+  }
+
+  const eaveSuperior = excluded.includes('superior') ? 0 : rawSuperior;
+  const eaveInferior = excluded.includes('inferior') ? 0 : rawInferior;
+  const eaveIzquierda = excluded.includes('izquierda') ? 0 : rawIzquierda;
+  const eaveDerecha = excluded.includes('derecha') ? 0 : rawDerecha;
+
+  // Useful-elevation model: eave extension is added on the slope length itself.
+  // This aligns volume layers with alzado measurements used as reference.
+  const slopeExt1 = Math.max(eaveSuperior, 0);
+  const slopeExt2 = Math.max(eaveInferior, 0);
+
+  // Faldón 1 (superior)
+  const hyp1 = structHyp + slopeExt1;
+  const proj1 = Math.sqrt(Math.max(hyp1 * hyp1 - riseM * riseM, 0));
   const baseLen1 = structBaseLen + eaveIzquierda + eaveDerecha;
 
-  // Faldón 2 (inferior): ridge -> inferior side
-  const proj2 = structProjectedHalf + eaveInferior;
-  const hyp2 = Math.sqrt(proj2 * proj2 + riseM * riseM);
+  // Faldón 2 (inferior)
+  const hyp2 = structHyp + slopeExt2;
+  const proj2 = Math.sqrt(Math.max(hyp2 * hyp2 - riseM * riseM, 0));
   const baseLen2 = structBaseLen + eaveIzquierda + eaveDerecha;
 
   return [
@@ -583,7 +612,7 @@ export function calculateRoofSlopes(plan: FloorPlanData, rooms?: RoomData[]): Ro
       hypotenuse: hyp1,
       projectedArea: baseLen1 * proj1,
       slopeArea: baseLen1 * hyp1,
-      includesEaves: eaveSuperior > 0 || eaveIzquierda > 0 || eaveDerecha > 0,
+      includesEaves: slopeExt1 > 0 || eaveIzquierda > 0 || eaveDerecha > 0,
       structBaseLength: structBaseLen,
       structProjectedWidth: structProjectedHalf,
       structHypotenuse: structHyp,
@@ -598,7 +627,7 @@ export function calculateRoofSlopes(plan: FloorPlanData, rooms?: RoomData[]): Ro
       hypotenuse: hyp2,
       projectedArea: baseLen2 * proj2,
       slopeArea: baseLen2 * hyp2,
-      includesEaves: eaveInferior > 0 || eaveIzquierda > 0 || eaveDerecha > 0,
+      includesEaves: slopeExt2 > 0 || eaveIzquierda > 0 || eaveDerecha > 0,
       structBaseLength: structBaseLen,
       structProjectedWidth: structProjectedHalf,
       structHypotenuse: structHyp,

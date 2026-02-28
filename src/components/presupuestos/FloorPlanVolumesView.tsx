@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -513,9 +513,15 @@ export function FloorPlanVolumesView({ plan, rooms, floors, floorPlanId }: Floor
   const [levelVolumes, setLevelVolumes] = useState<Record<string, Record<SurfaceType, VolumeLayer[]>>>({});
   const [expandedLevels, setExpandedLevels] = useState<Set<string>>(new Set(floors.map(f => f.id)));
 
-  // Load from DB
+  // Stabilize floors reference to avoid re-running load on every render
+  const floorsKey = useMemo(() => floors.map(f => f.id).join(','), [floors]);
+  const floorsRef = useRef(floors);
+  floorsRef.current = floors;
+
+  // Load from DB — only when floorPlanId or floor IDs actually change
   useEffect(() => {
     if (!floorPlanId) return;
+    const currentFloors = floorsRef.current;
     const load = async () => {
       const { data, error } = await supabase
         .from('budget_volume_layers')
@@ -529,7 +535,7 @@ export function FloorPlanVolumesView({ plan, rooms, floors, floorPlanId }: Floor
       }
 
       const init: Record<string, Record<SurfaceType, VolumeLayer[]>> = {};
-      for (const floor of floors) {
+      for (const floor of currentFloors) {
         init[floor.id] = {
           suelo: [], cara_superior: [], cara_derecha: [], cara_inferior: [], cara_izquierda: [], techo: [],
           cubierta_superior: [], cubierta_inferior: [],
@@ -538,7 +544,7 @@ export function FloorPlanVolumesView({ plan, rooms, floors, floorPlanId }: Floor
 
       if (data) {
         for (const row of data) {
-          const floorId = row.floor_id || floors[0]?.id;
+          const floorId = row.floor_id || currentFloors[0]?.id;
           if (!floorId || !init[floorId]) continue;
           const st = row.surface_type as SurfaceType;
           if (!init[floorId][st]) init[floorId][st] = [];
@@ -549,14 +555,14 @@ export function FloorPlanVolumesView({ plan, rooms, floors, floorPlanId }: Floor
             thicknessMm: row.thickness_mm || 20,
             surfaceType: st,
             includeNonStructural: row.include_non_structural || false,
-            extraSurfaceName: (row as any).extra_surface_name || '',
+            extraSurfaceName: row.extra_surface_name || '',
             orderIndex: row.layer_order || 0,
-            measurementType: ((row as any).measurement_type || 'area') as MeasurementType,
-            sectionWidthMm: (row as any).section_width_mm || null,
-            sectionHeightMm: (row as any).section_height_mm || null,
-            orientation: (row as any).orientation || null,
-            spacingMm: (row as any).spacing_mm || null,
-            groupTag: (row as any).group_tag || '',
+            measurementType: (row.measurement_type || 'area') as MeasurementType,
+            sectionWidthMm: row.section_width_mm || null,
+            sectionHeightMm: row.section_height_mm || null,
+            orientation: (row.orientation as 'parallel_ridge' | 'crossed_ridge' | null) || null,
+            spacingMm: row.spacing_mm || null,
+            groupTag: row.group_tag || '',
           });
         }
       }
@@ -565,20 +571,22 @@ export function FloorPlanVolumesView({ plan, rooms, floors, floorPlanId }: Floor
       setLoaded(true);
     };
     load();
-  }, [floorPlanId, floors]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [floorPlanId, floorsKey]);
 
   // Init empty state if no DB data
   useEffect(() => {
     if (loaded) return;
     const init: Record<string, Record<SurfaceType, VolumeLayer[]>> = {};
-    for (const floor of floors) {
+    for (const floor of floorsRef.current) {
       init[floor.id] = {
         suelo: [], cara_superior: [], cara_derecha: [], cara_inferior: [], cara_izquierda: [], techo: [],
         cubierta_superior: [], cubierta_inferior: [],
       };
     }
     setLevelVolumes(init);
-  }, [floors, loaded]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [floorsKey, loaded]);
 
   const toggleLevel = (floorId: string) => {
     setExpandedLevels(prev => {
@@ -698,6 +706,18 @@ export function FloorPlanVolumesView({ plan, rooms, floors, floorPlanId }: Floor
       setSaving(false);
     }
   }, [floorPlanId, levelVolumes]);
+
+  // Auto-save with debounce when layers change
+  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (!loaded || !hasDirty) return;
+    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    autoSaveTimerRef.current = setTimeout(() => {
+      saveAll();
+    }, 2000);
+    return () => { if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [levelVolumes, loaded]);
 
   const hasDirty = Object.values(levelVolumes).some(surfaces =>
     Object.values(surfaces).some(layers => layers.some(l => l.dirty))

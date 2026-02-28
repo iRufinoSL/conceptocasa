@@ -527,7 +527,7 @@ ${profile.mensaje_adicional || 'Ninguno'}
         .from('budget_floors')
         .insert({
           floor_plan_id: planData.id,
-          name: 'Nivel 2 - Bajo Cubierta',
+          name: 'Nivel 2 - Cubierta',
           level: `nivel_${bajoCubiertaLevel}`,
           order_index: bajoCubiertaLevel,
         });
@@ -535,7 +535,7 @@ ${profile.mensaje_adicional || 'Ninguno'}
 
       // Create a space for the bajo cubierta usage
       const spaceType = usoBajoCubierta === 'habitable' ? 'Habitación' : 'Almacén';
-      const spaceName = usoBajoCubierta === 'habitable' ? 'Bajo Cubierta (Habitable)' : 'Bajo Cubierta (Almacén)';
+      const spaceName = usoBajoCubierta === 'habitable' ? 'Cubierta (Habitable)' : 'Cubierta (Almacén)';
       const { error: spaceError } = await supabase
         .from('budget_spaces')
         .insert({

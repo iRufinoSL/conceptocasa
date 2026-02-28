@@ -261,13 +261,18 @@ export interface FloorSummary {
 export interface RoofSlopeDetail {
   name: string; // "Tejado 1" (superior), "Tejado 2" (inferior)
   side: 'superior' | 'inferior'; // which side of the ridge
-  baseLength: number; // largo del faldón (along ridge, meters)
-  projectedWidth: number; // ancho proyectado en planta (meters)
+  baseLength: number; // largo del faldón WITH eaves (along ridge, meters)
+  projectedWidth: number; // ancho proyectado en planta WITH eaves (meters)
   ridgeHeight: number; // altura de cumbrera sobre arranque del faldón (meters)
-  hypotenuse: number; // longitud real del faldón inclinado (meters)
-  projectedArea: number; // baseLength × projectedWidth (m²)
-  slopeArea: number; // baseLength × hypotenuse (m²) — superficie real
+  hypotenuse: number; // longitud real del faldón inclinado WITH eaves (meters)
+  projectedArea: number; // baseLength × projectedWidth (m²) WITH eaves
+  slopeArea: number; // baseLength × hypotenuse (m²) — superficie real WITH eaves
   includesEaves: boolean;
+  // Structural-only values (without eave overhangs)
+  structBaseLength: number; // largo sin aleros laterales
+  structProjectedWidth: number; // ancho sin alero frontal
+  structHypotenuse: number; // hipotenusa sin alero
+  structSlopeArea: number; // superficie real sin aleros
 }
 
 export interface FloorPlanSummary {
@@ -556,16 +561,23 @@ export function calculateRoofSlopes(plan: FloorPlanData, rooms?: RoomData[]): Ro
   const eaveIzquierda = excluded.includes('izquierda') ? 0 : overhang;
   const eaveDerecha = excluded.includes('derecha') ? 0 : overhang;
 
+  // Structural-only values (no eave overhangs)
+  const structBaseLen = planL + 2 * ewt;
+  const structProj1 = ridgeX; // half building width, no eave
+  const structHyp1 = Math.sqrt(structProj1 * structProj1 + riseM * riseM);
+  const structProj2 = buildingWidthAtWall - ridgeX; // other half, no eave
+  const structHyp2 = Math.sqrt(structProj2 * structProj2 + riseM * riseM);
+
   // Faldón 1 (superior / top side): from ridge to top edge (with eave if not excluded)
   const proj1 = ridgeX + eaveSuperior;
   const hyp1 = Math.sqrt(proj1 * proj1 + riseM * riseM);
-  const baseLen1 = planL + 2 * ewt + eaveIzquierda + eaveDerecha; // length along ridge
+  const baseLen1 = structBaseLen + eaveIzquierda + eaveDerecha; // length along ridge
 
   // Faldón 2 (inferior / bottom side): from ridge to bottom edge (with eave if not excluded)
   const proj2 = (buildingWidthAtWall - ridgeX) + eaveInferior;
   const hyp2 = Math.sqrt(proj2 * proj2 + riseM * riseM);
 
-  const baseLen2 = planL + 2 * ewt + eaveIzquierda + eaveDerecha; // same for both slopes
+  const baseLen2 = structBaseLen + eaveIzquierda + eaveDerecha; // same for both slopes
 
   return [
     {
@@ -578,6 +590,10 @@ export function calculateRoofSlopes(plan: FloorPlanData, rooms?: RoomData[]): Ro
       projectedArea: baseLen1 * proj1,
       slopeArea: baseLen1 * hyp1,
       includesEaves: eaveSuperior > 0 || eaveIzquierda > 0 || eaveDerecha > 0,
+      structBaseLength: structBaseLen,
+      structProjectedWidth: structProj1,
+      structHypotenuse: structHyp1,
+      structSlopeArea: structBaseLen * structHyp1,
     },
     {
       name: 'Tejado 2',
@@ -589,6 +605,10 @@ export function calculateRoofSlopes(plan: FloorPlanData, rooms?: RoomData[]): Ro
       projectedArea: baseLen2 * proj2,
       slopeArea: baseLen2 * hyp2,
       includesEaves: eaveInferior > 0 || eaveIzquierda > 0 || eaveDerecha > 0,
+      structBaseLength: structBaseLen,
+      structProjectedWidth: structProj2,
+      structHypotenuse: structHyp2,
+      structSlopeArea: structBaseLen * structHyp2,
     },
   ];
 }

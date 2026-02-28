@@ -128,18 +128,30 @@ function calcSurfaceArea(
   if (surfaceType === 'cubierta_superior') {
     const slope = slopes.find(s => s.side === 'superior');
     if (!slope) return { area: 0, description: 'Sin faldón' };
+    if (includeNonStructural) {
+      return {
+        area: slope.slopeArea,
+        description: `${fmt(slope.baseLength, 3)}m (largo c/aleros) × ${fmt(slope.hypotenuse, 3)}m (hipotenusa c/aleros)`,
+      };
+    }
     return {
-      area: slope.slopeArea,
-      description: `${fmt(slope.baseLength, 3)}m (largo) × ${fmt(slope.hypotenuse, 3)}m (hipotenusa)`,
+      area: slope.structSlopeArea,
+      description: `${fmt(slope.structBaseLength, 3)}m (largo) × ${fmt(slope.structHypotenuse, 3)}m (hipotenusa)`,
     };
   }
 
   if (surfaceType === 'cubierta_inferior') {
     const slope = slopes.find(s => s.side === 'inferior');
     if (!slope) return { area: 0, description: 'Sin faldón' };
+    if (includeNonStructural) {
+      return {
+        area: slope.slopeArea,
+        description: `${fmt(slope.baseLength, 3)}m (largo c/aleros) × ${fmt(slope.hypotenuse, 3)}m (hipotenusa c/aleros)`,
+      };
+    }
     return {
-      area: slope.slopeArea,
-      description: `${fmt(slope.baseLength, 3)}m (largo) × ${fmt(slope.hypotenuse, 3)}m (hipotenusa)`,
+      area: slope.structSlopeArea,
+      description: `${fmt(slope.structBaseLength, 3)}m (largo) × ${fmt(slope.structHypotenuse, 3)}m (hipotenusa)`,
     };
   }
 
@@ -511,11 +523,18 @@ export function FloorPlanVolumesView({ plan, rooms, floors, floorPlanId }: Floor
                 {slopes.map((s, i) => (
                   <div key={i} className="text-xs space-y-0.5 bg-muted/30 rounded p-2">
                     <div className="font-medium">{s.name} ({s.side})</div>
-                    <div className="flex justify-between"><span>Base (largo):</span> <span className="font-mono">{fmt(s.baseLength, 3)} m</span></div>
-                    <div className="flex justify-between"><span>Proyección (ancho):</span> <span className="font-mono">{fmt(s.projectedWidth, 3)} m</span></div>
-                    <div className="flex justify-between"><span>Hipotenusa:</span> <span className="font-mono">{fmt(s.hypotenuse, 3)} m</span></div>
-                    <div className="flex justify-between"><span>Altura cumbrera:</span> <span className="font-mono">{fmt(s.ridgeHeight, 3)} m</span></div>
-                    <div className="flex justify-between font-semibold"><span>Superficie real:</span> <span className="font-mono">{fmt(s.slopeArea)} m²</span></div>
+                    <div className="flex justify-between"><span>Base (largo) estructural:</span> <span className="font-mono">{fmt(s.structBaseLength, 3)} m</span></div>
+                    <div className="flex justify-between"><span>Hipotenusa estructural:</span> <span className="font-mono">{fmt(s.structHypotenuse, 3)} m</span></div>
+                    <div className="flex justify-between font-semibold"><span>Superficie sin aleros:</span> <span className="font-mono">{fmt(s.structSlopeArea)} m²</span></div>
+                    {s.includesEaves && (
+                      <>
+                        <Separator className="my-1" />
+                        <div className="flex justify-between"><span>Base c/aleros:</span> <span className="font-mono">{fmt(s.baseLength, 3)} m</span></div>
+                        <div className="flex justify-between"><span>Hipotenusa c/aleros:</span> <span className="font-mono">{fmt(s.hypotenuse, 3)} m</span></div>
+                        <div className="flex justify-between font-semibold"><span>Superficie c/aleros:</span> <span className="font-mono">{fmt(s.slopeArea)} m²</span></div>
+                      </>
+                    )}
+                    <div className="flex justify-between text-muted-foreground"><span>Altura cumbrera:</span> <span className="font-mono">{fmt(s.ridgeHeight, 3)} m</span></div>
                   </div>
                 ))}
               </div>

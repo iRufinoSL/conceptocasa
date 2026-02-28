@@ -1545,15 +1545,48 @@ function ElevationCardView({ card, plan, onOpeningClick, onAddOpening, onCardDou
             );
           })()}
 
-          {/* Dimensions - base (1 of 4) */}
-          <line x1={rx} y1={baseY + 12} x2={rx + rw} y2={baseY + 12}
+          {/* Half-base dimensions (left + right) */}
+          {(() => {
+            const halfBase = card.width / 2;
+            const halfBaseMm = Math.round(halfBase * 1000);
+            const dimColor = 'hsl(210, 60%, 45%)';
+            const fz = fsScale ? 9 : 7;
+            return (
+              <g>
+                {/* Left half-base */}
+                <line x1={rx} y1={baseY + 12} x2={peakX} y2={baseY + 12} stroke={dimColor} strokeWidth={0.6} />
+                <line x1={rx} y1={baseY + 8} x2={rx} y2={baseY + 16} stroke={dimColor} strokeWidth={0.4} />
+                <line x1={peakX} y1={baseY + 8} x2={peakX} y2={baseY + 16} stroke={dimColor} strokeWidth={0.4} />
+                <text x={(rx + peakX) / 2} y={baseY + 22} textAnchor="middle" fontSize={fz} fill={dimColor} fontWeight={600}>
+                  {halfBaseMm} mm
+                </text>
+                {/* Right half-base */}
+                <line x1={peakX} y1={baseY + 12} x2={rx + rw} y2={baseY + 12} stroke={dimColor} strokeWidth={0.6} />
+                <line x1={rx + rw} y1={baseY + 8} x2={rx + rw} y2={baseY + 16} stroke={dimColor} strokeWidth={0.4} />
+                <text x={(peakX + rx + rw) / 2} y={baseY + 22} textAnchor="middle" fontSize={fz} fill={dimColor} fontWeight={600}>
+                  {halfBaseMm} mm
+                </text>
+              </g>
+            );
+          })()}
+          {/* Total base dimension */}
+          <line x1={rx} y1={baseY + 30} x2={rx + rw} y2={baseY + 30}
             stroke="hsl(25, 95%, 45%)" strokeWidth={0.6} />
-          <line x1={rx} y1={baseY + 8} x2={rx} y2={baseY + 16} stroke="hsl(25, 95%, 45%)" strokeWidth={0.4} />
-          <line x1={rx + rw} y1={baseY + 8} x2={rx + rw} y2={baseY + 16} stroke="hsl(25, 95%, 45%)" strokeWidth={0.4} />
-          <text x={rx + rw / 2} y={baseY + 24} textAnchor="middle" fontSize={fsScale ? 10 : 8} fill="hsl(25, 95%, 45%)" fontWeight={600}>
-            {Math.round(card.width * 1000)} mm (base)
+          <line x1={rx} y1={baseY + 26} x2={rx} y2={baseY + 34} stroke="hsl(25, 95%, 45%)" strokeWidth={0.4} />
+          <line x1={rx + rw} y1={baseY + 26} x2={rx + rw} y2={baseY + 34} stroke="hsl(25, 95%, 45%)" strokeWidth={0.4} />
+          <text x={rx + rw / 2} y={baseY + 44} textAnchor="middle" fontSize={fsScale ? 10 : 8} fill="hsl(25, 95%, 45%)" fontWeight={600}>
+            {Math.round(card.width * 1000)} mm (base total)
           </text>
-          {/* Dimensions - height / cumbrera (2 of 4) */}
+          {/* Vertical height line base→cumbrera */}
+          <line x1={peakX} y1={ry} x2={peakX} y2={baseY}
+            stroke="hsl(25, 95%, 45%)" strokeWidth={0.8} strokeDasharray="4 2" />
+          <line x1={peakX - 4} y1={ry} x2={peakX + 4} y2={ry} stroke="hsl(25, 95%, 45%)" strokeWidth={0.4} />
+          <line x1={peakX - 4} y1={baseY} x2={peakX + 4} y2={baseY} stroke="hsl(25, 95%, 45%)" strokeWidth={0.4} />
+          <text x={peakX + 6} y={ry + rh / 2} textAnchor="start" fontSize={fsScale ? 10 : 8} fill="hsl(25, 95%, 45%)" fontWeight={700}
+            transform={`rotate(-90, ${peakX + 6}, ${ry + rh / 2})`}>
+            {Math.round(card.gablePeakH! * 1000)} mm
+          </text>
+          {/* Dimensions - height / cumbrera (left side) */}
           <line x1={rx - 12} y1={ry} x2={rx - 12} y2={baseY}
             stroke="hsl(25, 95%, 45%)" strokeWidth={0.6} />
           <line x1={rx - 16} y1={ry} x2={rx - 8} y2={ry} stroke="hsl(25, 95%, 45%)" strokeWidth={0.4} />
@@ -1562,24 +1595,26 @@ function ElevationCardView({ card, plan, onOpeningClick, onAddOpening, onCardDou
             transform={`rotate(-90, ${rx - 18}, ${ry + rh / 2})`}>
             {Math.round(card.gablePeakH! * 1000)} mm (cumbrera)
           </text>
-          {/* Left hypotenuse (3 of 4) */}
+          {/* Left hypotenuse */}
           {(() => {
-            const slopeLen = Math.sqrt((card.width / 2) ** 2 + card.gablePeakH! ** 2);
+            const halfBase = card.width / 2;
+            const slopeLen = Math.sqrt(halfBase ** 2 + card.gablePeakH! ** 2);
             return (
               <text x={rx + rw * 0.22} y={ry + rh * 0.4} textAnchor="middle"
                 fontSize={fsScale ? 9 : 7} fill="hsl(15, 70%, 45%)" fontWeight={600}
-                transform={`rotate(${Math.atan2(card.gablePeakH!, card.width / 2) * -180 / Math.PI}, ${rx + rw * 0.22}, ${ry + rh * 0.4})`}>
+                transform={`rotate(${Math.atan2(card.gablePeakH!, halfBase) * -180 / Math.PI}, ${rx + rw * 0.22}, ${ry + rh * 0.4})`}>
                 {Math.round(slopeLen * 1000)} mm
               </text>
             );
           })()}
-          {/* Right hypotenuse (4 of 4) */}
+          {/* Right hypotenuse */}
           {(() => {
-            const slopeLen = Math.sqrt((card.width / 2) ** 2 + card.gablePeakH! ** 2);
+            const halfBase = card.width / 2;
+            const slopeLen = Math.sqrt(halfBase ** 2 + card.gablePeakH! ** 2);
             return (
               <text x={rx + rw * 0.78} y={ry + rh * 0.4} textAnchor="middle"
                 fontSize={fsScale ? 9 : 7} fill="hsl(15, 70%, 45%)" fontWeight={600}
-                transform={`rotate(${Math.atan2(card.gablePeakH!, card.width / 2) * 180 / Math.PI}, ${rx + rw * 0.78}, ${ry + rh * 0.4})`}>
+                transform={`rotate(${Math.atan2(card.gablePeakH!, halfBase) * 180 / Math.PI}, ${rx + rw * 0.78}, ${ry + rh * 0.4})`}>
                 {Math.round(slopeLen * 1000)} mm
               </text>
             );
@@ -2833,7 +2868,7 @@ const isDoor = op.openingType === 'puerta' || op.openingType === 'puerta_externa
             {crossesRidge && <text x={peakX} y={peakY - 6} textAnchor="middle"
               fontSize={9} fill="hsl(15, 70%, 45%)" fontWeight={700}>CUMBRERA</text>}
 
-            {/* Hypotenuse dimension lines (base corner → peak) */}
+            {/* Hypotenuse dimension lines + vertical height + half-base (base corner → peak) */}
             {crossesRidge && (() => {
               const gableTotalLen = gableSections.reduce((sum, gs) => sum + gs.length, 0);
               const leftBH = cw.gableStartBaseH ?? 0;
@@ -2848,8 +2883,14 @@ const isDoor = op.openingType === 'puerta' || op.openingType === 'puerta_externa
               const lMidY = (leftBaseY + peakY) / 2;
               const rMidX = (peakX + rightX) / 2;
               const rMidY = (peakY + rightBaseY) / 2;
+              const dimColor = 'hsl(210, 60%, 45%)';
+              const vColor = 'hsl(25, 95%, 45%)';
+              const leftHalfMm = Math.round(leftHorizDist * 1000);
+              const rightHalfMm = Math.round(rightHorizDist * 1000);
+              const halfBaseY = baseY + 55;
               return (
                 <>
+                  {/* Hypotenuse lines */}
                   <line x1={leftX} y1={leftBaseY} x2={peakX} y2={peakY}
                     stroke={hColor} strokeWidth={0.6} strokeDasharray="4 2" opacity={0.7} />
                   <text x={lMidX - 8} y={lMidY - 4} textAnchor="end"
@@ -2863,6 +2904,30 @@ const isDoor = op.openingType === 'puerta' || op.openingType === 'puerta_externa
                     fontSize={fz} fill={hColor} fontWeight={700}
                     transform={`rotate(${Math.atan2((peakH - rightBH) * s, rightHorizDist * s) * 180 / Math.PI}, ${rMidX + 8}, ${rMidY - 4})`}>
                     {Math.round(hypRightM * 1000)} mm
+                  </text>
+                  {/* Vertical height line base→cumbrera */}
+                  <line x1={peakX} y1={peakY} x2={peakX} y2={baseY}
+                    stroke={vColor} strokeWidth={0.8} strokeDasharray="4 2" />
+                  <line x1={peakX - 5} y1={peakY} x2={peakX + 5} y2={peakY} stroke={vColor} strokeWidth={0.5} />
+                  <line x1={peakX - 5} y1={baseY} x2={peakX + 5} y2={baseY} stroke={vColor} strokeWidth={0.5} />
+                  <text x={peakX + 8} y={(peakY + baseY) / 2} textAnchor="start"
+                    fontSize={10} fill={vColor} fontWeight={700}>
+                    {Math.round(peakH * 1000)} mm
+                  </text>
+                  {/* Left half-base */}
+                  <line x1={leftX} y1={halfBaseY} x2={peakX} y2={halfBaseY} stroke={dimColor} strokeWidth={0.7} />
+                  <line x1={leftX} y1={halfBaseY - 4} x2={leftX} y2={halfBaseY + 4} stroke={dimColor} strokeWidth={0.5} />
+                  <line x1={peakX} y1={halfBaseY - 4} x2={peakX} y2={halfBaseY + 4} stroke={dimColor} strokeWidth={0.5} />
+                  <text x={(leftX + peakX) / 2} y={halfBaseY - 5} textAnchor="middle"
+                    fontSize={9} fill={dimColor} fontWeight={700}>
+                    {leftHalfMm} mm
+                  </text>
+                  {/* Right half-base */}
+                  <line x1={peakX} y1={halfBaseY} x2={rightX} y2={halfBaseY} stroke={dimColor} strokeWidth={0.7} />
+                  <line x1={rightX} y1={halfBaseY - 4} x2={rightX} y2={halfBaseY + 4} stroke={dimColor} strokeWidth={0.5} />
+                  <text x={(peakX + rightX) / 2} y={halfBaseY - 5} textAnchor="middle"
+                    fontSize={9} fill={dimColor} fontWeight={700}>
+                    {rightHalfMm} mm
                   </text>
                 </>
               );
@@ -3990,7 +4055,7 @@ function CompositeWallCard({ compositeWall, plan, onOpeningClick, onAddBlockGrou
               {fsScale && <text x={peakX} y={peakY - 6} textAnchor="middle"
                 fontSize={9} fill="hsl(15, 70%, 45%)" fontWeight={700}>CUMBRERA</text>}
 
-              {/* Hypotenuse dimension lines (base corner → peak) */}
+              {/* Hypotenuse dimension lines + vertical height + half-base (base corner → peak) */}
               {(() => {
                 const gableTotalLen = gableSections.reduce((sum, gs) => sum + gs.length, 0);
                 const leftBH = cw.gableStartBaseH ?? 0;
@@ -4001,14 +4066,18 @@ function CompositeWallCard({ compositeWall, plan, onOpeningClick, onAddBlockGrou
                 const hypRightM = Math.sqrt(Math.pow(rightHorizDist, 2) + Math.pow(peakH - rightBH, 2));
                 const fz = fsScale ? 9 : 6.5;
                 const hColor = 'hsl(280, 60%, 45%)';
-
                 const lMidX = (leftX + peakX) / 2;
                 const lMidY = (leftBaseY + peakY) / 2;
                 const rMidX = (peakX + rightX) / 2;
                 const rMidY = (peakY + rightBaseY) / 2;
-
+                const dimColor = 'hsl(210, 60%, 45%)';
+                const vColor = 'hsl(25, 95%, 45%)';
+                const leftHalfMm = Math.round(leftHorizDist * 1000);
+                const rightHalfMm = Math.round(rightHorizDist * 1000);
+                const halfBaseY2 = baseY + 55;
                 return (
                   <>
+                    {/* Hypotenuse lines */}
                     <line x1={leftX} y1={leftBaseY} x2={peakX} y2={peakY}
                       stroke={hColor} strokeWidth={0.6} strokeDasharray="4 2" opacity={0.7} />
                     <text x={lMidX - 8} y={lMidY - 4} textAnchor="end"
@@ -4022,6 +4091,30 @@ function CompositeWallCard({ compositeWall, plan, onOpeningClick, onAddBlockGrou
                       fontSize={fz} fill={hColor} fontWeight={700}
                       transform={`rotate(${Math.atan2((peakH - rightBH) * s, rightHorizDist * s) * 180 / Math.PI}, ${rMidX + 8}, ${rMidY - 4})`}>
                       {Math.round(hypRightM * 1000)} mm
+                    </text>
+                    {/* Vertical height line base→cumbrera */}
+                    <line x1={peakX} y1={peakY} x2={peakX} y2={baseY}
+                      stroke={vColor} strokeWidth={0.8} strokeDasharray="4 2" />
+                    <line x1={peakX - 5} y1={peakY} x2={peakX + 5} y2={peakY} stroke={vColor} strokeWidth={0.5} />
+                    <line x1={peakX - 5} y1={baseY} x2={peakX + 5} y2={baseY} stroke={vColor} strokeWidth={0.5} />
+                    <text x={peakX + 8} y={(peakY + baseY) / 2} textAnchor="start"
+                      fontSize={fsScale ? 10 : 7} fill={vColor} fontWeight={700}>
+                      {Math.round(peakH * 1000)} mm
+                    </text>
+                    {/* Left half-base */}
+                    <line x1={leftX} y1={halfBaseY2} x2={peakX} y2={halfBaseY2} stroke={dimColor} strokeWidth={0.7} />
+                    <line x1={leftX} y1={halfBaseY2 - 4} x2={leftX} y2={halfBaseY2 + 4} stroke={dimColor} strokeWidth={0.5} />
+                    <line x1={peakX} y1={halfBaseY2 - 4} x2={peakX} y2={halfBaseY2 + 4} stroke={dimColor} strokeWidth={0.5} />
+                    <text x={(leftX + peakX) / 2} y={halfBaseY2 - 5} textAnchor="middle"
+                      fontSize={fsScale ? 9 : 6.5} fill={dimColor} fontWeight={700}>
+                      {leftHalfMm} mm
+                    </text>
+                    {/* Right half-base */}
+                    <line x1={peakX} y1={halfBaseY2} x2={rightX} y2={halfBaseY2} stroke={dimColor} strokeWidth={0.7} />
+                    <line x1={rightX} y1={halfBaseY2 - 4} x2={rightX} y2={halfBaseY2 + 4} stroke={dimColor} strokeWidth={0.5} />
+                    <text x={(peakX + rightX) / 2} y={halfBaseY2 - 5} textAnchor="middle"
+                      fontSize={fsScale ? 9 : 6.5} fill={dimColor} fontWeight={700}>
+                      {rightHalfMm} mm
                     </text>
                   </>
                 );

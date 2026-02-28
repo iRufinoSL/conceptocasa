@@ -215,6 +215,52 @@ function calcLinearMetrics(
   }
 }
 
+/** Group tag input with suggestions from existing layers */
+function GroupTagInput({
+  value,
+  allLayers,
+  currentLayerId,
+  onChange,
+  className,
+}: {
+  value: string;
+  allLayers: VolumeLayer[];
+  currentLayerId: string;
+  onChange: (val: string) => void;
+  className?: string;
+}) {
+  const existingTags = useMemo(() => {
+    const tags = new Set<string>();
+    allLayers.forEach(l => {
+      if (l.id !== currentLayerId && l.groupTag && l.groupTag.trim() !== '') {
+        tags.add(l.groupTag.trim());
+      }
+    });
+    return Array.from(tags).sort();
+  }, [allLayers, currentLayerId]);
+
+  const listId = `group-tags-${currentLayerId}`;
+
+  return (
+    <div className={className}>
+      <Input
+        className="h-6 text-[10px] p-1"
+        value={value}
+        placeholder="Seleccionar o escribir grupo"
+        list={listId}
+        onChange={e => onChange(e.target.value)}
+      />
+      {existingTags.length > 0 && (
+        <datalist id={listId}>
+          {existingTags.map(tag => (
+            <option key={tag} value={tag} />
+          ))}
+        </datalist>
+      )}
+    </div>
+  );
+}
+
 /** Single layer row component */
 function LayerRow({
   layer,
@@ -382,11 +428,11 @@ function LayerRow({
           </div>
           <div>
             <label className="text-muted-foreground block mb-0.5">Grupo (compartir espesor)</label>
-            <Input
-              className="h-6 text-[10px] p-1"
+            <GroupTagInput
               value={layer.groupTag}
-              placeholder="ej: viguetas_aislamiento"
-              onChange={e => onUpdateLayer(layer.id, { groupTag: e.target.value })}
+              allLayers={allLayers}
+              currentLayerId={layer.id}
+              onChange={val => onUpdateLayer(layer.id, { groupTag: val })}
             />
           </div>
           {linearMetrics && (
@@ -408,11 +454,12 @@ function LayerRow({
           style={{ marginLeft: `${(depth > 0 ? depth * 20 : 0) + 52}px` }}
         >
           <label className="text-[10px] text-muted-foreground">Grupo:</label>
-          <Input
-            className="h-6 text-[10px] w-40 p-1"
+          <GroupTagInput
             value={layer.groupTag}
-            placeholder="Compartir espesor"
-            onChange={e => onUpdateLayer(layer.id, { groupTag: e.target.value })}
+            allLayers={allLayers}
+            currentLayerId={layer.id}
+            onChange={val => onUpdateLayer(layer.id, { groupTag: val })}
+            className="w-40"
           />
           <label className="text-[10px] text-muted-foreground ml-2">Etiqueta +:</label>
           <Input

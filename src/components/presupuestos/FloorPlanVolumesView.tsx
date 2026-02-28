@@ -8,7 +8,9 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { FloorPlanData, RoomData, calculateRoofSlopes, RoofSlopeDetail, isExteriorType, isVisibleWall } from '@/lib/floor-plan-calculations';
-import { Box, ChevronDown, ChevronRight, Plus, Trash2, Layers, ArrowDown, ArrowUp, ArrowRight as ArrowRightIcon, Save, Loader2, CornerDownRight, Copy, Ruler, Settings2, Link2, Unlink } from 'lucide-react';
+import { Box, ChevronDown, ChevronRight, Plus, Trash2, Layers, ArrowDown, ArrowUp, ArrowRight as ArrowRightIcon, Save, Loader2, CornerDownRight, Copy, Ruler, Settings2, Link2, Unlink, Pencil } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -1131,7 +1133,8 @@ export function FloorPlanVolumesView({ plan, rooms, floors, floorPlanId }: Floor
   // grandTotalVolume is declared inside the render section below
 
   // ── Collect all measurement items for the Mediciones section ──
-  type MeasurementItem = { name: string; value: number; unit: 'm²' | 'ml'; surfaceLabel: string; floorName: string };
+  type MeasurementItem = { name: string; value: number; unit: 'm²' | 'ml'; surfaceLabel: string; floorName: string; layerRef: { floorId: string; surfaceType: SurfaceType; layerId: string } };
+  const [editingLayer, setEditingLayer] = useState<{ floorId: string; surfaceType: SurfaceType; layerId: string } | null>(null);
   const allMeasurementItems = useMemo(() => {
     const items: MeasurementItem[] = [];
     for (const floor of floors) {
@@ -1151,9 +1154,11 @@ export function FloorPlanVolumesView({ plan, rooms, floors, floorPlanId }: Floor
           const dims = calcSurfaceArea(st, plan, rooms, floorRooms, slopes, l.includeNonStructural);
           if (l.measurementType === 'linear') {
             const lm = calcLinearMetrics(l, { largo: dims.largo, ancho: dims.ancho });
-            if (lm) items.push({ name: l.name, value: lm.totalMl, unit: 'ml', surfaceLabel: SURFACE_LABELS[st], floorName: floor.name });
+            const ref = { floorId: floor.id, surfaceType: st, layerId: l.id };
+            if (lm) items.push({ name: l.name, value: lm.totalMl, unit: 'ml', surfaceLabel: SURFACE_LABELS[st], floorName: floor.name, layerRef: ref });
           } else {
-            items.push({ name: l.name, value: dims.area, unit: 'm²', surfaceLabel: SURFACE_LABELS[st], floorName: floor.name });
+            const ref = { floorId: floor.id, surfaceType: st, layerId: l.id };
+            items.push({ name: l.name, value: dims.area, unit: 'm²', surfaceLabel: SURFACE_LABELS[st], floorName: floor.name, layerRef: ref });
           }
         }
       }
@@ -1172,7 +1177,13 @@ export function FloorPlanVolumesView({ plan, rooms, floors, floorPlanId }: Floor
     });
   };
 
-  const normalizeForGroup = (name: string) => name.replace(/\s*\(copia\)\s*$/i, '').trim();
+  const normalizeForGroup = (name: string) => {
+    return name
+      .replace(/\s*\(copia\)\s*$/i, '')
+      .replace(/\b(superior|inferior|izquierd[oa]|derech[oa]|exterior|interior|lateral|central|frontal|trasero)\b/gi, '')
+      .replace(/\s{2,}/g, ' ')
+      .trim();
+  };
 
   const alphabeticalItems = useMemo(() => {
     const grouped = new Map<string, { items: MeasurementItem[]; unit: 'ml' | 'm²'; canUnify: boolean }>();
@@ -1190,7 +1201,7 @@ export function FloorPlanVolumesView({ plan, rooms, floors, floorPlanId }: Floor
       }
     });
     // Build display list
-    const result: { name: string; value: number; unit: string; canUnify: boolean; isUnified: boolean; subItems?: MeasurementItem[] }[] = [];
+    const result: { name: string; value: number; unit: string; canUnify: boolean; isUnified: boolean; subItems?: MeasurementItem[]; layerRef?: MeasurementItem['layerRef'] }[] = [];
     const processedKeys = new Set<string>();
     const sortedItems = [...allMeasurementItems].sort((a, b) => a.name.localeCompare(b.name, 'es'));
     for (const item of sortedItems) {
@@ -1201,11 +1212,11 @@ export function FloorPlanVolumesView({ plan, rooms, floors, floorPlanId }: Floor
           processedKeys.add(key);
           const group = grouped.get(key)!;
           const total = group.items.reduce((s, i) => s + i.value, 0);
-          result.push({ name: norm, value: total, unit: item.unit, canUnify: true, isUnified: true, subItems: group.items });
+          result.push({ name: norm, value: total, unit: item.unit, canUnify: true, isUnified: true, subItems: group.items, layerRef: group.items[0]?.layerRef });
         }
       } else {
         const group = grouped.get(key)!;
-        result.push({ name: item.name, value: item.value, unit: item.unit, canUnify: group.canUnify, isUnified: false });
+        result.push({ name: item.name, value: item.value, unit: item.unit, canUnify: group.canUnify, isUnified: false, layerRef: item.layerRef });
       }
     }
     return result;
@@ -1494,14 +1505,15 @@ export function FloorPlanVolumesView({ plan, rooms, floors, floorPlanId }: Floor
 
                   <TabsContent value="alphabetical">
                     <div className="space-y-1">
-                      <div className="grid grid-cols-[24px_1fr_120px_40px] gap-2 text-[10px] font-semibold text-muted-foreground px-1 pb-1 border-b border-border">
+                      <div className="grid grid-cols-[24px_1fr_120px_40px_32px] gap-2 text-[10px] font-semibold text-muted-foreground px-1 pb-1 border-b border-border">
                         <span className="text-center">#</span>
                         <span>Nombre</span>
                         <span className="text-right">Cantidad</span>
                         <span className="text-center" title="Unificar objetos del mismo tipo">⊕</span>
+                        <span className="text-center">✎</span>
                       </div>
                       {alphabeticalItems.map((item, idx) => (
-                        <div key={`${item.name}-${idx}`} className={`grid grid-cols-[24px_1fr_120px_40px] gap-2 items-center text-sm px-1 py-1 rounded ${item.isUnified ? 'bg-primary/5 border border-primary/20' : 'hover:bg-muted/30'}`}>
+                        <div key={`${item.name}-${idx}`} className={`grid grid-cols-[24px_1fr_120px_40px_32px] gap-2 items-center text-sm px-1 py-1 rounded ${item.isUnified ? 'bg-primary/5 border border-primary/20' : 'hover:bg-muted/30'}`}>
                           <span className="text-xs text-muted-foreground text-center font-mono">{idx + 1}</span>
                           <div className="flex items-center gap-1.5">
                             <span className={item.isUnified ? 'font-medium text-primary' : ''}>{item.name}</span>
@@ -1530,6 +1542,18 @@ export function FloorPlanVolumesView({ plan, rooms, floors, floorPlanId }: Floor
                               </Button>
                             )}
                           </div>
+                          <div className="flex justify-center">
+                            {!item.isUnified && item.layerRef && (
+                              <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => setEditingLayer(item.layerRef!)} title="Editar objeto">
+                                <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+                              </Button>
+                            )}
+                            {item.isUnified && item.subItems && item.subItems.length > 0 && (
+                              <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => setEditingLayer(item.subItems![0].layerRef)} title="Editar primer objeto">
+                                <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+                              </Button>
+                            )}
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -1542,9 +1566,14 @@ export function FloorPlanVolumesView({ plan, rooms, floors, floorPlanId }: Floor
                           <p className="text-xs font-semibold text-muted-foreground mb-1">{groupKey}</p>
                           <div className="space-y-0.5 pl-2 border-l-2 border-muted">
                             {items.sort((a, b) => a.name.localeCompare(b.name, 'es')).map((item, idx) => (
-                              <div key={idx} className="flex items-center justify-between text-sm px-2 py-0.5 hover:bg-muted/30 rounded">
+                              <div key={idx} className="flex items-center justify-between text-sm px-2 py-0.5 hover:bg-muted/30 rounded group">
                                 <span>{item.name}</span>
-                                <span className="font-mono font-medium">{fmt(item.value)} {item.unit}</span>
+                                <div className="flex items-center gap-2">
+                                  <span className="font-mono font-medium">{fmt(item.value)} {item.unit}</span>
+                                  <Button variant="ghost" size="sm" className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => setEditingLayer(item.layerRef)} title="Editar objeto">
+                                    <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+                                  </Button>
+                                </div>
                               </div>
                             ))}
                           </div>
@@ -1558,6 +1587,120 @@ export function FloorPlanVolumesView({ plan, rooms, floors, floorPlanId }: Floor
           </CollapsibleContent>
         </Card>
       </Collapsible>
+
+      {/* ── Edit Layer Dialog ── */}
+      {editingLayer && (() => {
+        const el = editingLayer;
+        const layer = (levelVolumes[el.floorId]?.[el.surfaceType] || []).find(l => l.id === el.layerId);
+        if (!layer) return null;
+        const floorRooms = rooms.filter(r => r.floorId === el.floorId);
+        const dims = calcSurfaceArea(el.surfaceType, plan, rooms, floorRooms, slopes, layer.includeNonStructural);
+        const linearMetrics = calcLinearMetrics(layer, { largo: dims.largo, ancho: dims.ancho });
+        const onUpdate = (data: Partial<VolumeLayer>) => updateLayer(el.floorId, el.surfaceType, el.layerId, data);
+        return (
+          <Dialog open={!!editingLayer} onOpenChange={(open) => { if (!open) setEditingLayer(null); }}>
+            <DialogContent className="max-w-lg">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <Pencil className="h-4 w-4" />
+                  Editar objeto/capa
+                </DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Nombre</Label>
+                  <Input value={layer.name} onChange={e => onUpdate({ name: e.target.value })} />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Tipo de medición</Label>
+                    <Select value={layer.measurementType} onValueChange={v => onUpdate({ measurementType: v as MeasurementType })}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="area">Superficie (m²)</SelectItem>
+                        <SelectItem value="linear">Lineal (ml)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Espesor (mm)</Label>
+                    <Input type="number" value={layer.thicknessMm} min={1} onChange={e => onUpdate({ thicknessMm: Math.max(1, parseInt(e.target.value) || 1) })} />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Superficie</Label>
+                    <span className="text-sm font-mono block pt-1">{SURFACE_LABELS[el.surfaceType]}</span>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Incluir no estructural</Label>
+                    <div className="pt-1">
+                      <Checkbox checked={layer.includeNonStructural} onCheckedChange={c => onUpdate({ includeNonStructural: !!c })} />
+                      <span className="text-xs text-muted-foreground ml-2">{layer.extraSurfaceName || (el.surfaceType.startsWith('cubierta') ? 'Aleros' : 'Ext.')}</span>
+                    </div>
+                  </div>
+                </div>
+                {layer.measurementType === 'linear' && (
+                  <div className="space-y-3 border-t pt-3">
+                    <p className="text-xs font-semibold text-muted-foreground">Propiedades lineales</p>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>Sección ancho (mm)</Label>
+                        <Input type="number" value={layer.sectionWidthMm ?? ''} placeholder="100" onChange={e => onUpdate({ sectionWidthMm: parseInt(e.target.value) || null })} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Sección alto (mm)</Label>
+                        <Input type="number" value={layer.sectionHeightMm ?? ''} placeholder="150" onChange={e => onUpdate({ sectionHeightMm: parseInt(e.target.value) || null })} />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>Orientación</Label>
+                        <Select value={layer.orientation || 'parallel_ridge'} onValueChange={v => onUpdate({ orientation: v as 'parallel_ridge' | 'crossed_ridge' })}>
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="parallel_ridge">∥ Paralelo cumbrera</SelectItem>
+                            <SelectItem value="crossed_ridge">⊥ Cruzado cumbrera</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Separación (mm)</Label>
+                        <Input type="number" value={layer.spacingMm ?? ''} placeholder="600" onChange={e => onUpdate({ spacingMm: parseInt(e.target.value) || null })} />
+                      </div>
+                    </div>
+                  </div>
+                )}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Grupo (compartir espesor)</Label>
+                    <GroupTagInput value={layer.groupTag} allLayers={Object.values(levelVolumes[el.floorId] || {}).flat()} currentLayerId={layer.id} onChange={val => onUpdate({ groupTag: val })} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Etiqueta superficie extra</Label>
+                    <Input value={layer.extraSurfaceName} placeholder={el.surfaceType.startsWith('cubierta') ? 'Aleros' : 'Ext.'} onChange={e => onUpdate({ extraSurfaceName: e.target.value })} />
+                  </div>
+                </div>
+                {/* Summary */}
+                <div className="border-t pt-3 space-y-1 text-sm">
+                  <div className="flex justify-between"><span className="text-muted-foreground">Largo:</span><span className="font-mono">{fmt(dims.largo, 3)} m</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">Ancho:</span><span className="font-mono">{fmt(dims.ancho, 3)} m</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">Superficie:</span><span className="font-mono">{fmt(dims.area)} m²</span></div>
+                  {layer.measurementType === 'area' && (
+                    <div className="flex justify-between font-medium"><span>Volumen:</span><span className="font-mono">{fmt(dims.area * layer.thicknessMm / 1000)} m³</span></div>
+                  )}
+                  {layer.measurementType === 'linear' && linearMetrics && (
+                    <>
+                      <div className="flex justify-between"><span className="text-muted-foreground">Nº piezas:</span><span className="font-mono">{linearMetrics.pieceCount}</span></div>
+                      <div className="flex justify-between font-medium"><span>Total lineal:</span><span className="font-mono">{fmt(linearMetrics.totalMl)} ml</span></div>
+                    </>
+                  )}
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
+        );
+      })()}
 
       {grandTotalVolume > 0 && (
         <Card>

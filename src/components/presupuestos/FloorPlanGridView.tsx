@@ -272,6 +272,24 @@ export function FloorPlanGridView({
   const currentFloorRooms = floors.length > 0 ? (roomsByFloor.get(currentFloorId) || []) : rooms;
   const currentFloorName = effectiveFloors.find(f => f.id === currentFloorId)?.name || 'Nivel 1';
 
+  // Calculate plant surface area for the current floor (structural rooms only, including ext walls)
+  const floorSurfaceArea = useMemo(() => {
+    const structRooms = currentFloorRooms.filter(r => {
+      const n = (r.name || '').toLowerCase();
+      return r.posX >= 0 && r.posY >= 0 && !n.includes('acera') && !n.includes('alero') && !n.includes('eave');
+    });
+    if (structRooms.length === 0) return 0;
+    const minX = Math.min(...structRooms.map(r => r.posX));
+    const maxX = Math.max(...structRooms.map(r => r.posX + r.width));
+    const minY = Math.min(...structRooms.map(r => r.posY));
+    const maxY = Math.max(...structRooms.map(r => r.posY + r.length));
+    // Include external wall thickness on all sides
+    const extThick = structRooms[0]?.extWallThickness ?? (scaleMode === 'bloque' ? blockLengthMm / 1000 * 0.48 : 0.3);
+    const totalW = (maxX - minX) + 2 * extThick;
+    const totalL = (maxY - minY) + 2 * extThick;
+    return totalW * totalL;
+  }, [currentFloorRooms, scaleMode, blockLengthMm]);
+
   // Level prefix for coordinates: floor orderIndex + 1 (e.g. "1" for Level 1, "2" for Level 2)
   const currentFloorObj = effectiveFloors.find(f => f.id === currentFloorId);
   const levelPrefix = effectiveFloors.length > 1 ? String((currentFloorObj?.orderIndex ?? 0) + 1) : undefined;
@@ -1340,13 +1358,20 @@ export function FloorPlanGridView({
       {/* Toolbar */}
       <div className="flex items-center justify-between gap-2 flex-wrap">
         {effectiveFloors.length >= 1 && (
-          <Tabs value={currentFloorId} onValueChange={setActiveFloorId}>
-            <TabsList className="h-8">
-              {effectiveFloors.map(f => (
-                <TabsTrigger key={f.id} value={f.id} className="text-xs h-7">{f.name}</TabsTrigger>
-              ))}
-            </TabsList>
-          </Tabs>
+          <>
+            <Tabs value={currentFloorId} onValueChange={setActiveFloorId}>
+              <TabsList className="h-8">
+                {effectiveFloors.map(f => (
+                  <TabsTrigger key={f.id} value={f.id} className="text-xs h-7">{f.name}</TabsTrigger>
+                ))}
+              </TabsList>
+            </Tabs>
+            {floorSurfaceArea > 0 && (
+              <Badge variant="outline" className="text-xs font-mono h-7 flex items-center gap-1">
+                📐 {floorSurfaceArea.toFixed(2)} m²
+              </Badge>
+            )}
+          </>
         )}
         <div className="flex items-center gap-1.5 flex-wrap">
           {onAddRoom && (
@@ -1841,7 +1866,10 @@ export function FloorPlanGridView({
         <div className="fixed inset-0 z-[9999] bg-background flex flex-col">
           {/* Toolbar — never printed */}
           <div className="flex items-center justify-between px-4 py-2 border-b border-border bg-muted/30 shrink-0">
-            <span className="text-sm font-medium">{budgetName || 'Cuadrícula'} — {currentFloorName}</span>
+            <span className="text-sm font-medium">
+              {budgetName || 'Cuadrícula'} — {currentFloorName}
+              {floorSurfaceArea > 0 && <span className="ml-2 text-muted-foreground font-normal">· {floorSurfaceArea.toFixed(2)} m²</span>}
+            </span>
             <div className="flex items-center gap-2">
               <Button
                 variant="outline"
@@ -1900,7 +1928,10 @@ export function FloorPlanGridView({
                     // Header with budget name, level, and scale
                     pdf.setFontSize(11);
                     pdf.setFont('helvetica', 'bold');
-                    pdf.text(`${budgetName || 'Plano'} — ${currentFloorName}`, 10, 12);
+                    const headerTitle = floorSurfaceArea > 0
+                      ? `${budgetName || 'Plano'} — ${currentFloorName} · ${floorSurfaceArea.toFixed(2)} m²`
+                      : `${budgetName || 'Plano'} — ${currentFloorName}`;
+                    pdf.text(headerTitle, 10, 12);
                     pdf.setFontSize(8);
                     pdf.setFont('helvetica', 'normal');
                     pdf.text(`Escala: ${fullscreenScalePct}% · ${cellLabel}`, pdf.internal.pageSize.getWidth() - 10, 12, { align: 'right' });

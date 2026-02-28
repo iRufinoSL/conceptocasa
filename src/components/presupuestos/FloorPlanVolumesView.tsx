@@ -7,7 +7,7 @@ import { Separator } from '@/components/ui/separator';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { FloorPlanData, RoomData, calculateRoofSlopes, RoofSlopeDetail, isExteriorType, isVisibleWall } from '@/lib/floor-plan-calculations';
+import { FloorPlanData, RoomData, calculateRoofSlopes, RoofSlopeDetail, isExteriorType, isVisibleWall, calculateRoom } from '@/lib/floor-plan-calculations';
 import { Box, ChevronDown, ChevronRight, Plus, Trash2, Layers, ArrowDown, ArrowUp, ArrowRight as ArrowRightIcon, Save, Loader2, CornerDownRight, Copy, Ruler, Settings2, Link2, Unlink, Pencil } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
@@ -1130,6 +1130,51 @@ export function FloorPlanVolumesView({ plan, rooms, floors, floorPlanId }: Floor
   const totalW = allMaxX - allMinX;
   const totalL = allMaxY - allMinY;
   const totalPlantArea = totalW * totalL;
+
+  // ── Compute area summaries per level ──
+  const areaSummaryByLevel = useMemo(() => {
+    return floors.map(floor => {
+      const floorRooms = rooms.filter(r => r.floorId === floor.id);
+      const isBajoCubierta = floor.level === 'bajo_cubierta' || floor.name.toLowerCase().includes('cubierta');
+      let totalFloorArea = 0;
+      let totalCeilingArea = 0;
+      let totalExtWallArea = 0;
+      let totalIntWallArea = 0;
+
+      for (const room of floorRooms) {
+        if (isNonStructural(room.name)) continue;
+        const calc = calculateRoom(room, plan);
+        if (calc.hasFloor) totalFloorArea += calc.floorArea;
+        if (calc.hasCeiling) totalCeilingArea += calc.ceilingArea;
+        totalExtWallArea += calc.totalExternalWallArea;
+        totalIntWallArea += calc.totalInternalWallArea;
+      }
+
+      // Roof slopes for bajo cubierta
+      let totalRoofArea = 0;
+      if (isBajoCubierta && slopes.length > 0) {
+        totalRoofArea = slopes.reduce((sum, s) => sum + s.structSlopeArea, 0);
+      }
+
+      return {
+        floorId: floor.id,
+        floorName: floor.name,
+        isBajoCubierta,
+        totalFloorArea,
+        totalCeilingArea,
+        totalExtWallArea,
+        totalIntWallArea,
+        totalRoofArea,
+      };
+    });
+  }, [floors, rooms, plan, slopes]);
+
+  const globalTotalFloors = areaSummaryByLevel.reduce((s, l) => s + l.totalFloorArea, 0);
+  const globalTotalCeilings = areaSummaryByLevel.reduce((s, l) => s + l.totalCeilingArea, 0);
+  const globalTotalExtWalls = areaSummaryByLevel.reduce((s, l) => s + l.totalExtWallArea, 0);
+  const globalTotalIntWalls = areaSummaryByLevel.reduce((s, l) => s + l.totalIntWallArea, 0);
+  const globalTotalRoofs = areaSummaryByLevel.reduce((s, l) => s + l.totalRoofArea, 0);
+
   // grandTotalVolume is declared inside the render section below
 
   // ── Collect all measurement items for the Mediciones section ──
@@ -1320,6 +1365,71 @@ export function FloorPlanVolumesView({ plan, rooms, floors, floorPlanId }: Floor
                   </div>
                 </div>
               )}
+
+              {/* ── Resumen de superficies por nivel ── */}
+              <div className="mt-3 pt-3 border-t border-border">
+                <p className="text-xs font-semibold text-muted-foreground mb-2">Superficies principales por nivel</p>
+                <div className="space-y-2">
+                  {areaSummaryByLevel.map(lvl => (
+                    <div key={lvl.floorId} className="bg-muted/30 rounded p-2">
+                      <p className="text-xs font-medium mb-1">{lvl.floorName}</p>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-0.5 text-xs">
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Suelos:</span>
+                          <span className="font-mono">{fmt(lvl.totalFloorArea)} m²</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Techos:</span>
+                          <span className="font-mono">{fmt(lvl.totalCeilingArea)} m²</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Paredes ext.:</span>
+                          <span className="font-mono">{fmt(lvl.totalExtWallArea)} m²</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Paredes int.:</span>
+                          <span className="font-mono">{fmt(lvl.totalIntWallArea)} m²</span>
+                        </div>
+                        {lvl.totalRoofArea > 0 && (
+                          <div className="flex justify-between col-span-2">
+                            <span className="text-muted-foreground">Cubiertas:</span>
+                            <span className="font-mono">{fmt(lvl.totalRoofArea)} m²</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Totales globales */}
+                <div className="mt-2 pt-2 border-t border-border">
+                  <p className="text-xs font-semibold text-muted-foreground mb-1">Totales globales</p>
+                  <div className="grid grid-cols-2 md:grid-cols-5 gap-x-4 gap-y-0.5 text-xs">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Suelos:</span>
+                      <span className="font-mono font-semibold">{fmt(globalTotalFloors)} m²</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Techos:</span>
+                      <span className="font-mono font-semibold">{fmt(globalTotalCeilings)} m²</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Paredes ext.:</span>
+                      <span className="font-mono font-semibold">{fmt(globalTotalExtWalls)} m²</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Paredes int.:</span>
+                      <span className="font-mono font-semibold">{fmt(globalTotalIntWalls)} m²</span>
+                    </div>
+                    {globalTotalRoofs > 0 && (
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Cubiertas:</span>
+                        <span className="font-mono font-semibold">{fmt(globalTotalRoofs)} m²</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
             </CardContent>
           </CollapsibleContent>
         </Card>

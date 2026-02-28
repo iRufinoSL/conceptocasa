@@ -1087,9 +1087,10 @@ export function FloorPlanVolumesView({ plan, rooms, floors, floorPlanId }: Floor
           cubierta_superior: [], cubierta_inferior: [],
         };
 
-        const surfaceTypes: SurfaceType[] = isBajoCubierta
-          ? ['suelo', 'cara_superior', 'cara_derecha', 'cara_inferior', 'cara_izquierda', 'techo', 'cubierta_superior', 'cubierta_inferior']
-          : ['suelo', 'cara_superior', 'cara_derecha', 'cara_inferior', 'cara_izquierda', 'techo'];
+        // cubierta_superior/inferior are sub-levels of techo, rendered nested
+        const mainSurfaceTypes: SurfaceType[] = ['suelo', 'cara_superior', 'cara_derecha', 'cara_inferior', 'cara_izquierda', 'techo'];
+        const roofSubSurfaces: SurfaceType[] = isBajoCubierta ? ['cubierta_superior', 'cubierta_inferior'] : [];
+        const surfaceTypes: SurfaceType[] = [...mainSurfaceTypes, ...roofSubSurfaces];
 
         let levelTotalVolume = 0;
         const surfaceData = surfaceTypes.map(st => {
@@ -1126,24 +1127,57 @@ export function FloorPlanVolumesView({ plan, rooms, floors, floorPlanId }: Floor
             </CardHeader>
             {isExpanded && (
               <CardContent className="px-4 pb-4 pt-0 space-y-1">
-                {surfaceData.map(sd => (
-                  <SurfaceSection
-                    key={sd.surfaceType}
-                    surfaceType={sd.surfaceType}
-                    layers={sd.layers}
-                    surfaceAreaDefault={sd.area}
-                    description={sd.description}
-                    onAddLayer={() => addLayer(floor.id, sd.surfaceType)}
-                    onAddChildLayer={(parentId) => addChildLayer(floor.id, sd.surfaceType, parentId)}
-                    onRemoveLayer={(id) => removeLayer(floor.id, sd.surfaceType, id)}
-                    onUpdateLayer={(id, data) => updateLayer(floor.id, sd.surfaceType, id, data)}
-                    calcAreaForLayer={(includeNS) => calcSurfaceArea(sd.surfaceType, plan, rooms, floorRooms, slopes, includeNS).area}
-                    calcDimsForLayer={(includeNS) => {
-                      const r = calcSurfaceArea(sd.surfaceType, plan, rooms, floorRooms, slopes, includeNS);
-                      return { largo: r.largo, ancho: r.ancho };
-                    }}
-                  />
-                ))}
+                {surfaceData
+                  .filter(sd => !roofSubSurfaces.includes(sd.surfaceType))
+                  .map(sd => {
+                    const isTecho = sd.surfaceType === 'techo';
+                    const roofSubData = isTecho
+                      ? surfaceData.filter(s => roofSubSurfaces.includes(s.surfaceType))
+                      : [];
+
+                    return (
+                      <div key={sd.surfaceType}>
+                        <SurfaceSection
+                          surfaceType={sd.surfaceType}
+                          layers={sd.layers}
+                          surfaceAreaDefault={sd.area}
+                          description={sd.description}
+                          onAddLayer={() => addLayer(floor.id, sd.surfaceType)}
+                          onAddChildLayer={(parentId) => addChildLayer(floor.id, sd.surfaceType, parentId)}
+                          onRemoveLayer={(id) => removeLayer(floor.id, sd.surfaceType, id)}
+                          onUpdateLayer={(id, data) => updateLayer(floor.id, sd.surfaceType, id, data)}
+                          calcAreaForLayer={(includeNS) => calcSurfaceArea(sd.surfaceType, plan, rooms, floorRooms, slopes, includeNS).area}
+                          calcDimsForLayer={(includeNS) => {
+                            const r = calcSurfaceArea(sd.surfaceType, plan, rooms, floorRooms, slopes, includeNS);
+                            return { largo: r.largo, ancho: r.ancho };
+                          }}
+                        />
+                        {/* Render roof sub-surfaces nested under Techo */}
+                        {roofSubData.length > 0 && (
+                          <div className="ml-6 border-l-2 border-muted pl-2 space-y-1">
+                            {roofSubData.map(rsd => (
+                              <SurfaceSection
+                                key={rsd.surfaceType}
+                                surfaceType={rsd.surfaceType}
+                                layers={rsd.layers}
+                                surfaceAreaDefault={rsd.area}
+                                description={rsd.description}
+                                onAddLayer={() => addLayer(floor.id, rsd.surfaceType)}
+                                onAddChildLayer={(parentId) => addChildLayer(floor.id, rsd.surfaceType, parentId)}
+                                onRemoveLayer={(id) => removeLayer(floor.id, rsd.surfaceType, id)}
+                                onUpdateLayer={(id, data) => updateLayer(floor.id, rsd.surfaceType, id, data)}
+                                calcAreaForLayer={(includeNS) => calcSurfaceArea(rsd.surfaceType, plan, rooms, floorRooms, slopes, includeNS).area}
+                                calcDimsForLayer={(includeNS) => {
+                                  const r = calcSurfaceArea(rsd.surfaceType, plan, rooms, floorRooms, slopes, includeNS);
+                                  return { largo: r.largo, ancho: r.ancho };
+                                }}
+                              />
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
               </CardContent>
             )}
           </Card>

@@ -1270,15 +1270,14 @@ export function FloorPlanVolumesView({ plan, rooms, floors, floorPlanId }: Floor
       if (!grouped.has(key)) grouped.set(key, { items: [], unit: item.unit, canUnify: false });
       grouped.get(key)!.items.push(item);
     }
-    // Mark groups with >1 items with same normalized name as unifiable
+    // Mark groups with >1 items as unifiable — same name across levels OR different name variants
     grouped.forEach((g, key) => {
       if (g.items.length > 1) {
-        const uniqueNames = new Set(g.items.map(i => i.name));
-        if (uniqueNames.size > 1) g.canUnify = true;
+        g.canUnify = true;
       }
     });
     // Build display list
-    const result: { name: string; value: number; unit: string; canUnify: boolean; isUnified: boolean; subItems?: MeasurementItem[]; layerRef?: MeasurementItem['layerRef'] }[] = [];
+    const result: { name: string; value: number; unit: string; canUnify: boolean; isUnified: boolean; subItems?: MeasurementItem[]; layerRef?: MeasurementItem['layerRef']; floorName?: string }[] = [];
     const processedKeys = new Set<string>();
     const sortedItems = [...allMeasurementItems].sort((a, b) => a.name.localeCompare(b.name, 'es'));
     for (const item of sortedItems) {
@@ -1293,7 +1292,7 @@ export function FloorPlanVolumesView({ plan, rooms, floors, floorPlanId }: Floor
         }
       } else {
         const group = grouped.get(key)!;
-        result.push({ name: item.name, value: item.value, unit: item.unit, canUnify: group.canUnify, isUnified: false, layerRef: item.layerRef });
+        result.push({ name: item.name, value: item.value, unit: item.unit, canUnify: group.canUnify, isUnified: false, layerRef: item.layerRef, floorName: item.floorName });
       }
     }
     return result;
@@ -1655,12 +1654,16 @@ export function FloorPlanVolumesView({ plan, rooms, floors, floorPlanId }: Floor
                         <span className="text-center">✎</span>
                       </div>
                       {alphabeticalItems.map((item, idx) => (
-                        <div key={`${item.name}-${idx}`} className={`grid grid-cols-[24px_1fr_120px_40px_32px] gap-2 items-center text-sm px-1 py-1 rounded ${item.isUnified ? 'bg-primary/5 border border-primary/20' : 'hover:bg-muted/30'}`}>
+                        <React.Fragment key={`${item.name}-${idx}`}>
+                        <div className={`grid grid-cols-[24px_1fr_120px_40px_32px] gap-2 items-center text-sm px-1 py-1 rounded ${item.isUnified ? 'bg-primary/5 border border-primary/20' : 'hover:bg-muted/30'}`}>
                           <span className="text-xs text-muted-foreground text-center font-mono">{idx + 1}</span>
                           <div className="flex items-center gap-1.5">
                             <span className={item.isUnified ? 'font-medium text-primary' : ''}>{item.name}</span>
                             {item.isUnified && item.subItems && (
                               <Badge variant="secondary" className="text-[9px]">{item.subItems.length} unificados</Badge>
+                            )}
+                            {!item.isUnified && item.floorName && (
+                              <Badge variant="outline" className="text-[9px] text-muted-foreground">{item.floorName}</Badge>
                             )}
                           </div>
                           <span className="text-right font-mono font-medium">
@@ -1697,6 +1700,28 @@ export function FloorPlanVolumesView({ plan, rooms, floors, floorPlanId }: Floor
                             )}
                           </div>
                         </div>
+                        {/* Show sub-items with floor origin when unified */}
+                        {item.isUnified && item.subItems && (
+                          <div className="pl-8 space-y-0.5 mb-1">
+                            {item.subItems.map((sub, si) => (
+                              <div key={si} className="grid grid-cols-[1fr_120px_32px] gap-2 items-center text-xs text-muted-foreground px-1 py-0.5 hover:bg-muted/20 rounded">
+                                <div className="flex items-center gap-1.5">
+                                  <CornerDownRight className="h-3 w-3 shrink-0" />
+                                  <span>{sub.name}</span>
+                                  <Badge variant="outline" className="text-[9px]">{sub.floorName}</Badge>
+                                  <span className="text-[9px] opacity-60">{sub.surfaceLabel}</span>
+                                </div>
+                                <span className="text-right font-mono">{fmt(sub.value)} {sub.unit}</span>
+                                <div className="flex justify-center">
+                                  <Button variant="ghost" size="sm" className="h-5 w-5 p-0" onClick={() => setEditingLayer(sub.layerRef)} title="Editar">
+                                    <Pencil className="h-3 w-3" />
+                                  </Button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        </React.Fragment>
                       ))}
                     </div>
                   </TabsContent>

@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Plus, Trash2, Box, Layers, ArrowUpDown, Maximize2, Merge, Unlink, Map as MapIcon, Printer, FileDown, Ruler } from 'lucide-react';
 import jsPDF from 'jspdf';
-import { OPENING_PRESETS, WALL_LABELS, WALL_SIDE_LETTERS, computeWallSegments, autoClassifyWalls, generateExternalWallNames, isExteriorType, isInvisibleType, computeBuildingOutline, computeCompositeWalls, computeCompositeWallsFromCorners, calcBajoCubiertaWallHeight, getBlockDimensions } from '@/lib/floor-plan-calculations';
+import { OPENING_PRESETS, WALL_LABELS, WALL_SIDE_LETTERS, computeWallSegments, autoClassifyWalls, generateExternalWallNames, isExteriorType, isInvisibleType, computeBuildingOutline, computeCompositeWalls, computeCompositeWallsFromCorners, calcBajoCubiertaWallHeight, getBlockDimensions, getEffectiveRidgeHeight } from '@/lib/floor-plan-calculations';
 import type { RoomData, WallData, OpeningData, FloorPlanData, WallSegment, FloorLevel, WallType, BlockGroupData, OutlineVertex, CompositeWall } from '@/lib/floor-plan-calculations';
 import type { CustomCorner } from '@/hooks/useFloorPlan';
 
@@ -112,7 +112,8 @@ function getGablePeakHeight(plan: FloorPlanData, rooms: RoomData[]): number {
   if (minX === Infinity) return 0;
   // Gable is strictly between wall perimeter, NO eave overhang
   const totalWidth = (maxX - minX) + 2 * plan.externalWallThickness;
-  return (totalWidth / 2) * (plan.roofSlopePercent / 100);
+  const halfWidth = totalWidth / 2;
+  return getEffectiveRidgeHeight(plan, halfWidth);
 }
 
 export function ElevationsGridViewer({
@@ -2501,7 +2502,7 @@ function CompositeFullscreenBlockGrid({ compositeWall, plan, maxHeight, selected
         const buildMinX = Math.min(...(allRooms.length > 0 ? allRooms.map(r => r.posX) : [0]));
         const buildMaxX = Math.max(...(allRooms.length > 0 ? allRooms.map(r => r.posX + r.width) : [0]));
         const totalBuildW = (buildMaxX - buildMinX) + 2 * plan.externalWallThickness;
-        const ridgeH = (totalBuildW / 2) * (plan.roofSlopePercent / 100);
+        const ridgeH = getEffectiveRidgeHeight(plan, totalBuildW / 2);
         if (ridgeH > 0 && ridgeH <= totalH / s * 1.2) {
           const ridgeY = rys + totalH - ridgeH * s;
           return (
@@ -3098,9 +3099,8 @@ function TotalElevationCard({ side, label, layers, plan, rooms, budgetName }: {
     const baseY = padding / 2 + totalHeight * scale + 10;
 
     // Compute slope ratio for roof lines
-    const slopeRatio = plan.roofSlopePercent / 100;
     const halfBuildingWidth = totalWidth / 2;
-    const ridgePeakH = halfBuildingWidth * slopeRatio;
+    const ridgePeakH = getEffectiveRidgeHeight(plan, halfBuildingWidth);
 
     return (
       <svg
@@ -3657,7 +3657,7 @@ function CompositeWallCard({ compositeWall, plan, onOpeningClick, onAddBlockGrou
           const buildMinX = Math.min(...allRooms.map(r => r.posX));
           const buildMaxX = Math.max(...allRooms.map(r => r.posX + r.width));
           const totalBuildW = (buildMaxX - buildMinX) + 2 * plan.externalWallThickness;
-          const ridgeH = (totalBuildW / 2) * (plan.roofSlopePercent / 100);
+          const ridgeH = getEffectiveRidgeHeight(plan, totalBuildW / 2);
           if (ridgeH > 0 && ridgeH <= totalH * 1.2) {
             const ridgeY = rys + totalH - ridgeH * s;
             return (

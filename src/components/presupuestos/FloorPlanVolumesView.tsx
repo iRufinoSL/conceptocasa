@@ -122,17 +122,31 @@ function calcSurfaceArea(
     const ceilingRooms = filterRooms.filter(r => r.hasCeiling);
     if (ceilingRooms.length === 0) return { area: 0, description: 'Sin techos', largo: 0, ancho: 0 };
     let totalArea = 0;
+    // Calculate bounding box of ceiling rooms INCLUDING wall thicknesses for linear calcs
+    let bbMinX = Infinity, bbMaxX = -Infinity, bbMinY = Infinity, bbMaxY = -Infinity;
     for (const room of ceilingRooms) {
       const calc = calculateRoom(room, plan);
       totalArea += calc.ceilingArea;
+      // Expand bounding box by wall thicknesses (same logic as ceilingArea)
+      const wallThick = (w: typeof room.walls[0] | undefined) => {
+        if (!w || w.wallType.endsWith('_invisible')) return 0;
+        return w.thickness || (w.wallType.startsWith('exterior') ? plan.externalWallThickness : plan.internalWallThickness);
+      };
+      const topW = room.walls.find(w => w.wallIndex === 1);
+      const rightW = room.walls.find(w => w.wallIndex === 2);
+      const bottomW = room.walls.find(w => w.wallIndex === 3);
+      const leftW = room.walls.find(w => w.wallIndex === 4);
+      const rMinX = room.posX - wallThick(leftW);
+      const rMaxX = room.posX + room.width + wallThick(rightW);
+      const rMinY = room.posY - wallThick(topW);
+      const rMaxY = room.posY + room.length + wallThick(bottomW);
+      if (rMinX < bbMinX) bbMinX = rMinX;
+      if (rMaxX > bbMaxX) bbMaxX = rMaxX;
+      if (rMinY < bbMinY) bbMinY = rMinY;
+      if (rMaxY > bbMaxY) bbMaxY = rMaxY;
     }
-    // Calculate bounding box of ceiling rooms for linear layer calculations
-    const minX = Math.min(...ceilingRooms.map(r => r.posX));
-    const maxX = Math.max(...ceilingRooms.map(r => r.posX + r.width));
-    const minY = Math.min(...ceilingRooms.map(r => r.posY));
-    const maxY = Math.max(...ceilingRooms.map(r => r.posY + r.length));
-    const techoW = maxX - minX;
-    const techoL = maxY - minY;
+    const techoW = bbMaxX - bbMinX;
+    const techoL = bbMaxY - bbMinY;
     return {
       area: totalArea,
       description: `Suma de ${ceilingRooms.length} espacios con techo (${fmt(techoW, 3)}m × ${fmt(techoL, 3)}m)`,
@@ -1230,7 +1244,7 @@ export function FloorPlanVolumesView({ plan, rooms, floors, floorPlanId }: Floor
           if (l.measurementType === 'linear') {
             const lm = calcLinearMetrics(l, { largo: dims.largo, ancho: dims.ancho });
             const ref = { floorId: floor.id, surfaceType: st, layerId: l.id };
-            if (lm) items.push({ name: l.name, value: lm.totalMl, unit: 'ml', surfaceLabel: SURFACE_LABELS[st], floorName: floor.name, layerRef: ref });
+            items.push({ name: l.name, value: lm ? lm.totalMl : 0, unit: 'ml', surfaceLabel: SURFACE_LABELS[st], floorName: floor.name, layerRef: ref });
           } else {
             const ref = { floorId: floor.id, surfaceType: st, layerId: l.id };
             items.push({ name: l.name, value: dims.area, unit: 'm²', surfaceLabel: SURFACE_LABELS[st], floorName: floor.name, layerRef: ref });

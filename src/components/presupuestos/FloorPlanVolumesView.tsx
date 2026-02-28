@@ -242,22 +242,25 @@ function calcLinearMetrics(
   layer: VolumeLayer,
   surfaceData: { largo: number; ancho: number },
 ): { pieceLength: number; pieceCount: number; totalMl: number } | null {
-  if (layer.measurementType !== 'linear' || !layer.spacingMm || layer.spacingMm <= 0) return null;
+  if (layer.measurementType !== 'linear') return null;
   if (surfaceData.largo <= 0 || surfaceData.ancho <= 0) return null;
 
-  const spacingM = layer.spacingMm / 1000;
+  // Fallback: if spacing is missing in old rows, use 600mm default
+  const spacingM = ((layer.spacingMm && layer.spacingMm > 0) ? layer.spacingMm : 600) / 1000;
   const orient = layer.orientation || 'parallel_ridge';
+
+  // Continuous piece count (can be decimal): length / spacing
   // parallel_ridge / left_right: pieces run along "largo", spaced across "ancho"
   // crossed_ridge / top_bottom: pieces run along "ancho", spaced across "largo"
   if (orient === 'parallel_ridge' || orient === 'left_right') {
     const pieceLength = surfaceData.largo;
-    const pieceCount = Math.floor(surfaceData.ancho / spacingM) + 1;
-    return { pieceLength, pieceCount, totalMl: pieceLength * pieceCount };
-  } else {
-    const pieceLength = surfaceData.ancho;
-    const pieceCount = Math.floor(surfaceData.largo / spacingM) + 1;
+    const pieceCount = Math.max(surfaceData.ancho / spacingM, 1);
     return { pieceLength, pieceCount, totalMl: pieceLength * pieceCount };
   }
+
+  const pieceLength = surfaceData.ancho;
+  const pieceCount = Math.max(surfaceData.largo / spacingM, 1);
+  return { pieceLength, pieceCount, totalMl: pieceLength * pieceCount };
 }
 
 /** Group tag input with suggestions from existing layers */
@@ -367,7 +370,16 @@ function LayerRow({
         </div>
         <Select
           value={layer.measurementType}
-          onValueChange={(v) => onUpdateLayer(layer.id, { measurementType: v as MeasurementType })}
+          onValueChange={(v) => {
+            const nextType = v as MeasurementType;
+            onUpdateLayer(layer.id, nextType === 'linear'
+              ? {
+                  measurementType: nextType,
+                  spacingMm: layer.spacingMm ?? 600,
+                  orientation: layer.orientation ?? 'parallel_ridge',
+                }
+              : { measurementType: nextType });
+          }}
         >
           <SelectTrigger className="h-7 text-[10px] px-1">
             <SelectValue />
@@ -490,7 +502,7 @@ function LayerRow({
           {linearMetrics && (
             <div className="col-span-5 flex gap-4 text-xs mt-1 pt-1 border-t border-border">
               <span>Longitud pieza: <strong className="font-mono">{fmt(linearMetrics.pieceLength, 3)} m</strong></span>
-              <span>Nº piezas: <strong className="font-mono">{linearMetrics.pieceCount}</strong></span>
+              <span>Nº piezas: <strong className="font-mono">{fmt(linearMetrics.pieceCount, 2)}</strong></span>
               <span>Total ml: <strong className="font-mono">{fmt(linearMetrics.totalMl)} ml</strong></span>
               {layer.sectionWidthMm && layer.sectionHeightMm && (
                 <span>Sección: <strong className="font-mono">{layer.sectionWidthMm}×{layer.sectionHeightMm} mm</strong></span>
@@ -857,7 +869,9 @@ export function FloorPlanVolumesView({ plan, rooms, floors, floorPlanId }: Floor
             sectionWidthMm: row.section_width_mm || null,
             sectionHeightMm: row.section_height_mm || null,
             orientation: (row.orientation as VolumeLayer['orientation']) || null,
-            spacingMm: row.spacing_mm || null,
+            spacingMm: row.measurement_type === 'linear'
+              ? (row.spacing_mm ?? 600)
+              : (row.spacing_mm ?? null),
             groupTag: row.group_tag || '',
             parentLayerId: (row as any).parent_layer_id || null,
           };
@@ -1808,7 +1822,19 @@ export function FloorPlanVolumesView({ plan, rooms, floors, floorPlanId }: Floor
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>Tipo de medición</Label>
-                    <Select value={layer.measurementType} onValueChange={v => onUpdate({ measurementType: v as MeasurementType })}>
+                    <Select
+                      value={layer.measurementType}
+                      onValueChange={v => {
+                        const nextType = v as MeasurementType;
+                        onUpdate(nextType === 'linear'
+                          ? {
+                              measurementType: nextType,
+                              spacingMm: layer.spacingMm ?? 600,
+                              orientation: layer.orientation ?? 'parallel_ridge',
+                            }
+                          : { measurementType: nextType });
+                      }}
+                    >
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="area">Superficie (m²)</SelectItem>
@@ -1887,7 +1913,7 @@ export function FloorPlanVolumesView({ plan, rooms, floors, floorPlanId }: Floor
                   )}
                   {layer.measurementType === 'linear' && linearMetrics && (
                     <>
-                      <div className="flex justify-between"><span className="text-muted-foreground">Nº piezas:</span><span className="font-mono">{linearMetrics.pieceCount}</span></div>
+                      <div className="flex justify-between"><span className="text-muted-foreground">Nº piezas:</span><span className="font-mono">{fmt(linearMetrics.pieceCount, 2)}</span></div>
                       <div className="flex justify-between font-medium"><span>Total lineal:</span><span className="font-mono">{fmt(linearMetrics.totalMl)} ml</span></div>
                     </>
                   )}

@@ -295,7 +295,7 @@ export function FloorPlanGridView({
   const levelPrefix = effectiveFloors.length > 1 ? String((currentFloorObj?.orderIndex ?? 0) + 1) : undefined;
 
   // Detect bajo cubierta floor
-  const isBajoCubierta = currentFloorObj?.level === 'bajo_cubierta' || (currentFloorObj?.name || '').toLowerCase().includes('bajo cubierta');
+  const isBajoCubierta = currentFloorObj?.level === 'bajo_cubierta' || (currentFloorObj?.name || '').toLowerCase().includes('cubierta');
   const showSlopeGrids = isBajoCubierta && roofType === 'dos_aguas';
 
   // Ghost underlay: rooms from the floor directly below the current one
@@ -1843,7 +1843,7 @@ export function FloorPlanGridView({
           <div className="space-y-3">
             <div className="flex items-center gap-2">
               <Badge variant="secondary" className="text-xs">
-                🏠 Bajo cubierta — Tejado a dos aguas
+                🏠 Cubierta — Tejado a dos aguas
               </Badge>
               <span className="text-[10px] text-muted-foreground">
                 Cumbrera: +{riseM.toFixed(2)}m sobre muro · Pendiente: {roofSlopePercent}% · Vuelo: {roofOverhang}m

@@ -3,6 +3,16 @@ Updated: now
 
 El sistema de volúmenes utiliza un modelo de 6 caras por nivel (Suelo, Techo, y Caras superior/derecha/inferior/izquierda) para la definición de capas persistentes en 'budget_volume_layers'. En niveles bajo cubierta, se añaden los faldones (superior e inferior) como superficies independientes. Las capas siguen una dirección de crecimiento estricta: Suelo (hacia abajo), Techo/Cubierta (hacia arriba), y Caras (de fuera hacia adentro).
 
+### Jerarquía de capas
+- `parent_layer_id`: UUID nullable que referencia a otra capa del mismo surface_type. NULL = capa raíz, valor = sub-capa.
+- Las capas padre se muestran como encabezados colapsables. Al colapsar un padre, sus sub-capas se ocultan.
+- Solo las capas hoja (sin hijos) contribuyen a los cálculos de volumen y superficie.
+- Al eliminar un padre, se eliminan también todas sus sub-capas (ON DELETE CASCADE en DB).
+- La relación capa↔alzado se establece a través del `surface_type`: cada sub-capa hereda el tipo de superficie del padre (ej: cubierta_superior = Faldón superior/Tejado 1).
+
+### Guardado en dos pasadas
+El save usa dos INSERT: primero capas raíz (sin parent), luego capas hijas con el parent_layer_id resuelto a los nuevos IDs de DB.
+
 ### Campos por capa
 - `layer_order` (orderIndex): Orden definido por el usuario; el listado se ordena de mayor a menor (abajo→arriba físicamente en tejados).
 - `measurement_type`: 'area' (m², superficie×espesor→volumen) o 'linear' (ml, objetos longitudinales con sección, orientación y separación).

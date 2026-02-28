@@ -1798,6 +1798,7 @@ export type Database = {
           measurement_type: string
           name: string
           orientation: string | null
+          parent_layer_id: string | null
           section_height_mm: number | null
           section_width_mm: number | null
           spacing_mm: number | null
@@ -1817,6 +1818,7 @@ export type Database = {
           measurement_type?: string
           name?: string
           orientation?: string | null
+          parent_layer_id?: string | null
           section_height_mm?: number | null
           section_width_mm?: number | null
           spacing_mm?: number | null
@@ -1836,6 +1838,7 @@ export type Database = {
           measurement_type?: string
           name?: string
           orientation?: string | null
+          parent_layer_id?: string | null
           section_height_mm?: number | null
           section_width_mm?: number | null
           spacing_mm?: number | null
@@ -1856,6 +1859,13 @@ export type Database = {
             columns: ["floor_plan_id"]
             isOneToOne: false
             referencedRelation: "budget_floor_plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budget_volume_layers_parent_layer_id_fkey"
+            columns: ["parent_layer_id"]
+            isOneToOne: false
+            referencedRelation: "budget_volume_layers"
             referencedColumns: ["id"]
           },
         ]

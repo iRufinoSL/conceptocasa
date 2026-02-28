@@ -2837,8 +2837,10 @@ const isDoor = op.openingType === 'puerta' || op.openingType === 'puerta_externa
               const gableTotalLen = gableSections.reduce((sum, gs) => sum + gs.length, 0);
               const leftBH = cw.gableStartBaseH ?? 0;
               const rightBH = cw.gableEndBaseH ?? 0;
-              const hypLeftM = Math.sqrt(Math.pow(gableTotalLen / 2, 2) + Math.pow(peakH - leftBH, 2));
-              const hypRightM = Math.sqrt(Math.pow(gableTotalLen / 2, 2) + Math.pow(peakH - rightBH, 2));
+              const leftHorizDist = gableTotalLen * ridgeRatio;
+              const rightHorizDist = gableTotalLen * (1 - ridgeRatio);
+              const hypLeftM = Math.sqrt(Math.pow(leftHorizDist, 2) + Math.pow(peakH - leftBH, 2));
+              const hypRightM = Math.sqrt(Math.pow(rightHorizDist, 2) + Math.pow(peakH - rightBH, 2));
               const fz = 9;
               const hColor = 'hsl(280, 60%, 45%)';
               const lMidX = (leftX + peakX) / 2;
@@ -2851,14 +2853,14 @@ const isDoor = op.openingType === 'puerta' || op.openingType === 'puerta_externa
                     stroke={hColor} strokeWidth={0.6} strokeDasharray="4 2" opacity={0.7} />
                   <text x={lMidX - 8} y={lMidY - 4} textAnchor="end"
                     fontSize={fz} fill={hColor} fontWeight={700}
-                    transform={`rotate(${Math.atan2(-(peakH - leftBH) * s, gableTotalW / 2) * 180 / Math.PI}, ${lMidX - 8}, ${lMidY - 4})`}>
+                    transform={`rotate(${Math.atan2(-(peakH - leftBH) * s, leftHorizDist * s) * 180 / Math.PI}, ${lMidX - 8}, ${lMidY - 4})`}>
                     {Math.round(hypLeftM * 1000)} mm
                   </text>
                   <line x1={peakX} y1={peakY} x2={rightX} y2={rightBaseY}
                     stroke={hColor} strokeWidth={0.6} strokeDasharray="4 2" opacity={0.7} />
                   <text x={rMidX + 8} y={rMidY - 4} textAnchor="start"
                     fontSize={fz} fill={hColor} fontWeight={700}
-                    transform={`rotate(${Math.atan2((peakH - rightBH) * s, gableTotalW / 2) * 180 / Math.PI}, ${rMidX + 8}, ${rMidY - 4})`}>
+                    transform={`rotate(${Math.atan2((peakH - rightBH) * s, rightHorizDist * s) * 180 / Math.PI}, ${rMidX + 8}, ${rMidY - 4})`}>
                     {Math.round(hypRightM * 1000)} mm
                   </text>
                 </>
@@ -3993,8 +3995,10 @@ function CompositeWallCard({ compositeWall, plan, onOpeningClick, onAddBlockGrou
                 const gableTotalLen = gableSections.reduce((sum, gs) => sum + gs.length, 0);
                 const leftBH = cw.gableStartBaseH ?? 0;
                 const rightBH = cw.gableEndBaseH ?? 0;
-                const hypLeftM = Math.sqrt(Math.pow(gableTotalLen / 2, 2) + Math.pow(peakH - leftBH, 2));
-                const hypRightM = Math.sqrt(Math.pow(gableTotalLen / 2, 2) + Math.pow(peakH - rightBH, 2));
+                const leftHorizDist = gableTotalLen * ridgeRatio;
+                const rightHorizDist = gableTotalLen * (1 - ridgeRatio);
+                const hypLeftM = Math.sqrt(Math.pow(leftHorizDist, 2) + Math.pow(peakH - leftBH, 2));
+                const hypRightM = Math.sqrt(Math.pow(rightHorizDist, 2) + Math.pow(peakH - rightBH, 2));
                 const fz = fsScale ? 9 : 6.5;
                 const hColor = 'hsl(280, 60%, 45%)';
 
@@ -4009,14 +4013,14 @@ function CompositeWallCard({ compositeWall, plan, onOpeningClick, onAddBlockGrou
                       stroke={hColor} strokeWidth={0.6} strokeDasharray="4 2" opacity={0.7} />
                     <text x={lMidX - 8} y={lMidY - 4} textAnchor="end"
                       fontSize={fz} fill={hColor} fontWeight={700}
-                      transform={`rotate(${Math.atan2(-(peakH - leftBH) * s, gableTotalW / 2) * 180 / Math.PI}, ${lMidX - 8}, ${lMidY - 4})`}>
+                      transform={`rotate(${Math.atan2(-(peakH - leftBH) * s, leftHorizDist * s) * 180 / Math.PI}, ${lMidX - 8}, ${lMidY - 4})`}>
                       {Math.round(hypLeftM * 1000)} mm
                     </text>
                     <line x1={peakX} y1={peakY} x2={rightX} y2={rightBaseY}
                       stroke={hColor} strokeWidth={0.6} strokeDasharray="4 2" opacity={0.7} />
                     <text x={rMidX + 8} y={rMidY - 4} textAnchor="start"
                       fontSize={fz} fill={hColor} fontWeight={700}
-                      transform={`rotate(${Math.atan2((peakH - rightBH) * s, gableTotalW / 2) * 180 / Math.PI}, ${rMidX + 8}, ${rMidY - 4})`}>
+                      transform={`rotate(${Math.atan2((peakH - rightBH) * s, rightHorizDist * s) * 180 / Math.PI}, ${rMidX + 8}, ${rMidY - 4})`}>
                       {Math.round(hypRightM * 1000)} mm
                     </text>
                   </>

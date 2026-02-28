@@ -2701,15 +2701,37 @@ const isDoor = op.openingType === 'puerta' || op.openingType === 'puerta_externa
         const gableStartX = rxs + gableSections[0].startOffset * s;
         const gableTotalW = gableSections.reduce((sum, gs) => sum + gs.length, 0) * s;
         const baseY = rys + totalH;
-        const peakX = gableStartX + gableTotalW / 2;
-        const peakY = baseY - peakH * s;
         const leftX = gableStartX;
         const rightX = gableStartX + gableTotalW;
         const leftBaseH = (cw.gableStartBaseH ?? 0) * s;
         const rightBaseH = (cw.gableEndBaseH ?? 0) * s;
         const leftBaseY = baseY - leftBaseH;
         const rightBaseY = baseY - rightBaseH;
-        const trianglePath = `M ${leftX} ${leftBaseY} L ${peakX} ${peakY} L ${rightX} ${rightBaseY} L ${rightX} ${baseY} L ${leftX} ${baseY} Z`;
+
+        const buildingMinY = Math.min(...(allRooms.length > 0 ? allRooms.map(r => r.posY) : [cw.startCorner.y, cw.endCorner.y]));
+        const buildingMaxY = Math.max(...(allRooms.length > 0 ? allRooms.map(r => r.posY + r.length) : [cw.startCorner.y, cw.endCorner.y]));
+        const centerY = (buildingMinY + buildingMaxY) / 2;
+        const y1 = cw.startCorner.y;
+        const y2 = cw.endCorner.y;
+        const crossesRidge = Math.abs(y2 - y1) > 1e-6 && (y1 - centerY) * (y2 - centerY) <= 0;
+        const ridgeRatio = crossesRidge ? Math.max(0, Math.min(1, (centerY - y1) / (y2 - y1))) : 0.5;
+        const peakX = crossesRidge
+          ? leftX + gableTotalW * ridgeRatio
+          : (leftBaseY <= rightBaseY ? leftX : rightX);
+        const peakY = crossesRidge ? baseY - peakH * s : Math.min(leftBaseY, rightBaseY);
+        const clipTopY = Math.min(leftBaseY, rightBaseY, peakY);
+        const trianglePath = crossesRidge
+          ? `M ${leftX} ${leftBaseY} L ${peakX} ${peakY} L ${rightX} ${rightBaseY} L ${rightX} ${baseY} L ${leftX} ${baseY} Z`
+          : `M ${leftX} ${leftBaseY} L ${rightX} ${rightBaseY} L ${rightX} ${baseY} L ${leftX} ${baseY} Z`;
+        const topYAtX = (x: number) => {
+          if (!crossesRidge || Math.abs(rightX - leftX) < 1e-6) {
+            return leftBaseY + ((x - leftX) / Math.max(1e-6, rightX - leftX)) * (rightBaseY - leftBaseY);
+          }
+          if (x <= peakX) {
+            return leftBaseY + ((x - leftX) / Math.max(1e-6, peakX - leftX)) * (peakY - leftBaseY);
+          }
+          return peakY + ((x - peakX) / Math.max(1e-6, rightX - peakX)) * (rightBaseY - peakY);
+        };
         const clipId = `fs-gable-clip-${cw.id}`;
 
         return (
@@ -2732,12 +2754,12 @@ const isDoor = op.openingType === 'puerta' || op.openingType === 'puerta_externa
                 // Invisible section: white rect clipped to triangle
                 return (
                   <g key={`gable-inv-${gi}`}>
-                    <rect x={sx} y={peakY - 5} width={sw2} height={baseY - peakY + 10}
+                    <rect x={sx} y={clipTopY - 5} width={sw2} height={baseY - clipTopY + 10}
                       fill="#ffffff" clipPath={`url(#${clipId})`} />
-                    <rect x={sx} y={peakY} width={sw2} height={baseY - peakY}
+                    <rect x={sx} y={clipTopY} width={sw2} height={baseY - clipTopY}
                       fill="none" stroke="hsl(0, 0%, 75%)" strokeWidth={0.5} strokeDasharray="3 3"
                       clipPath={`url(#${clipId})`} />
-                    <text x={sx + sw2 / 2} y={baseY - (baseY - peakY) * 0.3} textAnchor="middle"
+                    <text x={sx + sw2 / 2} y={baseY - (baseY - clipTopY) * 0.3} textAnchor="middle"
                       fontSize={10} fill="hsl(222, 47%, 30%)" fontWeight={600} opacity={0.5} pointerEvents="none">
                       {section.roomName}
                     </text>
@@ -2749,7 +2771,7 @@ const isDoor = op.openingType === 'puerta' || op.openingType === 'puerta_externa
               const sectionFill = gi % 2 === 0 ? 'hsl(30, 30%, 92%)' : 'hsl(30, 25%, 88%)';
               return (
                 <g key={`gable-vis-${gi}`}>
-                  <rect x={sx} y={peakY - 5} width={sw2} height={baseY - peakY + 10}
+                  <rect x={sx} y={clipTopY - 5} width={sw2} height={baseY - clipTopY + 10}
                     fill={sectionFill} clipPath={`url(#${clipId})`} />
                   {/* Block pattern */}
                   {plan.scaleMode === 'bloque' && (() => {
@@ -2757,19 +2779,19 @@ const isDoor = op.openingType === 'puerta' || op.openingType === 'puerta_externa
                     const bwP = (bDims.lengthMm / 1000) * s;
                     const bhP = (bDims.heightMm / 1000) * s;
                     if (bwP < 3 || bhP < 2) return null;
-                    const hPx = peakH * s;
+                    const hPx = baseY - clipTopY;
                     const rowCount = Math.ceil(hPx / bhP);
                     const lines: React.ReactElement[] = [];
                     for (let r = 1; r < rowCount; r++) {
                       const y = baseY - r * bhP;
-                      if (y <= peakY) break;
+                      if (y <= clipTopY) break;
                       lines.push(
                         <line key={`gbh-${gi}-${r}`} x1={sx} y1={y} x2={sx + sw2} y2={y}
                           stroke="hsl(210, 50%, 35%)" strokeWidth={0.6} opacity={0.5} />
                       );
                     }
                     for (let r = 0; r < rowCount; r++) {
-                      const yTop2 = Math.max(peakY, baseY - (r + 1) * bhP);
+                      const yTop2 = Math.max(clipTopY, baseY - (r + 1) * bhP);
                       const yBot2 = baseY - r * bhP;
                       if (yTop2 >= yBot2) continue;
                       const off = r % 2 === 0 ? 0 : bwP / 2;
@@ -2786,7 +2808,7 @@ const isDoor = op.openingType === 'puerta' || op.openingType === 'puerta_externa
                     }
                     return <g clipPath={`url(#${clipId})`}>{lines}</g>;
                   })()}
-                  <text x={sx + sw2 / 2} y={baseY - (baseY - peakY) * 0.3} textAnchor="middle"
+                  <text x={sx + sw2 / 2} y={baseY - (baseY - clipTopY) * 0.3} textAnchor="middle"
                     fontSize={10} fill="hsl(222, 47%, 30%)" fontWeight={600} opacity={0.7} pointerEvents="none">
                     {section.roomName}
                   </text>
@@ -2797,9 +2819,7 @@ const isDoor = op.openingType === 'puerta' || op.openingType === 'puerta_externa
             {/* Section separators within the gable */}
             {gableSections.slice(1).map((section, gi) => {
               const sx = rxs + section.startOffset * s;
-              const fracFromCenter = Math.abs(section.startOffset - (gableSections[0].startOffset + gableSections.reduce((sum, gs) => sum + gs.length, 0) / 2)) / (gableSections.reduce((sum, gs) => sum + gs.length, 0) / 2);
-              const sepH = peakH * (1 - fracFromCenter);
-              const sepTopY = baseY - sepH * s;
+              const sepTopY = topYAtX(sx);
               return (
                 <line key={`gable-sep-${gi}`}
                   x1={sx} y1={baseY} x2={sx} y2={sepTopY}
@@ -2808,12 +2828,12 @@ const isDoor = op.openingType === 'puerta' || op.openingType === 'puerta_externa
             })}
 
             {/* Cumbrera marker */}
-            <circle cx={peakX} cy={peakY} r={3} fill="hsl(15, 70%, 45%)" />
-            <text x={peakX} y={peakY - 6} textAnchor="middle"
-              fontSize={9} fill="hsl(15, 70%, 45%)" fontWeight={700}>CUMBRERA</text>
+            {crossesRidge && <circle cx={peakX} cy={peakY} r={3} fill="hsl(15, 70%, 45%)" />}
+            {crossesRidge && <text x={peakX} y={peakY - 6} textAnchor="middle"
+              fontSize={9} fill="hsl(15, 70%, 45%)" fontWeight={700}>CUMBRERA</text>}
 
             {/* Hypotenuse dimension lines (base corner → peak) */}
-            {(() => {
+            {crossesRidge && (() => {
               const gableTotalLen = gableSections.reduce((sum, gs) => sum + gs.length, 0);
               const leftBH = cw.gableStartBaseH ?? 0;
               const rightBH = cw.gableEndBaseH ?? 0;
@@ -3836,15 +3856,37 @@ function CompositeWallCard({ compositeWall, plan, onOpeningClick, onAddBlockGrou
           const gableStartX = rxs + gableSections[0].startOffset * s;
           const gableTotalW = gableSections.reduce((sum, gs) => sum + gs.length, 0) * s;
           const baseY = rys + totalH;
-          const peakX = gableStartX + gableTotalW / 2;
-          const peakY = baseY - peakH * s;
           const leftX = gableStartX;
           const rightX = gableStartX + gableTotalW;
           const leftBaseH = (cw.gableStartBaseH ?? 0) * s;
           const rightBaseH = (cw.gableEndBaseH ?? 0) * s;
           const leftBaseY = baseY - leftBaseH;
           const rightBaseY = baseY - rightBaseH;
-          const trianglePath = `M ${leftX} ${leftBaseY} L ${peakX} ${peakY} L ${rightX} ${rightBaseY} L ${rightX} ${baseY} L ${leftX} ${baseY} Z`;
+
+          const buildingMinY = Math.min(...((liveRooms?.length || 0) > 0 ? liveRooms!.map(r => r.posY) : [cw.startCorner.y, cw.endCorner.y]));
+          const buildingMaxY = Math.max(...((liveRooms?.length || 0) > 0 ? liveRooms!.map(r => r.posY + r.length) : [cw.startCorner.y, cw.endCorner.y]));
+          const centerY = (buildingMinY + buildingMaxY) / 2;
+          const y1 = cw.startCorner.y;
+          const y2 = cw.endCorner.y;
+          const crossesRidge = Math.abs(y2 - y1) > 1e-6 && (y1 - centerY) * (y2 - centerY) <= 0;
+          const ridgeRatio = crossesRidge ? Math.max(0, Math.min(1, (centerY - y1) / (y2 - y1))) : 0.5;
+          const peakX = crossesRidge
+            ? leftX + gableTotalW * ridgeRatio
+            : (leftBaseY <= rightBaseY ? leftX : rightX);
+          const peakY = crossesRidge ? baseY - peakH * s : Math.min(leftBaseY, rightBaseY);
+          const clipTopY = Math.min(leftBaseY, rightBaseY, peakY);
+          const trianglePath = crossesRidge
+            ? `M ${leftX} ${leftBaseY} L ${peakX} ${peakY} L ${rightX} ${rightBaseY} L ${rightX} ${baseY} L ${leftX} ${baseY} Z`
+            : `M ${leftX} ${leftBaseY} L ${rightX} ${rightBaseY} L ${rightX} ${baseY} L ${leftX} ${baseY} Z`;
+          const topYAtX = (x: number) => {
+            if (!crossesRidge || Math.abs(rightX - leftX) < 1e-6) {
+              return leftBaseY + ((x - leftX) / Math.max(1e-6, rightX - leftX)) * (rightBaseY - leftBaseY);
+            }
+            if (x <= peakX) {
+              return leftBaseY + ((x - leftX) / Math.max(1e-6, peakX - leftX)) * (peakY - leftBaseY);
+            }
+            return peakY + ((x - peakX) / Math.max(1e-6, rightX - peakX)) * (rightBaseY - peakY);
+          };
           const clipId = `comp-gable-shared-${cw.id}`;
 
           return (
@@ -3867,12 +3909,12 @@ function CompositeWallCard({ compositeWall, plan, onOpeningClick, onAddBlockGrou
                   return (
                     <g key={`gable-inv-${gi}`}>
                       {/* Use explicit white (#ffffff) instead of CSS variable for PDF serialization compatibility */}
-                      <rect x={sx} y={peakY - 5} width={sw2} height={baseY - peakY + 10}
+                      <rect x={sx} y={clipTopY - 5} width={sw2} height={baseY - clipTopY + 10}
                         fill="#ffffff" clipPath={`url(#${clipId})`} />
                       <rect x={sx} y={peakY} width={sw2} height={baseY - peakY}
                         fill="none" stroke="hsl(0, 0%, 75%)" strokeWidth={0.5} strokeDasharray="3 3"
                         clipPath={`url(#${clipId})`} />
-                      <text x={sx + sw2 / 2} y={baseY - (baseY - peakY) * 0.3} textAnchor="middle"
+                    <text x={sx + sw2 / 2} y={baseY - (baseY - clipTopY) * 0.3} textAnchor="middle"
                         fontSize={fsScale ? 10 : 7} fill="hsl(222, 47%, 30%)" fontWeight={600} opacity={0.5} pointerEvents="none">
                         {section.roomName}
                       </text>
@@ -3883,12 +3925,12 @@ function CompositeWallCard({ compositeWall, plan, onOpeningClick, onAddBlockGrou
                 const sectionFill = gi % 2 === 0 ? 'hsl(30, 30%, 92%)' : 'hsl(30, 25%, 88%)';
                 return (
                   <g key={`gable-vis-${gi}`}>
-                    <rect x={sx} y={peakY - 5} width={sw2} height={baseY - peakY + 10}
-                      fill={sectionFill} clipPath={`url(#${clipId})`} />
-                    {/* Block pattern */}
-                    {plan.scaleMode === 'bloque' && (() => {
-                      const bwPx = (plan.blockLengthMm / 1000) * s;
-                      const bhPx = (plan.blockHeightMm / 1000) * s;
+                  <rect x={sx} y={clipTopY - 5} width={sw2} height={baseY - clipTopY + 10}
+                    fill={sectionFill} clipPath={`url(#${clipId})`} />
+                  {/* Block pattern */}
+                  {plan.scaleMode === 'bloque' && (() => {
+                    const bwPx = (plan.blockLengthMm / 1000) * s;
+                    const bhPx = (plan.blockHeightMm / 1000) * s;
                       if (bwPx < 3 || bhPx < 2) return null;
                       const hPx = peakH * s;
                       const rowCount = Math.ceil(hPx / bhPx);

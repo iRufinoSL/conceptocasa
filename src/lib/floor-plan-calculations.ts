@@ -2149,6 +2149,11 @@ export function computeCompositeWallsFromCorners(
   const colSpan = Math.max(1, gridMaxCol - gridMinCol);
   const rowSpan = Math.max(1, gridMaxRow - gridMinRow);
   const classifyEdge = (cc: { col: number; row: number; side: string }): 'top' | 'right' | 'bottom' | 'left' => {
+    // Prefer explicit side stored on the marker (source of truth from grid editor).
+    // Fallback to geometric classification only for legacy/invalid data.
+    if (cc.side === 'top' || cc.side === 'right' || cc.side === 'bottom' || cc.side === 'left') {
+      return cc.side;
+    }
     if (cc.row === gridMinRow) return 'top';
     if (cc.col === gridMinCol && cc.row !== gridMinRow) return 'left';
     const dTop = Math.abs(cc.row - gridMinRow) / rowSpan;
@@ -2908,22 +2913,27 @@ export function computeCompositeWallsFromCorners(
 
     const rawSecs2: Array<{ room: RoomData; wall: WallData; sectionLen: number; wallH: number; sectionOpenings: OpeningData[]; isGableWall: boolean; overlapStart: number; fullWallLen: number }> = [];
 
-    // For bajo cubierta horizontal interior cuts, compute a single uniform height
-    // based on the Y position of the cut under the roof slope.
-    // Horizontal walls (1/3) in bajo cubierta: height depends on distance from building edge along Y.
+    // For bajo cubierta horizontal interior cuts, use the roof profile height at this Y.
+    // This keeps endpoint heights consistent with perimeter points (e.g. D1 has same
+    // height in D1-B1 and D1-A).
     const bajoCubiertaHorizCutHeight = (() => {
-      const allBajoCub = roomsForCalc.length > 0 && roomsForCalc.every(r => r.height === 0 || r.height === undefined || r.height === null) && roomsForCalc.some(r => r.height === 0) && plan.roofType === 'dos_aguas';
+      const allBajoCub = roomsForCalc.length > 0
+        && roomsForCalc.every(r => r.height === 0 || r.height === undefined || r.height === null)
+        && roomsForCalc.some(r => r.height === 0)
+        && plan.roofType === 'dos_aguas';
       if (!allBajoCub) return undefined;
-      // For a horizontal cut at wallY, the roof height is determined by the
-      // distance from the nearest top/bottom edge of the building.
-      // But in a "dos aguas" roof with ridge along Y, horizontal walls have
-      // constant height equal to the ridge height (they run parallel to the ridge).
-      // So use the maximum auto-calculated height across all matching rooms.
-      const heights = matchingRooms.map(({ room, wall }) => {
-        const crossWallIndex = matchBottom.includes(matchingRooms.find(m => m.room === room && m.wall === wall)!) ? 3 : 1;
-        return calcBajoCubiertaWallHeight(room, crossWallIndex, plan, rooms) ?? 0;
-      }).filter(h => h > 0);
-      return heights.length > 0 ? Math.max(...heights) : undefined;
+
+      const buildingMinX = Math.min(...roomsForCalc.map(r => r.posX));
+      const buildingMaxX = Math.max(...roomsForCalc.map(r => r.posX + r.width));
+      const buildingMinY = Math.min(...roomsForCalc.map(r => r.posY));
+      const buildingMaxY = Math.max(...roomsForCalc.map(r => r.posY + r.length));
+      const centerY = (buildingMinY + buildingMaxY) / 2;
+      const halfLenY = (buildingMaxY - buildingMinY) / 2;
+      if (halfLenY <= EPSILON) return 0;
+
+      const totalW = (buildingMaxX - buildingMinX) + 2 * plan.externalWallThickness;
+      const peakH = (totalW / 2) * (plan.roofSlopePercent / 100);
+      return Math.max(0, peakH * (1 - Math.abs(wallY - centerY) / halfLenY));
     })();
 
     matchingRooms.forEach(({ room, wall, overlapStart, overlapEnd }) => {

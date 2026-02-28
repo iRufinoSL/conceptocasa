@@ -662,9 +662,15 @@ export function FloorPlanGridView({
             );
           })}
 
-          {/* Ridge line (viga cumbrera) — horizontal red line at midpoint of rows (from gable to gable) for dos_aguas roofs */}
+          {/* Ridge line (viga cumbrera) — horizontal red line at center of STRUCTURAL building (excluding aleros/aceras) */}
           {roofType === 'dos_aguas' && (() => {
-            const ridgeRow = totalRows / 2;
+            const structRooms = allPlacedRooms.filter(r => {
+              const n = (r.name || '').toLowerCase();
+              return !n.includes('acera') && !n.includes('alero') && !n.includes('eave');
+            });
+            const minRowBB = structRooms.length > 0 ? Math.min(...structRooms.map(r => Math.round(r.posY / cellSizeM))) : 0;
+            const maxRowBB = structRooms.length > 0 ? Math.max(...structRooms.map(r => Math.round(r.posY / cellSizeM) + Math.round(r.length / cellSizeM))) : totalRows;
+            const ridgeRow = (minRowBB + maxRowBB) / 2;
             const ridgeTop = ROW_HEADER_H + ridgeRow * CS;
             return (
               <div

@@ -2745,11 +2745,17 @@ const isDoor = op.openingType === 'puerta' || op.openingType === 'puerta_externa
         const rightBaseY = baseY - rightBaseH;
 
         // Use REAL ridge position along the cut (global roof center projected to this segment)
+        // Exclude aleros/aceras to compute the structural building center
         const y1 = cw.startCorner.y;
         const y2 = cw.endCorner.y;
         const spanY = y2 - y1;
-        const buildingMinY = Math.min(...allRooms.map(r => r.posY));
-        const buildingMaxY = Math.max(...allRooms.map(r => r.posY + r.length));
+        const structRoomsForCenter = allRooms.filter(r => {
+          const n = (r.name || '').toLowerCase();
+          return !n.includes('acera') && !n.includes('alero') && !n.includes('eave');
+        });
+        const centerRooms = structRoomsForCenter.length > 0 ? structRoomsForCenter : allRooms;
+        const buildingMinY = Math.min(...centerRooms.map(r => r.posY));
+        const buildingMaxY = Math.max(...centerRooms.map(r => r.posY + r.length));
         const buildingCenterY = (buildingMinY + buildingMaxY) / 2;
         const rawRidgeRatio = Math.abs(spanY) > 1e-6 ? (buildingCenterY - y1) / spanY : 0.5;
         const ridgeRatio = Math.max(0, Math.min(1, rawRidgeRatio));
@@ -3932,11 +3938,17 @@ function CompositeWallCard({ compositeWall, plan, onOpeningClick, onAddBlockGrou
           const rightBaseY = baseY - rightBaseH;
 
           // Use REAL ridge position along the cut (global roof center projected to this segment)
+          // Exclude aleros/aceras to compute the structural building center
           const y1 = cw.startCorner.y;
           const y2 = cw.endCorner.y;
           const spanY = y2 - y1;
-          const buildingMinY = Math.min(...liveRooms.map(r => r.posY));
-          const buildingMaxY = Math.max(...liveRooms.map(r => r.posY + r.length));
+          const structRoomsForCenter2 = liveRooms.filter(r => {
+            const n = (r.name || '').toLowerCase();
+            return !n.includes('acera') && !n.includes('alero') && !n.includes('eave');
+          });
+          const centerRooms2 = structRoomsForCenter2.length > 0 ? structRoomsForCenter2 : liveRooms;
+          const buildingMinY = Math.min(...centerRooms2.map(r => r.posY));
+          const buildingMaxY = Math.max(...centerRooms2.map(r => r.posY + r.length));
           const buildingCenterY = (buildingMinY + buildingMaxY) / 2;
           const rawRidgeRatio = Math.abs(spanY) > 1e-6 ? (buildingCenterY - y1) / spanY : 0.5;
           const ridgeRatio = Math.max(0, Math.min(1, rawRidgeRatio));

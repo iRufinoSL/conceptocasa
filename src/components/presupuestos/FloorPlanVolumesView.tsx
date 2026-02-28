@@ -1311,11 +1311,9 @@ export function FloorPlanVolumesView({ plan, rooms, floors, floorPlanId }: Floor
       if (!grouped.has(key)) grouped.set(key, { items: [], unit: item.unit, canUnify: false });
       grouped.get(key)!.items.push(item);
     }
-    // Mark groups with >1 items as unifiable — same name across levels OR different name variants
-    grouped.forEach((g, key) => {
-      if (g.items.length > 1) {
-        g.canUnify = true;
-      }
+    // All items are unifiable — allows pre-marking single items for future association
+    grouped.forEach((g) => {
+      g.canUnify = true;
     });
     // Build display list
     const result: { name: string; value: number; unit: string; canUnify: boolean; isUnified: boolean; subItems?: MeasurementItem[]; layerRef?: MeasurementItem['layerRef']; floorName?: string }[] = [];

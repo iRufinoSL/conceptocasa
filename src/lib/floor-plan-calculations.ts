@@ -1003,6 +1003,24 @@ export function calculateFloorPlanSummary(plan: FloorPlanData, rooms: RoomData[]
   const wallSegments = computeWallSegments(rooms);
 
   const roomCalcs = classifiedRooms.map(r => calculateRoom(r, plan));
+  const floorById = new Map((floors || []).map(f => [f.id, f]));
+  const roomById = new Map(classifiedRooms.map(r => [r.id, r]));
+
+  const isRoofLevel = (floor?: FloorLevel): boolean => {
+    if (!floor) return false;
+    return floor.level === 'bajo_cubierta' || floor.name.toLowerCase().includes('cubierta');
+  };
+
+  const getEffectiveCeilingArea = (rc: RoomCalculation, room?: RoomData, floor?: FloorLevel): number => {
+    if (rc.hasCeiling) return rc.ceilingArea;
+    const canUseSlopeAsCeiling =
+      rc.slopeRoofCeilingArea > 0 &&
+      rc.hasRoof &&
+      !!room &&
+      (room.height === 0 || isRoofLevel(floor));
+
+    return canUseSlopeAsCeiling ? rc.slopeRoofCeilingArea : 0;
+  };
 
   // Override room wall areas using segment-based calculation
   // This fixes double-counting when walls have multiple neighbors
@@ -1107,15 +1125,11 @@ export function calculateFloorPlanSummary(plan: FloorPlanData, rooms: RoomData[]
 
   roomCalcs.forEach((rc, idx) => {
     const room = classifiedRooms[idx];
+    const floor = room.floorId ? floorById.get(room.floorId) : undefined;
     // Only count usable area for rooms that have a floor (e.g. Level 2 bajo cubierta has no floor)
     if (rc.hasFloor) totalUsableM2 += rc.floorArea;
     if (rc.hasFloor) totalFloorM2 += rc.floorArea;
-    if (rc.hasCeiling) {
-      totalCeilingM2 += rc.ceilingArea;
-    } else if (rc.slopeRoofCeilingArea > 0) {
-      // Faldón = techo: count inclined roof surface as ceiling
-      totalCeilingM2 += rc.slopeRoofCeilingArea;
-    }
+    totalCeilingM2 += getEffectiveCeilingArea(rc, room, floor);
     totalExternalWallM2 += rc.totalExternalWallArea;
     totalInternalWallM2 += rc.totalInternalWallArea;
     

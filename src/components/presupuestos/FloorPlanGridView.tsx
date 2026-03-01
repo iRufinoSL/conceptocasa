@@ -631,10 +631,11 @@ export function FloorPlanGridView({
           }}
         >
           {/* Column headers — separated ~10px from grid edge for readability */}
+          {/* Column headers — X axis (red, like SketchUp) */}
           {Array.from({ length: totalCols }, (_, ci) => (
             <div
               key={`ch-${ci}`}
-              className="absolute text-[8px] font-bold text-blue-600 dark:text-blue-400 leading-none"
+              className="absolute text-[8px] font-bold leading-none"
               style={{
                 left: COL_HEADER_W + ci * CS,
                 top: 2,
@@ -644,17 +645,18 @@ export function FloorPlanGridView({
                 alignItems: 'flex-end',
                 justifyContent: 'flex-start',
                 paddingLeft: 1,
+                color: '#c0392b',
               }}
             >
               {colToLabel(ci + 1, levelPrefix)}
             </div>
           ))}
 
-          {/* Row headers — separated ~10px from grid edge */}
+          {/* Row headers — Y axis (green, like SketchUp) */}
           {Array.from({ length: totalRows }, (_, ri) => (
             <div
               key={`rh-${ri}`}
-              className="absolute text-[8px] font-bold text-blue-600 dark:text-blue-400 text-right leading-none"
+              className="absolute text-[8px] font-bold text-right leading-none"
               style={{
                 left: 2,
                 top: ROW_HEADER_H + ri * CS,
@@ -664,13 +666,14 @@ export function FloorPlanGridView({
                 alignItems: 'flex-start',
                 justifyContent: 'flex-end',
                 paddingTop: 1,
+                color: '#27ae60',
               }}
             >
               {rowToLabel(ri + 1, levelPrefix)}
             </div>
           ))}
 
-          {/* Grid cells — each one = 1 bloque (625×625mm), with borders and alternating shading */}
+          {/* Grid cells — X lines (vertical, red) + Y lines (horizontal, green) + alternating fill */}
           {Array.from({ length: totalCols * totalRows }, (_, i) => {
             const col = (i % totalCols);
             const row = Math.floor(i / totalCols);
@@ -684,8 +687,11 @@ export function FloorPlanGridView({
                   top: ROW_HEADER_H + row * CS,
                   width: CS,
                   height: CS,
-                  border: '1.5px solid rgba(0,128,0,0.25)',
-                  backgroundColor: isOdd ? 'rgba(0,128,0,0.06)' : 'rgba(0,128,0,0.015)',
+                  borderLeft: '1.5px solid rgba(192,57,43,0.30)',
+                  borderRight: col === totalCols - 1 ? '1.5px solid rgba(192,57,43,0.30)' : 'none',
+                  borderTop: '1.5px solid rgba(39,174,96,0.30)',
+                  borderBottom: row === totalRows - 1 ? '1.5px solid rgba(39,174,96,0.30)' : 'none',
+                  backgroundColor: isOdd ? 'rgba(0,0,0,0.03)' : 'transparent',
                   zIndex: 15,
                 }}
               />

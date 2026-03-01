@@ -1504,7 +1504,7 @@ function ElevationCardView({ card, plan, onOpeningClick, onAddOpening, onCardDou
               if (y <= ry) break;
               lines.push(
               <line key={`bh-${r}`} x1={rx} y1={y} x2={rx + rw} y2={y}
-                  stroke="hsl(210, 50%, 35%)" strokeWidth={1.2} opacity={1} pointerEvents="none" />
+                  stroke="rgba(41,128,185,0.85)" strokeWidth={1.2} opacity={1} pointerEvents="none" />
               );
             }
             for (let r = 0; r < rows; r++) {
@@ -1517,7 +1517,7 @@ function ElevationCardView({ card, plan, onOpeningClick, onAddOpening, onCardDou
                 if (x <= rx) continue;
                 lines.push(
                   <line key={`bv-${r}-${c}`} x1={x} y1={yTop} x2={x} y2={Math.min(yBot, baseY)}
-                    stroke="hsl(210, 50%, 35%)" strokeWidth={1.0} opacity={1} pointerEvents="none" />
+                    stroke="rgba(192,57,43,0.70)" strokeWidth={1.0} opacity={1} pointerEvents="none" />
                 );
               }
             }
@@ -1718,7 +1718,7 @@ function ElevationCardView({ card, plan, onOpeningClick, onAddOpening, onCardDou
             if (y <= ry) break;
             lines.push(
               <line key={`bh-${r}`} x1={rx} y1={y} x2={rx + rw} y2={y}
-                stroke="hsl(210, 50%, 35%)" strokeWidth={1.2} opacity={1} pointerEvents="none" />
+                stroke="rgba(41,128,185,0.85)" strokeWidth={1.2} opacity={1} pointerEvents="none" />
             );
           }
           for (let r = 0; r < rows; r++) {
@@ -1732,7 +1732,7 @@ function ElevationCardView({ card, plan, onOpeningClick, onAddOpening, onCardDou
               if (x <= rx) continue;
               lines.push(
                 <line key={`bv-${r}-${c}`} x1={x} y1={yTop} x2={x} y2={Math.min(yBot, ry + rh)}
-                  stroke="hsl(210, 50%, 35%)" strokeWidth={1.0} opacity={1} pointerEvents="none" />
+                  stroke="rgba(192,57,43,0.70)" strokeWidth={1.0} opacity={1} pointerEvents="none" />
               );
             }
           }
@@ -2877,7 +2877,7 @@ const isDoor = op.openingType === 'puerta' || op.openingType === 'puerta_externa
                       if (y <= clipTopY) break;
                       lines.push(
                         <line key={`gbh-${gi}-${r}`} x1={sx} y1={y} x2={sx + sw2} y2={y}
-                          stroke="hsl(210, 50%, 35%)" strokeWidth={0.6} opacity={0.5} />
+                          stroke="rgba(41,128,185,0.50)" strokeWidth={0.6} opacity={0.5} />
                       );
                     }
                     for (let r = 0; r < rowCount; r++) {
@@ -2892,7 +2892,7 @@ const isDoor = op.openingType === 'puerta' || op.openingType === 'puerta_externa
                         if (x <= sx || x >= sx + sw2) continue;
                         lines.push(
                           <line key={`gbv-${gi}-${r}-${c}`} x1={x} y1={yTop2} x2={x} y2={yBot2}
-                            stroke="hsl(210, 50%, 35%)" strokeWidth={0.6} opacity={0.5} />
+                            stroke="rgba(192,57,43,0.45)" strokeWidth={0.6} opacity={0.5} />
                         );
                       }
                     }
@@ -3305,7 +3305,7 @@ function TotalElevationCard({ side, label, layers, plan, rooms, budgetName }: {
                       if (y <= peakY) break;
                       lines.push(
                         <line key={`gbh-${r}`} x1={leftX} y1={y} x2={rightX} y2={y}
-                          stroke="hsl(210, 50%, 35%)" strokeWidth={0.8} opacity={0.5} />
+                          stroke="rgba(41,128,185,0.50)" strokeWidth={0.8} opacity={0.5} />
                       );
                     }
                     // Vertical block lines with offset per row
@@ -3321,7 +3321,7 @@ function TotalElevationCard({ side, label, layers, plan, rooms, budgetName }: {
                         if (x <= leftX || x >= rightX) continue;
                         lines.push(
                           <line key={`gbv-${r}-${c}`} x1={x} y1={yTop} x2={x} y2={yBot}
-                            stroke="hsl(210, 50%, 35%)" strokeWidth={0.6} opacity={0.5} />
+                            stroke="rgba(192,57,43,0.45)" strokeWidth={0.6} opacity={0.5} />
                         );
                       }
                     }
@@ -3446,7 +3446,7 @@ function TotalElevationCard({ side, label, layers, plan, rooms, budgetName }: {
                             if (y <= sy) break;
                             lines.push(
                               <line key={`bh-${r}`} x1={sx} y1={y} x2={sx + sw2} y2={y}
-                                stroke="hsl(210, 50%, 35%)" strokeWidth={0.8} opacity={0.5} />
+                                stroke="rgba(41,128,185,0.50)" strokeWidth={0.8} opacity={0.5} />
                             );
                           }
                           for (let r = 0; r < rows; r++) {
@@ -3461,7 +3461,7 @@ function TotalElevationCard({ side, label, layers, plan, rooms, budgetName }: {
                               if (x <= sx || x >= sx + sw2) continue;
                               lines.push(
                                 <line key={`bv-${r}-${c}`} x1={x} y1={yTop} x2={x} y2={Math.min(yBot, sy + sh2)}
-                                  stroke="hsl(210, 50%, 35%)" strokeWidth={0.6} opacity={0.5} />
+                                  stroke="rgba(192,57,43,0.45)" strokeWidth={0.6} opacity={0.5} />
                               );
                             }
                           }
@@ -3845,21 +3845,20 @@ function CompositeWallCard({ compositeWall, plan, onOpeningClick, onAddBlockGrou
                 if (bwPx < 3 || bhPx < 2) return null;
                 const rows = Math.ceil(sh2 / bhPx);
                 const lines: React.ReactElement[] = [];
-                // Horizontal lines (per section)
+                // Horizontal lines (Z axis — blue, like SketchUp)
                 for (let r = 1; r < rows; r++) {
                   const y = sy + sh2 - r * bhPx;
                   if (y <= sy) break;
                   lines.push(
                     <line key={`bh-${idx}-${r}`} x1={sx} y1={y} x2={sx + sw2} y2={y}
-                      stroke="hsl(210, 50%, 35%)" strokeWidth={1.2} opacity={1} pointerEvents="none" />
+                      stroke="rgba(41,128,185,0.85)" strokeWidth={1.2} opacity={1} pointerEvents="none" />
                   );
                 }
-                // Vertical lines — aligned to composite wall origin (rxs) so blocks are continuous
+                // Vertical lines (X axis — red, like SketchUp) — aligned to composite wall origin
                 for (let r = 0; r < rows; r++) {
                   const yTop = Math.max(sy, sy + sh2 - (r + 1) * bhPx);
                   const yBot = sy + sh2 - r * bhPx;
                   const offset = r % 2 === 0 ? 0 : bwPx / 2;
-                  // Calculate global block columns from composite wall origin
                   const globalStartCol = Math.floor((sx - rxs - offset) / bwPx);
                   const globalEndCol = Math.ceil((sx + sw2 - rxs - offset) / bwPx);
                   for (let c = globalStartCol; c <= globalEndCol; c++) {
@@ -3867,7 +3866,7 @@ function CompositeWallCard({ compositeWall, plan, onOpeningClick, onAddBlockGrou
                     if (x <= sx || x >= sx + sw2) continue;
                     lines.push(
                       <line key={`bv-${idx}-${r}-${c}`} x1={x} y1={yTop} x2={x} y2={Math.min(yBot, sy + sh2)}
-                        stroke="hsl(210, 50%, 35%)" strokeWidth={1.0} opacity={1} pointerEvents="none" />
+                        stroke="rgba(192,57,43,0.70)" strokeWidth={1.0} opacity={1} pointerEvents="none" />
                     );
                   }
                 }
@@ -4095,7 +4094,7 @@ function CompositeWallCard({ compositeWall, plan, onOpeningClick, onAddBlockGrou
                         if (y <= peakY) break;
                         lines.push(
                           <line key={`gbh-${gi}-${r}`} x1={sx} y1={y} x2={sx + sw2} y2={y}
-                            stroke="hsl(210, 50%, 35%)" strokeWidth={0.6} opacity={0.5} />
+                            stroke="rgba(41,128,185,0.50)" strokeWidth={0.6} opacity={0.5} />
                         );
                       }
                       for (let r = 0; r < rowCount; r++) {
@@ -4110,7 +4109,7 @@ function CompositeWallCard({ compositeWall, plan, onOpeningClick, onAddBlockGrou
                           if (x <= sx || x >= sx + sw2) continue;
                           lines.push(
                             <line key={`gbv-${gi}-${r}-${c}`} x1={x} y1={yTop2} x2={x} y2={yBot2}
-                              stroke="hsl(210, 50%, 35%)" strokeWidth={0.6} opacity={0.5} />
+                              stroke="rgba(192,57,43,0.45)" strokeWidth={0.6} opacity={0.5} />
                           );
                         }
                       }

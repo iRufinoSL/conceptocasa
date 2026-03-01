@@ -994,14 +994,17 @@ export function FloorPlanGridView({
                           e.stopPropagation();
                           if (c.idx >= 0) {
                             const parsed = parseCoord(editingCornerCoord.trim());
-                            setCustomCorners(prev => prev.map((cc, i) => {
+                            const updatedCorners = customCorners.map((cc, i) => {
                               if (i !== c.idx) return cc;
                               const updates: Partial<CustomCorner> = {};
                               if (editingCornerLabel.trim()) updates.label = editingCornerLabel.trim();
-                              if (parsed) { updates.col = parsed.col; updates.row = parsed.row; if (parsed.z !== undefined) updates.z = parsed.z; }
+                              if (parsed) { updates.col = parsed.col; updates.row = parsed.row; updates.z = parsed.z ?? 0; }
                               updates.side = editingCornerSide;
                               return { ...cc, ...updates };
-                            }));
+                            });
+                            onCustomCornersChange?.(updatedCorners);
+                            const savedCorner = updatedCorners[c.idx];
+                            toast.success(`Coordenada ${savedCorner.label} guardada: (${(savedCorner.col)-1},${(savedCorner.row)-1},${savedCorner.z ?? 0})`);
                           }
                           setEditingCornerIdx(null);
                         }}

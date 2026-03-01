@@ -1012,7 +1012,10 @@ export function calculateFloorPlanSummary(plan: FloorPlanData, rooms: RoomData[]
   };
 
   const getEffectiveCeilingArea = (rc: RoomCalculation, room?: RoomData, floor?: FloorLevel): number => {
-    if (rc.hasCeiling) return rc.ceilingArea;
+    // Techo plano por estancia: proyección horizontal real del espacio
+    // (no sumar espesores por estancia para evitar sobrecálculo a nivel de planta).
+    if (rc.hasCeiling) return rc.floorArea;
+
     const canUseSlopeAsCeiling =
       rc.slopeRoofCeilingArea > 0 &&
       rc.hasRoof &&
@@ -1230,7 +1233,7 @@ export function calculateFloorPlanSummary(plan: FloorPlanData, rooms: RoomData[]
 
       const flatCeilingM2 = floorRooms
         .filter(r => r.hasCeiling)
-        .reduce((s, r) => s + r.ceilingArea, 0);
+        .reduce((s, r) => s + r.floorArea, 0);
 
       const slopeEligibleRooms = floorRooms.filter(r => {
         if (r.hasCeiling) return false;

@@ -124,39 +124,30 @@ function calcSurfaceArea(
   }
 
   if (surfaceType === 'techo') {
-    // Flat ceilings are summed per room.
-    // Sloped ceilings (faldón=techo) are counted once from roof geometry only in roof levels.
-    const ceilingRooms = filterRooms.filter(r => r.hasCeiling || (!r.hasCeiling && r.hasRoof));
+    // Techo plano: usar proyección horizontal real del espacio (sin sumar espesores de muros por estancia).
+    // Techo inclinado (faldón=techo): solo en niveles de cubierta y agregado una vez por nivel.
+    const ceilingRooms = filterRooms.filter(r => r.hasCeiling || (isRoofLevel && !r.hasCeiling && r.hasRoof));
     if (ceilingRooms.length === 0) return { area: 0, description: 'Sin techos', largo: 0, ancho: 0 };
 
     let totalArea = 0;
     let hasSlopeCeiling = false;
     let slopeFallbackArea = 0;
 
-    // Calculate bounding box of ceiling rooms INCLUDING wall thicknesses for linear calcs
+    // Bounding box de espacios con techo en proyección horizontal (sin expandir por espesores)
     let bbMinX = Infinity, bbMaxX = -Infinity, bbMinY = Infinity, bbMaxY = -Infinity;
     for (const room of ceilingRooms) {
       const calc = calculateRoom(room, plan);
       if (calc.hasCeiling) {
-        totalArea += calc.ceilingArea;
+        totalArea += calc.floorArea;
       } else if (isRoofLevel && calc.hasRoof && calc.slopeRoofCeilingArea > 0) {
         hasSlopeCeiling = true;
         slopeFallbackArea += calc.slopeRoofCeilingArea;
       }
 
-      // Expand bounding box by wall thicknesses (same logic as ceilingArea)
-      const wallThick = (w: typeof room.walls[0] | undefined) => {
-        if (!w || w.wallType.endsWith('_invisible')) return 0;
-        return w.thickness || (w.wallType.startsWith('exterior') ? plan.externalWallThickness : plan.internalWallThickness);
-      };
-      const topW = room.walls.find(w => w.wallIndex === 1);
-      const rightW = room.walls.find(w => w.wallIndex === 2);
-      const bottomW = room.walls.find(w => w.wallIndex === 3);
-      const leftW = room.walls.find(w => w.wallIndex === 4);
-      const rMinX = room.posX - wallThick(leftW);
-      const rMaxX = room.posX + room.width + wallThick(rightW);
-      const rMinY = room.posY - wallThick(topW);
-      const rMaxY = room.posY + room.length + wallThick(bottomW);
+      const rMinX = room.posX;
+      const rMaxX = room.posX + room.width;
+      const rMinY = room.posY;
+      const rMaxY = room.posY + room.length;
       if (rMinX < bbMinX) bbMinX = rMinX;
       if (rMaxX > bbMaxX) bbMaxX = rMaxX;
       if (rMinY < bbMinY) bbMinY = rMinY;
@@ -168,11 +159,11 @@ function calcSurfaceArea(
       totalArea += roofArea > 0 ? roofArea : slopeFallbackArea;
     }
 
-    const techoW = bbMaxX - bbMinX;
-    const techoL = bbMaxY - bbMinY;
+    const techoW = isFinite(bbMinX) && isFinite(bbMaxX) ? bbMaxX - bbMinX : 0;
+    const techoL = isFinite(bbMinY) && isFinite(bbMaxY) ? bbMaxY - bbMinY : 0;
     return {
       area: totalArea,
-      description: `Suma de ${ceilingRooms.length} espacios con techo (${fmt(techoW, 3)}m × ${fmt(techoL, 3)}m)`,
+      description: `Proyección horizontal de ${ceilingRooms.length} espacios (${fmt(techoW, 3)}m × ${fmt(techoL, 3)}m)`,
       largo: techoW,
       ancho: techoL,
     };
@@ -272,7 +263,7 @@ function calcRoomSurfaceArea(
 
   if (surfaceType === 'techo') {
     const calc = calculateRoom(room, plan);
-    const area = calc.hasCeiling ? calc.ceilingArea : (calc.slopeRoofCeilingArea > 0 ? calc.slopeRoofCeilingArea : 0);
+    const area = calc.hasCeiling ? calc.floorArea : (calc.slopeRoofCeilingArea > 0 ? calc.slopeRoofCeilingArea : 0);
     return { area, description: `Techo de ${room.name}`, largo: room.width, ancho: room.length };
   }
 
@@ -1349,7 +1340,7 @@ export function FloorPlanVolumesView({ plan, rooms, floors, floorPlanId, budgetI
         const calc = calculateRoom(room, plan);
         if (calc.hasFloor) totalFloorArea += calc.floorArea;
         if (calc.hasCeiling) {
-          totalFlatCeilingArea += calc.ceilingArea;
+          totalFlatCeilingArea += calc.floorArea;
         } else if (isBajoCubierta && calc.hasRoof && calc.slopeRoofCeilingArea > 0) {
           hasSlopeCeilingRooms = true;
           slopeCeilingFallbackArea += calc.slopeRoofCeilingArea;
@@ -1414,7 +1405,7 @@ export function FloorPlanVolumesView({ plan, rooms, floors, floorPlanId, budgetI
           entries.push({ name: `Suelo ${rn}`, value: calc.floorArea, unit: 'm2', sourceKey: `vol_suelo_room_${room.id}` });
         }
         const ceilingArea = calc.hasCeiling
-          ? calc.ceilingArea
+          ? calc.floorArea
           : (lvl.isBajoCubierta && calc.hasRoof && calc.slopeRoofCeilingArea > 0 ? calc.slopeRoofCeilingArea : 0);
         if (ceilingArea > 0) {
           entries.push({ name: `Techo ${rn}`, value: ceilingArea, unit: 'm2', sourceKey: `vol_techo_room_${room.id}` });
@@ -1827,7 +1818,7 @@ export function FloorPlanVolumesView({ plan, rooms, floors, floorPlanId, budgetI
                     room,
                     calc,
                     floorArea: calc.floorArea,
-                    ceilingArea: calc.hasCeiling ? calc.ceilingArea : (isBajoCubierta && calc.hasRoof && calc.slopeRoofCeilingArea > 0 ? calc.slopeRoofCeilingArea : 0),
+                    ceilingArea: calc.hasCeiling ? calc.floorArea : (isBajoCubierta && calc.hasRoof && calc.slopeRoofCeilingArea > 0 ? calc.slopeRoofCeilingArea : 0),
                     extWallArea: calc.totalExternalWallArea,
                     intWallArea: calc.totalInternalWallArea,
                     volume: room.width * room.length * h,
@@ -1837,9 +1828,10 @@ export function FloorPlanVolumesView({ plan, rooms, floors, floorPlanId, budgetI
 
                 // Level summary by wall type (shared walls counted only once)
                 const wallAreas = calcLevelWallAreas(floorRooms);
+                const totalCeilingSurface = surfaceData.find(s => s.surfaceType === 'techo')?.area ?? 0;
                 const levelSummary = {
                   totalFloor: roomSummaries.reduce((s, r) => s + r.floorArea, 0),
-                  totalCeiling: roomSummaries.reduce((s, r) => s + r.ceilingArea, 0),
+                  totalCeiling: totalCeilingSurface,
                   totalExtWall: wallAreas.totalExtWallArea,
                   totalIntWall: wallAreas.totalIntWallArea,
                   totalVolume: roomSummaries.reduce((s, r) => s + r.volume, 0),

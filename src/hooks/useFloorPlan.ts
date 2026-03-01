@@ -1460,14 +1460,22 @@ export function useFloorPlan(budgetId: string) {
 
   const updateCustomCorners = async (corners: CustomCorner[]) => {
     if (!floorPlan) return;
+    console.log('[CORNERS] Saving corners with Z values:', corners.map(c => `${c.label}=(${c.col-1},${c.row-1},${c.z ?? 0})`).join(', '));
     setCustomCornersState(corners);
     try {
-      await supabase
+      const { error } = await supabase
         .from('budget_floor_plans')
         .update({ custom_corners: corners } as any)
         .eq('id', floorPlan.id);
+      if (error) {
+        console.error('[CORNERS] Error saving custom corners:', error);
+        toast.error('Error al guardar coordenadas');
+      } else {
+        console.log('[CORNERS] Corners saved successfully');
+      }
     } catch (err) {
-      console.error('Error saving custom corners:', err);
+      console.error('[CORNERS] Exception saving custom corners:', err);
+      toast.error('Error al guardar coordenadas');
     }
   };
 

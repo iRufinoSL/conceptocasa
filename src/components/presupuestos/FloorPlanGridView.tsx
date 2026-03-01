@@ -1026,7 +1026,7 @@ export function FloorPlanGridView({
                     <div
                       className="flex items-center justify-center rounded-full bg-primary text-primary-foreground font-bold text-[10px] cursor-pointer hover:ring-2 hover:ring-primary/50 transition-all"
                       style={{ width: 26, height: 20, minWidth: 26 }}
-                      title={`Clic para editar ${c.label}`}
+                      title={c.idx >= 0 ? `${c.label} ${formatCoord(customCorners[c.idx].col, customCorners[c.idx].row, undefined, customCorners[c.idx].z ?? 0)} — Clic para editar` : `Clic para editar ${c.label}`}
                       onClick={() => {
                         if (c.idx >= 0) {
                           const corner = customCorners[c.idx];
@@ -1038,6 +1038,9 @@ export function FloorPlanGridView({
                       }}
                     >
                       {c.label}
+                      {c.idx >= 0 && (customCorners[c.idx].z ?? 0) > 0 && (
+                        <span className="text-[7px] opacity-70 ml-0.5">z{customCorners[c.idx].z}</span>
+                      )}
                     </div>
                   )}
                 </div>

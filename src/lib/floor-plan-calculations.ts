@@ -223,7 +223,8 @@ export interface RoomCalculation {
   roomName: string;
   floorId?: string;
   floorArea: number; // m2 de suelo útil
-  ceilingArea: number; // m2 de techo
+  ceilingArea: number; // m2 de techo (horizontal plano)
+  slopeRoofCeilingArea: number; // m2 de faldón inclinado que actúa como techo (bajo cubierta)
   roomHeight: number; // altura de la estancia
   hasFloor: boolean;
   hasCeiling: boolean;
@@ -513,12 +514,25 @@ export function calculateRoom(room: RoomData, plan: FloorPlanData): RoomCalculat
     };
   });
   
+  // Compute inclined roof ceiling area for bajo cubierta rooms (faldón = techo)
+  // When room has no ceiling (hasCeiling=false) and has roof, the faldón IS the ceiling
+  let slopeRoofCeilingArea = 0;
+  const isBajoCubiertaRoom = room.hasCeiling === false && room.hasRoof !== false;
+  if (isBajoCubiertaRoom && plan.roofType === 'dos_aguas' && plan.roofSlopePercent && plan.roofSlopePercent > 0) {
+    // Inclined area = horizontal projection / cos(θ)
+    // cos(θ) = 1 / sqrt(1 + (slope/100)²)
+    const slopeFraction = plan.roofSlopePercent / 100;
+    const cosTheta = 1 / Math.sqrt(1 + slopeFraction * slopeFraction);
+    slopeRoofCeilingArea = ceilingArea / cosTheta;
+  }
+
   return {
     roomId: room.id,
     roomName: room.name,
     floorId: room.floorId,
     floorArea,
     ceilingArea,
+    slopeRoofCeilingArea,
     roomHeight: room.height || plan.defaultHeight,
     hasFloor: room.hasFloor !== false,
     hasCeiling: room.hasCeiling !== false,
@@ -1096,7 +1110,12 @@ export function calculateFloorPlanSummary(plan: FloorPlanData, rooms: RoomData[]
     // Only count usable area for rooms that have a floor (e.g. Level 2 bajo cubierta has no floor)
     if (rc.hasFloor) totalUsableM2 += rc.floorArea;
     if (rc.hasFloor) totalFloorM2 += rc.floorArea;
-    if (rc.hasCeiling) totalCeilingM2 += rc.ceilingArea;
+    if (rc.hasCeiling) {
+      totalCeilingM2 += rc.ceilingArea;
+    } else if (rc.slopeRoofCeilingArea > 0) {
+      // Faldón = techo: count inclined roof surface as ceiling
+      totalCeilingM2 += rc.slopeRoofCeilingArea;
+    }
     totalExternalWallM2 += rc.totalExternalWallArea;
     totalInternalWallM2 += rc.totalInternalWallArea;
     
@@ -1203,7 +1222,11 @@ export function calculateFloorPlanSummary(plan: FloorPlanData, rooms: RoomData[]
         totalExternalWallM2: floorRooms.reduce((s, r) => s + r.totalExternalWallArea + r.gableExternalArea, 0),
         totalInternalWallM2: floorRooms.reduce((s, r) => s + r.totalInternalWallArea + r.gableInternalArea, 0),
         totalFloorM2: floorRooms.filter(r => r.hasFloor).reduce((s, r) => s + r.floorArea, 0),
-        totalCeilingM2: floorRooms.filter(r => r.hasCeiling).reduce((s, r) => s + r.ceilingArea, 0),
+        totalCeilingM2: floorRooms.reduce((s, r) => {
+          if (r.hasCeiling) return s + r.ceilingArea;
+          if (r.slopeRoofCeilingArea > 0) return s + r.slopeRoofCeilingArea;
+          return s;
+        }, 0),
         totalDoors: floorRooms.reduce((s, r) => s + r.doorCount, 0),
         totalWindows: floorRooms.reduce((s, r) => s + r.windowCount, 0),
         gableExternalM2: floorRooms.reduce((s, r) => s + r.gableExternalArea, 0),
@@ -1231,7 +1254,11 @@ export function calculateFloorPlanSummary(plan: FloorPlanData, rooms: RoomData[]
         totalExternalWallM2: unassigned.reduce((s, r) => s + r.totalExternalWallArea + r.gableExternalArea, 0),
         totalInternalWallM2: unassigned.reduce((s, r) => s + r.totalInternalWallArea + r.gableInternalArea, 0),
         totalFloorM2: unassigned.filter(r => r.hasFloor).reduce((s, r) => s + r.floorArea, 0),
-        totalCeilingM2: unassigned.filter(r => r.hasCeiling).reduce((s, r) => s + r.ceilingArea, 0),
+        totalCeilingM2: unassigned.reduce((s, r) => {
+          if (r.hasCeiling) return s + r.ceilingArea;
+          if (r.slopeRoofCeilingArea > 0) return s + r.slopeRoofCeilingArea;
+          return s;
+        }, 0),
         totalDoors: unassigned.reduce((s, r) => s + r.doorCount, 0),
         totalWindows: unassigned.reduce((s, r) => s + r.windowCount, 0),
         gableExternalM2: unassigned.reduce((s, r) => s + r.gableExternalArea, 0),

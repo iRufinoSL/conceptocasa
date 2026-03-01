@@ -119,15 +119,16 @@ function calcSurfaceArea(
   }
 
   if (surfaceType === 'techo') {
-    // Only sum rooms that actually have a ceiling (hasCeiling: true)
-    const ceilingRooms = filterRooms.filter(r => r.hasCeiling);
+    // Sum rooms with flat ceiling OR inclined roof ceiling (faldón = techo)
+    const ceilingRooms = filterRooms.filter(r => r.hasCeiling || (!r.hasCeiling && r.hasRoof));
     if (ceilingRooms.length === 0) return { area: 0, description: 'Sin techos', largo: 0, ancho: 0 };
     let totalArea = 0;
     // Calculate bounding box of ceiling rooms INCLUDING wall thicknesses for linear calcs
     let bbMinX = Infinity, bbMaxX = -Infinity, bbMinY = Infinity, bbMaxY = -Infinity;
     for (const room of ceilingRooms) {
       const calc = calculateRoom(room, plan);
-      totalArea += calc.ceilingArea;
+      // Use inclined area when no flat ceiling but has roof (faldón = techo)
+      totalArea += calc.hasCeiling ? calc.ceilingArea : (calc.slopeRoofCeilingArea > 0 ? calc.slopeRoofCeilingArea : 0);
       // Expand bounding box by wall thicknesses (same logic as ceilingArea)
       const wallThick = (w: typeof room.walls[0] | undefined) => {
         if (!w || w.wallType.endsWith('_invisible')) return 0;
@@ -1228,7 +1229,11 @@ export function FloorPlanVolumesView({ plan, rooms, floors, floorPlanId }: Floor
         if (isNonStructural(room.name)) continue;
         const calc = calculateRoom(room, plan);
         if (calc.hasFloor) totalFloorArea += calc.floorArea;
-        if (calc.hasCeiling) totalCeilingArea += calc.ceilingArea;
+        if (calc.hasCeiling) {
+          totalCeilingArea += calc.ceilingArea;
+        } else if (calc.slopeRoofCeilingArea > 0) {
+          totalCeilingArea += calc.slopeRoofCeilingArea;
+        }
         totalExtWallArea += calc.totalExternalWallArea;
         totalIntWallArea += calc.totalInternalWallArea;
       }

@@ -4587,6 +4587,7 @@ export type Database = {
           google_maps_url: string | null
           housing_profile_id: string | null
           id: string
+          is_executed: boolean
           latitude: number | null
           longitude: number | null
           name: string
@@ -4609,6 +4610,7 @@ export type Database = {
           google_maps_url?: string | null
           housing_profile_id?: string | null
           id?: string
+          is_executed?: boolean
           latitude?: number | null
           longitude?: number | null
           name: string
@@ -4631,6 +4633,7 @@ export type Database = {
           google_maps_url?: string | null
           housing_profile_id?: string | null
           id?: string
+          is_executed?: boolean
           latitude?: number | null
           longitude?: number | null
           name?: string

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -765,6 +765,39 @@ function LevelManagerPanel({ floors, planData, rooms, onAdd, onUpdate, onDelete,
   );
 }
 
+// Error boundary to prevent white screen on room selection crashes
+class SpaceFormErrorBoundary extends React.Component<
+  { children: React.ReactNode; onReset: () => void },
+  { hasError: boolean; error: string }
+> {
+  constructor(props: any) {
+    super(props);
+    this.state = { hasError: false, error: '' };
+  }
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error: error.message };
+  }
+  componentDidCatch(error: Error) {
+    console.error('[SpaceFormErrorBoundary]', error);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <Card>
+          <CardContent className="py-6 text-center space-y-3">
+            <p className="text-sm text-destructive">Error al mostrar el espacio</p>
+            <p className="text-xs text-muted-foreground">{this.state.error}</p>
+            <Button variant="outline" size="sm" onClick={() => { this.setState({ hasError: false, error: '' }); this.props.onReset(); }}>
+              Cerrar panel
+            </Button>
+          </CardContent>
+        </Card>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 // FloorPlanSettingsPanel removed — merged into LevelManagerPanel
 
 export function FloorPlanTab({ budgetId, budgetName = '', isAdmin }: FloorPlanTabProps) {
@@ -1244,49 +1277,51 @@ export function FloorPlanTab({ budgetId, budgetName = '', isAdmin }: FloorPlanTa
                   <X className="h-4 w-4" />
                 </Button>
               </div>
-              {(() => {
-                const cellSizeM = planData.scaleMode === 'bloque' ? planData.blockLengthMm / 1000 : 1;
-                const isUnplaced = selectedRoom.posX < 0 || selectedRoom.posY < 0;
-                const coordCol = isUnplaced ? undefined : Math.round(selectedRoom.posX / cellSizeM) + 1;
-                const coordRow = isUnplaced ? undefined : Math.round(selectedRoom.posY / cellSizeM) + 1;
-                const floorObj = floors.find(f => f.id === selectedRoom.floorId);
-                const floorName = floorObj?.name;
+              <SpaceFormErrorBoundary onReset={() => setSelectedRoomId(null)}>
+                {(() => {
+                  const cellSizeM = planData.scaleMode === 'bloque' ? planData.blockLengthMm / 1000 : 1;
+                  const isUnplaced = selectedRoom.posX < 0 || selectedRoom.posY < 0;
+                  const coordCol = isUnplaced ? undefined : Math.round(selectedRoom.posX / cellSizeM) + 1;
+                  const coordRow = isUnplaced ? undefined : Math.round(selectedRoom.posY / cellSizeM) + 1;
+                  const floorObj = floors.find(f => f.id === selectedRoom.floorId);
+                  const floorName = floorObj?.name;
 
-                const handleChangeCoordinate = async (targetCol: number, targetRow: number) => {
-                  const posX = (targetCol - 1) * cellSizeM;
-                  const posY = (targetRow - 1) * cellSizeM;
-                  await updateRoom(selectedRoom.id, { posX: Math.round(posX * 1000) / 1000, posY: Math.round(posY * 1000) / 1000 });
-                  toast.success(`${selectedRoom.name} movido a ${formatCoord(targetCol, targetRow)}`);
-                };
+                  const handleChangeCoordinate = async (targetCol: number, targetRow: number) => {
+                    const posX = (targetCol - 1) * cellSizeM;
+                    const posY = (targetRow - 1) * cellSizeM;
+                    await updateRoom(selectedRoom.id, { posX: Math.round(posX * 1000) / 1000, posY: Math.round(posY * 1000) / 1000 });
+                    toast.success(`${selectedRoom.name} movido a ${formatCoord(targetCol, targetRow)}`);
+                  };
 
-                return (
-                  <FloorPlanSpaceForm
-                    room={selectedRoom}
-                    allRooms={rooms}
-                    planData={planData}
-                    coordCol={coordCol}
-                    coordRow={coordRow}
-                    floorName={floorName}
-                    onUpdateRoom={(data) => updateRoom(selectedRoom.id, data)}
-                    onUpdateWall={(wallId, data) => updateWall(wallId, data)}
-                    onUpdateWallSegmentType={(wallId, segIdx, segType) => updateWallSegmentType(wallId, segIdx, segType)}
-                    onAddOpening={(wallId, type, w, h, sh, px) => addOpening(wallId, type, w, h, sh, px)}
-                    onDeleteOpening={(openingId) => deleteOpening(openingId)}
-                    onDuplicateRoom={async (direction) => {
-                      const newId = await duplicateRoom(selectedRoom.id, direction, true);
-                      if (newId) setSelectedRoomId(newId);
-                    }}
-                    onChangeCoordinate={handleChangeCoordinate}
-                    onUngroupRoom={selectedRoom.groupId ? () => ungroupRooms(selectedRoom.groupId!) : undefined}
-                    onDeleteRoom={() => { deleteRoom(selectedRoom.id); setSelectedRoomId(null); }}
-                    onNavigateToElevation={(wallId, _wallIndex) => {
-                      setElevationReturnContext({ roomId: selectedRoom.id, wallId });
-                      setViewTab('alzados');
-                    }}
-                    saving={saving}
-                  />
-                );
-              })()}
+                  return (
+                    <FloorPlanSpaceForm
+                      room={selectedRoom}
+                      allRooms={rooms}
+                      planData={planData}
+                      coordCol={coordCol}
+                      coordRow={coordRow}
+                      floorName={floorName}
+                      onUpdateRoom={(data) => updateRoom(selectedRoom.id, data)}
+                      onUpdateWall={(wallId, data) => updateWall(wallId, data)}
+                      onUpdateWallSegmentType={(wallId, segIdx, segType) => updateWallSegmentType(wallId, segIdx, segType)}
+                      onAddOpening={(wallId, type, w, h, sh, px) => addOpening(wallId, type, w, h, sh, px)}
+                      onDeleteOpening={(openingId) => deleteOpening(openingId)}
+                      onDuplicateRoom={async (direction) => {
+                        const newId = await duplicateRoom(selectedRoom.id, direction, true);
+                        if (newId) setSelectedRoomId(newId);
+                      }}
+                      onChangeCoordinate={handleChangeCoordinate}
+                      onUngroupRoom={selectedRoom.groupId ? () => ungroupRooms(selectedRoom.groupId!) : undefined}
+                      onDeleteRoom={() => { deleteRoom(selectedRoom.id); setSelectedRoomId(null); }}
+                      onNavigateToElevation={(wallId, _wallIndex) => {
+                        setElevationReturnContext({ roomId: selectedRoom.id, wallId });
+                        setViewTab('alzados');
+                      }}
+                      saving={saving}
+                    />
+                  );
+                })()}
+              </SpaceFormErrorBoundary>
             </div>
           ) : null}
         </div>

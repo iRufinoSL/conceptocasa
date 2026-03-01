@@ -1464,6 +1464,8 @@ export function computeWallSegments(rooms: RoomData[]): Map<string, WallSegment[
   const result = new Map<string, WallSegment[]>();
 
   rooms.forEach(room => {
+    // Skip rooms with zero or negative dimensions to prevent division by zero
+    if (room.width <= 0 || room.length <= 0) return;
     [1, 2, 3, 4].forEach(wallIdx => {
       const key = `${room.id}::${wallIdx}`;
       const isHoriz = wallIdx === 1 || wallIdx === 3;

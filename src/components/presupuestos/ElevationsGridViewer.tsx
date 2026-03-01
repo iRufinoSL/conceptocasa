@@ -126,7 +126,7 @@ export function ElevationsGridViewer({
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editCard, setEditCard] = useState<ElevationCard | null>(null);
   const [editCardDialogOpen, setEditCardDialogOpen] = useState(false);
-  const [viewMode, setViewMode] = useState<'rooms' | 'groups' | 'composite' | 'total'>('rooms');
+  const [viewMode, setViewMode] = useState<'rooms' | 'groups' | 'composite' | 'total' | 'vivienda'>('rooms');
   // showFaldonesWithAleros removed — faldones are now in Volúmenes tab
 
   // Scroll to focused wall on mount
@@ -654,7 +654,7 @@ export function ElevationsGridViewer({
 
   const hasGroups = elevationGroups.length > 0;
 
-  // Compute Total Elevations: stack floors by building side
+  // Compute Total Elevations: stack floors by building side (requires 2+ floors)
   const totalElevations = useMemo(() => {
     if (perFloorComposites.length < 2) return [];
     const TOTAL_SIDE_LABELS: Record<string, string> = {
@@ -668,23 +668,51 @@ export function ElevationsGridViewer({
     }> = [];
     sides.forEach(side => {
       const layers: Array<{ floorName: string; composites: CompositeWall[]; isGable: boolean }> = [];
-      const sortedFloorComps = [...perFloorComposites];
-      sortedFloorComps.forEach(({ floorName, composites }) => {
-        // Find main perimeter wall for this side (A-B, B-C, C-D, D-A pattern)
+      [...perFloorComposites].forEach(({ floorName, composites }) => {
         const sideComposites = composites.filter(cw => {
           if (cw.side !== side) return false;
-          // Exclude interior cuts from total elevation (both corners have numeric suffix after letter)
           const hasNumSuffix = (lbl: string) => /[A-D]\d/.test(lbl.replace(/^\d+/, ''));
           return !(hasNumSuffix(cw.startCorner.label) && hasNumSuffix(cw.endCorner.label));
         });
         if (sideComposites.length > 0) {
-          // Check if any section is a gable
           const isGable = sideComposites.some(cw => cw.sections.some(s => s.isGable));
           layers.push({ floorName, composites: sideComposites, isGable });
         }
       });
       if (layers.length >= 2) {
         result.push({ side, label: TOTAL_SIDE_LABELS[side], layers });
+      }
+    });
+    return result;
+  }, [perFloorComposites]);
+
+  // Compute Nivel Vivienda elevations: whole-building facades (all floors stacked, available with 1+ floors)
+  const viviendaElevations = useMemo(() => {
+    if (perFloorComposites.length < 1) return [];
+    const FACE_LABELS: Record<string, string> = {
+      top: 'Cara Superior', right: 'Cara Derecha', bottom: 'Cara Inferior', left: 'Cara Izquierda',
+    };
+    const sides: Array<'top' | 'right' | 'bottom' | 'left'> = ['top', 'right', 'bottom', 'left'];
+    const result: Array<{
+      side: 'top' | 'right' | 'bottom' | 'left';
+      label: string;
+      layers: Array<{ floorName: string; composites: CompositeWall[]; isGable: boolean }>;
+    }> = [];
+    sides.forEach(side => {
+      const layers: Array<{ floorName: string; composites: CompositeWall[]; isGable: boolean }> = [];
+      [...perFloorComposites].forEach(({ floorName, composites }) => {
+        const sideComposites = composites.filter(cw => {
+          if (cw.side !== side) return false;
+          const hasNumSuffix = (lbl: string) => /[A-D]\d/.test(lbl.replace(/^\d+/, ''));
+          return !(hasNumSuffix(cw.startCorner.label) && hasNumSuffix(cw.endCorner.label));
+        });
+        if (sideComposites.length > 0) {
+          const isGable = sideComposites.some(cw => cw.sections.some(s => s.isGable));
+          layers.push({ floorName, composites: sideComposites, isGable });
+        }
+      });
+      if (layers.length >= 1) {
+        result.push({ side, label: FACE_LABELS[side], layers });
       }
     });
     return result;
@@ -719,6 +747,12 @@ export function ElevationsGridViewer({
           <Button variant={viewMode === 'total' ? 'default' : 'outline'} size="sm" className="text-xs h-7"
             onClick={() => setViewMode('total')}>
             <ArrowUpDown className="h-3 w-3 mr-1" /> Nivel Total
+          </Button>
+        )}
+        {viviendaElevations.length > 0 && (
+          <Button variant={viewMode === 'vivienda' ? 'default' : 'outline'} size="sm" className="text-xs h-7"
+            onClick={() => setViewMode('vivienda')}>
+            <Layers className="h-3 w-3 mr-1" /> Nivel Vivienda
           </Button>
         )}
         {viewMode === 'composite' && buildingOutline.length > 0 && (
@@ -926,8 +960,24 @@ export function ElevationsGridViewer({
         </div>
       )}
 
+      {/* Nivel Vivienda — whole-building facades (all floors, including single-floor) */}
+      {viewMode === 'vivienda' && viviendaElevations.length > 0 && (
+        <div className="space-y-4">
+          {viviendaElevations.map(te => (
+            <TotalElevationCard
+              key={`viv-${te.side}`}
+              side={te.side}
+              label={te.label}
+              layers={te.layers}
+              plan={plan}
+              rooms={rooms}
+              budgetName={budgetName}
+            />
+          ))}
+        </div>
+      )}
 
-      {/* Room-based view (default) */}
+
       {viewMode === 'rooms' && floorGroups.map(({ floorId, floorName, roomGroups: floorRoomGroups }) => {
         const hasFloorHeader = floorName !== '';
         const content = (

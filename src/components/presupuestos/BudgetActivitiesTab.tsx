@@ -186,6 +186,7 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [viewMode, setViewMode] = useState<'alphabetical' | 'grouped' | 'workarea' | 'time' | 'options'>('alphabetical');
+  const [showOnlyActive, setShowOnlyActive] = useState(true);
   const [selectedActivityIds, setSelectedActivityIds] = useState<Set<string>>(new Set());
   const [expandedOptions, setExpandedOptions] = useState<Set<string>>(new Set());
   const [activitySortOrder, setActivitySortOrder] = useState<'asc' | 'desc'>('asc');
@@ -1487,8 +1488,13 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
       );
     }
 
+    // Apply uses_measurement (X) filter
+    if (showOnlyActive) {
+      filtered = filtered.filter(a => a.uses_measurement !== false);
+    }
+
     return filtered;
-  }, [activities, searchTerm, permissions]);
+  }, [activities, searchTerm, permissions, showOnlyActive]);
 
   // Check if user can edit a specific activity
   const canEditActivity = useCallback((activityId: string): boolean => {
@@ -2019,6 +2025,21 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
         />
       </div>
 
+      {/* Filter: Show only X=SI (uses_measurement) */}
+      <div className="flex items-center gap-3">
+        <Button
+          variant={showOnlyActive ? 'default' : 'outline'}
+          size="sm"
+          onClick={() => setShowOnlyActive(!showOnlyActive)}
+        >
+          <Eye className="h-4 w-4 mr-1" />
+          {showOnlyActive ? 'Mostrando solo X (activas)' : 'Mostrando todas'}
+        </Button>
+        <span className="text-xs text-muted-foreground">
+          {filteredActivities.length} de {activities.length} actividades
+        </span>
+      </div>
+
       {/* Budget Total Summary with Option Subtotals */}
       {(() => {
         const OPCIONES = ['A', 'B', 'C'];
@@ -2127,7 +2148,7 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
                   />
                 </TableHead>
                 <TableHead>ActividadID</TableHead>
-                <TableHead className="text-center w-16">Uso Pres.</TableHead>
+                <TableHead className="text-center w-16">X</TableHead>
                 <TableHead>Actividad</TableHead>
                 <TableHead>Áreas</TableHead>
                 <TableHead>Opciones</TableHead>
@@ -2175,7 +2196,7 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
                               if (error) throw error;
                               await syncActivityResourcesRelatedUnits(activity.id);
                               fetchData();
-                              toast.success(`Uso en Presupuesto: ${newValue ? 'Sí' : 'No'}`);
+                              toast.success(`Actividad: ${newValue ? 'X (activa)' : '— (inactiva)'}`);
                             } catch (err: any) {
                               toast.error('Error al actualizar');
                             }
@@ -2183,12 +2204,12 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
                           className="cursor-pointer hover:opacity-80 transition-opacity"
                         >
                           <Badge variant={activity.uses_measurement !== false ? 'default' : 'secondary'} className="text-xs">
-                            {activity.uses_measurement !== false ? 'Sí' : 'No'}
+                            {activity.uses_measurement !== false ? 'X' : '—'}
                           </Badge>
                         </button>
                       ) : (
                         <Badge variant={activity.uses_measurement !== false ? 'default' : 'secondary'} className="text-xs">
-                          {activity.uses_measurement !== false ? 'Sí' : 'No'}
+                          {activity.uses_measurement !== false ? 'X' : '—'}
                         </Badge>
                       )}
                     </TableCell>
@@ -2558,7 +2579,7 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
                               </Button>
                             </TableHead>
                             <TableHead>Opciones</TableHead>
-                            <TableHead>Uso Pres.</TableHead>
+                            <TableHead>X</TableHead>
                             <TableHead>Unidad</TableHead>
                             <TableHead className="text-right">Uds Relac.</TableHead>
                             <TableHead>MediciónID</TableHead>
@@ -2647,7 +2668,7 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
                                             .eq('id', activity.id);
                                           if (error) throw error;
                                           fetchData();
-                                          toast.success(newValue ? 'Uso en Presupuesto: Sí' : 'Uso en Presupuesto: No');
+                                          toast.success(newValue ? 'Actividad: X (activa)' : 'Actividad: — (inactiva)');
                                         } catch (err: any) {
                                           toast.error('Error al actualizar');
                                         }
@@ -2655,12 +2676,12 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
                                       className="cursor-pointer hover:opacity-80 transition-opacity"
                                     >
                                       <Badge variant={activity.uses_measurement !== false ? 'default' : 'secondary'} className="text-xs">
-                                        {activity.uses_measurement !== false ? 'Sí' : 'No'}
+                                        {activity.uses_measurement !== false ? 'X' : '—'}
                                       </Badge>
                                     </button>
                                   ) : (
                                     <Badge variant={activity.uses_measurement !== false ? 'default' : 'secondary'} className="text-xs">
-                                      {activity.uses_measurement !== false ? 'Sí' : 'No'}
+                                      {activity.uses_measurement !== false ? 'X' : '—'}
                                     </Badge>
                                   )}
                                 </TableCell>
@@ -2823,7 +2844,7 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
                               </Button>
                             </TableHead>
                             <TableHead>Opciones</TableHead>
-                            <TableHead>Uso Pres.</TableHead>
+                            <TableHead>X</TableHead>
                             <TableHead>Unidad</TableHead>
                             <TableHead className="text-right">Uds Relac.</TableHead>
                             <TableHead>MediciónID</TableHead>
@@ -2923,22 +2944,22 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
                                             .eq('id', activity.id);
                                           if (error) throw error;
                                           fetchData();
-                                          toast.success(newValue ? 'Uso en Presupuesto: Sí' : 'Uso en Presupuesto: No');
+                                          toast.success(newValue ? 'Actividad: X (activa)' : 'Actividad: — (inactiva)');
                                         } catch (err: any) {
                                           toast.error('Error al actualizar');
                                         }
                                       }}
                                       className="cursor-pointer hover:opacity-80 transition-opacity"
                                     >
-                                      <Badge variant={activity.uses_measurement !== false ? 'default' : 'secondary'} className="text-xs">
-                                        {activity.uses_measurement !== false ? 'Sí' : 'No'}
-                                      </Badge>
-                                    </button>
-                                  ) : (
                                     <Badge variant={activity.uses_measurement !== false ? 'default' : 'secondary'} className="text-xs">
-                                      {activity.uses_measurement !== false ? 'Sí' : 'No'}
+                                      {activity.uses_measurement !== false ? 'X' : '—'}
                                     </Badge>
-                                  )}
+                                  </button>
+                                ) : (
+                                  <Badge variant={activity.uses_measurement !== false ? 'default' : 'secondary'} className="text-xs">
+                                    {activity.uses_measurement !== false ? 'X' : '—'}
+                                  </Badge>
+                                )}
                                 </TableCell>
                                 <TableCell>{activity.measurement_unit}</TableCell>
                                 <TableCell className="text-right">

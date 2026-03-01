@@ -243,13 +243,13 @@ export function FloorPlanSpaceForm({ room, allRooms, planData, coordCol, coordRo
 
         {/* Coordinate - XYZ format (e.g. 0,0 or 18,1,10) */}
         <div>
-          <Label className="text-xs font-semibold">Coordenada XY (ej: 0,0)</Label>
+          <Label className="text-xs font-semibold">Coordenada XYZ (ej: 0,0 o 1,1,10)</Label>
           <div className="flex items-end gap-2 mt-1">
             <input
               type="text"
               value={localCoord}
               onChange={e => setLocalCoord(e.target.value)}
-              placeholder="0,0"
+              placeholder="0,0 o X,Y,Z"
               disabled={fieldsDisabled}
               className="flex h-8 w-24 rounded-md border border-input bg-background px-3 py-1 text-sm text-center font-mono ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
             />

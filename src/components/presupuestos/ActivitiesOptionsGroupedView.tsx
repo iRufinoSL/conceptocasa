@@ -191,7 +191,7 @@ export function ActivitiesOptionsGroupedView({
                           <TableHead>Actividad</TableHead>
                           <TableHead>Opciones</TableHead>
                           <TableHead>Fase</TableHead>
-                          <TableHead className="text-center">Uso Pres.</TableHead>
+                          <TableHead className="text-center">X</TableHead>
                           <TableHead className="text-right">€SubTotal</TableHead>
                           <TableHead>Archivos</TableHead>
                           {(isAdmin || canEdit) && <TableHead className="w-20">Acciones</TableHead>}
@@ -283,7 +283,7 @@ export function ActivitiesOptionsGroupedView({
                               </TableCell>
                               <TableCell className="text-center">
                                 <Badge variant={activity.uses_measurement ? 'default' : 'secondary'} className="text-xs">
-                                  {activity.uses_measurement ? 'Sí' : 'No'}
+                                  {activity.uses_measurement ? 'X' : '—'}
                                 </Badge>
                               </TableCell>
                               <TableCell className="text-right font-mono font-semibold text-primary">

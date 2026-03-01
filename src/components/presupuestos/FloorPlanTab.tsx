@@ -319,12 +319,14 @@ function LevelManagerPanel({ floors, planData, rooms, onAdd, onUpdate, onDelete,
   const [intBlockWMm, setIntBlockWMm] = useState(String(planData.intBlockWidthMm || 100));
 
   // Per-level heights
+  // Per-level heights stored in mm for display (internally room.height is in meters)
   const [levelHeights, setLevelHeights] = useState<Record<string, string>>(() => {
     const map: Record<string, string> = {};
     floors.forEach(f => {
       const floorRooms = rooms.filter(r => r.floorId === f.id);
       const firstHeight = floorRooms[0]?.height;
-      map[f.id] = firstHeight !== undefined ? String(firstHeight) : String(planData.defaultHeight);
+      const heightM = firstHeight !== undefined ? firstHeight : planData.defaultHeight;
+      map[f.id] = String(Math.round(heightM * 1000));
     });
     return map;
   });
@@ -424,7 +426,7 @@ function LevelManagerPanel({ floors, planData, rooms, onAdd, onUpdate, onDelete,
 
     // Determine default height from first non-bajo-cubierta level
     const normalFloor = floors.find(f => !isFloorBajoCubierta(f));
-    const defaultH = normalFloor ? (parseFloat(levelHeights[normalFloor.id] || '') || planData.defaultHeight) : planData.defaultHeight;
+    const defaultH = normalFloor ? ((parseFloat(levelHeights[normalFloor.id] || '') || 2500) / 1000) : planData.defaultHeight;
 
     await onUpdatePlan({
       defaultHeight: defaultH,
@@ -440,13 +442,13 @@ function LevelManagerPanel({ floors, planData, rooms, onAdd, onUpdate, onDelete,
 
     // Apply per-level heights to rooms
     for (const floor of floors) {
-      const levelH = levelHeights[floor.id];
+      const levelHmm = levelHeights[floor.id];
       const floorRooms = rooms.filter(r => r.floorId === floor.id);
-      if (levelH !== undefined && levelH !== '') {
-        const h = parseFloat(levelH);
+      if (levelHmm !== undefined && levelHmm !== '') {
+        const hMeters = (parseFloat(levelHmm) || 2500) / 1000; // Convert mm to meters for storage
         for (const room of floorRooms) {
-          if (room.height !== h) {
-            await onUpdateRoom(room.id, { height: h });
+          if (room.height !== hMeters) {
+            await onUpdateRoom(room.id, { height: hMeters });
           }
         }
       }
@@ -629,18 +631,22 @@ function LevelManagerPanel({ floors, planData, rooms, onAdd, onUpdate, onDelete,
                     <div className="px-3 pb-3 space-y-3 border-t">
                       <div className="grid grid-cols-2 gap-3 pt-2">
                         <div>
-                          <Label className="text-xs">Altura paredes (m)</Label>
+                          <Label className="text-xs">Altura paredes (mm)</Label>
                           <Input
                             type="number"
-                            step="0.1"
+                            step="250"
                             min="0"
                             value={levelHeights[f.id] || ''}
-                            placeholder="2.5"
+                            placeholder="2500"
                             onChange={e => setLevelHeights(prev => ({ ...prev, [f.id]: e.target.value }))}
                             disabled={saving}
                           />
+                          <p className="text-[10px] text-muted-foreground mt-1">
+                            = {((parseFloat(levelHeights[f.id] || '2500') / 1000)).toFixed(2)}m
+                            {' · '}{Math.round((parseFloat(levelHeights[f.id] || '2500')) / (planData.blockHeightMm || 250))} bloques
+                          </p>
                           {isBajo && (
-                            <p className="text-[10px] text-muted-foreground mt-1">0 = bajo cubierta (paredes siguen pendiente)</p>
+                            <p className="text-[10px] text-muted-foreground">0 = bajo cubierta (paredes siguen pendiente)</p>
                           )}
                         </div>
                         <div className="flex items-end">

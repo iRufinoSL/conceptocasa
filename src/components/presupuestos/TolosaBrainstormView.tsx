@@ -1725,7 +1725,6 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
                         )}
                         {cuanto > 0 && cuanto !== (summary?.resourceSubtotal || 0) && (
                           <Badge variant="secondary" className="text-[10px] font-mono gap-1 bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300">
-                            <DollarSign className="h-2.5 w-2.5" />
                             {formatCurrency(cuanto)}
                           </Badge>
                         )}

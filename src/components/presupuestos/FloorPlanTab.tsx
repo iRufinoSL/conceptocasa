@@ -1286,11 +1286,25 @@ export function FloorPlanTab({ budgetId, budgetName = '', isAdmin }: FloorPlanTa
                   const floorObj = floors.find(f => f.id === selectedRoom.floorId);
                   const floorName = floorObj?.name;
 
-                  const handleChangeCoordinate = async (targetCol: number, targetRow: number) => {
+                  // Compute Z for this floor based on accumulated heights of lower floors
+                  const blockHMmVal = planData.blockHeightMm || 250;
+                  const sortedFloors = [...floors].sort((a, b) => a.orderIndex - b.orderIndex);
+                  let accumulatedZ = 0;
+                  for (const f of sortedFloors) {
+                    if (f.id === selectedRoom.floorId) break;
+                    const floorRooms = rooms.filter(r => r.floorId === f.id);
+                    const firstHeight = floorRooms[0]?.height;
+                    const heightM = firstHeight !== undefined ? firstHeight : planData.defaultHeight;
+                    const heightMm = Math.round(heightM * 1000);
+                    accumulatedZ += Math.round(heightMm / blockHMmVal);
+                  }
+                  const coordZ = accumulatedZ;
+
+                  const handleChangeCoordinate = async (targetCol: number, targetRow: number, targetZ?: number) => {
                     const posX = (targetCol - 1) * cellSizeM;
                     const posY = (targetRow - 1) * cellSizeM;
                     await updateRoom(selectedRoom.id, { posX: Math.round(posX * 1000) / 1000, posY: Math.round(posY * 1000) / 1000 });
-                    toast.success(`${selectedRoom.name} movido a ${formatCoord(targetCol, targetRow)}`);
+                    toast.success(`${selectedRoom.name} movido a ${formatCoord(targetCol, targetRow, undefined, targetZ ?? coordZ)}`);
                   };
 
                   return (
@@ -1300,6 +1314,7 @@ export function FloorPlanTab({ budgetId, budgetName = '', isAdmin }: FloorPlanTa
                       planData={planData}
                       coordCol={coordCol}
                       coordRow={coordRow}
+                      coordZ={coordZ}
                       floorName={floorName}
                       onUpdateRoom={(data) => updateRoom(selectedRoom.id, data)}
                       onUpdateWall={(wallId, data) => updateWall(wallId, data)}

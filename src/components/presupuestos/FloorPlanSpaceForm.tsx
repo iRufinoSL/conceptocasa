@@ -17,6 +17,7 @@ interface FloorPlanSpaceFormProps {
   planData: FloorPlanData;
   coordCol?: number;
   coordRow?: number;
+  coordZ?: number;
   floorName?: string;
   onUpdateRoom: (data: { name?: string; width?: number; length?: number; height?: number; extWallThickness?: number | null; intWallThickness?: number | null; hasFloor?: boolean; hasCeiling?: boolean }) => void | Promise<void>;
   onUpdateWall: (wallId: string, data: { wallType?: WallType }) => void | Promise<void>;
@@ -24,7 +25,7 @@ interface FloorPlanSpaceFormProps {
   onAddOpening?: (wallId: string, type: string, width: number, height: number, sillHeight?: number, positionX?: number) => Promise<void>;
   onDeleteOpening?: (openingId: string) => Promise<void>;
   onDuplicateRoom?: (direction: 'right' | 'down') => Promise<void>;
-  onChangeCoordinate?: (col: number, row: number) => void | Promise<void>;
+  onChangeCoordinate?: (col: number, row: number, z?: number) => void | Promise<void>;
   onUngroupRoom?: (groupId: string) => void;
   onDeleteRoom: () => void;
   onNavigateToElevation?: (wallId: string, wallIndex: number) => void;
@@ -42,7 +43,7 @@ const WALL_TYPE_OPTIONS: { value: WallType; label: string }[] = [
   { value: 'interior_invisible', label: 'Int. invisible' },
 ];
 
-export function FloorPlanSpaceForm({ room, allRooms, planData, coordCol, coordRow, floorName, onUpdateRoom, onUpdateWall, onUpdateWallSegmentType, onAddOpening, onDeleteOpening, onDuplicateRoom, onChangeCoordinate, onUngroupRoom, onDeleteRoom, onNavigateToElevation, saving }: FloorPlanSpaceFormProps) {
+export function FloorPlanSpaceForm({ room, allRooms, planData, coordCol, coordRow, coordZ, floorName, onUpdateRoom, onUpdateWall, onUpdateWallSegmentType, onAddOpening, onDeleteOpening, onDuplicateRoom, onChangeCoordinate, onUngroupRoom, onDeleteRoom, onNavigateToElevation, saving }: FloorPlanSpaceFormProps) {
   const isBlockMode = planData.scaleMode === 'bloque';
   const blockL = planData.blockLengthMm || 625;
   const blockH = planData.blockHeightMm || 250;
@@ -58,7 +59,7 @@ export function FloorPlanSpaceForm({ room, allRooms, planData, coordCol, coordRo
   const [localIntWT, setLocalIntWT] = useState(room.intWallThickness != null ? String(room.intWallThickness) : '');
   const [localHasFloor, setLocalHasFloor] = useState(room.hasFloor !== false);
   const [localHasCeiling, setLocalHasCeiling] = useState(room.hasCeiling !== false);
-  const [localCoord, setLocalCoord] = useState(coordCol && coordRow ? formatCoord(coordCol, coordRow) : '');
+  const [localCoord, setLocalCoord] = useState(coordCol && coordRow ? formatCoord(coordCol, coordRow, undefined, coordZ ?? 0) : '');
   const [localWalls, setLocalWalls] = useState<Record<string, WallType>>(() => {
     const map: Record<string, WallType> = {};
     room.walls.forEach(w => { map[w.id] = w.wallType; });
@@ -76,13 +77,13 @@ export function FloorPlanSpaceForm({ room, allRooms, planData, coordCol, coordRo
     setLocalIntWT(room.intWallThickness != null ? String(room.intWallThickness) : '');
     setLocalHasFloor(room.hasFloor !== false);
     setLocalHasCeiling(room.hasCeiling !== false);
-    setLocalCoord(coordCol && coordRow ? formatCoord(coordCol, coordRow) : '');
+    setLocalCoord(coordCol && coordRow ? formatCoord(coordCol, coordRow, undefined, coordZ ?? 0) : '');
     const map: Record<string, WallType> = {};
     room.walls.forEach(w => { map[w.id] = w.wallType; });
     setLocalWalls(map);
     setExpandedWall(null);
     setIsEditing(false);
-  }, [room, coordCol, coordRow, toDisplay]);
+  }, [room, coordCol, coordRow, coordZ, toDisplay]);
 
   // Filter rooms to same floor and only placed rooms to avoid false adjacencies and crashes
   const sameFloorRooms = useMemo(() => {
@@ -112,6 +113,7 @@ export function FloorPlanSpaceForm({ room, allRooms, planData, coordCol, coordRo
   const parsedCoord = localCoord ? parseCoord(localCoord) : null;
   const parsedCol = parsedCoord?.col || 0;
   const parsedRow = parsedCoord?.row || 0;
+  const parsedZ = parsedCoord?.z ?? 0;
   const m2 = isBlockMode
     ? blocksToMeters(parsedWidth, blockL) * blocksToMeters(parsedLength, blockL)
     : parsedWidth * parsedLength;
@@ -142,7 +144,7 @@ export function FloorPlanSpaceForm({ room, allRooms, planData, coordCol, coordRo
     localHasFloor !== (room.hasFloor !== false) ||
     localHasCeiling !== (room.hasCeiling !== false);
 
-  const coordChanged = parsedCol !== (coordCol || 0) || parsedRow !== (coordRow || 0);
+  const coordChanged = parsedCol !== (coordCol || 0) || parsedRow !== (coordRow || 0) || parsedZ !== (coordZ ?? 0);
 
   const wallsChanged = room.walls.some(w => localWalls[w.id] !== w.wallType);
 
@@ -152,7 +154,7 @@ export function FloorPlanSpaceForm({ room, allRooms, planData, coordCol, coordRo
   const handleSave = async () => {
     // Save coordinate changes FIRST (most important for unplaced rooms)
     if (coordChanged && onChangeCoordinate && parsedCol > 0 && parsedRow > 0) {
-      await onChangeCoordinate(parsedCol, parsedRow);
+      await onChangeCoordinate(parsedCol, parsedRow, parsedZ);
     }
 
     // Save room property changes

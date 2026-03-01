@@ -1488,9 +1488,28 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
       );
     }
 
-    // Apply uses_measurement (X) filter
+    // Apply uses_measurement (X) filter with cascading: if a parent activity (by code prefix)
+    // is inactive, all its children are also hidden and excluded from calculations.
     if (showOnlyActive) {
-      filtered = filtered.filter(a => a.uses_measurement !== false);
+      // Build set of inactive activity codes (uses_measurement === false)
+      const inactiveCodes = new Set(
+        activities
+          .filter(a => a.uses_measurement === false)
+          .map(a => a.code)
+      );
+
+      filtered = filtered.filter(a => {
+        // If the activity itself is inactive, hide it
+        if (a.uses_measurement === false) return false;
+
+        // Check if any ancestor code is inactive (e.g., code "01.02.03" checks "01.02" and "01")
+        const codeParts = a.code.split('.');
+        for (let i = codeParts.length - 1; i >= 1; i--) {
+          const parentCode = codeParts.slice(0, i).join('.');
+          if (inactiveCodes.has(parentCode)) return false;
+        }
+        return true;
+      });
     }
 
     return filtered;
@@ -2033,7 +2052,7 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
           onClick={() => setShowOnlyActive(!showOnlyActive)}
         >
           <Eye className="h-4 w-4 mr-1" />
-          {showOnlyActive ? 'Mostrando solo X (activas)' : 'Mostrando todas'}
+          {showOnlyActive ? 'Solo las que SÍ se ejecutan' : 'Listar todas'}
         </Button>
         <span className="text-xs text-muted-foreground">
           {filteredActivities.length} de {activities.length} actividades

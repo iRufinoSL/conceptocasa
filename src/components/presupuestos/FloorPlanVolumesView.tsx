@@ -371,9 +371,12 @@ function LayerRow({
             </Button>
           )}
         </div>
-        <span className="text-[10px] text-muted-foreground truncate" title={layer.description || ''}>
-          {layer.description || '—'}
-        </span>
+        <Input
+          className="h-7 text-xs"
+          value={layer.description}
+          onChange={e => onUpdateLayer(layer.id, { description: e.target.value })}
+          placeholder="Descripción"
+        />
         <Select
           value={layer.measurementType}
           onValueChange={(v) => {

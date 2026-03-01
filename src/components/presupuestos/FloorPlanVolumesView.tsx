@@ -100,6 +100,7 @@ function calcSurfaceArea(
   floorRooms: RoomData[],
   slopes: RoofSlopeDetail[],
   includeNonStructural: boolean,
+  isRoofLevel: boolean = false,
 ): { area: number; description: string; largo: number; ancho: number } {
   const filterRooms = includeNonStructural
     ? floorRooms
@@ -123,16 +124,26 @@ function calcSurfaceArea(
   }
 
   if (surfaceType === 'techo') {
-    // Sum rooms with flat ceiling OR inclined roof ceiling (faldón = techo)
+    // Flat ceilings are summed per room.
+    // Sloped ceilings (faldón=techo) are counted once from roof geometry only in roof levels.
     const ceilingRooms = filterRooms.filter(r => r.hasCeiling || (!r.hasCeiling && r.hasRoof));
     if (ceilingRooms.length === 0) return { area: 0, description: 'Sin techos', largo: 0, ancho: 0 };
+
     let totalArea = 0;
+    let hasSlopeCeiling = false;
+    let slopeFallbackArea = 0;
+
     // Calculate bounding box of ceiling rooms INCLUDING wall thicknesses for linear calcs
     let bbMinX = Infinity, bbMaxX = -Infinity, bbMinY = Infinity, bbMaxY = -Infinity;
     for (const room of ceilingRooms) {
       const calc = calculateRoom(room, plan);
-      // Use inclined area when no flat ceiling but has roof (faldón = techo)
-      totalArea += calc.hasCeiling ? calc.ceilingArea : (calc.slopeRoofCeilingArea > 0 ? calc.slopeRoofCeilingArea : 0);
+      if (calc.hasCeiling) {
+        totalArea += calc.ceilingArea;
+      } else if (isRoofLevel && calc.hasRoof && calc.slopeRoofCeilingArea > 0) {
+        hasSlopeCeiling = true;
+        slopeFallbackArea += calc.slopeRoofCeilingArea;
+      }
+
       // Expand bounding box by wall thicknesses (same logic as ceilingArea)
       const wallThick = (w: typeof room.walls[0] | undefined) => {
         if (!w || w.wallType.endsWith('_invisible')) return 0;
@@ -151,6 +162,12 @@ function calcSurfaceArea(
       if (rMinY < bbMinY) bbMinY = rMinY;
       if (rMaxY > bbMaxY) bbMaxY = rMaxY;
     }
+
+    if (isRoofLevel && hasSlopeCeiling) {
+      const roofArea = slopes.reduce((sum, s) => sum + (includeNonStructural ? s.slopeArea : s.structSlopeArea), 0);
+      totalArea += roofArea > 0 ? roofArea : slopeFallbackArea;
+    }
+
     const techoW = bbMaxX - bbMinX;
     const techoL = bbMaxY - bbMinY;
     return {
@@ -1323,26 +1340,35 @@ export function FloorPlanVolumesView({ plan, rooms, floors, floorPlanId, budgetI
       const floorRooms = rooms.filter(r => r.floorId === floor.id);
       const isBajoCubierta = floor.level === 'bajo_cubierta' || floor.name.toLowerCase().includes('cubierta');
       let totalFloorArea = 0;
-      let totalCeilingArea = 0;
+      let totalFlatCeilingArea = 0;
+      let slopeCeilingFallbackArea = 0;
+      let hasSlopeCeilingRooms = false;
 
       for (const room of floorRooms) {
         if (isNonStructural(room.name)) continue;
         const calc = calculateRoom(room, plan);
         if (calc.hasFloor) totalFloorArea += calc.floorArea;
         if (calc.hasCeiling) {
-          totalCeilingArea += calc.ceilingArea;
-        } else if (calc.slopeRoofCeilingArea > 0) {
-          totalCeilingArea += calc.slopeRoofCeilingArea;
+          totalFlatCeilingArea += calc.ceilingArea;
+        } else if (isBajoCubierta && calc.hasRoof && calc.slopeRoofCeilingArea > 0) {
+          hasSlopeCeilingRooms = true;
+          slopeCeilingFallbackArea += calc.slopeRoofCeilingArea;
         }
       }
 
       const { totalExtWallArea, totalIntWallArea } = calcLevelWallAreas(floorRooms);
 
-      // Roof slopes for bajo cubierta
+      // Roof slopes for bajo cubierta (calculated once from floor geometry to avoid room-based double-counting)
       let totalRoofArea = 0;
-      if (isBajoCubierta && slopes.length > 0) {
-        totalRoofArea = slopes.reduce((sum, s) => sum + s.structSlopeArea, 0);
+      if (isBajoCubierta) {
+        const floorSlopes = calculateRoofSlopes(plan, floorRooms);
+        totalRoofArea = floorSlopes.reduce((sum, s) => sum + s.structSlopeArea, 0);
       }
+
+      const slopeCeilingArea = hasSlopeCeilingRooms
+        ? (totalRoofArea > 0 ? totalRoofArea : slopeCeilingFallbackArea)
+        : 0;
+      const totalCeilingArea = totalFlatCeilingArea + slopeCeilingArea;
 
       return {
         floorId: floor.id,
@@ -1356,7 +1382,7 @@ export function FloorPlanVolumesView({ plan, rooms, floors, floorPlanId, budgetI
       };
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [floors, rooms, plan, slopes]);
+  }, [floors, rooms, plan]);
 
   const globalTotalFloors = areaSummaryByLevel.reduce((s, l) => s + l.totalFloorArea, 0);
   const globalTotalCeilings = areaSummaryByLevel.reduce((s, l) => s + l.totalCeilingArea, 0);
@@ -1387,7 +1413,9 @@ export function FloorPlanVolumesView({ plan, rooms, floors, floorPlanId, budgetI
         if (calc.hasFloor) {
           entries.push({ name: `Suelo ${rn}`, value: calc.floorArea, unit: 'm2', sourceKey: `vol_suelo_room_${room.id}` });
         }
-        const ceilingArea = calc.hasCeiling ? calc.ceilingArea : (calc.slopeRoofCeilingArea > 0 ? calc.slopeRoofCeilingArea : 0);
+        const ceilingArea = calc.hasCeiling
+          ? calc.ceilingArea
+          : (lvl.isBajoCubierta && calc.hasRoof && calc.slopeRoofCeilingArea > 0 ? calc.slopeRoofCeilingArea : 0);
         if (ceilingArea > 0) {
           entries.push({ name: `Techo ${rn}`, value: ceilingArea, unit: 'm2', sourceKey: `vol_techo_room_${room.id}` });
         }
@@ -1510,7 +1538,7 @@ export function FloorPlanVolumesView({ plan, rooms, floors, floorPlanId, budgetI
         const leafLayers = layers.filter(l => !childParentIds.has(l.id));
         for (const l of leafLayers) {
           if (!l.name || l.name.trim() === '') continue;
-          const dims = calcSurfaceArea(st, plan, rooms, floorRooms, slopes, l.includeNonStructural);
+          const dims = calcSurfaceArea(st, plan, rooms, floorRooms, slopes, l.includeNonStructural, isBajoCubierta);
           if (l.measurementType === 'linear') {
             const lm = calcLinearMetrics(l, { largo: dims.largo, ancho: dims.ancho });
             const ref = { floorId: floor.id, surfaceType: st, layerId: l.id };
@@ -1776,13 +1804,13 @@ export function FloorPlanVolumesView({ plan, rooms, floors, floorPlanId, budgetI
 
                 let levelTotalVolume = 0;
                 const surfaceData = surfaceTypes.map(st => {
-                  const result = calcSurfaceArea(st, plan, rooms, floorRooms, slopes, false);
+                  const result = calcSurfaceArea(st, plan, rooms, floorRooms, slopes, false, isBajoCubierta);
                   const layers = floorLayers[st] || [];
                   const childParentIds = new Set(layers.filter(l => l.parentLayerId).map(l => l.parentLayerId!));
                   const leafLayers = layers.filter(l => !childParentIds.has(l.id));
                   const vol = leafLayers.reduce((sum, l) => {
                     if (l.measurementType === 'linear') return sum;
-                    const lArea = calcSurfaceArea(st, plan, rooms, floorRooms, slopes, l.includeNonStructural).area;
+                    const lArea = calcSurfaceArea(st, plan, rooms, floorRooms, slopes, l.includeNonStructural, isBajoCubierta).area;
                     return sum + (lArea * l.thicknessMm / 1000);
                   }, 0);
                   levelTotalVolume += vol;
@@ -1799,7 +1827,7 @@ export function FloorPlanVolumesView({ plan, rooms, floors, floorPlanId, budgetI
                     room,
                     calc,
                     floorArea: calc.floorArea,
-                    ceilingArea: calc.hasCeiling ? calc.ceilingArea : (calc.slopeRoofCeilingArea > 0 ? calc.slopeRoofCeilingArea : 0),
+                    ceilingArea: calc.hasCeiling ? calc.ceilingArea : (isBajoCubierta && calc.hasRoof && calc.slopeRoofCeilingArea > 0 ? calc.slopeRoofCeilingArea : 0),
                     extWallArea: calc.totalExternalWallArea,
                     intWallArea: calc.totalInternalWallArea,
                     volume: room.width * room.length * h,
@@ -1889,9 +1917,9 @@ export function FloorPlanVolumesView({ plan, rooms, floors, floorPlanId, budgetI
                                       onRemoveLayer={(id) => removeLayer(floor.id, sd.surfaceType, id)}
                                       onDuplicateLayer={(id) => duplicateLayer(floor.id, sd.surfaceType, id)}
                                       onUpdateLayer={(id, data) => updateLayer(floor.id, sd.surfaceType, id, data)}
-                                      calcAreaForLayer={(includeNS) => calcSurfaceArea(sd.surfaceType, plan, rooms, floorRooms, slopes, includeNS).area}
+                                      calcAreaForLayer={(includeNS) => calcSurfaceArea(sd.surfaceType, plan, rooms, floorRooms, slopes, includeNS, isBajoCubierta).area}
                                       calcDimsForLayer={(includeNS) => {
-                                        const r = calcSurfaceArea(sd.surfaceType, plan, rooms, floorRooms, slopes, includeNS);
+                                        const r = calcSurfaceArea(sd.surfaceType, plan, rooms, floorRooms, slopes, includeNS, isBajoCubierta);
                                         return { largo: r.largo, ancho: r.ancho };
                                       }}
                                       onEditLayer={(layer) => setEditingLayer({ floorId: floor.id, surfaceType: sd.surfaceType, layerId: layer.id })}
@@ -1910,9 +1938,9 @@ export function FloorPlanVolumesView({ plan, rooms, floors, floorPlanId, budgetI
                                             onRemoveLayer={(id) => removeLayer(floor.id, rsd.surfaceType, id)}
                                             onDuplicateLayer={(id) => duplicateLayer(floor.id, rsd.surfaceType, id)}
                                             onUpdateLayer={(id, data) => updateLayer(floor.id, rsd.surfaceType, id, data)}
-                                            calcAreaForLayer={(includeNS) => calcSurfaceArea(rsd.surfaceType, plan, rooms, floorRooms, slopes, includeNS).area}
+                                            calcAreaForLayer={(includeNS) => calcSurfaceArea(rsd.surfaceType, plan, rooms, floorRooms, slopes, includeNS, isBajoCubierta).area}
                                             calcDimsForLayer={(includeNS) => {
-                                              const r = calcSurfaceArea(rsd.surfaceType, plan, rooms, floorRooms, slopes, includeNS);
+                                              const r = calcSurfaceArea(rsd.surfaceType, plan, rooms, floorRooms, slopes, includeNS, isBajoCubierta);
                                               return { largo: r.largo, ancho: r.ancho };
                                             }}
                                             onEditLayer={(layer) => setEditingLayer({ floorId: floor.id, surfaceType: rsd.surfaceType, layerId: layer.id })}
@@ -2169,7 +2197,9 @@ export function FloorPlanVolumesView({ plan, rooms, floors, floorPlanId, budgetI
         const layer = (levelVolumes[el.floorId]?.[el.surfaceType] || []).find(l => l.id === el.layerId);
         if (!layer) return null;
         const floorRooms = rooms.filter(r => r.floorId === el.floorId);
-        const dims = calcSurfaceArea(el.surfaceType, plan, rooms, floorRooms, slopes, layer.includeNonStructural);
+        const floorMeta = floors.find(f => f.id === el.floorId);
+        const isBajoCubierta = !!floorMeta && (floorMeta.level === 'bajo_cubierta' || floorMeta.name.toLowerCase().includes('cubierta'));
+        const dims = calcSurfaceArea(el.surfaceType, plan, rooms, floorRooms, slopes, layer.includeNonStructural, isBajoCubierta);
         const linearMetrics = calcLinearMetrics(layer, { largo: dims.largo, ancho: dims.ancho });
         const onUpdate = (data: Partial<VolumeLayer>) => updateLayer(el.floorId, el.surfaceType, el.layerId, data);
         return (

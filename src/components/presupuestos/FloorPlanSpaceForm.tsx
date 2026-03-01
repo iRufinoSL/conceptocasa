@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
-import { Trash2, Save, Unlink, Plus, DoorOpen, Copy, ArrowRight, ArrowDown, ChevronDown, ChevronRight, Eye } from 'lucide-react';
+import { Trash2, Save, Unlink, Plus, DoorOpen, Copy, ArrowRight, ArrowDown, ChevronDown, ChevronRight, Eye, Pencil, X } from 'lucide-react';
 import type { RoomData, WallType, FloorPlanData, OpeningData } from '@/lib/floor-plan-calculations';
 import { OPENING_PRESETS, metersToBlocks, blocksToMeters, computeWallSegments } from '@/lib/floor-plan-calculations';
 import { formatCoord, parseCoord } from './FloorPlanGridView';
@@ -65,6 +65,24 @@ export function FloorPlanSpaceForm({ room, allRooms, planData, coordCol, coordRo
     return map;
   });
   const [expandedWall, setExpandedWall] = useState<number | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+
+  const resetDraftFromRoom = useCallback(() => {
+    setLocalName(room.name);
+    setLocalWidth(toDisplay(room.width));
+    setLocalLength(toDisplay(room.length));
+    setLocalHeight(room.height != null ? String(room.height) : '');
+    setLocalExtWT(room.extWallThickness != null ? String(room.extWallThickness) : '');
+    setLocalIntWT(room.intWallThickness != null ? String(room.intWallThickness) : '');
+    setLocalHasFloor(room.hasFloor !== false);
+    setLocalHasCeiling(room.hasCeiling !== false);
+    setLocalCoord(coordCol && coordRow ? formatCoord(coordCol, coordRow) : '');
+    const map: Record<string, WallType> = {};
+    room.walls.forEach(w => { map[w.id] = w.wallType; });
+    setLocalWalls(map);
+    setExpandedWall(null);
+    setIsEditing(false);
+  }, [room, coordCol, coordRow, toDisplay]);
 
   // Filter rooms to same floor to avoid false adjacencies across floors
   const sameFloorRooms = useMemo(() => {
@@ -88,20 +106,8 @@ export function FloorPlanSpaceForm({ room, allRooms, planData, coordCol, coordRo
 
   // Reset local state when a different room is selected
   useEffect(() => {
-    setLocalName(room.name);
-    setLocalWidth(toDisplay(room.width));
-    setLocalLength(toDisplay(room.length));
-    setLocalHeight(room.height != null ? String(room.height) : '');
-    setLocalExtWT(room.extWallThickness != null ? String(room.extWallThickness) : '');
-    setLocalIntWT(room.intWallThickness != null ? String(room.intWallThickness) : '');
-    setLocalHasFloor(room.hasFloor !== false);
-    setLocalHasCeiling(room.hasCeiling !== false);
-    setLocalCoord(coordCol && coordRow ? formatCoord(coordCol, coordRow) : '');
-    const map: Record<string, WallType> = {};
-    room.walls.forEach(w => { map[w.id] = w.wallType; });
-    setLocalWalls(map);
-    setExpandedWall(null);
-  }, [room.id, coordCol, coordRow, isBlockMode]);
+    resetDraftFromRoom();
+  }, [resetDraftFromRoom]);
 
   const parsedWidth = parseFloat(localWidth) || room.width;
   const parsedLength = parseFloat(localLength) || room.length;
@@ -143,6 +149,7 @@ export function FloorPlanSpaceForm({ room, allRooms, planData, coordCol, coordRo
   const wallsChanged = room.walls.some(w => localWalls[w.id] !== w.wallType);
 
   const hasChanges = roomChanged || coordChanged || wallsChanged;
+  const fieldsDisabled = saving || !isEditing;
 
   const handleSave = async () => {
     // Save coordinate changes FIRST (most important for unplaced rooms)
@@ -172,16 +179,41 @@ export function FloorPlanSpaceForm({ room, allRooms, planData, coordCol, coordRo
         }
       }
     }
+
+    setIsEditing(false);
   };
 
   return (
     <Card>
       <CardHeader className="py-3">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-2">
           <CardTitle className="text-sm">{room.name}</CardTitle>
-          <Button variant="ghost" size="sm" onClick={onDeleteRoom} disabled={saving}>
-            <Trash2 className="h-3.5 w-3.5 text-destructive" />
-          </Button>
+          <div className="flex items-center gap-1">
+            {isEditing ? (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 px-2"
+                onClick={resetDraftFromRoom}
+                disabled={saving}
+              >
+                <X className="h-3.5 w-3.5 mr-1" /> Cancelar
+              </Button>
+            ) : (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 px-2"
+                onClick={() => setIsEditing(true)}
+                disabled={saving}
+              >
+                <Pencil className="h-3.5 w-3.5 mr-1" /> Editar
+              </Button>
+            )}
+            <Button variant="ghost" size="sm" onClick={onDeleteRoom} disabled={saving}>
+              <Trash2 className="h-3.5 w-3.5 text-destructive" />
+            </Button>
+          </div>
         </div>
         {floorName && (
           <div className="flex items-center gap-2 mt-1">
@@ -193,13 +225,19 @@ export function FloorPlanSpaceForm({ room, allRooms, planData, coordCol, coordRo
         )}
       </CardHeader>
       <CardContent className="space-y-4">
+        {!isEditing && (
+          <div className="rounded-md border border-border bg-muted/30 px-3 py-2 text-[11px] text-muted-foreground">
+            Pulsa <span className="font-semibold text-foreground">Editar</span> para modificar este espacio.
+          </div>
+        )}
+
         {/* Name */}
         <div>
           <Label className="text-xs">Nombre</Label>
           <Input
             value={localName}
             onChange={e => setLocalName(e.target.value)}
-            disabled={saving}
+            disabled={fieldsDisabled}
           />
         </div>
 
@@ -212,7 +250,7 @@ export function FloorPlanSpaceForm({ room, allRooms, planData, coordCol, coordRo
               value={localCoord}
               onChange={e => setLocalCoord(e.target.value)}
               placeholder="0,0"
-              disabled={saving}
+              disabled={fieldsDisabled}
               className="flex h-8 w-24 rounded-md border border-input bg-background px-3 py-1 text-sm text-center font-mono ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
             />
             <span className="text-[10px] text-muted-foreground pb-1">
@@ -254,7 +292,7 @@ export function FloorPlanSpaceForm({ room, allRooms, planData, coordCol, coordRo
             <Input
               type="number" step={isBlockMode ? '1' : '0.1'} value={localWidth}
               onChange={e => setLocalWidth(e.target.value)}
-              disabled={saving}
+              disabled={fieldsDisabled}
             />
             {isBlockMode && (
               <span className="text-[10px] text-muted-foreground">
@@ -267,7 +305,7 @@ export function FloorPlanSpaceForm({ room, allRooms, planData, coordCol, coordRo
             <Input
               type="number" step={isBlockMode ? '1' : '0.1'} value={localLength}
               onChange={e => setLocalLength(e.target.value)}
-              disabled={saving}
+              disabled={fieldsDisabled}
             />
             {isBlockMode && (
               <span className="text-[10px] text-muted-foreground">
@@ -291,7 +329,7 @@ export function FloorPlanSpaceForm({ room, allRooms, planData, coordCol, coordRo
                 type="number" step="0.01" value={localHeight}
                 onChange={e => setLocalHeight(e.target.value)}
                 placeholder={String(planData.defaultHeight)}
-                disabled={saving}
+                disabled={fieldsDisabled}
                 className="h-8 text-xs"
               />
               <span className="text-[9px] text-muted-foreground">
@@ -304,7 +342,7 @@ export function FloorPlanSpaceForm({ room, allRooms, planData, coordCol, coordRo
                 type="number" step="0.01" value={localExtWT}
                 onChange={e => setLocalExtWT(e.target.value)}
                 placeholder={String(planData.externalWallThickness)}
-                disabled={saving}
+                disabled={fieldsDisabled}
                 className="h-8 text-xs"
               />
               <span className="text-[9px] text-muted-foreground">
@@ -317,7 +355,7 @@ export function FloorPlanSpaceForm({ room, allRooms, planData, coordCol, coordRo
                 type="number" step="0.01" value={localIntWT}
                 onChange={e => setLocalIntWT(e.target.value)}
                 placeholder={String(planData.internalWallThickness)}
-                disabled={saving}
+                disabled={fieldsDisabled}
                 className="h-8 text-xs"
               />
               <span className="text-[9px] text-muted-foreground">
@@ -334,7 +372,7 @@ export function FloorPlanSpaceForm({ room, allRooms, planData, coordCol, coordRo
             <Switch
               checked={localHasFloor}
               onCheckedChange={v => setLocalHasFloor(v)}
-              disabled={saving}
+              disabled={fieldsDisabled}
             />
           </div>
           <div className="flex items-center justify-between">
@@ -342,7 +380,7 @@ export function FloorPlanSpaceForm({ room, allRooms, planData, coordCol, coordRo
             <Switch
               checked={localHasCeiling}
               onCheckedChange={v => setLocalHasCeiling(v)}
-              disabled={saving}
+              disabled={fieldsDisabled}
             />
           </div>
         </div>
@@ -388,7 +426,7 @@ export function FloorPlanSpaceForm({ room, allRooms, planData, coordCol, coordRo
                       <Select
                         value={localWalls[wall.id] || wall.wallType}
                         onValueChange={v => setLocalWalls(prev => ({ ...prev, [wall.id]: v as WallType }))}
-                        disabled={saving}
+                        disabled={fieldsDisabled}
                       >
                         <SelectTrigger className="h-8 text-xs">
                           <SelectValue />
@@ -434,7 +472,7 @@ export function FloorPlanSpaceForm({ room, allRooms, planData, coordCol, coordRo
                                 <Select
                                   value={seg.segmentType}
                                   onValueChange={v => onUpdateWallSegmentType(wall.id, si, v as WallType)}
-                                  disabled={saving}
+                                  disabled={fieldsDisabled}
                                 >
                                   <SelectTrigger className="h-5 text-[9px] w-auto min-w-[100px] px-1 py-0">
                                     <SelectValue />
@@ -477,7 +515,7 @@ export function FloorPlanSpaceForm({ room, allRooms, planData, coordCol, coordRo
                               </span>
                             </div>
                             {onDeleteOpening && (
-                              <Button variant="ghost" size="sm" className="h-5 w-5 p-0" onClick={() => onDeleteOpening(op.id)} disabled={saving}>
+                              <Button variant="ghost" size="sm" className="h-5 w-5 p-0" onClick={() => onDeleteOpening(op.id)} disabled={fieldsDisabled}>
                                 <Trash2 className="h-3 w-3 text-destructive" />
                               </Button>
                             )}
@@ -494,7 +532,7 @@ export function FloorPlanSpaceForm({ room, allRooms, planData, coordCol, coordRo
                                   size="sm"
                                   className="text-[9px] h-6 px-2"
                                   onClick={() => onAddOpening(wall.id, key, preset.width, preset.height, preset.sillHeight)}
-                                  disabled={saving}
+                                  disabled={fieldsDisabled}
                                 >
                                   <Plus className="h-2.5 w-2.5 mr-0.5" />
                                   {preset.label}
@@ -547,14 +585,16 @@ export function FloorPlanSpaceForm({ room, allRooms, planData, coordCol, coordRo
         {/* Save button */}
         <Button
           onClick={handleSave}
-          disabled={saving || !hasChanges}
+          disabled={saving || !isEditing || !hasChanges}
           className="w-full"
         >
-          <Save className="h-4 w-4 mr-1" /> Guardar
+          <Save className="h-4 w-4 mr-1" /> Guardar cambios
         </Button>
 
         <p className="text-[10px] text-muted-foreground">
-          El tipo de pared queda bloqueado tras guardar y solo cambia cuando lo vuelves a editar y guardar.
+          {isEditing
+            ? 'Haz los cambios y pulsa Guardar cambios para confirmarlos.'
+            : 'Modo lectura activo. Pulsa Editar para habilitar cambios.'}
         </p>
       </CardContent>
     </Card>

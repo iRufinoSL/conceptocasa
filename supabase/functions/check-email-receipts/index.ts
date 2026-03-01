@@ -11,18 +11,45 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    // Verify caller is the scheduler
+    // Verify caller is the scheduler or an authenticated admin
     const authHeader = req.headers.get('Authorization');
-    const schedulerSecret = Deno.env.get('SCHEDULER_SECRET');
-    const expectedKey = Deno.env.get('SUPABASE_ANON_KEY');
-    const token = authHeader?.replace('Bearer ', '');
-    const isScheduler = schedulerSecret && token === schedulerSecret;
-    const isAnonKey = expectedKey && token === expectedKey;
-    if (!authHeader || (!isScheduler && !isAnonKey)) {
+    if (!authHeader?.startsWith('Bearer ')) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
         status: 401,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
+    }
+    const token = authHeader.replace('Bearer ', '');
+    const schedulerSecret = Deno.env.get('SCHEDULER_SECRET');
+    const isScheduler = schedulerSecret && token === schedulerSecret;
+
+    if (!isScheduler) {
+      // Fallback: verify as authenticated admin via JWT
+      const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+      const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+      const userClient = createClient(supabaseUrl, supabaseAnonKey, {
+        global: { headers: { Authorization: authHeader } }
+      });
+      const { data: claimsData, error: claimsError } = await userClient.auth.getClaims(token);
+      if (claimsError || !claimsData?.claims) {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+          status: 401,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      const serviceClient = createClient(supabaseUrl, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+      const { data: roleData } = await serviceClient
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', claimsData.claims.sub)
+        .eq('role', 'administrador')
+        .maybeSingle();
+      if (!roleData) {
+        return new Response(JSON.stringify({ error: 'Forbidden - Admin role required' }), {
+          status: 403,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
     }
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;

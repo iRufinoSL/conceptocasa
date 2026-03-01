@@ -203,17 +203,17 @@ export function FloorPlanSpaceForm({ room, allRooms, planData, coordCol, coordRo
           />
         </div>
 
-        {/* Coordinate - letter+number format (e.g. A1, B3) */}
+        {/* Coordinate - XYZ format (e.g. 0,0 or 18,1,10) */}
         <div>
-          <Label className="text-xs font-semibold">Coordenada (ej: A1, C5)</Label>
+          <Label className="text-xs font-semibold">Coordenada XY (ej: 0,0)</Label>
           <div className="flex items-end gap-2 mt-1">
             <input
               type="text"
               value={localCoord}
-              onChange={e => setLocalCoord(e.target.value.toUpperCase())}
-              placeholder="A1"
+              onChange={e => setLocalCoord(e.target.value)}
+              placeholder="0,0"
               disabled={saving}
-              className="flex h-8 w-20 rounded-md border border-input bg-background px-3 py-1 text-sm text-center font-mono ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex h-8 w-24 rounded-md border border-input bg-background px-3 py-1 text-sm text-center font-mono ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
             />
             <span className="text-[10px] text-muted-foreground pb-1">
               {coordCol && coordRow

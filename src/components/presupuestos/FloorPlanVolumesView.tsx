@@ -1371,12 +1371,39 @@ export function FloorPlanVolumesView({ plan, rooms, floors, floorPlanId, budgetI
   useEffect(() => {
     if (!budgetId || areaSummaryByLevel.length === 0) return;
 
-    // Build measurement entries for each level + global totals
+    // Build measurement entries: per-room + per-level + global totals
     type SyncEntry = { name: string; value: number; unit: string; sourceKey: string };
     const entries: SyncEntry[] = [];
 
     for (const lvl of areaSummaryByLevel) {
       const fn = lvl.floorName;
+      const floorRooms = rooms.filter(r => r.floorId === lvl.floorId && !isNonStructural(r.name));
+
+      // Per-room measurements
+      for (const room of floorRooms) {
+        const calc = calculateRoom(room, plan);
+        const h = room.height ?? plan.defaultHeight;
+        const rn = room.name;
+        if (calc.hasFloor) {
+          entries.push({ name: `Suelo ${rn}`, value: calc.floorArea, unit: 'm2', sourceKey: `vol_suelo_room_${room.id}` });
+        }
+        const ceilingArea = calc.hasCeiling ? calc.ceilingArea : (calc.slopeRoofCeilingArea > 0 ? calc.slopeRoofCeilingArea : 0);
+        if (ceilingArea > 0) {
+          entries.push({ name: `Techo ${rn}`, value: ceilingArea, unit: 'm2', sourceKey: `vol_techo_room_${room.id}` });
+        }
+        if (calc.totalExternalWallArea > 0) {
+          entries.push({ name: `Paredes externas ${rn}`, value: calc.totalExternalWallArea, unit: 'm2', sourceKey: `vol_ext_room_${room.id}` });
+        }
+        if (calc.totalInternalWallArea > 0) {
+          entries.push({ name: `Paredes internas ${rn}`, value: calc.totalInternalWallArea, unit: 'm2', sourceKey: `vol_int_room_${room.id}` });
+        }
+        const vol = room.width * room.length * h;
+        if (vol > 0) {
+          entries.push({ name: `Volumen ${rn}`, value: vol, unit: 'm3', sourceKey: `vol_volumen_room_${room.id}` });
+        }
+      }
+
+      // Per-level totals
       entries.push({ name: `Suelos ${fn}`, value: lvl.totalFloorArea, unit: 'm2', sourceKey: `vol_suelo_${lvl.floorId}` });
       entries.push({ name: `Techos ${fn}`, value: lvl.totalCeilingArea, unit: 'm2', sourceKey: `vol_techo_${lvl.floorId}` });
       entries.push({ name: `Paredes externas ${fn}`, value: lvl.totalExtWallArea, unit: 'm2', sourceKey: `vol_ext_${lvl.floorId}` });
@@ -1460,7 +1487,7 @@ export function FloorPlanVolumesView({ plan, rooms, floors, floorPlanId, budgetI
     return () => {
       if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
     };
-  }, [areaSummaryByLevel, budgetId, globalTotalFloors, globalTotalCeilings, globalTotalExtWalls, globalTotalIntWalls, globalTotalRoofs]);
+  }, [areaSummaryByLevel, budgetId, globalTotalFloors, globalTotalCeilings, globalTotalExtWalls, globalTotalIntWalls, globalTotalRoofs, rooms, plan]);
 
   // grandTotalVolume is declared inside the render section below
 

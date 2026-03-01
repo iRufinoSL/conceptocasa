@@ -1,0 +1,1 @@
+ALTER TABLE public.budget_volume_layers ADD COLUMN description text;

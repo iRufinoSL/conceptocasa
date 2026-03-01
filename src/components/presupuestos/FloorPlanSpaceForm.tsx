@@ -84,25 +84,23 @@ export function FloorPlanSpaceForm({ room, allRooms, planData, coordCol, coordRo
     setIsEditing(false);
   }, [room, coordCol, coordRow, toDisplay]);
 
-  // Filter rooms to same floor to avoid false adjacencies across floors
+  // Filter rooms to same floor and only placed rooms to avoid false adjacencies and crashes
   const sameFloorRooms = useMemo(() => {
-    if (!room.floorId) return allRooms;
-    return allRooms.filter(r => r.floorId === room.floorId);
+    const base = room.floorId ? allRooms.filter(r => r.floorId === room.floorId) : allRooms;
+    // Exclude unplaced rooms (posX<0 or posY<0) and zero-dimension rooms to prevent division-by-zero in computeWallSegments
+    return base.filter(r => r.posX >= 0 && r.posY >= 0 && r.width > 0 && r.length > 0);
   }, [allRooms, room.floorId]);
 
   // Compute wall segments dynamically based on room adjacency (same floor only)
   const wallSegmentsMap = useMemo(() => {
-    const map = computeWallSegments(sameFloorRooms);
-    // Debug: log segments for the current room
-    [1,2,3,4].forEach(wi => {
-      const k = `${room.id}::${wi}`;
-      const segs = map.get(k);
-      if (segs && segs.length > 1) {
-        console.log(`[SEG] ${room.name} wall ${wi}: ${segs.length} segments`, segs.map(s => ({ start: s.startMeters.toFixed(3), end: s.endMeters.toFixed(3), type: s.segmentType, neighbor: s.neighborRoomId?.slice(0,8) })));
-      }
-    });
-    return map;
-  }, [sameFloorRooms, room.id, room.name]);
+    try {
+      const map = computeWallSegments(sameFloorRooms);
+      return map;
+    } catch (err) {
+      console.error('[FloorPlanSpaceForm] computeWallSegments crashed:', err);
+      return new Map();
+    }
+  }, [sameFloorRooms]);
 
   // Reset local state when a different room is selected
   useEffect(() => {

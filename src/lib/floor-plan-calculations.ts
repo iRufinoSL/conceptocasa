@@ -1227,6 +1227,24 @@ export function calculateFloorPlanSummary(plan: FloorPlanData, rooms: RoomData[]
       const floorRooms = roomCalcs.filter(rc => rc.floorId === floor.id);
       const floorRoomData = classifiedRooms.filter(r => r.floorId === floor.id);
       const perimeters = calcFloorPerimeters(floorRoomData, floor.level);
+
+      const flatCeilingM2 = floorRooms
+        .filter(r => r.hasCeiling)
+        .reduce((s, r) => s + r.ceilingArea, 0);
+
+      const slopeEligibleRooms = floorRooms.filter(r => {
+        if (r.hasCeiling) return false;
+        const room = roomById.get(r.roomId);
+        return getEffectiveCeilingArea(r, room, floor) > 0;
+      });
+      const slopeFallbackM2 = slopeEligibleRooms.reduce((s, r) => s + r.slopeRoofCeilingArea, 0);
+      const roofSlopeM2 = slopeEligibleRooms.length > 0
+        ? calculateRoofSlopes(plan, floorRoomData).reduce((s, slope) => s + slope.structSlopeArea, 0)
+        : 0;
+      const totalCeilingM2Floor = flatCeilingM2 + (slopeEligibleRooms.length > 0
+        ? (roofSlopeM2 > 0 ? roofSlopeM2 : slopeFallbackM2)
+        : 0);
+
       const fs: FloorSummary = {
         floorId: floor.id,
         floorName: floor.name,
@@ -1236,11 +1254,7 @@ export function calculateFloorPlanSummary(plan: FloorPlanData, rooms: RoomData[]
         totalExternalWallM2: floorRooms.reduce((s, r) => s + r.totalExternalWallArea + r.gableExternalArea, 0),
         totalInternalWallM2: floorRooms.reduce((s, r) => s + r.totalInternalWallArea + r.gableInternalArea, 0),
         totalFloorM2: floorRooms.filter(r => r.hasFloor).reduce((s, r) => s + r.floorArea, 0),
-        totalCeilingM2: floorRooms.reduce((s, r) => {
-          if (r.hasCeiling) return s + r.ceilingArea;
-          if (r.slopeRoofCeilingArea > 0) return s + r.slopeRoofCeilingArea;
-          return s;
-        }, 0),
+        totalCeilingM2: totalCeilingM2Floor,
         totalDoors: floorRooms.reduce((s, r) => s + r.doorCount, 0),
         totalWindows: floorRooms.reduce((s, r) => s + r.windowCount, 0),
         gableExternalM2: floorRooms.reduce((s, r) => s + r.gableExternalArea, 0),
@@ -1268,11 +1282,7 @@ export function calculateFloorPlanSummary(plan: FloorPlanData, rooms: RoomData[]
         totalExternalWallM2: unassigned.reduce((s, r) => s + r.totalExternalWallArea + r.gableExternalArea, 0),
         totalInternalWallM2: unassigned.reduce((s, r) => s + r.totalInternalWallArea + r.gableInternalArea, 0),
         totalFloorM2: unassigned.filter(r => r.hasFloor).reduce((s, r) => s + r.floorArea, 0),
-        totalCeilingM2: unassigned.reduce((s, r) => {
-          if (r.hasCeiling) return s + r.ceilingArea;
-          if (r.slopeRoofCeilingArea > 0) return s + r.slopeRoofCeilingArea;
-          return s;
-        }, 0),
+        totalCeilingM2: unassigned.reduce((s, r) => s + getEffectiveCeilingArea(r, roomById.get(r.roomId), undefined), 0),
         totalDoors: unassigned.reduce((s, r) => s + r.doorCount, 0),
         totalWindows: unassigned.reduce((s, r) => s + r.windowCount, 0),
         gableExternalM2: unassigned.reduce((s, r) => s + r.gableExternalArea, 0),
@@ -1283,6 +1293,11 @@ export function calculateFloorPlanSummary(plan: FloorPlanData, rooms: RoomData[]
         rooms: unassigned,
       });
     }
+  }
+
+  // Keep global ceiling total aligned with per-floor logic (avoids roof room double-counting)
+  if (floorSummaries.length > 0) {
+    totalCeilingM2 = floorSummaries.reduce((sum, floor) => sum + floor.totalCeilingM2, 0);
   }
   
   return {

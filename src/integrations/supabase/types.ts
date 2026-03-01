@@ -286,6 +286,7 @@ export type Database = {
           duration_days: number | null
           end_date: string | null
           id: string
+          is_executed: boolean
           measurement_id: string | null
           measurement_unit: string | null
           name: string
@@ -306,6 +307,7 @@ export type Database = {
           duration_days?: number | null
           end_date?: string | null
           id?: string
+          is_executed?: boolean
           measurement_id?: string | null
           measurement_unit?: string | null
           name: string
@@ -326,6 +328,7 @@ export type Database = {
           duration_days?: number | null
           end_date?: string | null
           id?: string
+          is_executed?: boolean
           measurement_id?: string | null
           measurement_unit?: string | null
           name?: string

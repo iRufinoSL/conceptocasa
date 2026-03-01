@@ -69,6 +69,7 @@ interface BudgetActivity {
   phase_id: string | null;
   measurement_id: string | null;
   uses_measurement: boolean;
+  is_executed: boolean;
   opciones: string[];
   created_at: string;
   files_count?: number;
@@ -1007,6 +1008,7 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
           measurement_unit: activity.measurement_unit,
           measurement_id: activity.measurement_id, // Keep measurement relation
           uses_measurement: activity.uses_measurement, // Keep uses_measurement flag
+          is_executed: activity.is_executed ?? true, // Keep is_executed flag
           phase_id: activity.phase_id,
           start_date: activity.start_date,
           duration_days: activity.duration_days,
@@ -1488,21 +1490,21 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
       );
     }
 
-    // Apply uses_measurement (X) filter with cascading: if a parent activity (by code prefix)
-    // is inactive, all its children are also hidden and excluded from calculations.
+    // Apply is_executed filter with cascading: if a parent activity (by code prefix)
+    // is not executed, all its children are also hidden and excluded from calculations.
     if (showOnlyActive) {
-      // Build set of inactive activity codes (uses_measurement === false)
+      // Build set of non-executed activity codes (is_executed === false)
       const inactiveCodes = new Set(
         activities
-          .filter(a => a.uses_measurement === false)
+          .filter(a => a.is_executed === false)
           .map(a => a.code)
       );
 
       filtered = filtered.filter(a => {
-        // If the activity itself is inactive, hide it
-        if (a.uses_measurement === false) return false;
+        // If the activity itself is not executed, hide it
+        if (a.is_executed === false) return false;
 
-        // Check if any ancestor code is inactive (e.g., code "01.02.03" checks "01.02" and "01")
+        // Check if any ancestor code is not executed (e.g., code "01.02.03" checks "01.02" and "01")
         const codeParts = a.code.split('.');
         for (let i = codeParts.length - 1; i >= 1; i--) {
           const parentCode = codeParts.slice(0, i).join('.');
@@ -1797,7 +1799,7 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
           tableData.push([
             `  ${generateActivityId(activity)}`,
             opciones,
-            activity.uses_measurement !== false ? 'Sí' : 'No',
+            activity.is_executed !== false ? 'Sí' : 'No',
             activity.measurement_unit,
             formatPdfCurrency(activity.signed_subtotal || 0),
             formatPdfCurrency(activity.resources_subtotal || 0),
@@ -1841,7 +1843,7 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
         tableData.push([
           `  ${generateActivityId(activity)}`,
           opciones,
-          activity.uses_measurement !== false ? 'Sí' : 'No',
+          activity.is_executed !== false ? 'Sí' : 'No',
           activity.measurement_unit,
           formatPdfCurrency(activity.signed_subtotal || 0),
           formatPdfCurrency(activity.resources_subtotal || 0),
@@ -2044,7 +2046,7 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
         />
       </div>
 
-      {/* Filter: Show only X=SI (uses_measurement) */}
+      {/* Filter: Show only executed activities (is_executed) */}
       <div className="flex items-center gap-3">
         <Button
           variant={showOnlyActive ? 'default' : 'outline'}
@@ -2167,7 +2169,7 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
                   />
                 </TableHead>
                 <TableHead>ActividadID</TableHead>
-                <TableHead className="text-center w-16">X</TableHead>
+                <TableHead className="text-center w-16">Ejecuta</TableHead>
                 <TableHead>Actividad</TableHead>
                 <TableHead>Áreas</TableHead>
                 <TableHead>Opciones</TableHead>
@@ -2206,29 +2208,28 @@ export function BudgetActivitiesTab({ budgetId, budgetName, isAdmin, budgetStart
                       {canEditActivity(activity.id) ? (
                         <button
                           onClick={async () => {
-                            const newValue = !activity.uses_measurement;
+                            const newValue = !(activity.is_executed !== false);
                             try {
                               const { error } = await supabase
                                 .from('budget_activities')
-                                .update({ uses_measurement: newValue })
+                                .update({ is_executed: newValue })
                                 .eq('id', activity.id);
                               if (error) throw error;
-                              await syncActivityResourcesRelatedUnits(activity.id);
                               fetchData();
-                              toast.success(`Actividad: ${newValue ? 'X (activa)' : '— (inactiva)'}`);
+                              toast.success(`Actividad: ${newValue ? 'SÍ se ejecuta' : 'NO se ejecuta'}`);
                             } catch (err: any) {
                               toast.error('Error al actualizar');
                             }
                           }}
                           className="cursor-pointer hover:opacity-80 transition-opacity"
                         >
-                          <Badge variant={activity.uses_measurement !== false ? 'default' : 'secondary'} className="text-xs">
-                            {activity.uses_measurement !== false ? 'X' : '—'}
+                          <Badge variant={activity.is_executed !== false ? 'success' : 'destructive'} className="text-xs">
+                            {activity.is_executed !== false ? 'SÍ' : 'NO'}
                           </Badge>
                         </button>
                       ) : (
-                        <Badge variant={activity.uses_measurement !== false ? 'default' : 'secondary'} className="text-xs">
-                          {activity.uses_measurement !== false ? 'X' : '—'}
+                        <Badge variant={activity.is_executed !== false ? 'success' : 'destructive'} className="text-xs">
+                          {activity.is_executed !== false ? 'SÍ' : 'NO'}
                         </Badge>
                       )}
                     </TableCell>

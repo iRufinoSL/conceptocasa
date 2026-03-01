@@ -30,6 +30,7 @@ interface VolumeLayer {
   id: string;
   dbId?: string;
   name: string;
+  description: string;
   thicknessMm: number;
   surfaceType: SurfaceType;
   includeNonStructural: boolean;
@@ -322,6 +323,7 @@ function LayerRow({
   defaultExtraLabel,
   depth = 0,
   childCount = 0,
+  onEditLayer,
 }: {
   layer: VolumeLayer;
   allLayers: VolumeLayer[];
@@ -334,6 +336,7 @@ function LayerRow({
   defaultExtraLabel: string;
   depth?: number;
   childCount?: number;
+  onEditLayer?: (layer: VolumeLayer) => void;
 }) {
   const dims = calcDimsForLayer(layer.includeNonStructural);
   const layerArea = calcAreaForLayer(layer.includeNonStructural);
@@ -345,7 +348,7 @@ function LayerRow({
 
   return (
     <div className="space-y-1">
-      <div className={`grid grid-cols-[50px_1fr_70px_80px_80px_90px_90px_70px_50px_32px_32px] gap-1 items-center ${groupColor} rounded px-1`}
+      <div className={`grid grid-cols-[50px_1fr_120px_70px_80px_80px_90px_90px_70px_50px_32px_32px_32px] gap-1 items-center ${groupColor} rounded px-1`}
         style={{ paddingLeft: depth > 0 ? `${depth * 20 + 4}px` : undefined }}
       >
         <Input
@@ -368,6 +371,9 @@ function LayerRow({
             </Button>
           )}
         </div>
+        <span className="text-[10px] text-muted-foreground truncate" title={layer.description || ''}>
+          {layer.description || '—'}
+        </span>
         <Select
           value={layer.measurementType}
           onValueChange={(v) => {
@@ -430,6 +436,9 @@ function LayerRow({
             />
           )}
         </div>
+        <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => onEditLayer?.(layer)} title="Editar objeto">
+          <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+        </Button>
         <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => onDuplicateLayer(layer.id)} title="Duplicar capa">
           <Copy className="h-3.5 w-3.5 text-muted-foreground" />
         </Button>
@@ -552,6 +561,7 @@ function SurfaceSection({
   calcDimsForLayer,
   onRemoveAllLayers,
   onDuplicateAllLayers,
+  onEditLayer,
 }: {
   surfaceType: SurfaceType;
   layers: VolumeLayer[];
@@ -566,6 +576,7 @@ function SurfaceSection({
   calcDimsForLayer: (includeNonStructural: boolean) => { largo: number; ancho: number };
   onRemoveAllLayers?: () => void;
   onDuplicateAllLayers?: () => void;
+  onEditLayer?: (layer: VolumeLayer) => void;
 }) {
   const [open, setOpen] = useState(layers.length > 0);
   const [collapsedParents, setCollapsedParents] = useState<Set<string>>(new Set());
@@ -678,9 +689,10 @@ function SurfaceSection({
           {sortedRoots.length > 0 && (
             <div className="space-y-1.5">
               {/* Header */}
-              <div className="grid grid-cols-[50px_1fr_70px_80px_80px_90px_90px_70px_50px_32px_32px] gap-1 text-[10px] font-semibold text-muted-foreground px-1">
+              <div className="grid grid-cols-[50px_1fr_120px_70px_80px_80px_90px_90px_70px_50px_32px_32px_32px] gap-1 text-[10px] font-semibold text-muted-foreground px-1">
                 <span className="text-center">Orden</span>
                 <span>Nombre</span>
+                <span className="truncate" title="Descripción">Desc.</span>
                 <span className="text-center">Tipo</span>
                 <span className="text-right">Largo (m)</span>
                 <span className="text-right">Ancho (m)</span>
@@ -688,6 +700,7 @@ function SurfaceSection({
                 <span className="text-right">Sup m² / ml</span>
                 <span className="text-right">Vol m³</span>
                 <span className="text-center text-[9px]">+{defaultExtraLabel}</span>
+                <span></span>
                 <span></span>
                 <span></span>
               </div>
@@ -750,6 +763,7 @@ function SurfaceSection({
                         defaultExtraLabel={defaultExtraLabel}
                         depth={0}
                         childCount={0}
+                        onEditLayer={onEditLayer}
                       />
                     )}
 
@@ -770,6 +784,7 @@ function SurfaceSection({
                             defaultExtraLabel={defaultExtraLabel}
                             depth={1}
                             childCount={0}
+                            onEditLayer={onEditLayer}
                           />
                         ))}
                       </div>
@@ -780,15 +795,17 @@ function SurfaceSection({
 
               {/* Totals */}
               <Separator className="my-1" />
-              <div className="grid grid-cols-[50px_1fr_70px_80px_80px_90px_90px_70px_50px_32px_32px] gap-1 items-center text-xs font-semibold px-1">
+              <div className="grid grid-cols-[50px_1fr_120px_70px_80px_80px_90px_90px_70px_50px_32px_32px_32px] gap-1 items-center text-xs font-semibold px-1">
                 <span></span>
                 <span>Total</span>
+                <span></span>
                 <span></span>
                 <span></span>
                 <span></span>
                 <span className="text-right font-mono">{totalThicknessMm} mm</span>
                 <span></span>
                 <span className="text-right font-mono text-primary">{fmt(totalVolume)} m³</span>
+                <span></span>
                 <span></span>
                 <span></span>
               </div>
@@ -860,6 +877,7 @@ export function FloorPlanVolumesView({ plan, rooms, floors, floorPlanId }: Floor
             id: localId,
             dbId: row.id,
             name: row.name || '',
+            description: (row as any).description || '',
             thicknessMm: row.thickness_mm || 20,
             surfaceType: st,
             includeNonStructural: row.include_non_structural || false,
@@ -931,6 +949,7 @@ export function FloorPlanVolumesView({ plan, rooms, floors, floorPlanId }: Floor
       current.push({
         id: newLayerId(),
         name: '',
+        description: '',
         thicknessMm: surfaceType === 'suelo' ? 20 : surfaceType === 'techo' ? 15 : 120,
         surfaceType,
         includeNonStructural: false,
@@ -960,6 +979,7 @@ export function FloorPlanVolumesView({ plan, rooms, floors, floorPlanId }: Floor
       current.push({
         id: newLayerId(),
         name: '',
+        description: '',
         thicknessMm: surfaceType === 'suelo' ? 20 : surfaceType === 'techo' ? 15 : 120,
         surfaceType,
         includeNonStructural: false,
@@ -1089,6 +1109,7 @@ export function FloorPlanVolumesView({ plan, rooms, floors, floorPlanId }: Floor
           surface_type: e.st,
           layer_order: e.layer.orderIndex,
           name: e.layer.name,
+          description: e.layer.description || null,
           thickness_mm: e.layer.thicknessMm,
           include_non_structural: e.layer.includeNonStructural,
           measurement_type: e.layer.measurementType,
@@ -1126,6 +1147,7 @@ export function FloorPlanVolumesView({ plan, rooms, floors, floorPlanId }: Floor
           surface_type: e.st,
           layer_order: e.layer.orderIndex,
           name: e.layer.name,
+          description: e.layer.description || null,
           thickness_mm: e.layer.thicknessMm,
           include_non_structural: e.layer.includeNonStructural,
           measurement_type: e.layer.measurementType,
@@ -1575,6 +1597,7 @@ export function FloorPlanVolumesView({ plan, rooms, floors, floorPlanId }: Floor
                                     const r = calcSurfaceArea(sd.surfaceType, plan, rooms, floorRooms, slopes, includeNS);
                                     return { largo: r.largo, ancho: r.ancho };
                                   }}
+                                  onEditLayer={(layer) => setEditingLayer({ floorId: floor.id, surfaceType: sd.surfaceType, layerId: layer.id })}
                                 />
                                 {roofSubData.length > 0 && (
                                   <div className="ml-6 border-l-2 border-muted pl-2 space-y-1">
@@ -1595,6 +1618,7 @@ export function FloorPlanVolumesView({ plan, rooms, floors, floorPlanId }: Floor
                                           const r = calcSurfaceArea(rsd.surfaceType, plan, rooms, floorRooms, slopes, includeNS);
                                           return { largo: r.largo, ancho: r.ancho };
                                         }}
+                                        onEditLayer={(layer) => setEditingLayer({ floorId: floor.id, surfaceType: rsd.surfaceType, layerId: layer.id })}
                                         onRemoveAllLayers={() => {
                                           const layers = floorLayers[rsd.surfaceType] || [];
                                           layers.forEach(l => {
@@ -1816,6 +1840,10 @@ export function FloorPlanVolumesView({ plan, rooms, floors, floorPlanId }: Floor
                 <div className="space-y-2">
                   <Label>Nombre</Label>
                   <Input value={layer.name} onChange={e => onUpdate({ name: e.target.value })} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Descripción</Label>
+                  <Input value={layer.description} onChange={e => onUpdate({ description: e.target.value })} placeholder="Descripción del objeto" />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">

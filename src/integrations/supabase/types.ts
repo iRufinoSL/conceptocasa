@@ -1788,6 +1788,7 @@ export type Database = {
       budget_volume_layers: {
         Row: {
           created_at: string
+          description: string | null
           extra_surface_name: string | null
           floor_id: string | null
           floor_plan_id: string
@@ -1808,6 +1809,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          description?: string | null
           extra_surface_name?: string | null
           floor_id?: string | null
           floor_plan_id: string
@@ -1828,6 +1830,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          description?: string | null
           extra_surface_name?: string | null
           floor_id?: string | null
           floor_plan_id?: string

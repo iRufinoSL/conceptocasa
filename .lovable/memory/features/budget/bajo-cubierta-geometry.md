@@ -11,3 +11,4 @@ En niveles 'bajo cubierta' (detectados por floor.level='bajo_cubierta' O floor.n
 7. Los tipos de pared son editables en los alzados de bajo cubierta igual que en otros niveles.
 8. Bloques por tipo de pared: exterior (blockLengthMm×blockHeightMm×blockWidthMm) e interior (intBlockLengthMm×intBlockHeightMm×intBlockWidthMm) con dimensiones independientes almacenadas en budget_floor_plans.
 9. Regla CAD: Disponible en vistas a pantalla completa de alzados (horizontal en la parte superior, vertical en la derecha) con marcas graduadas en mm.
+10. TECHO: Los espacios bajo cubierta NO tienen techo plano propio — el faldón del tejado ES su techo (modelo "faldón = techo"). `hasCeiling=false` pero `slopeRoofCeilingArea` contiene la superficie inclinada real calculada como `ceilingArea / cos(θ)` donde θ es el ángulo de pendiente del tejado. Esta superficie inclinada se usa en resúmenes, volúmenes y mediciones en lugar de mostrar "Sin techo".

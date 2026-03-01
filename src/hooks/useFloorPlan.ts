@@ -791,9 +791,11 @@ export function useFloorPlan(budgetId: string) {
 
       // Per-room measurements
       summary.rooms.forEach(rc => {
+        const techoArea = rc.hasCeiling ? rc.ceilingArea : (rc.slopeRoofCeilingArea > 0 ? rc.slopeRoofCeilingArea : 0);
+        const techoLabel = rc.hasCeiling ? 'Techo' : (rc.slopeRoofCeilingArea > 0 ? 'Techo (faldón)' : 'Techo');
         measurements.push(
           { name: `${rc.roomName} - Suelo`, manual_units: rc.floorArea, measurement_unit: 'm2', source: 'plano' },
-          { name: `${rc.roomName} - Techo`, manual_units: rc.ceilingArea, measurement_unit: 'm2', source: 'plano' },
+          { name: `${rc.roomName} - ${techoLabel}`, manual_units: techoArea, measurement_unit: 'm2', source: 'plano' },
         );
         rc.walls.forEach(w => {
           if (w.netArea > 0) {

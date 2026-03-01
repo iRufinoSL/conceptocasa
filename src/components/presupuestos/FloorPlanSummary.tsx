@@ -351,7 +351,12 @@ export function FloorPlanSummaryView({ summary, onRecalculate, recalculating }: 
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">6. Techo</span>
-                <span>{rc.hasCeiling !== false ? fmt(rc.ceilingArea) : <span className="italic text-muted-foreground">Sin techo</span>}</span>
+                <span>{rc.hasCeiling !== false 
+                  ? fmt(rc.ceilingArea) 
+                  : rc.slopeRoofCeilingArea > 0 
+                    ? <span className="text-primary">{fmt(rc.slopeRoofCeilingArea)} <span className="text-[9px] text-muted-foreground">(faldón inclinado)</span></span>
+                    : <span className="italic text-muted-foreground">Sin techo</span>
+                }</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">7. Tejado</span>

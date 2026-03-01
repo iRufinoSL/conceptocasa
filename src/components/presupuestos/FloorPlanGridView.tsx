@@ -63,27 +63,39 @@ export interface PositionedRoom {
 
 const THRESHOLD = 0.15;
 
-/** Column label: 2-digit padded with level prefix. col=1, level="1" → "1:01" */
-export function colToLabel(col: number, levelPrefix?: string): string {
-  const num = String(col).padStart(2, '0');
-  return levelPrefix ? `${levelPrefix}:${num}` : num;
+/** Column header label: 0-based X axis. col=1 (internal 1-based) → display "X0" */
+export function colToLabel(col: number, _levelPrefix?: string): string {
+  return `X${col - 1}`;
 }
 
-/** Row label: 2-digit padded with level prefix. row=4, level="1" → "1:04" */
-export function rowToLabel(row: number, levelPrefix?: string): string {
-  const num = String(row).padStart(2, '0');
-  return levelPrefix ? `${levelPrefix}:${num}` : num;
+/** Row header label: 0-based Y axis. row=1 (internal 1-based) → display "Y0" */
+export function rowToLabel(row: number, _levelPrefix?: string): string {
+  return `Y${row - 1}`;
 }
 
-/** Parse coordinate in multiple formats:
- * - Compact: "1:1710" or "1-1710" → level 1, col 17, row 10
- * - Slash:   "1:05/04" or "1-05/04" or "05/04" → col 5, row 4
- * - Legacy letter: "A1" → col 1, row 1
+/** Parse coordinate in XYZ format or legacy formats:
+ * - XYZ tuple: "(18,1,10)" or "18,1,10" → col=19, row=2, z=10
+ * - XY only:   "(5,4)" or "5,4" → col=6, row=5, z=0
+ * - Legacy slash: "05/04" → col=5, row=4
+ * - Legacy compact: "1-1710" → col=17, row=10
+ * - Legacy letter: "A1" → col=1, row=1
+ * Note: XYZ values are 0-based; internal col/row are 1-based (col = X+1, row = Y+1)
  */
-export function parseCoord(coord: string): { col: number; row: number } | null {
+export function parseCoord(coord: string): { col: number; row: number; z?: number } | null {
+  const trimmed = coord.trim().replace(/^\(/, '').replace(/\)$/, '');
+
+  // XYZ or XY comma format: "18,1,10" or "18,1"
+  const xyzMatch = trimmed.match(/^(\d+)\s*,\s*(\d+)(?:\s*,\s*(\d+))?$/);
+  if (xyzMatch) {
+    const x = parseInt(xyzMatch[1]);
+    const y = parseInt(xyzMatch[2]);
+    const z = xyzMatch[3] !== undefined ? parseInt(xyzMatch[3]) : 0;
+    return { col: x + 1, row: y + 1, z }; // Convert 0-based to 1-based
+  }
+
   // Strip level prefix (supports both ":" and "-" separators for backward compat)
-  const levelMatch = coord.match(/^(\d+)[:|-](.+)$/);
-  const body = levelMatch ? levelMatch[2] : coord;
+  const levelMatch = trimmed.match(/^(\d+)[:|-](.+)$/);
+  const body = levelMatch ? levelMatch[2] : trimmed;
 
   // Slash format: "05/04"
   const slashMatch = body.match(/^(\d+)\/(\d+)$/);
@@ -111,10 +123,10 @@ export function parseCoord(coord: string): { col: number; row: number } | null {
   return null;
 }
 
-/** Format coordinate: col=5, row=4, level="1" → "1:05/04" */
-export function formatCoord(col: number, row: number, levelPrefix?: string): string {
-  const base = `${String(col).padStart(2, '0')}/${String(row).padStart(2, '0')}`;
-  return levelPrefix ? `${levelPrefix}:${base}` : base;
+/** Format coordinate in XYZ system: col=5, row=4, z=0 → "(4,3,0)"
+ *  X = col-1 (0-based), Y = row-1 (0-based), Z defaults to 0 */
+export function formatCoord(col: number, row: number, _levelPrefix?: string, z?: number): string {
+  return `(${col - 1},${row - 1},${z ?? 0})`;
 }
 
 // Derive grid positions from room posX/posY based on cell size in meters
@@ -551,7 +563,7 @@ export function FloorPlanGridView({
       const isMultiSelected = selectedIds.has(room.id);
       const m2 = (room.width * room.length).toFixed(1);
       const colorClass = getSpaceColor(room.name);
-      const coord = formatCoord(startCol, startRow, levelPrefix);
+      const coord = formatCoord(startCol, startRow, levelPrefix, 0);
       const groupColor = room.groupId ? getGroupColor(room.groupId) : undefined;
 
       // Position: COL_HEADER_W + (startCol-1)*CS, ROW_HEADER_H + (startRow-1)*CS
@@ -759,7 +771,7 @@ export function FloorPlanGridView({
                 {isEmptySelected && (
                   <div className="absolute top-0.5 right-0.5 w-3 h-3 rounded-full bg-blue-500 border-blue-500 border" />
                 )}
-                <div className="text-[7px] text-muted-foreground/40 p-0.5">{formatCoord(col, row)}</div>
+                <div className="text-[7px] text-muted-foreground/40 p-0.5">{formatCoord(col, row, undefined, 0)}</div>
               </div>
             );
           })}
@@ -841,7 +853,7 @@ export function FloorPlanGridView({
                       e.stopPropagation();
                       if (exists) return; // Don't create duplicate
                       const { label, side } = autoCornerName(col, row);
-                      setCustomCorners(prev => [...prev, { label, col, row, side, floorId: currentFloorId }]);
+                      setCustomCorners(prev => [...prev, { label, col, row, side, z: 0, floorId: currentFloorId }]);
                     }}
                   >
                     <div className={`rounded-full transition-all ${exists ? 'w-2.5 h-2.5 bg-primary' : 'w-1.5 h-1.5 bg-muted-foreground/30 group-hover:w-3 group-hover:h-3 group-hover:bg-primary/60'}`} />
@@ -952,11 +964,11 @@ export function FloorPlanGridView({
                         onKeyDown={e => { if (e.key === 'Escape') setEditingCornerIdx(null); }}
                       />
                       <input
-                        className="w-14 h-4 text-[10px] text-center bg-transparent border-b border-primary-foreground outline-none text-primary-foreground"
+                        className="w-16 h-4 text-[10px] text-center bg-transparent border-b border-primary-foreground outline-none text-primary-foreground"
                         value={editingCornerCoord}
                         onChange={e => setEditingCornerCoord(e.target.value)}
-                        placeholder="col/row"
-                        title="Coordenada (ej: 1-0504 o 05/04)"
+                        placeholder="(X,Y,Z)"
+                        title="Coordenada XYZ (ej: 18,1,10)"
                         onKeyDown={e => { if (e.key === 'Escape') setEditingCornerIdx(null); }}
                       />
                       <select
@@ -980,7 +992,7 @@ export function FloorPlanGridView({
                               if (i !== c.idx) return cc;
                               const updates: Partial<CustomCorner> = {};
                               if (editingCornerLabel.trim()) updates.label = editingCornerLabel.trim();
-                              if (parsed) { updates.col = parsed.col; updates.row = parsed.row; }
+                              if (parsed) { updates.col = parsed.col; updates.row = parsed.row; if (parsed.z !== undefined) updates.z = parsed.z; }
                               updates.side = editingCornerSide;
                               return { ...cc, ...updates };
                             }));
@@ -1014,7 +1026,7 @@ export function FloorPlanGridView({
                           const corner = customCorners[c.idx];
                           setEditingCornerIdx(c.idx);
                           setEditingCornerLabel(c.label);
-                          setEditingCornerCoord(formatCoord(corner.col, corner.row, levelPrefix));
+                          setEditingCornerCoord(formatCoord(corner.col, corner.row, levelPrefix, corner.z ?? 0));
                           setEditingCornerSide(corner.side || 'top');
                         }
                       }}
@@ -1459,9 +1471,9 @@ export function FloorPlanGridView({
             <Input
               value={newCornerCoord}
               onChange={e => setNewCornerCoord(e.target.value)}
-              placeholder="1-1704"
-              className="w-20 h-8 text-xs"
-              title="Coordenada de la celda (ej: R18)"
+              placeholder="18,1,0"
+              className="w-24 h-8 text-xs"
+              title="Coordenada XYZ (ej: 18,1,10)"
             />
             <select
               value={newCornerSide}
@@ -1484,7 +1496,7 @@ export function FloorPlanGridView({
                 const labelWithPrefix = cornerLevelPrefix && !newCornerLabel.trim().startsWith(cornerLevelPrefix)
                   ? `${cornerLevelPrefix}${newCornerLabel.trim()}`
                   : newCornerLabel.trim();
-                setCustomCorners(prev => [...prev, { label: labelWithPrefix, col: parsed.col, row: parsed.row, side: newCornerSide, floorId: currentFloorId }]);
+                setCustomCorners(prev => [...prev, { label: labelWithPrefix, col: parsed.col, row: parsed.row, z: parsed.z ?? 0, side: newCornerSide, floorId: currentFloorId }]);
                 setNewCornerLabel('');
                 setNewCornerCoord('');
               }}
@@ -1548,12 +1560,12 @@ export function FloorPlanGridView({
                     />
                   </div>
                   <div>
-                    <Label className="text-xs">Coordenada (ej: 01/01)</Label>
+                    <Label className="text-xs">Coordenada XY (ej: 0,0)</Label>
                     <input
                       type="text"
                       value={inlineSpaceCoord}
-                      onChange={e => setInlineSpaceCoord(e.target.value.toUpperCase())}
-                      placeholder="01/01"
+                      onChange={e => setInlineSpaceCoord(e.target.value)}
+                      placeholder="0,0"
                       disabled={saving}
                       className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm font-mono ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                     />
@@ -1858,7 +1870,7 @@ export function FloorPlanGridView({
       })()}
 
       <p className="text-xs text-muted-foreground">
-        Cada celda = {scaleMode === 'bloque' ? `${blockLengthMm}×${blockLengthMm}mm (1 bloque)` : '1 m²'}. Coordenadas: formato compacto {levelPrefix || '1'}-CCRR (ej: {levelPrefix || '1'}-1704 = col 17, fila 4) o con barra {formatCoord(5, 4, levelPrefix)}. Clic en un espacio para editar.
+        Cada celda = {scaleMode === 'bloque' ? `${blockLengthMm}×${blockLengthMm}mm (1 bloque)` : '1 m²'}. Coordenadas: sistema XYZ, ej: {formatCoord(5, 4, undefined, 0)} = X4, Y3, Z0. Escala horizontal: {blockLengthMm}mm, vertical: 250mm. Clic en un espacio para editar.
       </p>
 
       {/* Fullscreen overlay via portal — bigger cells */}

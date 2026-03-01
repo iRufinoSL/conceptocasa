@@ -8,6 +8,8 @@ export interface CustomCorner {
   label: string;
   col: number;
   row: number;
+  /** Vertical coordinate in block-height units (250mm default). 0 = ground level. */
+  z?: number;
   side: 'top' | 'right' | 'bottom' | 'left';
   isMain?: boolean;
   isEave?: boolean;

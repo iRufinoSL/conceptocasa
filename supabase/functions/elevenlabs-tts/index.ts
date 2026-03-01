@@ -91,7 +91,7 @@ Deno.serve(async (req: Request) => {
     if (!response.ok) {
       const errorText = await response.text();
       console.error(`[TTS] ElevenLabs API error (${response.status}):`, errorText);
-      return new Response(JSON.stringify({ error: `TTS API error: ${response.status}` }), {
+      return new Response(JSON.stringify({ error: 'Error al generar el audio. Inténtalo de nuevo.' }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });

@@ -357,7 +357,7 @@ function LevelManagerPanel({ floors, planData, rooms, onAdd, onUpdate, onDelete,
   }, []);
 
   const isFloorBajoCubierta = (f: { level: string; name: string }) => {
-    return f.level === 'bajo_cubierta' || f.name.toLowerCase().includes('bajo cubierta');
+    return f.level === 'bajo_cubierta' || f.name.toLowerCase().includes('cubierta');
   };
 
   // Compute building half-width
@@ -606,8 +606,24 @@ function LevelManagerPanel({ floors, planData, rooms, onAdd, onUpdate, onDelete,
                       <>
                         <Badge variant="secondary" className="text-xs">{f.orderIndex}</Badge>
                         <span className="text-sm font-medium flex-1">{f.name}</span>
-                        {isBajo && <Badge variant="outline" className="text-[9px] h-4">Bajo cubierta</Badge>}
-                        <span className="text-[10px] text-muted-foreground">{floorRooms.length} espacios</span>
+                        {isBajo && <Badge variant="outline" className="text-[9px] h-4">Cubierta</Badge>}
+                        {/* Inline height field (visible without expanding) */}
+                        <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
+                          <Input
+                            type="number"
+                            step="250"
+                            min="0"
+                            className="h-6 w-20 text-[10px] px-1"
+                            value={levelHeights[f.id] || ''}
+                            placeholder="2500"
+                            onChange={e => setLevelHeights(prev => ({ ...prev, [f.id]: e.target.value }))}
+                            disabled={saving}
+                          />
+                          <span className="text-[9px] text-muted-foreground whitespace-nowrap">
+                            mm ({((parseFloat(levelHeights[f.id] || '2500') / 1000)).toFixed(1)}m)
+                          </span>
+                        </div>
+                        <span className="text-[10px] text-muted-foreground">{floorRooms.length} esp.</span>
                         <Button variant="ghost" size="sm" className="h-7 w-7 p-0"
                           onClick={(e) => { e.stopPropagation(); setEditId(f.id); setEditName(f.name); }}>
                           <Pencil className="h-3.5 w-3.5" />
@@ -646,7 +662,7 @@ function LevelManagerPanel({ floors, planData, rooms, onAdd, onUpdate, onDelete,
                             {' · '}{Math.round((parseFloat(levelHeights[f.id] || '2500')) / (planData.blockHeightMm || 250))} bloques
                           </p>
                           {isBajo && (
-                            <p className="text-[10px] text-muted-foreground">0 = bajo cubierta (paredes siguen pendiente)</p>
+                            <p className="text-[10px] text-muted-foreground">0 = cubierta (paredes siguen pendiente)</p>
                           )}
                         </div>
                         <div className="flex items-end">

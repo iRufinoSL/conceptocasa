@@ -89,7 +89,7 @@ function getWallHeight(wall: WallData, room: RoomData, plan: FloorPlanData): num
   return plan.defaultHeight;
 }
 
-/** Check if a room is bajo cubierta (height=0 or undefined with dos_aguas roof, or floor level is bajo_cubierta) */
+/** Check if a room is under the roof (height=0 or undefined with dos_aguas roof, or floor level is bajo_cubierta) */
 function isBajoCubierta(room: RoomData, plan: FloorPlanData, floors?: FloorLevel[]): boolean {
   if (plan.roofType !== 'dos_aguas') return false;
   // Check room height
@@ -97,7 +97,7 @@ function isBajoCubierta(room: RoomData, plan: FloorPlanData, floors?: FloorLevel
   // Check floor level
   if (room.floorId && floors) {
     const floor = floors.find(f => f.id === room.floorId);
-    if (floor && (floor.level === 'bajo_cubierta' || floor.name.toLowerCase().includes('bajo cubierta'))) return true;
+    if (floor && (floor.level === 'bajo_cubierta' || floor.name.toLowerCase().includes('cubierta'))) return true;
   }
   return false;
 }
@@ -3219,7 +3219,7 @@ function TotalElevationCard({ side, label, layers, plan, rooms, budgetName }: {
   const layerDetails = useMemo(() => {
     return layers.map((layer, layerIdx) => {
       const maxLength = Math.max(...layer.composites.map(cw => cw.totalLength), 0);
-      // For gable sides on bajo cubierta layer (last layer), height = peak height of the gable triangle
+      // For gable sides on roof layer (last layer), height = peak height of the gable triangle
       // For non-gable layers, use max section height
       let maxHeight: number;
       if (isGableSide && layer.isGable) {
@@ -3318,7 +3318,7 @@ function TotalElevationCard({ side, label, layers, plan, rooms, budgetName }: {
             const layerTopY = currentBaseY - layer.maxHeight * scale;
             const isTopLayer = layerIdx === layers.length - 1;
 
-            // For gable sides with bajo cubierta layer:
+            // For gable sides with roof layer:
             // Render ONE single triangle spanning the full width, NOT per-section
             if (isGableSide && layer.isGable && isTopLayer) {
               const peakX = rx + totalWidth * scale / 2;
@@ -3475,7 +3475,7 @@ function TotalElevationCard({ side, label, layers, plan, rooms, budgetName }: {
                   } else {
                     const sectionFill = secIdx % 2 === 0 ? TOTAL_SIDE_COLORS[side].fill : 'hsl(30, 25%, 88%)';
 
-                    // Check if this is a bajo cubierta section on top/bottom side (sloped wall)
+                    // Check if this is a roof section on top/bottom side (sloped wall)
                     // These get a trapezoidal shape if heights differ at edges
                     elements.push(
                       <g key={`total-${layerIdx}-${secIdx}`}>
@@ -3557,7 +3557,7 @@ function TotalElevationCard({ side, label, layers, plan, rooms, budgetName }: {
                 });
               });
 
-              // For non-gable bajo cubierta layers on top/bottom sides,
+              // For non-gable roof layers on top/bottom sides,
               // draw the sloping roof line
               if (isTopLayer && !isGableSide && layer.isGable) {
                 // The roof slopes from edges to center
@@ -3660,6 +3660,26 @@ function TotalElevationCard({ side, label, layers, plan, rooms, budgetName }: {
           });
 
           return elements;
+        })()}
+
+        {/* Total vertical dimension line (right side, outermost) */}
+        {layerDetails.length >= 2 && (() => {
+          const dimX = rx + totalWidth * scale + 18 + layerDetails.length * 15 + 10;
+          return (
+            <g>
+              <line x1={dimX} y1={baseY} x2={dimX} y2={baseY - totalHeight * scale}
+                stroke="hsl(var(--foreground))" strokeWidth={1} opacity={0.7} />
+              <line x1={dimX - 4} y1={baseY} x2={dimX + 4} y2={baseY}
+                stroke="hsl(var(--foreground))" strokeWidth={1} opacity={0.7} />
+              <line x1={dimX - 4} y1={baseY - totalHeight * scale} x2={dimX + 4} y2={baseY - totalHeight * scale}
+                stroke="hsl(var(--foreground))" strokeWidth={1} opacity={0.7} />
+              <text x={dimX + 3} y={(baseY + (baseY - totalHeight * scale)) / 2 + 3} textAnchor="start"
+                fontSize={fsScale ? 13 : 10} fill="hsl(var(--foreground))" fontWeight={800} opacity={0.8}
+                transform={`rotate(90, ${dimX + 3}, ${(baseY + (baseY - totalHeight * scale)) / 2})`}>
+                TOTAL {Math.round(totalHeight * 1000)} mm
+              </text>
+            </g>
+          );
         })()}
 
         {/* Total dimension line (bottom) */}

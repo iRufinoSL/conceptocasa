@@ -18,25 +18,33 @@ interface MeasurementsSurfaceTypeViewProps {
   searchTerm: string;
 }
 
-// Surface type categories derived from source_classification prefix
 const SURFACE_CATEGORIES = [
   { key: 'suelo', label: 'Suelos', icon: <ArrowDown className="h-4 w-4" />, color: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300' },
   { key: 'techo', label: 'Techos', icon: <ArrowUp className="h-4 w-4" />, color: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300' },
   { key: 'ext', label: 'Paredes externas', icon: <Layers className="h-4 w-4" />, color: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300' },
   { key: 'int', label: 'Paredes internas', icon: <Layers className="h-4 w-4" />, color: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' },
   { key: 'roof', label: 'Cubierta', icon: <ArrowUp className="h-4 w-4" />, color: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300' },
+  { key: 'volumen', label: 'Volumen', icon: <Box className="h-4 w-4" />, color: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300' },
 ];
 
 function getCategoryFromClassification(classification: string | null): string | null {
   if (!classification) return null;
-  // e.g. vol_suelo_xxx, vol_ext_xxx, vol_int_xxx, vol_techo_xxx, vol_roof_xxx
-  const match = classification.match(/^vol_(suelo|techo|ext|int|roof)_/);
+  const match = classification.match(/^vol_(suelo|techo|ext|int|roof|volumen)_/);
   return match ? match[1] : null;
 }
 
-function isTotal(classification: string | null): boolean {
-  return classification?.endsWith('_total') ?? false;
+function getTier(classification: string | null): 'room' | 'level' | 'total' {
+  if (!classification) return 'level';
+  if (classification.endsWith('_total')) return 'total';
+  if (classification.includes('_room_')) return 'room';
+  return 'level';
 }
+
+const TIER_LABELS: Record<string, string> = {
+  room: 'Estancia',
+  level: 'Nivel',
+  total: 'Total',
+};
 
 export function MeasurementsSurfaceTypeView({ measurements, searchTerm }: MeasurementsSurfaceTypeViewProps) {
   const volumeMeasurements = useMemo(() => {
@@ -44,17 +52,16 @@ export function MeasurementsSurfaceTypeView({ measurements, searchTerm }: Measur
   }, [measurements]);
 
   const grouped = useMemo(() => {
-    const result: Record<string, { levels: Measurement[]; total: Measurement | null }> = {};
+    const result: Record<string, { rooms: Measurement[]; levels: Measurement[]; total: Measurement | null }> = {};
     
     for (const cat of SURFACE_CATEGORIES) {
-      result[cat.key] = { levels: [], total: null };
+      result[cat.key] = { rooms: [], levels: [], total: null };
     }
 
     for (const m of volumeMeasurements) {
       const catKey = getCategoryFromClassification(m.source_classification);
       if (!catKey || !result[catKey]) continue;
 
-      // Apply search filter
       if (searchTerm) {
         const term = searchTerm.toLowerCase();
         const nameMatch = m.name.toLowerCase().includes(term);
@@ -63,8 +70,11 @@ export function MeasurementsSurfaceTypeView({ measurements, searchTerm }: Measur
         if (!nameMatch && !catMatch) continue;
       }
 
-      if (isTotal(m.source_classification)) {
+      const tier = getTier(m.source_classification);
+      if (tier === 'total') {
         result[catKey].total = m;
+      } else if (tier === 'room') {
+        result[catKey].rooms.push(m);
       } else {
         result[catKey].levels.push(m);
       }
@@ -73,7 +83,7 @@ export function MeasurementsSurfaceTypeView({ measurements, searchTerm }: Measur
     return result;
   }, [volumeMeasurements, searchTerm]);
 
-  const hasAny = Object.values(grouped).some(g => g.levels.length > 0 || g.total);
+  const hasAny = Object.values(grouped).some(g => g.rooms.length > 0 || g.levels.length > 0 || g.total);
 
   if (!hasAny) {
     return (
@@ -91,16 +101,17 @@ export function MeasurementsSurfaceTypeView({ measurements, searchTerm }: Measur
     <div className="space-y-4">
       {SURFACE_CATEGORIES.map(cat => {
         const group = grouped[cat.key];
-        if (!group || (group.levels.length === 0 && !group.total)) return null;
+        if (!group || (group.rooms.length === 0 && group.levels.length === 0 && !group.total)) return null;
+
+        const totalCount = group.rooms.length + group.levels.length + (group.total ? 1 : 0);
 
         return (
           <div key={cat.key} className="rounded-md border">
-            {/* Category header */}
             <div className="flex items-center gap-2 px-4 py-2.5 bg-muted/50 border-b">
               {cat.icon}
               <span className="font-semibold text-sm">{cat.label}</span>
               <Badge variant="secondary" className={`text-xs ${cat.color}`}>
-                {(group.levels.length) + (group.total ? 1 : 0)}
+                {totalCount}
               </Badge>
             </div>
 
@@ -114,18 +125,33 @@ export function MeasurementsSurfaceTypeView({ measurements, searchTerm }: Measur
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {group.levels.map(m => (
+                {/* Per-room measurements */}
+                {group.rooms.map(m => (
                   <TableRow key={m.id}>
-                    <TableCell className="font-medium">{m.name}</TableCell>
+                    <TableCell className="pl-6">{m.name}</TableCell>
                     <TableCell className="text-right font-mono">
                       {m.manual_units !== null ? formatNumber(m.manual_units) : '-'}
                     </TableCell>
                     <TableCell className="text-muted-foreground">{m.measurement_unit || 'ud'}</TableCell>
                     <TableCell>
-                      <Badge variant="outline" className="text-xs">Por nivel</Badge>
+                      <Badge variant="outline" className="text-xs bg-background">{TIER_LABELS.room}</Badge>
                     </TableCell>
                   </TableRow>
                 ))}
+                {/* Per-level measurements */}
+                {group.levels.map(m => (
+                  <TableRow key={m.id} className="bg-muted/20">
+                    <TableCell className="font-medium">{m.name}</TableCell>
+                    <TableCell className="text-right font-mono font-medium">
+                      {m.manual_units !== null ? formatNumber(m.manual_units) : '-'}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">{m.measurement_unit || 'ud'}</TableCell>
+                    <TableCell>
+                      <Badge variant="secondary" className="text-xs">{TIER_LABELS.level}</Badge>
+                    </TableCell>
+                  </TableRow>
+                ))}
+                {/* Total measurement */}
                 {group.total && (
                   <TableRow className="bg-muted/30 font-semibold">
                     <TableCell className="font-bold">{group.total.name}</TableCell>
@@ -134,7 +160,7 @@ export function MeasurementsSurfaceTypeView({ measurements, searchTerm }: Measur
                     </TableCell>
                     <TableCell className="text-muted-foreground">{group.total.measurement_unit || 'ud'}</TableCell>
                     <TableCell>
-                      <Badge className="text-xs">Total</Badge>
+                      <Badge className="text-xs">{TIER_LABELS.total}</Badge>
                     </TableCell>
                   </TableRow>
                 )}

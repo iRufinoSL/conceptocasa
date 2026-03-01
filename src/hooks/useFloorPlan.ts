@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import type { FloorPlanData, RoomData, WallData, OpeningData, WallType, FloorLevel, ScaleMode, BlockGroupData, WallLayerData } from '@/lib/floor-plan-calculations';
-import { migrateLegacyWallType, autoClassifyWalls, isExteriorType } from '@/lib/floor-plan-calculations';
+import { migrateLegacyWallType, isExteriorType } from '@/lib/floor-plan-calculations';
 
 export interface CustomCorner {
   label: string;
@@ -851,44 +851,12 @@ export function useFloorPlan(budgetId: string) {
     }
   };
 
-  // Auto-classify perimeter walls as 'externa' in DB
+  // IMPORTANT: wall_type is now strictly manual.
+  // We keep this method for backwards compatibility with existing buttons/actions,
+  // but it must never overwrite persisted wall types automatically.
   const classifyPerimeterWalls = async () => {
-    if (!floorPlan || rooms.length === 0) return;
-    setSaving(true);
-    try {
-      const classification = autoClassifyWalls(rooms);
-      // Only update walls that haven't been manually set by the user.
-      // Walls with temp- IDs are new (not yet in DB) — always classify them.
-      // Walls whose stored type matches a "default" pattern (exterior/interior)
-      // are considered auto-classified and safe to overwrite.
-      // Any non-default type (_compartida/_invisible) is treated as manual and preserved.
-      const DEFAULT_TYPES = new Set(['exterior', 'interior']);
-      let updated = 0;
-      for (const room of rooms) {
-        for (const wall of room.walls) {
-          if (wall.id.startsWith('temp-')) continue;
-          const key = `${room.id}::${wall.wallIndex}`;
-          const autoType = classification.get(key);
-          if (!autoType) continue;
-          if (wall.wallType === autoType) continue; // already correct
-          const isManuallySet = !DEFAULT_TYPES.has(wall.wallType);
-          if (isManuallySet) continue;
-          const { error } = await supabase
-            .from('budget_floor_plan_walls')
-            .update({ wall_type: autoType })
-            .eq('id', wall.id);
-          if (error) throw error;
-          updated++;
-        }
-      }
-      await fetchAll();
-      toast.success(`${updated} paredes actualizadas automáticamente`);
-    } catch (err) {
-      console.error('Error classifying walls:', err);
-      toast.error('Error al clasificar paredes');
-    } finally {
-      setSaving(false);
-    }
+    // Intentionally no-op to guarantee manual wall type persistence.
+    return;
   };
 
   // --- Undo system: up to 3 snapshots ---

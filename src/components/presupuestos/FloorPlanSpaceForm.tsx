@@ -554,8 +554,7 @@ export function FloorPlanSpaceForm({ room, allRooms, planData, coordCol, coordRo
         </Button>
 
         <p className="text-[10px] text-muted-foreground">
-          Las paredes sin nada adyacente se consideran externas por defecto.
-          Haz clic en una pared para ver y gestionar sus aperturas.
+          El tipo de pared queda bloqueado tras guardar y solo cambia cuando lo vuelves a editar y guardar.
         </p>
       </CardContent>
     </Card>

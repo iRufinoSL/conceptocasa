@@ -47,7 +47,7 @@ export function FloorPlanSpaceForm({ room, allRooms, planData, coordCol, coordRo
   const blockL = planData.blockLengthMm || 625;
   const blockH = planData.blockHeightMm || 250;
 
-  const toDisplay = (meters: number) => isBlockMode ? String(metersToBlocks(meters, blockL)) : String(meters);
+  const toDisplay = useCallback((meters: number) => isBlockMode ? String(metersToBlocks(meters, blockL)) : String(meters), [isBlockMode, blockL]);
 
   // Local buffered state for all editable fields
   const [localName, setLocalName] = useState(room.name);

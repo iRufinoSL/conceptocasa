@@ -20,6 +20,7 @@ interface FloorPlanVolumesViewProps {
   rooms: RoomData[];
   floors: { id: string; name: string; level: string; orderIndex: number }[];
   floorPlanId: string;
+  budgetId: string;
 }
 
 type SurfaceType = 'suelo' | 'cara_superior' | 'cara_derecha' | 'cara_inferior' | 'cara_izquierda' | 'techo' | 'cubierta_superior' | 'cubierta_inferior' | 'volumen';
@@ -877,7 +878,7 @@ function SurfaceSection({
   );
 }
 
-export function FloorPlanVolumesView({ plan, rooms, floors, floorPlanId }: FloorPlanVolumesViewProps) {
+export function FloorPlanVolumesView({ plan, rooms, floors, floorPlanId, budgetId }: FloorPlanVolumesViewProps) {
   const slopes = calculateRoofSlopes(plan, rooms);
   const [saving, setSaving] = useState(false);
   const [loaded, setLoaded] = useState(false);
@@ -1362,6 +1363,104 @@ export function FloorPlanVolumesView({ plan, rooms, floors, floorPlanId }: Floor
   const globalTotalExtWalls = areaSummaryByLevel.reduce((s, l) => s + l.totalExtWallArea, 0);
   const globalTotalIntWalls = areaSummaryByLevel.reduce((s, l) => s + l.totalIntWallArea, 0);
   const globalTotalRoofs = areaSummaryByLevel.reduce((s, l) => s + l.totalRoofArea, 0);
+
+  // ── Auto-sync volume summaries to budget_measurements ──
+  const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastSyncedRef = useRef<string>('');
+
+  useEffect(() => {
+    if (!budgetId || areaSummaryByLevel.length === 0) return;
+
+    // Build measurement entries for each level + global totals
+    type SyncEntry = { name: string; value: number; unit: string; sourceKey: string };
+    const entries: SyncEntry[] = [];
+
+    for (const lvl of areaSummaryByLevel) {
+      const fn = lvl.floorName;
+      entries.push({ name: `Suelos ${fn}`, value: lvl.totalFloorArea, unit: 'm2', sourceKey: `vol_suelo_${lvl.floorId}` });
+      entries.push({ name: `Techos ${fn}`, value: lvl.totalCeilingArea, unit: 'm2', sourceKey: `vol_techo_${lvl.floorId}` });
+      entries.push({ name: `Paredes externas ${fn}`, value: lvl.totalExtWallArea, unit: 'm2', sourceKey: `vol_ext_${lvl.floorId}` });
+      entries.push({ name: `Paredes internas ${fn}`, value: lvl.totalIntWallArea, unit: 'm2', sourceKey: `vol_int_${lvl.floorId}` });
+      if (lvl.totalRoofArea > 0) {
+        entries.push({ name: `Cubierta ${fn}`, value: lvl.totalRoofArea, unit: 'm2', sourceKey: `vol_roof_${lvl.floorId}` });
+      }
+    }
+    // Global totals
+    entries.push({ name: 'Suelos total vivienda', value: globalTotalFloors, unit: 'm2', sourceKey: 'vol_suelo_total' });
+    entries.push({ name: 'Techos total vivienda', value: globalTotalCeilings, unit: 'm2', sourceKey: 'vol_techo_total' });
+    entries.push({ name: 'Paredes externas total vivienda', value: globalTotalExtWalls, unit: 'm2', sourceKey: 'vol_ext_total' });
+    entries.push({ name: 'Paredes internas total vivienda', value: globalTotalIntWalls, unit: 'm2', sourceKey: 'vol_int_total' });
+    if (globalTotalRoofs > 0) {
+      entries.push({ name: 'Cubierta total vivienda', value: globalTotalRoofs, unit: 'm2', sourceKey: 'vol_roof_total' });
+    }
+
+    // Skip if nothing changed
+    const fingerprint = JSON.stringify(entries.map(e => `${e.sourceKey}:${e.value.toFixed(4)}`));
+    if (fingerprint === lastSyncedRef.current) return;
+
+    // Debounce 3s
+    if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
+    syncTimerRef.current = setTimeout(async () => {
+      try {
+        // Fetch existing auto-synced measurements
+        const { data: existing } = await supabase
+          .from('budget_measurements')
+          .select('id, source_classification, manual_units')
+          .eq('budget_id', budgetId)
+          .eq('source', 'volumen_auto');
+
+        const existingByKey = new Map<string, { id: string; manual_units: number | null }>();
+        if (existing) {
+          for (const row of existing) {
+            if (row.source_classification) {
+              existingByKey.set(row.source_classification, { id: row.id, manual_units: row.manual_units });
+            }
+          }
+        }
+
+        const toInsert: any[] = [];
+        const toUpdate: { id: string; manual_units: number }[] = [];
+
+        for (const entry of entries) {
+          const rounded = Math.round(entry.value * 100) / 100;
+          const ex = existingByKey.get(entry.sourceKey);
+          if (ex) {
+            // Only update if value changed
+            if (Math.abs((ex.manual_units || 0) - rounded) > 0.005) {
+              toUpdate.push({ id: ex.id, manual_units: rounded });
+            }
+          } else {
+            toInsert.push({
+              budget_id: budgetId,
+              name: entry.name,
+              manual_units: rounded,
+              measurement_unit: entry.unit,
+              source: 'volumen_auto',
+              source_classification: entry.sourceKey,
+            });
+          }
+        }
+
+        if (toInsert.length > 0) {
+          await supabase.from('budget_measurements').insert(toInsert);
+        }
+        for (const u of toUpdate) {
+          await supabase.from('budget_measurements').update({ manual_units: u.manual_units, updated_at: new Date().toISOString() }).eq('id', u.id);
+        }
+
+        lastSyncedRef.current = fingerprint;
+        if (toInsert.length > 0 || toUpdate.length > 0) {
+          console.log(`[Volúmenes] Sincronizadas ${toInsert.length} nuevas + ${toUpdate.length} actualizadas mediciones`);
+        }
+      } catch (err) {
+        console.error('[Volúmenes] Error sincronizando mediciones:', err);
+      }
+    }, 3000);
+
+    return () => {
+      if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
+    };
+  }, [areaSummaryByLevel, budgetId, globalTotalFloors, globalTotalCeilings, globalTotalExtWalls, globalTotalIntWalls, globalTotalRoofs]);
 
   // grandTotalVolume is declared inside the render section below
 

@@ -1318,6 +1318,7 @@ export function FloorPlanTab({ budgetId, budgetName = '', isAdmin }: FloorPlanTa
           rooms={rooms}
           floors={floors}
           floorPlanId={floorPlan?.id || ''}
+          budgetId={budgetId}
         />
       )}
 

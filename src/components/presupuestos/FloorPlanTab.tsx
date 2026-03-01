@@ -284,7 +284,7 @@ function NewLevelWizardDialog({ open, onOpenChange, floors, onAdd, saving, onFlo
   );
 }
 
-function LevelManagerPanel({ floors, planData, rooms, onAdd, onUpdate, onDelete, onUpdatePlan, onUpdateRoom, onUpdateWall, onClassifyWalls, saving, onClose, onFloorCreated }: {
+function LevelManagerPanel({ floors, planData, rooms, onAdd, onUpdate, onDelete, onUpdatePlan, onUpdateRoom, onUpdateWall, saving, onClose, onFloorCreated }: {
   floors: Array<{ id: string; name: string; level: string; orderIndex: number }>;
   planData: FloorPlanData;
   rooms: RoomData[];
@@ -294,7 +294,6 @@ function LevelManagerPanel({ floors, planData, rooms, onAdd, onUpdate, onDelete,
   onUpdatePlan: (data: Partial<FloorPlanData>) => Promise<void>;
   onUpdateRoom: (roomId: string, data: any) => Promise<void>;
   onUpdateWall: (wallId: string, data: any) => Promise<void>;
-  onClassifyWalls: () => Promise<void>;
   saving: boolean;
   onClose: () => void;
   onFloorCreated?: (floorId: string) => void;
@@ -468,7 +467,6 @@ function LevelManagerPanel({ floors, planData, rooms, onAdd, onUpdate, onDelete,
       }
     }
 
-    await onClassifyWalls();
     toast.success('Niveles y parámetros actualizados');
   };
 
@@ -1193,7 +1191,6 @@ export function FloorPlanTab({ budgetId, budgetName = '', isAdmin }: FloorPlanTa
               onUpdatePlan={updateFloorPlan}
               onUpdateRoom={updateRoom}
               onUpdateWall={updateWall}
-              onClassifyWalls={classifyPerimeterWalls}
               saving={saving}
               onClose={() => setShowLevelManager(false)}
               onFloorCreated={(floorId) => setForceActiveFloorId(floorId)}

@@ -7,7 +7,7 @@ import { Separator } from '@/components/ui/separator';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { FloorPlanData, RoomData, calculateRoofSlopes, RoofSlopeDetail, isExteriorType, isVisibleWall, calculateRoom } from '@/lib/floor-plan-calculations';
+import { FloorPlanData, RoomData, calculateRoofSlopes, RoofSlopeDetail, isExteriorType, isVisibleWall, calculateRoom, isCompartidaType, isInvisibleType } from '@/lib/floor-plan-calculations';
 import { Box, ChevronDown, ChevronRight, Plus, Trash2, Layers, ArrowDown, ArrowUp, ArrowRight as ArrowRightIcon, Save, Loader2, CornerDownRight, Copy, Ruler, Settings2, Link2, Unlink, Pencil } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
@@ -1269,6 +1269,53 @@ export function FloorPlanVolumesView({ plan, rooms, floors, floorPlanId }: Floor
   const totalL = allMaxY - allMinY;
   const totalPlantArea = totalW * totalL;
 
+  // ── Helper: compute wall areas separating shared (compartida) to avoid double-counting ──
+  function calcLevelWallAreas(floorRooms: RoomData[]) {
+    let extNonShared = 0;
+    let extShared = 0;
+    let intNonShared = 0;
+    let intShared = 0;
+
+    for (const room of floorRooms) {
+      if (isNonStructural(room.name)) continue;
+      const calc = calculateRoom(room, plan);
+      for (const wallCalc of calc.walls) {
+        if (wallCalc.segments && wallCalc.segments.length > 0) {
+          for (const seg of wallCalc.segments) {
+            if (isInvisibleType(seg.segmentType)) continue;
+            const isExt = isExteriorType(seg.segmentType);
+            const isShared = isCompartidaType(seg.segmentType);
+            if (isExt) {
+              if (isShared) extShared += seg.netArea;
+              else extNonShared += seg.netArea;
+            } else {
+              if (isShared) intShared += seg.netArea;
+              else intNonShared += seg.netArea;
+            }
+          }
+        } else {
+          // Fallback: no segments, use wallCalc-level data
+          if (isInvisibleType(wallCalc.wallType)) continue;
+          const isExt = isExteriorType(wallCalc.wallType);
+          const isShared = isCompartidaType(wallCalc.wallType);
+          if (isExt) {
+            if (isShared) extShared += wallCalc.netArea;
+            else extNonShared += wallCalc.netArea;
+          } else {
+            if (isShared) intShared += wallCalc.netArea;
+            else intNonShared += wallCalc.netArea;
+          }
+        }
+      }
+    }
+
+    // Shared walls are counted by both rooms → halve to avoid double-counting
+    return {
+      totalExtWallArea: extNonShared + extShared / 2,
+      totalIntWallArea: intNonShared + intShared / 2,
+    };
+  }
+
   // ── Compute area summaries per level ──
   const areaSummaryByLevel = useMemo(() => {
     return floors.map(floor => {
@@ -1276,8 +1323,6 @@ export function FloorPlanVolumesView({ plan, rooms, floors, floorPlanId }: Floor
       const isBajoCubierta = floor.level === 'bajo_cubierta' || floor.name.toLowerCase().includes('cubierta');
       let totalFloorArea = 0;
       let totalCeilingArea = 0;
-      let totalExtWallArea = 0;
-      let totalIntWallArea = 0;
 
       for (const room of floorRooms) {
         if (isNonStructural(room.name)) continue;
@@ -1288,9 +1333,9 @@ export function FloorPlanVolumesView({ plan, rooms, floors, floorPlanId }: Floor
         } else if (calc.slopeRoofCeilingArea > 0) {
           totalCeilingArea += calc.slopeRoofCeilingArea;
         }
-        totalExtWallArea += calc.totalExternalWallArea;
-        totalIntWallArea += calc.totalInternalWallArea;
       }
+
+      const { totalExtWallArea, totalIntWallArea } = calcLevelWallAreas(floorRooms);
 
       // Roof slopes for bajo cubierta
       let totalRoofArea = 0;
@@ -1309,6 +1354,7 @@ export function FloorPlanVolumesView({ plan, rooms, floors, floorPlanId }: Floor
         totalRoofArea,
       };
     });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [floors, rooms, plan, slopes]);
 
   const globalTotalFloors = areaSummaryByLevel.reduce((s, l) => s + l.totalFloorArea, 0);
@@ -1635,12 +1681,13 @@ export function FloorPlanVolumesView({ plan, rooms, floors, floorPlanId }: Floor
                   };
                 });
 
-                // Level summary by wall type
+                // Level summary by wall type (shared walls counted only once)
+                const wallAreas = calcLevelWallAreas(floorRooms);
                 const levelSummary = {
                   totalFloor: roomSummaries.reduce((s, r) => s + r.floorArea, 0),
                   totalCeiling: roomSummaries.reduce((s, r) => s + r.ceilingArea, 0),
-                  totalExtWall: roomSummaries.reduce((s, r) => s + r.extWallArea, 0),
-                  totalIntWall: roomSummaries.reduce((s, r) => s + r.intWallArea, 0),
+                  totalExtWall: wallAreas.totalExtWallArea,
+                  totalIntWall: wallAreas.totalIntWallArea,
                   totalVolume: roomSummaries.reduce((s, r) => s + r.volume, 0),
                 };
 

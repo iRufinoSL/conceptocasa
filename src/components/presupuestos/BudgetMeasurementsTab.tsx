@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
-import { Plus, Search, Edit, Trash2, Ruler, Link2, Upload, FileUp, X, Download, Copy, List, Layers, ChevronFirst, ChevronLast, ChevronLeft, ChevronRight, FileCode2 } from 'lucide-react';
+import { Plus, Search, Edit, Trash2, Ruler, Link2, Upload, FileUp, X, Download, Copy, List, Layers, ChevronFirst, ChevronLast, ChevronLeft, ChevronRight, FileCode2, LayoutGrid } from 'lucide-react';
 import { formatNumber } from '@/lib/format-utils';
 import { searchMatch } from '@/lib/search-utils';
 import { NumericInput } from '@/components/ui/numeric-input';
@@ -22,6 +22,7 @@ import { syncAllAffectedResources, syncResourcesRelatedUnits } from '@/lib/budge
 import { ResourceInlineEdit } from '@/components/presupuestos/ResourceInlineEdit';
 import { ChiefArchitectImportDialog } from '@/components/presupuestos/ChiefArchitectImportDialog';
 import { ChiefMeasurementsView } from '@/components/presupuestos/ChiefMeasurementsView';
+import { MeasurementsSurfaceTypeView } from '@/components/presupuestos/MeasurementsSurfaceTypeView';
 import { 
   readExcelFile, 
   writeExcelFile, 
@@ -97,7 +98,7 @@ export function BudgetMeasurementsTab({ budgetId, isAdmin }: BudgetMeasurementsT
   const [workAreaMeasurements, setWorkAreaMeasurements] = useState<WorkAreaMeasurement[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [viewMode, setViewMode] = useState<'alphabetic' | 'grouped' | 'chief'>('alphabetic');
+  const [viewMode, setViewMode] = useState<'alphabetic' | 'grouped' | 'chief' | 'surface_type'>('alphabetic');
   
   // Form states
   const [formOpen, setFormOpen] = useState(false);
@@ -941,7 +942,7 @@ export function BudgetMeasurementsTab({ budgetId, isAdmin }: BudgetMeasurementsT
         <CardContent>
           {/* View Mode Tabs + Search */}
           <div className="flex flex-col sm:flex-row sm:items-center gap-4 mb-4">
-            <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as 'alphabetic' | 'grouped' | 'chief')} className="w-auto">
+            <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as 'alphabetic' | 'grouped' | 'surface_type' | 'chief')} className="w-auto">
               <TabsList>
                 <TabsTrigger value="alphabetic" className="flex items-center gap-2">
                   <List className="h-4 w-4" />
@@ -950,6 +951,10 @@ export function BudgetMeasurementsTab({ budgetId, isAdmin }: BudgetMeasurementsT
                 <TabsTrigger value="grouped" className="flex items-center gap-2">
                   <Layers className="h-4 w-4" />
                   Por Área
+                </TabsTrigger>
+                <TabsTrigger value="surface_type" className="flex items-center gap-2">
+                  <LayoutGrid className="h-4 w-4" />
+                  Por Tipo Superficie
                 </TabsTrigger>
                 <TabsTrigger value="chief" className="flex items-center gap-2">
                   <FileCode2 className="h-4 w-4" />
@@ -976,6 +981,11 @@ export function BudgetMeasurementsTab({ budgetId, isAdmin }: BudgetMeasurementsT
               isAdmin={isAdmin}
               onDataChanged={fetchData}
               onOpenImport={() => setChiefImportOpen(true)}
+            />
+          ) : viewMode === 'surface_type' ? (
+            <MeasurementsSurfaceTypeView
+              measurements={measurements}
+              searchTerm={searchTerm}
             />
           ) : viewMode === 'grouped' ? (
             <MeasurementsWorkAreaGroupedView

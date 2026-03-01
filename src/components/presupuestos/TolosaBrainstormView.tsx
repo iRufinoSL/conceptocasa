@@ -12,7 +12,7 @@ import {
   ExternalLink, Building, User, Truck, FileText, Link, Unlink,
   Home, Ruler, Layers, Landmark, PenTool, RulerIcon, FolderOpen,
   CalendarDays, MessageSquare, Calculator, BarChart3, Timer, Settings,
-  ArrowUp, ArrowDown, ArrowLeft, ArrowRight, List, LayoutGrid, ShoppingCart
+  ArrowUp, ArrowDown, ArrowLeft, ArrowRight, List, LayoutGrid, ShoppingCart, Eye
 } from 'lucide-react';
 import { TolosaCardView } from './TolosaCardView';
 import { BudgetUrbanismTab } from './BudgetUrbanismTab';
@@ -60,6 +60,7 @@ interface TolosItem {
   client_contact_id: string | null;
   supplier_contact_id: string | null;
   housing_profile_id: string | null;
+  is_executed: boolean;
 }
 
 interface ContactInfo {
@@ -146,6 +147,7 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
   const [itemSubtotals, setItemSubtotals] = useState<Record<string, number>>({});
   const [itemSummaries, setItemSummaries] = useState<Record<string, { measurementUnits: number; measurementUnit: string; resourceSubtotal: number }>>({});
   const [viewMode, setViewMode] = useState<'list' | 'cards'>('list');
+  const [showOnlyExecuted, setShowOnlyExecuted] = useState(true);
   const [graphEntryItemId, setGraphEntryItemId] = useState<string | null>(null); // tracks item opened from graph card ✏️
   const [measurementVersions, setMeasurementVersions] = useState<Record<string, number>>({});
 
@@ -426,8 +428,27 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
 
   useEffect(() => { fetchItems(); fetchContacts(); fetchHousingProfiles(); }, [fetchItems, fetchContacts, fetchHousingProfiles]);
 
-  const rootItems = items.filter(i => !i.parent_id);
-  const getChildren = (parentId: string) => items.filter(i => i.parent_id === parentId);
+  // Build set of non-executed codes for cascading filter
+  const inactiveCodes = useMemo(() => {
+    const codes = new Set<string>();
+    items.filter(i => i.is_executed === false).forEach(i => codes.add(i.code));
+    return codes;
+  }, [items]);
+
+  const isItemVisible = useCallback((item: TolosItem): boolean => {
+    if (!showOnlyExecuted) return true;
+    if (item.is_executed === false) return false;
+    // Check if any ancestor code is inactive (cascading)
+    const codeParts = item.code.split('.');
+    for (let i = codeParts.length - 1; i >= 1; i--) {
+      const parentCode = codeParts.slice(0, i).join('.');
+      if (inactiveCodes.has(parentCode)) return false;
+    }
+    return true;
+  }, [showOnlyExecuted, inactiveCodes]);
+
+  const rootItems = items.filter(i => !i.parent_id && isItemVisible(i));
+  const getChildren = (parentId: string) => items.filter(i => i.parent_id === parentId && isItemVisible(i));
 
   const getNextCode = (parentId: string | null) => {
     const siblings = parentId ? getChildren(parentId) : rootItems;
@@ -1654,6 +1675,28 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
                   >
                     {item.name}
                   </button>
+                  <button
+                    onClick={async (e) => {
+                      e.stopPropagation();
+                      const newValue = !(item.is_executed !== false);
+                      try {
+                        const { error } = await supabase
+                          .from('tolosa_items')
+                          .update({ is_executed: newValue })
+                          .eq('id', item.id);
+                        if (error) throw error;
+                        fetchItems();
+                        toast.success(`Actividad: ${newValue ? 'SÍ se ejecuta' : 'NO se ejecuta'}`);
+                      } catch (err: any) {
+                        toast.error('Error al actualizar');
+                      }
+                    }}
+                    className="cursor-pointer hover:opacity-80 transition-opacity shrink-0"
+                  >
+                    <Badge variant={item.is_executed !== false ? 'success' : 'destructive'} className="text-xs">
+                      {item.is_executed !== false ? 'SÍ' : 'NO'}
+                    </Badge>
+                  </button>
                   {hasChildren && (
                     <Badge
                       variant="outline"
@@ -1905,6 +1948,21 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
             );
           })}
         </div>
+      </div>
+
+      {/* Filter: Show only executed items */}
+      <div className="flex items-center gap-3">
+        <Button
+          variant={showOnlyExecuted ? 'default' : 'outline'}
+          size="sm"
+          onClick={() => setShowOnlyExecuted(!showOnlyExecuted)}
+        >
+          <Eye className="h-4 w-4 mr-1" />
+          {showOnlyExecuted ? 'Solo las que SÍ se ejecutan' : 'Listar todas'}
+        </Button>
+        <span className="text-xs text-muted-foreground">
+          {items.filter(i => !showOnlyExecuted || i.is_executed !== false).length} de {items.length} ítems
+        </span>
       </div>
 
       {/* Root add form */}

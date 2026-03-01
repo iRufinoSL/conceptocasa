@@ -1,0 +1,1 @@
+ALTER TABLE public.tolosa_items ADD COLUMN is_executed boolean NOT NULL DEFAULT true;

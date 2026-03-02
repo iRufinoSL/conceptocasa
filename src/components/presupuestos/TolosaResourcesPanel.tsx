@@ -83,8 +83,10 @@ export function TolosaResourcesPanel({ budgetId, tolosItemId, isAdmin, parentIte
   const [measurementUnitType, setMeasurementUnitType] = useState<string>('ud');
   // Volume measurement override for individual resources
   const [volumeMeasurements, setVolumeMeasurements] = useState<Array<{ id: string; name: string; manual_units: number | null; count_raw: number | null; measurement_unit: string | null; source_classification: string | null; floor: string | null }>>([]);
+  const [volumeLayers, setVolumeLayers] = useState<Array<{ id: string; name: string; measurement_type: string; surface_type: string; thickness_mm: number; floor_id: string | null; floor_name?: string; group_tag: string | null }>>([]);
   const [showMeasPicker, setShowMeasPicker] = useState(false);
   const [measPickerExpanded, setMeasPickerExpanded] = useState<Set<string>>(new Set());
+  const [measPickerSearch, setMeasPickerSearch] = useState('');
   // External resources (from general resources catalogue)
   const [externalCatalogueResources, setExternalCatalogueResources] = useState<any[]>([]);
   const [externalSearchQuery, setExternalSearchQuery] = useState('');
@@ -142,6 +144,34 @@ export function TolosaResourcesPanel({ budgetId, tolosItemId, isAdmin, parentIte
       .eq('source', 'volumen_auto')
       .order('name');
     setVolumeMeasurements(data || []);
+  }, [budgetId]);
+
+  // Fetch volume layers for this budget (for layer-level measurement search)
+  const fetchVolumeLayers = useCallback(async () => {
+    // First get floor_plan_ids for this budget
+    const { data: plans } = await supabase
+      .from('budget_floor_plans')
+      .select('id')
+      .eq('budget_id', budgetId);
+    if (!plans || plans.length === 0) { setVolumeLayers([]); return; }
+    const planIds = plans.map(p => p.id);
+    const { data: layers } = await supabase
+      .from('budget_volume_layers')
+      .select('id, name, measurement_type, surface_type, thickness_mm, floor_id, group_tag')
+      .in('floor_plan_id', planIds)
+      .order('layer_order');
+    if (!layers) { setVolumeLayers([]); return; }
+    // Fetch floor names for display
+    const floorIds = [...new Set(layers.filter(l => l.floor_id).map(l => l.floor_id!))];
+    let floorMap: Record<string, string> = {};
+    if (floorIds.length > 0) {
+      const { data: floors } = await supabase
+        .from('budget_floors')
+        .select('id, name')
+        .in('id', floorIds);
+      (floors || []).forEach(f => { floorMap[f.id] = f.name; });
+    }
+    setVolumeLayers(layers.map(l => ({ ...l, floor_name: l.floor_id ? floorMap[l.floor_id] || 'Nivel' : 'Todos los niveles' })));
   }, [budgetId]);
 
   // Use measurement units as related_units for subtotal calculation
@@ -238,7 +268,7 @@ export function TolosaResourcesPanel({ budgetId, tolosItemId, isAdmin, parentIte
 
   useEffect(() => { fetchLinked(); }, [fetchLinked]);
   useEffect(() => { fetchMeasurementUnits(); }, [fetchMeasurementUnits, measurementVersion]);
-  useEffect(() => { fetchVolumeMeasurements(); }, [fetchVolumeMeasurements]);
+  useEffect(() => { fetchVolumeMeasurements(); fetchVolumeLayers(); }, [fetchVolumeMeasurements, fetchVolumeLayers]);
   useEffect(() => { if (showSearch) fetchAllResources(); }, [showSearch, fetchAllResources]);
   useEffect(() => { if (activeTab === 'external') fetchExternalCatalogueResources(externalSearchQuery); }, [activeTab]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -810,13 +840,13 @@ export function TolosaResourcesPanel({ budgetId, tolosItemId, isAdmin, parentIte
                   size="sm"
                   variant={showMeasPicker ? 'default' : 'outline'}
                   className="text-xs h-7"
-                  onClick={() => { setShowMeasPicker(!showMeasPicker); if (!showMeasPicker) fetchVolumeMeasurements(); }}
+                  onClick={() => { setShowMeasPicker(!showMeasPicker); if (!showMeasPicker) { fetchVolumeMeasurements(); fetchVolumeLayers(); } setMeasPickerSearch(''); }}
                 >
                   <Layers className="h-3 w-3 mr-1" /> {showMeasPicker ? 'Ocultar' : 'Seleccionar medición'}
                 </Button>
               </div>
               <p className="text-xs text-muted-foreground">
-                Por defecto el recurso hereda la medición de su actividad (QUÉ?). Aquí puedes asignarle una medición específica de Volúmenes.
+                Por defecto el recurso hereda la medición de su actividad (QUÉ?). Aquí puedes asignarle una medición específica de Volúmenes o de una Capa concreta.
               </p>
               {formData.related_units != null && formData.related_units > 0 && (
                 <div className="flex items-center gap-2">
@@ -826,54 +856,164 @@ export function TolosaResourcesPanel({ budgetId, tolosItemId, isAdmin, parentIte
                   </Button>
                 </div>
               )}
-              {showMeasPicker && volumeMeasurements.length > 0 && (
-                <div className="max-h-48 overflow-y-auto space-y-0.5 border rounded p-2 bg-background">
+              {showMeasPicker && (
+                <>
+                  {/* Search filter */}
+                  <div className="flex items-center gap-2">
+                    <Search className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                    <Input
+                      value={measPickerSearch}
+                      onChange={e => setMeasPickerSearch(e.target.value)}
+                      placeholder="Filtrar por nombre, nivel, capa..."
+                      className="h-7 text-xs"
+                      autoFocus
+                    />
+                  </div>
+
+                  {/* Mediciones de Volúmenes */}
                   {(() => {
-                    // Group by floor/level for easier navigation
-                    const byFloor = new Map<string, typeof volumeMeasurements>();
-                    volumeMeasurements.forEach(m => {
-                      const key = m.floor || 'Sin nivel';
-                      if (!byFloor.has(key)) byFloor.set(key, []);
-                      byFloor.get(key)!.push(m);
-                    });
-                    return Array.from(byFloor.entries()).map(([floorName, items]) => (
-                      <Collapsible key={floorName} open={measPickerExpanded.has(floorName)} onOpenChange={() => {
-                        setMeasPickerExpanded(prev => {
-                          const next = new Set(prev);
-                          next.has(floorName) ? next.delete(floorName) : next.add(floorName);
-                          return next;
-                        });
-                      }}>
-                        <CollapsibleTrigger className="w-full flex items-center gap-2 px-2 py-1 rounded hover:bg-accent text-left text-xs font-medium">
-                          {measPickerExpanded.has(floorName) ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-                          {floorName} ({items.length})
-                        </CollapsibleTrigger>
-                        <CollapsibleContent className="pl-4 space-y-0.5">
-                          {items.map(m => {
-                            const units = m.manual_units ?? m.count_raw ?? 0;
-                            return (
-                              <button
-                                key={m.id}
-                                className="w-full text-left px-2 py-1 text-xs flex items-center justify-between gap-2 rounded hover:bg-accent transition-colors"
-                                onClick={() => {
-                                  setFormData(d => ({ ...d, related_units: units }));
-                                  setShowMeasPicker(false);
-                                  toast.success(`Medición "${m.name}" asignada: ${formatNumber(units)} ${m.measurement_unit || 'ud'}`);
-                                }}
-                              >
-                                <span className="truncate">{m.name}</span>
-                                <span className="font-mono text-muted-foreground shrink-0">{formatNumber(units)} {m.measurement_unit || 'ud'}</span>
-                              </button>
-                            );
-                          })}
-                        </CollapsibleContent>
-                      </Collapsible>
-                    ));
+                    const searchLower = measPickerSearch.toLowerCase();
+                    const filteredMeas = volumeMeasurements.filter(m =>
+                      !searchLower || m.name.toLowerCase().includes(searchLower) ||
+                      (m.floor && m.floor.toLowerCase().includes(searchLower)) ||
+                      (m.measurement_unit && m.measurement_unit.toLowerCase().includes(searchLower)) ||
+                      (m.source_classification && m.source_classification.toLowerCase().includes(searchLower))
+                    );
+                    if (filteredMeas.length === 0 && volumeLayers.length === 0) {
+                      return <p className="text-xs text-muted-foreground text-center py-2">Sin mediciones de volúmenes. Genera mediciones desde Plano → Volúmenes.</p>;
+                    }
+                    if (filteredMeas.length > 0) {
+                      const byFloor = new Map<string, typeof volumeMeasurements>();
+                      filteredMeas.forEach(m => {
+                        const key = m.floor || 'Sin nivel';
+                        if (!byFloor.has(key)) byFloor.set(key, []);
+                        byFloor.get(key)!.push(m);
+                      });
+                      return (
+                        <div className="max-h-48 overflow-y-auto space-y-0.5 border rounded p-2 bg-background">
+                          <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-1 pb-1">Mediciones por Nivel / Espacio</p>
+                          {Array.from(byFloor.entries()).map(([floorName, items]) => (
+                            <Collapsible key={floorName} open={measPickerExpanded.has(floorName)} onOpenChange={() => {
+                              setMeasPickerExpanded(prev => {
+                                const next = new Set(prev);
+                                next.has(floorName) ? next.delete(floorName) : next.add(floorName);
+                                return next;
+                              });
+                            }}>
+                              <CollapsibleTrigger className="w-full flex items-center gap-2 px-2 py-1 rounded hover:bg-accent text-left text-xs font-medium">
+                                {measPickerExpanded.has(floorName) ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+                                {floorName} ({items.length})
+                              </CollapsibleTrigger>
+                              <CollapsibleContent className="pl-4 space-y-0.5">
+                                {items.map(m => {
+                                  const units = m.manual_units ?? m.count_raw ?? 0;
+                                  return (
+                                    <button
+                                      key={m.id}
+                                      className="w-full text-left px-2 py-1 text-xs flex items-center justify-between gap-2 rounded hover:bg-accent transition-colors"
+                                      onClick={() => {
+                                        setFormData(d => ({ ...d, related_units: units }));
+                                        setShowMeasPicker(false);
+                                        toast.success(`Medición "${m.name}" asignada: ${formatNumber(units)} ${m.measurement_unit || 'ud'}`);
+                                      }}
+                                    >
+                                      <span className="truncate">{m.name}</span>
+                                      <span className="font-mono text-muted-foreground shrink-0">{formatNumber(units)} {m.measurement_unit || 'ud'}</span>
+                                    </button>
+                                  );
+                                })}
+                              </CollapsibleContent>
+                            </Collapsible>
+                          ))}
+                        </div>
+                      );
+                    }
+                    return null;
                   })()}
-                </div>
-              )}
-              {showMeasPicker && volumeMeasurements.length === 0 && (
-                <p className="text-xs text-muted-foreground text-center py-2">Sin mediciones de volúmenes. Genera mediciones desde Plano → Volúmenes.</p>
+
+                  {/* Capas de Volúmenes (layers) — matching measurements */}
+                  {(() => {
+                    const searchLower = measPickerSearch.toLowerCase();
+                    const filteredLayers = volumeLayers.filter(l =>
+                      !searchLower || l.name.toLowerCase().includes(searchLower) ||
+                      (l.floor_name && l.floor_name.toLowerCase().includes(searchLower)) ||
+                      l.surface_type.toLowerCase().includes(searchLower) ||
+                      (l.group_tag && l.group_tag.toLowerCase().includes(searchLower)) ||
+                      l.measurement_type.toLowerCase().includes(searchLower)
+                    );
+                    if (filteredLayers.length === 0) return null;
+
+                    const layerItems = filteredLayers.map(layer => {
+                      const layerNameLower = layer.name.toLowerCase();
+                      const groupLower = layer.group_tag?.toLowerCase() || '';
+                      const matchingMeas = volumeMeasurements.filter(m => {
+                        const mNameLower = m.name.toLowerCase();
+                        const mClassLower = (m.source_classification || '').toLowerCase();
+                        return mNameLower.includes(layerNameLower) ||
+                          mClassLower.includes(layerNameLower) ||
+                          (groupLower && (mNameLower.includes(groupLower) || mClassLower.includes(groupLower)));
+                      });
+                      return { layer, matchingMeas };
+                    });
+
+                    const byFloor = new Map<string, typeof layerItems>();
+                    layerItems.forEach(item => {
+                      const key = item.layer.floor_name || 'Todos los niveles';
+                      if (!byFloor.has(key)) byFloor.set(key, []);
+                      byFloor.get(key)!.push(item);
+                    });
+
+                    return (
+                      <div className="max-h-48 overflow-y-auto space-y-0.5 border rounded p-2 bg-background mt-2">
+                        <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-1 pb-1">Capas de Volúmenes</p>
+                        {Array.from(byFloor.entries()).map(([floorName, items]) => (
+                          <Collapsible key={`layer-${floorName}`} open={measPickerExpanded.has(`layer-${floorName}`)} onOpenChange={() => {
+                            setMeasPickerExpanded(prev => {
+                              const next = new Set(prev);
+                              const k = `layer-${floorName}`;
+                              next.has(k) ? next.delete(k) : next.add(k);
+                              return next;
+                            });
+                          }}>
+                            <CollapsibleTrigger className="w-full flex items-center gap-2 px-2 py-1 rounded hover:bg-accent text-left text-xs font-medium">
+                              {measPickerExpanded.has(`layer-${floorName}`) ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+                              <Layers className="h-3 w-3 text-muted-foreground" />
+                              {floorName} ({items.length} capas)
+                            </CollapsibleTrigger>
+                            <CollapsibleContent className="pl-4 space-y-0.5">
+                              {items.map(({ layer, matchingMeas }) => (
+                                <div key={layer.id}>
+                                  <p className="text-[10px] font-medium text-muted-foreground px-2 pt-1">
+                                    {layer.name} <span className="text-muted-foreground/60">({layer.surface_type} · {layer.measurement_type} · {layer.thickness_mm}mm)</span>
+                                  </p>
+                                  {matchingMeas.length > 0 ? matchingMeas.map(m => {
+                                    const units = m.manual_units ?? m.count_raw ?? 0;
+                                    return (
+                                      <button
+                                        key={m.id}
+                                        className="w-full text-left px-2 py-1 text-xs flex items-center justify-between gap-2 rounded hover:bg-accent transition-colors"
+                                        onClick={() => {
+                                          setFormData(d => ({ ...d, related_units: units, unit: m.measurement_unit || d.unit }));
+                                          setShowMeasPicker(false);
+                                          toast.success(`Capa "${layer.name}" → ${formatNumber(units)} ${m.measurement_unit || 'ud'}`);
+                                        }}
+                                      >
+                                        <span className="truncate">{m.name}</span>
+                                        <span className="font-mono text-muted-foreground shrink-0">{formatNumber(units)} {m.measurement_unit || 'ud'}</span>
+                                      </button>
+                                    );
+                                  }) : (
+                                    <p className="text-[10px] text-muted-foreground/60 px-2 py-0.5 italic">Sin mediciones vinculadas a esta capa</p>
+                                  )}
+                                </div>
+                              ))}
+                            </CollapsibleContent>
+                          </Collapsible>
+                        ))}
+                      </div>
+                    );
+                  })()}
+                </>
               )}
             </div>
 

@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { ChevronDown, ChevronRight, Ruler, DollarSign, Users, MapPin, Minus, Plus, Edit2, Maximize2, Home } from 'lucide-react';
+import { ChevronDown, ChevronRight, Ruler, Users, MapPin, Minus, Plus, Edit2, Maximize2, Home } from 'lucide-react';
 import { formatCurrency, formatNumber } from '@/lib/format-utils';
 
 interface TolosItem {
@@ -305,7 +305,6 @@ export function TolosaCardView({
               )}
               {cuanto > 0 && cuanto !== (summary?.resourceSubtotal || 0) && (
                 <Badge className="text-[8px] font-mono gap-0.5 px-1 py-0 bg-rose-100 text-rose-700 dark:bg-rose-900 dark:text-rose-300 border-rose-300 dark:border-rose-700" variant="outline">
-                  <DollarSign className="h-2 w-2" />
                   {formatCurrency(cuanto)}
                 </Badge>
               )}

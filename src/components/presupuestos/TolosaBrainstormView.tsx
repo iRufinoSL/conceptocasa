@@ -2004,7 +2004,7 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
         </Card>
       ) : viewMode === 'cards' ? (
         <TolosaCardView
-          items={items}
+          items={items.filter(i => isItemVisible(i))}
           itemSummaries={itemSummaries}
           itemSubtotals={itemSubtotals}
           contactCache={contactCache}

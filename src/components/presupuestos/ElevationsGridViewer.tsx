@@ -8,11 +8,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { Plus, Trash2, Box, Layers, ArrowUpDown, Maximize2, Merge, Unlink, Map as MapIcon, Printer, FileDown, Ruler } from 'lucide-react';
+import { Plus, Trash2, Box, Layers, ArrowUpDown, Maximize2, Merge, Unlink, Map as MapIcon, Printer, FileDown, Ruler, Check, Pencil } from 'lucide-react';
 import jsPDF from 'jspdf';
+import { toast } from 'sonner';
 import { OPENING_PRESETS, WALL_LABELS, WALL_SIDE_LETTERS, computeWallSegments, autoClassifyWalls, generateExternalWallNames, isExteriorType, isInvisibleType, computeBuildingOutline, computeCompositeWalls, computeCompositeWallsFromCorners, calcBajoCubiertaWallHeight, getBlockDimensions, getEffectiveRidgeHeight, calculateRoom } from '@/lib/floor-plan-calculations';
 import type { RoomData, WallData, OpeningData, FloorPlanData, WallSegment, FloorLevel, WallType, BlockGroupData, OutlineVertex, CompositeWall } from '@/lib/floor-plan-calculations';
 import type { CustomCorner } from '@/hooks/useFloorPlan';
+import { parseCoord, formatCoord } from './FloorPlanGridView';
 
 interface ElevationsGridViewerProps {
   plan: FloorPlanData;
@@ -31,6 +33,7 @@ interface ElevationsGridViewerProps {
   autoEditWallId?: string;
   budgetName?: string;
   customCorners?: CustomCorner[];
+  onCustomCornersChange?: (corners: CustomCorner[]) => void;
 }
 
 type SurfaceCategory = 'cimentacion' | 'suelo' | 'techo' | 'pared' | 'volumen' | 'tejado' | 'faldon';
@@ -77,7 +80,123 @@ function formatXYZ(x: number, y: number, z: number): string {
   return `(${Math.round(x)},${Math.round(y)},${Math.round(z)})`;
 }
 
-/** Check if a composite section is invisible, using effectiveWallType when available */
+/** Editable corner label overlay — renders as HTML on top of SVG */
+function EditableCornerLabel({
+  cornerLabel,
+  xyzLabel,
+  customCorners,
+  onCustomCornersChange,
+  anchorStyle,
+  textAnchor = 'start',
+  fontSize = 9,
+  xyzFontSize = 6,
+}: {
+  cornerLabel: string;
+  xyzLabel: string;
+  customCorners?: CustomCorner[];
+  onCustomCornersChange?: (corners: CustomCorner[]) => void;
+  anchorStyle?: React.CSSProperties;
+  textAnchor?: 'start' | 'end';
+  fontSize?: number;
+  xyzFontSize?: number;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [editLabel, setEditLabel] = useState('');
+  const [editCoord, setEditCoord] = useState('');
+
+  if (!onCustomCornersChange || !customCorners) {
+    // Read-only: just show text
+    return null; // Let SVG text handle it
+  }
+
+  const cornerIdx = customCorners.findIndex(c => c.label === cornerLabel);
+  const corner = cornerIdx >= 0 ? customCorners[cornerIdx] : undefined;
+
+  const handleStartEdit = () => {
+    if (corner) {
+      setEditLabel(corner.label);
+      setEditCoord(formatCoord(corner.col, corner.row, undefined, corner.z ?? 0));
+    } else {
+      setEditLabel(cornerLabel);
+      setEditCoord(xyzLabel);
+    }
+    setEditing(true);
+  };
+
+  const handleSave = () => {
+    if (cornerIdx >= 0) {
+      const parsed = parseCoord(editCoord.trim());
+      const updated = customCorners.map((cc, i) => {
+        if (i !== cornerIdx) return cc;
+        const updates: Partial<CustomCorner> = {};
+        if (editLabel.trim()) updates.label = editLabel.trim();
+        if (parsed) { updates.col = parsed.col; updates.row = parsed.row; updates.z = parsed.z ?? 0; }
+        return { ...cc, ...updates };
+      });
+      onCustomCornersChange(updated);
+      toast.success(`Coordenada ${editLabel.trim() || corner?.label} guardada`);
+    }
+    setEditing(false);
+  };
+
+  if (editing) {
+    return (
+      <div
+        className="absolute z-50 flex items-center gap-0.5 bg-primary rounded-full px-1.5 h-6"
+        style={anchorStyle}
+        onClick={e => e.stopPropagation()}
+      >
+        <input
+          autoFocus
+          className="w-10 h-4 text-[10px] text-center bg-transparent border-b border-primary-foreground outline-none text-primary-foreground"
+          value={editLabel}
+          onChange={e => setEditLabel(e.target.value)}
+          placeholder="ID"
+          onKeyDown={e => { if (e.key === 'Escape') setEditing(false); if (e.key === 'Enter') handleSave(); }}
+        />
+        <input
+          className="w-20 h-4 text-[10px] text-center bg-transparent border-b border-primary-foreground outline-none text-primary-foreground"
+          value={editCoord}
+          onChange={e => setEditCoord(e.target.value)}
+          placeholder="(X,Y,Z)"
+          onKeyDown={e => { if (e.key === 'Escape') setEditing(false); if (e.key === 'Enter') handleSave(); }}
+        />
+        <button
+          className="flex items-center justify-center w-4 h-4 rounded-full bg-green-500 hover:bg-green-600 text-white"
+          onClick={e => { e.stopPropagation(); handleSave(); }}
+        >
+          <Check className="h-3 w-3" />
+        </button>
+        {!corner?.isMain && cornerIdx >= 0 && (
+          <button
+            className="flex items-center justify-center w-4 h-4 rounded-full bg-destructive hover:bg-destructive/80 text-destructive-foreground"
+            onClick={e => { e.stopPropagation(); onCustomCornersChange(customCorners.filter((_, i) => i !== cornerIdx)); setEditing(false); }}
+          >
+            <Trash2 className="h-3 w-3" />
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  // Clickable label
+  return (
+    <div
+      className="absolute cursor-pointer hover:bg-primary/10 rounded px-0.5 transition-colors group"
+      style={anchorStyle}
+      onClick={e => { e.stopPropagation(); handleStartEdit(); }}
+      title={`Clic para editar ${cornerLabel} ${xyzLabel}`}
+    >
+      <div className="flex items-center gap-0.5">
+        <span style={{ fontSize, fontWeight: 800 }} className="text-primary">{cornerLabel}</span>
+        <Pencil className="h-2.5 w-2.5 text-primary opacity-0 group-hover:opacity-70 transition-opacity" />
+      </div>
+      <div style={{ fontSize: xyzFontSize, fontWeight: 600, color: 'hsl(222, 47%, 45%)' }}>{xyzLabel}</div>
+    </div>
+  );
+}
+
+
 function isSectionWallInvisible(section: { wall: WallData; effectiveWallType?: string }): boolean {
   return isInvisibleType((section.effectiveWallType || section.wall.wallType) as string);
 }
@@ -124,7 +243,7 @@ function getGablePeakHeight(plan: FloorPlanData, rooms: RoomData[]): number {
 export function ElevationsGridViewer({
   plan, rooms, floors, onUpdateOpening, onAddOpening, onDeleteOpening, onUpdateWall, onUpdateWallSegmentType,
   onAddBlockGroup, onDeleteBlockGroup, onUpdateBlockGroup, saving, focusWallId, autoEditWallId, budgetName,
-  customCorners,
+  customCorners, onCustomCornersChange,
 }: ElevationsGridViewerProps) {
   const [selectedOpening, setSelectedOpening] = useState<OpeningData | null>(null);
   const [selectedOpeningWallLen, setSelectedOpeningWallLen] = useState<number>(1);
@@ -923,6 +1042,8 @@ export function ElevationsGridViewer({
                 budgetName={budgetName}
                 floorBaseZ={floorBaseZMap.get(floorId) ?? 0}
                 cellSizeM={cellSizeM}
+                customCorners={customCorners}
+                onCustomCornersChange={onCustomCornersChange}
               />
             );
 
@@ -990,6 +1111,8 @@ export function ElevationsGridViewer({
               floorBaseZMap={floorBaseZMap}
               floors={floors}
               cellSizeM={cellSizeM}
+              customCorners={customCorners}
+              onCustomCornersChange={onCustomCornersChange}
             />
           ))}
         </div>
@@ -1010,6 +1133,8 @@ export function ElevationsGridViewer({
               floorBaseZMap={floorBaseZMap}
               floors={floors}
               cellSizeM={cellSizeM}
+              customCorners={customCorners}
+              onCustomCornersChange={onCustomCornersChange}
             />
           ))}
         </div>
@@ -3294,7 +3419,7 @@ const TOTAL_SIDE_COLORS: Record<string, { fill: string; stroke: string }> = {
   left: { fill: 'hsl(200, 20%, 90%)', stroke: 'hsl(222, 47%, 30%)' },
 };
 
-function TotalElevationCard({ side, label, layers, plan, rooms, budgetName, floorBaseZMap, floors, cellSizeM }: {
+function TotalElevationCard({ side, label, layers, plan, rooms, budgetName, floorBaseZMap, floors, cellSizeM, customCorners, onCustomCornersChange }: {
   side: 'top' | 'right' | 'bottom' | 'left';
   label: string;
   layers: Array<{ floorName: string; composites: CompositeWall[]; isGable: boolean }>;
@@ -3304,6 +3429,8 @@ function TotalElevationCard({ side, label, layers, plan, rooms, budgetName, floo
   floorBaseZMap?: Map<string, number>;
   floors?: FloorLevel[];
   cellSizeM?: number;
+  customCorners?: CustomCorner[];
+  onCustomCornersChange?: (corners: CustomCorner[]) => void;
 }) {
   const [fullscreen, setFullscreen] = useState(false);
   const isGableSide = side === 'right' || side === 'left';
@@ -3939,7 +4066,7 @@ const SIDE_LABELS: Record<string, string> = {
   top: 'Norte', right: 'Este', bottom: 'Sur', left: 'Oeste',
 };
 
-function CompositeWallCard({ compositeWall, plan, onOpeningClick, onAddBlockGroup, onDeleteBlockGroup, onDeleteOpening, onUpdateOpening, onUpdateWall, saving, rooms: liveRooms, budgetName, floorBaseZ, cellSizeM: cellSizeMProp }: {
+function CompositeWallCard({ compositeWall, plan, onOpeningClick, onAddBlockGroup, onDeleteBlockGroup, onDeleteOpening, onUpdateOpening, onUpdateWall, saving, rooms: liveRooms, budgetName, floorBaseZ, cellSizeM: cellSizeMProp, customCorners, onCustomCornersChange }: {
   compositeWall: CompositeWall;
   plan: FloorPlanData;
   onOpeningClick: (op: OpeningData) => void;
@@ -3953,6 +4080,8 @@ function CompositeWallCard({ compositeWall, plan, onOpeningClick, onAddBlockGrou
   budgetName?: string;
   floorBaseZ?: number;
   cellSizeM?: number;
+  customCorners?: CustomCorner[];
+  onCustomCornersChange?: (corners: CustomCorner[]) => void;
 }) {
   const [fullscreen, setFullscreen] = useState(false);
   const [selectedBlocks, setSelectedBlocks] = useState<Set<string>>(new Set());
@@ -4813,6 +4942,30 @@ function CompositeWallCard({ compositeWall, plan, onOpeningClick, onAddBlockGrou
               </Button>
             </div>
           </div>
+          {/* Editable corner coordinates */}
+          {onCustomCornersChange && customCorners && (
+            <div className="px-3 py-1 border-b border-border/30 flex items-center gap-2 text-[10px]">
+              <CornerEditBadge
+                label={cw.startCorner.label}
+                cornerX={Math.round(cw.startCorner.x / (cellSizeMProp || 0.625))}
+                cornerY={Math.round(cw.startCorner.y / (cellSizeMProp || 0.625))}
+                baseZ={floorBaseZ ?? 0}
+                customCorners={customCorners}
+                onCustomCornersChange={onCustomCornersChange}
+                blockHeightMm={plan.blockHeightMm}
+              />
+              <span className="text-muted-foreground">→</span>
+              <CornerEditBadge
+                label={cw.endCorner.label}
+                cornerX={Math.round(cw.endCorner.x / (cellSizeMProp || 0.625))}
+                cornerY={Math.round(cw.endCorner.y / (cellSizeMProp || 0.625))}
+                baseZ={floorBaseZ ?? 0}
+                customCorners={customCorners}
+                onCustomCornersChange={onCustomCornersChange}
+                blockHeightMm={plan.blockHeightMm}
+              />
+            </div>
+          )}
         </CardHeader>
         <CardContent className="p-2">
           {renderCompositeSvg()}

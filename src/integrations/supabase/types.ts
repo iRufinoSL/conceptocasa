@@ -275,6 +275,48 @@ export type Database = {
         }
         Relationships: []
       }
+      backup_history: {
+        Row: {
+          backup_type: string
+          created_at: string
+          created_by: string | null
+          error_message: string | null
+          file_path: string | null
+          file_size_bytes: number | null
+          id: string
+          module: string
+          status: string
+          total_records: number | null
+          total_tables: number | null
+        }
+        Insert: {
+          backup_type: string
+          created_at?: string
+          created_by?: string | null
+          error_message?: string | null
+          file_path?: string | null
+          file_size_bytes?: number | null
+          id?: string
+          module?: string
+          status?: string
+          total_records?: number | null
+          total_tables?: number | null
+        }
+        Update: {
+          backup_type?: string
+          created_at?: string
+          created_by?: string | null
+          error_message?: string | null
+          file_path?: string | null
+          file_size_bytes?: number | null
+          id?: string
+          module?: string
+          status?: string
+          total_records?: number | null
+          total_tables?: number | null
+        }
+        Relationships: []
+      }
       budget_activities: {
         Row: {
           actual_end_date: string | null

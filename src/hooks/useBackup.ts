@@ -182,6 +182,50 @@ export function useBackup() {
   const [isImporting, setIsImporting] = useState(false);
   const [importProgress, setImportProgress] = useState<string>('');
 
+  const recordBackupHistory = async (
+    backupType: 'automatic' | 'manual',
+    module: BackupModule,
+    totalRecords: number,
+    totalTables: number,
+    status: 'completed' | 'failed' = 'completed',
+    errorMessage?: string,
+  ) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      await supabase.from('backup_history').insert({
+        backup_type: backupType,
+        module,
+        total_records: totalRecords,
+        total_tables: totalTables,
+        status,
+        error_message: errorMessage,
+        created_by: user?.id,
+      } as any);
+    } catch (err) {
+      console.warn('Could not record backup history:', err);
+    }
+  };
+
+  const getLastBackupInfo = async () => {
+    const { data } = await supabase
+      .from('backup_history')
+      .select('*')
+      .eq('status', 'completed')
+      .order('created_at', { ascending: false })
+      .limit(2) as any;
+
+    if (!data || data.length === 0) return null;
+
+    const lastAuto = data.find((b: any) => b.backup_type === 'automatic');
+    const lastManual = data.find((b: any) => b.backup_type === 'manual');
+
+    return {
+      lastAutomatic: lastAuto || null,
+      lastManual: lastManual || null,
+      lastAny: data[0],
+    };
+  };
+
   const exportBackup = async (module: BackupModule = 'all') => {
     setIsExporting(true);
     
@@ -229,14 +273,21 @@ export function useBackup() {
         (sum, arr) => sum + arr.length, 
         0
       );
+      const totalTables = Object.keys(backupData.tables).filter(
+        t => backupData.tables[t].length > 0
+      ).length;
+
+      // Record in history
+      await recordBackupHistory('manual', module, totalRecords, totalTables);
 
       toast.success(`Backup de ${MODULE_NAMES[module]} completado`, {
-        description: `${totalRecords} registros exportados en ${Object.keys(backupData.tables).length} tablas`,
+        description: `${totalRecords} registros exportados en ${totalTables} tablas`,
       });
 
       return backupData;
     } catch (error) {
       console.error('Backup error:', error);
+      await recordBackupHistory('manual', module, 0, 0, 'failed', String(error));
       toast.error('Error al generar backup', {
         description: 'Por favor, inténtelo de nuevo',
       });
@@ -254,7 +305,6 @@ export function useBackup() {
           const content = e.target?.result as string;
           const data = JSON.parse(content) as BackupData;
           
-          // Validate backup structure
           if (!data.exportDate || !data.module || !data.tables) {
             throw new Error('Formato de backup inválido');
           }
@@ -283,16 +333,13 @@ export function useBackup() {
     };
 
     try {
-      // Create automatic backup before destructive 'replace' operation
       if (mode === 'replace' && !skipAutoBackup) {
         setImportProgress('Creando backup automático antes de reemplazar...');
         try {
           await exportBackup(backupData.module);
-          console.log('Auto-backup created successfully before replace operation');
         } catch (backupError) {
           console.error('Failed to create auto-backup:', backupError);
           result.errors.push('Advertencia: No se pudo crear el backup automático previo');
-          // Continue with restore - this is a warning, not a blocking error
         }
       }
 
@@ -303,7 +350,6 @@ export function useBackup() {
         
         if (!records || records.length === 0) continue;
         
-        // Skip system tables
         if (SKIP_IMPORT_TABLES.includes(tableName)) {
           result.skipped += records.length;
           continue;
@@ -313,17 +359,14 @@ export function useBackup() {
 
         try {
           if (mode === 'replace') {
-            // Delete existing records first (only for non-system tables)
             await supabase.from(tableName as any).delete().neq('id', '00000000-0000-0000-0000-000000000000');
           }
 
-          // Remove timestamps that might cause conflicts
           const cleanedRecords = records.map(record => {
             const { created_at, updated_at, ...rest } = record;
             return rest;
           });
 
-          // Insert in batches of 100
           const batchSize = 100;
           for (let i = 0; i < cleanedRecords.length; i += batchSize) {
             const batch = cleanedRecords.slice(i, i + batchSize);
@@ -375,6 +418,7 @@ export function useBackup() {
     exportBackup,
     parseBackupFile,
     importBackup,
+    getLastBackupInfo,
     isExporting,
     isImporting,
     importProgress,

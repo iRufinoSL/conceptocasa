@@ -8,7 +8,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { FloorPlanData, RoomData, calculateRoofSlopes, RoofSlopeDetail, isExteriorType, isVisibleWall, calculateRoom, isCompartidaType, isInvisibleType } from '@/lib/floor-plan-calculations';
-import { Box, ChevronDown, ChevronRight, Plus, Trash2, Layers, ArrowDown, ArrowUp, ArrowRight as ArrowRightIcon, Save, Loader2, CornerDownRight, Copy, Ruler, Settings2, Link2, Unlink, Pencil } from 'lucide-react';
+import { Box, ChevronDown, ChevronRight, Plus, Trash2, Layers, ArrowDown, ArrowUp, ArrowRight as ArrowRightIcon, Save, Loader2, CornerDownRight, Copy, Ruler, Settings2, Link2, Unlink, Pencil, Search, LinkIcon } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
@@ -1540,6 +1540,65 @@ export function FloorPlanVolumesView({ plan, rooms, floors, floorPlanId, budgetI
   // ── Collect all measurement items for the Mediciones section ──
   type MeasurementItem = { name: string; value: number; unit: 'm²' | 'ml'; surfaceLabel: string; floorName: string; layerRef: { floorId: string; surfaceType: SurfaceType; layerId: string } };
   const [editingLayer, setEditingLayer] = useState<{ floorId: string; surfaceType: SurfaceType; layerId: string } | null>(null);
+
+  // ── Activity association from layers ──
+  const [associatingLayer, setAssociatingLayer] = useState<{ name: string; value: number; unit: string } | null>(null);
+  const [activitySearchQuery, setActivitySearchQuery] = useState('');
+  const [tolosActivities, setTolosActivities] = useState<Array<{ id: string; code: string; name: string; parent_id: string | null }>>([]);
+  const [loadingActivities, setLoadingActivities] = useState(false);
+  const [associating, setAssociating] = useState(false);
+
+  const fetchTolosActivities = useCallback(async () => {
+    setLoadingActivities(true);
+    const { data } = await supabase
+      .from('tolosa_items')
+      .select('id, code, name, parent_id')
+      .eq('budget_id', budgetId)
+      .order('code');
+    setTolosActivities((data as any[]) || []);
+    setLoadingActivities(false);
+  }, [budgetId]);
+
+  const openAssociateDialog = (layerInfo: { name: string; value: number; unit: string }) => {
+    setAssociatingLayer(layerInfo);
+    setActivitySearchQuery('');
+    fetchTolosActivities();
+  };
+
+  const associateLayerToActivity = async (activityId: string) => {
+    if (!associatingLayer) return;
+    setAssociating(true);
+    try {
+      // Create a resource in budget_activity_resources with layer data
+      const unitMap: Record<string, string> = { 'ml': 'ml', 'm²': 'm2', 'm³': 'm3' };
+      const payload = {
+        budget_id: budgetId,
+        name: associatingLayer.name,
+        unit: unitMap[associatingLayer.unit] || 'ud',
+        resource_type: 'Material',
+        external_unit_cost: 0,
+        safety_margin_percent: 0.15,
+        sales_margin_percent: 0.25,
+        related_units: Math.round(associatingLayer.value * 100) / 100,
+        signed_subtotal: 0,
+      };
+      const { data: newRes, error } = await supabase
+        .from('budget_activity_resources')
+        .insert(payload as any)
+        .select()
+        .single();
+      if (error || !newRes) throw error || new Error('No data');
+      // Link resource to the tolosa item (activity)
+      await supabase.from('tolosa_item_resources').insert({ tolosa_item_id: activityId, resource_id: newRes.id });
+      const activity = tolosActivities.find(a => a.id === activityId);
+      toast.success(`"${associatingLayer.name}" asociado a ${activity?.code || ''} ${activity?.name || 'actividad'}`);
+      setAssociatingLayer(null);
+    } catch (err: any) {
+      toast.error('Error al asociar: ' + (err?.message || 'desconocido'));
+    } finally {
+      setAssociating(false);
+    }
+  };
   const allMeasurementItems = useMemo(() => {
     const items: MeasurementItem[] = [];
     for (const floor of floors) {
@@ -2101,16 +2160,17 @@ export function FloorPlanVolumesView({ plan, rooms, floors, floorPlanId, budgetI
 
                   <TabsContent value="alphabetical">
                     <div className="space-y-1">
-                      <div className="grid grid-cols-[24px_1fr_120px_40px_32px] gap-2 text-[10px] font-semibold text-muted-foreground px-1 pb-1 border-b border-border">
+                      <div className="grid grid-cols-[24px_1fr_120px_32px_32px_32px] gap-2 text-[10px] font-semibold text-muted-foreground px-1 pb-1 border-b border-border">
                         <span className="text-center">#</span>
                         <span>Nombre</span>
                         <span className="text-right">Cantidad</span>
+                        <span className="text-center" title="Asociar a actividad QUÉ?">🔗</span>
                         <span className="text-center" title="Unificar objetos del mismo tipo">⊕</span>
                         <span className="text-center">✎</span>
                       </div>
                       {alphabeticalItems.map((item, idx) => (
                         <React.Fragment key={`${item.name}-${idx}`}>
-                        <div className={`grid grid-cols-[24px_1fr_120px_40px_32px] gap-2 items-center text-sm px-1 py-1 rounded ${item.isUnified ? 'bg-primary/5 border border-primary/20' : 'hover:bg-muted/30'}`}>
+                        <div className={`grid grid-cols-[24px_1fr_120px_32px_32px_32px] gap-2 items-center text-sm px-1 py-1 rounded ${item.isUnified ? 'bg-primary/5 border border-primary/20' : 'hover:bg-muted/30'}`}>
                           <span className="text-xs text-muted-foreground text-center font-mono">{idx + 1}</span>
                           <div className="flex items-center gap-1.5">
                             <span className={item.isUnified ? 'font-medium text-primary' : ''}>{item.name}</span>
@@ -2124,6 +2184,17 @@ export function FloorPlanVolumesView({ plan, rooms, floors, floorPlanId, budgetI
                           <span className="text-right font-mono font-medium">
                             {fmt(item.value)} {item.unit}
                           </span>
+                          <div className="flex justify-center">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 w-6 p-0"
+                              onClick={() => openAssociateDialog({ name: item.name, value: item.value, unit: item.unit })}
+                              title="Asociar a actividad QUÉ?"
+                            >
+                              <LinkIcon className="h-3.5 w-3.5 text-muted-foreground" />
+                            </Button>
+                          </div>
                           <div className="flex justify-center">
                             {item.canUnify && (
                               <Button
@@ -2159,7 +2230,7 @@ export function FloorPlanVolumesView({ plan, rooms, floors, floorPlanId, budgetI
                         {item.isUnified && item.subItems && (
                           <div className="pl-8 space-y-0.5 mb-1">
                             {item.subItems.map((sub, si) => (
-                              <div key={si} className="grid grid-cols-[1fr_120px_32px] gap-2 items-center text-xs text-muted-foreground px-1 py-0.5 hover:bg-muted/20 rounded">
+                              <div key={si} className="grid grid-cols-[1fr_120px_32px_32px] gap-2 items-center text-xs text-muted-foreground px-1 py-0.5 hover:bg-muted/20 rounded">
                                 <div className="flex items-center gap-1.5">
                                   <CornerDownRight className="h-3 w-3 shrink-0" />
                                   <span>{sub.name}</span>
@@ -2167,6 +2238,11 @@ export function FloorPlanVolumesView({ plan, rooms, floors, floorPlanId, budgetI
                                   <span className="text-[9px] opacity-60">{sub.surfaceLabel}</span>
                                 </div>
                                 <span className="text-right font-mono">{fmt(sub.value)} {sub.unit}</span>
+                                <div className="flex justify-center">
+                                  <Button variant="ghost" size="sm" className="h-5 w-5 p-0" onClick={() => openAssociateDialog({ name: sub.name, value: sub.value, unit: sub.unit })} title="Asociar a actividad">
+                                    <LinkIcon className="h-3 w-3" />
+                                  </Button>
+                                </div>
                                 <div className="flex justify-center">
                                   <Button variant="ghost" size="sm" className="h-5 w-5 p-0" onClick={() => setEditingLayer(sub.layerRef)} title="Editar">
                                     <Pencil className="h-3 w-3" />
@@ -2192,6 +2268,9 @@ export function FloorPlanVolumesView({ plan, rooms, floors, floorPlanId, budgetI
                                 <span>{item.name}</span>
                                 <div className="flex items-center gap-2">
                                   <span className="font-mono font-medium">{fmt(item.value)} {item.unit}</span>
+                                  <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => openAssociateDialog({ name: item.name, value: item.value, unit: item.unit })} title="Asociar a actividad QUÉ?">
+                                    <LinkIcon className="h-3.5 w-3.5 text-muted-foreground" />
+                                  </Button>
                                   <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => setEditingLayer(item.layerRef)} title="Editar objeto">
                                     <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
                                   </Button>
@@ -2354,6 +2433,77 @@ export function FloorPlanVolumesView({ plan, rooms, floors, floorPlanId, budgetI
           </CardContent>
         </Card>
       )}
+
+      {/* ── Associate Layer to Activity Dialog ── */}
+      <Dialog open={!!associatingLayer} onOpenChange={(open) => { if (!open) setAssociatingLayer(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <LinkIcon className="h-4 w-4" />
+              Asociar capa a actividad QUÉ?
+            </DialogTitle>
+          </DialogHeader>
+          {associatingLayer && (
+            <div className="space-y-4">
+              <div className="bg-muted/30 rounded p-3 text-sm">
+                <p className="font-medium">{associatingLayer.name}</p>
+                <p className="text-muted-foreground font-mono">{fmt(associatingLayer.value)} {associatingLayer.unit}</p>
+                <p className="text-xs text-muted-foreground mt-1">Se creará un Recurso con estos datos en la actividad seleccionada.</p>
+              </div>
+              <div className="space-y-2">
+                <Label>Buscar actividad</Label>
+                <div className="relative">
+                  <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                  <Input
+                    className="pl-8 h-8 text-sm"
+                    placeholder="Buscar por código o nombre..."
+                    value={activitySearchQuery}
+                    onChange={e => setActivitySearchQuery(e.target.value)}
+                  />
+                </div>
+              </div>
+              <div className="max-h-64 overflow-y-auto border rounded space-y-0.5 p-1">
+                {loadingActivities ? (
+                  <p className="text-sm text-muted-foreground text-center py-4">Cargando actividades...</p>
+                ) : (() => {
+                  const q = activitySearchQuery.toLowerCase().trim();
+                  const filtered = q
+                    ? tolosActivities.filter(a => a.code.toLowerCase().includes(q) || a.name.toLowerCase().includes(q))
+                    : tolosActivities;
+                  if (filtered.length === 0) return <p className="text-sm text-muted-foreground text-center py-4">Sin resultados</p>;
+                  // Build hierarchy: show parents with indentation
+                  const parentMap = new Map<string | null, typeof filtered>();
+                  filtered.forEach(a => {
+                    const key = a.parent_id;
+                    if (!parentMap.has(key)) parentMap.set(key, []);
+                    parentMap.get(key)!.push(a);
+                  });
+                  // For search results, show flat list
+                  const items = q ? filtered : filtered;
+                  return items.map(activity => {
+                    const isChild = !!activity.parent_id;
+                    return (
+                      <Button
+                        key={activity.id}
+                        variant="ghost"
+                        size="sm"
+                        className={`w-full justify-start text-left h-auto py-1.5 px-2 ${isChild ? 'pl-6' : ''}`}
+                        disabled={associating}
+                        onClick={() => associateLayerToActivity(activity.id)}
+                      >
+                        <div className="flex items-center gap-2 w-full min-w-0">
+                          <Badge variant="outline" className="text-[9px] font-mono shrink-0">{activity.code}</Badge>
+                          <span className="text-sm truncate">{activity.name}</span>
+                        </div>
+                      </Button>
+                    );
+                  });
+                })()}
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

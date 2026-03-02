@@ -4943,27 +4943,15 @@ function CompositeWallCard({ compositeWall, plan, onOpeningClick, onAddBlockGrou
             </div>
           </div>
           {/* Editable corner coordinates */}
-          {onCustomCornersChange && customCorners && (
+          {customCorners && (
             <div className="px-3 py-1 border-b border-border/30 flex items-center gap-2 text-[10px]">
-              <CornerEditBadge
-                label={cw.startCorner.label}
-                cornerX={Math.round(cw.startCorner.x / (cellSizeMProp || 0.625))}
-                cornerY={Math.round(cw.startCorner.y / (cellSizeMProp || 0.625))}
-                baseZ={floorBaseZ ?? 0}
-                customCorners={customCorners}
-                onCustomCornersChange={onCustomCornersChange}
-                blockHeightMm={plan.blockHeightMm}
-              />
+              <span className="bg-muted px-1.5 py-0.5 rounded font-mono">
+                {cw.startCorner.label} ({Math.round(cw.startCorner.x / (cellSizeMProp || 0.625))},{Math.round(cw.startCorner.y / (cellSizeMProp || 0.625))},{floorBaseZ ?? 0})
+              </span>
               <span className="text-muted-foreground">→</span>
-              <CornerEditBadge
-                label={cw.endCorner.label}
-                cornerX={Math.round(cw.endCorner.x / (cellSizeMProp || 0.625))}
-                cornerY={Math.round(cw.endCorner.y / (cellSizeMProp || 0.625))}
-                baseZ={floorBaseZ ?? 0}
-                customCorners={customCorners}
-                onCustomCornersChange={onCustomCornersChange}
-                blockHeightMm={plan.blockHeightMm}
-              />
+              <span className="bg-muted px-1.5 py-0.5 rounded font-mono">
+                {cw.endCorner.label} ({Math.round(cw.endCorner.x / (cellSizeMProp || 0.625))},{Math.round(cw.endCorner.y / (cellSizeMProp || 0.625))},{floorBaseZ ?? 0})
+              </span>
             </div>
           )}
         </CardHeader>

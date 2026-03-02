@@ -4,8 +4,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { Plus, Search, Package, X, Link2, Pencil, ShoppingBag, ExternalLink } from 'lucide-react';
+import { Plus, Search, Package, X, Link2, Pencil, ShoppingBag, ExternalLink, Ruler, ChevronDown, ChevronRight, Layers, Home } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { searchMatch } from '@/lib/search-utils';
 import { formatCurrency, formatNumber, formatPercent } from '@/lib/format-utils';
 import { NumericInput } from '@/components/ui/numeric-input';
@@ -80,7 +81,10 @@ export function TolosaResourcesPanel({ budgetId, tolosItemId, isAdmin, parentIte
   const [formData, setFormData] = useState(defaultForm);
   const [measurementUnits, setMeasurementUnits] = useState<number>(0);
   const [measurementUnitType, setMeasurementUnitType] = useState<string>('ud');
-
+  // Volume measurement override for individual resources
+  const [volumeMeasurements, setVolumeMeasurements] = useState<Array<{ id: string; name: string; manual_units: number | null; count_raw: number | null; measurement_unit: string | null; source_classification: string | null; floor: string | null }>>([]);
+  const [showMeasPicker, setShowMeasPicker] = useState(false);
+  const [measPickerExpanded, setMeasPickerExpanded] = useState<Set<string>>(new Set());
   // External resources (from general resources catalogue)
   const [externalCatalogueResources, setExternalCatalogueResources] = useState<any[]>([]);
   const [externalSearchQuery, setExternalSearchQuery] = useState('');
@@ -128,6 +132,17 @@ export function TolosaResourcesPanel({ budgetId, tolosItemId, isAdmin, parentIte
       setMeasurementUnitType('ud');
     }
   }, [tolosItemId]);
+
+  // Fetch volume measurements for this budget (for resource-level override)
+  const fetchVolumeMeasurements = useCallback(async () => {
+    const { data } = await supabase
+      .from('budget_measurements')
+      .select('id, name, manual_units, count_raw, measurement_unit, source_classification, floor')
+      .eq('budget_id', budgetId)
+      .eq('source', 'volumen_auto')
+      .order('name');
+    setVolumeMeasurements(data || []);
+  }, [budgetId]);
 
   // Use measurement units as related_units for subtotal calculation
   const getSubtotal = useCallback((r: BudgetResource) => calcResourceSubtotal({
@@ -223,6 +238,7 @@ export function TolosaResourcesPanel({ budgetId, tolosItemId, isAdmin, parentIte
 
   useEffect(() => { fetchLinked(); }, [fetchLinked]);
   useEffect(() => { fetchMeasurementUnits(); }, [fetchMeasurementUnits, measurementVersion]);
+  useEffect(() => { fetchVolumeMeasurements(); }, [fetchVolumeMeasurements]);
   useEffect(() => { if (showSearch) fetchAllResources(); }, [showSearch, fetchAllResources]);
   useEffect(() => { if (activeTab === 'external') fetchExternalCatalogueResources(externalSearchQuery); }, [activeTab]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -775,6 +791,84 @@ export function TolosaResourcesPanel({ budgetId, tolosItemId, isAdmin, parentIte
                   disabled className="bg-muted font-semibold"
                 />
               </div>
+            </div>
+
+            {/* Volume measurement override for this resource */}
+            <div className="p-3 bg-muted/30 rounded-lg border space-y-2">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-medium flex items-center gap-1.5">
+                  <Ruler className="h-4 w-4 text-muted-foreground" />
+                  Medición de Volúmenes (override)
+                </p>
+                <Button
+                  size="sm"
+                  variant={showMeasPicker ? 'default' : 'outline'}
+                  className="text-xs h-7"
+                  onClick={() => { setShowMeasPicker(!showMeasPicker); if (!showMeasPicker) fetchVolumeMeasurements(); }}
+                >
+                  <Layers className="h-3 w-3 mr-1" /> {showMeasPicker ? 'Ocultar' : 'Seleccionar medición'}
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Por defecto el recurso hereda la medición de su actividad (QUÉ?). Aquí puedes asignarle una medición específica de Volúmenes.
+              </p>
+              {formData.related_units != null && formData.related_units > 0 && (
+                <div className="flex items-center gap-2">
+                  <Badge variant="secondary" className="text-xs font-mono">{formatNumber(formData.related_units)} uds</Badge>
+                  <Button size="sm" variant="ghost" className="text-xs h-6" onClick={() => setFormData(d => ({ ...d, related_units: null }))}>
+                    <X className="h-3 w-3 mr-1" /> Quitar override
+                  </Button>
+                </div>
+              )}
+              {showMeasPicker && volumeMeasurements.length > 0 && (
+                <div className="max-h-48 overflow-y-auto space-y-0.5 border rounded p-2 bg-background">
+                  {(() => {
+                    // Group by floor/level for easier navigation
+                    const byFloor = new Map<string, typeof volumeMeasurements>();
+                    volumeMeasurements.forEach(m => {
+                      const key = m.floor || 'Sin nivel';
+                      if (!byFloor.has(key)) byFloor.set(key, []);
+                      byFloor.get(key)!.push(m);
+                    });
+                    return Array.from(byFloor.entries()).map(([floorName, items]) => (
+                      <Collapsible key={floorName} open={measPickerExpanded.has(floorName)} onOpenChange={() => {
+                        setMeasPickerExpanded(prev => {
+                          const next = new Set(prev);
+                          next.has(floorName) ? next.delete(floorName) : next.add(floorName);
+                          return next;
+                        });
+                      }}>
+                        <CollapsibleTrigger className="w-full flex items-center gap-2 px-2 py-1 rounded hover:bg-accent text-left text-xs font-medium">
+                          {measPickerExpanded.has(floorName) ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+                          {floorName} ({items.length})
+                        </CollapsibleTrigger>
+                        <CollapsibleContent className="pl-4 space-y-0.5">
+                          {items.map(m => {
+                            const units = m.manual_units ?? m.count_raw ?? 0;
+                            return (
+                              <button
+                                key={m.id}
+                                className="w-full text-left px-2 py-1 text-xs flex items-center justify-between gap-2 rounded hover:bg-accent transition-colors"
+                                onClick={() => {
+                                  setFormData(d => ({ ...d, related_units: units }));
+                                  setShowMeasPicker(false);
+                                  toast.success(`Medición "${m.name}" asignada: ${formatNumber(units)} ${m.measurement_unit || 'ud'}`);
+                                }}
+                              >
+                                <span className="truncate">{m.name}</span>
+                                <span className="font-mono text-muted-foreground shrink-0">{formatNumber(units)} {m.measurement_unit || 'ud'}</span>
+                              </button>
+                            );
+                          })}
+                        </CollapsibleContent>
+                      </Collapsible>
+                    ));
+                  })()}
+                </div>
+              )}
+              {showMeasPicker && volumeMeasurements.length === 0 && (
+                <p className="text-xs text-muted-foreground text-center py-2">Sin mediciones de volúmenes. Genera mediciones desde Plano → Volúmenes.</p>
+              )}
             </div>
 
             {/* Row 4.5: Buying list fields */}

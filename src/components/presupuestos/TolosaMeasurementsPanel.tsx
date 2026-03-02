@@ -475,7 +475,7 @@ export function TolosaMeasurementsPanel({ budgetId, tolosItemId, isAdmin, parent
                   {/* Level totals first */}
                   {levelTotalItems
                     .sort((a, b) => SURFACE_TYPE_ORDER.indexOf(a.surfaceType) - SURFACE_TYPE_ORDER.indexOf(b.surfaceType))
-                    .map(item => renderMeasurementRow(item.measurement, activeIds.has(item.measurement.id), isInheriting))}
+                    .map(item => renderMeasurementRow(item.measurement, activeIds.has(item.measurement.id), isInheriting && inheritedIds.has(item.measurement.id) && !linkedIds.has(item.measurement.id)))}
 
                   {/* Room items grouped by surface type */}
                   {SURFACE_TYPE_ORDER.map(st => {
@@ -490,7 +490,7 @@ export function TolosaMeasurementsPanel({ budgetId, tolosItemId, isAdmin, parent
                           <span className="text-xs text-muted-foreground">{SURFACE_TYPE_LABELS[st] || st} por espacio ({items.length})</span>
                         </CollapsibleTrigger>
                         <CollapsibleContent className="pl-4 space-y-0.5 mt-0.5">
-                          {items.map(item => renderMeasurementRow(item.measurement, activeIds.has(item.measurement.id), isInheriting))}
+                          {items.map(item => renderMeasurementRow(item.measurement, activeIds.has(item.measurement.id), isInheriting && inheritedIds.has(item.measurement.id) && !linkedIds.has(item.measurement.id)))}
                         </CollapsibleContent>
                       </Collapsible>
                     );
@@ -520,7 +520,7 @@ export function TolosaMeasurementsPanel({ budgetId, tolosItemId, isAdmin, parent
                 <CollapsibleContent className="pl-6 space-y-0.5 mt-1">
                   {group.items
                     .sort((a, b) => SURFACE_TYPE_ORDER.indexOf(a.surfaceType) - SURFACE_TYPE_ORDER.indexOf(b.surfaceType))
-                    .map(item => renderMeasurementRow(item.measurement, activeIds.has(item.measurement.id), isInheriting))}
+                    .map(item => renderMeasurementRow(item.measurement, activeIds.has(item.measurement.id), isInheriting && inheritedIds.has(item.measurement.id) && !linkedIds.has(item.measurement.id)))}
                 </CollapsibleContent>
               </Collapsible>
             );

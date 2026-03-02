@@ -2430,13 +2430,27 @@ const isDoor = op.openingType === 'puerta' || op.openingType === 'puerta_externa
               const topZ = baseZ + Math.round(card.height * 1000 / bHMm);
               const leftXY = cornerXY[leftCorner] || [0, 0];
               const rightXY = cornerXY[rightCorner] || [0, 0];
+              // Build top-corner labels: prefix with level+1 digit if label starts with digit
+              const topLabel = (lbl: string) => {
+                const m = lbl.match(/^(\d+)(.+)$/);
+                if (m) return `${parseInt(m[1]) + 1}${m[2]}`;
+                return lbl;
+              };
               return (
-                <>
-                  <CornerEditBadge label={leftCorner} x={toGrid(leftXY[0])} y={toGrid(leftXY[1])} z={baseZ} customCorners={customCorners} onCustomCornersChange={onCustomCornersChange} />
-                  <span className="text-muted-foreground">→</span>
-                  <CornerEditBadge label={rightCorner} x={toGrid(rightXY[0])} y={toGrid(rightXY[1])} z={baseZ} customCorners={customCorners} onCustomCornersChange={onCustomCornersChange} />
-                  <span className="text-muted-foreground/50 text-[8px]">Z: {baseZ}→{topZ}</span>
-                </>
+                <div className="flex flex-col gap-0.5">
+                  <div className="flex items-center gap-1 text-[10px]">
+                    <span className="text-[8px] text-muted-foreground w-6">Sup:</span>
+                    <CornerEditBadge label={topLabel(leftCorner)} x={toGrid(leftXY[0])} y={toGrid(leftXY[1])} z={topZ} customCorners={customCorners} onCustomCornersChange={onCustomCornersChange} />
+                    <span className="text-muted-foreground">→</span>
+                    <CornerEditBadge label={topLabel(rightCorner)} x={toGrid(rightXY[0])} y={toGrid(rightXY[1])} z={topZ} customCorners={customCorners} onCustomCornersChange={onCustomCornersChange} />
+                  </div>
+                  <div className="flex items-center gap-1 text-[10px]">
+                    <span className="text-[8px] text-muted-foreground w-6">Inf:</span>
+                    <CornerEditBadge label={leftCorner} x={toGrid(leftXY[0])} y={toGrid(leftXY[1])} z={baseZ} customCorners={customCorners} onCustomCornersChange={onCustomCornersChange} />
+                    <span className="text-muted-foreground">→</span>
+                    <CornerEditBadge label={rightCorner} x={toGrid(rightXY[0])} y={toGrid(rightXY[1])} z={baseZ} customCorners={customCorners} onCustomCornersChange={onCustomCornersChange} />
+                  </div>
+                </div>
               );
             })()}
           </div>
@@ -4180,11 +4194,41 @@ function TotalElevationCard({ side, label, layers, plan, rooms, budgetName, floo
               <Badge variant="default" className="text-[9px] h-4">{TOTAL_SIDE_NAMES[side]}</Badge>
               <Badge variant="outline" className="text-[9px] h-4">{Math.round(totalWidth * 1000)} × {Math.round(totalHeight * 1000)} mm</Badge>
               <Badge variant="secondary" className="text-[9px] h-4">{layers.length} niveles</Badge>
-              {cornerLabels.bottomLeft && (
-                <Badge variant="outline" className="text-[9px] h-4 max-w-[120px] truncate">
-                  {cornerLabels.bottomLeft} → {cornerLabels.topRight}
-                </Badge>
-              )}
+              {cornerLabels.bottomLeft && (() => {
+                const csm = cellSizeM || (plan.blockLengthMm / 1000) || 0.625;
+                const blockHMm2 = plan.blockHeightMm || 250;
+                const bottomLayer2 = layers[0];
+                const bottomComps2 = bottomLayer2?.composites || [];
+                const startC2 = bottomComps2[0]?.startCorner;
+                const endC2 = bottomComps2[bottomComps2.length - 1]?.endCorner;
+                const sortedF2 = floors ? [...floors].sort((a, b) => a.orderIndex - b.orderIndex) : [];
+                const firstFId = sortedF2[0]?.id;
+                const bottomZ2 = firstFId && floorBaseZMap ? (floorBaseZMap.get(firstFId) ?? 0) : 0;
+                const lastFId = sortedF2[sortedF2.length - 1]?.id;
+                const lastFBaseZ = lastFId && floorBaseZMap ? (floorBaseZMap.get(lastFId) ?? 0) : 0;
+                const topZ2 = lastFBaseZ + Math.round(layerDetails[layerDetails.length - 1].maxHeight * 1000 / blockHMm2);
+                const sX2 = startC2 ? Math.round(startC2.x / csm) : 0;
+                const sY2 = startC2 ? Math.round(startC2.y / csm) : 0;
+                const eX2 = endC2 ? Math.round(endC2.x / csm) : 0;
+                const eY2 = endC2 ? Math.round(endC2.y / csm) : 0;
+                const topLbl2 = (lbl: string) => { const m2 = lbl.match(/^(\d+)(.+)$/); return m2 ? `${parseInt(m2[1]) + 1}${m2[2]}` : lbl; };
+                return (
+                  <div className="flex flex-col gap-0.5">
+                    <div className="flex items-center gap-1 text-[10px]">
+                      <span className="text-[8px] text-muted-foreground w-6">Sup:</span>
+                      <CornerEditBadge label={topLbl2(cornerLabels.topLeft)} x={sX2} y={sY2} z={topZ2} customCorners={customCorners} onCustomCornersChange={onCustomCornersChange} />
+                      <span className="text-muted-foreground">→</span>
+                      <CornerEditBadge label={topLbl2(cornerLabels.topRight)} x={eX2} y={eY2} z={topZ2} customCorners={customCorners} onCustomCornersChange={onCustomCornersChange} />
+                    </div>
+                    <div className="flex items-center gap-1 text-[10px]">
+                      <span className="text-[8px] text-muted-foreground w-6">Inf:</span>
+                      <CornerEditBadge label={cornerLabels.bottomLeft} x={sX2} y={sY2} z={bottomZ2} customCorners={customCorners} onCustomCornersChange={onCustomCornersChange} />
+                      <span className="text-muted-foreground">→</span>
+                      <CornerEditBadge label={cornerLabels.bottomRight} x={eX2} y={eY2} z={bottomZ2} customCorners={customCorners} onCustomCornersChange={onCustomCornersChange} />
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
             <Button variant="ghost" size="sm" className="h-5 w-5 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
               onClick={() => setFullscreen(true)} title="Ampliar">
@@ -5109,28 +5153,34 @@ function CompositeWallCard({ compositeWall, plan, onOpeningClick, onAddBlockGrou
               </Button>
             </div>
           </div>
-          {/* Editable corner coordinates */}
-          {customCorners && (
-            <div className="px-3 py-1 border-b border-border/30 flex items-center gap-2 text-[10px]">
-              <CornerEditBadge
-                label={cw.startCorner.label}
-                x={Math.round(cw.startCorner.x / (cellSizeMProp || 0.625))}
-                y={Math.round(cw.startCorner.y / (cellSizeMProp || 0.625))}
-                z={floorBaseZ ?? 0}
-                customCorners={customCorners}
-                onCustomCornersChange={onCustomCornersChange}
-              />
-              <span className="text-muted-foreground">→</span>
-              <CornerEditBadge
-                label={cw.endCorner.label}
-                x={Math.round(cw.endCorner.x / (cellSizeMProp || 0.625))}
-                y={Math.round(cw.endCorner.y / (cellSizeMProp || 0.625))}
-                z={floorBaseZ ?? 0}
-                customCorners={customCorners}
-                onCustomCornersChange={onCustomCornersChange}
-              />
-            </div>
-          )}
+          {/* Editable corner coordinates — Sup (top) + Inf (bottom) */}
+          {customCorners && (() => {
+            const csm = cellSizeMProp || 0.625;
+            const bHMm = plan.blockHeightMm || 250;
+            const baseZ = floorBaseZ ?? 0;
+            const topZ = baseZ + Math.round(maxHeight * 1000 / bHMm);
+            const sX = Math.round(cw.startCorner.x / csm);
+            const sY = Math.round(cw.startCorner.y / csm);
+            const eX = Math.round(cw.endCorner.x / csm);
+            const eY = Math.round(cw.endCorner.y / csm);
+            const topLbl = (lbl: string) => { const m = lbl.match(/^(\d+)(.+)$/); return m ? `${parseInt(m[1]) + 1}${m[2]}` : lbl; };
+            return (
+              <div className="px-3 py-1 border-b border-border/30 flex flex-col gap-0.5 text-[10px]">
+                <div className="flex items-center gap-1">
+                  <span className="text-[8px] text-muted-foreground w-6">Sup:</span>
+                  <CornerEditBadge label={topLbl(cw.startCorner.label)} x={sX} y={sY} z={topZ} customCorners={customCorners} onCustomCornersChange={onCustomCornersChange} />
+                  <span className="text-muted-foreground">→</span>
+                  <CornerEditBadge label={topLbl(cw.endCorner.label)} x={eX} y={eY} z={topZ} customCorners={customCorners} onCustomCornersChange={onCustomCornersChange} />
+                </div>
+                <div className="flex items-center gap-1">
+                  <span className="text-[8px] text-muted-foreground w-6">Inf:</span>
+                  <CornerEditBadge label={cw.startCorner.label} x={sX} y={sY} z={baseZ} customCorners={customCorners} onCustomCornersChange={onCustomCornersChange} />
+                  <span className="text-muted-foreground">→</span>
+                  <CornerEditBadge label={cw.endCorner.label} x={eX} y={eY} z={baseZ} customCorners={customCorners} onCustomCornersChange={onCustomCornersChange} />
+                </div>
+              </div>
+            );
+          })()}
         </CardHeader>
         <CardContent className="p-2">
           {renderCompositeSvg()}

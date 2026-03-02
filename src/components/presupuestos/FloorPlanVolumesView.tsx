@@ -386,6 +386,7 @@ function LayerRow({
   depth = 0,
   childCount = 0,
   onEditLayer,
+  onAssociateLayer,
 }: {
   layer: VolumeLayer;
   allLayers: VolumeLayer[];
@@ -399,6 +400,7 @@ function LayerRow({
   depth?: number;
   childCount?: number;
   onEditLayer?: (layer: VolumeLayer) => void;
+  onAssociateLayer?: (info: { name: string; value: number; unit: string }) => void;
 }) {
   const dims = calcDimsForLayer(layer.includeNonStructural);
   const layerArea = calcAreaForLayer(layer.includeNonStructural);
@@ -410,7 +412,7 @@ function LayerRow({
 
   return (
     <div className="space-y-1">
-      <div className={`grid grid-cols-[50px_1fr_120px_70px_80px_80px_90px_90px_70px_50px_32px_32px_32px] gap-1 items-center ${groupColor} rounded px-1`}
+      <div className={`grid grid-cols-[50px_1fr_120px_70px_80px_80px_90px_90px_70px_50px_32px_32px_32px_32px] gap-1 items-center ${groupColor} rounded px-1`}
         style={{ paddingLeft: depth > 0 ? `${depth * 20 + 4}px` : undefined }}
       >
         <Input
@@ -510,6 +512,18 @@ function LayerRow({
         <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => onRemoveLayer(layer.id)} title="Eliminar capa">
           <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
         </Button>
+        {onAssociateLayer && layer.name && (
+          <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => {
+            const value = layer.measurementType === 'linear' && linearMetrics
+              ? linearMetrics.totalMl
+              : layerArea;
+            const unit = layer.measurementType === 'linear' ? 'ml' : 'm²';
+            onAssociateLayer({ name: layer.name, value, unit });
+          }} title="Asociar a actividad QUÉ?">
+            <LinkIcon className="h-3.5 w-3.5 text-muted-foreground" />
+          </Button>
+        )}
+        {onAssociateLayer && !layer.name && <span />}
       </div>
 
       {/* Linear layer details */}
@@ -627,6 +641,7 @@ function SurfaceSection({
   onRemoveAllLayers,
   onDuplicateAllLayers,
   onEditLayer,
+  onAssociateLayer,
 }: {
   surfaceType: SurfaceType;
   layers: VolumeLayer[];
@@ -642,6 +657,7 @@ function SurfaceSection({
   onRemoveAllLayers?: () => void;
   onDuplicateAllLayers?: () => void;
   onEditLayer?: (layer: VolumeLayer) => void;
+  onAssociateLayer?: (info: { name: string; value: number; unit: string }) => void;
 }) {
   const [open, setOpen] = useState(layers.length > 0);
   const [collapsedParents, setCollapsedParents] = useState<Set<string>>(new Set());
@@ -754,7 +770,7 @@ function SurfaceSection({
           {sortedRoots.length > 0 && (
             <div className="space-y-1.5">
               {/* Header */}
-              <div className="grid grid-cols-[50px_1fr_120px_70px_80px_80px_90px_90px_70px_50px_32px_32px_32px] gap-1 text-[10px] font-semibold text-muted-foreground px-1">
+              <div className="grid grid-cols-[50px_1fr_120px_70px_80px_80px_90px_90px_70px_50px_32px_32px_32px_32px] gap-1 text-[10px] font-semibold text-muted-foreground px-1">
                 <span className="text-center">Orden</span>
                 <span>Nombre</span>
                 <span className="truncate" title="Descripción">Desc.</span>
@@ -768,6 +784,7 @@ function SurfaceSection({
                 <span></span>
                 <span></span>
                 <span></span>
+                <span className="text-center" title="Asociar a actividad QUÉ?">🔗</span>
               </div>
 
               {sortedRoots.map((rootLayer) => {
@@ -829,6 +846,7 @@ function SurfaceSection({
                         depth={0}
                         childCount={0}
                         onEditLayer={onEditLayer}
+                        onAssociateLayer={onAssociateLayer}
                       />
                     )}
 
@@ -850,6 +868,7 @@ function SurfaceSection({
                             depth={1}
                             childCount={0}
                             onEditLayer={onEditLayer}
+                            onAssociateLayer={onAssociateLayer}
                           />
                         ))}
                       </div>
@@ -2001,6 +2020,7 @@ export function FloorPlanVolumesView({ plan, rooms, floors, floorPlanId, budgetI
                                         return { largo: r.largo, ancho: r.ancho };
                                       }}
                                       onEditLayer={(layer) => setEditingLayer({ floorId: floor.id, surfaceType: sd.surfaceType, layerId: layer.id })}
+                                      onAssociateLayer={openAssociateDialog}
                                     />
                                     {roofSubData.length > 0 && (
                                       <div className="ml-6 border-l-2 border-muted pl-2 space-y-1">
@@ -2022,6 +2042,7 @@ export function FloorPlanVolumesView({ plan, rooms, floors, floorPlanId, budgetI
                                               return { largo: r.largo, ancho: r.ancho };
                                             }}
                                             onEditLayer={(layer) => setEditingLayer({ floorId: floor.id, surfaceType: rsd.surfaceType, layerId: layer.id })}
+                                            onAssociateLayer={openAssociateDialog}
                                             onRemoveAllLayers={() => {
                                               const layers = floorLayers[rsd.surfaceType] || [];
                                               layers.forEach(l => {

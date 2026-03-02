@@ -88,8 +88,8 @@ export function FloorPlanSpaceForm({ room, allRooms, planData, coordCol, coordRo
   // Filter rooms to same floor and only placed rooms to avoid false adjacencies and crashes
   const sameFloorRooms = useMemo(() => {
     const base = room.floorId ? allRooms.filter(r => r.floorId === room.floorId) : allRooms;
-    // Exclude unplaced rooms (posX<0 or posY<0) and zero-dimension rooms to prevent division-by-zero in computeWallSegments
-    return base.filter(r => r.posX >= 0 && r.posY >= 0 && r.width > 0 && r.length > 0);
+    // Exclude unplaced rooms (posX/posY null) and zero-dimension rooms to prevent division-by-zero in computeWallSegments
+    return base.filter(r => r.posX != null && r.posY != null && r.width > 0 && r.length > 0);
   }, [allRooms, room.floorId]);
 
   // Compute wall segments dynamically based on room adjacency (same floor only)

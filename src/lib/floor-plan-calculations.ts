@@ -96,8 +96,8 @@ export interface FloorLevel {
 export interface RoomData {
   id: string;
   name: string;
-  posX: number;
-  posY: number;
+  posX: number | null;  // null = not placed on grid; any number (incl. negative) = placed
+  posY: number | null;  // null = not placed on grid; any number (incl. negative) = placed
   width: number;
   length: number;
   height?: number;
@@ -110,6 +110,11 @@ export interface RoomData {
   groupId?: string;
   groupName?: string;
   walls: WallData[];
+}
+
+/** Check whether a room has been placed on the grid (non-null position) */
+export function isRoomPlaced(room: RoomData): boolean {
+  return room.posX != null && room.posY != null;
 }
 
 export interface WallLayerData {
@@ -382,7 +387,7 @@ export function calcBajoCubiertaWallHeight(
   const ignoredIds = getIgnoredRoofElevationRoomIds(allRooms);
   if (ignoredIds.has(room.id)) return 0;
 
-  const calcRooms = allRooms.filter(r => r.posX >= 0 && !ignoredIds.has(r.id));
+  const calcRooms = allRooms.filter(r => r.posX != null && r.posY != null && !ignoredIds.has(r.id));
   if (calcRooms.length === 0) return undefined;
 
   let bbMinX = Infinity, bbMaxX = -Infinity;

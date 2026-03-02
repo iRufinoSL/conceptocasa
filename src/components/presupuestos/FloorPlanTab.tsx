@@ -361,10 +361,10 @@ function LevelManagerPanel({ floors, planData, rooms, onAdd, onUpdate, onDelete,
 
   // Compute building half-width
   const buildingHalfWidth = useMemo(() => {
-    const placedRooms = rooms.filter(r => r.posX >= 0 && r.posY >= 0);
+    const placedRooms = rooms.filter(r => r.posX != null && r.posY != null);
     if (placedRooms.length === 0) return planData.width / 2;
-    const minX = Math.min(...placedRooms.map(r => r.posX));
-    const maxX = Math.max(...placedRooms.map(r => r.posX + r.width));
+    const minX = Math.min(...placedRooms.map(r => r.posX!));
+    const maxX = Math.max(...placedRooms.map(r => r.posX! + r.width));
     return ((maxX - minX) + 2 * planData.externalWallThickness) / 2 + (parseFloat(overhang) || planData.roofOverhang);
   }, [rooms, planData, overhang]);
 
@@ -1280,9 +1280,9 @@ export function FloorPlanTab({ budgetId, budgetName = '', isAdmin }: FloorPlanTa
               <SpaceFormErrorBoundary onReset={() => setSelectedRoomId(null)}>
                 {(() => {
                   const cellSizeM = planData.scaleMode === 'bloque' ? planData.blockLengthMm / 1000 : 1;
-                  const isUnplaced = selectedRoom.posX < 0 || selectedRoom.posY < 0;
-                  const coordCol = isUnplaced ? undefined : Math.round(selectedRoom.posX / cellSizeM) + 1;
-                  const coordRow = isUnplaced ? undefined : Math.round(selectedRoom.posY / cellSizeM) + 1;
+                   const isUnplaced = selectedRoom.posX == null || selectedRoom.posY == null;
+                   const coordCol = isUnplaced ? undefined : Math.round(selectedRoom.posX! / cellSizeM) + 1;
+                   const coordRow = isUnplaced ? undefined : Math.round(selectedRoom.posY! / cellSizeM) + 1;
                   const floorObj = floors.find(f => f.id === selectedRoom.floorId);
                   const floorName = floorObj?.name;
 

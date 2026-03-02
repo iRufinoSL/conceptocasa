@@ -11,7 +11,7 @@ import { createPortal } from 'react-dom';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 import type { RoomData, FloorLevel, WallType, ScaleMode } from '@/lib/floor-plan-calculations';
-import { autoClassifyWalls, isExteriorType, isInvisibleType, isCompartidaType } from '@/lib/floor-plan-calculations';
+import { autoClassifyWalls, isExteriorType, isInvisibleType, isCompartidaType, isRoomPlaced } from '@/lib/floor-plan-calculations';
 import type { CustomCorner } from '@/hooks/useFloorPlan';
 import { toast } from 'sonner';
 
@@ -81,11 +81,19 @@ export function rowToLabel(row: number, _levelPrefix?: string): string {
  * - Legacy letter: "A1" → col=1, row=1
  * Note: XYZ values are 0-based; internal col/row are 1-based (col = X+1, row = Y+1)
  */
+/** Parse coordinate in XYZ format (supports negative values):
+ * - XYZ tuple: "(18,1,10)" or "(-1,2,10)" → col=19, row=3, z=10
+ * - XY only:   "(5,4)" or "5,4" → col=6, row=5, z=0
+ * - Legacy slash: "05/04" → col=5, row=4
+ * - Legacy compact: "1710" → col=17, row=10
+ * - Legacy letter: "A1" → col=1, row=1
+ * Note: XYZ values are 0-based display; internal col/row are offset by +1 (col = X+1, row = Y+1)
+ */
 export function parseCoord(coord: string): { col: number; row: number; z?: number } | null {
   const trimmed = coord.trim().replace(/^\(/, '').replace(/\)$/, '');
 
-  // XYZ or XY comma format: "18,1,10" or "18,1"
-  const xyzMatch = trimmed.match(/^(\d+)\s*,\s*(\d+)(?:\s*,\s*(\d+))?$/);
+  // XYZ or XY comma format with optional negative signs: "-1,2,10" or "18,1"
+  const xyzMatch = trimmed.match(/^(-?\d+)\s*,\s*(-?\d+)(?:\s*,\s*(-?\d+))?$/);
   if (xyzMatch) {
     const x = parseInt(xyzMatch[1]);
     const y = parseInt(xyzMatch[2]);
@@ -110,7 +118,7 @@ export function parseCoord(coord: string): { col: number; row: number; z?: numbe
   }
 
   // Single number (column only, assume row=1)
-  const singleMatch = body.match(/^(\d{1,2})$/);
+  const singleMatch = body.match(/^(-?\d{1,3})$/);
   if (singleMatch) return { col: parseInt(singleMatch[1]), row: 1 };
 
   // Legacy letter format: "A1", "B02"
@@ -131,10 +139,10 @@ export function formatCoord(col: number, row: number, _levelPrefix?: string, z?:
 
 // Derive grid positions from room posX/posY based on cell size in meters
 export function deriveGridPositions(floorRooms: RoomData[], cellSizeM: number = 1): PositionedRoom[] {
-  return floorRooms.map(r => ({
+  return floorRooms.filter(r => r.posX != null && r.posY != null).map(r => ({
     room: r,
-    gridCol: Math.round(r.posX / cellSizeM) + 1, // 1-based col
-    gridRow: Math.round(r.posY / cellSizeM) + 1, // 1-based row
+    gridCol: Math.round(r.posX! / cellSizeM) + 1, // 1-based col (can be ≤0 for negative coords)
+    gridRow: Math.round(r.posY! / cellSizeM) + 1, // 1-based row (can be ≤0 for negative coords)
   }));
 }
 
@@ -288,13 +296,13 @@ export function FloorPlanGridView({
   const floorSurfaceArea = useMemo(() => {
     const structRooms = currentFloorRooms.filter(r => {
       const n = (r.name || '').toLowerCase();
-      return r.posX >= 0 && r.posY >= 0 && !n.includes('acera') && !n.includes('alero') && !n.includes('eave');
+      return isRoomPlaced(r) && !n.includes('acera') && !n.includes('alero') && !n.includes('eave');
     });
     if (structRooms.length === 0) return 0;
-    const minX = Math.min(...structRooms.map(r => r.posX));
-    const maxX = Math.max(...structRooms.map(r => r.posX + r.width));
-    const minY = Math.min(...structRooms.map(r => r.posY));
-    const maxY = Math.max(...structRooms.map(r => r.posY + r.length));
+    const minX = Math.min(...structRooms.map(r => r.posX!));
+    const maxX = Math.max(...structRooms.map(r => r.posX! + r.width));
+    const minY = Math.min(...structRooms.map(r => r.posY!));
+    const maxY = Math.max(...structRooms.map(r => r.posY! + r.length));
     // Include external wall thickness on all sides
     const extThick = structRooms[0]?.extWallThickness ?? (scaleMode === 'bloque' ? blockLengthMm / 1000 * 0.48 : 0.3);
     const totalW = (maxX - minX) + 2 * extThick;
@@ -318,7 +326,7 @@ export function FloorPlanGridView({
     const lowerFloor = effectiveFloors.find(f => f.orderIndex === currentIdx - 1);
     if (!lowerFloor) return [];
     const lowerRooms = roomsByFloor.get(lowerFloor.id) || [];
-    return lowerRooms.filter(r => r.posX >= 0 && r.posY >= 0);
+    return lowerRooms.filter(r => isRoomPlaced(r));
   }, [currentFloorObj, effectiveFloors, roomsByFloor]);
 
   // Report active floor name changes
@@ -326,32 +334,48 @@ export function FloorPlanGridView({
     onActiveFloorChange?.(currentFloorName, currentFloorId);
   }, [currentFloorName, currentFloorId, onActiveFloorChange]);
 
-  // Rooms placed on the grid (posX >= 0 and posY >= 0)
+  // Rooms placed on the grid (posX/posY not null)
   const placedRooms = useMemo(() => {
-    return currentFloorRooms.filter(r => r.width > 0 && r.length > 0 && r.posX >= 0 && r.posY >= 0);
+    return currentFloorRooms.filter(r => r.width > 0 && r.length > 0 && isRoomPlaced(r));
   }, [currentFloorRooms]);
 
   // Grid size: GLOBAL across ALL floors so coordinates align between levels
   const allPlacedRooms = useMemo(() => {
-    return rooms.filter(r => r.width > 0 && r.length > 0 && r.posX >= 0 && r.posY >= 0);
+    return rooms.filter(r => r.width > 0 && r.length > 0 && isRoomPlaced(r));
   }, [rooms]);
 
-  const totalCols = useMemo(() => {
-    if (allPlacedRooms.length === 0) return Math.max(1, Math.ceil(planWidth / cellSizeM));
-    return Math.max(...allPlacedRooms.map(r => Math.round(r.posX / cellSizeM) + Math.max(1, Math.round(r.width / cellSizeM))));
-  }, [planWidth, allPlacedRooms, cellSizeM]);
+  // Grid bounds: compute min and max col/row to support negative coordinates
+  const gridBounds = useMemo(() => {
+    if (allPlacedRooms.length === 0) {
+      return { minCol: 1, maxCol: Math.max(1, Math.ceil(planWidth / cellSizeM)), minRow: 1, maxRow: Math.max(1, Math.ceil(planLength / cellSizeM)) };
+    }
+    const cols = allPlacedRooms.map(r => {
+      const startCol = Math.round(r.posX! / cellSizeM) + 1;
+      const endCol = startCol + Math.max(1, Math.round(r.width / cellSizeM)) - 1;
+      return { start: startCol, end: endCol };
+    });
+    const rows = allPlacedRooms.map(r => {
+      const startRow = Math.round(r.posY! / cellSizeM) + 1;
+      const endRow = startRow + Math.max(1, Math.round(r.length / cellSizeM)) - 1;
+      return { start: startRow, end: endRow };
+    });
+    return {
+      minCol: Math.min(...cols.map(c => c.start)),
+      maxCol: Math.max(...cols.map(c => c.end)),
+      minRow: Math.min(...rows.map(r => r.start)),
+      maxRow: Math.max(...rows.map(r => r.end)),
+    };
+  }, [planWidth, planLength, allPlacedRooms, cellSizeM]);
 
-  const totalRows = useMemo(() => {
-    if (allPlacedRooms.length === 0) return Math.max(1, Math.ceil(planLength / cellSizeM));
-    return Math.max(...allPlacedRooms.map(r => Math.round(r.posY / cellSizeM) + Math.max(1, Math.round(r.length / cellSizeM))));
-  }, [planLength, allPlacedRooms, cellSizeM]);
+  const totalCols = gridBounds.maxCol - gridBounds.minCol + 1;
+  const totalRows = gridBounds.maxRow - gridBounds.minRow + 1;
 
   // Build a cell occupation map: key = "col,row" → roomId
   const cellMap = useMemo(() => {
     const map = new Map<string, { roomId: string; isOrigin: boolean }>();
     placedRooms.forEach(r => {
-      const startCol = Math.round(r.posX / cellSizeM) + 1;
-      const startRow = Math.round(r.posY / cellSizeM) + 1;
+      const startCol = Math.round(r.posX! / cellSizeM) + 1;
+      const startRow = Math.round(r.posY! / cellSizeM) + 1;
       const spanCols = Math.max(1, Math.round(r.width / cellSizeM));
       const spanRows = Math.max(1, Math.round(r.length / cellSizeM));
       for (let dc = 0; dc < spanCols; dc++) {
@@ -365,9 +389,9 @@ export function FloorPlanGridView({
     return map;
   }, [placedRooms, totalCols, totalRows]);
 
-  // Unplaced rooms: posX < 0 means "not yet positioned on the grid"
+  // Unplaced rooms: posX/posY null means "not yet positioned on the grid"
   const unplacedRooms = useMemo(() => {
-    return currentFloorRooms.filter(r => r.posX < 0 || r.posY < 0);
+    return currentFloorRooms.filter(r => !isRoomPlaced(r));
   }, [currentFloorRooms]);
 
   // Bounding box of placed rooms in grid coordinates

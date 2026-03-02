@@ -1286,25 +1286,44 @@ export function FloorPlanTab({ budgetId, budgetName = '', isAdmin }: FloorPlanTa
                   const floorObj = floors.find(f => f.id === selectedRoom.floorId);
                   const floorName = floorObj?.name;
 
-                  // Compute Z for this floor based on accumulated heights of lower floors
+                  // Compute base Z for each floor based on accumulated heights of lower floors
                   const blockHMmVal = planData.blockHeightMm || 250;
                   const sortedFloors = [...floors].sort((a, b) => a.orderIndex - b.orderIndex);
+                  const floorBaseZMap = new Map<string, number>();
                   let accumulatedZ = 0;
                   for (const f of sortedFloors) {
-                    if (f.id === selectedRoom.floorId) break;
+                    floorBaseZMap.set(f.id, accumulatedZ);
                     const floorRooms = rooms.filter(r => r.floorId === f.id);
                     const firstHeight = floorRooms[0]?.height;
                     const heightM = firstHeight !== undefined ? firstHeight : planData.defaultHeight;
                     const heightMm = Math.round(heightM * 1000);
                     accumulatedZ += Math.round(heightMm / blockHMmVal);
                   }
-                  const coordZ = accumulatedZ;
+                  const coordZ = floorObj ? (floorBaseZMap.get(floorObj.id) ?? 0) : 0;
 
                   const handleChangeCoordinate = async (targetCol: number, targetRow: number, targetZ?: number) => {
                     const posX = (targetCol - 1) * cellSizeM;
                     const posY = (targetRow - 1) * cellSizeM;
-                    await updateRoom(selectedRoom.id, { posX: Math.round(posX * 1000) / 1000, posY: Math.round(posY * 1000) / 1000 });
-                    toast.success(`${selectedRoom.name} movido a ${formatCoord(targetCol, targetRow, undefined, targetZ ?? coordZ)}`);
+                    const updates: { posX: number; posY: number; floorId?: string } = {
+                      posX: Math.round(posX * 1000) / 1000,
+                      posY: Math.round(posY * 1000) / 1000,
+                    };
+
+                    if (typeof targetZ === 'number' && Number.isFinite(targetZ)) {
+                      const normalizedZ = Math.round(targetZ);
+                      const matchedFloor = sortedFloors.find(f => (floorBaseZMap.get(f.id) ?? 0) === normalizedZ);
+                      if (!matchedFloor) {
+                        toast.error(`No existe un nivel con Z=${normalizedZ}.`);
+                        return;
+                      }
+                      if (matchedFloor.id !== selectedRoom.floorId) {
+                        updates.floorId = matchedFloor.id;
+                      }
+                    }
+
+                    await updateRoom(selectedRoom.id, updates);
+                    const finalZ = updates.floorId ? (floorBaseZMap.get(updates.floorId) ?? (targetZ ?? coordZ)) : (targetZ ?? coordZ);
+                    toast.success(`${selectedRoom.name} movido a ${formatCoord(targetCol, targetRow, undefined, finalZ)}`);
                   };
 
                   return (

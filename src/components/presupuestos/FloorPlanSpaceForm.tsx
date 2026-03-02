@@ -59,7 +59,7 @@ export function FloorPlanSpaceForm({ room, allRooms, planData, coordCol, coordRo
   const [localIntWT, setLocalIntWT] = useState(room.intWallThickness != null ? String(room.intWallThickness) : '');
   const [localHasFloor, setLocalHasFloor] = useState(room.hasFloor !== false);
   const [localHasCeiling, setLocalHasCeiling] = useState(room.hasCeiling !== false);
-  const [localCoord, setLocalCoord] = useState(coordCol != null && coordRow != null ? `${coordCol - 1},${coordRow - 1}` : '');
+  const [localCoord, setLocalCoord] = useState(coordCol != null && coordRow != null ? `${coordCol - 1},${coordRow - 1},${coordZ ?? 0}` : '');
   const [localWalls, setLocalWalls] = useState<Record<string, WallType>>(() => {
     const map: Record<string, WallType> = {};
     room.walls.forEach(w => { map[w.id] = w.wallType; });
@@ -77,7 +77,7 @@ export function FloorPlanSpaceForm({ room, allRooms, planData, coordCol, coordRo
     setLocalIntWT(room.intWallThickness != null ? String(room.intWallThickness) : '');
     setLocalHasFloor(room.hasFloor !== false);
     setLocalHasCeiling(room.hasCeiling !== false);
-    setLocalCoord(coordCol != null && coordRow != null ? `${coordCol - 1},${coordRow - 1}` : '');
+    setLocalCoord(coordCol != null && coordRow != null ? `${coordCol - 1},${coordRow - 1},${coordZ ?? 0}` : '');
     const map: Record<string, WallType> = {};
     room.walls.forEach(w => { map[w.id] = w.wallType; });
     setLocalWalls(map);
@@ -111,9 +111,11 @@ export function FloorPlanSpaceForm({ room, allRooms, planData, coordCol, coordRo
   const parsedWidth = parseFloat(localWidth) || room.width;
   const parsedLength = parseFloat(localLength) || room.length;
   const parsedCoord = localCoord ? parseCoord(localCoord) : null;
-  const parsedCol = parsedCoord?.col || 0;
-  const parsedRow = parsedCoord?.row || 0;
-  const parsedZ = parsedCoord?.z ?? 0;
+  const coordBody = localCoord.trim().replace(/^\(/, '').replace(/\)$/, '');
+  const hasExplicitZ = /^-?\d+\s*,\s*-?\d+\s*,\s*-?\d+$/.test(coordBody);
+  const parsedCol = parsedCoord?.col ?? 0;
+  const parsedRow = parsedCoord?.row ?? 0;
+  const parsedZ = hasExplicitZ ? (parsedCoord?.z ?? (coordZ ?? 0)) : (coordZ ?? 0);
   const m2 = isBlockMode
     ? blocksToMeters(parsedWidth, blockL) * blocksToMeters(parsedLength, blockL)
     : parsedWidth * parsedLength;
@@ -144,7 +146,7 @@ export function FloorPlanSpaceForm({ room, allRooms, planData, coordCol, coordRo
     localHasFloor !== (room.hasFloor !== false) ||
     localHasCeiling !== (room.hasCeiling !== false);
 
-  const coordChanged = parsedCol !== (coordCol ?? 0) || parsedRow !== (coordRow ?? 0);
+  const coordChanged = parsedCol !== (coordCol ?? 0) || parsedRow !== (coordRow ?? 0) || parsedZ !== (coordZ ?? 0);
 
   const wallsChanged = room.walls.some(w => localWalls[w.id] !== w.wallType);
 
@@ -154,7 +156,7 @@ export function FloorPlanSpaceForm({ room, allRooms, planData, coordCol, coordRo
   const handleSave = async () => {
     // Save coordinate changes FIRST (most important for unplaced rooms)
     if (coordChanged && onChangeCoordinate && parsedCol != null && parsedRow != null) {
-      await onChangeCoordinate(parsedCol, parsedRow, coordZ);
+      await onChangeCoordinate(parsedCol, parsedRow, parsedZ);
     }
 
     // Save room property changes
@@ -241,23 +243,22 @@ export function FloorPlanSpaceForm({ room, allRooms, planData, coordCol, coordRo
           />
         </div>
 
-        {/* Coordinate - XY editable, Z read-only (derived from floor level) */}
+        {/* Coordinate - XYZ editable */}
         <div>
-          <Label className="text-xs font-semibold">Coordenada XY (ej: 0,0 o 18,1)</Label>
+          <Label className="text-xs font-semibold">Coordenada XYZ (ej: 0,0,0 o 18,1,10)</Label>
           <div className="flex items-end gap-2 mt-1">
             <input
               type="text"
               value={localCoord}
               onChange={e => setLocalCoord(e.target.value)}
-              placeholder="X,Y"
+              placeholder="X,Y,Z"
               disabled={fieldsDisabled}
-              className="flex h-8 w-24 rounded-md border border-input bg-background px-3 py-1 text-sm text-center font-mono ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex h-8 w-32 rounded-md border border-input bg-background px-3 py-1 text-sm text-center font-mono ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
             />
             <span className="text-[10px] text-muted-foreground pb-1">
-              Z={coordZ ?? 0} (nivel)
               {coordCol != null && coordRow != null
-                ? ` · Actual: ${formatCoord(coordCol, coordRow, undefined, coordZ)}`
-                : ' · Sin colocar — asigna coordenada para posicionar'}
+                ? `Actual: ${formatCoord(coordCol, coordRow, undefined, coordZ)}`
+                : 'Sin colocar — asigna coordenada XYZ para posicionar'}
             </span>
           </div>
         </div>

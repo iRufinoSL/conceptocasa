@@ -59,7 +59,7 @@ export function FloorPlanSpaceForm({ room, allRooms, planData, coordCol, coordRo
   const [localIntWT, setLocalIntWT] = useState(room.intWallThickness != null ? String(room.intWallThickness) : '');
   const [localHasFloor, setLocalHasFloor] = useState(room.hasFloor !== false);
   const [localHasCeiling, setLocalHasCeiling] = useState(room.hasCeiling !== false);
-  const [localCoord, setLocalCoord] = useState(coordCol && coordRow ? formatCoord(coordCol, coordRow, undefined, coordZ ?? 0) : '');
+  const [localCoord, setLocalCoord] = useState(coordCol != null && coordRow != null ? `${coordCol - 1},${coordRow - 1}` : '');
   const [localWalls, setLocalWalls] = useState<Record<string, WallType>>(() => {
     const map: Record<string, WallType> = {};
     room.walls.forEach(w => { map[w.id] = w.wallType; });
@@ -77,7 +77,7 @@ export function FloorPlanSpaceForm({ room, allRooms, planData, coordCol, coordRo
     setLocalIntWT(room.intWallThickness != null ? String(room.intWallThickness) : '');
     setLocalHasFloor(room.hasFloor !== false);
     setLocalHasCeiling(room.hasCeiling !== false);
-    setLocalCoord(coordCol && coordRow ? formatCoord(coordCol, coordRow, undefined, coordZ ?? 0) : '');
+    setLocalCoord(coordCol != null && coordRow != null ? `${coordCol - 1},${coordRow - 1}` : '');
     const map: Record<string, WallType> = {};
     room.walls.forEach(w => { map[w.id] = w.wallType; });
     setLocalWalls(map);
@@ -144,7 +144,7 @@ export function FloorPlanSpaceForm({ room, allRooms, planData, coordCol, coordRo
     localHasFloor !== (room.hasFloor !== false) ||
     localHasCeiling !== (room.hasCeiling !== false);
 
-  const coordChanged = parsedCol !== (coordCol || 0) || parsedRow !== (coordRow || 0) || parsedZ !== (coordZ ?? 0);
+  const coordChanged = parsedCol !== (coordCol ?? 0) || parsedRow !== (coordRow ?? 0);
 
   const wallsChanged = room.walls.some(w => localWalls[w.id] !== w.wallType);
 
@@ -153,8 +153,8 @@ export function FloorPlanSpaceForm({ room, allRooms, planData, coordCol, coordRo
 
   const handleSave = async () => {
     // Save coordinate changes FIRST (most important for unplaced rooms)
-    if (coordChanged && onChangeCoordinate && parsedCol > 0 && parsedRow > 0) {
-      await onChangeCoordinate(parsedCol, parsedRow, parsedZ);
+    if (coordChanged && onChangeCoordinate && parsedCol != null && parsedRow != null) {
+      await onChangeCoordinate(parsedCol, parsedRow, coordZ);
     }
 
     // Save room property changes
@@ -218,8 +218,8 @@ export function FloorPlanSpaceForm({ room, allRooms, planData, coordCol, coordRo
         {floorName && (
           <div className="flex items-center gap-2 mt-1">
             <Badge variant="secondary" className="text-[10px]">{floorName}</Badge>
-            {coordCol && coordRow && (
-              <Badge variant="outline" className="text-[10px] font-mono">{formatCoord(coordCol, coordRow)}</Badge>
+            {coordCol != null && coordRow != null && (
+              <Badge variant="outline" className="text-[10px] font-mono">{formatCoord(coordCol, coordRow, undefined, coordZ)}</Badge>
             )}
           </div>
         )}
@@ -241,22 +241,23 @@ export function FloorPlanSpaceForm({ room, allRooms, planData, coordCol, coordRo
           />
         </div>
 
-        {/* Coordinate - XYZ format (e.g. 0,0 or 18,1,10) */}
+        {/* Coordinate - XY editable, Z read-only (derived from floor level) */}
         <div>
-          <Label className="text-xs font-semibold">Coordenada XYZ (ej: 0,0 o 1,1,10)</Label>
+          <Label className="text-xs font-semibold">Coordenada XY (ej: 0,0 o 18,1)</Label>
           <div className="flex items-end gap-2 mt-1">
             <input
               type="text"
               value={localCoord}
               onChange={e => setLocalCoord(e.target.value)}
-              placeholder="0,0 o X,Y,Z"
+              placeholder="X,Y"
               disabled={fieldsDisabled}
               className="flex h-8 w-24 rounded-md border border-input bg-background px-3 py-1 text-sm text-center font-mono ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
             />
             <span className="text-[10px] text-muted-foreground pb-1">
-              {coordCol && coordRow
-                ? `Actual: ${formatCoord(coordCol, coordRow)}`
-                : 'Sin colocar — asigna coordenada para posicionar'}
+              Z={coordZ ?? 0} (nivel)
+              {coordCol != null && coordRow != null
+                ? ` · Actual: ${formatCoord(coordCol, coordRow, undefined, coordZ)}`
+                : ' · Sin colocar — asigna coordenada para posicionar'}
             </span>
           </div>
         </div>

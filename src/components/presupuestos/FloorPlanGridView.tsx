@@ -310,6 +310,34 @@ export function FloorPlanGridView({
     return totalW * totalL;
   }, [currentFloorRooms, scaleMode, blockLengthMm]);
 
+  // Calculate usable surface area (sum of room interiors, no walls)
+  const floorUsableArea = useMemo(() => {
+    const structRooms = currentFloorRooms.filter(r => {
+      const n = (r.name || '').toLowerCase();
+      return isRoomPlaced(r) && !n.includes('acera') && !n.includes('alero') && !n.includes('eave');
+    });
+    return structRooms.reduce((sum, r) => sum + r.width * r.length, 0);
+  }, [currentFloorRooms]);
+
+  // Helper: calculate built (Construida) area for a single room (interior + half of each wall footprint)
+  const calcRoomBuiltArea = useCallback((room: RoomData) => {
+    const wInfo = getWallInfo(room, wallClassification);
+    const getThick = (wt: WallType) => {
+      if (isInvisibleType(wt)) return 0;
+      const isExt = isExteriorType(wt);
+      const base = isExt
+        ? (room.extWallThickness ?? (scaleMode === 'bloque' ? blockLengthMm / 1000 * 0.48 : 0.3))
+        : (room.intWallThickness ?? (scaleMode === 'bloque' ? 0.1 : 0.1));
+      // Compartida walls count at 50%
+      return isCompartidaType(wt) ? base * 0.5 : base;
+    };
+    const thTop = getThick(wInfo.get(1)!);
+    const thRight = getThick(wInfo.get(2)!);
+    const thBottom = getThick(wInfo.get(3)!);
+    const thLeft = getThick(wInfo.get(4)!);
+    return (room.width + thLeft + thRight) * (room.length + thTop + thBottom);
+  }, [wallClassification, scaleMode, blockLengthMm]);
+
   // Level prefix for coordinates: floor orderIndex + 1 (e.g. "1" for Level 1, "2" for Level 2)
   const currentFloorObj = effectiveFloors.find(f => f.id === currentFloorId);
   const levelPrefix = effectiveFloors.length > 1 ? String((currentFloorObj?.orderIndex ?? 0) + 1) : undefined;
@@ -585,7 +613,9 @@ export function FloorPlanGridView({
 
       const isSelected = room.id === selectedRoomId;
       const isMultiSelected = selectedIds.has(room.id);
-      const m2 = (room.width * room.length).toFixed(1);
+      const usableM2 = room.width * room.length;
+      const builtM2 = calcRoomBuiltArea(room);
+      const m2 = usableM2.toFixed(1);
       const colorClass = getSpaceColor(room.name);
       const coord = formatCoord(startCol, startRow, levelPrefix, 0);
       const groupColor = room.groupId ? getGroupColor(room.groupId) : undefined;
@@ -632,7 +662,11 @@ export function FloorPlanGridView({
           {renderOpeningMarks(room, 4, 'left', width, height)}
 
           <div className="font-bold text-center max-w-full px-0.5 leading-tight break-words" style={{ fontSize: `${nameFontSize}px`, lineHeight: '1.2' }}>{room.name}</div>
-          <div className="font-semibold" style={{ fontSize: `${m2FontSize}px` }}>{m2} m²</div>
+          <div className="font-mono leading-tight text-center" style={{ fontSize: `${Math.max(7, m2FontSize - 1)}px` }}>
+            <span className="font-semibold">C={builtM2.toFixed(2)}</span>
+            <span className="text-muted-foreground mx-0.5">·</span>
+            <span className="font-semibold">U={usableM2.toFixed(2)}</span>
+          </div>
           <div className="text-muted-foreground" style={{ fontSize: `${dimFontSize}px` }}>{room.width.toFixed(1)}×{room.length.toFixed(1)}</div>
           <Badge variant="outline" className="px-0.5 py-0 mt-0.5" style={{ fontSize: `${coordFontSize}px`, height: `${Math.max(12, Math.round(12 * fontScale))}px` }}>{coord}</Badge>
 
@@ -1415,9 +1449,14 @@ export function FloorPlanGridView({
               </TabsList>
             </Tabs>
             {floorSurfaceArea > 0 && (
-              <Badge variant="outline" className="text-xs font-mono h-7 flex items-center gap-1">
-                📐 {floorSurfaceArea.toFixed(2)} m²
-              </Badge>
+              <div className="flex items-center gap-1.5">
+                <Badge variant="outline" className="text-xs font-mono h-7 flex items-center gap-1">
+                  C={floorSurfaceArea.toFixed(2)} m²
+                </Badge>
+                <Badge variant="outline" className="text-xs font-mono h-7 flex items-center gap-1">
+                  U={floorUsableArea.toFixed(2)} m²
+                </Badge>
+              </div>
             )}
           </>
         )}
@@ -1916,7 +1955,7 @@ export function FloorPlanGridView({
           <div className="flex items-center justify-between px-4 py-2 border-b border-border bg-muted/30 shrink-0">
             <span className="text-sm font-medium">
               {budgetName || 'Cuadrícula'} — {currentFloorName}
-              {floorSurfaceArea > 0 && <span className="ml-2 text-muted-foreground font-normal">· {floorSurfaceArea.toFixed(2)} m²</span>}
+              {floorSurfaceArea > 0 && <span className="ml-2 text-muted-foreground font-normal">· C={floorSurfaceArea.toFixed(2)} m² · U={floorUsableArea.toFixed(2)} m²</span>}
             </span>
             <div className="flex items-center gap-2">
               <Button
@@ -1977,7 +2016,7 @@ export function FloorPlanGridView({
                     pdf.setFontSize(11);
                     pdf.setFont('helvetica', 'bold');
                     const headerTitle = floorSurfaceArea > 0
-                      ? `${budgetName || 'Plano'} — ${currentFloorName} · ${floorSurfaceArea.toFixed(2)} m²`
+                      ? `${budgetName || 'Plano'} — ${currentFloorName} · C=${floorSurfaceArea.toFixed(2)} m² · U=${floorUsableArea.toFixed(2)} m²`
                       : `${budgetName || 'Plano'} — ${currentFloorName}`;
                     pdf.text(headerTitle, 10, 12);
                     pdf.setFontSize(8);

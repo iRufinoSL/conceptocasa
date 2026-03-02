@@ -1003,7 +1003,39 @@ export function TolosaResourcesPanel({ budgetId, tolosItemId, isAdmin, parentIte
                                       </button>
                                     );
                                   }) : (
-                                    <p className="text-[10px] text-muted-foreground/60 px-2 py-0.5 italic">Sin mediciones vinculadas a esta capa</p>
+                                    <button
+                                      className="w-full text-left px-2 py-1 text-xs flex items-center justify-between gap-2 rounded hover:bg-accent transition-colors"
+                                      onClick={() => {
+                                        // Fallback: find the parent surface measurement for this layer's surface_type and floor
+                                        const surfaceKey = layer.surface_type;
+                                        const floorName = (layer.floor_name || '').toLowerCase();
+                                        const surfaceMeas = volumeMeasurements.find(m => {
+                                          const cl = (m.source_classification || '').toLowerCase();
+                                          const nameLower = m.name.toLowerCase();
+                                          const surfaceMatch = cl.includes(`vol_${surfaceKey}`) || nameLower.includes(surfaceKey.replace(/_/g, ' '));
+                                          const floorMatch = !floorName || nameLower.includes(floorName) || (m.floor && m.floor.toLowerCase().includes(floorName));
+                                          return surfaceMatch && floorMatch;
+                                        });
+                                        const unitType = layer.measurement_type === 'linear' ? 'ml' : 'm2';
+                                        if (surfaceMeas) {
+                                          const units = surfaceMeas.manual_units ?? surfaceMeas.count_raw ?? 0;
+                                          setFormData(d => ({ ...d, related_units: units, unit: unitType }));
+                                          setShowMeasPicker(false);
+                                          toast.success(`Capa "${layer.name}" → ${formatNumber(units)} ${unitType} (de ${surfaceMeas.name})`);
+                                        } else {
+                                          // No surface measurement either — set unit type and let user input manually
+                                          setFormData(d => ({ ...d, unit: unitType }));
+                                          toast.info(`Introduce manualmente las unidades para "${layer.name}"`);
+                                        }
+                                      }}
+                                    >
+                                      <span className="truncate text-muted-foreground">
+                                        {layer.name} <span className="text-[9px]">(usar medición de superficie)</span>
+                                      </span>
+                                      <Badge variant="outline" className="text-[9px] shrink-0">
+                                        {layer.measurement_type === 'linear' ? 'ml' : 'm²'}
+                                      </Badge>
+                                    </button>
                                   )}
                                 </div>
                               ))}

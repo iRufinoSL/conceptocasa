@@ -72,6 +72,11 @@ const CARD_SCALE = 60;
 const CARD_PADDING = 20;
 const MAX_CARD_WIDTH = 400;
 
+/** Format XYZ coordinate label */
+function formatXYZ(x: number, y: number, z: number): string {
+  return `(${Math.round(x)},${Math.round(y)},${Math.round(z)})`;
+}
+
 /** Check if a composite section is invisible, using effectiveWallType when available */
 function isSectionWallInvisible(section: { wall: WallData; effectiveWallType?: string }): boolean {
   return isInvisibleType((section.effectiveWallType || section.wall.wallType) as string);
@@ -312,6 +317,26 @@ export function ElevationsGridViewer({
 
   // Gable peak height for bajo cubierta rooms
   const gablePeakHeight = useMemo(() => getGablePeakHeight(plan, rooms), [plan, rooms]);
+
+  // Floor base Z map for XYZ coordinate labels in elevations
+  const floorBaseZMap = useMemo(() => {
+    const map = new Map<string, number>();
+    if (!floors || floors.length === 0) {
+      map.set('all', 0);
+      return map;
+    }
+    const blockHMm = plan.blockHeightMm || 250;
+    const sorted = [...floors].sort((a, b) => a.orderIndex - b.orderIndex);
+    let accZ = 0;
+    for (const f of sorted) {
+      map.set(f.id, accZ);
+      const floorRooms = rooms.filter(r => r.floorId === f.id);
+      const firstH = floorRooms[0]?.height;
+      const heightMm = (firstH != null && firstH > 0 ? firstH : plan.defaultHeight) * 1000;
+      accZ += Math.round(heightMm / blockHMm);
+    }
+    return map;
+  }, [floors, rooms, plan.blockHeightMm, plan.defaultHeight]);
 
   // Sync editCard wall data when rooms refresh (e.g. after saving wall type)
   // This ensures the WallEditDialog always shows the current wall type
@@ -893,6 +918,8 @@ export function ElevationsGridViewer({
                 saving={saving}
                 rooms={rooms}
                 budgetName={budgetName}
+                floorBaseZ={floorBaseZMap.get(floorId) ?? 0}
+                cellSizeM={cellSizeM}
               />
             );
 
@@ -957,6 +984,9 @@ export function ElevationsGridViewer({
               plan={plan}
               rooms={rooms}
               budgetName={budgetName}
+              floorBaseZMap={floorBaseZMap}
+              floors={floors}
+              cellSizeM={cellSizeM}
             />
           ))}
         </div>
@@ -974,6 +1004,9 @@ export function ElevationsGridViewer({
               plan={plan}
               rooms={rooms}
               budgetName={budgetName}
+              floorBaseZMap={floorBaseZMap}
+              floors={floors}
+              cellSizeM={cellSizeM}
             />
           ))}
         </div>
@@ -3206,13 +3239,16 @@ const TOTAL_SIDE_COLORS: Record<string, { fill: string; stroke: string }> = {
   left: { fill: 'hsl(200, 20%, 90%)', stroke: 'hsl(222, 47%, 30%)' },
 };
 
-function TotalElevationCard({ side, label, layers, plan, rooms, budgetName }: {
+function TotalElevationCard({ side, label, layers, plan, rooms, budgetName, floorBaseZMap, floors, cellSizeM }: {
   side: 'top' | 'right' | 'bottom' | 'left';
   label: string;
   layers: Array<{ floorName: string; composites: CompositeWall[]; isGable: boolean }>;
   plan: FloorPlanData;
   rooms: RoomData[];
   budgetName?: string;
+  floorBaseZMap?: Map<string, number>;
+  floors?: FloorLevel[];
+  cellSizeM?: number;
 }) {
   const [fullscreen, setFullscreen] = useState(false);
   const isGableSide = side === 'right' || side === 'left';
@@ -3695,23 +3731,65 @@ function TotalElevationCard({ side, label, layers, plan, rooms, budgetName }: {
           {Math.round(totalWidth * 1000)} mm
         </text>
 
-        {/* Corner labels */}
-        <text x={rx - 3} y={baseY + 42} textAnchor="end"
-          fontSize={fsScale ? 14 : 10} fill="hsl(222, 47%, 25%)" fontWeight={800}>
-          {cornerLabels.bottomLeft}
-        </text>
-        <text x={rx + totalWidth * scale + 3} y={baseY + 42} textAnchor="start"
-          fontSize={fsScale ? 14 : 10} fill="hsl(222, 47%, 25%)" fontWeight={800}>
-          {cornerLabels.bottomRight}
-        </text>
-        <text x={rx - 3} y={baseY - totalHeight * scale - 5} textAnchor="end"
-          fontSize={fsScale ? 14 : 10} fill="hsl(222, 47%, 25%)" fontWeight={800}>
-          {cornerLabels.topLeft}
-        </text>
-        <text x={rx + totalWidth * scale + 3} y={baseY - totalHeight * scale - 5} textAnchor="start"
-          fontSize={fsScale ? 14 : 10} fill="hsl(222, 47%, 25%)" fontWeight={800}>
-          {cornerLabels.topRight}
-        </text>
+        {/* Corner labels with XYZ coordinates */}
+        {(() => {
+          const csm = cellSizeM || (plan.blockLengthMm / 1000) || 0.625;
+          const blockHMm = plan.blockHeightMm || 250;
+          const bottomLayer = layers[0];
+          const bottomComps = bottomLayer?.composites || [];
+          const startC = bottomComps[0]?.startCorner;
+          const endC = bottomComps[bottomComps.length - 1]?.endCorner;
+          // Bottom Z = first floor's base Z
+          const sortedFloors2 = floors ? [...floors].sort((a, b) => a.orderIndex - b.orderIndex) : [];
+          const firstFloorId = sortedFloors2[0]?.id;
+          const bottomZ = firstFloorId && floorBaseZMap ? (floorBaseZMap.get(firstFloorId) ?? 0) : 0;
+          // Top Z = last floor's base Z + last floor height
+          const lastFloorId = sortedFloors2[sortedFloors2.length - 1]?.id;
+          const lastFloorBaseZ = lastFloorId && floorBaseZMap ? (floorBaseZMap.get(lastFloorId) ?? 0) : 0;
+          const topZ = lastFloorBaseZ + Math.round(layerDetails[layerDetails.length - 1].maxHeight * 1000 / blockHMm);
+          const blX = startC ? Math.round(startC.x / csm) : 0;
+          const blY = startC ? Math.round(startC.y / csm) : 0;
+          const brX = endC ? Math.round(endC.x / csm) : 0;
+          const brY = endC ? Math.round(endC.y / csm) : 0;
+          const fs2 = fsScale ? 10 : 7;
+          const fs3 = fsScale ? 9 : 6;
+          return (
+            <g>
+              <text x={rx - 3} y={baseY + 42} textAnchor="end"
+                fontSize={fsScale ? 14 : 10} fill="hsl(222, 47%, 25%)" fontWeight={800}>
+                {cornerLabels.bottomLeft}
+              </text>
+              <text x={rx - 3} y={baseY + 42 + fs2} textAnchor="end"
+                fontSize={fs3} fill="hsl(222, 47%, 45%)" fontWeight={600}>
+                {formatXYZ(blX, blY, bottomZ)}
+              </text>
+              <text x={rx + totalWidth * scale + 3} y={baseY + 42} textAnchor="start"
+                fontSize={fsScale ? 14 : 10} fill="hsl(222, 47%, 25%)" fontWeight={800}>
+                {cornerLabels.bottomRight}
+              </text>
+              <text x={rx + totalWidth * scale + 3} y={baseY + 42 + fs2} textAnchor="start"
+                fontSize={fs3} fill="hsl(222, 47%, 45%)" fontWeight={600}>
+                {formatXYZ(brX, brY, bottomZ)}
+              </text>
+              <text x={rx - 3} y={baseY - totalHeight * scale - 5} textAnchor="end"
+                fontSize={fsScale ? 14 : 10} fill="hsl(222, 47%, 25%)" fontWeight={800}>
+                {cornerLabels.topLeft}
+              </text>
+              <text x={rx - 3} y={baseY - totalHeight * scale - 5 + fs2} textAnchor="end"
+                fontSize={fs3} fill="hsl(222, 47%, 45%)" fontWeight={600}>
+                {formatXYZ(blX, blY, topZ)}
+              </text>
+              <text x={rx + totalWidth * scale + 3} y={baseY - totalHeight * scale - 5} textAnchor="start"
+                fontSize={fsScale ? 14 : 10} fill="hsl(222, 47%, 25%)" fontWeight={800}>
+                {cornerLabels.topRight}
+              </text>
+              <text x={rx + totalWidth * scale + 3} y={baseY - totalHeight * scale - 5 + fs2} textAnchor="start"
+                fontSize={fs3} fill="hsl(222, 47%, 45%)" fontWeight={600}>
+                {formatXYZ(brX, brY, topZ)}
+              </text>
+            </g>
+          );
+        })()}
 
         {/* Intermediate coordinate labels at section boundaries, between floors */}
         {layers.length >= 2 && (() => {
@@ -3806,7 +3884,7 @@ const SIDE_LABELS: Record<string, string> = {
   top: 'Norte', right: 'Este', bottom: 'Sur', left: 'Oeste',
 };
 
-function CompositeWallCard({ compositeWall, plan, onOpeningClick, onAddBlockGroup, onDeleteBlockGroup, onDeleteOpening, onUpdateOpening, onUpdateWall, saving, rooms: liveRooms, budgetName }: {
+function CompositeWallCard({ compositeWall, plan, onOpeningClick, onAddBlockGroup, onDeleteBlockGroup, onDeleteOpening, onUpdateOpening, onUpdateWall, saving, rooms: liveRooms, budgetName, floorBaseZ, cellSizeM: cellSizeMProp }: {
   compositeWall: CompositeWall;
   plan: FloorPlanData;
   onOpeningClick: (op: OpeningData) => void;
@@ -3818,6 +3896,8 @@ function CompositeWallCard({ compositeWall, plan, onOpeningClick, onAddBlockGrou
   saving?: boolean;
   rooms?: RoomData[];
   budgetName?: string;
+  floorBaseZ?: number;
+  cellSizeM?: number;
 }) {
   const [fullscreen, setFullscreen] = useState(false);
   const [selectedBlocks, setSelectedBlocks] = useState<Set<string>>(new Set());
@@ -4390,15 +4470,51 @@ function CompositeWallCard({ compositeWall, plan, onOpeningClick, onAddBlockGrou
           {Math.round(maxHeight * 1000)} mm
         </text>
 
-        {/* Corner labels */}
-        <text x={rxs - 3} y={rys + totalH + 42} textAnchor="end"
-          fontSize={fsScale ? 13 : 9} fill="hsl(var(--primary))" fontWeight={800}>
-          {cw.startCorner.label}
-        </text>
-        <text x={rxs + cw.totalLength * s + 3} y={rys + totalH + 42} textAnchor="start"
-          fontSize={fsScale ? 13 : 9} fill="hsl(var(--primary))" fontWeight={800}>
-          {cw.endCorner.label}
-        </text>
+        {/* Corner labels with XYZ coordinates */}
+        {(() => {
+          const csm = cellSizeMProp || (plan.blockLengthMm / 1000) || 0.625;
+          const blockHMm = plan.blockHeightMm || 250;
+          const baseZ = floorBaseZ ?? 0;
+          const topZ = baseZ + Math.round(maxHeight * 1000 / blockHMm);
+          const sX = Math.round(cw.startCorner.x / csm);
+          const sY = Math.round(cw.startCorner.y / csm);
+          const eX = Math.round(cw.endCorner.x / csm);
+          const eY = Math.round(cw.endCorner.y / csm);
+          const fs2 = fsScale ? 11 : 7;
+          const fs3 = fsScale ? 9 : 6;
+          return (
+            <g>
+              {/* Bottom-left */}
+              <text x={rxs - 3} y={rys + totalH + 42} textAnchor="end"
+                fontSize={fsScale ? 13 : 9} fill="hsl(var(--primary))" fontWeight={800}>
+                {cw.startCorner.label}
+              </text>
+              <text x={rxs - 3} y={rys + totalH + 42 + fs2} textAnchor="end"
+                fontSize={fs3} fill="hsl(222, 47%, 45%)" fontWeight={600}>
+                {formatXYZ(sX, sY, baseZ)}
+              </text>
+              {/* Bottom-right */}
+              <text x={rxs + cw.totalLength * s + 3} y={rys + totalH + 42} textAnchor="start"
+                fontSize={fsScale ? 13 : 9} fill="hsl(var(--primary))" fontWeight={800}>
+                {cw.endCorner.label}
+              </text>
+              <text x={rxs + cw.totalLength * s + 3} y={rys + totalH + 42 + fs2} textAnchor="start"
+                fontSize={fs3} fill="hsl(222, 47%, 45%)" fontWeight={600}>
+                {formatXYZ(eX, eY, baseZ)}
+              </text>
+              {/* Top-left */}
+              <text x={rxs - 3} y={rys - 4} textAnchor="end"
+                fontSize={fs3} fill="hsl(222, 47%, 45%)" fontWeight={600}>
+                {formatXYZ(sX, sY, topZ)}
+              </text>
+              {/* Top-right */}
+              <text x={rxs + cw.totalLength * s + 3} y={rys - 4} textAnchor="start"
+                fontSize={fs3} fill="hsl(222, 47%, 45%)" fontWeight={600}>
+                {formatXYZ(eX, eY, topZ)}
+              </text>
+            </g>
+          );
+        })()}
 
         {/* Ruler lines (fullscreen only) */}
         {fsScale && rulerLines.map((rl, i) => {

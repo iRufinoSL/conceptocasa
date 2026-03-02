@@ -40,8 +40,8 @@ interface DbRoom {
   id: string;
   floor_plan_id: string;
   name: string;
-  pos_x: number;
-  pos_y: number;
+  pos_x: number | null;  // null = not placed on grid
+  pos_y: number | null;  // null = not placed on grid
   width: number;
   length: number;
   height: number | null;
@@ -92,13 +92,13 @@ function getPresetDimensions(m2: number): { width: number; length: number } {
 }
 
 function calcGridPositions(spaces: Array<{ m2: number; gridCol: number; gridRow: number }>) {
-  // For 1m grid: if gridCol/gridRow are 0, the space is "unplaced" (posX=-1, posY=-1)
+  // For 1m grid: if gridCol/gridRow are 0, the space is "unplaced" (posX=null, posY=null)
   // Otherwise place at gridCol-1, gridRow-1 in meters
   return spaces.map(s => {
     const dims = getPresetDimensions(s.m2);
     if (s.gridCol <= 0 || s.gridRow <= 0) {
-      // Unplaced - use negative position as marker
-      return { width: dims.width, length: dims.length, posX: -1, posY: -1 };
+      // Unplaced - use null position
+      return { width: dims.width, length: dims.length, posX: null as number | null, posY: null as number | null };
     }
     return { width: dims.width, length: dims.length, posX: s.gridCol - 1, posY: s.gridRow - 1 };
   });
@@ -250,8 +250,8 @@ export function useFloorPlan(budgetId: string) {
         return {
           id: r.id,
           name: r.name,
-          posX: Number(r.pos_x),
-          posY: Number(r.pos_y),
+          posX: r.pos_x != null ? Number(r.pos_x) : null,
+          posY: r.pos_y != null ? Number(r.pos_y) : null,
           width: Number(r.width),
           length: Number(r.length),
           height: r.height != null ? Number(r.height) : undefined,
@@ -442,8 +442,8 @@ export function useFloorPlan(budgetId: string) {
     try {
       const cellSizeM = floorPlan.scale_mode === 'bloque' ? (floorPlan.block_length_mm || 625) / 1000 : 1;
       // Use integer grid math to avoid floating-point drift:
-      // Snap each room's current position to the nearest grid cell, apply delta, then convert back to meters
       for (const room of rooms) {
+        if (room.posX == null || room.posY == null) continue; // skip unplaced rooms
         const currentCol = Math.round(room.posX / cellSizeM);
         const currentRow = Math.round(room.posY / cellSizeM);
         const newCol = currentCol + deltaCol;
@@ -471,11 +471,11 @@ export function useFloorPlan(budgetId: string) {
     setSaving(true);
     try {
       // Calculate position based on grid coordinate
-      let posX = -1;
-      let posY = -1;
+      let posX: number | null = null;
+      let posY: number | null = null;
       const cellSizeM = floorPlan.scale_mode === 'bloque' ? (floorPlan.block_length_mm || 625) / 1000 : 1;
 
-      if (gridCol && gridRow && gridCol > 0 && gridRow > 0) {
+      if (gridCol != null && gridRow != null) {
         posX = (gridCol - 1) * cellSizeM;
         posY = (gridRow - 1) * cellSizeM;
       }
@@ -483,14 +483,6 @@ export function useFloorPlan(budgetId: string) {
       // Snap dimensions to exact grid multiples so walls align with cell boundaries
       const snappedWidth = snapToGrid(width, cellSizeM);
       const snappedLength = snapToGrid(length, cellSizeM);
-
-      // If the new position would be negative, shift everything first
-      if (posX < 0 && posX !== -1 || posY < 0 && posY !== -1) {
-        const currentRoomPositions = rooms.map(r => ({ id: r.id, posX: r.posX, posY: r.posY }));
-        const { shiftX, shiftY } = await shiftAllRoomsIfNeeded(currentRoomPositions, posX, posY);
-        posX += shiftX;
-        posY += shiftY;
-      }
 
       const { data: room, error } = await supabase
         .from('budget_floor_plan_rooms')
@@ -500,8 +492,8 @@ export function useFloorPlan(budgetId: string) {
           name,
           width: snappedWidth,
           length: snappedLength,
-          pos_x: Math.round(posX * 1000) / 1000,
-          pos_y: Math.round(posY * 1000) / 1000,
+          pos_x: posX != null ? Math.round(posX * 1000) / 1000 : null,
+          pos_y: posY != null ? Math.round(posY * 1000) / 1000 : null,
           order_index: rooms.length,
         })
         .select()
@@ -533,24 +525,14 @@ export function useFloorPlan(budgetId: string) {
     }
   };
 
-  const updateRoom = async (roomId: string, data: { name?: string; width?: number; length?: number; height?: number; extWallThickness?: number | null; intWallThickness?: number | null; posX?: number; posY?: number; hasFloor?: boolean; hasCeiling?: boolean; hasRoof?: boolean; floorId?: string | null }) => {
+  const updateRoom = async (roomId: string, data: { name?: string; width?: number; length?: number; height?: number; extWallThickness?: number | null; intWallThickness?: number | null; posX?: number | null; posY?: number | null; hasFloor?: boolean; hasCeiling?: boolean; hasRoof?: boolean; floorId?: string | null }) => {
     setSaving(true);
     try {
       const cellSizeM = floorPlan ? (floorPlan.scale_mode === 'bloque' ? (floorPlan.block_length_mm || 625) / 1000 : 1) : 1;
-      let finalPosX = data.posX !== undefined ? snapToGrid(data.posX, cellSizeM) : undefined;
-      let finalPosY = data.posY !== undefined ? snapToGrid(data.posY, cellSizeM) : undefined;
+      let finalPosX = data.posX !== undefined ? (data.posX != null ? snapToGrid(data.posX, cellSizeM) : null) : undefined;
+      let finalPosY = data.posY !== undefined ? (data.posY != null ? snapToGrid(data.posY, cellSizeM) : null) : undefined;
 
-      // Check if the new position would result in negative coords and shift globally if so
-      if ((finalPosX !== undefined && finalPosX < 0) || (finalPosY !== undefined && finalPosY < 0)) {
-        const otherRooms = rooms.filter(r => r.id !== roomId).map(r => ({ id: r.id, posX: r.posX, posY: r.posY }));
-        const currentRoom = rooms.find(r => r.id === roomId);
-        const pendingX = finalPosX ?? currentRoom?.posX ?? 0;
-        const pendingY = finalPosY ?? currentRoom?.posY ?? 0;
-        const allPositions = [...otherRooms, { id: roomId, posX: pendingX, posY: pendingY }];
-        const { shiftX, shiftY } = await shiftAllRoomsIfNeeded(otherRooms, pendingX, pendingY);
-        if (finalPosX !== undefined) finalPosX += shiftX;
-        if (finalPosY !== undefined) finalPosY += shiftY;
-      }
+      // Negative coordinates are now valid — no auto-shifting needed
 
       const updates: any = {};
       if (data.name !== undefined) updates.name = data.name;
@@ -1093,7 +1075,7 @@ export function useFloorPlan(budgetId: string) {
 
       // Copy rooms from lower level if requested
       if (opts?.copyFromFloorId && newFloor) {
-        const sourceRooms = rooms.filter(r => r.floorId === opts.copyFromFloorId && r.posX >= 0);
+        const sourceRooms = rooms.filter(r => r.floorId === opts.copyFromFloorId && r.posX != null);
         for (const src of sourceRooms) {
           // For bajo cubierta (wallHeight=0), set room height to 0 explicitly
           const roomHeight = opts?.wallHeight === 0 ? 0 : (opts?.wallHeight || src.height || undefined);

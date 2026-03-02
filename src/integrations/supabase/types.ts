@@ -769,8 +769,8 @@ export type Database = {
           length: number
           name: string
           order_index: number | null
-          pos_x: number
-          pos_y: number
+          pos_x: number | null
+          pos_y: number | null
           updated_at: string | null
           width: number
         }
@@ -790,8 +790,8 @@ export type Database = {
           length?: number
           name: string
           order_index?: number | null
-          pos_x?: number
-          pos_y?: number
+          pos_x?: number | null
+          pos_y?: number | null
           updated_at?: string | null
           width?: number
         }
@@ -811,8 +811,8 @@ export type Database = {
           length?: number
           name?: string
           order_index?: number | null
-          pos_x?: number
-          pos_y?: number
+          pos_x?: number | null
+          pos_y?: number | null
           updated_at?: string | null
           width?: number
         }

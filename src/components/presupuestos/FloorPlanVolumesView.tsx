@@ -1440,6 +1440,33 @@ export function FloorPlanVolumesView({ plan, rooms, floors, floorPlanId, budgetI
       entries.push({ name: 'Cubierta total vivienda', value: globalTotalRoofs, unit: 'm2', sourceKey: 'vol_roof_total' });
     }
 
+    // Per-layer measurements (so individual layers are discoverable in QUÉ? resource override)
+    for (const floor of floorsRef.current) {
+      const floorRooms = rooms.filter(r => r.floorId === floor.id);
+      const isBajoCubierta = floor.level === 'bajo_cubierta' || floor.name.toLowerCase().includes('cubierta');
+      const floorLayers = levelVolumes[floor.id];
+      if (!floorLayers) continue;
+      const surfaceTypes: SurfaceType[] = ['suelo', 'cara_superior', 'cara_derecha', 'cara_inferior', 'cara_izquierda', 'techo', 'volumen',
+        ...(isBajoCubierta ? ['cubierta_superior', 'cubierta_inferior'] as SurfaceType[] : [])];
+      for (const st of surfaceTypes) {
+        const layers = floorLayers[st] || [];
+        const childParentIds = new Set(layers.filter(l => l.parentLayerId).map(l => l.parentLayerId!));
+        const leafLayers = layers.filter(l => !childParentIds.has(l.id));
+        for (const l of leafLayers) {
+          if (!l.name || l.name.trim() === '') continue;
+          const dims = calcSurfaceArea(st, plan, rooms, floorRooms, slopes, l.includeNonStructural, isBajoCubierta);
+          const normName = l.name.toLowerCase().replace(/[^a-záéíóúñü0-9]/g, '_').replace(/_+/g, '_');
+          const sourceKey = `vol_layer_${floor.id}_${st}_${normName}`;
+          if (l.measurementType === 'linear') {
+            const lm = calcLinearMetrics(l, { largo: dims.largo, ancho: dims.ancho });
+            entries.push({ name: l.name, value: lm ? lm.totalMl : 0, unit: 'ml', sourceKey });
+          } else {
+            entries.push({ name: l.name, value: dims.area, unit: 'm2', sourceKey });
+          }
+        }
+      }
+    }
+
     // Skip if nothing changed
     const fingerprint = JSON.stringify(entries.map(e => `${e.sourceKey}:${e.value.toFixed(4)}`));
     if (fingerprint === lastSyncedRef.current) return;
@@ -1506,7 +1533,7 @@ export function FloorPlanVolumesView({ plan, rooms, floors, floorPlanId, budgetI
     return () => {
       if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
     };
-  }, [areaSummaryByLevel, budgetId, globalTotalFloors, globalTotalCeilings, globalTotalExtWalls, globalTotalIntWalls, globalTotalRoofs, rooms, plan]);
+  }, [areaSummaryByLevel, budgetId, globalTotalFloors, globalTotalCeilings, globalTotalExtWalls, globalTotalIntWalls, globalTotalRoofs, rooms, plan, levelVolumes]);
 
   // grandTotalVolume is declared inside the render section below
 

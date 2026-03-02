@@ -80,6 +80,19 @@ function formatXYZ(x: number, y: number, z: number): string {
   return `(${Math.round(x)},${Math.round(y)},${Math.round(z)})`;
 }
 
+/** Build a level-prefixed corner label: baseZ=0 → level 1, baseZ=10 → level 2, etc. */
+function levelCornerLabel(cornerLetter: string, baseZ: number): string {
+  const level = baseZ + 1;
+  return `${level}${cornerLetter}`;
+}
+
+/** Top-corner label: increment the level prefix by 1 */
+function topCornerLabel(baseLbl: string): string {
+  const m = baseLbl.match(/^(\d+)(.+)$/);
+  if (m) return `${parseInt(m[1]) + 1}${m[2]}`;
+  return baseLbl;
+}
+
 /** Inline editable badge for corner XYZ in card headers */
 function CornerEditBadge({
   label: initialLabel,
@@ -112,16 +125,22 @@ function CornerEditBadge({
   const handleSave = () => {
     if (!customCorners || !onCustomCornersChange) return;
     const parsed = parseCoord(editCoord.trim());
-    if (cornerIdx >= 0 && parsed) {
+    if (!parsed) { setEditing(false); return; }
+    const finalLabel = editLabel.trim() || initialLabel;
+    // Find existing corner by label (current or new label)
+    const existingIdx = customCorners.findIndex(c => c.label === initialLabel);
+    const existingByNewLabel = customCorners.findIndex(c => c.label === finalLabel);
+    const targetIdx = existingIdx >= 0 ? existingIdx : existingByNewLabel;
+    if (targetIdx >= 0) {
       const updated = customCorners.map((cc, i) =>
-        i === cornerIdx ? { ...cc, label: editLabel.trim() || cc.label, col: parsed.col, row: parsed.row, z: parsed.z ?? cc.z ?? 0 } : cc
+        i === targetIdx ? { ...cc, label: finalLabel, col: parsed.col, row: parsed.row, z: parsed.z ?? cc.z ?? 0 } : cc
       );
       onCustomCornersChange(updated);
-      toast.success(`Coordenada ${editLabel.trim()} actualizada`);
-    } else if (parsed) {
+      toast.success(`Coordenada ${finalLabel} actualizada`);
+    } else {
       // Add new corner
       const newCorner: CustomCorner = {
-        label: editLabel.trim() || initialLabel,
+        label: finalLabel,
         col: parsed.col,
         row: parsed.row,
         z: parsed.z ?? 0,
@@ -129,7 +148,7 @@ function CornerEditBadge({
         isMain: false,
       };
       onCustomCornersChange([...customCorners, newCorner]);
-      toast.success(`Coordenada ${newCorner.label} creada`);
+      toast.success(`Coordenada ${finalLabel} creada`);
     }
     setEditing(false);
   };
@@ -2417,7 +2436,7 @@ const isDoor = op.openingType === 'puerta' || op.openingType === 'puerta_externa
               const interiorCornerMap: Record<number, [string, string]> = {
                 1: ['A', 'B'], 2: ['B', 'C'], 3: ['C', 'D'], 4: ['D', 'A'],
               };
-              const [leftCorner, rightCorner] = interiorCornerMap[wi] || ['?', '?'];
+              const [leftLetter, rightLetter] = interiorCornerMap[wi] || ['?', '?'];
               const room = card.room!;
               const csM = cellSizeM && cellSizeM > 0 ? cellSizeM : 1;
               const toGrid = (m: number) => Math.round(m / csM);
@@ -2428,27 +2447,25 @@ const isDoor = op.openingType === 'puerta' || op.openingType === 'puerta_externa
               const baseZ = floorBaseZ ?? 0;
               const bHMm = blockHeightMm ?? plan.blockHeightMm ?? 250;
               const topZ = baseZ + Math.round(card.height * 1000 / bHMm);
-              const leftXY = cornerXY[leftCorner] || [0, 0];
-              const rightXY = cornerXY[rightCorner] || [0, 0];
-              // Build top-corner labels: prefix with level+1 digit if label starts with digit
-              const topLabel = (lbl: string) => {
-                const m = lbl.match(/^(\d+)(.+)$/);
-                if (m) return `${parseInt(m[1]) + 1}${m[2]}`;
-                return lbl;
-              };
+              const leftXY = cornerXY[leftLetter] || [0, 0];
+              const rightXY = cornerXY[rightLetter] || [0, 0];
+              const leftLabel = levelCornerLabel(leftLetter, baseZ);
+              const rightLabel = levelCornerLabel(rightLetter, baseZ);
+              const topLeftLabel = topCornerLabel(leftLabel);
+              const topRightLabel = topCornerLabel(rightLabel);
               return (
                 <div className="flex flex-col gap-0.5">
                   <div className="flex items-center gap-1 text-[10px]">
                     <span className="text-[8px] text-muted-foreground w-6">Sup:</span>
-                    <CornerEditBadge label={topLabel(leftCorner)} x={toGrid(leftXY[0])} y={toGrid(leftXY[1])} z={topZ} customCorners={customCorners} onCustomCornersChange={onCustomCornersChange} />
+                    <CornerEditBadge label={topLeftLabel} x={toGrid(leftXY[0])} y={toGrid(leftXY[1])} z={topZ} customCorners={customCorners} onCustomCornersChange={onCustomCornersChange} />
                     <span className="text-muted-foreground">→</span>
-                    <CornerEditBadge label={topLabel(rightCorner)} x={toGrid(rightXY[0])} y={toGrid(rightXY[1])} z={topZ} customCorners={customCorners} onCustomCornersChange={onCustomCornersChange} />
+                    <CornerEditBadge label={topRightLabel} x={toGrid(rightXY[0])} y={toGrid(rightXY[1])} z={topZ} customCorners={customCorners} onCustomCornersChange={onCustomCornersChange} />
                   </div>
                   <div className="flex items-center gap-1 text-[10px]">
                     <span className="text-[8px] text-muted-foreground w-6">Inf:</span>
-                    <CornerEditBadge label={leftCorner} x={toGrid(leftXY[0])} y={toGrid(leftXY[1])} z={baseZ} customCorners={customCorners} onCustomCornersChange={onCustomCornersChange} />
+                    <CornerEditBadge label={leftLabel} x={toGrid(leftXY[0])} y={toGrid(leftXY[1])} z={baseZ} customCorners={customCorners} onCustomCornersChange={onCustomCornersChange} />
                     <span className="text-muted-foreground">→</span>
-                    <CornerEditBadge label={rightCorner} x={toGrid(rightXY[0])} y={toGrid(rightXY[1])} z={baseZ} customCorners={customCorners} onCustomCornersChange={onCustomCornersChange} />
+                    <CornerEditBadge label={rightLabel} x={toGrid(rightXY[0])} y={toGrid(rightXY[1])} z={baseZ} customCorners={customCorners} onCustomCornersChange={onCustomCornersChange} />
                   </div>
                 </div>
               );
@@ -2545,6 +2562,50 @@ const isDoor = op.openingType === 'puerta' || op.openingType === 'puerta_externa
           </DialogTitle>
           <DialogDescription className="sr-only">Vista a pantalla completa del alzado</DialogDescription>
         </DialogHeader>
+        {/* Fullscreen coordinate badges */}
+        {card.wall && card.room && isExteriorType(card.wall.wallType as string) && customCorners && (
+          <div className="shrink-0 flex items-center gap-3 border-b border-border/50 pb-2 text-sm">
+            {(() => {
+              const wi = card.wall!.wallIndex;
+              const interiorCornerMap: Record<number, [string, string]> = {
+                1: ['A', 'B'], 2: ['B', 'C'], 3: ['C', 'D'], 4: ['D', 'A'],
+              };
+              const [leftLetter, rightLetter] = interiorCornerMap[wi] || ['?', '?'];
+              const room = card.room!;
+              const csM = cellSizeM && cellSizeM > 0 ? cellSizeM : 1;
+              const toGrid = (m: number) => Math.round(m / csM);
+              const cornerXY: Record<string, [number, number]> = {
+                'A': [room.posX, room.posY], 'B': [room.posX + room.width, room.posY],
+                'C': [room.posX + room.width, room.posY + room.length], 'D': [room.posX, room.posY + room.length],
+              };
+              const baseZ = floorBaseZ ?? 0;
+              const bHMm = blockHeightMm ?? plan.blockHeightMm ?? 250;
+              const topZ = baseZ + Math.round(card.height * 1000 / bHMm);
+              const leftXY = cornerXY[leftLetter] || [0, 0];
+              const rightXY = cornerXY[rightLetter] || [0, 0];
+              const leftLabel = levelCornerLabel(leftLetter, baseZ);
+              const rightLabel = levelCornerLabel(rightLetter, baseZ);
+              const topLeftLabel = topCornerLabel(leftLabel);
+              const topRightLabel = topCornerLabel(rightLabel);
+              return (
+                <div className="flex flex-col gap-1">
+                  <div className="flex items-center gap-2 text-xs">
+                    <span className="text-muted-foreground font-medium w-8">Sup:</span>
+                    <CornerEditBadge label={topLeftLabel} x={toGrid(leftXY[0])} y={toGrid(leftXY[1])} z={topZ} customCorners={customCorners} onCustomCornersChange={onCustomCornersChange} />
+                    <span className="text-muted-foreground">→</span>
+                    <CornerEditBadge label={topRightLabel} x={toGrid(rightXY[0])} y={toGrid(rightXY[1])} z={topZ} customCorners={customCorners} onCustomCornersChange={onCustomCornersChange} />
+                  </div>
+                  <div className="flex items-center gap-2 text-xs">
+                    <span className="text-muted-foreground font-medium w-8">Inf:</span>
+                    <CornerEditBadge label={leftLabel} x={toGrid(leftXY[0])} y={toGrid(leftXY[1])} z={baseZ} customCorners={customCorners} onCustomCornersChange={onCustomCornersChange} />
+                    <span className="text-muted-foreground">→</span>
+                    <CornerEditBadge label={rightLabel} x={toGrid(rightXY[0])} y={toGrid(rightXY[1])} z={baseZ} customCorners={customCorners} onCustomCornersChange={onCustomCornersChange} />
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+        )}
         {/* Fullscreen opening controls */}
         {fsSelectedOpeningId && (
           <div className="shrink-0 flex items-center gap-2 flex-wrap border-b border-border/50 pb-2 print:hidden">
@@ -4211,14 +4272,14 @@ function TotalElevationCard({ side, label, layers, plan, rooms, budgetName, floo
                 const sY2 = startC2 ? Math.round(startC2.y / csm) : 0;
                 const eX2 = endC2 ? Math.round(endC2.x / csm) : 0;
                 const eY2 = endC2 ? Math.round(endC2.y / csm) : 0;
-                const topLbl2 = (lbl: string) => { const m2 = lbl.match(/^(\d+)(.+)$/); return m2 ? `${parseInt(m2[1]) + 1}${m2[2]}` : lbl; };
+                // Use shared topCornerLabel function
                 return (
                   <div className="flex flex-col gap-0.5">
                     <div className="flex items-center gap-1 text-[10px]">
                       <span className="text-[8px] text-muted-foreground w-6">Sup:</span>
-                      <CornerEditBadge label={topLbl2(cornerLabels.topLeft)} x={sX2} y={sY2} z={topZ2} customCorners={customCorners} onCustomCornersChange={onCustomCornersChange} />
+                      <CornerEditBadge label={topCornerLabel(cornerLabels.topLeft)} x={sX2} y={sY2} z={topZ2} customCorners={customCorners} onCustomCornersChange={onCustomCornersChange} />
                       <span className="text-muted-foreground">→</span>
-                      <CornerEditBadge label={topLbl2(cornerLabels.topRight)} x={eX2} y={eY2} z={topZ2} customCorners={customCorners} onCustomCornersChange={onCustomCornersChange} />
+                      <CornerEditBadge label={topCornerLabel(cornerLabels.topRight)} x={eX2} y={eY2} z={topZ2} customCorners={customCorners} onCustomCornersChange={onCustomCornersChange} />
                     </div>
                     <div className="flex items-center gap-1 text-[10px]">
                       <span className="text-[8px] text-muted-foreground w-6">Inf:</span>
@@ -5163,14 +5224,13 @@ function CompositeWallCard({ compositeWall, plan, onOpeningClick, onAddBlockGrou
             const sY = Math.round(cw.startCorner.y / csm);
             const eX = Math.round(cw.endCorner.x / csm);
             const eY = Math.round(cw.endCorner.y / csm);
-            const topLbl = (lbl: string) => { const m = lbl.match(/^(\d+)(.+)$/); return m ? `${parseInt(m[1]) + 1}${m[2]}` : lbl; };
             return (
               <div className="px-3 py-1 border-b border-border/30 flex flex-col gap-0.5 text-[10px]">
                 <div className="flex items-center gap-1">
                   <span className="text-[8px] text-muted-foreground w-6">Sup:</span>
-                  <CornerEditBadge label={topLbl(cw.startCorner.label)} x={sX} y={sY} z={topZ} customCorners={customCorners} onCustomCornersChange={onCustomCornersChange} />
+                  <CornerEditBadge label={topCornerLabel(cw.startCorner.label)} x={sX} y={sY} z={topZ} customCorners={customCorners} onCustomCornersChange={onCustomCornersChange} />
                   <span className="text-muted-foreground">→</span>
-                  <CornerEditBadge label={topLbl(cw.endCorner.label)} x={eX} y={eY} z={topZ} customCorners={customCorners} onCustomCornersChange={onCustomCornersChange} />
+                  <CornerEditBadge label={topCornerLabel(cw.endCorner.label)} x={eX} y={eY} z={topZ} customCorners={customCorners} onCustomCornersChange={onCustomCornersChange} />
                 </div>
                 <div className="flex items-center gap-1">
                   <span className="text-[8px] text-muted-foreground w-6">Inf:</span>

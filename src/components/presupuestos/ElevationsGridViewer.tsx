@@ -80,6 +80,98 @@ function formatXYZ(x: number, y: number, z: number): string {
   return `(${Math.round(x)},${Math.round(y)},${Math.round(z)})`;
 }
 
+/** Inline editable badge for corner XYZ in card headers */
+function CornerEditBadge({
+  label: initialLabel,
+  x,
+  y,
+  z,
+  customCorners,
+  onCustomCornersChange,
+}: {
+  label: string;
+  x: number;
+  y: number;
+  z: number;
+  customCorners?: CustomCorner[];
+  onCustomCornersChange?: (corners: CustomCorner[]) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [editLabel, setEditLabel] = useState(initialLabel);
+  const [editCoord, setEditCoord] = useState('');
+
+  const cornerIdx = customCorners?.findIndex(c => c.label === initialLabel) ?? -1;
+  const isEditable = !!onCustomCornersChange && !!customCorners;
+
+  const handleStartEdit = () => {
+    setEditLabel(initialLabel);
+    setEditCoord(`${x},${y},${z}`);
+    setEditing(true);
+  };
+
+  const handleSave = () => {
+    if (!customCorners || !onCustomCornersChange) return;
+    const parsed = parseCoord(editCoord.trim());
+    if (cornerIdx >= 0 && parsed) {
+      const updated = customCorners.map((cc, i) =>
+        i === cornerIdx ? { ...cc, label: editLabel.trim() || cc.label, col: parsed.col, row: parsed.row, z: parsed.z ?? cc.z ?? 0 } : cc
+      );
+      onCustomCornersChange(updated);
+      toast.success(`Coordenada ${editLabel.trim()} actualizada`);
+    } else if (parsed) {
+      // Add new corner
+      const newCorner: CustomCorner = {
+        label: editLabel.trim() || initialLabel,
+        col: parsed.col,
+        row: parsed.row,
+        z: parsed.z ?? 0,
+        side: 'top',
+        isMain: false,
+      };
+      onCustomCornersChange([...customCorners, newCorner]);
+      toast.success(`Coordenada ${newCorner.label} creada`);
+    }
+    setEditing(false);
+  };
+
+  if (editing) {
+    return (
+      <span className="inline-flex items-center gap-0.5 bg-primary rounded-full px-1.5 py-0.5" onClick={e => e.stopPropagation()}>
+        <input
+          autoFocus
+          className="w-8 h-3.5 text-[9px] text-center bg-transparent border-b border-primary-foreground/50 outline-none text-primary-foreground"
+          value={editLabel}
+          onChange={e => setEditLabel(e.target.value)}
+          placeholder="ID"
+          onKeyDown={e => { if (e.key === 'Escape') setEditing(false); if (e.key === 'Enter') handleSave(); }}
+        />
+        <input
+          className="w-16 h-3.5 text-[9px] text-center bg-transparent border-b border-primary-foreground/50 outline-none text-primary-foreground font-mono"
+          value={editCoord}
+          onChange={e => setEditCoord(e.target.value)}
+          placeholder="X,Y,Z"
+          onKeyDown={e => { if (e.key === 'Escape') setEditing(false); if (e.key === 'Enter') handleSave(); }}
+        />
+        <button className="flex items-center justify-center w-3.5 h-3.5 rounded-full bg-green-600 hover:bg-green-700 text-white"
+          onClick={e => { e.stopPropagation(); handleSave(); }}>
+          <Check className="h-2.5 w-2.5" />
+        </button>
+      </span>
+    );
+  }
+
+  return (
+    <span
+      className={`bg-muted px-1.5 py-0.5 rounded font-mono inline-flex items-center gap-0.5 ${isEditable ? 'cursor-pointer hover:bg-primary/10 transition-colors group/corner' : ''}`}
+      onClick={isEditable ? (e) => { e.stopPropagation(); handleStartEdit(); } : undefined}
+      title={isEditable ? `Clic para editar ${initialLabel}` : undefined}
+    >
+      <span className="font-bold">{initialLabel}</span> {formatXYZ(x, y, z)}
+      {isEditable && <Pencil className="h-2 w-2 opacity-0 group-hover/corner:opacity-60 transition-opacity" />}
+    </span>
+  );
+}
+
 /** Editable corner label overlay — renders as HTML on top of SVG */
 function EditableCornerLabel({
   cornerLabel,
@@ -940,6 +1032,8 @@ export function ElevationsGridViewer({
                       floorBaseZ={floorBaseZMap.get(card.room?.floorId || 'all') ?? 0}
                       cellSizeM={cellSizeM}
                       blockHeightMm={plan.blockHeightMm}
+                      customCorners={customCorners}
+                      onCustomCornersChange={onCustomCornersChange}
                     />
                   ))}
                 </div>
@@ -1179,6 +1273,8 @@ export function ElevationsGridViewer({
                           floorBaseZ={floorBaseZMap.get(card.room?.floorId || 'all') ?? 0}
                           cellSizeM={cellSizeM}
                           blockHeightMm={plan.blockHeightMm}
+                          customCorners={customCorners}
+                          onCustomCornersChange={onCustomCornersChange}
                         />
                       ))}
                     </div>
@@ -1283,6 +1379,8 @@ export function ElevationsGridViewer({
                               floorBaseZ={floorBaseZMap.get(card.room?.floorId || 'all') ?? 0}
                               cellSizeM={cellSizeM}
                               blockHeightMm={plan.blockHeightMm}
+                              customCorners={customCorners}
+                              onCustomCornersChange={onCustomCornersChange}
                             />
                           ))}
                         </div>
@@ -1514,7 +1612,7 @@ function RulerLinesOverlay({ lines, drawPoint, widthM, rw }: {
 }
 
 // Individual elevation card
-function ElevationCardView({ card, plan, onOpeningClick, onAddOpening, onCardDoubleClick, onAddBlockGroup, onDeleteBlockGroup, onUpdateWall, onUpdateWallSegmentType, onUpdateOpening, onDeleteOpening, saving, budgetName, floorBaseZ, cellSizeM, blockHeightMm }: {
+function ElevationCardView({ card, plan, onOpeningClick, onAddOpening, onCardDoubleClick, onAddBlockGroup, onDeleteBlockGroup, onUpdateWall, onUpdateWallSegmentType, onUpdateOpening, onDeleteOpening, saving, budgetName, floorBaseZ, cellSizeM, blockHeightMm, customCorners, onCustomCornersChange }: {
   card: ElevationCard;
   plan: FloorPlanData;
   onOpeningClick: (op: OpeningData) => void;
@@ -1531,6 +1629,8 @@ function ElevationCardView({ card, plan, onOpeningClick, onAddOpening, onCardDou
   floorBaseZ?: number;
   cellSizeM?: number;
   blockHeightMm?: number;
+  customCorners?: CustomCorner[];
+  onCustomCornersChange?: (corners: CustomCorner[]) => void;
 }) {
   const [fullscreen, setFullscreen] = useState(false);
   const [selectedBlocks, setSelectedBlocks] = useState<Set<string>>(new Set());
@@ -1891,6 +1991,41 @@ function ElevationCardView({ card, plan, onOpeningClick, onAddOpening, onCardDou
           <text x={rx + rw / 2} y={ry + rh / 2} textAnchor="middle" fontSize={fsScale ? 12 : 9} fill="hsl(15, 70%, 40%)" fontWeight={700}>
             {card.surfaceArea?.toFixed(2)} m²
           </text>
+          {/* 4 XYZ vertex labels for roof slope (faldón) */}
+          {(() => {
+            const room = card.room;
+            if (!room) return null;
+            const csM = cellSizeM && cellSizeM > 0 ? cellSizeM : 1;
+            const toGrid = (m: number) => Math.round(m / csM);
+            const baseZ = floorBaseZ ?? 0;
+            const bHMm = blockHeightMm ?? plan.blockHeightMm ?? 250;
+            const topZ = baseZ + Math.round(card.height * 1000 / bHMm);
+            // Vertices: V1=TL, V2=TR, V3=BR, V4=BL
+            const posX = room.posX ?? 0;
+            const posY = room.posY ?? 0;
+            const vfs = fsScale ? 8 : 6;
+            return (
+              <g>
+                <text x={rx + 2} y={ry + vfs + 2} textAnchor="start" fontSize={vfs} fontWeight={700} fill="hsl(222, 47%, 40%)">
+                  V1 {formatXYZ(toGrid(posX), toGrid(posY), topZ)}
+                </text>
+                <text x={rx + rw - 2} y={ry + vfs + 2} textAnchor="end" fontSize={vfs} fontWeight={700} fill="hsl(222, 47%, 40%)">
+                  V2 {formatXYZ(toGrid(posX + room.width), toGrid(posY), topZ)}
+                </text>
+                <text x={rx + rw - 2} y={ry + rh - 3} textAnchor="end" fontSize={vfs} fontWeight={700} fill="hsl(222, 47%, 40%)">
+                  V3 {formatXYZ(toGrid(posX + room.width), toGrid(posY + room.length), baseZ)}
+                </text>
+                <text x={rx + 2} y={ry + rh - 3} textAnchor="start" fontSize={vfs} fontWeight={700} fill="hsl(222, 47%, 40%)">
+                  V4 {formatXYZ(toGrid(posX), toGrid(posY + room.length), baseZ)}
+                </text>
+                {/* Vertex dots */}
+                <circle cx={rx} cy={ry} r={2.5} fill="hsl(222, 47%, 40%)" />
+                <circle cx={rx + rw} cy={ry} r={2.5} fill="hsl(222, 47%, 40%)" />
+                <circle cx={rx + rw} cy={ry + rh} r={2.5} fill="hsl(222, 47%, 40%)" />
+                <circle cx={rx} cy={ry + rh} r={2.5} fill="hsl(222, 47%, 40%)" />
+              </g>
+            );
+          })()}
         </svg>
       );
     }
@@ -2274,6 +2409,38 @@ const isDoor = op.openingType === 'puerta' || op.openingType === 'puerta_externa
             )}
           </div>
         </div>
+        {/* Editable corner coordinates for wall cards */}
+        {card.wall && card.room && isExteriorType(card.wall.wallType as string) && customCorners && (
+          <div className="px-3 py-1 border-t border-border/30 flex items-center gap-2 text-[10px] flex-wrap">
+            {(() => {
+              const wi = card.wall.wallIndex;
+              const interiorCornerMap: Record<number, [string, string]> = {
+                1: ['A', 'B'], 2: ['B', 'C'], 3: ['C', 'D'], 4: ['D', 'A'],
+              };
+              const [leftCorner, rightCorner] = interiorCornerMap[wi] || ['?', '?'];
+              const room = card.room!;
+              const csM = cellSizeM && cellSizeM > 0 ? cellSizeM : 1;
+              const toGrid = (m: number) => Math.round(m / csM);
+              const cornerXY: Record<string, [number, number]> = {
+                'A': [room.posX, room.posY], 'B': [room.posX + room.width, room.posY],
+                'C': [room.posX + room.width, room.posY + room.length], 'D': [room.posX, room.posY + room.length],
+              };
+              const baseZ = floorBaseZ ?? 0;
+              const bHMm = blockHeightMm ?? plan.blockHeightMm ?? 250;
+              const topZ = baseZ + Math.round(card.height * 1000 / bHMm);
+              const leftXY = cornerXY[leftCorner] || [0, 0];
+              const rightXY = cornerXY[rightCorner] || [0, 0];
+              return (
+                <>
+                  <CornerEditBadge label={leftCorner} x={toGrid(leftXY[0])} y={toGrid(leftXY[1])} z={baseZ} customCorners={customCorners} onCustomCornersChange={onCustomCornersChange} />
+                  <span className="text-muted-foreground">→</span>
+                  <CornerEditBadge label={rightCorner} x={toGrid(rightXY[0])} y={toGrid(rightXY[1])} z={baseZ} customCorners={customCorners} onCustomCornersChange={onCustomCornersChange} />
+                  <span className="text-muted-foreground/50 text-[8px]">Z: {baseZ}→{topZ}</span>
+                </>
+              );
+            })()}
+          </div>
+        )}
       </CardHeader>
       <CardContent className="p-2">
         {card.category === 'volumen' ? (
@@ -4945,13 +5112,23 @@ function CompositeWallCard({ compositeWall, plan, onOpeningClick, onAddBlockGrou
           {/* Editable corner coordinates */}
           {customCorners && (
             <div className="px-3 py-1 border-b border-border/30 flex items-center gap-2 text-[10px]">
-              <span className="bg-muted px-1.5 py-0.5 rounded font-mono">
-                {cw.startCorner.label} ({Math.round(cw.startCorner.x / (cellSizeMProp || 0.625))},{Math.round(cw.startCorner.y / (cellSizeMProp || 0.625))},{floorBaseZ ?? 0})
-              </span>
+              <CornerEditBadge
+                label={cw.startCorner.label}
+                x={Math.round(cw.startCorner.x / (cellSizeMProp || 0.625))}
+                y={Math.round(cw.startCorner.y / (cellSizeMProp || 0.625))}
+                z={floorBaseZ ?? 0}
+                customCorners={customCorners}
+                onCustomCornersChange={onCustomCornersChange}
+              />
               <span className="text-muted-foreground">→</span>
-              <span className="bg-muted px-1.5 py-0.5 rounded font-mono">
-                {cw.endCorner.label} ({Math.round(cw.endCorner.x / (cellSizeMProp || 0.625))},{Math.round(cw.endCorner.y / (cellSizeMProp || 0.625))},{floorBaseZ ?? 0})
-              </span>
+              <CornerEditBadge
+                label={cw.endCorner.label}
+                x={Math.round(cw.endCorner.x / (cellSizeMProp || 0.625))}
+                y={Math.round(cw.endCorner.y / (cellSizeMProp || 0.625))}
+                z={floorBaseZ ?? 0}
+                customCorners={customCorners}
+                onCustomCornersChange={onCustomCornersChange}
+              />
             </div>
           )}
         </CardHeader>

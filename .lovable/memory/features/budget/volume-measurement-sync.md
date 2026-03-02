@@ -16,5 +16,11 @@ Las mediciones calculadas en 'Volúmenes' se sincronizan automáticamente con `b
 - `roof`: m² de cubierta (solo bajo cubierta)
 - `volumen`: m³ de volumen (solo por estancia)
 
-### Vista "Por Tipo Superficie"
-En la pestaña Mediciones, la vista "Por Tipo Superficie" agrupa estos registros por categoría y muestra tres filas por tipo: Estancia → Nivel → Total. Esto permite en QUÉ? (Actividades) seleccionar una medición concreta de una estancia o una agrupada de nivel/total.
+### Selector en QUÉ? (TO.LO.SA.systems)
+En TO.LO.SA.systems, la pestaña Mediciones de cada actividad (QUÉ?) usa exclusivamente mediciones de Volúmenes (`source: 'volumen_auto'`), organizadas en dos vistas:
+- **Por Nivel**: Agrupa mediciones por planta, mostrando primero los totales de nivel y luego las mediciones por espacio agrupadas por tipo de superficie.
+- **Por Espacio**: Agrupa mediciones por habitación/estancia individual.
+
+Las actividades pueden **heredar mediciones del padre**: si una actividad no tiene mediciones propias vinculadas, se buscan automáticamente las del ancestro más cercano que las tenga (badge "heredadas del padre").
+
+El panel permite vincular/desvincular mediciones con un click. Las mediciones heredadas son de solo lectura.

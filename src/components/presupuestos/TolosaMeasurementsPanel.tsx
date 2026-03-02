@@ -1,16 +1,11 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { Plus, Search, Ruler, Link2, X, Check, ExternalLink } from 'lucide-react';
-import { searchMatch } from '@/lib/search-utils';
+import { Ruler, Link2, X, ExternalLink, ChevronDown, ChevronRight, Layers, Home, Building } from 'lucide-react';
 import { formatNumber } from '@/lib/format-utils';
-import { NumericInput } from '@/components/ui/numeric-input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Label } from '@/components/ui/label';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 
 interface Measurement {
   id: string;
@@ -27,7 +22,30 @@ interface Measurement {
   updated_at: string;
 }
 
-const MEASUREMENT_UNITS = ['ud', 'm', 'm2', 'm3', 'kg', 'l', 'ml', 'h', 'día', 'sem', 'mes', 'año', 'pa', 'pza', 'rollo', 'saco', 'caja', 'palé'];
+interface FloorInfo {
+  id: string;
+  name: string;
+  level: string;
+  orderIndex: number;
+}
+
+interface RoomInfo {
+  id: string;
+  name: string;
+  floorId: string | null;
+}
+
+// Surface type labels for grouping
+const SURFACE_TYPE_LABELS: Record<string, string> = {
+  suelo: 'Suelos',
+  techo: 'Techos',
+  ext: 'Paredes externas',
+  int: 'Paredes internas',
+  roof: 'Cubierta',
+  volumen: 'Volumen',
+};
+
+const SURFACE_TYPE_ORDER = ['suelo', 'techo', 'ext', 'int', 'roof', 'volumen'];
 
 interface TolosaMeasurementsPanelProps {
   budgetId: string;
@@ -38,25 +56,98 @@ interface TolosaMeasurementsPanelProps {
   onMeasurementChange?: () => void;
 }
 
+type GroupMode = 'level' | 'space';
+
+/**
+ * Parse source_classification to extract type and granularity.
+ * Patterns: vol_<tipo>_room_<roomId>, vol_<tipo>_<floorId>, vol_<tipo>_total
+ */
+function parseClassification(sc: string): { surfaceType: string; granularity: 'room' | 'level' | 'total'; refId: string | null } | null {
+  if (!sc.startsWith('vol_')) return null;
+  const rest = sc.slice(4); // remove 'vol_'
+
+  // Check for _total suffix
+  if (rest.endsWith('_total')) {
+    const tipo = rest.slice(0, -6); // remove '_total'
+    return { surfaceType: tipo, granularity: 'total', refId: null };
+  }
+
+  // Check for _room_ pattern
+  const roomMatch = rest.match(/^(.+?)_room_(.+)$/);
+  if (roomMatch) {
+    return { surfaceType: roomMatch[1], granularity: 'room', refId: roomMatch[2] };
+  }
+
+  // Otherwise it's a level: vol_<tipo>_<floorId>
+  const lastUnderscore = rest.lastIndexOf('_');
+  if (lastUnderscore > 0) {
+    // The tipo could contain underscores... but our types are simple: suelo, techo, ext, int, roof, volumen
+    // Try known types first
+    for (const tipo of SURFACE_TYPE_ORDER) {
+      if (rest.startsWith(tipo + '_')) {
+        const floorId = rest.slice(tipo.length + 1);
+        return { surfaceType: tipo, granularity: 'level', refId: floorId };
+      }
+    }
+  }
+
+  return null;
+}
+
 export function TolosaMeasurementsPanel({ budgetId, tolosItemId, isAdmin, parentItemId, onNavigateToMeasurements, onMeasurementChange }: TolosaMeasurementsPanelProps) {
-  const [linkedMeasurements, setLinkedMeasurements] = useState<Measurement[]>([]);
-  const [inheritedMeasurements, setInheritedMeasurements] = useState<Measurement[]>([]);
-  const [allMeasurements, setAllMeasurements] = useState<Measurement[]>([]);
+  const [volumeMeasurements, setVolumeMeasurements] = useState<Measurement[]>([]);
+  const [floors, setFloors] = useState<FloorInfo[]>([]);
+  const [rooms, setRooms] = useState<RoomInfo[]>([]);
   const [linkedIds, setLinkedIds] = useState<Set<string>>(new Set());
+  const [inheritedIds, setInheritedIds] = useState<Set<string>>(new Set());
   const [isInheriting, setIsInheriting] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [showSearch, setShowSearch] = useState(false);
-  const [showCreateDialog, setShowCreateDialog] = useState(false);
-  const [newName, setNewName] = useState('');
-  const [newUnit, setNewUnit] = useState('ud');
-  const [newManualUnits, setNewManualUnits] = useState<number | null>(null);
-  const [newFloor, setNewFloor] = useState('');
-  const [creating, setCreating] = useState(false);
+  const [groupMode, setGroupMode] = useState<GroupMode>('level');
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
 
-  const fetchLinked = useCallback(async () => {
+  // Fetch volume measurements + floors + rooms
+  const fetchData = useCallback(async () => {
     setLoading(true);
-    // Get linked measurement IDs for this item
+    const [measRes, floorsRes, roomsRes] = await Promise.all([
+      supabase
+        .from('budget_measurements')
+        .select('*')
+        .eq('budget_id', budgetId)
+        .eq('source', 'volumen_auto')
+        .order('name'),
+      supabase
+        .from('budget_floors')
+        .select('id, name, level, order_index, floor_plan_id')
+        .order('order_index'),
+      supabase
+        .from('budget_floor_plan_rooms')
+        .select('id, name, floor_id, floor_plan_id')
+        .order('order_index'),
+    ]);
+
+    // Filter floors/rooms to only those belonging to floor plans of this budget
+    const { data: floorPlans } = await supabase
+      .from('budget_floor_plans')
+      .select('id')
+      .eq('budget_id', budgetId);
+    const fpIds = new Set((floorPlans || []).map(fp => fp.id));
+
+    const filteredFloors = (floorsRes.data || [])
+      .filter((f: any) => fpIds.has(f.floor_plan_id))
+      .map((f: any) => ({ id: f.id, name: f.name, level: f.level, orderIndex: f.order_index }));
+
+    const filteredRooms = (roomsRes.data || [])
+      .filter((r: any) => fpIds.has(r.floor_plan_id))
+      .map((r: any) => ({ id: r.id, name: r.name, floorId: r.floor_id }));
+
+    setVolumeMeasurements((measRes.data as Measurement[]) || []);
+    setFloors(filteredFloors);
+    setRooms(filteredRooms);
+    setLoading(false);
+  }, [budgetId]);
+
+  // Fetch linked measurements for this item + inheritance
+  const fetchLinked = useCallback(async () => {
     const { data: links } = await supabase
       .from('tolosa_item_measurements')
       .select('measurement_id')
@@ -66,38 +157,23 @@ export function TolosaMeasurementsPanel({ budgetId, tolosItemId, isAdmin, parent
     setLinkedIds(ids);
 
     if (ids.size > 0) {
-      const { data: measurements } = await supabase
-        .from('budget_measurements')
-        .select('*')
-        .in('id', Array.from(ids))
-        .order('name');
-      setLinkedMeasurements((measurements as Measurement[]) || []);
-      setInheritedMeasurements([]);
+      setInheritedIds(new Set());
       setIsInheriting(false);
     } else {
-      setLinkedMeasurements([]);
-      // Walk up ancestor chain to find inherited measurements
+      // Walk up ancestors for inheritance
       let currentParentId: string | null = parentItemId ?? null;
-      let foundInherited = false;
-
-      while (currentParentId && !foundInherited) {
+      let found = false;
+      while (currentParentId && !found) {
         const { data: ancestorLinks } = await supabase
           .from('tolosa_item_measurements')
           .select('measurement_id')
           .eq('tolosa_item_id', currentParentId);
-        const ancestorIds = (ancestorLinks || []).map(l => l.measurement_id);
-
-        if (ancestorIds.length > 0) {
-          const { data: ancestorMeasurements } = await supabase
-            .from('budget_measurements')
-            .select('*')
-            .in('id', ancestorIds)
-            .order('name');
-          setInheritedMeasurements((ancestorMeasurements as Measurement[]) || []);
+        const ancestorMeasIds = (ancestorLinks || []).map(l => l.measurement_id);
+        if (ancestorMeasIds.length > 0) {
+          setInheritedIds(new Set(ancestorMeasIds));
           setIsInheriting(true);
-          foundInherited = true;
+          found = true;
         } else {
-          // Go up to next ancestor
           const { data: parentItem } = await supabase
             .from('tolosa_items')
             .select('parent_id')
@@ -106,41 +182,28 @@ export function TolosaMeasurementsPanel({ budgetId, tolosItemId, isAdmin, parent
           currentParentId = parentItem?.parent_id ?? null;
         }
       }
-
-      if (!foundInherited) {
-        setInheritedMeasurements([]);
+      if (!found) {
+        setInheritedIds(new Set());
         setIsInheriting(false);
       }
     }
-    setLoading(false);
   }, [tolosItemId, parentItemId]);
 
-  const fetchAllMeasurements = useCallback(async () => {
-    const { data } = await supabase
-      .from('budget_measurements')
-      .select('*')
-      .eq('budget_id', budgetId)
-      .order('name');
-    setAllMeasurements((data as Measurement[]) || []);
-  }, [budgetId]);
-
+  useEffect(() => { fetchData(); }, [fetchData]);
   useEffect(() => { fetchLinked(); }, [fetchLinked]);
-  useEffect(() => { if (showSearch) fetchAllMeasurements(); }, [showSearch, fetchAllMeasurements]);
+
+  const activeIds = linkedIds.size > 0 ? linkedIds : inheritedIds;
 
   const linkMeasurement = async (measurementId: string) => {
     const { error } = await supabase
       .from('tolosa_item_measurements')
       .insert({ tolosa_item_id: tolosItemId, measurement_id: measurementId });
     if (error) {
-      if (error.code === '23505') {
-        toast.info('Esta medición ya está vinculada');
-      } else {
-        toast.error('Error al vincular medición');
-      }
+      if (error.code === '23505') toast.info('Ya vinculada');
+      else toast.error('Error al vincular');
     } else {
       toast.success('Medición vinculada');
       fetchLinked();
-      fetchAllMeasurements();
       onMeasurementChange?.();
     }
   };
@@ -151,116 +214,210 @@ export function TolosaMeasurementsPanel({ budgetId, tolosItemId, isAdmin, parent
       .delete()
       .eq('tolosa_item_id', tolosItemId)
       .eq('measurement_id', measurementId);
-    if (error) {
-      toast.error('Error al desvincular');
-    } else {
+    if (error) toast.error('Error al desvincular');
+    else {
       toast.success('Medición desvinculada');
       fetchLinked();
       onMeasurementChange?.();
     }
   };
 
-  const createAndLink = async () => {
-    if (!newName.trim()) return;
-    setCreating(true);
-    const { data, error } = await supabase
-      .from('budget_measurements')
-      .insert({
-        budget_id: budgetId,
-        name: newName.trim(),
-        measurement_unit: newUnit,
-        manual_units: newManualUnits,
-        floor: newFloor.trim() || null,
-      })
-      .select()
-      .single();
+  const getUnits = (m: Measurement): number => m.manual_units ?? m.count_raw ?? 0;
 
-    if (error || !data) {
-      toast.error('Error al crear medición');
-      setCreating(false);
-      return;
-    }
-
-    // Link it
-    await supabase
-      .from('tolosa_item_measurements')
-      .insert({ tolosa_item_id: tolosItemId, measurement_id: data.id });
-
-    toast.success('Medición creada y vinculada');
-    setShowCreateDialog(false);
-    setNewName('');
-    setNewUnit('ud');
-    setNewManualUnits(null);
-    setNewFloor('');
-    setCreating(false);
-    fetchLinked();
-    fetchAllMeasurements();
-    onMeasurementChange?.();
-  };
-
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editData, setEditData] = useState<{ name: string; floor: string; manual_units: number | null; measurement_unit: string }>({ name: '', floor: '', manual_units: null, measurement_unit: 'ud' });
-  const [saving, setSaving] = useState(false);
-
-  const getCalculatedUnits = (m: Measurement): number => {
-    if (m.manual_units != null) return m.manual_units;
-    return m.count_raw ?? 0;
-  };
-
-  const startEdit = (m: Measurement) => {
-    setEditingId(m.id);
-    setEditData({
-      name: m.name,
-      floor: m.floor || '',
-      manual_units: m.manual_units,
-      measurement_unit: m.measurement_unit || 'ud',
+  const toggleSection = (key: string) => {
+    setExpandedSections(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
     });
   };
 
-  const cancelEdit = () => {
-    setEditingId(null);
-  };
+  // Build organized structure
+  const floorMap = useMemo(() => new Map(floors.map(f => [f.id, f])), [floors]);
+  const roomMap = useMemo(() => new Map(rooms.map(r => [r.id, r])), [rooms]);
 
-  const saveEdit = async () => {
-    if (!editingId || !editData.name.trim()) return;
-    setSaving(true);
-    const { error } = await supabase
-      .from('budget_measurements')
-      .update({
-        name: editData.name.trim(),
-        floor: editData.floor.trim() || null,
-        manual_units: editData.manual_units,
-        measurement_unit: editData.measurement_unit,
-      })
-      .eq('id', editingId);
-    setSaving(false);
-    if (error) {
-      toast.error('Error al guardar');
-    } else {
-      toast.success('Medición actualizada');
-      setEditingId(null);
-      fetchLinked();
-      onMeasurementChange?.();
+  // Parse all measurements
+  const parsed = useMemo(() => {
+    return volumeMeasurements.map(m => ({
+      measurement: m,
+      parsed: m.source_classification ? parseClassification(m.source_classification) : null,
+    })).filter(p => p.parsed !== null) as Array<{ measurement: Measurement; parsed: NonNullable<ReturnType<typeof parseClassification>> }>;
+  }, [volumeMeasurements]);
+
+  // Group by level
+  const byLevel = useMemo(() => {
+    const groups: Array<{
+      key: string;
+      label: string;
+      orderIndex: number;
+      items: Array<{ measurement: Measurement; surfaceType: string; granularity: string }>;
+    }> = [];
+
+    // Total group
+    const totalItems = parsed.filter(p => p.parsed.granularity === 'total');
+    if (totalItems.length > 0) {
+      groups.push({
+        key: 'total',
+        label: 'Total Vivienda',
+        orderIndex: 999,
+        items: totalItems.map(p => ({ measurement: p.measurement, surfaceType: p.parsed.surfaceType, granularity: 'total' })),
+      });
     }
+
+    // Level groups
+    const levelIds = new Set(parsed.filter(p => p.parsed.granularity === 'level').map(p => p.parsed.refId!));
+    for (const floorId of levelIds) {
+      const floor = floorMap.get(floorId);
+      const levelItems = parsed.filter(p => p.parsed.granularity === 'level' && p.parsed.refId === floorId);
+      const roomItems = parsed.filter(p => p.parsed.granularity === 'room' && (() => {
+        const room = roomMap.get(p.parsed.refId!);
+        return room?.floorId === floorId;
+      })());
+      groups.push({
+        key: floorId,
+        label: floor?.name || `Nivel ${floorId.slice(0, 6)}`,
+        orderIndex: floor?.orderIndex ?? 50,
+        items: [
+          ...levelItems.map(p => ({ measurement: p.measurement, surfaceType: p.parsed.surfaceType, granularity: 'level' })),
+          ...roomItems.map(p => ({ measurement: p.measurement, surfaceType: p.parsed.surfaceType, granularity: 'room' })),
+        ],
+      });
+    }
+
+    // Rooms without a matching floor in levelIds (orphans)
+    const roomOnlyItems = parsed.filter(p => {
+      if (p.parsed.granularity !== 'room') return false;
+      const room = roomMap.get(p.parsed.refId!);
+      if (!room?.floorId) return true;
+      return !levelIds.has(room.floorId);
+    });
+    if (roomOnlyItems.length > 0) {
+      groups.push({
+        key: 'other_rooms',
+        label: 'Otros espacios',
+        orderIndex: 998,
+        items: roomOnlyItems.map(p => ({ measurement: p.measurement, surfaceType: p.parsed.surfaceType, granularity: 'room' })),
+      });
+    }
+
+    groups.sort((a, b) => a.orderIndex - b.orderIndex);
+    return groups;
+  }, [parsed, floorMap, roomMap]);
+
+  // Group by space (room)
+  const bySpace = useMemo(() => {
+    const groups: Array<{
+      key: string;
+      label: string;
+      floorName: string;
+      items: Array<{ measurement: Measurement; surfaceType: string }>;
+    }> = [];
+
+    // Collect all room IDs from room-level measurements
+    const roomIds = new Set(parsed.filter(p => p.parsed.granularity === 'room').map(p => p.parsed.refId!));
+    for (const roomId of roomIds) {
+      const room = roomMap.get(roomId);
+      const floor = room?.floorId ? floorMap.get(room.floorId) : null;
+      const roomItems = parsed.filter(p => p.parsed.granularity === 'room' && p.parsed.refId === roomId);
+      groups.push({
+        key: roomId,
+        label: room?.name || `Espacio ${roomId.slice(0, 6)}`,
+        floorName: floor?.name || '',
+        items: roomItems.map(p => ({ measurement: p.measurement, surfaceType: p.parsed.surfaceType })),
+      });
+    }
+
+    // Add level totals as a separate group
+    const levelItems = parsed.filter(p => p.parsed.granularity === 'level');
+    if (levelItems.length > 0) {
+      const byFloor = new Map<string, typeof levelItems>();
+      levelItems.forEach(p => {
+        const fid = p.parsed.refId!;
+        if (!byFloor.has(fid)) byFloor.set(fid, []);
+        byFloor.get(fid)!.push(p);
+      });
+      for (const [fid, items] of byFloor) {
+        const floor = floorMap.get(fid);
+        groups.push({
+          key: `level_${fid}`,
+          label: `Totales ${floor?.name || 'Nivel'}`,
+          floorName: floor?.name || '',
+          items: items.map(p => ({ measurement: p.measurement, surfaceType: p.parsed.surfaceType })),
+        });
+      }
+    }
+
+    // Add totals
+    const totalItems = parsed.filter(p => p.parsed.granularity === 'total');
+    if (totalItems.length > 0) {
+      groups.push({
+        key: 'total',
+        label: 'Total Vivienda',
+        floorName: '',
+        items: totalItems.map(p => ({ measurement: p.measurement, surfaceType: p.parsed.surfaceType })),
+      });
+    }
+
+    return groups;
+  }, [parsed, roomMap, floorMap]);
+
+  const renderMeasurementRow = (m: Measurement, isActive: boolean, isInherit: boolean) => {
+    const units = getUnits(m);
+    return (
+      <button
+        key={m.id}
+        className={`w-full text-left px-3 py-1.5 text-sm flex items-center justify-between gap-2 transition-colors rounded ${
+          isActive
+            ? 'bg-primary/10 border border-primary/30'
+            : 'hover:bg-accent'
+        }`}
+        onClick={() => {
+          if (isInherit) return;
+          if (isActive) unlinkMeasurement(m.id);
+          else linkMeasurement(m.id);
+        }}
+        disabled={isInherit}
+      >
+        <div className="flex items-center gap-2 min-w-0">
+          {isActive && <Link2 className="h-3 w-3 text-primary shrink-0" />}
+          <span className={`truncate ${isActive ? 'font-medium text-primary' : ''}`}>{m.name}</span>
+          {isInherit && <Badge variant="outline" className="text-[9px] border-amber-300 text-amber-600 shrink-0">heredada</Badge>}
+        </div>
+        <div className="flex items-center gap-1.5 shrink-0">
+          <span className="text-xs font-mono text-muted-foreground">{formatNumber(units)}</span>
+          <Badge variant="secondary" className="text-[9px]">{m.measurement_unit || 'ud'}</Badge>
+          {isActive && !isInherit && (
+            <X className="h-3 w-3 text-muted-foreground hover:text-destructive ml-1" />
+          )}
+        </div>
+      </button>
+    );
   };
 
-  // Filter available measurements (not yet linked)
-  const availableMeasurements = allMeasurements.filter(m =>
-    !linkedIds.has(m.id) && (
-      !searchQuery || searchMatch(m.name, searchQuery) ||
-      (m.floor && searchMatch(m.floor, searchQuery)) ||
-      (m.measurement_unit && searchMatch(m.measurement_unit, searchQuery))
-    )
+  if (loading) return <p className="text-xs text-muted-foreground text-center py-4">Cargando mediciones de volúmenes...</p>;
+
+  if (volumeMeasurements.length === 0) return (
+    <div className="p-4 rounded border border-dashed text-center space-y-1">
+      <Ruler className="h-6 w-6 text-muted-foreground/40 mx-auto" />
+      <p className="text-sm text-muted-foreground">Sin mediciones de volúmenes</p>
+      <p className="text-xs text-muted-foreground">Las mediciones se generan automáticamente desde la pestaña Volúmenes del plano.</p>
+    </div>
   );
+
+  const activeCount = activeIds.size;
 
   return (
     <div className="space-y-3">
       {/* Header */}
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
         <h5 className="text-sm font-semibold flex items-center gap-1.5">
           <Ruler className="h-4 w-4 text-muted-foreground" />
-          Mediciones {isInheriting ? '(heredadas del padre)' : `vinculadas (${linkedMeasurements.length})`}
-          {isInheriting && <Badge variant="outline" className="text-[9px] ml-1">heredadas</Badge>}
+          Mediciones de Volúmenes
+          {isInheriting && <Badge variant="outline" className="text-[9px] ml-1 border-amber-300 text-amber-600">heredadas del padre</Badge>}
+          {activeCount > 0 && !isInheriting && (
+            <Badge variant="default" className="text-[9px] ml-1">{activeCount} vinculadas</Badge>
+          )}
         </h5>
         <div className="flex gap-1">
           {onNavigateToMeasurements && (
@@ -268,253 +425,108 @@ export function TolosaMeasurementsPanel({ budgetId, tolosItemId, isAdmin, parent
               <ExternalLink className="h-3 w-3 mr-1" /> Ver Mediciones
             </Button>
           )}
-          <Button size="sm" variant="outline" className="text-xs" onClick={() => setShowSearch(!showSearch)}>
-            <Search className="h-3 w-3 mr-1" /> Buscar existente
+          <Button
+            size="sm"
+            variant={groupMode === 'level' ? 'default' : 'outline'}
+            className="text-xs"
+            onClick={() => setGroupMode('level')}
+          >
+            <Layers className="h-3 w-3 mr-1" /> Por Nivel
           </Button>
-          <Button size="sm" variant="outline" className="text-xs" onClick={() => setShowCreateDialog(true)}>
-            <Plus className="h-3 w-3 mr-1" /> Nueva
+          <Button
+            size="sm"
+            variant={groupMode === 'space' ? 'default' : 'outline'}
+            className="text-xs"
+            onClick={() => setGroupMode('space')}
+          >
+            <Home className="h-3 w-3 mr-1" /> Por Espacio
           </Button>
         </div>
       </div>
 
-      {/* Linked or inherited measurements list */}
-      {(() => {
-        const displayMeasurements = linkedMeasurements.length > 0 ? linkedMeasurements : inheritedMeasurements;
-        const isDisplayInherited = linkedMeasurements.length === 0 && inheritedMeasurements.length > 0;
+      {/* Grouped measurement tree */}
+      {groupMode === 'level' && (
+        <div className="space-y-1">
+          {byLevel.map(group => {
+            const isExpanded = expandedSections.has(group.key);
+            const groupActiveCount = group.items.filter(i => activeIds.has(i.measurement.id)).length;
 
-        if (loading) return <p className="text-xs text-muted-foreground text-center py-4">Cargando...</p>;
+            // Separate level-total items from room items
+            const levelTotalItems = group.items.filter(i => i.granularity === 'level' || i.granularity === 'total');
+            const roomItems = group.items.filter(i => i.granularity === 'room');
 
-        if (displayMeasurements.length === 0) return (
-          <div className="p-4 rounded border border-dashed text-center space-y-1">
-            <Ruler className="h-6 w-6 text-muted-foreground/40 mx-auto" />
-            <p className="text-sm text-muted-foreground">Sin mediciones vinculadas</p>
-            <p className="text-xs text-muted-foreground">Busca una medición existente o crea una nueva.</p>
-          </div>
-        );
+            // Group room items by surface type
+            const roomsBySurface = new Map<string, typeof roomItems>();
+            roomItems.forEach(ri => {
+              if (!roomsBySurface.has(ri.surfaceType)) roomsBySurface.set(ri.surfaceType, []);
+              roomsBySurface.get(ri.surfaceType)!.push(ri);
+            });
 
-        return (
-        <div className="border rounded overflow-hidden">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-muted/50 text-xs text-muted-foreground">
-                <th className="text-left px-3 py-1.5 font-medium">Nombre</th>
-                <th className="text-center px-2 py-1.5 font-medium w-16">Planta</th>
-                <th className="text-right px-2 py-1.5 font-medium w-20">Uds</th>
-                <th className="text-center px-2 py-1.5 font-medium w-14">Tipo</th>
-                <th className="text-center px-2 py-1.5 font-medium w-10"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {displayMeasurements.map(m => {
-                const isEditing = !isDisplayInherited && editingId === m.id;
-                return (
-                  <tr key={m.id} className={`border-t hover:bg-accent/20 transition-colors ${isDisplayInherited ? 'opacity-70' : ''}`}>
-                    {isEditing ? (
-                      <>
-                        <td className="px-2 py-1">
-                          <Input
-                            value={editData.name}
-                            onChange={e => setEditData(d => ({ ...d, name: e.target.value }))}
-                            className="h-7 text-sm"
-                            autoFocus
-                            onKeyDown={e => { if (e.key === 'Enter') saveEdit(); if (e.key === 'Escape') cancelEdit(); }}
-                          />
-                        </td>
-                        <td className="px-1 py-1">
-                          <Input
-                            value={editData.floor}
-                            onChange={e => setEditData(d => ({ ...d, floor: e.target.value }))}
-                            className="h-7 text-sm text-center w-16"
-                            placeholder="—"
-                            onKeyDown={e => { if (e.key === 'Enter') saveEdit(); if (e.key === 'Escape') cancelEdit(); }}
-                          />
-                        </td>
-                        <td className="px-1 py-1">
-                          <NumericInput
-                            value={editData.manual_units}
-                            onChange={v => setEditData(d => ({ ...d, manual_units: v }))}
-                            className="h-7 text-sm text-right w-20"
-                            onKeyDown={e => { if (e.key === 'Enter') saveEdit(); if (e.key === 'Escape') cancelEdit(); }}
-                          />
-                        </td>
-                        <td className="px-1 py-1">
-                          <Select value={editData.measurement_unit} onValueChange={v => setEditData(d => ({ ...d, measurement_unit: v }))}>
-                            <SelectTrigger className="h-7 text-xs w-16">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {MEASUREMENT_UNITS.map(u => (
-                                <SelectItem key={u} value={u}>{u}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </td>
-                        <td className="px-1 py-1 text-center">
-                          <div className="flex gap-0.5 justify-center">
-                            <button onClick={saveEdit} disabled={saving} className="p-1 rounded hover:bg-primary/10 text-primary transition-colors" title="Guardar">
-                              <Check className="h-3 w-3" />
-                            </button>
-                            <button onClick={cancelEdit} className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors" title="Cancelar">
-                              <X className="h-3 w-3" />
-                            </button>
-                          </div>
-                        </td>
-                      </>
-                    ) : (
-                      <>
-                        <td className="px-3 py-1.5 cursor-pointer" onClick={() => !isDisplayInherited && startEdit(m)}>
-                          <span className="font-medium">{m.name}</span>
-                          {m.source && (
-                            <Badge variant="outline" className="ml-2 text-[9px]">{m.source}</Badge>
-                          )}
-                          {isDisplayInherited && (
-                            <Badge variant="outline" className="ml-2 text-[9px] border-amber-300 text-amber-600">heredada</Badge>
-                          )}
-                        </td>
-                        <td className="px-2 py-1.5 text-center text-muted-foreground text-xs cursor-pointer" onClick={() => !isDisplayInherited && startEdit(m)}>
-                          {m.floor || '—'}
-                        </td>
-                        <td className="px-2 py-1.5 text-right font-mono text-xs cursor-pointer" onClick={() => !isDisplayInherited && startEdit(m)}>
-                          {formatNumber(getCalculatedUnits(m))}
-                        </td>
-                        <td className="px-2 py-1.5 text-center cursor-pointer" onClick={() => !isDisplayInherited && startEdit(m)}>
-                          <Badge variant="secondary" className="text-[9px]">{m.measurement_unit || 'ud'}</Badge>
-                        </td>
-                        <td className="px-2 py-1.5 text-center">
-                          {!isDisplayInherited && (
-                            <button
-                              onClick={() => unlinkMeasurement(m.id)}
-                              className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
-                              title="Desvincular medición"
-                            >
-                              <X className="h-3 w-3" />
-                            </button>
-                          )}
-                        </td>
-                      </>
-                    )}
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-        );
-      })()}
+            return (
+              <Collapsible key={group.key} open={isExpanded} onOpenChange={() => toggleSection(group.key)}>
+                <CollapsibleTrigger className="w-full flex items-center gap-2 px-3 py-2 rounded-md hover:bg-accent transition-colors text-left">
+                  {isExpanded ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" /> : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />}
+                  <Building className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                  <span className="text-sm font-medium flex-1">{group.label}</span>
+                  {groupActiveCount > 0 && <Badge variant="default" className="text-[9px]">{groupActiveCount}</Badge>}
+                  <span className="text-xs text-muted-foreground">{group.items.length} mediciones</span>
+                </CollapsibleTrigger>
+                <CollapsibleContent className="pl-6 space-y-0.5 mt-1">
+                  {/* Level totals first */}
+                  {levelTotalItems
+                    .sort((a, b) => SURFACE_TYPE_ORDER.indexOf(a.surfaceType) - SURFACE_TYPE_ORDER.indexOf(b.surfaceType))
+                    .map(item => renderMeasurementRow(item.measurement, activeIds.has(item.measurement.id), isInheriting))}
 
-      {/* Search panel */}
-      {showSearch && (
-        <div className="space-y-2 p-3 rounded border border-blue-200 bg-blue-50/30 dark:border-blue-800 dark:bg-blue-950/20">
-          <div className="flex items-center gap-2">
-            <Search className="h-4 w-4 text-muted-foreground shrink-0" />
-            <Input
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              placeholder="Buscar medición por nombre, planta, tipo..."
-              className="h-8 text-sm"
-              autoFocus
-            />
-            <Button size="sm" variant="ghost" className="shrink-0" onClick={() => { setShowSearch(false); setSearchQuery(''); }}>
-              <X className="h-3 w-3" />
-            </Button>
-          </div>
-
-          {availableMeasurements.length > 0 ? (
-            <div className="max-h-48 overflow-y-auto space-y-0.5">
-              {availableMeasurements.slice(0, 30).map(m => (
-                <button
-                  key={m.id}
-                  className="w-full text-left px-3 py-1.5 text-sm hover:bg-accent rounded flex items-center justify-between gap-2 transition-colors"
-                  onClick={() => linkMeasurement(m.id)}
-                >
-                  <div className="flex items-center gap-2 min-w-0">
-                    <Link2 className="h-3 w-3 text-primary shrink-0" />
-                    <span className="truncate font-medium">{m.name}</span>
-                    {m.floor && <span className="text-xs text-muted-foreground shrink-0">({m.floor})</span>}
-                  </div>
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <span className="text-xs font-mono text-muted-foreground">{formatNumber(getCalculatedUnits(m))}</span>
-                    <Badge variant="secondary" className="text-[9px]">{m.measurement_unit || 'ud'}</Badge>
-                  </div>
-                </button>
-              ))}
-              {availableMeasurements.length > 30 && (
-                <p className="text-xs text-muted-foreground text-center py-1">
-                  +{availableMeasurements.length - 30} más — refina la búsqueda
-                </p>
-              )}
-            </div>
-          ) : (
-            <div className="text-center py-3 space-y-1">
-              <p className="text-xs text-muted-foreground">
-                {searchQuery ? 'No se encontraron mediciones' : 'Todas las mediciones ya están vinculadas'}
-              </p>
-              <Button size="sm" variant="outline" className="text-xs" onClick={() => { setShowSearch(false); setShowCreateDialog(true); }}>
-                <Plus className="h-3 w-3 mr-1" /> Crear nueva medición
-              </Button>
-            </div>
-          )}
+                  {/* Room items grouped by surface type */}
+                  {SURFACE_TYPE_ORDER.map(st => {
+                    const items = roomsBySurface.get(st);
+                    if (!items || items.length === 0) return null;
+                    const stKey = `${group.key}_${st}`;
+                    const stExpanded = expandedSections.has(stKey);
+                    return (
+                      <Collapsible key={stKey} open={stExpanded} onOpenChange={() => toggleSection(stKey)}>
+                        <CollapsibleTrigger className="w-full flex items-center gap-2 px-2 py-1 rounded hover:bg-accent/50 transition-colors text-left">
+                          {stExpanded ? <ChevronDown className="h-3 w-3 text-muted-foreground" /> : <ChevronRight className="h-3 w-3 text-muted-foreground" />}
+                          <span className="text-xs text-muted-foreground">{SURFACE_TYPE_LABELS[st] || st} por espacio ({items.length})</span>
+                        </CollapsibleTrigger>
+                        <CollapsibleContent className="pl-4 space-y-0.5 mt-0.5">
+                          {items.map(item => renderMeasurementRow(item.measurement, activeIds.has(item.measurement.id), isInheriting))}
+                        </CollapsibleContent>
+                      </Collapsible>
+                    );
+                  })}
+                </CollapsibleContent>
+              </Collapsible>
+            );
+          })}
         </div>
       )}
 
-      {/* Create dialog */}
-      <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Nueva Medición</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3">
-            <div>
-              <Label className="text-xs">Nombre *</Label>
-              <Input
-                value={newName}
-                onChange={e => setNewName(e.target.value)}
-                placeholder="Ej: Tabiquería interior, Solado planta baja..."
-                autoFocus
-              />
-            </div>
-            <div className="grid grid-cols-3 gap-2">
-              <div>
-                <Label className="text-xs">Unidad</Label>
-                <Select value={newUnit} onValueChange={setNewUnit}>
-                  <SelectTrigger className="h-8">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {MEASUREMENT_UNITS.map(u => (
-                      <SelectItem key={u} value={u}>{u}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label className="text-xs">Cantidad</Label>
-                <NumericInput
-                  value={newManualUnits}
-                  onChange={setNewManualUnits}
-                  className="h-8"
-                  placeholder="0"
-                />
-              </div>
-              <div>
-                <Label className="text-xs">Planta</Label>
-                <Input
-                  value={newFloor}
-                  onChange={e => setNewFloor(e.target.value)}
-                  className="h-8"
-                  placeholder="PB, P1..."
-                />
-              </div>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" size="sm" onClick={() => setShowCreateDialog(false)}>Cancelar</Button>
-            <Button size="sm" onClick={createAndLink} disabled={!newName.trim() || creating}>
-              <Plus className="h-3 w-3 mr-1" /> Crear y vincular
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {groupMode === 'space' && (
+        <div className="space-y-1">
+          {bySpace.map(group => {
+            const isExpanded = expandedSections.has(group.key);
+            const groupActiveCount = group.items.filter(i => activeIds.has(i.measurement.id)).length;
+
+            return (
+              <Collapsible key={group.key} open={isExpanded} onOpenChange={() => toggleSection(group.key)}>
+                <CollapsibleTrigger className="w-full flex items-center gap-2 px-3 py-2 rounded-md hover:bg-accent transition-colors text-left">
+                  {isExpanded ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" /> : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />}
+                  <Home className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                  <span className="text-sm font-medium flex-1">{group.label}</span>
+                  {group.floorName && <span className="text-xs text-muted-foreground">{group.floorName}</span>}
+                  {groupActiveCount > 0 && <Badge variant="default" className="text-[9px]">{groupActiveCount}</Badge>}
+                </CollapsibleTrigger>
+                <CollapsibleContent className="pl-6 space-y-0.5 mt-1">
+                  {group.items
+                    .sort((a, b) => SURFACE_TYPE_ORDER.indexOf(a.surfaceType) - SURFACE_TYPE_ORDER.indexOf(b.surfaceType))
+                    .map(item => renderMeasurementRow(item.measurement, activeIds.has(item.measurement.id), isInheriting))}
+                </CollapsibleContent>
+              </Collapsible>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

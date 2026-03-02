@@ -638,30 +638,36 @@ export function TolosaResourcesPanel({ budgetId, tolosItemId, isAdmin, parentIte
                   ))}
                 </div>
               ) : (
-                <div className="text-center py-3 space-y-2">
+                <div className="text-center py-3">
                   <ShoppingBag className="h-6 w-6 text-muted-foreground/40 mx-auto mb-1" />
                   <p className="text-xs text-muted-foreground">
-                    {externalSearchQuery ? `"${externalSearchQuery}" no existe en el catálogo general` : 'Escribe para buscar en el catálogo general'}
+                    {externalSearchQuery ? `"${externalSearchQuery}" no encontrado en el catálogo` : 'Escribe para buscar en el catálogo general'}
                   </p>
-                  {externalSearchQuery && (
-                    <Button
-                      size="sm"
-                      variant="default"
-                      className="text-xs"
-                      onClick={() => {
-                        const prefillName = externalSearchQuery.trim();
-                        setShowSearch(false);
-                        setExternalSearchQuery('');
-                        setEditingResource(null);
-                        setFormData({ ...defaultForm, unit: measurementUnitType, name: prefillName });
-                        setShowFormDialog(true);
-                      }}
-                    >
-                      <Plus className="h-3 w-3 mr-1" /> Crear "{externalSearchQuery}" como nuevo recurso
-                    </Button>
-                  )}
                 </div>
               )}
+              {/* Always show "create new" option in external catalogue tab */}
+              <div className={`flex items-center gap-2 pt-1 ${externalCatalogueResources.length === 0 && !loadingExternal ? 'border-t mt-1' : 'border-t mt-2'}`}>
+                {externalCatalogueResources.length === 0 && !loadingExternal && externalSearchQuery && (
+                  <p className="text-xs text-muted-foreground flex-1">
+                    No existe en el catálogo general
+                  </p>
+                )}
+                <Button
+                  size="sm"
+                  variant={externalCatalogueResources.length === 0 && externalSearchQuery ? 'default' : 'outline'}
+                  className="text-xs shrink-0"
+                  onClick={() => {
+                    const prefillName = externalSearchQuery.trim();
+                    setShowSearch(false);
+                    setExternalSearchQuery('');
+                    setEditingResource(null);
+                    setFormData({ ...defaultForm, unit: measurementUnitType, name: prefillName });
+                    setShowFormDialog(true);
+                  }}
+                >
+                  <Plus className="h-3 w-3 mr-1" /> {externalSearchQuery ? `Registrar "${externalSearchQuery}"` : 'Registrar nuevo recurso'}
+                </Button>
+              </div>
               <p className="text-[10px] text-muted-foreground pt-1 border-t">
                 Al importar, el recurso se copia al presupuesto y queda vinculado a este QUÉ?.
               </p>

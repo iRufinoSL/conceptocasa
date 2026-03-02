@@ -818,6 +818,9 @@ export function ElevationsGridViewer({
                       onDeleteOpening={onDeleteOpening}
                       saving={saving}
                       budgetName={budgetName}
+                      floorBaseZ={floorBaseZMap.get(card.room?.floorId || 'all') ?? 0}
+                      cellSizeM={cellSizeM}
+                      blockHeightMm={plan.blockHeightMm}
                     />
                   ))}
                 </div>
@@ -1048,6 +1051,9 @@ export function ElevationsGridViewer({
                           onDeleteOpening={onDeleteOpening}
                           saving={saving}
                           budgetName={budgetName}
+                          floorBaseZ={floorBaseZMap.get(card.room?.floorId || 'all') ?? 0}
+                          cellSizeM={cellSizeM}
+                          blockHeightMm={plan.blockHeightMm}
                         />
                       ))}
                     </div>
@@ -1149,6 +1155,9 @@ export function ElevationsGridViewer({
                               onDeleteOpening={onDeleteOpening}
                               saving={saving}
                               budgetName={budgetName}
+                              floorBaseZ={floorBaseZMap.get(card.room?.floorId || 'all') ?? 0}
+                              cellSizeM={cellSizeM}
+                              blockHeightMm={plan.blockHeightMm}
                             />
                           ))}
                         </div>
@@ -1380,7 +1389,7 @@ function RulerLinesOverlay({ lines, drawPoint, widthM, rw }: {
 }
 
 // Individual elevation card
-function ElevationCardView({ card, plan, onOpeningClick, onAddOpening, onCardDoubleClick, onAddBlockGroup, onDeleteBlockGroup, onUpdateWall, onUpdateWallSegmentType, onUpdateOpening, onDeleteOpening, saving, budgetName }: {
+function ElevationCardView({ card, plan, onOpeningClick, onAddOpening, onCardDoubleClick, onAddBlockGroup, onDeleteBlockGroup, onUpdateWall, onUpdateWallSegmentType, onUpdateOpening, onDeleteOpening, saving, budgetName, floorBaseZ, cellSizeM, blockHeightMm }: {
   card: ElevationCard;
   plan: FloorPlanData;
   onOpeningClick: (op: OpeningData) => void;
@@ -1394,6 +1403,9 @@ function ElevationCardView({ card, plan, onOpeningClick, onAddOpening, onCardDou
   onDeleteOpening?: (openingId: string) => Promise<void>;
   saving: boolean;
   budgetName?: string;
+  floorBaseZ?: number;
+  cellSizeM?: number;
+  blockHeightMm?: number;
 }) {
   const [fullscreen, setFullscreen] = useState(false);
   const [selectedBlocks, setSelectedBlocks] = useState<Set<string>>(new Set());
@@ -1824,7 +1836,7 @@ function ElevationCardView({ card, plan, onOpeningClick, onAddOpening, onCardDou
           return <g className="block-pattern">{lines}</g>;
         })()}
 
-        {/* Direction arrows — walls viewed from INTERIOR */}
+        {/* Direction arrows — walls viewed from INTERIOR + XYZ coordinates */}
         {isWall && card.wall && isExteriorType(card.wall.wallType as string) && (() => {
           const wi = card.wall.wallIndex;
           // Walls viewed from INTERIOR (standing inside the room)
@@ -1837,16 +1849,59 @@ function ElevationCardView({ card, plan, onOpeningClick, onAddOpening, onCardDou
           const [leftCorner, rightCorner] = interiorCornerMap[wi] || ['?', '?'];
           const arrowY = ry - 8;
           const fs = fsScale ? 9 : 7;
+
+          // Compute XYZ for each corner
+          const room = card.room;
+          const baseZ = floorBaseZ ?? 0;
+          const bHMm = blockHeightMm ?? plan.blockHeightMm ?? 250;
+          const wallH = card.height;
+          const topZ = baseZ + Math.round(wallH * 1000 / bHMm);
+          // Grid XY for each corner of the room (TL=A, TR=B, BR=C, BL=D)
+          const posX = room?.posX ?? 0;
+          const posY = room?.posY ?? 0;
+          const roomW = room?.width ?? 0;
+          const roomL = room?.length ?? 0;
+          const cornerXY: Record<string, [number, number]> = {
+            'A': [posX, posY],
+            'B': [posX + roomW, posY],
+            'C': [posX + roomW, posY + roomL],
+            'D': [posX, posY + roomL],
+          };
+          // Convert meters to grid coords if cellSizeM is available
+          const csM = cellSizeM && cellSizeM > 0 ? cellSizeM : 1;
+          const toGrid = (m: number) => Math.round(m / csM);
+          const leftXY = cornerXY[leftCorner] || [0, 0];
+          const rightXY = cornerXY[rightCorner] || [0, 0];
+          const leftXYZBottom = formatXYZ(toGrid(leftXY[0]), toGrid(leftXY[1]), baseZ);
+          const rightXYZBottom = formatXYZ(toGrid(rightXY[0]), toGrid(rightXY[1]), baseZ);
+          const leftXYZTop = formatXYZ(toGrid(leftXY[0]), toGrid(leftXY[1]), topZ);
+          const rightXYZTop = formatXYZ(toGrid(rightXY[0]), toGrid(rightXY[1]), topZ);
+          const xyzFs = fsScale ? 7 : 5.5;
+
           return (
             <g>
+              {/* Top corners with XYZ */}
               <text x={rx} y={arrowY} textAnchor="start" fontSize={fs} fontWeight={700} fill="hsl(222, 47%, 40%)">
                 ← {leftCorner}
+              </text>
+              <text x={rx} y={arrowY + xyzFs + 1} textAnchor="start" fontSize={xyzFs} fill="hsl(222, 47%, 55%)" opacity={0.85}>
+                {leftXYZTop}
               </text>
               <text x={rx + rw} y={arrowY} textAnchor="end" fontSize={fs} fontWeight={700} fill="hsl(222, 47%, 40%)">
                 {rightCorner} →
               </text>
+              <text x={rx + rw} y={arrowY + xyzFs + 1} textAnchor="end" fontSize={xyzFs} fill="hsl(222, 47%, 55%)" opacity={0.85}>
+                {rightXYZTop}
+              </text>
               <line x1={rx + 12} y1={arrowY - 3} x2={rx + rw - 12} y2={arrowY - 3}
                 stroke="hsl(222, 47%, 40%)" strokeWidth={0.5} opacity={0.4} />
+              {/* Bottom corners with XYZ */}
+              <text x={rx} y={ry + rh + 8 + xyzFs} textAnchor="start" fontSize={xyzFs} fill="hsl(222, 47%, 55%)" opacity={0.7}>
+                {leftCorner} {leftXYZBottom}
+              </text>
+              <text x={rx + rw} y={ry + rh + 8 + xyzFs} textAnchor="end" fontSize={xyzFs} fill="hsl(222, 47%, 55%)" opacity={0.7}>
+                {rightCorner} {rightXYZBottom}
+              </text>
             </g>
           );
         })()}

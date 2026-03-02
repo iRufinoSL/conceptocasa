@@ -1378,6 +1378,7 @@ export function FloorPlanTab({ budgetId, budgetName = '', isAdmin }: FloorPlanTa
           focusWallId={elevationReturnContext?.wallId}
           budgetName={budgetName}
           customCorners={customCorners}
+          onCustomCornersChange={updateCustomCorners}
         />
       )}
 

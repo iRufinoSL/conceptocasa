@@ -1,8 +1,8 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { Badge } from '@/components/ui/badge';
-import { ChevronDown, ChevronRight, Ruler, DollarSign, Users, MapPin, Minus, Plus, Edit2 } from 'lucide-react';
-import { formatCurrency, formatNumber } from '@/lib/format-utils';
 import { Button } from '@/components/ui/button';
+import { ChevronDown, ChevronRight, Ruler, DollarSign, Users, MapPin, Minus, Plus, Edit2, Maximize2, Home } from 'lucide-react';
+import { formatCurrency, formatNumber } from '@/lib/format-utils';
 
 interface TolosItem {
   id: string;
@@ -25,6 +25,7 @@ interface TolosItem {
   client_contact_id: string | null;
   supplier_contact_id: string | null;
   housing_profile_id: string | null;
+  is_executed?: boolean;
 }
 
 interface ItemSummary {
@@ -42,6 +43,8 @@ interface TolosaCardViewProps {
   onItemClick?: (itemId: string) => void;
   onItemDoubleClick?: (itemId: string) => void;
   onEditItem?: (itemId: string) => void;
+  onOpenFullDetail?: (itemId: string) => void;
+  initialFocusId?: string | null;
 }
 
 const SIBLING_PALETTES = [
@@ -64,10 +67,14 @@ export function TolosaCardView({
   onItemClick,
   onItemDoubleClick,
   onEditItem,
+  onOpenFullDetail,
+  initialFocusId,
 }: TolosaCardViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const cardRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const [focusedId, setFocusedId] = useState<string | null>(null);
+  // Drill-down: when set, only show this item as root
+  const [drillRootId, setDrillRootId] = useState<string | null>(null);
 
   const getChildren = useCallback((parentId: string | null) => {
     return items
@@ -75,9 +82,27 @@ export function TolosaCardView({
       .sort((a, b) => a.order_index - b.order_index);
   }, [items]);
 
-  const rootItems = useMemo(() => getChildren(null), [getChildren]);
+  // Build ancestor path for breadcrumb
+  const getAncestorChain = useCallback((itemId: string): TolosItem[] => {
+    const chain: TolosItem[] = [];
+    let current = items.find(i => i.id === itemId);
+    while (current) {
+      chain.unshift(current);
+      current = current.parent_id ? items.find(i => i.id === current!.parent_id) : undefined;
+    }
+    return chain;
+  }, [items]);
 
-  // Compute depth of each item
+  // Effective roots: either drilled-down item or actual roots
+  const effectiveRoots = useMemo(() => {
+    if (drillRootId) {
+      const item = items.find(i => i.id === drillRootId);
+      return item ? [item] : [];
+    }
+    return getChildren(null);
+  }, [drillRootId, items, getChildren]);
+
+  // Compute depth of each item relative to effective roots
   const itemDepth = useMemo(() => {
     const map: Record<string, number> = {};
     const computeDepth = (parentId: string | null, depth: number) => {
@@ -86,14 +111,17 @@ export function TolosaCardView({
         computeDepth(item.id, depth + 1);
       });
     };
-    computeDepth(null, 0);
+    if (drillRootId) {
+      map[drillRootId] = 0;
+      computeDepth(drillRootId, 1);
+    } else {
+      computeDepth(null, 0);
+    }
     return map;
-  }, [getChildren]);
+  }, [getChildren, drillRootId]);
 
-  // By default collapse items deeper than level 1 (show 2 levels: 0 and 1)
   const [expandedIds, setExpandedIds] = useState<Set<string>>(() => {
     const expanded = new Set<string>();
-    // Expand root items (depth 0) so their children (depth 1) are visible
     items.forEach(item => {
       if ((itemDepth[item.id] ?? 0) < 2) {
         const children = getChildren(item.id);
@@ -105,10 +133,48 @@ export function TolosaCardView({
     return expanded;
   });
 
-  // Color assignment
+  // When drill root changes, expand all direct children
+  useEffect(() => {
+    if (drillRootId) {
+      setExpandedIds(prev => {
+        const next = new Set(prev);
+        next.add(drillRootId);
+        getChildren(drillRootId).forEach(child => {
+          if (getChildren(child.id).length > 0) next.add(child.id);
+        });
+        return next;
+      });
+      // Scroll to top
+      setTimeout(() => containerRef.current?.scrollTo({ top: 0, left: 0, behavior: 'smooth' }), 50);
+    }
+  }, [drillRootId, getChildren]);
+
+  // Auto-focus on initialFocusId when it changes
+  useEffect(() => {
+    if (initialFocusId) {
+      setFocusedId(initialFocusId);
+      // If the item has a parent, drill into the parent so the item is visible
+      const item = items.find(i => i.id === initialFocusId);
+      if (item?.parent_id) {
+        // Expand ancestors
+        setExpandedIds(prev => {
+          const next = new Set(prev);
+          let current = item;
+          while (current?.parent_id) {
+            next.add(current.parent_id);
+            current = items.find(i => i.id === current!.parent_id);
+          }
+          return next;
+        });
+      }
+    }
+  }, [initialFocusId, items]);
+
+  // Color assignment based on root ancestor
   const parentColorMap = useMemo(() => {
     const map: Record<string, number> = {};
-    rootItems.forEach((item, idx) => {
+    const allRoots = getChildren(null);
+    allRoots.forEach((item, idx) => {
       map[item.id] = idx % SIBLING_PALETTES.length;
     });
     const assignColors = (parentId: string, colorIdx: number) => {
@@ -117,62 +183,47 @@ export function TolosaCardView({
         assignColors(child.id, colorIdx);
       });
     };
-    rootItems.forEach((item, idx) => {
+    allRoots.forEach((item, idx) => {
       assignColors(item.id, idx % SIBLING_PALETTES.length);
     });
     return map;
-  }, [rootItems, getChildren]);
+  }, [getChildren]);
 
   const toggleExpand = useCallback((id: string) => {
     setExpandedIds(prev => {
       const next = new Set(prev);
       if (next.has(id)) {
-        // Collapsing: focus parent
         next.delete(id);
-        const item = items.find(i => i.id === id);
-        setFocusedId(item?.parent_id || id);
       } else {
         next.add(id);
-        setFocusedId(id);
       }
       return next;
     });
-  }, [items]);
+  }, []);
 
-  // Auto-scroll focused card to top-left
+  // Auto-scroll focused card into view
   useEffect(() => {
     if (!focusedId || !containerRef.current) return;
     const el = cardRefs.current[focusedId];
     if (el) {
       setTimeout(() => {
-        el.scrollIntoView({ behavior: 'smooth', block: 'start', inline: 'start' });
-      }, 100);
+        el.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+      }, 150);
     }
-  }, [focusedId, expandedIds]);
+  }, [focusedId, expandedIds, drillRootId]);
 
-  // Get ancestors for path display
-  const getAncestorPath = useCallback((itemId: string): string[] => {
-    const path: string[] = [];
-    let current = items.find(i => i.id === itemId);
-    while (current?.parent_id) {
-      const parent = items.find(i => i.id === current!.parent_id);
-      if (parent) {
-        path.unshift(parent.name);
-        current = parent;
-      } else break;
+  // Handle click on card body → drill-down
+  const handleCardClick = useCallback((e: React.MouseEvent, item: TolosItem) => {
+    const children = getChildren(item.id);
+    if (children.length > 0) {
+      // Drill-down: show this item as root with its children
+      setDrillRootId(item.id);
+      setFocusedId(item.id);
+    } else {
+      // Leaf node: open full detail
+      onOpenFullDetail?.(item.id);
     }
-    return path;
-  }, [items]);
-
-  const handleDoubleClick = useCallback((e: React.MouseEvent, itemId: string) => {
-    e.preventDefault();
-    e.stopPropagation();
-    onItemDoubleClick?.(itemId);
-  }, [onItemDoubleClick]);
-
-  const handleSingleClick = useCallback((itemId: string) => {
-    onItemClick?.(itemId);
-  }, [onItemClick]);
+  }, [getChildren, onOpenFullDetail]);
 
   const renderCard = (item: TolosItem) => {
     const children = getChildren(item.id);
@@ -183,6 +234,7 @@ export function TolosaCardView({
     const palette = SIBLING_PALETTES[parentColorMap[item.id] ?? 0];
     const clientName = item.client_contact_id ? contactCache[item.client_contact_id] : null;
     const hasLocation = !!(item.address_city || item.address_street);
+    const isFocused = focusedId === item.id;
 
     return (
       <div
@@ -192,19 +244,28 @@ export function TolosaCardView({
       >
         {/* The card itself */}
         <div
-          className={`rounded-xl border-2 ${palette.border} ${palette.bg} min-w-[200px] max-w-[280px] cursor-pointer hover:shadow-lg transition-all relative select-none`}
-          onClick={() => handleSingleClick(item.id)}
-          onDoubleClick={(e) => handleDoubleClick(e, item.id)}
+          className={`rounded-xl border-2 ${palette.border} ${palette.bg} min-w-[200px] max-w-[280px] cursor-pointer hover:shadow-lg transition-all relative select-none ${isFocused ? 'ring-2 ring-primary shadow-lg' : ''}`}
+          onClick={(e) => handleCardClick(e, item)}
         >
-          {/* Header with code + expand/collapse + edit button */}
+          {/* Header with code + expand/collapse + action buttons */}
           <div className={`flex items-center justify-between gap-1 px-2.5 py-1.5 rounded-t-[10px] ${palette.header}`}>
             <Badge variant="outline" className="font-mono text-[10px] shrink-0 px-1.5 bg-background/50">{item.code}</Badge>
             <div className="flex items-center gap-0.5 ml-auto">
+              {/* Full detail button */}
+              {onOpenFullDetail && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); onOpenFullDetail(item.id); }}
+                  className="flex items-center gap-0.5 px-1 py-0.5 rounded text-[10px] font-medium hover:bg-black/10 dark:hover:bg-white/10 transition-colors opacity-60 hover:opacity-100"
+                  title="Abrir detalle completo"
+                >
+                  <Maximize2 className="h-3 w-3" />
+                </button>
+              )}
               {onEditItem && (
                 <button
                   onClick={(e) => { e.stopPropagation(); onEditItem(item.id); }}
                   className="flex items-center gap-0.5 px-1 py-0.5 rounded text-[10px] font-medium hover:bg-black/10 dark:hover:bg-white/10 transition-colors opacity-60 hover:opacity-100"
-                  title="Abrir formulario de este QUÉ?"
+                  title="Editar nombre"
                 >
                   <Edit2 className="h-3 w-3" />
                 </button>
@@ -267,12 +328,10 @@ export function TolosaCardView({
         {/* Children with SVG connectors */}
         {hasChildren && isExpanded && (
           <div className="flex flex-col items-center mt-0">
-            {/* Vertical line from parent to horizontal bar */}
             <svg width="2" height="24" className="shrink-0">
               <line x1="1" y1="0" x2="1" y2="24" stroke={palette.line} strokeWidth="2" />
             </svg>
             <div className="relative flex gap-4 items-start">
-              {/* Horizontal connector bar (SVG overlay) */}
               {children.length > 1 && (
                 <div className="absolute top-0 left-0 right-0 h-0 pointer-events-none" style={{ zIndex: 0 }}>
                   <svg width="100%" height="2" className="absolute top-0 left-0 w-full">
@@ -282,7 +341,6 @@ export function TolosaCardView({
               )}
               {children.map((child) => (
                 <div key={child.id} className="flex flex-col items-center relative">
-                  {/* Vertical connector from horizontal bar to child card */}
                   <svg width="2" height="16" className="shrink-0">
                     <line x1="1" y1="0" x2="1" y2="16" stroke={palette.line} strokeWidth="2" />
                   </svg>
@@ -298,10 +356,47 @@ export function TolosaCardView({
 
   if (items.length === 0) return null;
 
+  // Breadcrumb for drill-down navigation
+  const breadcrumb = drillRootId ? getAncestorChain(drillRootId) : [];
+
   return (
-    <div ref={containerRef} className="overflow-auto pb-4 max-h-[75vh]">
-      <div className="flex gap-6 items-start p-4 min-w-min">
-        {rootItems.map(item => renderCard(item))}
+    <div className="space-y-2">
+      {/* Breadcrumb when drilled down */}
+      {drillRootId && (
+        <div className="flex items-center gap-1 flex-wrap px-2 py-1.5 bg-muted/50 rounded-lg border">
+          <button
+            onClick={() => { setDrillRootId(null); setFocusedId(null); }}
+            className="flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+            title="Volver a la vista raíz"
+          >
+            <Home className="h-3 w-3" />
+            Raíz
+          </button>
+          {breadcrumb.map((ancestor, idx) => {
+            const isLast = idx === breadcrumb.length - 1;
+            return (
+              <span key={ancestor.id} className="flex items-center gap-1">
+                <ChevronRight className="h-3 w-3 text-muted-foreground" />
+                {isLast ? (
+                  <span className="text-xs font-semibold text-foreground">{ancestor.code} {ancestor.name}</span>
+                ) : (
+                  <button
+                    onClick={() => { setDrillRootId(ancestor.id); setFocusedId(ancestor.id); }}
+                    className="text-xs font-medium text-primary hover:underline"
+                  >
+                    {ancestor.code} {ancestor.name}
+                  </button>
+                )}
+              </span>
+            );
+          })}
+        </div>
+      )}
+
+      <div ref={containerRef} className="overflow-auto pb-4 max-h-[75vh]">
+        <div className="flex gap-6 items-start p-4 min-w-min">
+          {effectiveRoots.map(item => renderCard(item))}
+        </div>
       </div>
     </div>
   );

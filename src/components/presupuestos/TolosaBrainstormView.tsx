@@ -12,8 +12,10 @@ import {
   ExternalLink, Building, User, Truck, FileText, Link, Unlink,
   Home, Ruler, Layers, Landmark, PenTool, RulerIcon, FolderOpen,
   CalendarDays, MessageSquare, Calculator, BarChart3, Timer, Settings,
-  ArrowUp, ArrowDown, ArrowLeft, ArrowRight, List, LayoutGrid, ShoppingCart, Eye
+  ArrowUp, ArrowDown, ArrowLeft, ArrowRight, List, LayoutGrid, ShoppingCart, Eye,
+  ArrowLeftCircle
 } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { TolosaCardView } from './TolosaCardView';
 import { BudgetUrbanismTab } from './BudgetUrbanismTab';
 import { BudgetMeasurementsTab } from './BudgetMeasurementsTab';
@@ -150,6 +152,9 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
   const [showOnlyExecuted, setShowOnlyExecuted] = useState(true);
   const [graphEntryItemId, setGraphEntryItemId] = useState<string | null>(null); // tracks item opened from graph card ✏️
   const [measurementVersions, setMeasurementVersions] = useState<Record<string, number>>({});
+  const [fullDetailItemId, setFullDetailItemId] = useState<string | null>(null); // item shown in full-detail dialog from graph
+  const [lastWorkedItemId, setLastWorkedItemId] = useState<string | null>(null); // last item the user interacted with
+  const [previousViewMode, setPreviousViewMode] = useState<'list' | 'cards' | null>(null); // for back navigation
 
   const bumpMeasurementVersion = useCallback((itemId: string) => {
     setMeasurementVersions(prev => ({ ...prev, [itemId]: (prev[itemId] || 0) + 1 }));
@@ -621,9 +626,12 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
       const next = new Set(prev);
       const isClosing = next.has(id);
       isClosing ? next.delete(id) : next.add(id);
+      // Track last worked item
+      if (!isClosing) setLastWorkedItemId(id);
       // If closing an item opened from graph ✏️ button, return to graph view
       if (isClosing && graphEntryItemId === id) {
         setGraphEntryItemId(null);
+        setLastWorkedItemId(id); // remember for centering
         setTimeout(() => setViewMode('cards'), 0);
       }
       return next;
@@ -1892,7 +1900,7 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
           {/* View toggle */}
           <div className="flex items-center border rounded-lg overflow-hidden">
             <button
-              onClick={() => setViewMode('list')}
+              onClick={() => { setPreviousViewMode(viewMode); setViewMode('list'); }}
               className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium transition-colors ${
                 viewMode === 'list'
                   ? 'bg-primary text-primary-foreground'
@@ -1904,7 +1912,7 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
               <span className="hidden sm:inline">Listado</span>
             </button>
             <button
-              onClick={() => setViewMode('cards')}
+              onClick={() => { setPreviousViewMode(viewMode); setViewMode('cards'); }}
               className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium transition-colors ${
                 viewMode === 'cards'
                   ? 'bg-primary text-primary-foreground'
@@ -2001,15 +2009,17 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
           itemSubtotals={itemSubtotals}
           contactCache={contactCache}
           getCuanto={getCuanto}
+          initialFocusId={lastWorkedItemId}
           onItemClick={(itemId) => {
-            // Single click: no-op in card view (expand/collapse handled internally)
+            // Single click handled by TolosaCardView drill-down internally
           }}
           onItemDoubleClick={(itemId) => {
             // Double click: switch to list view and open item detail
+            setPreviousViewMode('cards');
+            setLastWorkedItemId(itemId);
             setViewMode('list');
             setExpandedIds(prev => {
               const next = new Set(prev);
-              // Expand all ancestors
               let current = items.find(i => i.id === itemId);
               while (current?.parent_id) {
                 next.add(current.parent_id);
@@ -2027,6 +2037,8 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
           onEditItem={(itemId) => {
             // Edit button in graph card: switch to list view and open item detail form
             setGraphEntryItemId(itemId); // remember origin for return navigation
+            setLastWorkedItemId(itemId);
+            setPreviousViewMode('cards');
             setViewMode('list');
             setExpandedIds(prev => {
               const next = new Set(prev);
@@ -2043,10 +2055,102 @@ export function TolosaBrainstormView({ budgetId, isAdmin }: TolosaBrainstormView
               return n;
             });
           }}
+          onOpenFullDetail={(itemId) => {
+            // Open full-detail dialog from graph without leaving graph mode
+            setFullDetailItemId(itemId);
+            setLastWorkedItemId(itemId);
+          }}
         />
       ) : (
         <div className="space-y-1">
           {rootItems.map(item => renderItem(item, 0))}
+        </div>
+      )}
+
+      {/* Full-detail dialog from graph mode */}
+      {fullDetailItemId && (() => {
+        const detailItem = items.find(i => i.id === fullDetailItemId);
+        if (!detailItem) return null;
+        const cuanto = getCuanto(detailItem.id);
+        return (
+          <Dialog open={true} onOpenChange={(open) => { if (!open) setFullDetailItemId(null); }}>
+            <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <Badge variant="outline" className="font-mono text-xs">{detailItem.code}</Badge>
+                  {detailItem.name}
+                  {cuanto > 0 && (
+                    <Badge variant="secondary" className="ml-auto text-xs font-mono">{formatCurrency(cuanto)}</Badge>
+                  )}
+                </DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4">
+                {detailItem.description && (
+                  <p className="text-sm text-muted-foreground">{detailItem.description}</p>
+                )}
+                {/* Mediciones */}
+                <TolosaMeasurementsPanel
+                  budgetId={budgetId}
+                  tolosItemId={detailItem.id}
+                  isAdmin={isAdmin}
+                  parentItemId={detailItem.parent_id}
+                  onNavigateToMeasurements={() => {}}
+                  onMeasurementChange={() => bumpMeasurementVersion(detailItem.id)}
+                />
+                {/* Recursos */}
+                <TolosaResourcesPanel
+                  budgetId={budgetId}
+                  tolosItemId={detailItem.id}
+                  isAdmin={isAdmin}
+                  parentItemId={detailItem.parent_id}
+                  onSubtotalChange={(s) => updateItemSubtotal(detailItem.id, s)}
+                  measurementVersion={measurementVersions[detailItem.id] || 0}
+                />
+                {/* Dimension links */}
+                <div className="space-y-3 border-t pt-3">
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                    {DIMENSION_LINKS.map(dim => {
+                      const Icon = dim.icon;
+                      const isActive = activeDimension[detailItem.id] === dim.key;
+                      return (
+                        <button
+                          key={dim.key}
+                          className={`flex flex-col items-center gap-1 p-3 rounded-lg border text-center transition-all hover:shadow-md hover:scale-[1.02] ${dim.color} ${isActive ? 'ring-2 ring-primary shadow-md' : ''}`}
+                          onClick={() => setDimension(detailItem.id, dim.key)}
+                        >
+                          <Icon className="h-5 w-5" />
+                          <span className="text-xs font-bold">{dim.label}</span>
+                          <span className="text-[10px] opacity-70">{dim.hint}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {activeDimension[detailItem.id] && renderDimensionPanel(detailItem, activeDimension[detailItem.id])}
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
+        );
+      })()}
+
+      {/* Back button when in list mode from graph */}
+      {viewMode === 'list' && previousViewMode === 'cards' && (
+        <div className="flex justify-start">
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5"
+            onClick={() => {
+              // Close all open details and return to graph
+              setDetailOpenIds(new Set());
+              setGraphEntryItemId(null);
+              setPreviousViewMode(null);
+              setViewMode('cards');
+            }}
+          >
+            <ArrowLeftCircle className="h-4 w-4" />
+            Volver al Gráfico
+          </Button>
         </div>
       )}
 

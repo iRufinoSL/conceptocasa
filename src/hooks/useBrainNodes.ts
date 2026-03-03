@@ -36,6 +36,8 @@ const MODULE_CHILDREN = [
   { name: 'Configuración', icon: 'Settings', target_url: '/configuracion', color: '#78716C', order_index: 8 },
 ];
 
+const BRAIN_LAST_NODE_KEY = 'brain_last_active_node';
+
 export function useBrainNodes() {
   const { user } = useAuth();
   const [nodes, setNodes] = useState<BrainNode[]>([]);
@@ -61,15 +63,17 @@ export function useBrainNodes() {
     })) as BrainNode[];
 
     if (typedData.length === 0) {
-      // Seed initial nodes
       await seedNodes();
       return;
     }
 
     setNodes(typedData);
     if (!activeNodeId) {
+      // Restore last active node from localStorage
+      const savedNodeId = localStorage.getItem(BRAIN_LAST_NODE_KEY);
+      const savedNode = savedNodeId ? typedData.find(n => n.id === savedNodeId) : null;
       const root = typedData.find(n => n.parent_id === null);
-      if (root) setActiveNodeId(root.id);
+      setActiveNodeId(savedNode?.id || root?.id || null);
     }
     setLoading(false);
   }, [user, activeNodeId]);
@@ -122,29 +126,66 @@ export function useBrainNodes() {
       console.error('Error seeding children:', childErr);
     }
 
-    // Now seed presupuestos as children of "Presupuestos" node
+    // Now seed presupuestos grouped by status as children of "Presupuestos" node
     const presNode = childData?.find((c: any) => c.name === 'Presupuestos');
     if (presNode) {
-      const { data: budgets } = await supabase
-        .from('presupuestos')
-        .select('id, nombre')
-        .order('created_at', { ascending: false })
-        .limit(50);
+      // Create status category sub-nodes
+      const statusCategories = [
+        { name: 'Activos', icon: 'FolderKanban', color: '#22C55E', statusFilter: 'activo', archivedFilter: false, order: 0 },
+        { name: 'En Ejecución', icon: 'Layers', color: '#F59E0B', statusFilter: 'en_ejecucion', archivedFilter: false, order: 1 },
+        { name: 'Archivados', icon: 'Package', color: '#94A3B8', statusFilter: null, archivedFilter: true, order: 2 },
+      ];
 
-      if (budgets && budgets.length > 0) {
-        const budgetInserts = budgets.map((b: any, i: number) => ({
+      const { data: categoryData } = await supabase
+        .from('brain_nodes')
+        .insert(statusCategories.map(cat => ({
           user_id: user.id,
           parent_id: presNode.id,
-          name: b.nombre || 'Sin nombre',
-          icon: 'FileSpreadsheet',
-          node_type: 'data' as const,
-          target_url: `/presupuestos/${b.id}`,
-          target_params: { budgetId: b.id },
-          color: '#F59E0B',
-          order_index: i,
-        }));
+          name: cat.name,
+          icon: cat.icon,
+          node_type: 'module' as const,
+          target_url: '/presupuestos',
+          target_params: { filter: cat.statusFilter || 'archived' },
+          color: cat.color,
+          order_index: cat.order,
+        })))
+        .select();
 
-        await supabase.from('brain_nodes').insert(budgetInserts);
+      // Fetch all budgets and assign to categories
+      const { data: budgets } = await supabase
+        .from('presupuestos')
+        .select('id, nombre, status, archived')
+        .order('created_at', { ascending: false })
+        .limit(100);
+
+      if (budgets && budgets.length > 0 && categoryData) {
+        const budgetInserts: any[] = [];
+        budgets.forEach((b: any, i: number) => {
+          let parentCat: any = null;
+          if (b.archived) {
+            parentCat = categoryData.find((c: any) => c.name === 'Archivados');
+          } else if (b.status === 'en_ejecucion') {
+            parentCat = categoryData.find((c: any) => c.name === 'En Ejecución');
+          } else {
+            parentCat = categoryData.find((c: any) => c.name === 'Activos');
+          }
+          if (parentCat) {
+            budgetInserts.push({
+              user_id: user.id,
+              parent_id: parentCat.id,
+              name: b.nombre || 'Sin nombre',
+              icon: 'FileSpreadsheet',
+              node_type: 'data' as const,
+              target_url: `/presupuestos/${b.id}`,
+              target_params: { budgetId: b.id },
+              color: parentCat.color,
+              order_index: i,
+            });
+          }
+        });
+        if (budgetInserts.length > 0) {
+          await supabase.from('brain_nodes').insert(budgetInserts);
+        }
       }
     }
 
@@ -234,6 +275,7 @@ export function useBrainNodes() {
 
   const navigateTo = useCallback((nodeId: string) => {
     setActiveNodeId(nodeId);
+    localStorage.setItem(BRAIN_LAST_NODE_KEY, nodeId);
   }, []);
 
   const getBreadcrumbs = useCallback(() => {

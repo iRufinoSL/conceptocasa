@@ -370,6 +370,14 @@ export function ElevationsGridViewer({
   const [manualElevVertices, setManualElevVertices] = useState<string[]>([]);
   const [manualElevFloorId, setManualElevFloorId] = useState<string>('');
 
+  const openManualElevationDialog = useCallback(() => {
+    setViewMode('composite');
+    setManualElevName('');
+    setManualElevVertices([]);
+    setManualElevFloorId('');
+    setShowManualElevDialog(true);
+  }, []);
+
   // Scroll to focused wall on mount
   useEffect(() => {
     if (focusWallId) {
@@ -1006,6 +1014,18 @@ export function ElevationsGridViewer({
             <MapIcon className="h-3 w-3 mr-1" /> Alzados de coordenadas ({allCompositeWalls.length + (manualElevations || []).length})
           </Button>
         )}
+        {onManualElevationsChange && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="text-xs h-7"
+            onClick={openManualElevationDialog}
+            disabled={(customCorners?.length || 0) < 3}
+            title={(customCorners?.length || 0) < 3 ? 'Necesitas al menos 3 coordenadas para crear un alzado manual' : 'Crear un alzado manual entre coordenadas'}
+          >
+            <Plus className="h-3 w-3 mr-1" /> Añadir alzado manual
+          </Button>
+        )}
         {perFloorComposites.length >= 2 && (
           <Button variant={viewMode === 'total' ? 'default' : 'outline'} size="sm" className="text-xs h-7"
             onClick={() => setViewMode('total')}>
@@ -1233,12 +1253,7 @@ export function ElevationsGridViewer({
             />
           ))}
           {onManualElevationsChange && (
-            <Button variant="outline" size="sm" className="text-xs h-7" onClick={() => {
-              setManualElevName('');
-              setManualElevVertices([]);
-              setManualElevFloorId('');
-              setShowManualElevDialog(true);
-            }}>
+            <Button variant="outline" size="sm" className="text-xs h-7" onClick={openManualElevationDialog}>
               <Plus className="h-3 w-3 mr-1" /> Nuevo alzado manual
             </Button>
           )}

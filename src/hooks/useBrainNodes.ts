@@ -68,6 +68,7 @@ const BUDGET_SECONDARY_SUBLEVELS = [
 const DONDE_SUBLEVELS = [
   { name: 'Volúmenes', icon: 'Home', color: '#10B981', tab: 'espacios', order: 0, description: 'Espacios con coordenadas XYZ' },
   { name: 'Planos', icon: 'PenTool', color: '#14B8A6', tab: 'plano', order: 1, description: 'Cuadrículas por nivel' },
+  { name: 'Alzados', icon: 'Layers', color: '#0EA5E9', tab: 'alzados', order: 2, description: 'Vistas de alzados por fachada' },
 ];
 
 const extractBudgetIdFromNode = (node: BrainNode): string | null => {

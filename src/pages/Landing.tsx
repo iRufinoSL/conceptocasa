@@ -108,22 +108,29 @@ const Landing = () => {
     message: ""
   });
 
-  // Password gate
-  const [isUnlocked, setIsUnlocked] = useState(false);
+  // Password dialog for "Concepto" menu
+  const [showConceptoDialog, setShowConceptoDialog] = useState(false);
   const [passwordInput, setPasswordInput] = useState("");
   const [passwordError, setPasswordError] = useState(false);
 
-  useEffect(() => {
+  const handleConceptoClick = () => {
     const unlocked = sessionStorage.getItem("tolosa_prototype_unlocked");
-    if (unlocked === "true") setIsUnlocked(true);
-  }, []);
+    if (unlocked === "true") {
+      window.location.href = "/auth";
+      return;
+    }
+    setShowConceptoDialog(true);
+    setPasswordInput("");
+    setPasswordError(false);
+    setMobileMenuOpen(false);
+  };
 
   const handlePasswordSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (passwordInput === PROTOTYPE_PASSWORD) {
-      setIsUnlocked(true);
       sessionStorage.setItem("tolosa_prototype_unlocked", "true");
-      setPasswordError(false);
+      setShowConceptoDialog(false);
+      window.location.href = "/auth";
     } else {
       setPasswordError(true);
     }
@@ -226,53 +233,6 @@ const Landing = () => {
     })
   };
 
-  // Password Gate Screen
-  if (!isUnlocked) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center p-4">
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.5 }}
-          className="w-full max-w-md"
-        >
-          <Card className="p-8 text-center space-y-6 border-border/50 shadow-xl">
-            <div className="w-16 h-16 mx-auto rounded-2xl gradient-primary flex items-center justify-center">
-              <Lock className="w-8 h-8 text-primary-foreground" />
-            </div>
-            <div className="space-y-2">
-              <h1 className="text-2xl font-display font-bold text-foreground">
-                Concepto <span className="text-primary italic">To.Lo.Sa.</span>
-              </h1>
-              <p className="text-sm text-muted-foreground">
-                Prototipo en desarrollo · Acceso restringido
-              </p>
-            </div>
-            <form onSubmit={handlePasswordSubmit} className="space-y-4">
-              <div>
-                <Input
-                  type="password"
-                  placeholder="Introduce la contraseña"
-                  value={passwordInput}
-                  onChange={(e) => { setPasswordInput(e.target.value); setPasswordError(false); }}
-                  className={passwordError ? "border-destructive" : ""}
-                />
-                {passwordError && (
-                  <p className="text-sm text-destructive mt-1">Contraseña incorrecta</p>
-                )}
-              </div>
-              <Button type="submit" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">
-                Acceder al prototipo
-              </Button>
-            </form>
-            <p className="text-xs text-muted-foreground">
-              Si necesitas acceso, contacta con nosotros.
-            </p>
-          </Card>
-        </motion.div>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -300,11 +260,12 @@ const Landing = () => {
             </div>
 
             <div className="hidden lg:flex items-center gap-4">
-              <Link to="/auth">
-                <Button variant="outline" className="border-primary/30 text-primary hover:bg-primary/10">
-                  Acceso clientes
+              <button onClick={handleConceptoClick}>
+                <Button className="bg-primary hover:bg-primary/90 text-primary-foreground gap-2">
+                  <Sparkles className="w-4 h-4" />
+                  Concepto
                 </Button>
-              </Link>
+              </button>
             </div>
 
             <button className="lg:hidden p-2" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
@@ -321,7 +282,7 @@ const Landing = () => {
                 <button onClick={() => scrollToSection('compromiso')} className="text-left text-sm text-muted-foreground hover:text-primary">Tu Proyecto</button>
                 <button onClick={() => scrollToSection('proceso')} className="text-left text-sm text-muted-foreground hover:text-primary">Proceso</button>
                 <button onClick={() => scrollToSection('contacto')} className="text-left text-sm text-muted-foreground hover:text-primary">Contacto</button>
-                <Link to="/auth"><Button className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">Acceso clientes</Button></Link>
+                <button onClick={handleConceptoClick}><Button className="w-full bg-primary hover:bg-primary/90 text-primary-foreground gap-2"><Sparkles className="w-4 h-4" />Concepto</Button></button>
               </div>
             </div>
           )}
@@ -812,14 +773,64 @@ const Landing = () => {
             <p className="text-sm text-muted-foreground text-center">
               © {new Date().getFullYear()} Concepto To.Lo.Sa. — Viviendas que cuidan de ti.
             </p>
-            <Link to="/auth" className="text-sm text-primary hover:text-primary/80 transition-colors">
-              Acceso clientes →
-            </Link>
+            <button onClick={handleConceptoClick} className="text-sm text-primary hover:text-primary/80 transition-colors cursor-pointer">
+              Concepto →
+            </button>
           </div>
         </div>
       </footer>
 
       <HousingProfileForm open={showHousingForm} onOpenChange={setShowHousingForm} />
+
+      {/* Concepto Password Dialog */}
+      {showConceptoDialog && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-foreground/50 backdrop-blur-sm p-4">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.3 }}
+            className="w-full max-w-md"
+          >
+            <Card className="p-8 text-center space-y-6 border-border/50 shadow-xl relative">
+              <button
+                onClick={() => setShowConceptoDialog(false)}
+                className="absolute top-4 right-4 text-muted-foreground hover:text-foreground"
+              >
+                <X className="w-5 h-5" />
+              </button>
+              <div className="w-16 h-16 mx-auto rounded-2xl gradient-primary flex items-center justify-center">
+                <Lock className="w-8 h-8 text-primary-foreground" />
+              </div>
+              <div className="space-y-2">
+                <h2 className="text-2xl font-display font-bold text-foreground">
+                  Concepto <span className="text-primary italic">To.Lo.Sa.</span>
+                </h2>
+                <p className="text-sm text-muted-foreground">
+                  Área de gestión · Acceso con contraseña
+                </p>
+              </div>
+              <form onSubmit={handlePasswordSubmit} className="space-y-4">
+                <div>
+                  <Input
+                    type="password"
+                    placeholder="Introduce la contraseña"
+                    value={passwordInput}
+                    onChange={(e) => { setPasswordInput(e.target.value); setPasswordError(false); }}
+                    className={passwordError ? "border-destructive" : ""}
+                    autoFocus
+                  />
+                  {passwordError && (
+                    <p className="text-sm text-destructive mt-1">Contraseña incorrecta</p>
+                  )}
+                </div>
+                <Button type="submit" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">
+                  Acceder
+                </Button>
+              </form>
+            </Card>
+          </motion.div>
+        </div>
+      )}
     </div>
   );
 };

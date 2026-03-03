@@ -35,7 +35,7 @@ import {
 import heroPassivhaus from "@/assets/hero-passivhaus.jpg";
 import healthyInterior from "@/assets/healthy-home-interior.jpg";
 
-const PROTOTYPE_PASSWORD = "tosa2025";
+
 
 const formatFileSize = (bytes: number): string => {
   if (bytes === 0) return '0 Bytes';
@@ -108,33 +108,6 @@ const Landing = () => {
     message: ""
   });
 
-  // Password dialog for "Concepto" menu
-  const [showConceptoDialog, setShowConceptoDialog] = useState(false);
-  const [passwordInput, setPasswordInput] = useState("");
-  const [passwordError, setPasswordError] = useState(false);
-
-  const handleConceptoClick = () => {
-    const unlocked = sessionStorage.getItem("tolosa_prototype_unlocked");
-    if (unlocked === "true") {
-      window.location.href = "/auth";
-      return;
-    }
-    setShowConceptoDialog(true);
-    setPasswordInput("");
-    setPasswordError(false);
-    setMobileMenuOpen(false);
-  };
-
-  const handlePasswordSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (passwordInput === PROTOTYPE_PASSWORD) {
-      sessionStorage.setItem("tolosa_prototype_unlocked", "true");
-      setShowConceptoDialog(false);
-      window.location.href = "/auth";
-    } else {
-      setPasswordError(true);
-    }
-  };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -260,12 +233,11 @@ const Landing = () => {
             </div>
 
             <div className="hidden lg:flex items-center gap-4">
-              <button onClick={handleConceptoClick}>
-                <Button className="bg-primary hover:bg-primary/90 text-primary-foreground gap-2">
-                  <Sparkles className="w-4 h-4" />
-                  Concepto
+              <Link to="/auth">
+                <Button variant="outline" className="gap-2 border-primary/30 text-primary hover:bg-primary hover:text-primary-foreground">
+                  Acceso
                 </Button>
-              </button>
+              </Link>
             </div>
 
             <button className="lg:hidden p-2" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
@@ -282,7 +254,7 @@ const Landing = () => {
                 <button onClick={() => scrollToSection('compromiso')} className="text-left text-sm text-muted-foreground hover:text-primary">Tu Proyecto</button>
                 <button onClick={() => scrollToSection('proceso')} className="text-left text-sm text-muted-foreground hover:text-primary">Proceso</button>
                 <button onClick={() => scrollToSection('contacto')} className="text-left text-sm text-muted-foreground hover:text-primary">Contacto</button>
-                <button onClick={handleConceptoClick}><Button className="w-full bg-primary hover:bg-primary/90 text-primary-foreground gap-2"><Sparkles className="w-4 h-4" />Concepto</Button></button>
+                <Link to="/auth"><Button className="w-full border-primary/30 text-primary hover:bg-primary hover:text-primary-foreground gap-2" variant="outline">Acceso</Button></Link>
               </div>
             </div>
           )}
@@ -775,64 +747,14 @@ const Landing = () => {
             <p className="text-sm text-muted-foreground text-center">
               © {new Date().getFullYear()} Concepto To.Lo.Sa. — Viviendas que cuidan de ti.
             </p>
-            <button onClick={handleConceptoClick} className="text-sm text-primary hover:text-primary/80 transition-colors cursor-pointer">
-              Concepto →
-            </button>
+            <Link to="/auth" className="text-sm text-primary hover:text-primary/80 transition-colors cursor-pointer">
+              Acceso →
+            </Link>
           </div>
         </div>
       </footer>
 
       <HousingProfileForm open={showHousingForm} onOpenChange={setShowHousingForm} />
-
-      {/* Concepto Password Dialog */}
-      {showConceptoDialog && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-foreground/50 backdrop-blur-sm p-4">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.3 }}
-            className="w-full max-w-md"
-          >
-            <Card className="p-8 text-center space-y-6 border-border/50 shadow-xl relative">
-              <button
-                onClick={() => setShowConceptoDialog(false)}
-                className="absolute top-4 right-4 text-muted-foreground hover:text-foreground"
-              >
-                <X className="w-5 h-5" />
-              </button>
-              <div className="w-16 h-16 mx-auto rounded-2xl gradient-primary flex items-center justify-center">
-                <Lock className="w-8 h-8 text-primary-foreground" />
-              </div>
-              <div className="space-y-2">
-                <h2 className="text-2xl font-display font-bold text-foreground">
-                  Concepto <span className="text-primary italic">To.Lo.Sa.</span>
-                </h2>
-                <p className="text-sm text-muted-foreground">
-                  Área de gestión · Acceso con contraseña
-                </p>
-              </div>
-              <form onSubmit={handlePasswordSubmit} className="space-y-4">
-                <div>
-                  <Input
-                    type="password"
-                    placeholder="Introduce la contraseña"
-                    value={passwordInput}
-                    onChange={(e) => { setPasswordInput(e.target.value); setPasswordError(false); }}
-                    className={passwordError ? "border-destructive" : ""}
-                    autoFocus
-                  />
-                  {passwordError && (
-                    <p className="text-sm text-destructive mt-1">Contraseña incorrecta</p>
-                  )}
-                </div>
-                <Button type="submit" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">
-                  Acceder
-                </Button>
-              </form>
-            </Card>
-          </motion.div>
-        </div>
-      )}
     </div>
   );
 };

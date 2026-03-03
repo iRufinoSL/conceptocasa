@@ -37,12 +37,160 @@ const MODULE_CHILDREN = [
 ];
 
 const BRAIN_LAST_NODE_KEY = 'brain_last_active_node';
+const BUDGET_CATEGORIES = [
+  { name: 'Activos', icon: 'FolderKanban', color: '#22C55E', order: 0, filter: 'activo' },
+  { name: 'En Ejecución', icon: 'Layers', color: '#F59E0B', order: 1, filter: 'en_ejecucion' },
+  { name: 'Archivados', icon: 'Package', color: '#94A3B8', order: 2, filter: 'archived' },
+] as const;
+
+const BUDGET_CATEGORY_NAMES = BUDGET_CATEGORIES.map(category => category.name);
+
+const extractBudgetIdFromNode = (node: BrainNode): string | null => {
+  const budgetIdFromParams = (node.target_params as { budgetId?: unknown } | null)?.budgetId;
+  if (typeof budgetIdFromParams === 'string' && budgetIdFromParams) {
+    return budgetIdFromParams;
+  }
+
+  if (typeof node.target_url === 'string' && node.target_url.startsWith('/presupuestos/')) {
+    const [, , budgetId] = node.target_url.split('/');
+    return budgetId || null;
+  }
+
+  return null;
+};
+
+const resolveBudgetCategoryName = (status: string | null | undefined, archived: boolean | null | undefined) => {
+  if (archived) return 'Archivados';
+  if (status === 'en_ejecucion') return 'En Ejecución';
+  return 'Activos';
+};
 
 export function useBrainNodes() {
   const { user } = useAuth();
   const [nodes, setNodes] = useState<BrainNode[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeNodeId, setActiveNodeId] = useState<string | null>(null);
+
+  const ensureBudgetHierarchy = useCallback(async (currentNodes: BrainNode[]) => {
+    if (!user) return false;
+
+    const budgetsNode = currentNodes.find(
+      node => node.name === 'Presupuestos' && node.target_url === '/presupuestos',
+    );
+
+    if (!budgetsNode) return false;
+
+    const directChildren = currentNodes.filter(node => node.parent_id === budgetsNode.id);
+    const existingCategories = directChildren.filter(node => BUDGET_CATEGORY_NAMES.includes(node.name as any));
+    const categoryByName = new Map(existingCategories.map(node => [node.name, node]));
+
+    let didChange = false;
+
+    const missingCategories = BUDGET_CATEGORIES.filter(category => !categoryByName.has(category.name));
+    if (missingCategories.length > 0) {
+      const { data: insertedCategories, error: insertCategoriesError } = await supabase
+        .from('brain_nodes')
+        .insert(
+          missingCategories.map(category => ({
+            user_id: user.id,
+            parent_id: budgetsNode.id,
+            name: category.name,
+            icon: category.icon,
+            node_type: 'module' as const,
+            target_url: '/presupuestos',
+            target_params: { filter: category.filter },
+            color: category.color,
+            order_index: category.order,
+          })),
+        )
+        .select();
+
+      if (insertCategoriesError) {
+        console.error('Error creating budget categories in Brain:', insertCategoriesError);
+      } else {
+        insertedCategories?.forEach((category: any) => {
+          categoryByName.set(category.name, category as BrainNode);
+        });
+        didChange = true;
+      }
+    }
+
+    const misplacedBudgetNodes = directChildren.filter(node => {
+      if (node.node_type !== 'data') return false;
+      return Boolean(extractBudgetIdFromNode(node));
+    });
+
+    if (misplacedBudgetNodes.length === 0) {
+      return didChange;
+    }
+
+    const budgetIds = Array.from(new Set(
+      misplacedBudgetNodes
+        .map(extractBudgetIdFromNode)
+        .filter((budgetId): budgetId is string => Boolean(budgetId)),
+    ));
+
+    if (budgetIds.length === 0) {
+      return didChange;
+    }
+
+    const { data: budgets, error: budgetsError } = await supabase
+      .from('presupuestos')
+      .select('id, status, archived')
+      .in('id', budgetIds);
+
+    if (budgetsError) {
+      console.error('Error loading budget status for Brain hierarchy:', budgetsError);
+      return didChange;
+    }
+
+    const budgetsById = new Map((budgets || []).map((budget: any) => [budget.id, budget]));
+
+    const nextOrderByCategory = new Map<string, number>();
+    BUDGET_CATEGORY_NAMES.forEach(categoryName => {
+      const categoryNode = categoryByName.get(categoryName);
+      if (!categoryNode) {
+        nextOrderByCategory.set(categoryName, 0);
+        return;
+      }
+      const maxOrder = currentNodes
+        .filter(node => node.parent_id === categoryNode.id)
+        .reduce((max, node) => Math.max(max, node.order_index), -1);
+      nextOrderByCategory.set(categoryName, maxOrder + 1);
+    });
+
+    const updates = misplacedBudgetNodes.map(node => {
+      const budgetId = extractBudgetIdFromNode(node);
+      const budget = budgetId ? budgetsById.get(budgetId) : null;
+      const categoryName = resolveBudgetCategoryName(budget?.status, budget?.archived);
+      const categoryNode = categoryByName.get(categoryName) || categoryByName.get('Activos');
+      const orderIndex = nextOrderByCategory.get(categoryName) ?? 0;
+      nextOrderByCategory.set(categoryName, orderIndex + 1);
+
+      return {
+        nodeId: node.id,
+        parentId: categoryNode?.id || budgetsNode.id,
+        orderIndex,
+      };
+    });
+
+    const updateResults = await Promise.all(
+      updates.map(update => supabase
+        .from('brain_nodes')
+        .update({ parent_id: update.parentId, order_index: update.orderIndex })
+        .eq('id', update.nodeId)),
+    );
+
+    updateResults.forEach(result => {
+      if (result.error) {
+        console.error('Error moving budget node into category:', result.error);
+      } else {
+        didChange = true;
+      }
+    });
+
+    return didChange;
+  }, [user]);
 
   const fetchNodes = useCallback(async () => {
     if (!user) return;
@@ -67,6 +215,12 @@ export function useBrainNodes() {
       return;
     }
 
+    const hierarchyUpdated = await ensureBudgetHierarchy(typedData);
+    if (hierarchyUpdated) {
+      await fetchNodes();
+      return;
+    }
+
     setNodes(typedData);
     if (!activeNodeId) {
       // Restore last active node from localStorage
@@ -76,7 +230,7 @@ export function useBrainNodes() {
       setActiveNodeId(savedNode?.id || root?.id || null);
     }
     setLoading(false);
-  }, [user, activeNodeId]);
+  }, [user, activeNodeId, ensureBudgetHierarchy]);
 
   const seedNodes = useCallback(async () => {
     if (!user) return;

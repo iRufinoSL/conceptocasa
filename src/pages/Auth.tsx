@@ -59,7 +59,8 @@ export default function Auth() {
     if (user && !loading && mode !== 'reset-password' && mode !== '2fa-verification') {
       // Check if there's a saved location to redirect to
       const from = (location.state as { from?: { pathname: string } })?.from?.pathname;
-      navigate(from || '/dashboard', { replace: true });
+      // Default to /brain as the main entry point after login
+      navigate(from || '/brain', { replace: true });
     }
   }, [user, loading, navigate, mode, location.state]);
 

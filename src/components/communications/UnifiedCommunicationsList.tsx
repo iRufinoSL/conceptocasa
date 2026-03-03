@@ -104,6 +104,7 @@ export function UnifiedCommunicationsList({
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [search, setSearch] = useState('');
+  const [isSyncing, setIsSyncing] = useState(false);
   const [selectedCommunication, setSelectedCommunication] = useState<UnifiedCommunication | null>(null);
   const [isInboxExpanded, setIsInboxExpanded] = useState(true);
   const [isOutboxExpanded, setIsOutboxExpanded] = useState(true);
@@ -117,6 +118,26 @@ export function UnifiedCommunicationsList({
   const [fullscreenCommunication, setFullscreenCommunication] = useState<UnifiedCommunication | null>(null);
   const [showCreateDocument, setShowCreateDocument] = useState(false);
   const [emailForDocument, setEmailForDocument] = useState<EmailMessage | null>(null);
+
+  const handleSyncResend = async () => {
+    setIsSyncing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('sync-emails', {
+        body: { since: '2026-02-01T00:00:00Z' }
+      });
+      if (error) throw error;
+      toast({
+        title: 'Sincronización completada',
+        description: `Enviados: ${data.sent_synced} nuevos, Recibidos: ${data.received_synced} nuevos`,
+      });
+      queryClient.invalidateQueries({ queryKey: ['unified-communications'] });
+    } catch (error: any) {
+      console.error('Error syncing emails:', error);
+      toast({ title: 'Error', description: 'Error al sincronizar emails', variant: 'destructive' });
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   const getEmailAttachmentDisplayName = (att: EmailAttachment) => {
     const name = (att.file_name || '').trim();
@@ -1123,15 +1144,29 @@ export function UnifiedCommunicationsList({
         </Card>
       </div>
 
-      {/* Search */}
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input
-          placeholder="Buscar por contacto, asunto, contenido..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="pl-9"
-        />
+      {/* Search + Sync */}
+      <div className="flex items-center gap-2">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Buscar por contacto, asunto, contenido..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-9"
+          />
+        </div>
+        {isAdmin && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleSyncResend}
+            disabled={isSyncing}
+            className="gap-2 shrink-0"
+          >
+            <Download className={`h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />
+            {isSyncing ? 'Sincronizando...' : 'Sincronizar'}
+          </Button>
+        )}
       </div>
 
       {/* Two-column layout */}

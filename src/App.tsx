@@ -46,7 +46,8 @@ const App = () => {
           <InactivityHandler />
           <Routes>
             {/* Public routes */}
-            <Route path="/" element={<Landing />} />
+            <Route path="/" element={<Soluciones />} />
+            <Route path="/concepto" element={<Landing />} />
             <Route path="/auth" element={<Auth />} />
             <Route path="/setup" element={<Setup />} />
             <Route path="/install" element={<Install />} />

@@ -507,8 +507,8 @@ const Soluciones = () => {
             </div>
 
             <div className="hidden lg:flex items-center gap-3">
-              <Link to="/">
-                <Button variant="outline" size="sm">← Concepto.Casa</Button>
+              <Link to="/concepto">
+                <Button size="sm" className="bg-primary hover:bg-primary/90 text-primary-foreground">Concepto</Button>
               </Link>
             </div>
 
@@ -523,7 +523,7 @@ const Soluciones = () => {
               <button onClick={() => scrollToSection("sol-services")} className="block text-sm text-muted-foreground">All Services</button>
               <button onClick={() => scrollToSection("sol-categories")} className="block text-sm text-muted-foreground">Categories</button>
               <button onClick={() => scrollToSection("sol-how")} className="block text-sm text-muted-foreground">How does it work?</button>
-              <Link to="/"><Button variant="outline" size="sm" className="w-full">← Concepto.Casa</Button></Link>
+              <Link to="/concepto"><Button size="sm" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">Concepto</Button></Link>
             </div>
           )}
         </div>

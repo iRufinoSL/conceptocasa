@@ -2,13 +2,11 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import {
   Home,
   Mail,
   Menu,
   X,
-  Lock,
   Search,
   ClipboardList,
   Users,
@@ -27,8 +25,6 @@ import {
   CheckCircle2,
   ArrowRight,
 } from "lucide-react";
-
-const PASSWORD = "soluciones2025";
 
 /* ────────────────────── DATA ────────────────────── */
 
@@ -409,21 +405,8 @@ const howItWorks = [
 /* ────────────────────── COMPONENT ────────────────────── */
 
 const Soluciones = () => {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [password, setPassword] = useState("");
-  const [passwordError, setPasswordError] = useState(false);
   const [expandedCategories, setExpandedCategories] = useState<Set<number>>(new Set());
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-
-  const handlePasswordSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (password === PASSWORD) {
-      setIsAuthenticated(true);
-      setPasswordError(false);
-    } else {
-      setPasswordError(true);
-    }
-  };
 
   const toggleCategory = (index: number) => {
     setExpandedCategories((prev) => {
@@ -439,49 +422,6 @@ const Soluciones = () => {
     setMobileMenuOpen(false);
   };
 
-  /* ── Password gate ── */
-  if (!isAuthenticated) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center p-4">
-        <Card className="w-full max-w-md p-8 space-y-6">
-          <div className="text-center space-y-2">
-            <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto">
-              <Lock className="w-8 h-8 text-primary" />
-            </div>
-            <h1 className="text-2xl font-bold text-foreground">Soluciones</h1>
-            <p className="text-sm text-muted-foreground">
-              Esta sección está en desarrollo. Introduce la contraseña para acceder.
-            </p>
-          </div>
-          <form onSubmit={handlePasswordSubmit} className="space-y-4">
-            <Input
-              type="password"
-              placeholder="Contraseña"
-              value={password}
-              onChange={(e) => {
-                setPassword(e.target.value);
-                setPasswordError(false);
-              }}
-              className={passwordError ? "border-destructive" : ""}
-            />
-            {passwordError && (
-              <p className="text-sm text-destructive">Contraseña incorrecta</p>
-            )}
-            <Button type="submit" className="w-full">
-              Acceder
-            </Button>
-          </form>
-          <div className="text-center">
-            <Link to="/" className="text-sm text-muted-foreground hover:text-primary transition-colors">
-              ← Volver a Concepto.Casa
-            </Link>
-          </div>
-        </Card>
-      </div>
-    );
-  }
-
-  /* ── Main content ── */
   return (
     <div className="min-h-screen bg-background">
       {/* Navigation */}

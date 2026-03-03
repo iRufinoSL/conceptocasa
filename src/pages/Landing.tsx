@@ -35,7 +35,7 @@ import {
 import heroPassivhaus from "@/assets/hero-passivhaus.jpg";
 import healthyInterior from "@/assets/healthy-home-interior.jpg";
 
-const PROTOTYPE_PASSWORD = "tolosa2025";
+const PROTOTYPE_PASSWORD = "tosa2025";
 
 const formatFileSize = (bytes: number): string => {
   if (bytes === 0) return '0 Bytes';

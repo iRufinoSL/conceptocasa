@@ -324,9 +324,9 @@ const Landing = () => {
               transition={{ delay: 0.6 }}
               className="text-lg md:text-xl text-background/90 leading-relaxed text-overlay-dark"
             >
-              Construimos la casa con la que siempre soñaste. Un hogar que protege tu salud, 
-              respira aire puro y envuelve a tu familia en confort. Porque mereces vivir en un 
-              lugar que haga realidad tu ilusión.
+               Diseñamos y construimos viviendas unifamiliares con estándar Passivhaus: 
+               ventilación mecánica con recuperación de calor, envolvente térmica continua 
+               y demanda energética inferior a 15 kWh/m²·año.
             </motion.p>
 
             <motion.div
@@ -340,7 +340,7 @@ const Landing = () => {
                 className="bg-primary hover:bg-primary/90 text-primary-foreground px-8 gap-2"
                 onClick={() => scrollToSection('contacto')}
               >
-                Hablemos de tu sueño
+                Solicita información técnica
                 <ArrowRight className="w-4 h-4" />
               </Button>
               <Button 
@@ -374,17 +374,19 @@ const Landing = () => {
               <span className="text-sm text-primary font-semibold uppercase tracking-widest">Nuestra filosofía</span>
               <h2 className="text-3xl md:text-5xl font-bold text-foreground leading-tight">
                 No construimos casas.{" "}
-                <span className="font-display italic text-primary">Cumplimos sueños.</span>
+                <span className="font-display italic text-primary">Aplicamos ciencia constructiva.</span>
               </h2>
               <p className="text-muted-foreground text-lg leading-relaxed">
-                Sabemos que una casa no es solo un edificio. Es el lugar donde tu familia crece, 
-                descansa y vive. Por eso ponemos toda nuestra experiencia y conocimiento al servicio 
-                de tu ilusión: crear un hogar donde cada detalle esté pensado para tu bienestar.
+                Cada vivienda que ejecutamos integra un sistema completo de gestión del confort: 
+                aislamiento térmico continuo sin puentes térmicos, carpinterías de triple vidrio, 
+                y un sistema de ventilación con filtros F7 que renueva el aire interior cada 2 horas 
+                manteniendo la temperatura estable.
               </p>
               <p className="text-muted-foreground text-lg leading-relaxed">
-                El estándar <strong className="text-foreground">Passivhaus</strong> nos permite garantizar 
-                lo que otros solo prometen: eficiencia real, salud medible y un confort que se siente 
-                desde el primer día. Décadas de experiencia avalan nuestro compromiso.
+                El estándar <strong className="text-foreground">Passivhaus</strong> no es una etiqueta comercial: 
+                es un protocolo de diseño y construcción verificado con ensayos Blower Door (n50 ≤ 0,6 h⁻¹), 
+                termografía infrarroja y monitorización energética real. Más de 15 años de experiencia 
+                respaldan cada proyecto.
               </p>
               <div className="flex items-center gap-6 pt-4">
                 <div className="text-center">
@@ -577,17 +579,17 @@ const Landing = () => {
           >
             <span className="text-sm text-primary font-semibold uppercase tracking-widest">Nuestro proceso</span>
             <h2 className="text-3xl md:text-5xl font-bold text-foreground mt-3">
-              De tu sueño a{" "}
-              <span className="font-display italic text-primary">tu hogar</span>
+               Del análisis inicial al{" "}
+              <span className="font-display italic text-primary">certificado final</span>
             </h2>
           </motion.div>
 
           <div className="grid md:grid-cols-4 gap-8">
             {[
-              { step: "01", title: "Escuchamos", desc: "Entendemos tu estilo de vida, tu familia y tus necesidades para diseñar un hogar a tu medida." },
-              { step: "02", title: "Diseñamos", desc: "Proyecto arquitectónico con simulación energética Passivhaus. Sabrás exactamente cómo será tu casa." },
-              { step: "03", title: "Construimos", desc: "Construcción con control de calidad en cada fase. Participas en las decisiones, sin sorpresas." },
-              { step: "04", title: "Certificamos", desc: "Test de hermeticidad Blower Door y certificación oficial. Tu casa cumple lo que prometemos." }
+              { step: "01", title: "Análisis", desc: "Estudio del terreno, orientación solar, normativa urbanística y programa de necesidades del cliente." },
+              { step: "02", title: "Diseño PHPP", desc: "Modelado energético con PHPP (Passive House Planning Package). Simulación de demanda, ganancias solares y ventilación." },
+              { step: "03", title: "Ejecución", desc: "Construcción con control de estanqueidad, continuidad de aislamiento y supervisión técnica en cada fase." },
+              { step: "04", title: "Certificación", desc: "Ensayo Blower Door, termografía y trámite de certificación Passivhaus ante el PHI (Passive House Institute)." }
             ].map((item, i) => (
               <motion.div
                 key={item.step}
@@ -618,10 +620,10 @@ const Landing = () => {
             className="space-y-6"
           >
             <h2 className="text-3xl md:text-4xl font-bold text-primary-foreground">
-              ¿Preparado para hacer realidad tu sueño?
+              ¿Listo para un proyecto con garantías técnicas reales?
             </h2>
             <p className="text-primary-foreground/80 max-w-xl mx-auto text-lg">
-              Cuéntanos tu proyecto. Sin compromiso, con toda la ilusión y la experiencia que merecéis.
+              Analizamos tu caso sin compromiso. Estudio de viabilidad, estimación energética y presupuesto orientativo.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Button 
@@ -725,7 +727,7 @@ const Landing = () => {
                   </div>
                   <div>
                     <label className="text-sm font-medium text-foreground mb-1.5 block">Mensaje</label>
-                    <Textarea name="message" value={formData.message} onChange={handleInputChange} placeholder="Cuéntanos tu sueño..." rows={4} required />
+                    <Textarea name="message" value={formData.message} onChange={handleInputChange} placeholder="Describe tu proyecto: ubicación, superficie, necesidades específicas..." rows={4} required />
                   </div>
 
                   <div>

@@ -318,7 +318,7 @@ const Landing = () => {
               <Button 
                 size="lg" 
                 variant="outline" 
-                className="border-background/40 text-background hover:bg-background/10 backdrop-blur-sm"
+                className="border-background/40 text-foreground bg-background/80 hover:bg-background/90 backdrop-blur-sm"
                 onClick={() => scrollToSection('filosofia')}
               >
                 Descubre nuestra filosofía

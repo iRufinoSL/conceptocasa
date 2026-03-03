@@ -17,6 +17,16 @@ export interface CustomCorner {
   floorId?: string;
 }
 
+/** A manually-defined polygonal elevation (triangle, pentagon, etc.) built from coordinate labels */
+export interface ManualElevation {
+  id: string;
+  name: string;
+  /** Labels of corners that form the polygon vertices, in order */
+  vertexLabels: string[];
+  /** Optional floor ID if scoped to a specific level */
+  floorId?: string;
+}
+
 interface DbFloorPlan {
   id: string;
   budget_id: string;
@@ -109,6 +119,7 @@ export function useFloorPlan(budgetId: string) {
   const [rooms, setRooms] = useState<RoomData[]>([]);
   const [floors, setFloors] = useState<FloorLevel[]>([]);
   const [customCorners, setCustomCornersState] = useState<CustomCorner[]>([]);
+  const [manualElevations, setManualElevationsState] = useState<ManualElevation[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, _setSaving] = useState(false);
   const savingRef = useRef(false);
@@ -142,7 +153,18 @@ export function useFloorPlan(budgetId: string) {
       }
 
       setFloorPlan(fp as DbFloorPlan);
-      setCustomCornersState(Array.isArray((fp as any).custom_corners) ? (fp as any).custom_corners : []);
+      // Parse custom_corners — may be plain array (legacy) or wrapper object with manualElevations
+      const rawCorners = (fp as any).custom_corners;
+      if (Array.isArray(rawCorners)) {
+        setCustomCornersState(rawCorners);
+        setManualElevationsState([]);
+      } else if (rawCorners && typeof rawCorners === 'object' && Array.isArray(rawCorners.corners)) {
+        setCustomCornersState(rawCorners.corners);
+        setManualElevationsState(Array.isArray(rawCorners.manualElevations) ? rawCorners.manualElevations : []);
+      } else {
+        setCustomCornersState([]);
+        setManualElevationsState([]);
+      }
 
       // Fetch floors
       const { data: floorsData } = await supabase
@@ -425,9 +447,12 @@ export function useFloorPlan(budgetId: string) {
           col: c.col + colShift,
           row: c.row + rowShift,
         }));
+        const payload = manualElevations.length > 0
+          ? { corners: shiftedCorners, manualElevations }
+          : shiftedCorners;
         await supabase
           .from('budget_floor_plans')
-          .update({ custom_corners: shiftedCorners } as any)
+          .update({ custom_corners: payload } as any)
           .eq('id', floorPlan!.id);
       }
     }
@@ -455,7 +480,10 @@ export function useFloorPlan(budgetId: string) {
       }
       if (customCorners.length > 0) {
         const shiftedCorners = customCorners.map(c => ({ ...c, col: c.col + deltaCol, row: c.row + deltaRow }));
-        await supabase.from('budget_floor_plans').update({ custom_corners: shiftedCorners } as any).eq('id', floorPlan.id);
+        const payload = manualElevations.length > 0
+          ? { corners: shiftedCorners, manualElevations }
+          : shiftedCorners;
+        await supabase.from('budget_floor_plans').update({ custom_corners: payload } as any).eq('id', floorPlan.id);
       }
       console.log(`[SHIFT-MANUAL] Grid shifted by ${deltaCol} cols, ${deltaRow} rows`);
       await fetchAll();
@@ -1440,25 +1468,39 @@ export function useFloorPlan(budgetId: string) {
     }
   };
 
+  /** Helper to persist corners + manual elevations together */
+  const persistCornersData = async (corners: CustomCorner[], elevations: ManualElevation[]) => {
+    if (!floorPlan) return;
+    // If there are manual elevations, store as wrapper object; otherwise keep plain array for backward compat
+    const payload = elevations.length > 0
+      ? { corners, manualElevations: elevations }
+      : corners;
+    try {
+      const { error } = await supabase
+        .from('budget_floor_plans')
+        .update({ custom_corners: payload } as any)
+        .eq('id', floorPlan.id);
+      if (error) {
+        console.error('[CORNERS] Error saving:', error);
+        toast.error('Error al guardar coordenadas');
+      }
+    } catch (err) {
+      console.error('[CORNERS] Exception saving:', err);
+      toast.error('Error al guardar coordenadas');
+    }
+  };
+
   const updateCustomCorners = async (corners: CustomCorner[]) => {
     if (!floorPlan) return;
     console.log('[CORNERS] Saving corners with Z values:', corners.map(c => `${c.label}=(${c.col-1},${c.row-1},${c.z ?? 0})`).join(', '));
     setCustomCornersState(corners);
-    try {
-      const { error } = await supabase
-        .from('budget_floor_plans')
-        .update({ custom_corners: corners } as any)
-        .eq('id', floorPlan.id);
-      if (error) {
-        console.error('[CORNERS] Error saving custom corners:', error);
-        toast.error('Error al guardar coordenadas');
-      } else {
-        console.log('[CORNERS] Corners saved successfully');
-      }
-    } catch (err) {
-      console.error('[CORNERS] Exception saving custom corners:', err);
-      toast.error('Error al guardar coordenadas');
-    }
+    await persistCornersData(corners, manualElevations);
+  };
+
+  const updateManualElevations = async (elevations: ManualElevation[]) => {
+    if (!floorPlan) return;
+    setManualElevationsState(elevations);
+    await persistCornersData(customCorners, elevations);
   };
 
   return {
@@ -1467,6 +1509,8 @@ export function useFloorPlan(budgetId: string) {
     floors,
     customCorners,
     updateCustomCorners,
+    manualElevations,
+    updateManualElevations,
     loading,
     saving,
     createFloorPlan,

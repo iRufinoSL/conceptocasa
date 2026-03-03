@@ -802,7 +802,7 @@ class SpaceFormErrorBoundary extends React.Component<
 
 export function FloorPlanTab({ budgetId, budgetName = '', isAdmin }: FloorPlanTabProps) {
   const {
-    floorPlan, rooms, floors, customCorners, updateCustomCorners, loading, saving,
+    floorPlan, rooms, floors, customCorners, updateCustomCorners, manualElevations, updateManualElevations, loading, saving,
     addRoom, updateRoom, updateWall, updateWallSegmentType, deleteRoom, duplicateRoom,
     addOpening, updateOpening, deleteOpening, updateFloorPlan,
     classifyPerimeterWalls, syncToMeasurements, getPlanData, refetch,
@@ -1379,6 +1379,8 @@ export function FloorPlanTab({ budgetId, budgetName = '', isAdmin }: FloorPlanTa
           budgetName={budgetName}
           customCorners={customCorners}
           onCustomCornersChange={updateCustomCorners}
+          manualElevations={manualElevations}
+          onManualElevationsChange={updateManualElevations}
         />
       )}
 

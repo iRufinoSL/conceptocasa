@@ -13,7 +13,7 @@ import jsPDF from 'jspdf';
 import { toast } from 'sonner';
 import { OPENING_PRESETS, WALL_LABELS, WALL_SIDE_LETTERS, computeWallSegments, autoClassifyWalls, generateExternalWallNames, isExteriorType, isInvisibleType, computeBuildingOutline, computeCompositeWalls, computeCompositeWallsFromCorners, calcBajoCubiertaWallHeight, getBlockDimensions, getEffectiveRidgeHeight, calculateRoom } from '@/lib/floor-plan-calculations';
 import type { RoomData, WallData, OpeningData, FloorPlanData, WallSegment, FloorLevel, WallType, BlockGroupData, OutlineVertex, CompositeWall } from '@/lib/floor-plan-calculations';
-import type { CustomCorner } from '@/hooks/useFloorPlan';
+import type { CustomCorner, ManualElevation } from '@/hooks/useFloorPlan';
 import { parseCoord, formatCoord } from './FloorPlanGridView';
 
 interface ElevationsGridViewerProps {
@@ -34,6 +34,8 @@ interface ElevationsGridViewerProps {
   budgetName?: string;
   customCorners?: CustomCorner[];
   onCustomCornersChange?: (corners: CustomCorner[]) => void;
+  manualElevations?: ManualElevation[];
+  onManualElevationsChange?: (elevations: ManualElevation[]) => void;
 }
 
 type SurfaceCategory = 'cimentacion' | 'suelo' | 'techo' | 'pared' | 'volumen' | 'tejado' | 'faldon';
@@ -354,7 +356,7 @@ function getGablePeakHeight(plan: FloorPlanData, rooms: RoomData[]): number {
 export function ElevationsGridViewer({
   plan, rooms, floors, onUpdateOpening, onAddOpening, onDeleteOpening, onUpdateWall, onUpdateWallSegmentType,
   onAddBlockGroup, onDeleteBlockGroup, onUpdateBlockGroup, saving, focusWallId, autoEditWallId, budgetName,
-  customCorners, onCustomCornersChange,
+  customCorners, onCustomCornersChange, manualElevations, onManualElevationsChange,
 }: ElevationsGridViewerProps) {
   const [selectedOpening, setSelectedOpening] = useState<OpeningData | null>(null);
   const [selectedOpeningWallLen, setSelectedOpeningWallLen] = useState<number>(1);
@@ -362,7 +364,11 @@ export function ElevationsGridViewer({
   const [editCard, setEditCard] = useState<ElevationCard | null>(null);
   const [editCardDialogOpen, setEditCardDialogOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'rooms' | 'groups' | 'composite' | 'total' | 'vivienda'>('rooms');
-  // showFaldonesWithAleros removed — faldones are now in Volúmenes tab
+  // Manual elevation dialog state
+  const [showManualElevDialog, setShowManualElevDialog] = useState(false);
+  const [manualElevName, setManualElevName] = useState('');
+  const [manualElevVertices, setManualElevVertices] = useState<string[]>([]);
+  const [manualElevFloorId, setManualElevFloorId] = useState<string>('');
 
   // Scroll to focused wall on mount
   useEffect(() => {
@@ -1209,7 +1215,36 @@ export function ElevationsGridViewer({
         </div>
       )}
 
-      {/* Total Elevation view — stacked floors per building side */}
+      {/* Manual polygon elevations — shown in composite view */}
+      {viewMode === 'composite' && (
+        <div className="space-y-3">
+          {(manualElevations || []).map(me => (
+            <ManualElevationPolygonCard
+              key={me.id}
+              elevation={me}
+              allCorners={customCorners || []}
+              plan={plan}
+              cellSizeM={cellSizeM}
+              onDelete={() => {
+                if (!onManualElevationsChange) return;
+                onManualElevationsChange((manualElevations || []).filter(e => e.id !== me.id));
+                toast.success('Alzado manual eliminado');
+              }}
+            />
+          ))}
+          {onManualElevationsChange && (
+            <Button variant="outline" size="sm" className="text-xs h-7" onClick={() => {
+              setManualElevName('');
+              setManualElevVertices([]);
+              setManualElevFloorId('');
+              setShowManualElevDialog(true);
+            }}>
+              <Plus className="h-3 w-3 mr-1" /> Nuevo alzado manual
+            </Button>
+          )}
+        </div>
+      )}
+
       {viewMode === 'total' && totalElevations.length > 0 && (
         <div className="space-y-4">
           {totalElevations.map(te => (
@@ -1424,7 +1459,284 @@ export function ElevationsGridViewer({
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Manual elevation creation dialog */}
+      <Dialog open={showManualElevDialog} onOpenChange={setShowManualElevDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-sm">Nuevo alzado manual (polígono)</DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Selecciona las coordenadas que forman el polígono del alzado (mínimo 3 vértices para un triángulo).
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label className="text-xs">Nombre</Label>
+              <Input value={manualElevName} onChange={e => setManualElevName(e.target.value)} placeholder="Ej: Hastial izquierdo" className="h-8 text-sm" />
+            </div>
+            {floors && floors.length > 1 && (
+              <div>
+                <Label className="text-xs">Nivel (opcional)</Label>
+                <Select value={manualElevFloorId} onValueChange={setManualElevFloorId}>
+                  <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Todos los niveles" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all" className="text-xs">Todos los niveles</SelectItem>
+                    {floors.map(f => <SelectItem key={f.id} value={f.id} className="text-xs">{f.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            <div>
+              <Label className="text-xs">Vértices del polígono (en orden)</Label>
+              <div className="flex flex-wrap gap-1 mt-1 mb-2">
+                {manualElevVertices.map((v, i) => (
+                  <Badge key={i} variant="secondary" className="text-xs gap-1 cursor-pointer" onClick={() => setManualElevVertices(prev => prev.filter((_, j) => j !== i))}>
+                    {v} <span className="text-destructive">×</span>
+                  </Badge>
+                ))}
+                {manualElevVertices.length === 0 && <span className="text-xs text-muted-foreground italic">Sin vértices seleccionados</span>}
+              </div>
+              <div className="text-xs text-muted-foreground mb-1">Pulsa en una coordenada para añadirla:</div>
+              <div className="flex flex-wrap gap-1 max-h-40 overflow-y-auto border rounded p-2">
+                {(customCorners || [])
+                  .filter(c => !manualElevVertices.includes(c.label))
+                  .filter(c => !manualElevFloorId || manualElevFloorId === 'all' || c.floorId === manualElevFloorId || !c.floorId)
+                  .map(c => (
+                    <Button key={c.label} variant="outline" size="sm" className="h-6 text-[10px] px-2"
+                      onClick={() => setManualElevVertices(prev => [...prev, c.label])}>
+                      {c.label} {c.z !== undefined ? `(z=${c.z})` : ''}
+                    </Button>
+                  ))}
+                {(customCorners || []).length === 0 && <span className="text-xs text-muted-foreground">No hay coordenadas definidas en la cuadrícula</span>}
+              </div>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" size="sm" onClick={() => setShowManualElevDialog(false)}>Cancelar</Button>
+              <Button size="sm" disabled={manualElevVertices.length < 3 || !manualElevName.trim()} onClick={() => {
+                if (!onManualElevationsChange) return;
+                const newElev: ManualElevation = {
+                  id: `me-${Date.now()}`,
+                  name: manualElevName.trim(),
+                  vertexLabels: manualElevVertices,
+                  floorId: manualElevFloorId && manualElevFloorId !== 'all' ? manualElevFloorId : undefined,
+                };
+                onManualElevationsChange([...(manualElevations || []), newElev]);
+                setShowManualElevDialog(false);
+                toast.success(`Alzado "${newElev.name}" creado con ${manualElevVertices.length} vértices`);
+              }}>
+                Crear alzado
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
+  );
+}
+
+/** Manual elevation polygon card — renders arbitrary N-vertex polygon */
+function ManualElevationPolygonCard({ elevation, allCorners, plan, cellSizeM, onDelete }: {
+  elevation: ManualElevation;
+  allCorners: CustomCorner[];
+  plan: FloorPlanData;
+  cellSizeM: number;
+  onDelete: () => void;
+}) {
+  const blockHMm = plan.blockHeightMm || 250;
+  const blockHM = blockHMm / 1000;
+  const blockWM = (plan.blockLengthMm || 625) / 1000;
+
+  // Resolve vertex coordinates from labels
+  const vertices = useMemo(() => {
+    return elevation.vertexLabels.map(label => {
+      const corner = allCorners.find(c => c.label === label);
+      if (!corner) return null;
+      const x = (corner.col - 1) * cellSizeM;
+      const y = (corner.row - 1) * cellSizeM;
+      const z = (corner.z ?? 0) * blockHM;
+      return { label, x, y, z };
+    }).filter(Boolean) as Array<{ label: string; x: number; y: number; z: number }>;
+  }, [elevation.vertexLabels, allCorners, cellSizeM, blockHM]);
+
+  if (vertices.length < 3) {
+    return (
+      <Card className="border-dashed border-destructive/50">
+        <CardHeader className="p-3">
+          <CardTitle className="text-xs text-destructive flex items-center gap-2">
+            {elevation.name} — Faltan coordenadas ({vertices.length}/{elevation.vertexLabels.length} encontradas)
+            <Button variant="ghost" size="sm" className="h-5 w-5 p-0 ml-auto" onClick={onDelete}><Trash2 className="h-3 w-3" /></Button>
+          </CardTitle>
+        </CardHeader>
+      </Card>
+    );
+  }
+
+  // Project polygon onto 2D plane for rendering.
+  // Use the "widest" 2D projection: measure spread along X, Y, Z axes
+  // For a vertical wall (same X or same Y), project onto the varying horizontal axis + Z.
+  const xSpread = Math.max(...vertices.map(v => v.x)) - Math.min(...vertices.map(v => v.x));
+  const ySpread = Math.max(...vertices.map(v => v.y)) - Math.min(...vertices.map(v => v.y));
+  const zSpread = Math.max(...vertices.map(v => v.z)) - Math.min(...vertices.map(v => v.z));
+
+  // Choose horizontal axis: X if xSpread >= ySpread, else Y
+  const useXAxis = xSpread >= ySpread;
+  const hSpread = useXAxis ? xSpread : ySpread;
+  const hMin = useXAxis ? Math.min(...vertices.map(v => v.x)) : Math.min(...vertices.map(v => v.y));
+  const zMin = Math.min(...vertices.map(v => v.z));
+
+  // 2D projection: horizontal (h) and vertical (z)
+  const projected = vertices.map(v => ({
+    label: v.label,
+    h: (useXAxis ? v.x : v.y) - hMin,
+    z: v.z - zMin,
+  }));
+
+  // SVG dimensions
+  const padding = 40;
+  const maxSvgW = 500;
+  const scaleH = hSpread > 0 ? Math.min((maxSvgW - padding * 2) / hSpread, 80) : 80;
+  const scaleV = zSpread > 0 ? Math.min((maxSvgW - padding * 2) / zSpread, 80) : 80;
+  const scale = Math.min(scaleH, scaleV);
+
+  const svgW = hSpread * scale + padding * 2;
+  const svgH = zSpread * scale + padding * 2 + 20;
+  const rx = padding;
+  const ry = padding / 2;
+
+  // Build SVG polygon points (flip Z so Z+ goes up)
+  const points = projected.map(p => `${rx + p.h * scale},${ry + (zSpread - p.z) * scale}`).join(' ');
+
+  // Calculate polygon area using shoelace formula on projected coordinates
+  let area = 0;
+  for (let i = 0; i < projected.length; i++) {
+    const j = (i + 1) % projected.length;
+    area += projected[i].h * projected[j].z;
+    area -= projected[j].h * projected[i].z;
+  }
+  area = Math.abs(area) / 2;
+
+  return (
+    <Card>
+      <CardHeader className="p-3 pb-1">
+        <CardTitle className="text-xs flex items-center gap-2">
+          <Badge variant="secondary" className="text-[9px]">Polígono {vertices.length}v</Badge>
+          {elevation.name}
+          <span className="text-[10px] text-muted-foreground font-normal ml-1">
+            ({elevation.vertexLabels.join(' → ')})
+          </span>
+          <Badge variant="outline" className="text-[9px] ml-auto">{area.toFixed(2)} m²</Badge>
+          <Button variant="ghost" size="sm" className="h-5 w-5 p-0" onClick={onDelete}><Trash2 className="h-3 w-3 text-destructive" /></Button>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="p-2">
+        <svg width="100%" viewBox={`0 0 ${svgW} ${svgH}`} className="mx-auto" style={{ maxHeight: '200px' }}>
+          {/* Ground line */}
+          <line x1={rx - 5} y1={ry + zSpread * scale} x2={rx + hSpread * scale + 5} y2={ry + zSpread * scale}
+            stroke="hsl(var(--muted-foreground))" strokeWidth={1.5} opacity={0.5} />
+
+          {/* Polygon fill */}
+          <polygon points={points} fill="hsl(30, 30%, 92%)" stroke="hsl(222, 47%, 30%)" strokeWidth={1.5} />
+
+          {/* Block pattern inside polygon */}
+          {plan.scaleMode === 'bloque' && (() => {
+            const bwPx = blockWM * scale;
+            const bhPx = blockHM * scale;
+            if (bwPx < 3 || bhPx < 2) return null;
+            const clipId = `clip-${elevation.id}`;
+            return (
+              <g>
+                <defs>
+                  <clipPath id={clipId}>
+                    <polygon points={points} />
+                  </clipPath>
+                </defs>
+                <g clipPath={`url(#${clipId})`}>
+                  {/* Horizontal lines (Z axis) */}
+                  {Array.from({ length: Math.ceil(zSpread / blockHM) }, (_, r) => {
+                    const lineY = ry + zSpread * scale - (r + 1) * bhPx;
+                    if (lineY < ry) return null;
+                    return <line key={`h-${r}`} x1={rx} y1={lineY} x2={rx + hSpread * scale} y2={lineY}
+                      stroke="rgba(41,128,185,0.85)" strokeWidth={1} />;
+                  })}
+                  {/* Vertical lines (alternating offset) */}
+                  {Array.from({ length: Math.ceil(zSpread / blockHM) }, (_, r) => {
+                    const yTop = Math.max(ry, ry + zSpread * scale - (r + 1) * bhPx);
+                    const yBot = ry + zSpread * scale - r * bhPx;
+                    const offset = r % 2 === 0 ? 0 : bwPx / 2;
+                    const cols = Math.ceil(hSpread / blockWM) + 1;
+                    return Array.from({ length: cols }, (_, c) => {
+                      const lineX = rx + offset + c * bwPx;
+                      if (lineX <= rx || lineX >= rx + hSpread * scale) return null;
+                      return <line key={`v-${r}-${c}`} x1={lineX} y1={yTop} x2={lineX} y2={yBot}
+                        stroke="rgba(192,57,43,0.70)" strokeWidth={0.8} />;
+                    });
+                  })}
+                </g>
+              </g>
+            );
+          })()}
+
+          {/* Vertex labels */}
+          {projected.map((p, i) => {
+            const px = rx + p.h * scale;
+            const py = ry + (zSpread - p.z) * scale;
+            const isTop = p.z >= zSpread * 0.5;
+            return (
+              <g key={i}>
+                <circle cx={px} cy={py} r={3} fill="hsl(var(--primary))" />
+                <text x={px} y={isTop ? py - 8 : py + 14} textAnchor="middle"
+                  fontSize={9} fontWeight={700} fill="hsl(var(--foreground))">
+                  {p.label}
+                </text>
+              </g>
+            );
+          })}
+
+          {/* Edge length labels */}
+          {projected.map((p, i) => {
+            const j = (i + 1) % projected.length;
+            const p2 = projected[j];
+            const v1 = vertices[i];
+            const v2 = vertices[j];
+            // 3D distance
+            const dist3d = Math.sqrt(
+              (v2.x - v1.x) ** 2 + (v2.y - v1.y) ** 2 + (v2.z - v1.z) ** 2
+            );
+            const mx = rx + ((p.h + p2.h) / 2) * scale;
+            const my = ry + ((zSpread - p.z + zSpread - p2.z) / 2) * scale;
+            return (
+              <text key={`edge-${i}`} x={mx} y={my - 4} textAnchor="middle"
+                fontSize={8} fill="hsl(var(--muted-foreground))" fontWeight={500}>
+                {(dist3d * 1000).toFixed(0)} mm
+              </text>
+            );
+          })}
+        </svg>
+        {/* Vertex coordinates table */}
+        <div className="mt-2 overflow-x-auto">
+          <table className="w-full text-[10px]">
+            <thead>
+              <tr className="border-b border-border/50">
+                <th className="text-left px-1 py-0.5 text-muted-foreground">Vértice</th>
+                <th className="text-right px-1 py-0.5 text-muted-foreground">X</th>
+                <th className="text-right px-1 py-0.5 text-muted-foreground">Y</th>
+                <th className="text-right px-1 py-0.5 text-muted-foreground">Z</th>
+              </tr>
+            </thead>
+            <tbody>
+              {vertices.map(v => (
+                <tr key={v.label} className="border-b border-border/20">
+                  <td className="px-1 py-0.5 font-semibold">{v.label}</td>
+                  <td className="text-right px-1 py-0.5">{(v.x / cellSizeM).toFixed(0)}</td>
+                  <td className="text-right px-1 py-0.5">{(v.y / cellSizeM).toFixed(0)}</td>
+                  <td className="text-right px-1 py-0.5">{(v.z / blockHM).toFixed(0)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 

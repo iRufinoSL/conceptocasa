@@ -1216,6 +1216,40 @@ export function ElevationsGridViewer({
                     </CollapsibleContent>
                   </Collapsible>
                 ))}
+
+                {/* Manual elevations assigned to this floor */}
+                {(() => {
+                  const floorManualElevs = (manualElevations || []).filter(me => me.floorId === floorId);
+                  if (floorManualElevs.length === 0) return null;
+                  return (
+                    <Collapsible defaultOpen>
+                      <CollapsibleTrigger className="flex items-center gap-2 w-full text-left group hover:bg-muted/50 rounded px-2 py-1 transition-colors border-b border-border/30 pb-1">
+                        <ChevronRight className="h-3.5 w-3.5 text-foreground transition-transform group-data-[state=open]:rotate-90" />
+                        <h4 className="text-xs font-bold text-foreground">Alzados manuales</h4>
+                        <Badge variant="outline" className="text-[9px] h-4">{floorManualElevs.length}</Badge>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent className="space-y-2 mt-1 ml-2">
+                        {floorManualElevs.map(me => (
+                          <ManualElevationPolygonCard
+                            key={me.id}
+                            elevation={me}
+                            allCorners={customCorners || []}
+                            plan={plan}
+                            cellSizeM={cellSizeM}
+                            onDelete={() => {
+                              if (!onManualElevationsChange) return;
+                              onManualElevationsChange((manualElevations || []).filter(e => e.id !== me.id));
+                              toast.success('Alzado manual eliminado');
+                            }}
+                            onEdit={onManualElevationsChange ? (updated) => {
+                              onManualElevationsChange((manualElevations || []).map(e => e.id === updated.id ? updated : e));
+                            } : undefined}
+                          />
+                        ))}
+                      </CollapsibleContent>
+                    </Collapsible>
+                  );
+                })()}
               </div>
             );
             if (floorName) {
@@ -1235,10 +1269,10 @@ export function ElevationsGridViewer({
         </div>
       )}
 
-      {/* Manual polygon elevations — shown in composite view */}
+      {/* Manual polygon elevations without a floor assignment — shown in composite view */}
       {viewMode === 'composite' && (
         <div className="space-y-3">
-          {(manualElevations || []).map(me => (
+          {(manualElevations || []).filter(me => !me.floorId).map(me => (
             <ManualElevationPolygonCard
               key={me.id}
               elevation={me}

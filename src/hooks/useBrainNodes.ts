@@ -20,10 +20,6 @@ export interface BrainNode {
   updated_at: string;
 }
 
-const MODULE_SEED: Omit<BrainNode, 'id' | 'user_id' | 'created_at' | 'updated_at'>[] = [
-  { parent_id: null, name: 'TO.LO.SA.systems', description: 'Centro de operaciones', icon: 'Building2', node_type: 'module', target_url: '/dashboard', target_params: null, color: '#3B82F6', order_index: 0, is_pinned: true },
-];
-
 const MODULE_CHILDREN = [
   { name: 'Proyectos', icon: 'FolderKanban', target_url: '/proyectos', color: '#8B5CF6', order_index: 0 },
   { name: 'Presupuestos', icon: 'Calculator', target_url: '/presupuestos', color: '#F59E0B', order_index: 1 },
@@ -37,25 +33,52 @@ const MODULE_CHILDREN = [
 ];
 
 const BRAIN_LAST_NODE_KEY = 'brain_last_active_node';
+
 const BUDGET_CATEGORIES = [
   { name: 'Activos', icon: 'FolderKanban', color: '#22C55E', order: 0, filter: 'activo' },
   { name: 'En Ejecución', icon: 'Layers', color: '#F59E0B', order: 1, filter: 'en_ejecucion' },
   { name: 'Archivados', icon: 'Package', color: '#94A3B8', order: 2, filter: 'archived' },
 ] as const;
 
-const BUDGET_CATEGORY_NAMES = BUDGET_CATEGORIES.map(category => category.name);
+const BUDGET_CATEGORY_NAMES = BUDGET_CATEGORIES.map(c => c.name);
+
+// Primary sub-levels for each budget (the 6 key questions)
+const BUDGET_PRIMARY_SUBLEVELS = [
+  { name: 'QUÉ?', icon: 'ClipboardList', color: '#3B82F6', tab: 'actividades', order: 0 },
+  { name: 'CÓMO?', icon: 'FileText', color: '#8B5CF6', tab: 'recursos', order: 1 },
+  { name: 'DÓNDE?', icon: 'MapPin', color: '#10B981', tab: 'areas-trabajo', order: 2 },
+  { name: 'CUÁNDO?', icon: 'Calendar', color: '#EC4899', tab: 'fases', order: 3 },
+  { name: 'CUÁNTO?', icon: 'Euro', color: '#F59E0B', tab: 'cuanto-cuesta', order: 4 },
+  { name: 'QUIÉN?', icon: 'Users', color: '#6366F1', tab: 'contactos', order: 5 },
+];
+
+// Secondary menu items for each budget
+const BUDGET_SECONDARY_SUBLEVELS = [
+  { name: 'Urbanismo', icon: 'Landmark', color: '#78716C', tab: 'urbanismo', order: 0 },
+  { name: 'Ante-proyecto', icon: 'Image', color: '#78716C', tab: 'anteproyecto', order: 1 },
+  { name: 'Mediciones', icon: 'Ruler', color: '#78716C', tab: 'mediciones', order: 2 },
+  { name: 'Documentos', icon: 'FolderOpen', color: '#78716C', tab: 'documentos', order: 3 },
+  { name: 'Agenda', icon: 'CalendarCheck', color: '#78716C', tab: 'agenda', order: 4 },
+  { name: 'Comunicaciones', icon: 'Mail', color: '#78716C', tab: 'comunicaciones', order: 5 },
+  { name: 'Administración', icon: 'Wallet', color: '#78716C', tab: 'administracion', order: 6 },
+  { name: 'Resumen', icon: 'Calculator', color: '#78716C', tab: 'resumen', order: 7 },
+];
+
+// Sub-items under DÓNDE?
+const DONDE_SUBLEVELS = [
+  { name: 'Volúmenes', icon: 'Home', color: '#10B981', tab: 'espacios', order: 0, description: 'Espacios con coordenadas XYZ' },
+  { name: 'Planos', icon: 'PenTool', color: '#14B8A6', tab: 'plano', order: 1, description: 'Cuadrículas por nivel' },
+];
 
 const extractBudgetIdFromNode = (node: BrainNode): string | null => {
   const budgetIdFromParams = (node.target_params as { budgetId?: unknown } | null)?.budgetId;
   if (typeof budgetIdFromParams === 'string' && budgetIdFromParams) {
     return budgetIdFromParams;
   }
-
   if (typeof node.target_url === 'string' && node.target_url.startsWith('/presupuestos/')) {
     const [, , budgetId] = node.target_url.split('/');
     return budgetId || null;
   }
-
   return null;
 };
 
@@ -70,6 +93,106 @@ export function useBrainNodes() {
   const [nodes, setNodes] = useState<BrainNode[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeNodeId, setActiveNodeId] = useState<string | null>(null);
+
+  // Ensure budget sub-levels exist for a given budget node
+  const ensureBudgetSublevels = useCallback(async (budgetNode: BrainNode, currentNodes: BrainNode[]) => {
+    if (!user) return false;
+    const budgetId = extractBudgetIdFromNode(budgetNode);
+    if (!budgetId) return false;
+
+    const existingChildren = currentNodes.filter(n => n.parent_id === budgetNode.id);
+    const existingNames = new Set(existingChildren.map(n => n.name));
+
+    // Check if primary sublevels already exist
+    const hasPrimary = BUDGET_PRIMARY_SUBLEVELS.every(s => existingNames.has(s.name));
+    if (hasPrimary) return false;
+
+    let didChange = false;
+
+    // Create primary sublevels
+    const missingPrimary = BUDGET_PRIMARY_SUBLEVELS.filter(s => !existingNames.has(s.name));
+    if (missingPrimary.length > 0) {
+      const { data: primaryData, error } = await supabase
+        .from('brain_nodes')
+        .insert(missingPrimary.map(s => ({
+          user_id: user.id,
+          parent_id: budgetNode.id,
+          name: s.name,
+          icon: s.icon,
+          node_type: 'module' as const,
+          target_url: `/presupuestos/${budgetId}`,
+          target_params: { budgetId, tab: s.tab },
+          color: s.color,
+          order_index: s.order,
+        })))
+        .select();
+
+      if (!error && primaryData) {
+        didChange = true;
+
+        // Create DÓNDE? sub-items
+        const dondeNode = primaryData.find((n: any) => n.name === 'DÓNDE?');
+        if (dondeNode) {
+          const { error: dondeErr } = await supabase
+            .from('brain_nodes')
+            .insert(DONDE_SUBLEVELS.map(s => ({
+              user_id: user.id,
+              parent_id: dondeNode.id,
+              name: s.name,
+              description: s.description,
+              icon: s.icon,
+              node_type: 'module' as const,
+              target_url: `/presupuestos/${budgetId}`,
+              target_params: { budgetId, tab: s.tab },
+              color: s.color,
+              order_index: s.order,
+            })));
+          if (dondeErr) console.error('Error creating DÓNDE sublevels:', dondeErr);
+        }
+      } else if (error) {
+        console.error('Error creating budget sublevels:', error);
+      }
+    }
+
+    // Create secondary menu group node + items
+    const secondaryGroupName = 'Más...';
+    if (!existingNames.has(secondaryGroupName)) {
+      const { data: groupData, error: groupErr } = await supabase
+        .from('brain_nodes')
+        .insert({
+          user_id: user.id,
+          parent_id: budgetNode.id,
+          name: secondaryGroupName,
+          icon: 'MoreHorizontal',
+          node_type: 'module' as const,
+          target_url: `/presupuestos/${budgetId}`,
+          target_params: { budgetId },
+          color: '#78716C',
+          order_index: 10,
+        })
+        .select()
+        .single();
+
+      if (!groupErr && groupData) {
+        didChange = true;
+        await supabase
+          .from('brain_nodes')
+          .insert(BUDGET_SECONDARY_SUBLEVELS.map(s => ({
+            user_id: user.id,
+            parent_id: groupData.id,
+            name: s.name,
+            icon: s.icon,
+            node_type: 'module' as const,
+            target_url: `/presupuestos/${budgetId}`,
+            target_params: { budgetId, tab: s.tab },
+            color: s.color,
+            order_index: s.order,
+          })));
+      }
+    }
+
+    return didChange;
+  }, [user]);
 
   const ensureBudgetHierarchy = useCallback(async (currentNodes: BrainNode[]) => {
     if (!user) return false;
@@ -115,82 +238,63 @@ export function useBrainNodes() {
       }
     }
 
+    // Move misplaced budget nodes into correct category
     const misplacedBudgetNodes = directChildren.filter(node => {
       if (node.node_type !== 'data') return false;
       return Boolean(extractBudgetIdFromNode(node));
     });
 
-    if (misplacedBudgetNodes.length === 0) {
-      return didChange;
-    }
+    if (misplacedBudgetNodes.length > 0) {
+      const budgetIds = Array.from(new Set(
+        misplacedBudgetNodes
+          .map(extractBudgetIdFromNode)
+          .filter((id): id is string => Boolean(id)),
+      ));
 
-    const budgetIds = Array.from(new Set(
-      misplacedBudgetNodes
-        .map(extractBudgetIdFromNode)
-        .filter((budgetId): budgetId is string => Boolean(budgetId)),
-    ));
+      if (budgetIds.length > 0) {
+        const { data: budgets } = await supabase
+          .from('presupuestos')
+          .select('id, status, archived')
+          .in('id', budgetIds);
 
-    if (budgetIds.length === 0) {
-      return didChange;
-    }
+        const budgetsById = new Map((budgets || []).map((b: any) => [b.id, b]));
+        const nextOrderByCategory = new Map<string, number>();
+        BUDGET_CATEGORY_NAMES.forEach(catName => {
+          const catNode = categoryByName.get(catName);
+          if (!catNode) { nextOrderByCategory.set(catName, 0); return; }
+          const maxOrder = currentNodes
+            .filter(n => n.parent_id === catNode.id)
+            .reduce((max, n) => Math.max(max, n.order_index), -1);
+          nextOrderByCategory.set(catName, maxOrder + 1);
+        });
 
-    const { data: budgets, error: budgetsError } = await supabase
-      .from('presupuestos')
-      .select('id, status, archived')
-      .in('id', budgetIds);
-
-    if (budgetsError) {
-      console.error('Error loading budget status for Brain hierarchy:', budgetsError);
-      return didChange;
-    }
-
-    const budgetsById = new Map((budgets || []).map((budget: any) => [budget.id, budget]));
-
-    const nextOrderByCategory = new Map<string, number>();
-    BUDGET_CATEGORY_NAMES.forEach(categoryName => {
-      const categoryNode = categoryByName.get(categoryName);
-      if (!categoryNode) {
-        nextOrderByCategory.set(categoryName, 0);
-        return;
-      }
-      const maxOrder = currentNodes
-        .filter(node => node.parent_id === categoryNode.id)
-        .reduce((max, node) => Math.max(max, node.order_index), -1);
-      nextOrderByCategory.set(categoryName, maxOrder + 1);
-    });
-
-    const updates = misplacedBudgetNodes.map(node => {
-      const budgetId = extractBudgetIdFromNode(node);
-      const budget = budgetId ? budgetsById.get(budgetId) : null;
-      const categoryName = resolveBudgetCategoryName(budget?.status, budget?.archived);
-      const categoryNode = categoryByName.get(categoryName) || categoryByName.get('Activos');
-      const orderIndex = nextOrderByCategory.get(categoryName) ?? 0;
-      nextOrderByCategory.set(categoryName, orderIndex + 1);
-
-      return {
-        nodeId: node.id,
-        parentId: categoryNode?.id || budgetsNode.id,
-        orderIndex,
-      };
-    });
-
-    const updateResults = await Promise.all(
-      updates.map(update => supabase
-        .from('brain_nodes')
-        .update({ parent_id: update.parentId, order_index: update.orderIndex })
-        .eq('id', update.nodeId)),
-    );
-
-    updateResults.forEach(result => {
-      if (result.error) {
-        console.error('Error moving budget node into category:', result.error);
-      } else {
+        await Promise.all(misplacedBudgetNodes.map(node => {
+          const bId = extractBudgetIdFromNode(node);
+          const budget = bId ? budgetsById.get(bId) : null;
+          const catName = resolveBudgetCategoryName(budget?.status, budget?.archived);
+          const catNode = categoryByName.get(catName) || categoryByName.get('Activos');
+          const orderIdx = nextOrderByCategory.get(catName) ?? 0;
+          nextOrderByCategory.set(catName, orderIdx + 1);
+          return supabase
+            .from('brain_nodes')
+            .update({ parent_id: catNode?.id || budgetsNode.id, order_index: orderIdx })
+            .eq('id', node.id);
+        }));
         didChange = true;
       }
-    });
+    }
+
+    // Ensure sublevels for all budget data nodes
+    const allBudgetNodes = currentNodes.filter(n =>
+      n.node_type === 'data' && extractBudgetIdFromNode(n),
+    );
+    for (const budgetNode of allBudgetNodes) {
+      const sublevelCreated = await ensureBudgetSublevels(budgetNode, currentNodes);
+      if (sublevelCreated) didChange = true;
+    }
 
     return didChange;
-  }, [user]);
+  }, [user, ensureBudgetSublevels]);
 
   const fetchNodes = useCallback(async () => {
     if (!user) return;
@@ -223,7 +327,6 @@ export function useBrainNodes() {
 
     setNodes(typedData);
     if (!activeNodeId) {
-      // Restore last active node from localStorage
       const savedNodeId = localStorage.getItem(BRAIN_LAST_NODE_KEY);
       const savedNode = savedNodeId ? typedData.find(n => n.id === savedNodeId) : null;
       const root = typedData.find(n => n.parent_id === null);
@@ -260,52 +363,43 @@ export function useBrainNodes() {
     }
 
     // Create module children
-    const childInserts = MODULE_CHILDREN.map(c => ({
-      user_id: user.id,
-      parent_id: rootData.id,
-      name: c.name,
-      icon: c.icon,
-      node_type: 'module' as const,
-      target_url: c.target_url,
-      color: c.color,
-      order_index: c.order_index,
-    }));
-
     const { data: childData, error: childErr } = await supabase
       .from('brain_nodes')
-      .insert(childInserts)
+      .insert(MODULE_CHILDREN.map(c => ({
+        user_id: user.id,
+        parent_id: rootData.id,
+        name: c.name,
+        icon: c.icon,
+        node_type: 'module' as const,
+        target_url: c.target_url,
+        color: c.color,
+        order_index: c.order_index,
+      })))
       .select();
 
     if (childErr) {
       console.error('Error seeding children:', childErr);
     }
 
-    // Now seed presupuestos grouped by status as children of "Presupuestos" node
+    // Seed Presupuestos hierarchy
     const presNode = childData?.find((c: any) => c.name === 'Presupuestos');
     if (presNode) {
-      // Create status category sub-nodes
-      const statusCategories = [
-        { name: 'Activos', icon: 'FolderKanban', color: '#22C55E', statusFilter: 'activo', archivedFilter: false, order: 0 },
-        { name: 'En Ejecución', icon: 'Layers', color: '#F59E0B', statusFilter: 'en_ejecucion', archivedFilter: false, order: 1 },
-        { name: 'Archivados', icon: 'Package', color: '#94A3B8', statusFilter: null, archivedFilter: true, order: 2 },
-      ];
-
       const { data: categoryData } = await supabase
         .from('brain_nodes')
-        .insert(statusCategories.map(cat => ({
+        .insert(BUDGET_CATEGORIES.map(cat => ({
           user_id: user.id,
           parent_id: presNode.id,
           name: cat.name,
           icon: cat.icon,
           node_type: 'module' as const,
           target_url: '/presupuestos',
-          target_params: { filter: cat.statusFilter || 'archived' },
+          target_params: { filter: cat.filter },
           color: cat.color,
           order_index: cat.order,
         })))
         .select();
 
-      // Fetch all budgets and assign to categories
+      // Fetch budgets and create nodes with sub-levels
       const { data: budgets } = await supabase
         .from('presupuestos')
         .select('id, nombre, status, archived')
@@ -313,37 +407,107 @@ export function useBrainNodes() {
         .limit(100);
 
       if (budgets && budgets.length > 0 && categoryData) {
-        const budgetInserts: any[] = [];
-        budgets.forEach((b: any, i: number) => {
+        for (const [i, b] of budgets.entries()) {
           let parentCat: any = null;
-          if (b.archived) {
+          if ((b as any).archived) {
             parentCat = categoryData.find((c: any) => c.name === 'Archivados');
-          } else if (b.status === 'en_ejecucion') {
+          } else if ((b as any).status === 'en_ejecucion') {
             parentCat = categoryData.find((c: any) => c.name === 'En Ejecución');
           } else {
             parentCat = categoryData.find((c: any) => c.name === 'Activos');
           }
-          if (parentCat) {
-            budgetInserts.push({
+          if (!parentCat) continue;
+
+          const { data: budgetNode } = await supabase
+            .from('brain_nodes')
+            .insert({
               user_id: user.id,
               parent_id: parentCat.id,
-              name: b.nombre || 'Sin nombre',
+              name: (b as any).nombre || 'Sin nombre',
               icon: 'FileSpreadsheet',
               node_type: 'data' as const,
               target_url: `/presupuestos/${b.id}`,
               target_params: { budgetId: b.id },
               color: parentCat.color,
               order_index: i,
-            });
+            })
+            .select()
+            .single();
+
+          // Create sub-levels for this budget
+          if (budgetNode) {
+            // Primary sub-levels
+            const { data: primaryData } = await supabase
+              .from('brain_nodes')
+              .insert(BUDGET_PRIMARY_SUBLEVELS.map(s => ({
+                user_id: user.id,
+                parent_id: budgetNode.id,
+                name: s.name,
+                icon: s.icon,
+                node_type: 'module' as const,
+                target_url: `/presupuestos/${b.id}`,
+                target_params: { budgetId: b.id, tab: s.tab },
+                color: s.color,
+                order_index: s.order,
+              })))
+              .select();
+
+            // DÓNDE sub-items
+            const dondeNode = primaryData?.find((n: any) => n.name === 'DÓNDE?');
+            if (dondeNode) {
+              await supabase
+                .from('brain_nodes')
+                .insert(DONDE_SUBLEVELS.map(s => ({
+                  user_id: user.id,
+                  parent_id: dondeNode.id,
+                  name: s.name,
+                  description: s.description,
+                  icon: s.icon,
+                  node_type: 'module' as const,
+                  target_url: `/presupuestos/${b.id}`,
+                  target_params: { budgetId: b.id, tab: s.tab },
+                  color: s.color,
+                  order_index: s.order,
+                })));
+            }
+
+            // Secondary menu group
+            const { data: groupData } = await supabase
+              .from('brain_nodes')
+              .insert({
+                user_id: user.id,
+                parent_id: budgetNode.id,
+                name: 'Más...',
+                icon: 'MoreHorizontal',
+                node_type: 'module' as const,
+                target_url: `/presupuestos/${b.id}`,
+                target_params: { budgetId: b.id },
+                color: '#78716C',
+                order_index: 10,
+              })
+              .select()
+              .single();
+
+            if (groupData) {
+              await supabase
+                .from('brain_nodes')
+                .insert(BUDGET_SECONDARY_SUBLEVELS.map(s => ({
+                  user_id: user.id,
+                  parent_id: groupData.id,
+                  name: s.name,
+                  icon: s.icon,
+                  node_type: 'module' as const,
+                  target_url: `/presupuestos/${b.id}`,
+                  target_params: { budgetId: b.id, tab: s.tab },
+                  color: s.color,
+                  order_index: s.order,
+                })));
+            }
           }
-        });
-        if (budgetInserts.length > 0) {
-          await supabase.from('brain_nodes').insert(budgetInserts);
         }
       }
     }
 
-    // Refetch after seeding
     await fetchNodes();
   }, [user]);
 
